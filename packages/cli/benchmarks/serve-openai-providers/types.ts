@@ -68,6 +68,10 @@ export type RawRunRecord = {
 export type RawDocument = {
   session_id: string
   created_at: string
+  valid?: boolean
+  invalid_reasons?: string[]
+  orchestration_errors?: Array<{ provider: string; message: string }>
+  model_parity_evidence?: Record<string, unknown>
   config_snapshot: {
     generation: GenerationConfig
     cooldown_seconds?: number
@@ -93,6 +97,7 @@ export type GenerationConfig = {
 export type ProviderLifecycle = {
   start_command?: string[]
   stop_command?: string[]
+  timeout_seconds?: number
 }
 
 export type ProviderConfig = {

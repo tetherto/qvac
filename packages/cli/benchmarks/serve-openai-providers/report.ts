@@ -24,6 +24,9 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('')
   lines.push(`Session: \`${raw.session_id}\``)
   lines.push(`Created: \`${raw.created_at}\``)
+  lines.push(
+    `Benchmark validity: ${raw.valid === false ? `INVALID (${(raw.invalid_reasons ?? []).join(', ')})` : 'VALID'}`
+  )
   lines.push('')
   lines.push('## Executive summary')
   lines.push('')
@@ -41,7 +44,7 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push(JSON.stringify(snapshot.model_parity ?? {}, null, 2))
   lines.push('```')
   lines.push('')
-  lines.push('Preflight parity:')
+  lines.push('Provider-session parity:')
   lines.push('')
   lines.push('```json')
   lines.push(JSON.stringify(raw.parity ?? {}, null, 2))
@@ -123,6 +126,11 @@ export function writeReport(raw: RawDocument, path: string): void {
         `- \`${fail.provider}\` \`${fail.prompt_id}\` #${fail.run_index}: ${JSON.stringify(fail.validation_reasons)} error=${fail.error}`
       )
     }
+  }
+  const orchestrationErrors = raw.orchestration_errors ?? []
+  lines.push(`Lifecycle/orchestration failures: ${orchestrationErrors.length}`)
+  for (const failure of orchestrationErrors) {
+    lines.push(`- \`${failure.provider}\`: ${failure.message}`)
   }
   lines.push('')
   lines.push('## Interpretation')

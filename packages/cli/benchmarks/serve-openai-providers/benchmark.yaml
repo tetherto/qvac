@@ -30,6 +30,7 @@ prompt_ids:
 #   lifecycle:
 #     start_command: [REPLACE_WITH_START_ARGV_ITEM, REPLACE_WITH_START_ARGV_ITEM]
 #     stop_command: [REPLACE_WITH_STOP_ARGV_ITEM]
+#     timeout_seconds: 30
 providers:
   - id: qvac
     base_url: http://127.0.0.1:11435/v1

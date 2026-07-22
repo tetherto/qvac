@@ -19,7 +19,7 @@ const ROOT_KEYS = new Set([
 const GENERATION_KEYS = new Set(['max_tokens', 'temperature', 'seed', 'stream', 'stream_options'])
 const STREAM_OPTION_KEYS = new Set(['include_usage'])
 const PROVIDER_KEYS = new Set(['id', 'base_url', 'model', 'lifecycle'])
-const LIFECYCLE_KEYS = new Set(['start_command', 'stop_command'])
+const LIFECYCLE_KEYS = new Set(['start_command', 'stop_command', 'timeout_seconds'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -106,6 +106,12 @@ function assertProviderLifecycle(value: unknown): void {
         )
       }
     }
+  }
+  if (
+    'timeout_seconds' in value &&
+    (!isFiniteNumber(value.timeout_seconds) || value.timeout_seconds <= 0)
+  ) {
+    throw new TypeError('config provider lifecycle.timeout_seconds must be a positive number')
   }
 }
 

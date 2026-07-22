@@ -104,6 +104,30 @@ function makeMeasuredFailureClient(): ChatClient {
   }
 }
 
+function makeSuccessfulClient(
+  providerId: string,
+  promptTokens: number,
+  events?: string[]
+): ChatClient {
+  return {
+    chat: {
+      completions: {
+        create: (kwargs) => {
+          const content = String(kwargs.messages[0]?.content ?? '')
+          events?.push(`${providerId}:${content.includes('[run:') ? 'measured' : 'parity'}`)
+          return Promise.resolve([
+            createFakeChunk({ content: 'answer' }),
+            createFakeChunk({
+              emptyChoices: true,
+              usage: { promptTokens, completionTokens: 3 }
+            })
+          ])
+        }
+      }
+    }
+  }
+}
+
 describe('serve-openai-providers harness', () => {
   it('verifies the configured GGUF digest', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-digest-'))
@@ -222,6 +246,179 @@ describe('serve-openai-providers harness', () => {
       }
       const measuredFailure = raw.runs.find((run) => run.phase === 'measured' && run.ok === false)
       assert.ok(measuredFailure)
+    } finally {
+      console.log = originalLog
+      console.error = originalError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('full command runs parity and measurements in one sequential session per provider', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
+    const originalLog = console.log
+    const originalError = console.error
+    try {
+      console.log = ignoreError
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const config = makeConfig({
+        ggufPath,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      })
+      config.warmup_runs = 0
+      config.measured_runs = 1
+      config.cooldown_seconds = 0
+      config.providers = ['first', 'second'].map((id, index) => ({
+        id,
+        base_url: `http://127.0.0.1:${11435 + index}/v1`,
+        model: 'model',
+        lifecycle: {
+          start_command: [`start-${id}`],
+          stop_command: [`stop-${id}`]
+        }
+      }))
+
+      const events: string[] = []
+      const deps: CommandDependencies = {
+        ...defaultDependencies(),
+        createClient: (baseUrl) => {
+          const providerId = baseUrl.includes('11435') ? 'first' : 'second'
+          return makeSuccessfulClient(providerId, 5, events)
+        },
+        execute: async (command) => {
+          events.push(command[0]!)
+        }
+      }
+
+      assert.equal(await cmdFull(config, promptsDoc, dir, deps), 0)
+      assert.deepEqual(events, [
+        'start-first',
+        'first:parity',
+        'first:measured',
+        'stop-first',
+        'start-second',
+        'second:parity',
+        'second:measured',
+        'stop-second'
+      ])
+    } finally {
+      console.log = originalLog
+      console.error = originalError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('full command persists parity mismatch and marks the report invalid', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
+    const originalLog = console.log
+    const originalError = console.error
+    try {
+      console.log = ignoreError
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const config = makeConfig({
+        ggufPath,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      })
+      config.warmup_runs = 0
+      config.measured_runs = 1
+      config.cooldown_seconds = 0
+      config.providers = ['first', 'second'].map((id, index) => ({
+        id,
+        base_url: `http://127.0.0.1:${11435 + index}/v1`,
+        model: 'model'
+      }))
+      const deps: CommandDependencies = {
+        ...defaultDependencies(),
+        createClient: (baseUrl) =>
+          makeSuccessfulClient(
+            baseUrl.includes('11435') ? 'first' : 'second',
+            baseUrl.includes('11435') ? 5 : 6
+          )
+      }
+
+      assert.equal(await cmdFull(config, promptsDoc, dir, deps), 1)
+      const raw = JSON.parse(readFileSync(join(dir, 'results', 'raw.json'), 'utf8')) as {
+        parity: { prompt_tokens_equal: boolean }
+        runs: Array<Record<string, unknown>>
+        valid: boolean
+        invalid_reasons: string[]
+      }
+      assert.equal(raw.parity.prompt_tokens_equal, false)
+      assert.equal(raw.runs.filter((run) => run.phase === 'measured').length, 2)
+      assert.equal(raw.valid, false)
+      assert.ok(raw.invalid_reasons.includes('prompt_tokens_parity_mismatch'))
+      assert.match(
+        readFileSync(join(dir, 'results', 'report.md'), 'utf8'),
+        /Benchmark validity: INVALID/
+      )
+    } finally {
+      console.log = originalLog
+      console.error = originalError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('full command finalizes partial results after a later provider start failure', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
+    const originalLog = console.log
+    const originalError = console.error
+    try {
+      console.log = ignoreError
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const config = makeConfig({
+        ggufPath,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      })
+      config.warmup_runs = 0
+      config.measured_runs = 1
+      config.cooldown_seconds = 0
+      config.providers = ['first', 'second'].map((id, index) => ({
+        id,
+        base_url: `http://127.0.0.1:${11435 + index}/v1`,
+        model: 'model',
+        lifecycle: {
+          start_command: [`start-${id}`],
+          stop_command: [`stop-${id}`]
+        }
+      }))
+      const events: string[] = []
+      const deps: CommandDependencies = {
+        ...defaultDependencies(),
+        createClient: (baseUrl) =>
+          makeSuccessfulClient(baseUrl.includes('11435') ? 'first' : 'second', 5),
+        execute: async (command) => {
+          events.push(command[0]!)
+          if (command[0] === 'start-second') {
+            throw new Error('second failed to start')
+          }
+        },
+        clock: {
+          ...defaultDependencies().clock,
+          date: () => new Date('2026-07-22T12:00:00.000Z')
+        }
+      }
+
+      assert.equal(await cmdFull(config, promptsDoc, dir, deps), 1)
+      assert.ok(events.includes('stop-second'))
+      const raw = JSON.parse(readFileSync(join(dir, 'results', 'raw.json'), 'utf8')) as {
+        created_at: string
+        runs: Array<{ provider: string; started_at: string; ended_at: string }>
+        orchestration_errors: Array<{ provider: string; message: string }>
+      }
+      assert.equal(raw.created_at, '2026-07-22T12:00:00.000Z')
+      assert.equal(raw.runs.filter((run) => run.provider === 'first').length, 1)
+      assert.equal(raw.runs[0]!.started_at, '2026-07-22T12:00:00.000Z')
+      assert.equal(raw.runs[0]!.ended_at, '2026-07-22T12:00:00.000Z')
+      assert.match(raw.orchestration_errors[0]!.message, /second failed to start/)
+      assert.ok(readFileSync(join(dir, 'results', 'report.md'), 'utf8').includes('INVALID'))
     } finally {
       console.log = originalLog
       console.error = originalError
@@ -364,7 +561,8 @@ describe('serve-openai-providers harness', () => {
           model: 'model',
           lifecycle: {
             start_command: ['serve', '--port', '11435'],
-            stop_command: ['pkill', 'serve']
+            stop_command: ['pkill', 'serve'],
+            timeout_seconds: 45
           }
         }
       ]
@@ -394,7 +592,25 @@ describe('serve-openai-providers harness', () => {
       'unknown lifecycle key',
       [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: { restart: ['serve'] } }]
     ],
-    ['non-object lifecycle', [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: true }]]
+    [
+      'non-object lifecycle',
+      [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: true }]
+    ],
+    [
+      'zero lifecycle timeout',
+      [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: { timeout_seconds: 0 } }]
+    ],
+    [
+      'string lifecycle timeout',
+      [
+        {
+          id: 'qvac',
+          base_url: 'http://x/v1',
+          model: 'm',
+          lifecycle: { timeout_seconds: '30' }
+        }
+      ]
+    ]
   ] as const) {
     it(`rejects strict provider config with ${name}`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
@@ -904,5 +1120,48 @@ describe('serve-openai-providers harness', () => {
 
   it('rejects when the lifecycle command cannot start', async () => {
     await assert.rejects(executeCommand(['definitely-not-a-real-binary-xyz']))
+  })
+
+  it('times out a lifecycle command within the configured bound', async () => {
+    await assert.rejects(
+      executeCommand(['node', '-e', 'setInterval(() => {}, 1000)'], 25),
+      /timed out after 25ms/
+    )
+  })
+
+  it('attempts stop cleanup when the start command times out', async () => {
+    const events: string[] = []
+    await assert.rejects(
+      runProviderLifecycle(
+        providerWithCommands,
+        async () => 1,
+        async (command) => {
+          events.push(command[0]!)
+          if (command[0] === 'start-provider') {
+            throw new Error('timed out after 25ms')
+          }
+        }
+      ),
+      /timed out after 25ms/
+    )
+    assert.deepEqual(events, ['start-provider', 'stop-provider'])
+  })
+
+  it('passes the configured timeout to lifecycle commands', async () => {
+    const timeouts: Array<number | undefined> = []
+    await runProviderLifecycle(
+      {
+        ...providerWithCommands,
+        lifecycle: {
+          ...providerWithCommands.lifecycle,
+          timeout_seconds: 2.5
+        }
+      },
+      async () => 1,
+      async (_command, timeoutMs) => {
+        timeouts.push(timeoutMs)
+      }
+    )
+    assert.deepEqual(timeouts, [2500, 2500])
   })
 })

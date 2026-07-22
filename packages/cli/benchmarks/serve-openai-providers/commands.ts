@@ -30,6 +30,7 @@ import type {
 
 export type CommandClock = {
   now: () => number
+  date: () => Date
   sleep: (ms: number) => Promise<void>
 }
 
@@ -38,7 +39,7 @@ export type CommandFilesystem = {
   writeJson: (path: string, payload: unknown) => void
   ensureDir: (path: string) => void
   copyFile: (source: string, destination: string) => void
-  createSessionDir: (base: string) => string
+  createSessionDir: (base: string, date: Date) => string
   statFile: (path: string) => { isFile: boolean; size: number } | null
 }
 
@@ -66,6 +67,7 @@ export function defaultDependencies(): CommandDependencies {
     execute: executeCommand,
     clock: {
       now: nowSeconds,
+      date: () => new Date(),
       sleep: (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
     },
     fs: {
@@ -95,17 +97,20 @@ export async function runOne(params: {
   generation: GenerationConfig
   phase: string
   runIndex: number
+  clock?: CommandClock
 }): Promise<Record<string, unknown>> {
+  const clock = params.clock ?? defaultDependencies().clock
   const runId = randomBytes(5).toString('hex')
   const messages = buildMessages(params.prompt.content, runId)
-  const startedAt = new Date().toISOString()
+  const startedAt = clock.date().toISOString()
   const [parsed, metrics, validation] = await runStreamingCompletion({
     client: params.client,
     model: params.provider.model,
     messages,
-    generation: params.generation
+    generation: params.generation,
+    now: clock.now
   })
-  const endedAt = new Date().toISOString()
+  const endedAt = clock.date().toISOString()
   return {
     provider: params.provider.id,
     prompt_id: params.prompt.id,
@@ -167,7 +172,13 @@ export async function cmdPreflight(
       () => {
         const client = deps.createClient(provider.base_url, apiKey)
         const messages = buildMessages(parity.content, null)
-        return runStreamingCompletion({ client, model: provider.model, messages, generation })
+        return runStreamingCompletion({
+          client,
+          model: provider.model,
+          messages,
+          generation,
+          now: deps.clock.now
+        })
       },
       deps.execute
     )
@@ -235,7 +246,8 @@ export async function cmdSmoke(
           prompt,
           generation: config.generation,
           phase: 'smoke',
-          runIndex: 0
+          runIndex: 0,
+          clock: deps.clock
         }),
       deps.execute
     )
@@ -281,7 +293,8 @@ export async function cmdCalibrate(
           client,
           model: provider.model,
           messages: buildMessages(prompt.content, 'calibrate'),
-          generation
+          generation,
+          now: deps.clock.now
         })
         const row = {
           prompt_id: promptId,
@@ -307,77 +320,163 @@ export async function cmdFull(
 ): Promise<number> {
   const sessionBase = join(root, config.session_dir ?? 'results')
   deps.fs.ensureDir(sessionBase)
-  const sessionDir = deps.fs.createSessionDir(sessionBase)
+  const sessionDir = deps.fs.createSessionDir(sessionBase, deps.clock.date())
   const rawPath = join(sessionDir, 'raw.json')
-  let raw = newRawDocument(config, sessionDir.split(/[\\/]/).pop() ?? sessionDir)
+  const raw = newRawDocument(
+    config,
+    sessionDir.split(/[\\/]/).pop() ?? sessionDir,
+    deps.clock.date().toISOString()
+  )
   deps.fs.writeJson(rawPath, raw)
 
   console.log(`session: ${sessionDir}`)
-  if ((await cmdPreflight(config, promptsDoc, sessionDir, deps)) !== 0) {
-    console.error('preflight failed; aborting full sweep')
-    return 1
-  }
-
-  raw = JSON.parse(deps.fs.readText(rawPath)) as Record<string, unknown>
   const apiKey = config.api_key ?? 'local-benchmark-key'
   const warmupRuns = config.warmup_runs ?? 1
   const measuredRuns = config.measured_runs ?? 5
   const cooldownSeconds = config.cooldown_seconds ?? 90
   const basePromptIds = [...config.prompt_ids]
+  const parity = promptById(promptsDoc, config.parity_prompt_id ?? 'parity')
+  const parityResults: Record<string, unknown> = {}
+  const promptTokenCounts: Record<string, number> = {}
 
-  for (let providerIndex = 0; providerIndex < config.providers.length; providerIndex += 1) {
-    const provider = config.providers[providerIndex]!
-    ;(raw.provider_order as string[]).push(provider.id)
-    deps.fs.writeJson(rawPath, raw)
-    console.log(`\n=== provider ${provider.id} ===`)
-    const order = rotateIds(basePromptIds, providerIndex)
-    console.log(`prompt order: ${JSON.stringify(order)}`)
-
-    await runProviderLifecycle(
-      provider,
-      async () => {
-        const client = deps.createClient(provider.base_url, apiKey)
-        for (const promptId of order) {
-          const prompt = promptById(promptsDoc, promptId)
-          for (let i = 0; i < warmupRuns; i += 1) {
-            const run = await runOne({
-              client,
-              provider,
-              prompt,
-              generation: config.generation,
-              phase: 'warmup',
-              runIndex: i
-            })
-            appendRun(rawPath, raw, run, deps.fs.writeJson)
-            console.log(`warmup ${provider.id} ${promptId}#${i} ok=${run.ok}`)
-          }
-          for (let i = 0; i < measuredRuns; i += 1) {
-            const run = await runOne({
-              client,
-              provider,
-              prompt,
-              generation: config.generation,
-              phase: 'measured',
-              runIndex: i
-            })
-            appendRun(rawPath, raw, run, deps.fs.writeJson)
-            const metrics = run.metrics as Record<string, unknown>
-            console.log(
-              `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${metrics.ttft_ms} client_output_tps=${metrics.client_output_tps}`
-            )
-          }
-        }
-      },
-      deps.execute
-    )
-
-    if (providerIndex < config.providers.length - 1 && cooldownSeconds > 0) {
-      console.log(`cooldown ${cooldownSeconds}s before next provider`)
-      await deps.clock.sleep(cooldownSeconds * 1000)
+  function invalidate(reason: string): void {
+    raw.valid = false
+    const reasons = raw.invalid_reasons as string[]
+    if (!reasons.includes(reason)) {
+      reasons.push(reason)
     }
   }
 
+  try {
+    const bad = configPlaceholders(config)
+    if (bad.length > 0) {
+      throw new Error(`replace placeholders before full benchmark: ${bad.join(', ')}`)
+    }
+    raw.model_parity_evidence = await verifyModelParity(config)
+    deps.fs.writeJson(rawPath, raw)
+
+    for (let providerIndex = 0; providerIndex < config.providers.length; providerIndex += 1) {
+      const provider = config.providers[providerIndex]!
+      ;(raw.provider_order as string[]).push(provider.id)
+      deps.fs.writeJson(rawPath, raw)
+      console.log(`\n=== provider ${provider.id} ===`)
+      const order = rotateIds(basePromptIds, providerIndex)
+      console.log(`prompt order: ${JSON.stringify(order)}`)
+
+      try {
+        await runProviderLifecycle(
+          provider,
+          async () => {
+            const client = deps.createClient(provider.base_url, apiKey)
+            const [parsed, metrics, validation] = await runStreamingCompletion({
+              client,
+              model: provider.model,
+              messages: buildMessages(parity.content, null),
+              generation: config.generation,
+              now: deps.clock.now
+            })
+            parityResults[provider.id] = {
+              ok: validation.ok,
+              reasons: validation.reasons,
+              prompt_tokens: parsed.promptTokens,
+              completion_tokens: parsed.completionTokens,
+              response_model: parsed.responseModel,
+              content: parsed.content,
+              metrics: metricsToJson(metrics)
+            }
+            if (parsed.promptTokens !== null) {
+              promptTokenCounts[provider.id] = parsed.promptTokens
+            }
+            raw.parity = {
+              results: parityResults,
+              prompt_token_counts: promptTokenCounts,
+              prompt_tokens_equal: null
+            }
+            deps.fs.writeJson(rawPath, raw)
+
+            for (const promptId of order) {
+              const prompt = promptById(promptsDoc, promptId)
+              for (let i = 0; i < warmupRuns; i += 1) {
+                const run = await runOne({
+                  client,
+                  provider,
+                  prompt,
+                  generation: config.generation,
+                  phase: 'warmup',
+                  runIndex: i,
+                  clock: deps.clock
+                })
+                appendRun(rawPath, raw, run, deps.fs.writeJson)
+                console.log(`warmup ${provider.id} ${promptId}#${i} ok=${run.ok}`)
+              }
+              for (let i = 0; i < measuredRuns; i += 1) {
+                const run = await runOne({
+                  client,
+                  provider,
+                  prompt,
+                  generation: config.generation,
+                  phase: 'measured',
+                  runIndex: i,
+                  clock: deps.clock
+                })
+                appendRun(rawPath, raw, run, deps.fs.writeJson)
+                const metricsJson = run.metrics as Record<string, unknown>
+                console.log(
+                  `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${metricsJson.ttft_ms} client_output_tps=${metricsJson.client_output_tps}`
+                )
+              }
+            }
+          },
+          deps.execute
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        ;(raw.orchestration_errors as Array<{ provider: string; message: string }>).push({
+          provider: provider.id,
+          message
+        })
+        invalidate('provider_lifecycle_failure')
+        deps.fs.writeJson(rawPath, raw)
+        console.error(`FAIL provider ${provider.id}: ${message}`)
+        break
+      }
+
+      if (providerIndex < config.providers.length - 1 && cooldownSeconds > 0) {
+        console.log(`cooldown ${cooldownSeconds}s before next provider`)
+        await deps.clock.sleep(cooldownSeconds * 1000)
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    ;(raw.orchestration_errors as Array<{ provider: string; message: string }>).push({
+      provider: 'setup',
+      message
+    })
+    invalidate('benchmark_setup_failure')
+    console.error(`FAIL benchmark setup: ${message}`)
+  }
+
+  const uniquePromptTokenCounts = new Set(Object.values(promptTokenCounts))
+  const parityOk =
+    uniquePromptTokenCounts.size === 1 &&
+    Object.keys(promptTokenCounts).length === config.providers.length
+  raw.parity = {
+    results: parityResults,
+    prompt_token_counts: promptTokenCounts,
+    prompt_tokens_equal: parityOk
+  }
+  if (!parityOk) {
+    invalidate('prompt_tokens_parity_mismatch')
+  }
+  if (
+    !Object.values(parityResults).every((result) => (result as { ok?: boolean }).ok === true) ||
+    Object.keys(parityResults).length !== config.providers.length
+  ) {
+    invalidate('provider_parity_validation_failed')
+  }
+
   const reportPath = join(sessionDir, 'report.md')
+  deps.fs.writeJson(rawPath, raw)
   writeReport(raw as RawDocument, reportPath)
   deps.fs.writeJson(join(sessionBase, 'raw.json'), raw)
   deps.fs.copyFile(reportPath, join(sessionBase, 'report.md'))
@@ -387,7 +486,7 @@ export async function cmdFull(
   const measuredFailures = ((raw.runs as Array<Record<string, unknown>>) ?? []).filter(
     (r) => r.phase === 'measured' && !r.ok
   )
-  if (measuredFailures.length > 0) {
+  if (measuredFailures.length > 0 || raw.valid === false) {
     console.error(`FAIL: ${measuredFailures.length} measured run(s) failed; see ${rawPath}`)
     return 1
   }

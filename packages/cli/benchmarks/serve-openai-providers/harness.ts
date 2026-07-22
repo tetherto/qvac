@@ -117,10 +117,10 @@ export async function parseStream(
         responseModel = chunk.model
       }
       if (chunk.usage) {
-        if (chunk.usage.prompt_tokens != null) {
+        if (chunk.usage.prompt_tokens !== null && chunk.usage.prompt_tokens !== undefined) {
           promptTokens = Number(chunk.usage.prompt_tokens)
         }
-        if (chunk.usage.completion_tokens != null) {
+        if (chunk.usage.completion_tokens !== null && chunk.usage.completion_tokens !== undefined) {
           completionTokens = Number(chunk.usage.completion_tokens)
         }
       }
@@ -185,8 +185,8 @@ export function rotateIds(ids: string[], offset: number): string[] {
   return [...ids.slice(o), ...ids.slice(0, o)]
 }
 
-export function createSessionDir(base: string): string {
-  const stamp = new Date()
+export function createSessionDir(base: string, date: Date = new Date()): string {
+  const stamp = date
     .toISOString()
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}Z$/, 'Z')
@@ -197,11 +197,15 @@ export function createSessionDir(base: string): string {
 
 export function newRawDocument(
   config: BenchmarkConfig,
-  sessionId: string
+  sessionId: string,
+  createdAt: string = new Date().toISOString()
 ): Record<string, unknown> {
   return {
     session_id: sessionId,
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
+    valid: true,
+    invalid_reasons: [],
+    orchestration_errors: [],
     config_snapshot: {
       generation: config.generation,
       cooldown_seconds: config.cooldown_seconds,
@@ -241,10 +245,12 @@ export async function runStreamingCompletion(params: {
   model: string
   messages: Array<{ role: 'user'; content: string }>
   generation: GenerationConfig
+  now?: () => number
 }): Promise<[StreamParseResult, RunMetrics, ValidationResult]> {
+  const now = params.now ?? nowSeconds
   const kwargs = buildCompletionKwargs(params)
   const timings: StreamTimings = {
-    requestStartS: nowSeconds(),
+    requestStartS: now(),
     firstContentS: null,
     lastContentS: null,
     streamEndS: null
@@ -252,9 +258,9 @@ export async function runStreamingCompletion(params: {
   let parsed: StreamParseResult
   try {
     const stream = await params.client.chat.completions.create(kwargs)
-    parsed = await parseStream(stream, timings)
+    parsed = await parseStream(stream, timings, now)
   } catch (err) {
-    timings.streamEndS = nowSeconds()
+    timings.streamEndS = now()
     const name = err instanceof Error ? err.constructor.name : 'Error'
     const message = err instanceof Error ? err.message : String(err)
     parsed = {
