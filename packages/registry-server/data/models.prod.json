@@ -7563,6 +7563,39 @@
     "link": "https://huggingface.co/lerobot/pi05_base"
   },
   {
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "NVIDIA GR00T N1.7-3B vision-language-action model, LIBERO post-trained (libero_10). Single GGUF bundling a Qwen3-VL backbone (vision tower + text decoder truncated to select_layer=16), VL fusion, a 32-layer AlternateVLDiT action head, and a 4-step Euler flow-matching loop. Uses 2 camera views and continuous robot state (~3.76 GB). Desktop model of record.",
+    "quantization": "q8_vf16",
+    "params": "groot-n1.7-3b-libero",
+    "licenseId": "nvidia-open-model-license",
+    "tags": [
+      "vla",
+      "groot",
+      "libero",
+      "robotics"
+    ],
+    "notes": "q8_vf16 profile: Q8_0 text / DiT / VL-fusion / action-head linears, F16 vision tower, F32 norms. cos 0.999995 vs the PyTorch LIBERO oracle end-to-end. Converted from nvidia/GR00T-N1.7-LIBERO (libero_10) via convert_groot_dit_to_gguf.py.",
+    "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "NVIDIA GR00T N1.7-3B vision-language-action model, LIBERO post-trained (libero_10). Mobile profile of the desktop groot-q8_vf16 model: same architecture, smaller action-head quant so the model file fits the on-device memory budget (~2.74 GB). Uses 2 camera views and continuous robot state.",
+    "quantization": "q5_vf16",
+    "params": "groot-n1.7-3b-libero",
+    "licenseId": "nvidia-open-model-license",
+    "tags": [
+      "vla",
+      "groot",
+      "libero",
+      "robotics",
+      "mobile"
+    ],
+    "notes": "q5_vf16 profile: Q5_0 non-vision linears, F16 vision tower, F32 norms. cos 0.999964 vs the PyTorch LIBERO oracle. Q5_0 is required — legacy Q4_0 is too coarse for the LIBERO DiT action head, and K-quants are not supported by the qvac-fabric gguf packer. Converted from nvidia/GR00T-N1.7-LIBERO (libero_10) via convert_groot_dit_to_gguf.py.",
+    "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
+  },
+  {
     "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/593b5a2e04c8f3e4ee880263f93e0bd2901ad47f/smollm2-360m-instruct-q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "SmolLM2 360M instruction-tuned GGUF model from Hugging Face, useful as a small text-generation canary.",
