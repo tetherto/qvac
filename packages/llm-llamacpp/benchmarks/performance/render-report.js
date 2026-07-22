@@ -319,7 +319,7 @@ function shardKeyOf (config) {
 
 function shardLabel (key) {
   const [model, kv, bs] = key.split('|')
-  return `${model} [kv=${kv}]${bs ? ` [${bs}]` : ''}`
+  return `${model} [kv=${kv}]${bs ? ` [bs=${bs.slice(2)}]` : ''}`
 }
 
 // Per-device coverage of the mobile shard matrix. Every shard that runs emits
