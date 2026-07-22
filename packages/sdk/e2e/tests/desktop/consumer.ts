@@ -364,7 +364,7 @@ resources.define('vision', {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
+    ctx_size: 4096,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })

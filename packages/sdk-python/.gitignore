@@ -6,3 +6,5 @@ __pycache__/
 .mypy_cache/
 dist/
 build/
+# build_wheel.py's staged runtime+worker; never committed, wheel-only.
+src/tetherto/qvac_sdk/_bundle/

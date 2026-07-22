@@ -1,5 +1,6 @@
 import { type Request } from '@/schemas'
 import { handleBatchCompletionStream } from '@/server/rpc/handlers/batch-completion-stream'
+import { handleCompletionOrchestrate } from '@/server/rpc/handlers/completion-orchestrate'
 import { handleCompletionStream } from '@/server/rpc/handlers/completion-stream'
 import { handleDownloadAsset } from '@/server/rpc/handlers/download-asset'
 import { handleLoadModel } from '@/server/rpc/handlers/load-model'
@@ -156,6 +157,11 @@ export const registry: Record<string, HandlerEntry> = {
     delegatedHandler: handleCompletionStreamDelegated,
     isDelegated: isModelDelegated
   },
+
+  // Deliberately no delegated handler: tool callbacks execute code on the
+  // client machine, so only the user's own local worker may orchestrate
+  // (see completionOrchestrateResponseSchema's contract note).
+  completionOrchestrate: { type: 'duplex', handler: handleCompletionOrchestrate },
 
   batchCompletionStream: {
     type: 'stream',
