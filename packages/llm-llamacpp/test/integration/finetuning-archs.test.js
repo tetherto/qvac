@@ -9,7 +9,17 @@
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, setupParams, cleanupCheckpoints, safeTest } = require('./utils')
+const {
+  ensureModel,
+  setupParams,
+  cleanupCheckpoints,
+  assertFiniteMetricIfPresent,
+  runLoraInference,
+  waitForProgress,
+  verifyPauseCheckpoint,
+  handleEarlyCompletion,
+  safeTest
+} = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 const proc = require('bare-process')
@@ -27,68 +37,41 @@ const skipFinetuning = useCpu || (noGpu && !isWindows)
 
 const FINETUNE_TIMEOUT_MS = 3600_000
 
+// Download source (sha256/bytes) is resolved from models.manifest.json by `name`
+// at run time; ensureModel ignores the inline `url`. The `url` is kept here —
+// commit-pinned to match the manifest — because scripts/generate-model-manifest.js
+// scrapes name+url pairs from this file to (re)generate the mobile prestage
+// manifest; dropping it would make a regen silently lose this test's prestaged
+// model (finetuning-pause-resume.test.js keeps its urls for the same reason).
 const QWEN35_MODEL = {
   id: 'qwen3.5-0.8b-q4_0',
   name: 'Qwen3.5-0.8B-Q4_0.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf'
+  url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf'
 }
 
 const GEMMA4_MODEL = {
   id: 'gemma-4-e2b-q4_0',
   name: 'google_gemma-4-E2B-it-Q4_0.gguf',
-  url: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_0.gguf'
+  url: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_0.gguf'
 }
 
-const FINETUNE_MODELS = isMobile ? [QWEN35_MODEL] : [QWEN35_MODEL, GEMMA4_MODEL]
+// Gemma-4 (~3.3 GB) is the expensive leg and desktop-only. Keep it opt-in so the
+// default desktop CI run only pulls/finetunes the small Qwen3.5-0.8B; set
+// QVAC_RUN_ARCHS_GEMMA4=true to include it. Mobile always runs Qwen3.5 only (and
+// Qwen3.5-0.8B is the single model prestaged for this shard).
+const archsGemma4OptIn = !!(proc.env && proc.env.QVAC_RUN_ARCHS_GEMMA4 === 'true')
+const DESKTOP_MODELS = archsGemma4OptIn ? [QWEN35_MODEL, GEMMA4_MODEL] : [QWEN35_MODEL]
+const FINETUNE_MODELS = isMobile ? [QWEN35_MODEL] : DESKTOP_MODELS
 
 // Dense FFN gate + down; gradients flow through the gated-delta-net / attn mixers.
 const LORA_MODULES = 'ffn_gate,ffn_down'
-
-function assertFiniteIfPresent(t, stats, key, id) {
-  const v = stats?.[key]
-  if (v == null || (typeof v === 'number' && isNaN(v))) return
-  t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
-  t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not Inf), got: ${v}`)
-}
-
-async function runLoraInference(t, id, modelPath, loraAdapterPath) {
-  t.comment(`[${id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
-  const inferModel = new LlmLlamacpp({
-    files: { model: [modelPath] },
-    config: {
-      gpu_layers: '999',
-      ctx_size: '512',
-      device: forceCpuDevice ? 'cpu' : 'gpu',
-      predict: '32',
-      lora: loraAdapterPath
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-  try {
-    await inferModel.load()
-    const response = await inferModel.run([{ role: 'user', content: 'Hello' }])
-    let generated = ''
-    await response
-      .onUpdate((token) => {
-        generated += token
-      })
-      .await()
-    t.ok(generated.length > 0, `[${id}] LoRA inference should produce output`)
-    t.comment(
-      `[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
-    )
-  } finally {
-    await inferModel.unload().catch(() => {})
-  }
-}
 
 safeTest(
   'small LoRA finetune covers gated-delta-net + dense gemma4 archs',
   { timeout: FINETUNE_TIMEOUT_MS, skip: skipFinetuning },
   async (t) => {
     for (const m of FINETUNE_MODELS) {
-      const [modelName, modelDir] = await ensureModel({ modelName: m.name, downloadUrl: m.url })
+      const [modelName, modelDir] = await ensureModel({ modelName: m.name })
 
       const finetuneConfig = setupParams(modelDir, {
         testId: `archs-${m.id}`,
@@ -148,11 +131,11 @@ safeTest(
           !isNaN(stats.train_loss) && stats.train_loss > 0,
           `[${m.id}] train_loss must be positive finite (got ${stats.train_loss})`
         )
-        assertFiniteIfPresent(t, stats, 'train_loss', m.id)
-        assertFiniteIfPresent(t, stats, 'train_loss_uncertainty', m.id)
-        assertFiniteIfPresent(t, stats, 'val_loss', m.id)
-        assertFiniteIfPresent(t, stats, 'train_accuracy', m.id)
-        assertFiniteIfPresent(t, stats, 'val_accuracy', m.id)
+        assertFiniteMetricIfPresent(t, stats, 'train_loss', m.id)
+        assertFiniteMetricIfPresent(t, stats, 'train_loss_uncertainty', m.id)
+        assertFiniteMetricIfPresent(t, stats, 'val_loss', m.id)
+        assertFiniteMetricIfPresent(t, stats, 'train_accuracy', m.id)
+        assertFiniteMetricIfPresent(t, stats, 'val_accuracy', m.id)
 
         await model.unload().catch(() => {})
 
@@ -160,13 +143,121 @@ safeTest(
           finetuneConfig.outputParametersDir,
           'trained-lora-adapter.gguf'
         )
-        await runLoraInference(t, m.id, modelPath, loraAdapterPath)
+        await runLoraInference(t, { id: m.id, modelPath, loraAdapterPath, forceCpuDevice })
         t.pass(`[${m.id}] small LoRA finetune + inference completed`)
       } finally {
         loggerHandle.release()
         await model.unload().catch(() => {})
         cleanupCheckpoints(finetuneConfig.checkpointSaveDir)
       }
+    }
+  }
+)
+
+// Checkpoint save/resume coverage for a NEW dense arch. Previously only the
+// legacy arch (finetuning-pause-resume.test.js) exercised the addon resume path
+// (the `resumeBatch` math in LlamaFinetuningHelpers); qwen35/gemma4 had none.
+// Qwen3.5-0.8B is used: smallest new arch, still crosses a pause→resume boundary.
+// Desktop-only (`|| isMobile`): this adds a full extra finetune+resume cycle to
+// the shared mobile finetuningArchs/funcShardF shard, which would tighten its
+// 20/30-min per-test ceiling — and mobile already has pause/resume coverage via
+// the legacy-arch finetuning-pause-resume.test.js. Resume coverage for the new
+// arch is what matters, and desktop provides it.
+safeTest(
+  'LoRA finetune pause + resume (qwen35 dense)',
+  { timeout: FINETUNE_TIMEOUT_MS, skip: skipFinetuning || isMobile },
+  async (t) => {
+    const m = QWEN35_MODEL
+    const [modelName, modelDir] = await ensureModel({ modelName: m.name })
+
+    const finetuneConfig = setupParams(modelDir, {
+      testId: `archs-resume-${m.id}`,
+      loraModules: LORA_MODULES,
+      datasetSize: isMobile ? 8 : 16,
+      checkpointSaveSteps: 10
+    })
+    const checkpointDir = finetuneConfig.checkpointSaveDir
+
+    const modelPath = path.join(modelDir, modelName)
+    const loggerHandle = attachSpecLogger({ forwardToConsole: true })
+
+    const model = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: {
+        gpu_layers: '999',
+        ctx_size: '512',
+        device: forceCpuDevice ? 'cpu' : 'gpu',
+        verbosity: '2'
+      },
+      logger: console,
+      opts: { stats: true }
+    })
+
+    try {
+      await model.load()
+
+      const handle = await model.finetune(finetuneConfig)
+      let progressCount = 0
+      handle.on('stats', (stats) => {
+        progressCount++
+        t.ok(
+          !isNaN(stats.loss),
+          `[${m.id}] progress loss must not be NaN (step ${stats.global_steps})`
+        )
+      })
+      await waitForProgress(handle, 2)
+
+      await model.pause()
+      const pauseResult = await handle.await()
+
+      // Tiny datasets can finish before the pause takes effect — that's a valid
+      // path (no resume boundary to cross), accept it and stop.
+      if (pauseResult?.status === 'COMPLETED') {
+        await handleEarlyCompletion(
+          t,
+          handle,
+          checkpointDir,
+          `[${m.id}] finetune completed before pause`
+        )
+        t.pass(`[${m.id}] finetune completed early (no resume needed)`)
+        return
+      }
+
+      verifyPauseCheckpoint(t, checkpointDir)
+
+      const resumeHandle = await model.finetune(finetuneConfig)
+      resumeHandle.on('stats', (stats) => {
+        progressCount++
+        t.ok(
+          !isNaN(stats.loss),
+          `[${m.id}] resume progress loss must not be NaN (step ${stats.global_steps})`
+        )
+      })
+      const result = await resumeHandle.await()
+
+      t.ok(result, `[${m.id}] resume must return a result`)
+      t.ok(progressCount > 0, `[${m.id}] must receive at least one progress stats event`)
+      t.is(
+        result.status,
+        'COMPLETED',
+        `[${m.id}] resumed finetune should COMPLETE (got ${result.status})`
+      )
+      // Same dataset/batching as finetuning-pause-resume.test.js, so the total
+      // step count must match — proving no batch was skipped or repeated across
+      // the resume boundary.
+      const expectedGlobalSteps = isMobile ? 6 : 12
+      t.is(
+        result.stats?.global_steps,
+        expectedGlobalSteps,
+        `[${m.id}] global_steps should be ${expectedGlobalSteps} across the resume boundary, got ${result.stats?.global_steps}`
+      )
+      assertFiniteMetricIfPresent(t, result.stats, 'train_loss', m.id)
+      assertFiniteMetricIfPresent(t, result.stats, 'val_loss', m.id)
+      t.pass(`[${m.id}] pause + resume completed`)
+    } finally {
+      loggerHandle.release()
+      await model.unload().catch(() => {})
+      cleanupCheckpoints(finetuneConfig.checkpointSaveDir)
     }
   }
 )

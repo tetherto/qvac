@@ -6,7 +6,14 @@
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, setupParams, cleanupCheckpoints, safeTest } = require('./utils')
+const {
+  ensureModel,
+  setupParams,
+  cleanupCheckpoints,
+  assertFiniteMetricIfPresent,
+  runLoraInference,
+  safeTest
+} = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 const proc = require('bare-process')
@@ -27,61 +34,27 @@ const MOE_GPU_LAYERS = (proc.env && proc.env.QVAC_MOE_GPU_LAYERS) || '24'
 
 const FINETUNE_TIMEOUT_MS = 7200_000
 
+// Opt-in MoE model (~20 GB, gated behind QVAC_RUN_MOE_FINETUNE). Download source
+// (sha256/bytes) is resolved from models.manifest.json by `name`. Unlike the dense
+// archs models, no inline `url` is carried here ON PURPOSE: scripts/
+// generate-model-manifest.js scrapes name+url pairs to build the mobile prestage
+// list, and this 20 GB model must never be prestaged on mobile (the MoE test is
+// desktop / opt-in only and is never scheduled on a mobile shard).
 const MOE_MODEL = {
   id: 'qwen3.6-35b-a3b-q4_0',
-  name: 'Qwen_Qwen3.6-35B-A3B-Q4_0.gguf',
-  url: 'https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen_Qwen3.6-35B-A3B-Q4_0.gguf'
+  name: 'Qwen_Qwen3.6-35B-A3B-Q4_0.gguf'
 }
 
 // MoE expert gate + down projections — these match the per-expert ffn_*_exps tensors,
 // so the expert-LoRA path is exercised (it no-ops on dense models).
 const LORA_MODULES = 'ffn_gate_exps,ffn_down_exps'
 
-function assertFiniteIfPresent(t, stats, key, id) {
-  const v = stats?.[key]
-  if (v == null || (typeof v === 'number' && isNaN(v))) return
-  t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
-  t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not Inf), got: ${v}`)
-}
-
-async function runLoraInference(t, id, modelPath, loraAdapterPath) {
-  t.comment(`[${id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
-  const inferModel = new LlmLlamacpp({
-    files: { model: [modelPath] },
-    config: {
-      gpu_layers: MOE_GPU_LAYERS,
-      ctx_size: '512',
-      device: forceCpuDevice ? 'cpu' : 'gpu',
-      predict: '32',
-      lora: loraAdapterPath
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-  try {
-    await inferModel.load()
-    const response = await inferModel.run([{ role: 'user', content: 'Hello' }])
-    let generated = ''
-    await response
-      .onUpdate((token) => {
-        generated += token
-      })
-      .await()
-    t.ok(generated.length > 0, `[${id}] LoRA inference should produce output`)
-    t.comment(
-      `[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
-    )
-  } finally {
-    await inferModel.unload().catch(() => {})
-  }
-}
-
 safeTest(
   'MoE expert LoRA finetune (qwen35moe, opt-in)',
   { timeout: FINETUNE_TIMEOUT_MS, skip: skipMoeFinetuning },
   async (t) => {
     const m = MOE_MODEL
-    const [modelName, modelDir] = await ensureModel({ modelName: m.name, downloadUrl: m.url })
+    const [modelName, modelDir] = await ensureModel({ modelName: m.name })
 
     const finetuneConfig = setupParams(modelDir, {
       testId: `moe-${m.id}`,
@@ -137,11 +110,11 @@ safeTest(
         !isNaN(stats.train_loss) && stats.train_loss > 0,
         `[${m.id}] train_loss must be positive finite (got ${stats.train_loss})`
       )
-      assertFiniteIfPresent(t, stats, 'train_loss', m.id)
-      assertFiniteIfPresent(t, stats, 'train_loss_uncertainty', m.id)
-      assertFiniteIfPresent(t, stats, 'val_loss', m.id)
-      assertFiniteIfPresent(t, stats, 'train_accuracy', m.id)
-      assertFiniteIfPresent(t, stats, 'val_accuracy', m.id)
+      assertFiniteMetricIfPresent(t, stats, 'train_loss', m.id)
+      assertFiniteMetricIfPresent(t, stats, 'train_loss_uncertainty', m.id)
+      assertFiniteMetricIfPresent(t, stats, 'val_loss', m.id)
+      assertFiniteMetricIfPresent(t, stats, 'train_accuracy', m.id)
+      assertFiniteMetricIfPresent(t, stats, 'val_accuracy', m.id)
 
       await model.unload().catch(() => {})
 
@@ -149,7 +122,13 @@ safeTest(
         finetuneConfig.outputParametersDir,
         'trained-lora-adapter.gguf'
       )
-      await runLoraInference(t, m.id, modelPath, loraAdapterPath)
+      await runLoraInference(t, {
+        id: m.id,
+        modelPath,
+        loraAdapterPath,
+        gpuLayers: MOE_GPU_LAYERS,
+        forceCpuDevice
+      })
       t.pass(`[${m.id}] MoE expert LoRA finetune + inference completed`)
     } finally {
       loggerHandle.release()

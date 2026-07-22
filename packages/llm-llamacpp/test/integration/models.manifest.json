@@ -100,6 +100,14 @@
       "bytes": 2012012800,
       "warm": false
     },
+    "Qwen_Qwen3.6-35B-A3B-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/5c2410d71524f4f72b023ce8daf7a80528226d5f/Qwen_Qwen3.6-35B-A3B-Q4_0.gguf"
+      ],
+      "sha256": "52312daa5b2190c1f5723d33c3315c01c55af4206f6c6e6eb63f3d8dd52bb85e",
+      "bytes": 20836243072,
+      "warm": false
+    },
     "mmproj-Qwen3.5-0.8B-F16.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
@@ -168,7 +176,8 @@
         "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_0.gguf"
       ],
       "sha256": "9a1814fdb06f2a8b7f0a277b22bd3fc0083685fb39ff67836ab143bd19ff3bae",
-      "bytes": 3378738944
+      "bytes": 3378738944,
+      "warm": false
     },
     "mmproj-google_gemma-4-E2B-it-f16.gguf": {
       "urls": [
