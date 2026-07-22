@@ -2,9 +2,18 @@
 
 Client-side benchmark that hits each server's `POST /v1/chat/completions` with one
 shared OpenAI TypeScript SDK client, the same local GGUF, and a fixed prompt set.
-It measures TTFT, total latency, decode TPS, and an end-to-end prefill proxy.
+It measures TTFT, total latency, `client_output_tps`, and an end-to-end prefill
+proxy. `client_output_tps` is completion tokens divided by complete request
+latency, so it includes HTTP, queueing, prompt processing, and first-token time;
+it is not native decode throughput.
 
 Design details: [`design.md`](./design.md). Host/launch checklist: [`environment.md`](./environment.md).
+
+The full sweep verifies the configured GGUF SHA-256 before contacting providers.
+It then starts one provider at a time, runs parity and measurements in the same
+provider session, and always attempts bounded stop cleanup after a start attempt.
+Reports include valid, unavailable, failed, and attempted counts for every
+aggregate.
 
 ## CI
 
@@ -29,6 +38,9 @@ The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
 LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`
 runner, with the runtime config and environment manifest supplied by protected
 `benchmark-live` environment variables (never from the checked-out tree).
+The protected job validates the immutable target before dispatch and rejects
+runtime files that are missing, relative, inside the checkout, or reachable
+through a symlink into it.
 
 ## Local
 

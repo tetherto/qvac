@@ -87,7 +87,6 @@ export function validateRun(params: ValidateRunParams): ValidationResult {
   return { ok: reasons.length === 0, reasons }
 }
 
-/** Match Python statistics.quantiles(..., n=4, method='inclusive'). */
 export function quantilesInclusive(values: number[]): [number, number, number] {
   if (values.length === 0) {
     throw new Error('values must be non-empty')

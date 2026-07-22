@@ -32,14 +32,14 @@ function takeFlag(args: string[], name: string): string | undefined {
   return value
 }
 
-async function main(argv: string[]): Promise<number> {
+function main(argv: string[]): Promise<number> {
   const args = [...argv]
   const configPath = takeFlag(args, '--config') ?? 'benchmark.yaml'
   const promptsPath = takeFlag(args, '--prompts') ?? 'prompts.json'
   const command = args.shift()
   if (!command || command === '-h' || command === '--help') {
     printUsage()
-    return command ? 0 : 2
+    return Promise.resolve(command ? 0 : 2)
   }
 
   const root = process.cwd()
@@ -63,15 +63,15 @@ async function main(argv: string[]): Promise<number> {
       const raw = takeFlag(args, '--raw')
       if (!raw) {
         console.error('report requires --raw <path>')
-        return 2
+        return Promise.resolve(2)
       }
       const out = takeFlag(args, '--out') ?? 'results/report.md'
-      return cmdReport(resolve(root, raw), resolve(root, out))
+      return Promise.resolve(cmdReport(resolve(root, raw), resolve(root, out)))
     }
     default:
       console.error(`unknown command: ${command}`)
       printUsage()
-      return 2
+      return Promise.resolve(2)
   }
 }
 

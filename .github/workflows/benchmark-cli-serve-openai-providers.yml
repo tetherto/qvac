@@ -12,10 +12,10 @@ name: Benchmark CLI — OpenAI serve provider compare
 on:
   pull_request:
     paths:
-      - 'packages/cli/benchmarks/serve-openai-providers/**'
-      - 'packages/cli/package.json'
-      - 'packages/cli/tsconfig.benchmark.json'
-      - '.github/workflows/benchmark-cli-serve-openai-providers.yml'
+      - "packages/cli/benchmarks/serve-openai-providers/**"
+      - "packages/cli/package.json"
+      - "packages/cli/tsconfig.benchmark.json"
+      - ".github/workflows/benchmark-cli-serve-openai-providers.yml"
     branches:
       - main
       - release-*
@@ -24,11 +24,11 @@ on:
   workflow_dispatch:
     inputs:
       target_sha:
-        description: 'Full 40-char commit SHA to run (required; validated as ^[0-9a-fA-F]{40}$)'
+        description: "Full 40-char commit SHA to run (required; validated as ^[0-9a-fA-F]{40}$)"
         required: true
         type: string
       mode:
-        description: 'harness-unit (tsx tests only) | smoke | full'
+        description: "harness-unit (tsx tests only) | smoke | full"
         required: true
         type: choice
         options:
@@ -63,7 +63,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: '22'
+          node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
@@ -106,7 +106,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: '22'
+          node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
@@ -146,7 +146,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: '22'
+          node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Require runner-local config and environment manifest

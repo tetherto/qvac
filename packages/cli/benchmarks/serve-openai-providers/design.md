@@ -18,7 +18,7 @@ The benchmark covers:
 - Four fixed prompt sizes of approximately 512, 2,000, 4,000, and 7,000 tokens (labels are nominal; calibrate against measured Qwen3.5 `prompt_tokens` after the shared chat template is applied)
 - One warmup and five measured runs per provider and prompt size
 - Client-measured TTFT and total latency
-- Usage-based decode throughput and an end-to-end prefill proxy
+- Usage-based `client_output_tps` and an end-to-end prefill proxy
 
 It does not cover:
 
@@ -26,7 +26,7 @@ It does not cover:
 - Concurrent request throughput
 - Provider-native API endpoints
 - Native telemetry in comparative tables
-- Automated installation or lifecycle management of LM Studio and Ollama
+- Provider installation; optional runner-controlled lifecycle commands only
 - Running the full three-provider sweep on every pull request (harness unit tests only)
 
 ## CI
@@ -56,7 +56,8 @@ Credentials must not appear in configuration or result artifacts. Local endpoint
 Use the same GGUF bytes for all providers:
 
 1. Resolve the Qwen3.5-9B Q4_K_M registry model to its local GGUF path.
-2. Compute and record its SHA-256 digest.
+2. Compute its SHA-256 digest and require it to match `model_parity.sha256`
+   before any provider request.
 3. Configure `qvac serve` to load that local model (commit SHA recorded in `environment.md`).
 4. Load that file directly in LM Studio.
 5. Import that file into Ollama with a `Modelfile` whose `FROM` points to the same path.
@@ -80,11 +81,11 @@ Use the GGUF's embedded chat template without provider-specific system prompts o
 
 Keep `reasoning_budget` and other provider-specific fields out of the shared request body. Disable thinking via server/load configuration so the request shape stays identical:
 
-| Provider | Disable mechanism (record exact launch/config in `environment.md`) |
-|---|---|
-| `qvac serve` | Model/load config or server default equivalent to `reasoning_budget: 0` / thinking off for Qwen3.5 |
-| Ollama | Modelfile / server setting that disables thinking (e.g. `PARAMETER think false` or current Ollama equivalent) |
-| LM Studio | Load/runtime setting that disables reasoning / thinking for the GGUF |
+| Provider     | Disable mechanism (record exact launch/config in `environment.md`)                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `qvac serve` | Model/load config or server default equivalent to `reasoning_budget: 0` / thinking off for Qwen3.5            |
+| Ollama       | Modelfile / server setting that disables thinking (e.g. `PARAMETER think false` or current Ollama equivalent) |
+| LM Studio    | Load/runtime setting that disables reasoning / thinking for the GGUF                                          |
 
 Preflight must assert for every provider on the parity fixture:
 
@@ -100,7 +101,7 @@ Reasoning mode and context size may require provider-specific server configurati
 The environment manifest records:
 
 - macOS version, Apple chip, RAM, and power state
-- Python and OpenAI SDK versions
+- Node.js and OpenAI TypeScript SDK versions
 - qvac PR URL, branch, and exact commit SHA (minimum: PR #3259 merge `7ee761b70271`)
 - qvac CLI and SDK package versions
 - LM Studio and Ollama versions
@@ -117,16 +118,25 @@ Use fixed prompt bodies adapted from the existing calibrated prompt set in `pack
 
 Each request is a single user message. Insert a short run identifier near the start of the user content so a provider cannot reuse the full measured prompt prefix across runs. The run identifier is excluded from scenario naming but retained in raw request metadata. Size labels remain nominal because the run-id prefix makes `prompt_tokens` vary slightly across the five measured runs of a size; raw results keep per-run usage.
 
-For each provider:
+For each provider, sequentially:
 
-1. Run preflight validation.
-2. Execute prompt sizes in a recorded rotated order.
-3. Run one untimed warmup for each prompt size.
-4. Run five measured requests sequentially for each prompt size.
-5. Write each completed or failed run to `results/raw.json` immediately.
-6. Cool the machine for **90 seconds** (recorded; override via `benchmark.yaml` `cooldown_seconds`) before switching providers.
+1. Run its optional start command with the configured timeout.
+2. Create one client and run parity validation in that provider session.
+3. Execute prompt sizes in a recorded rotated order in the same session.
+4. Run one untimed warmup for each prompt size.
+5. Run five measured requests sequentially for each prompt size.
+6. Write each completed or failed run to `results/raw.json` immediately.
+7. Attempt the optional stop command after every start attempt, including a
+   start timeout or provider failure, and preserve both failures when cleanup
+   also fails.
+8. Cool the machine for **90 seconds** (recorded; override via
+   `benchmark.yaml` `cooldown_seconds`) before switching providers.
 
-Run only one provider benchmark block at a time. Stop unrelated inference processes and keep the Mac connected to AC power. The report must list provider execution order because provider blocks cannot be fully randomized without repeatedly unloading models.
+Run only one provider benchmark block at a time. A lifecycle failure stops later
+providers and marks the session invalid. Stop unrelated inference processes and
+keep the Mac connected to AC power. The report must list provider execution
+order because provider blocks cannot be fully randomized without repeatedly
+unloading models.
 
 ## Streaming and Metric Definitions
 
@@ -145,15 +155,19 @@ Per-run metrics:
 
 - `ttft_ms`: request start to first non-empty content
 - `total_ms`: request start to stream completion
-- `decode_window_ms`: first non-empty content to last non-empty content
 - `prompt_tokens`: final usage value
 - `completion_tokens`: final usage value
-- `decode_tps`: `(completion_tokens - 1) / (decode_window_ms / 1000)`
+- `client_output_tps`: `completion_tokens / (total_ms / 1000)`
 - `effective_prefill_tps`: `prompt_tokens / (ttft_ms / 1000)`
+
+`client_output_tps` is an end-to-end client measurement. It includes HTTP,
+queueing, chat-template processing, prompt prefill, first-token generation, and
+output generation, so it must not be presented as native llama.cpp decode TPS.
 
 `effective_prefill_tps` is an end-to-end proxy. It includes HTTP, queueing, chat-template processing, prefill, and first-token generation, so the report must not call it native `ppTPS`.
 
-If `completion_tokens` is less than two or the decode window is zero, `decode_tps` is unavailable for that run and the validation result records the reason.
+If completion usage is absent, zero, or invalid, `client_output_tps` is
+unavailable and validation fails the run.
 
 Aggregate each metric by provider and prompt size using:
 
@@ -161,17 +175,21 @@ Aggregate each metric by provider and prompt size using:
 - 25th percentile
 - 75th percentile
 - Interquartile range
-- Valid and failed run counts
+- Valid, unavailable, failed, and attempted run counts
 
 Do not aggregate warmups or failed runs.
 
-Calculate quartiles with inclusive linear interpolation over sorted values, matching Python's `statistics.quantiles(values, n=4, method="inclusive")`. This fixes the aggregation definition for the five-run sample.
+Calculate quartiles with inclusive linear interpolation over sorted values. For
+quartile `i`, interpolate at `i * (n - 1) / 4`. This fixes the aggregation
+definition for the five-run sample without depending on an external statistics
+runtime.
 
 ## Validation and Failure Handling
 
 Preflight must stop the formal sweep for a provider when any of these conditions occurs:
 
 - The endpoint or configured model is unavailable
+- The configured GGUF path, size, or SHA-256 digest does not match
 - The stream does not terminate normally
 - No non-empty content is emitted
 - Final prompt or completion usage is absent
@@ -194,13 +212,15 @@ The harness writes results atomically after each run so an interruption preserve
 - Role-only and reasoning-only chunks do not count as first content
 - First and last content timestamps are captured correctly
 - Final usage is required and extracted correctly
-- Decode TPS and effective prefill TPS formulas
-- Decode TPS is unavailable for fewer than two completion tokens
+- `client_output_tps` and effective prefill TPS formulas and caveats
 - Median, quartiles, and IQR for five values
-- Failed runs are excluded from aggregates
+- Aggregate valid, unavailable, failed, and attempted counts
 - Atomic result persistence retains completed runs
 - Missing usage, malformed chunks, and empty output fail validation
 - Reasoning markers in content fail validation
+- GGUF digest mismatches fail before provider requests
+- Parity and measured requests share one sequential provider session
+- Lifecycle timeouts, cleanup attempts, and combined failures are preserved
 
 After unit tests pass, run one measured request per provider at the shortest prompt size (`npx tsx benchmark.ts smoke`). The full sweep starts only if all three smoke runs produce valid usage and metrics, including streaming usage.
 
@@ -218,7 +238,9 @@ After unit tests pass, run one measured request per provider at the shortest pro
 8. Limitations
 9. Reproduction commands
 
-The primary comparison uses TTFT, total latency, and decode TPS. Effective prefill TPS appears in a separate table with its proxy caveat.
+The primary comparison uses TTFT, total latency, and `client_output_tps`, with
+the end-to-end caveat shown alongside the metric. Effective prefill TPS appears
+in a separate table with its proxy caveat.
 
 An optional qvac SDK-direct spot check may compare one short and one long request with native stats. It is validation context only and must not appear as a fourth comparative provider or alter HTTP metrics.
 
@@ -227,11 +249,14 @@ An optional qvac SDK-direct spot check may compare one short and one long reques
 The task is complete when:
 
 - All three providers use the exact same GGUF digest.
+- The configured digest is enforced before any provider request.
 - All benchmark requests use one OpenAI TypeScript SDK client and one shared request path.
+- Each provider's parity and measured requests run in the same sequential
+  lifecycle session, with bounded stop cleanup after every start attempt.
 - Four prompt sizes each have one warmup and five attempted measured runs per provider.
 - Raw results preserve every successful and failed attempt.
 - Comparative metrics use identical definitions and measurement sources.
 - The report presents medians and IQR, environment details, model parity evidence, limitations, and reproduction steps.
-- Unit tests and the three-provider smoke run pass.
+- TypeScript harness tests and the three-provider smoke run pass.
 - Any missing or invalid usage blocks the affected provider instead of producing estimated token throughput.
 - Reasoning is confirmed off on all three providers before the formal sweep.

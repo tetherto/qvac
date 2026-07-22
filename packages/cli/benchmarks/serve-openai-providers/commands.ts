@@ -501,11 +501,11 @@ export async function cmdFull(
   return 0
 }
 
-export async function cmdReport(
+export function cmdReport(
   rawPath: string,
   reportPath: string,
   deps: CommandDependencies = defaultDependencies()
-): Promise<number> {
+): number {
   const raw = JSON.parse(deps.fs.readText(rawPath)) as RawDocument
   writeReport(raw, reportPath)
   console.log(`wrote ${reportPath}`)

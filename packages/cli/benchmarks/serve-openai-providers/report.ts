@@ -54,9 +54,21 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('')
   lines.push('- TTFT: request start → first non-empty `delta.content`')
   lines.push('- Total: request start → stream completion')
-  lines.push('- Client output TPS: `completion_tokens / total_s`')
+  lines.push(
+    '- Client output TPS: `completion_tokens / total_s` (end to end; includes HTTP, queueing, prompt processing, and first-token time; not native decode TPS)'
+  )
   lines.push(
     '- Effective prefill TPS (proxy): `prompt_tokens / ttft_s` (includes HTTP, queueing, template, prefill, first token; not native ppTPS)'
+  )
+  lines.push('- The configured GGUF SHA-256 is enforced before provider requests.')
+  lines.push(
+    '- Providers run sequentially; parity and measurements share one provider lifecycle session, with bounded stop cleanup after every start attempt.'
+  )
+  lines.push(
+    '- Every aggregate reports valid, unavailable, failed, and attempted observation counts.'
+  )
+  lines.push(
+    '- Protected live CI supplies runtime config and environment files from outside the checked-out repository.'
   )
   lines.push(`- Provider order: ${JSON.stringify(raw.provider_order)}`)
   lines.push(`- Cool-down between providers: ${snapshot.cooldown_seconds}s`)
@@ -140,6 +152,7 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('## Limitations')
   lines.push('')
   lines.push('- Single-host, single-model, sequential requests only.')
+  lines.push('- Client output TPS is end-to-end client throughput, not native decode throughput.')
   lines.push(
     '- Provider blocks are ordered; cool-down reduces but does not erase thermal carryover.'
   )
@@ -163,5 +176,5 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('```')
   lines.push('')
 
-  writeFileSync(path, lines.join('\n'), 'utf8')
+  writeFileSync(path, `${lines.join('\n')}\n`, 'utf8')
 }

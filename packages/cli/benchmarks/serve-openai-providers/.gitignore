@@ -1,6 +1,3 @@
 results/session-*/
 results/raw.json
 results/report.md
-.venv/
-__pycache__/
-.pytest_cache/

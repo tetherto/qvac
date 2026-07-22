@@ -258,8 +258,9 @@ describe('serve-openai-providers harness', () => {
       const deps: CommandDependencies = {
         ...defaultDependencies(),
         createClient: () => makeMeasuredFailureClient(),
-        execute: async (command) => {
+        execute: (command) => {
           events.push(command[0]!)
+          return Promise.resolve()
         }
       }
 
@@ -315,8 +316,9 @@ describe('serve-openai-providers harness', () => {
           const providerId = baseUrl.includes('11435') ? 'first' : 'second'
           return makeSuccessfulClient(providerId, 5, events)
         },
-        execute: async (command) => {
+        execute: (command) => {
           events.push(command[0]!)
+          return Promise.resolve()
         }
       }
 
@@ -422,11 +424,12 @@ describe('serve-openai-providers harness', () => {
         ...defaultDependencies(),
         createClient: (baseUrl) =>
           makeSuccessfulClient(baseUrl.includes('11435') ? 'first' : 'second', 5),
-        execute: async (command) => {
+        execute: (command) => {
           events.push(command[0]!)
           if (command[0] === 'start-second') {
-            throw new Error('second failed to start')
+            return Promise.reject(new Error('second failed to start'))
           }
+          return Promise.resolve()
         },
         clock: {
           ...defaultDependencies().clock,
@@ -1054,12 +1057,13 @@ describe('serve-openai-providers harness', () => {
     const events: string[] = []
     const result = await runProviderLifecycle(
       providerWithCommands,
-      async () => {
+      () => {
         events.push('request')
-        return 7
+        return Promise.resolve(7)
       },
-      async (command) => {
+      (command) => {
         events.push(command[0]!)
+        return Promise.resolve()
       }
     )
     assert.equal(result, 7)
@@ -1068,15 +1072,14 @@ describe('serve-openai-providers harness', () => {
 
   it('stops the provider when its request fails', async () => {
     const events: string[] = []
-    const executeRecordingCommand = async (command: string[]): Promise<void> => {
+    const executeRecordingCommand = (command: string[]): Promise<void> => {
       events.push(command[0]!)
+      return Promise.resolve()
     }
     await assert.rejects(
       runProviderLifecycle(
         providerWithCommands,
-        async () => {
-          throw new Error('request failed')
-        },
+        () => Promise.reject(new Error('request failed')),
         executeRecordingCommand
       ),
       /request failed/
@@ -1089,9 +1092,10 @@ describe('serve-openai-providers harness', () => {
     let executed = 0
     const result = await runProviderLifecycle(
       provider,
-      async () => 42,
-      async () => {
+      () => Promise.resolve(42),
+      () => {
         executed += 1
+        return Promise.resolve()
       }
     )
     assert.equal(result, 42)
@@ -1099,29 +1103,29 @@ describe('serve-openai-providers harness', () => {
   })
 
   it('surfaces a stop failure after a successful operation', async () => {
-    const failingStop = async (command: string[]): Promise<void> => {
+    const failingStop = (command: string[]): Promise<void> => {
       if (command[0] === 'stop-provider') {
-        throw new Error('stop failed')
+        return Promise.reject(new Error('stop failed'))
       }
+      return Promise.resolve()
     }
     await assert.rejects(
-      runProviderLifecycle(providerWithCommands, async () => 1, failingStop),
+      runProviderLifecycle(providerWithCommands, () => Promise.resolve(1), failingStop),
       /stop failed/
     )
   })
 
   it('preserves the operation error when stop also fails', async () => {
-    const failingStop = async (command: string[]): Promise<void> => {
+    const failingStop = (command: string[]): Promise<void> => {
       if (command[0] === 'stop-provider') {
-        throw new Error('stop failed')
+        return Promise.reject(new Error('stop failed'))
       }
+      return Promise.resolve()
     }
     await assert.rejects(
       runProviderLifecycle(
         providerWithCommands,
-        async () => {
-          throw new Error('request failed')
-        },
+        () => Promise.reject(new Error('request failed')),
         failingStop
       ),
       (error: unknown) => {
@@ -1141,7 +1145,7 @@ describe('serve-openai-providers harness', () => {
       await runProviderLifecycle(
         providerWithCommands,
         () => Promise.reject(undefined),
-        async () => {}
+        () => Promise.resolve()
       )
     } catch (error) {
       rejected = true
@@ -1157,7 +1161,7 @@ describe('serve-openai-providers harness', () => {
     try {
       await runProviderLifecycle(
         providerWithCommands,
-        async () => 1,
+        () => Promise.resolve(1),
         (command) =>
           command[0] === 'stop-provider' ? Promise.reject(undefined) : Promise.resolve()
       )
@@ -1239,12 +1243,13 @@ describe('serve-openai-providers harness', () => {
     await assert.rejects(
       runProviderLifecycle(
         providerWithCommands,
-        async () => 1,
-        async (command) => {
+        () => Promise.resolve(1),
+        (command) => {
           events.push(command[0]!)
           if (command[0] === 'start-provider') {
-            throw new Error('timed out after 25ms')
+            return Promise.reject(new Error('timed out after 25ms'))
           }
+          return Promise.resolve()
         }
       ),
       /timed out after 25ms/
@@ -1262,9 +1267,10 @@ describe('serve-openai-providers harness', () => {
           timeout_seconds: 2.5
         }
       },
-      async () => 1,
-      async (_command, timeoutMs) => {
+      () => Promise.resolve(1),
+      (_command, timeoutMs) => {
         timeouts.push(timeoutMs)
+        return Promise.resolve()
       }
     )
     assert.deepEqual(timeouts, [2500, 2500])
