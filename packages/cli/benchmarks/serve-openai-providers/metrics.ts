@@ -120,7 +120,8 @@ export function aggregateMetric(observations: MetricObservation[]): AggregateSta
   const nAttempted = observations.length
   const nFailed = observations.filter((observation) => !observation.ok).length
   const nUnavailable = observations.filter(
-    (observation) => observation.ok && observation.value === null
+    (observation) =>
+      observation.ok && (observation.value === null || !Number.isFinite(observation.value))
   ).length
   const nValid = values.length
   if (values.length === 0) {

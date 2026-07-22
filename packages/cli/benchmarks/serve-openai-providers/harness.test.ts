@@ -11,7 +11,8 @@ import {
   rotateIds
 } from './harness.ts'
 import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
-import type { StreamParseResult, StreamTimings } from './types.ts'
+import { writeReport } from './report.ts'
+import type { RawDocument, StreamParseResult, StreamTimings } from './types.ts'
 
 function makeParsed(overrides: {
   requestStartS?: number
@@ -195,6 +196,93 @@ describe('serve-openai-providers harness', () => {
       },
       { attempted: 3, valid: 1, unavailable: 1, failed: 1 }
     )
+  })
+
+  it('classifies successful non-finite values as unavailable', () => {
+    const stats = aggregateMetric([
+      { value: 10, ok: true },
+      { value: Number.NaN, ok: true },
+      { value: Number.POSITIVE_INFINITY, ok: true },
+      { value: null, ok: true },
+      { value: null, ok: false }
+    ])
+    assert.deepEqual(
+      {
+        attempted: stats.nAttempted,
+        valid: stats.nValid,
+        unavailable: stats.nUnavailable,
+        failed: stats.nFailed
+      },
+      { attempted: 5, valid: 1, unavailable: 3, failed: 1 }
+    )
+    assert.equal(stats.nAttempted, stats.nValid + stats.nUnavailable + stats.nFailed)
+  })
+
+  it('renders aggregate counts in every metric table', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-report-'))
+    try {
+      const path = join(dir, 'report.md')
+      const raw: RawDocument = {
+        session_id: 'test-session',
+        created_at: '2026-07-22T00:00:00.000Z',
+        config_snapshot: {
+          generation: {},
+          cooldown_seconds: 0,
+          prompt_ids: ['short'],
+          providers: [{ id: 'qvac', base_url: 'http://localhost', model: 'model' }],
+          model_parity: { gguf_path: '/tmp/model.gguf' }
+        },
+        provider_order: ['qvac'],
+        parity: {},
+        runs: [
+          {
+            provider: 'qvac',
+            prompt_id: 'short',
+            phase: 'measured',
+            run_index: 0,
+            ok: true,
+            metrics: {
+              ttft_ms: 10,
+              total_ms: 20,
+              client_output_tps: 30,
+              effective_prefill_tps: 40
+            }
+          },
+          {
+            provider: 'qvac',
+            prompt_id: 'short',
+            phase: 'measured',
+            run_index: 1,
+            ok: true,
+            metrics: {
+              ttft_ms: null,
+              total_ms: null,
+              client_output_tps: null,
+              effective_prefill_tps: null
+            }
+          },
+          {
+            provider: 'qvac',
+            prompt_id: 'short',
+            phase: 'measured',
+            run_index: 2,
+            ok: false,
+            metrics: {
+              ttft_ms: null,
+              total_ms: null,
+              client_output_tps: null,
+              effective_prefill_tps: null
+            }
+          }
+        ]
+      }
+      writeReport(raw, path)
+      const report = readFileSync(path, 'utf8')
+      const expectedCounts = 'valid=1, unavailable=1, failed=1, attempted=3'
+      assert.equal(report.split(expectedCounts).length - 1, 4)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('persists results atomically', () => {
