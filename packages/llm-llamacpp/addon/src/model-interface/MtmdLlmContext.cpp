@@ -1932,7 +1932,9 @@ bool MtmdLlmContext::onGenerationFinished(
   }
   compactThinkSpan();
   rollbackState_.clearPrefillEntry();
-  generationStopReason_ = GenerationStopReason::None;
+  // `generationStopReason_` intentionally persists: runtime stats read
+  // it after generation returns; it is re-initialized at the next
+  // generation's entry.
   return true;
 }
 
