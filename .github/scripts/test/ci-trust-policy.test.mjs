@@ -308,6 +308,10 @@ function authorizePr(overrides = {}) {
     IS_DRAFT: 'false',
     AUTHOR_ASSOC: 'NONE',
     HAS_WRITE: '0',
+    // Default represents a legit, reviewed fork: the current head SHA carries
+    // the merge/release-approved qvac/fork-verified status (resolved by the
+    // separate 'approved' step, injected here for the decision-logic unit).
+    HAS_APPROVED_SHA: 'true',
     LABEL_NAME: 'verified',
     LABELS_JSON: '["verified"]',
     GITHUB_ACTOR: 'outsider',
@@ -346,6 +350,64 @@ test('authorize-pr: same-repo synchronize and reviewed fork open remain authoris
     'true',
   )
   assert.equal(authorizePr().allowed, 'true')
+})
+
+test('authorize-pr: SHA-bound — flip events do not authorise an unapproved head (Marcus)', () => {
+  // draft->ready and close->reopen replay a stale approval onto a new commit
+  // whose SHA was never approved (HAS_APPROVED_SHA=false). Both must deny.
+  assert.equal(
+    authorizePr({ ACTION: 'ready_for_review', HAS_APPROVED_SHA: 'false' }).allowed,
+    'false',
+  )
+  assert.equal(
+    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false' }).allowed,
+    'false',
+  )
+  // Even a plain reopen/open with the label present but an unapproved head SHA.
+  assert.equal(
+    authorizePr({ ACTION: 'opened', HAS_APPROVED_SHA: 'false' }).allowed,
+    'false',
+  )
+})
+
+test('authorize-pr: SHA-bound — labeled event authorises on the approval moment even before the status lands', () => {
+  // On the `labeled` event label-gate records the status in a parallel job;
+  // authorize-pr must authorise on label presence here (race-safe) and let
+  // label-gate enforce applier-team trust + strip.
+  assert.equal(
+    authorizePr({ ACTION: 'labeled', HAS_APPROVED_SHA: 'false' }).allowed,
+    'true',
+  )
+})
+
+test('authorize-pr: SHA-bound — reviewed fork at the approved head stays authorised across events', () => {
+  assert.equal(
+    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'true' }).allowed,
+    'true',
+  )
+  assert.equal(
+    authorizePr({ ACTION: 'ready_for_review', HAS_APPROVED_SHA: 'true' }).allowed,
+    'true',
+  )
+})
+
+test('authorize-pr: SHA-bound gate is bypassed by write/member trust (unaffected)', () => {
+  // Trusted actors never needed the label/SHA gate; that stays true.
+  assert.equal(
+    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false', HAS_WRITE: '1' }).allowed,
+    'true',
+  )
+  assert.equal(
+    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false', AUTHOR_ASSOC: 'MEMBER' }).allowed,
+    'true',
+  )
+})
+
+test('authorize-pr: external fork without the label is denied regardless of SHA status', () => {
+  assert.equal(
+    authorizePr({ ACTION: 'opened', LABELS_JSON: '[]', HAS_APPROVED_SHA: 'true' }).allowed,
+    'false',
+  )
 })
 
 test('authorize-pr: drafts are denied before internal or fork trust checks', () => {
