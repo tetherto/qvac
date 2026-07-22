@@ -1,0 +1,197 @@
+---
+title: Python SDK
+description: The Python client for QVAC — same worker, same contract as the TypeScript SDK.
+schemaType: TechArticle
+---
+
+The Python SDK (`tetherto-qvac-sdk` on PyPI) is a full-fidelity client for QVAC: it drives
+the same worker, over the same generated contract, as the TypeScript
+`@qvac/sdk`. Every capability — LLM completion, embeddings, transcription,
+text-to-speech, OCR, translation, diffusion, VLA, plugins — is available from
+Python, and behaves identically to the JS client because the behaviour lives in
+the shared worker, not re-implemented per language.
+
+It is asyncio-native. The package version tracks the `@qvac/sdk` version it
+speaks (for example `0.15.0`), so a given Python release makes clear exactly
+which SDK it targets.
+
+## Install
+
+Getting started is two steps: install the Python package, then make the QVAC
+**worker** available.
+
+### 1. Install the package
+
+```bash
+pip install "tetherto-qvac-sdk[bare-rpc]"
+```
+
+The `bare-rpc` extra is **required** — it is the wire transport the client uses
+to reach the worker. (It is packaged as an extra only because its dependencies
+are git-only for now; it folds into the base install once they are on PyPI.)
+Genuinely optional extras: `vla` (numpy), `notebook` (numpy + pandas).
+
+### 2. Install the worker (required)
+
+The Python package is a thin client — every model runs in the QVAC **worker**
+(the runtime, `@qvac/sdk`), so the worker must be installed before anything can
+run. Install it once, either way (both need Node.js on your machine):
+
+```bash
+# via Python — fetches the exact worker version this package speaks and caches
+# it under ~/.cache/qvac/worker/<version>:
+python -m tetherto.qvac_sdk install-worker
+
+# or via npm — install the @qvac/sdk version that MATCHES this package. The two
+# share a version number, so use your installed tetherto-qvac-sdk version here
+# (Client() warns on a mismatch):
+npm install -g @qvac/sdk@0.15.0
+```
+
+The Python route is recommended for a first run: it pins the worker to the exact
+version this package was generated against, so you never track the version
+yourself. After this, `Client()` finds the worker automatically — no
+configuration.
+
+### Worker resolution order
+
+`Client()` locates a worker by trying, in order:
+
+1. Explicit `worker_path` / `bare_path` arguments, or `QVAC_WORKER_PATH` /
+   `QVAC_BARE_PATH` environment variables.
+2. A self-contained bundled wheel — zero configuration.
+3. `sdk_dir` / `QVAC_SDK_DIR` pointing at an installed `@qvac/sdk` (handy when
+   developing against a locally-built SDK).
+4. A worker fetched by `python -m tetherto.qvac_sdk install-worker` (cached under
+   `~/.cache/qvac/worker/<version>`, overridable with `QVAC_WORKER_HOME`).
+5. A global `npm install -g @qvac/sdk`.
+
+The fetched worker is version-locked to the installed `tetherto-qvac-sdk` package.
+
+## Quickstart
+
+```python
+import asyncio
+from tetherto.qvac_sdk import Client, load_model, completion, unload_model
+from tetherto.qvac_sdk.models import LLAMA_3_2_1B_INST_Q4_0
+
+
+async def main():
+    async with Client() as client:
+        t = client.transport
+        model_id = await load_model(t, model_src=LLAMA_3_2_1B_INST_Q4_0)
+        run = completion(
+            t,
+            model_id=model_id,
+            history=[{"role": "user", "content": "Explain quantum computing in one sentence"}],
+        )
+        async for event in run.events:
+            if event.type == "contentDelta":
+                print(event.text, end="", flush=True)
+        print()
+        await unload_model(t, model_id)
+
+
+asyncio.run(main())
+```
+
+## The public API
+
+Everything you normally need is imported flat from `tetherto.qvac_sdk`; model constants live
+in `tetherto.qvac_sdk.models`.
+
+| Group | Names |
+| --- | --- |
+| Client | `Client` (`client.transport` is passed to every call) |
+| Ergonomic wrappers | `load_model`, `unload_model`, `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin`, `invoke_plugin_stream`, `model_registry_list` / `_search` / `_get_model` |
+| Result types | `CompletionRun` (`.events`, `.final`), `CompletionFinal`, `ToolCall`, `TranslateRun` |
+| Generated methods | `embed`, `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, … (each takes a typed request model) |
+| Models & enums | `LoadModelRequest`, `ModelType`, … (also in `tetherto.qvac_sdk.schemas`) |
+| Errors | `QvacError`, `RPCError`, `InferenceCancelledError`, `ContextOverflowError`, … |
+| Logging / VLA | `logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`; `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state` |
+| Notebook | `tetherto.qvac_sdk.notebook.SyncClient` — synchronous, numpy/pandas returns, live in-cell streaming |
+
+## Tool calling
+
+The public way to call tools is `completion(tools=...)`: the model's tool
+calls come back on the run, you execute them and feed the results into a
+follow-up completion — the same client-side flow as the TypeScript SDK.
+
+```python
+run = completion(t, model_id=model_id, history=history, tools=[
+    {"name": "get_weather", "description": "Current weather for a location",
+     "parameters": {"type": "object", "properties": {"location": {"type": "string"}}}},
+])
+final = await run.final
+for call in final.tool_calls:
+    ...  # run the tool, append its result to history, call completion() again
+```
+
+There is also an **advanced** worker-orchestrated path,
+`tetherto.qvac_sdk._completion.completion_orchestrate`, where the worker runs the whole
+multi-turn loop and calls back into your local handlers. It's not part of the
+flat public API — the TypeScript SDK has no client wrapper for it yet, so it's
+kept as worker plumbing pending JS parity.
+
+## Configuring the SDK
+
+`Client(config=...)` sends an SDK config to the worker on connect — the same
+`QvacConfig` the TypeScript client applies (`cacheDirectory`, `loggerLevel`,
+`swarmRelays`, per-device plugin defaults, …):
+
+```python
+async with Client(config={"cacheDirectory": "/data/qvac-models", "loggerLevel": "warn"}) as client:
+    ...
+```
+
+`cacheDirectory` (absolute) relocates where models are stored — useful for a
+shared or mounted cache. The `QVAC_CACHE_DIR` environment variable is a shortcut
+that sets `cacheDirectory` without code.
+
+## Notebook / data science (Jupyter)
+
+For notebooks and REPLs there's a synchronous facade,
+`tetherto.qvac_sdk.notebook.SyncClient`, that runs the async client on a
+background thread — so every call is a plain blocking call (no `await`), returns
+numpy/pandas-native data, and streams completions live into the cell. Install
+the `notebook` extra (`pip install "tetherto-qvac-sdk[notebook,bare-rpc]"`):
+
+```python
+from tetherto.qvac_sdk.notebook import SyncClient
+from tetherto.qvac_sdk.models import EMBEDDINGGEMMA_300M_Q4_0, QWEN3_600M_INST_Q4
+
+with SyncClient() as client:                       # owns a Client; or SyncClient(transport=...)
+    embed_model = client.load_model(model_src=EMBEDDINGGEMMA_300M_Q4_0)
+
+    vec = client.embed(embed_model, "hello")       # -> 1-D numpy float32 array
+    mat = client.embed(embed_model, ["a", "b"])    # -> 2-D numpy array, one row per text
+    df = client.embed_frame(                        # -> pandas DataFrame, indexed by text
+        embed_model, ["quantum computing", "espresso machine"]
+    )
+
+    llm = client.load_model(model_src=QWEN3_600M_INST_Q4, model_config={"n_ctx": 2048})
+    text = client.completion(llm, "Explain embeddings in one sentence.", predict=256)
+```
+
+`transcribe()` accepts a numpy PCM array (or a file path / raw bytes) and
+`text_to_speech()` returns float32 PCM as a numpy array, so audio round-trips
+stay in numpy. Full examples ship with the package: `examples/notebook.ipynb`
+(a Jupyter notebook) and `examples/notebook.py` (a script).
+
+## Consistency with the TypeScript SDK
+
+The Python and JS clients are held to the same behaviour by construction:
+
+- The typed models, method stubs, model-type maps, error codes, and the pinned
+  SDK version are all **generated from the one contract**; CI fails if they
+  drift.
+- Un-generatable behaviour (source-language detection, the tool loop) lives in
+  the **worker**, so both clients call it rather than re-implementing it.
+- A shared **conformance corpus** runs the same cases through both clients.
+
+## Examples
+
+Runnable examples for every major capability ship with the package under
+`examples/` (completion, tools, cancel, embeddings, translation, transcription,
+TTS, OCR, registry queries, logging, VLA, plugins, and the notebook facade),
+mirroring the TypeScript SDK's examples.

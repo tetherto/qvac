@@ -27,7 +27,7 @@ const S3_NO_BUCKET = (val) => {
 }
 
 let _s3LegacyPaths = null
-function loadS3LegacyPaths () {
+function loadS3LegacyPaths() {
   if (!_s3LegacyPaths) {
     const legacyPathsFile = path.resolve(__dirname, '../data/s3-legacy-paths.json')
     _s3LegacyPaths = new Set(JSON.parse(require('fs').readFileSync(legacyPathsFile, 'utf8')))
@@ -36,7 +36,7 @@ function loadS3LegacyPaths () {
 }
 
 let _hfLegacyMainSources = null
-function loadHfLegacyMainSources () {
+function loadHfLegacyMainSources() {
   if (!_hfLegacyMainSources) {
     const legacyFile = path.resolve(__dirname, '../data/hf-legacy-main-sources.json')
     _hfLegacyMainSources = new Set(JSON.parse(require('fs').readFileSync(legacyFile, 'utf8')))
@@ -60,20 +60,34 @@ const HF_COMMIT_PIN = (val) => {
 const ciFields = {
   ...baseModelFields,
   source: baseModelFields.source
-    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
-    .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' })
-    .refine(S3_DATE_FOLDER, { message: 'S3 URLs must include a date folder (YYYY-MM-DD) in the path. Upload artifacts to a dated directory to ensure registry consistency when models are updated.' })
-    .refine(HF_COMMIT_PIN, { message: 'HuggingFace source URLs must pin to a specific commit hash, not a branch name. Use https://huggingface.co/<org>/<repo>/resolve/<full-commit-sha>/<file>' }),
+    .refine(SOURCE_REFINE, {
+      message: 'Invalid source URL (must be s3:// or https://huggingface.co/)'
+    })
+    .refine(S3_NO_BUCKET, {
+      message:
+        'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.'
+    })
+    .refine(S3_DATE_FOLDER, {
+      message:
+        'S3 URLs must include a date folder (YYYY-MM-DD) in the path. Upload artifacts to a dated directory to ensure registry consistency when models are updated.'
+    })
+    .refine(HF_COMMIT_PIN, {
+      message:
+        'HuggingFace source URLs must pin to a specific commit hash, not a branch name. Use https://huggingface.co/<org>/<repo>/resolve/<full-commit-sha>/<file>'
+    }),
 
-  engine: baseModelFields.engine
-    .regex(ENGINE_PATTERN, 'Invalid engine format (expected @qvac/<engine-name>)'),
+  engine: baseModelFields.engine.regex(
+    ENGINE_PATTERN,
+    'Invalid engine format (expected @qvac/<engine-name>)'
+  ),
 
-  replacedBy: z.string()
+  replacedBy: z
+    .string()
     .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
     .optional()
 }
 
-function createModelSchema (validLicenses) {
+function createModelSchema(validLicenses) {
   return z.object({
     ...ciFields,
     licenseId: ciFields.licenseId.refine(
@@ -83,18 +97,18 @@ function createModelSchema (validLicenses) {
   })
 }
 
-function createDeprecatedModelSchema () {
+function createDeprecatedModelSchema() {
   return z.object(ciFields)
 }
 
-async function loadValidLicenses () {
+async function loadValidLicenses() {
   const licensesPath = path.resolve(__dirname, '../data/licenses.json')
   const licensesContent = await fs.readFile(licensesPath, 'utf8')
   const licensesData = JSON.parse(licensesContent)
-  return new Set(licensesData.map(l => l.spdxId))
+  return new Set(licensesData.map((l) => l.spdxId))
 }
 
-function checkDuplicates (models) {
+function checkDuplicates(models) {
   const errors = []
   const seenSources = new Map()
 
@@ -103,7 +117,9 @@ function checkDuplicates (models) {
     if (!source) continue
 
     if (seenSources.has(source)) {
-      errors.push(`[${i}] Duplicate source (first seen at index ${seenSources.get(source)}): ${source}`)
+      errors.push(
+        `[${i}] Duplicate source (first seen at index ${seenSources.get(source)}): ${source}`
+      )
     } else {
       seenSources.set(source, i)
     }
@@ -112,9 +128,9 @@ function checkDuplicates (models) {
   return errors
 }
 
-function validateReplacedByReferences (models) {
+function validateReplacedByReferences(models) {
   const errors = []
-  const allSources = new Set(models.map(m => m.source))
+  const allSources = new Set(models.map((m) => m.source))
 
   for (let i = 0; i < models.length; i++) {
     if (models[i].replacedBy && !allSources.has(models[i].replacedBy)) {
@@ -125,7 +141,7 @@ function validateReplacedByReferences (models) {
   return errors
 }
 
-async function validateModelsJson (filePath) {
+async function validateModelsJson(filePath) {
   const errors = []
 
   // Load models file
@@ -183,9 +199,9 @@ async function validateModelsJson (filePath) {
   }
 }
 
-async function main () {
+async function main() {
   const args = process.argv.slice(2)
-  const fileArg = args.find(arg => arg.startsWith('--file='))
+  const fileArg = args.find((arg) => arg.startsWith('--file='))
   const filePath = fileArg ? fileArg.split('=')[1] : './data/models.prod.json'
 
   const resolvedPath = path.resolve(filePath)
@@ -205,7 +221,7 @@ async function main () {
 }
 
 if (require.main === module) {
-  main().catch(err => {
+  main().catch((err) => {
     console.error('Fatal error:', err.message)
     process.exit(1)
   })

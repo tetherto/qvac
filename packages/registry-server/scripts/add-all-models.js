@@ -10,12 +10,12 @@ const { connectToRegistry } = require('./utils/rpc-client')
 
 const DEFAULT_FILE = './data/models.test.json'
 
-function filterEntriesByRange (entries, fromPattern, untilPattern) {
+function filterEntriesByRange(entries, fromPattern, untilPattern) {
   let startIdx = 0
   let endIdx = entries.length
 
   if (fromPattern) {
-    const idx = entries.findIndex(e => e.source && e.source.includes(fromPattern))
+    const idx = entries.findIndex((e) => e.source && e.source.includes(fromPattern))
     if (idx === -1) {
       throw new Error(`--from pattern "${fromPattern}" not found in any model source`)
     }
@@ -23,7 +23,7 @@ function filterEntriesByRange (entries, fromPattern, untilPattern) {
   }
 
   if (untilPattern) {
-    const idx = entries.findIndex(e => e.source && e.source.includes(untilPattern))
+    const idx = entries.findIndex((e) => e.source && e.source.includes(untilPattern))
     if (idx === -1) {
       throw new Error(`--until pattern "${untilPattern}" not found in any model source`)
     }
@@ -37,7 +37,7 @@ function filterEntriesByRange (entries, fromPattern, untilPattern) {
   return entries.slice(startIdx, endIdx)
 }
 
-async function addAllModels (flags) {
+async function addAllModels(flags) {
   const storesPath = path.resolve(flags.file)
   let entries = JSON.parse(await fs.readFile(storesPath, 'utf8'))
 
@@ -71,7 +71,12 @@ async function addAllModels (flags) {
   if (flags.storage) {
     logger.info('Using writer storage:', flags.storage)
   }
-  const connection = await connectToRegistry({ config, logger, storage: flags.storage, primaryKey: flags.primaryKey })
+  const connection = await connectToRegistry({
+    config,
+    logger,
+    storage: flags.storage,
+    primaryKey: flags.primaryKey
+  })
 
   try {
     let added = 0
