@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -279,6 +280,29 @@ struct Number : Value<Number> {
     return result;
   };
 
+  /// Validating parse for untrusted boundary input, unlike as<>() which
+  /// converts with the plain (truncating, range-unchecked) C++ cast.
+  /// Throws InvalidArgument unless the JS number is a finite, non-negative
+  /// integer no larger than 2^53 - 1 (the largest integer a JS double
+  /// represents exactly). Use for numbers that address or size native
+  /// state — job ids, counts, indices — where a truncated or wrapped
+  /// value would silently target the wrong thing.
+  template <typename CppType>
+  CppType asChecked(js_env_t* env) {
+    static_assert(
+        std::is_same_v<CppType, uint64_t>,
+        "asChecked currently supports uint64_t only");
+    const double underlying = as<double>(env);
+    if (!std::isfinite(underlying) || underlying < 0 ||
+        underlying > 9007199254740991.0 /* 2^53 - 1 */ ||
+        std::trunc(underlying) != underlying) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "expected a non-negative integer");
+    }
+    return static_cast<CppType>(underlying);
+  }
+
 protected:
   explicit Number(js_value_t* value) : Value<Number>{value} {}
 
@@ -326,6 +350,12 @@ protected:
   static int as_(js_env_t* env, js_value_t* value, int64_t* result) {
     return js_get_value_int64(env, value, result);
   }
+  /// Truncating cast, no validation: the JS double is static_cast to
+  /// uint64_t as-is. Fractional input truncates (42.9 -> 42); negative,
+  /// non-finite or >= 2^64 input is undefined behaviour per C++
+  /// float-to-unsigned cast rules. Only for values the caller already
+  /// trusts to be in range; parse untrusted boundary input through
+  /// asChecked<uint64_t>() instead.
   static int as_(js_env_t* env, js_value_t* value, uint64_t* result) {
     double underlying{};
     auto ret = js_get_value_double(env, value, &underlying);

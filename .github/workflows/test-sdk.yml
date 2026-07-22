@@ -1,5 +1,5 @@
 # QVAC SDK Tests
-# Runs desktop and/or mobile (Android/iOS) e2e tests for the SDK package
+# Runs desktop, Electron, Snap, and/or mobile e2e tests for the SDK package
 #
 # Triggered via:
 #   - workflow_dispatch: manual runs with full customizability
@@ -17,6 +17,7 @@ on:
           - all
           - desktop
           - electron
+          - snap
           - mobile
           - electron + desktop
           - desktop + mobile
@@ -73,6 +74,10 @@ on:
         description: "JSON array of runner labels for electron tests"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
+      snap-platforms:
+        description: "JSON array of Linux runner labels for strict Snap tests"
+        type: string
+        default: '["ubuntu-22.04"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -179,6 +184,25 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       platforms: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  snap-tests:
+    needs: resolve
+    # Snap CI is manual-only. It is intentionally excluded from workflow_call
+    # consumers such as on-pr-test-sdk.yml.
+    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'snap')
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: snap
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ inputs.snap-platforms || '["ubuntu-22.04"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}

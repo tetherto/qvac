@@ -31,6 +31,12 @@
       "responseSchema": "schema.json#/$defs/classify.response"
     },
     {
+      "name": "completionOrchestrate",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/completionOrchestrate.request",
+      "responseSchema": "schema.json#/$defs/completionOrchestrate.response"
+    },
+    {
       "name": "completionStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/completionStream.request",
