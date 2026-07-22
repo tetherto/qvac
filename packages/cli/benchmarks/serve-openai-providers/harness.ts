@@ -1,19 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto'
-import {
-  copyFileSync,
-  createReadStream,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { load as loadYaml } from 'js-yaml'
+import { randomBytes } from 'node:crypto'
+import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import OpenAI from 'openai'
+import { configPlaceholders, PLACEHOLDER_PREFIXES } from './config.ts'
 import { computeMetrics, validateRun } from './metrics.ts'
+import { atomicWriteJson, sha256File, verifyModelParity } from './persistence.ts'
 import { writeReport } from './report.ts'
 import type {
   BenchmarkConfig,
@@ -29,10 +20,11 @@ import type {
   ValidationResult
 } from './types.ts'
 
-export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
-
+export { configPlaceholders, loadBenchmarkConfig, PLACEHOLDER_PREFIXES } from './config.ts'
 export { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
+export { atomicWriteJson, sha256File, verifyModelParity } from './persistence.ts'
 export { writeReport } from './report.ts'
+export type { ModelParityEvidence } from './persistence.ts'
 export type {
   AggregateStats,
   BenchmarkConfig,
@@ -54,14 +46,6 @@ export function nowSeconds(): number {
   return performance.now() / 1000
 }
 
-export function loadBenchmarkConfig(path: string): BenchmarkConfig {
-  const data = loadYaml(readFileSync(path, 'utf8'))
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-    throw new Error(`config must be a mapping: ${path}`)
-  }
-  return data as BenchmarkConfig
-}
-
 export function loadPrompts(path: string): PromptsFile {
   const data = JSON.parse(readFileSync(path, 'utf8')) as PromptsFile
   if (!data.parity || !Array.isArray(data.prompts)) {
@@ -79,27 +63,6 @@ export function promptById(promptsDoc: PromptsFile, promptId: string): PromptDoc
     throw new Error(`unknown prompt id: ${promptId}`)
   }
   return { ...found }
-}
-
-export async function sha256File(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(path)) {
-    hash.update(chunk as Buffer)
-  }
-  return hash.digest('hex')
-}
-
-export function atomicWriteJson(path: string, payload: unknown): void {
-  mkdirSync(dirname(path), { recursive: true })
-  const dir = dirname(path)
-  const tmpDir = mkdtempSync(join(dir, '.tmp-'))
-  const tmpPath = join(tmpDir, 'payload.json')
-  try {
-    writeFileSync(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
-    renameSync(tmpPath, path)
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true })
-  }
 }
 
 export function buildMessages(
@@ -309,23 +272,6 @@ export async function runStreamingCompletion(params: {
   return [parsed, metrics, validation]
 }
 
-export function configPlaceholders(config: BenchmarkConfig): string[] {
-  const bad: string[] = []
-  for (const provider of config.providers) {
-    for (const key of ['model', 'base_url'] as const) {
-      const value = String(provider[key] ?? '')
-      if (PLACEHOLDER_PREFIXES.some((prefix) => value.startsWith(prefix))) {
-        bad.push(`providers.${provider.id}.${key}`)
-      }
-    }
-  }
-  const gguf = String(config.model_parity.gguf_path ?? '')
-  if (!gguf || PLACEHOLDER_PREFIXES.some((prefix) => gguf.startsWith(prefix))) {
-    bad.push('model_parity.gguf_path')
-  }
-  return bad
-}
-
 export function metricsToJson(metrics: RunMetrics): Record<string, unknown> {
   return {
     ttft_ms: metrics.ttftMs,
@@ -378,7 +324,7 @@ export function createFakeChunk(params: {
 }
 
 export async function cmdDigest(config: BenchmarkConfig): Promise<number> {
-  const path = resolve(config.model_parity.gguf_path.replace(/^~/, process.env.HOME ?? ''))
+  const path = config.model_parity.gguf_path
   try {
     const st = statSync(path)
     if (!st.isFile()) {
@@ -408,6 +354,7 @@ export async function cmdPreflight(
     return 1
   }
 
+  const modelParityEvidence = await verifyModelParity(config)
   const parity = promptById(promptsDoc, config.parity_prompt_id ?? 'parity')
   const generation = config.generation
   const apiKey = config.api_key ?? 'local-benchmark-key'
@@ -455,6 +402,7 @@ export async function cmdPreflight(
   if (sessionDir) {
     const rawPath = join(sessionDir, 'raw.json')
     const raw = newRawDocument(config, sessionDir.split(/[\\/]/).pop() ?? sessionDir)
+    raw.model_parity_evidence = modelParityEvidence
     raw.parity = { results, prompt_tokens_equal: parityOk }
     atomicWriteJson(rawPath, raw)
   }

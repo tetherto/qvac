@@ -1,18 +1,51 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import {
   atomicWriteJson,
   buildMessages,
+  cmdPreflight,
   createFakeChunk,
+  loadBenchmarkConfig,
   parseStream,
-  rotateIds
+  rotateIds,
+  verifyModelParity
 } from './harness.ts'
 import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
 import { writeReport } from './report.ts'
-import type { RawDocument, StreamParseResult, StreamTimings } from './types.ts'
+import type {
+  BenchmarkConfig,
+  PromptsFile,
+  RawDocument,
+  StreamParseResult,
+  StreamTimings
+} from './types.ts'
+
+function makeConfig(params: { ggufPath: string; sha256: string }): BenchmarkConfig {
+  return {
+    generation: { max_tokens: 128 },
+    prompt_ids: ['short'],
+    providers: [{ id: 'qvac', base_url: 'http://127.0.0.1:11435/v1', model: 'model' }],
+    model_parity: {
+      gguf_path: params.ggufPath,
+      sha256: params.sha256
+    }
+  }
+}
+
+function writeConfig(path: string, config: object): void {
+  writeFileSync(path, JSON.stringify(config), 'utf8')
+}
+
+function ignoreError(): void {}
+
+const promptsDoc: PromptsFile = {
+  parity: { id: 'parity', content: 'hello' },
+  prompts: [{ id: 'short', content: 'hello' }]
+}
 
 function makeParsed(overrides: {
   requestStartS?: number
@@ -44,6 +77,124 @@ function validateRunFromUsage(promptTokens: number, completionTokens: number) {
 }
 
 describe('serve-openai-providers harness', () => {
+  it('verifies the configured GGUF digest', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-digest-'))
+    try {
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const expected = createHash('sha256').update(bytes).digest('hex')
+
+      const evidence = await verifyModelParity(makeConfig({ ggufPath, sha256: expected }))
+
+      assert.equal(evidence.path, ggufPath)
+      assert.equal(evidence.sha256, expected)
+      assert.equal(evidence.bytes, 4)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a mismatched GGUF digest', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-digest-'))
+    try {
+      const ggufPath = join(dir, 'model.gguf')
+      writeFileSync(ggufPath, 'gguf')
+
+      await assert.rejects(
+        verifyModelParity(makeConfig({ ggufPath, sha256: '0'.repeat(64) })),
+        /GGUF SHA-256 mismatch/
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('enforces the GGUF digest before preflight provider requests', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-preflight-'))
+    try {
+      const ggufPath = join(dir, 'model.gguf')
+      writeFileSync(ggufPath, 'gguf')
+      const config = makeConfig({ ggufPath, sha256: '0'.repeat(64) })
+      config.providers[0]!.base_url = 'http://127.0.0.1:1/v1'
+
+      await assert.rejects(cmdPreflight(config, promptsDoc), /GGUF SHA-256 mismatch/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('persists GGUF digest evidence in preflight raw output', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-preflight-'))
+    const originalConsoleError = console.error
+    try {
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const sha256 = createHash('sha256').update(bytes).digest('hex')
+      const config = makeConfig({ ggufPath, sha256 })
+      config.providers = []
+
+      assert.equal(await cmdPreflight(config, promptsDoc, dir), 1)
+      const raw = JSON.parse(readFileSync(join(dir, 'raw.json'), 'utf8')) as Record<string, unknown>
+      assert.deepEqual(raw.model_parity_evidence, {
+        path: ggufPath,
+        bytes: 4,
+        sha256
+      })
+    } finally {
+      console.error = originalConsoleError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('loads a strict benchmark config', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+    try {
+      const path = join(dir, 'benchmark.yaml')
+      const config = makeConfig({
+        ggufPath: join(dir, 'model.gguf'),
+        sha256: 'a'.repeat(64)
+      })
+      writeConfig(path, config)
+
+      assert.deepEqual(loadBenchmarkConfig(path), config)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  for (const [name, update] of [
+    ['empty providers', { providers: [] }],
+    ['empty prompt IDs', { prompt_ids: [] }],
+    ['empty generation settings', { generation: {} }],
+    ['relative GGUF path', { model_parity: { gguf_path: 'model.gguf', sha256: 'a'.repeat(64) } }],
+    [
+      'invalid GGUF digest',
+      { model_parity: { gguf_path: '/tmp/model.gguf', sha256: 'A'.repeat(64) } }
+    ]
+  ] as const) {
+    it(`rejects benchmark config with ${name}`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+      try {
+        const path = join(dir, 'benchmark.yaml')
+        const config = {
+          ...makeConfig({
+            ggufPath: join(dir, 'model.gguf'),
+            sha256: 'a'.repeat(64)
+          }),
+          ...update
+        }
+        writeConfig(path, config)
+
+        assert.throws(() => loadBenchmarkConfig(path))
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  }
+
   it('ignores role-only and reasoning-only chunks for first content', async () => {
     const timings: StreamTimings = {
       requestStartS: 100,
