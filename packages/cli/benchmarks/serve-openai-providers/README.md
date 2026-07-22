@@ -21,7 +21,9 @@ rejected. `validate-target` runs on GitHub-hosted infra and pins the exact
 commit before any self-hosted code runs. The `live` job then requires manual
 approval of the protected `benchmark-live` environment (see
 [`environment.md`](./environment.md)) before it installs or executes anything on
-the self-hosted runner.
+the self-hosted runner. Approval attests to the selected commit's benchmark
+harness code and dependency install scripts as well as the protected external
+configuration.
 
 The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
 LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`

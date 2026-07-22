@@ -187,7 +187,9 @@ Environments) and configure:
 
 - **Required reviewers** — at least one trusted maintainer. The `live` job pauses
   for manual approval before it checks out, installs, or runs anything on the
-  self-hosted runner. This replaces the former label gate.
+  self-hosted runner. Approval attests to the selected target commit's benchmark
+  harness code and dependency install scripts, not only to the protected
+  external config. This replaces the former label gate.
 - **Deployment branch rule** — restrict the environment to the branches that are
   allowed to dispatch it (e.g. `main`, `release-*`). Dispatches from other
   branches cannot access the environment's variables and are blocked.
@@ -200,8 +202,11 @@ Environments) and configure:
 
 Both paths must be **absolute** and must point **outside** `GITHUB_WORKSPACE`.
 The `live` job rejects unset, relative, workspace-contained, missing, or
-unreadable paths. Keeping the real config off the checked-out tree means the
-benchmarked commit cannot smuggle in its own model paths or lifecycle commands.
+unreadable paths. It resolves the workspace and both files to their canonical
+paths first, so symlinks into the workspace are also rejected. Resolution
+failures stop the job. Keeping the real config off the checked-out tree means
+the benchmarked commit cannot smuggle in its own model paths or lifecycle
+commands.
 
 ### Runner-local files
 
@@ -217,10 +222,11 @@ the paths above:
 ### Lifecycle script contracts
 
 Each provider in the runtime config may declare an optional `lifecycle` block.
-`start_command` / `stop_command` are **argv arrays** (no shell) run before and
-after that provider's block, with an optional `timeout_seconds`. Because the
-config lives on the runner (outside the repo), these commands are controlled by
-the runner operator, not by the dispatched commit. Example:
+`start_command` and `stop_command` are **argv arrays** (no shell):
+`start_command` runs before the provider block, and `stop_command` runs after
+the provider block. An optional `timeout_seconds` applies to these commands.
+Because the config lives on the runner (outside the repo), these commands are
+controlled by the runner operator, not by the dispatched commit. Example:
 
 ```yaml
 lifecycle:

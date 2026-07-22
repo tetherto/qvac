@@ -90,6 +90,7 @@ jobs:
         id: resolve
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
+        shell: bash
         run: |
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "::error::target_sha must be a full 40-character commit SHA."
@@ -149,7 +150,13 @@ jobs:
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Require runner-local config and environment manifest
+        shell: bash
         run: |
+          if ! workspace_path="$(node -e 'process.stdout.write(require("node:fs").realpathSync(process.argv[1]))' "$GITHUB_WORKSPACE")"; then
+            echo "::error::GITHUB_WORKSPACE could not be resolved."
+            exit 1
+          fi
+
           require_external_file() {
             name="$1"
             value="$2"
@@ -162,8 +169,8 @@ jobs:
               exit 1
             fi
             case "$value" in
-              "$GITHUB_WORKSPACE" | "$GITHUB_WORKSPACE"/*)
-                echo "::error::$name must live outside GITHUB_WORKSPACE."
+              *$'\n'* | *$'\r'*)
+                echo "::error::$name must not contain line breaks."
                 exit 1
                 ;;
             esac
@@ -171,9 +178,23 @@ jobs:
               echo "::error::$name is missing or unreadable."
               exit 1
             fi
+            if ! resolved_path="$(node -e 'process.stdout.write(require("node:fs").realpathSync(process.argv[1]))' "$value")"; then
+              echo "::error::$name could not be resolved."
+              exit 1
+            fi
+            case "$resolved_path" in
+              "$workspace_path" | "$workspace_path"/*)
+                echo "::error::$name resolves inside GITHUB_WORKSPACE."
+                exit 1
+                ;;
+            esac
           }
           require_external_file BENCHMARK_CONFIG_PATH "$BENCHMARK_CONFIG_PATH"
+          config_path="$resolved_path"
           require_external_file BENCHMARK_ENVIRONMENT_PATH "$BENCHMARK_ENVIRONMENT_PATH"
+          environment_path="$resolved_path"
+          printf 'BENCHMARK_CONFIG_PATH=%s\n' "$config_path" >> "$GITHUB_ENV"
+          printf 'BENCHMARK_ENVIRONMENT_PATH=%s\n' "$environment_path" >> "$GITHUB_ENV"
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
