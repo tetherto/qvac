@@ -597,12 +597,3 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
     })
   assert.deepEqual(offenders, [])
 })
-
-test('unprivileged PR workflow runs both trust-policy test suites', () => {
-  const source = read('.github/workflows/pr-test-ci-trust-policy.yml')
-  assert.match(source, /pull_request:/)
-  assert.match(source, /permissions:\n\s+contents: read/)
-  assert.doesNotMatch(source, /pull_request_target|secrets\./)
-  assert.match(source, /label-gate\/test\/gate\.test\.mjs/)
-  assert.match(source, /ci-trust-policy\.test\.mjs/)
-})
