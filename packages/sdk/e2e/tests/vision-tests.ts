@@ -100,9 +100,10 @@ export const visionObjectDetection = createVisionTest(
 
 export const visionTextExtraction = createVisionTest(
   'vision-text-extraction',
-  'What text do you see in this image?',
+  'Read the text in this image. Reply with only the text.',
   'sign.jpg',
-  { validation: 'contains-any', contains: ['welcome', 'bienvenido', 'bienvenue', 'willkommen'] }
+  { validation: 'contains-all', contains: ['hello'] },
+  { generationParams: { temp: 0, top_k: 1, seed: 42, predict: 16 } }
 )
 
 export const visionSceneUnderstanding = createVisionTest(
