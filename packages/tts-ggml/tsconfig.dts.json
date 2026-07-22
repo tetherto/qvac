@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "index.d.ts",
+    "tts.d.ts",
+    "addonLogging.d.ts",
+    "lib/**/*.d.ts",
+    "test/types/**/*.ts"
+  ]
+}

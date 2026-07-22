@@ -7,7 +7,7 @@ const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
 const { readImageDimensions } = require('../../addon')
-const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
+const { recordPerformance, assertPhaseStats, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -86,6 +86,7 @@ safeTest(
 
       const images = []
       const progressTicks = []
+      let stats = null
 
       // ── Load ─────────────────────────────────────────────────────────────────
       console.log('\n=== Loading model ===')
@@ -154,6 +155,8 @@ safeTest(
         const genMs = Date.now() - tGen
         console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
 
+        stats = response.stats
+
         if (!isWarmup) {
           t.comment(
             recordPerformance(
@@ -188,6 +191,11 @@ safeTest(
       const dims = readImageDimensions(img)
       t.is(dims.width, 624, 'Output width matches requested 624')
       t.is(dims.height, 624, 'Output height matches requested 624')
+
+      // ── Runtime stats (per-phase breakdown) ───────────────────────────────────
+      // img2img: effective sampler steps are steps*strength, so the
+      // stepsPerSecond consistency check is intentionally skipped.
+      assertPhaseStats(t, stats)
 
       const outPath = path.join(modelDir, 'generate-image--flux2-i2i-seed42.png')
       fs.writeFileSync(outPath, img)

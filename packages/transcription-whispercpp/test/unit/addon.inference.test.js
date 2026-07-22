@@ -163,6 +163,102 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
   )
 })
 
+test('A malformed buffer does not poison the queue for later jobs', async (t) => {
+  const events = []
+  const onOutput = (addon, event, jobId, output, error) => {
+    events.push({ event, jobId, output, error })
+  }
+
+  const binding = new MockedBinding()
+  const runValidJob = binding.runJob.bind(binding)
+  binding.runJob = (handle, data) => {
+    if (data.input.byteLength % 4 !== 0) {
+      throw new Error('f32le buffer length must be a multiple of 4')
+    }
+    return runValidJob(handle, data)
+  }
+
+  const model = createMockedModel({ onOutput, binding })
+  await model.load()
+
+  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3]) })
+  try {
+    await model.addon.append({ type: 'end of job' })
+    t.fail('Malformed buffer should fail the end-of-job append')
+  } catch (error) {
+    t.ok(
+      error.message.includes('f32le buffer length must be a multiple of 4'),
+      'Malformed buffer should surface the native validation error'
+    )
+  }
+
+  t.is(model.addon._bufferedBytes, 0, 'Failed job should drain the buffered audio')
+  t.is(model.addon._bufferedAudio.length, 0, 'Failed job should leave no buffered chunks')
+
+  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
+  const recoveredJobId = await model.addon.append({ type: 'end of job' })
+  t.is(recoveredJobId, 1, 'A well-formed job after a failure should start cleanly')
+
+  await wait()
+
+  t.ok(
+    events.find((e) => e.event === 'JobEnded' && e.jobId === recoveredJobId),
+    'A well-formed job should complete after a malformed buffer failed'
+  )
+})
+
+test('run recovers on the same model after a malformed buffer fails', async (t) => {
+  const binding = new MockedBinding()
+  const runValidJob = binding.runJob.bind(binding)
+  binding.runJob = (handle, data) => {
+    if (data.input.byteLength % 4 !== 0) {
+      throw new Error('f32le buffer length must be a multiple of 4')
+    }
+    return runValidJob(handle, data)
+  }
+
+  const model = createMockedModel({ binding })
+  await model.load()
+
+  const malformedResponse = await model.run(new Uint8Array([1, 2, 3]))
+  try {
+    await malformedResponse.await()
+    t.fail('Malformed buffer transcription should reject')
+  } catch (error) {
+    t.ok(
+      error.message.includes('f32le buffer length must be a multiple of 4'),
+      'Malformed buffer transcription should reject with the native validation error'
+    )
+  }
+
+  const recoveredResponse = await model.run(new Uint8Array([1, 2, 3, 4]))
+  const output = await recoveredResponse.await()
+  t.ok(output, 'A well-formed transcription should resolve after a malformed buffer')
+  t.is(await model.status(), 'listening', 'Model should return to listening after recovery')
+})
+
+test('A rejected end-of-job append drains the buffered audio', async (t) => {
+  const binding = new MockedBinding()
+  binding.runJob = () => false
+
+  const model = createMockedModel({ binding })
+  await model.load()
+
+  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
+  try {
+    await model.addon.append({ type: 'end of job' })
+    t.fail('A rejected job should fail the end-of-job append')
+  } catch (error) {
+    t.ok(
+      error.message.includes('a job is already set or being processed'),
+      'A rejected job should surface the busy native error'
+    )
+  }
+
+  t.is(model.addon._bufferedBytes, 0, 'A rejected job should drain the buffered audio')
+  t.is(model.addon._bufferedAudio.length, 0, 'A rejected job should leave no buffered chunks')
+})
+
 test('WhisperInterface runJob preserves active job when native rejects new job', async (t) => {
   const binding = new MockedBinding()
   const addon = new WhisperInterface(

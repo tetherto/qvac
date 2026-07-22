@@ -11348,5 +11348,158 @@
     ],
     "notes": "",
     "link": "https://github.com/Jackchows/Cangjie5"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Indic Parler-TTS multilingual text-to-speech model (GGUF)",
+    "quantization": "fp16",
+    "params": "880M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "indic",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indic-parler-tts"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Indic Parler-TTS multilingual text-to-speech model (GGUF)",
+    "quantization": "fp32",
+    "params": "880M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "indic",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indic-parler-tts"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Indic Parler-TTS multilingual text-to-speech model (GGUF)",
+    "quantization": "q8_0",
+    "params": "880M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "indic",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indic-parler-tts"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Parler-TTS Large v1 text-to-speech model (GGUF, English)",
+    "quantization": "fp16",
+    "params": "2.3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "large-v1",
+      "en",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/parler-tts/parler-tts-large-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Parler-TTS Large v1 text-to-speech model (GGUF, English)",
+    "quantization": "fp32",
+    "params": "2.3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "large-v1",
+      "en",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/parler-tts/parler-tts-large-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-large-v1-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Parler-TTS Large v1 text-to-speech model (GGUF, English)",
+    "quantization": "q8_0",
+    "params": "2.3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "large-v1",
+      "en",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/parler-tts/parler-tts-large-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Parler-TTS Mini v1 text-to-speech model (GGUF, English)",
+    "quantization": "fp16",
+    "params": "880M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "mini-v1",
+      "en",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/parler-tts/parler-tts-mini-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Parler-TTS Mini v1 text-to-speech model (GGUF, English)",
+    "quantization": "fp32",
+    "params": "880M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "mini-v1",
+      "en",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/parler-tts/parler-tts-mini-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Parler-TTS Mini v1 text-to-speech model (GGUF, English)",
+    "quantization": "q8_0",
+    "params": "880M",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "parler-tts",
+      "mini-v1",
+      "en",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/parler-tts/parler-tts-mini-v1"
   }
 ]

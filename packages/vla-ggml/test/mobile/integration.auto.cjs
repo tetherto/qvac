@@ -16,6 +16,11 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runGrootTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGrootTest')) return __FILTERED
+  return runIntegrationModule('../integration/groot.test.js', options)
+}
+
 async function runPi05Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runPi05Test')) return __FILTERED
   return runIntegrationModule('../integration/pi05.test.js', options)
