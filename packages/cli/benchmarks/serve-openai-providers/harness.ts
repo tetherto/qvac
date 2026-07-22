@@ -13,107 +13,39 @@ import {
 import { dirname, join, resolve } from 'node:path'
 import { load as loadYaml } from 'js-yaml'
 import OpenAI from 'openai'
+import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
+import type {
+  BenchmarkConfig,
+  ChatChunk,
+  GenerationConfig,
+  MetricObservation,
+  PromptDoc,
+  PromptsFile,
+  ProviderConfig,
+  RunMetrics,
+  StreamParseResult,
+  StreamTimings,
+  ValidationResult
+} from './types.ts'
 
-export const THINK_MARKERS = ['<think>', '</think>'] as const
 export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
 
-export type StreamTimings = {
-  requestStartS: number
-  firstContentS: number | null
-  lastContentS: number | null
-  streamEndS: number | null
-}
-
-export type StreamParseResult = {
-  content: string
-  reasoningContent: string
-  promptTokens: number | null
-  completionTokens: number | null
-  responseModel: string | null
-  timings: StreamTimings
-  error: string | null
-}
-
-export type RunMetrics = {
-  ttftMs: number | null
-  totalMs: number | null
-  decodeWindowMs: number | null
-  promptTokens: number | null
-  completionTokens: number | null
-  decodeTps: number | null
-  effectivePrefillTps: number | null
-  decodeTpsUnavailableReason: string | null
-}
-
-export type ValidationResult = {
-  ok: boolean
-  reasons: string[]
-}
-
-export type AggregateStats = {
-  median: number | null
-  p25: number | null
-  p75: number | null
-  iqr: number | null
-  nValid: number
-  nFailed: number
-}
-
-export type GenerationConfig = {
-  max_tokens?: number
-  temperature?: number
-  seed?: number | null
-  stream?: boolean
-  stream_options?: { include_usage?: boolean }
-}
-
-export type ProviderConfig = {
-  id: string
-  base_url: string
-  model: string
-}
-
-export type BenchmarkConfig = {
-  session_dir?: string
-  cooldown_seconds?: number
-  warmup_runs?: number
-  measured_runs?: number
-  api_key?: string
-  generation: GenerationConfig
-  parity_prompt_id?: string
-  prompt_ids: string[]
-  providers: ProviderConfig[]
-  model_parity: {
-    registry_constant?: string
-    gguf_filename?: string
-    gguf_path: string
-    sha256?: string
-  }
-}
-
-export type PromptDoc = {
-  id: string
-  content: string
-  target_prompt_tokens?: number
-  meta?: Record<string, unknown>
-}
-
-export type PromptsFile = {
-  parity: PromptDoc
-  prompts: PromptDoc[]
-}
-
-export type ChatChunk = {
-  model?: string | null
-  usage?: { prompt_tokens?: number | null; completion_tokens?: number | null } | null
-  choices?: Array<{
-    delta?: {
-      content?: string | null
-      reasoning_content?: string | null
-      role?: string | null
-    } | null
-  }> | null
-}
+export { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
+export type {
+  AggregateStats,
+  BenchmarkConfig,
+  ChatChunk,
+  GenerationConfig,
+  MetricObservation,
+  PromptDoc,
+  PromptsFile,
+  ProviderConfig,
+  RunMetrics,
+  StreamParseResult,
+  StreamTimings,
+  ValidateRunParams,
+  ValidationResult
+} from './types.ts'
 
 export function nowSeconds(): number {
   return performance.now() / 1000
@@ -280,142 +212,6 @@ async function* asAsyncIterable<T>(source: AsyncIterable<T> | Iterable<T>): Asyn
   }
 }
 
-export function computeMetrics(parsed: StreamParseResult): RunMetrics {
-  const t = parsed.timings
-  let ttftMs: number | null = null
-  let totalMs: number | null = null
-  let decodeWindowMs: number | null = null
-
-  if (t.firstContentS !== null) {
-    ttftMs = (t.firstContentS - t.requestStartS) * 1000
-  }
-  if (t.streamEndS !== null) {
-    totalMs = (t.streamEndS - t.requestStartS) * 1000
-  }
-  if (t.firstContentS !== null && t.lastContentS !== null) {
-    decodeWindowMs = (t.lastContentS - t.firstContentS) * 1000
-  }
-
-  let decodeTps: number | null = null
-  let decodeReason: string | null = null
-  if (parsed.completionTokens === null) {
-    decodeReason = 'missing_completion_tokens'
-  } else if (parsed.completionTokens < 2) {
-    decodeReason = 'completion_tokens_lt_2'
-  } else if (decodeWindowMs === null || decodeWindowMs <= 0) {
-    decodeReason = 'decode_window_zero_or_missing'
-  } else {
-    decodeTps = (parsed.completionTokens - 1) / (decodeWindowMs / 1000)
-  }
-
-  let effectivePrefillTps: number | null = null
-  if (parsed.promptTokens !== null && parsed.promptTokens > 0 && ttftMs !== null && ttftMs > 0) {
-    effectivePrefillTps = parsed.promptTokens / (ttftMs / 1000)
-  }
-
-  return {
-    ttftMs,
-    totalMs,
-    decodeWindowMs,
-    promptTokens: parsed.promptTokens,
-    completionTokens: parsed.completionTokens,
-    decodeTps,
-    effectivePrefillTps,
-    decodeTpsUnavailableReason: decodeReason
-  }
-}
-
-export function validateRun(params: {
-  parsed: StreamParseResult
-  metrics: RunMetrics
-  requireContent?: boolean
-  checkReasoningOff?: boolean
-}): ValidationResult {
-  const requireContent = params.requireContent ?? true
-  const checkReasoningOff = params.checkReasoningOff ?? true
-  const reasons: string[] = []
-  const { parsed, metrics } = params
-
-  if (parsed.error) {
-    reasons.push(`stream_error:${parsed.error}`)
-  }
-  if (requireContent && !parsed.content.trim()) {
-    reasons.push('empty_content')
-  }
-  if (parsed.promptTokens === null || parsed.completionTokens === null) {
-    reasons.push('missing_usage')
-  } else {
-    if (parsed.promptTokens <= 0) {
-      reasons.push('prompt_tokens_zero')
-    }
-    if (parsed.completionTokens <= 0) {
-      reasons.push('completion_tokens_zero')
-    }
-  }
-  if (metrics.ttftMs === null) {
-    reasons.push('missing_ttft')
-  }
-  if (metrics.totalMs === null) {
-    reasons.push('missing_total')
-  }
-  if (checkReasoningOff) {
-    const lowered = parsed.content.toLowerCase()
-    for (const marker of THINK_MARKERS) {
-      if (lowered.includes(marker)) {
-        reasons.push(`think_marker_in_content:${marker}`)
-        break
-      }
-    }
-    if (parsed.reasoningContent.trim()) {
-      reasons.push('reasoning_content_non_empty')
-    }
-  }
-  return { ok: reasons.length === 0, reasons }
-}
-
-/** Match Python statistics.quantiles(..., n=4, method='inclusive'). */
-export function quantilesInclusive(values: number[]): [number, number, number] {
-  if (values.length === 0) {
-    throw new Error('values must be non-empty')
-  }
-  if (values.length === 1) {
-    const v = values[0]!
-    return [v, v, v]
-  }
-  const data = [...values].sort((a, b) => a - b)
-  const n = 4
-  const m = data.length - 1
-  const result: number[] = []
-  for (let i = 1; i < n; i += 1) {
-    const product = i * m
-    const j = Math.floor(product / n)
-    const delta = product % n
-    const left = data[j]!
-    const right = data[j + 1]!
-    result.push((left * (n - delta) + right * delta) / n)
-  }
-  return [result[0]!, result[1]!, result[2]!]
-}
-
-export function aggregateMetric(
-  values: Array<number | null | undefined>,
-  nFailed: number
-): AggregateStats {
-  const clean = values.filter((v): v is number => v != null).map((v) => Number(v))
-  if (clean.length === 0) {
-    return { median: null, p25: null, p75: null, iqr: null, nValid: 0, nFailed }
-  }
-  const [p25, median, p75] = quantilesInclusive(clean)
-  return {
-    median,
-    p25,
-    p75,
-    iqr: p75 - p25,
-    nValid: clean.length,
-    nFailed
-  }
-}
-
 export function rotateIds(ids: string[], offset: number): string[] {
   if (ids.length === 0) {
     return []
@@ -490,7 +286,7 @@ export async function runStreamingCompletion(params: {
   let parsed: StreamParseResult
   try {
     const stream = await params.client.chat.completions.create(
-      kwargs as Parameters<OpenAI['chat']['completions']['create']>[0]
+      kwargs as unknown as Parameters<OpenAI['chat']['completions']['create']>[0]
     )
     parsed = await parseStream(stream as AsyncIterable<ChatChunk>, timings)
   } catch (err) {
@@ -533,12 +329,10 @@ export function metricsToJson(metrics: RunMetrics): Record<string, unknown> {
   return {
     ttft_ms: metrics.ttftMs,
     total_ms: metrics.totalMs,
-    decode_window_ms: metrics.decodeWindowMs,
     prompt_tokens: metrics.promptTokens,
     completion_tokens: metrics.completionTokens,
-    decode_tps: metrics.decodeTps,
-    effective_prefill_tps: metrics.effectivePrefillTps,
-    decode_tps_unavailable_reason: metrics.decodeTpsUnavailableReason
+    client_output_tps: metrics.clientOutputTps,
+    effective_prefill_tps: metrics.effectivePrefillTps
   }
 }
 
@@ -726,7 +520,7 @@ export async function cmdSmoke(config: BenchmarkConfig, promptsDoc: PromptsFile)
     const metrics = result.metrics as Record<string, unknown>
     const status = result.ok ? 'OK' : 'FAIL'
     console.log(
-      `[${status}] smoke ${provider.id} ${shortest}: ttft_ms=${metrics.ttft_ms} decode_tps=${metrics.decode_tps} reasons=${JSON.stringify(result.validation_reasons)}`
+      `[${status}] smoke ${provider.id} ${shortest}: ttft_ms=${metrics.ttft_ms} client_output_tps=${metrics.client_output_tps} reasons=${JSON.stringify(result.validation_reasons)}`
     )
     if (!result.ok) {
       failed = true
@@ -827,7 +621,7 @@ export function writeReport(raw: Record<string, unknown>, path: string): void {
   lines.push('')
   lines.push('- TTFT: request start → first non-empty `delta.content`')
   lines.push('- Total: request start → stream completion')
-  lines.push('- Decode TPS: `(completion_tokens - 1) / decode_window_s`')
+  lines.push('- Client output TPS: `completion_tokens / total_s`')
   lines.push(
     '- Effective prefill TPS (proxy): `prompt_tokens / ttft_s` (includes HTTP, queueing, template, prefill, first token; not native ppTPS)'
   )
@@ -838,7 +632,7 @@ export function writeReport(raw: Record<string, unknown>, path: string): void {
   const metricKeys: Array<[string, string]> = [
     ['ttft_ms', 'TTFT (ms)'],
     ['total_ms', 'Total latency (ms)'],
-    ['decode_tps', 'Decode TPS']
+    ['client_output_tps', 'Client output TPS']
   ]
   lines.push('## Median and IQR tables by prompt size')
   lines.push('')
@@ -850,13 +644,13 @@ export function writeReport(raw: Record<string, unknown>, path: string): void {
     for (const promptId of promptIds) {
       const cells = [promptId]
       for (const provider of providers) {
-        const values = measured
-          .filter((r) => r.provider === provider && r.prompt_id === promptId && r.ok)
-          .map((r) => (r.metrics as Record<string, number | null>)[metricKey] ?? null)
-        const nFailed = measured.filter(
-          (r) => r.provider === provider && r.prompt_id === promptId && !r.ok
-        ).length
-        const stats = aggregateMetric(values, nFailed)
+        const observations: MetricObservation[] = measured
+          .filter((r) => r.provider === provider && r.prompt_id === promptId)
+          .map((r) => ({
+            value: (r.metrics as Record<string, number | null>)[metricKey] ?? null,
+            ok: Boolean(r.ok)
+          }))
+        const stats = aggregateMetric(observations)
         cells.push(
           `${fmt(stats.median)} (IQR ${fmt(stats.iqr)}; n=${stats.nValid}/${stats.nValid + stats.nFailed})`
         )
@@ -875,13 +669,13 @@ export function writeReport(raw: Record<string, unknown>, path: string): void {
   for (const promptId of promptIds) {
     const cells = [promptId]
     for (const provider of providers) {
-      const values = measured
-        .filter((r) => r.provider === provider && r.prompt_id === promptId && r.ok)
-        .map((r) => (r.metrics as Record<string, number | null>).effective_prefill_tps ?? null)
-      const nFailed = measured.filter(
-        (r) => r.provider === provider && r.prompt_id === promptId && !r.ok
-      ).length
-      const stats = aggregateMetric(values, nFailed)
+      const observations: MetricObservation[] = measured
+        .filter((r) => r.provider === provider && r.prompt_id === promptId)
+        .map((r) => ({
+          value: (r.metrics as Record<string, number | null>).effective_prefill_tps ?? null,
+          ok: Boolean(r.ok)
+        }))
+      const stats = aggregateMetric(observations)
       cells.push(`${fmt(stats.median)} (IQR ${fmt(stats.iqr)})`)
     }
     lines.push(`| ${cells.join(' | ')} |`)
@@ -996,7 +790,7 @@ export async function cmdFull(
         appendRun(rawPath, raw, run)
         const m = run.metrics as Record<string, unknown>
         console.log(
-          `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${m.ttft_ms} decode_tps=${m.decode_tps}`
+          `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${m.ttft_ms} client_output_tps=${m.client_output_tps}`
         )
       }
     }

@@ -4,17 +4,43 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import {
-  aggregateMetric,
   atomicWriteJson,
   buildMessages,
-  computeMetrics,
   createFakeChunk,
   parseStream,
-  rotateIds,
-  validateRun,
-  type StreamParseResult,
-  type StreamTimings
+  rotateIds
 } from './harness.ts'
+import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
+import type { StreamParseResult, StreamTimings } from './types.ts'
+
+function makeParsed(overrides: {
+  requestStartS?: number
+  firstContentS?: number | null
+  lastContentS?: number | null
+  streamEndS?: number | null
+  promptTokens?: number | null
+  completionTokens?: number | null
+}): StreamParseResult {
+  return {
+    content: 'answer',
+    reasoningContent: '',
+    promptTokens: overrides.promptTokens ?? 10,
+    completionTokens: overrides.completionTokens ?? 5,
+    responseModel: 'm',
+    timings: {
+      requestStartS: overrides.requestStartS ?? 0,
+      firstContentS: overrides.firstContentS ?? 0.1,
+      lastContentS: overrides.lastContentS ?? 0.2,
+      streamEndS: overrides.streamEndS ?? 1
+    },
+    error: null
+  }
+}
+
+function validateRunFromUsage(promptTokens: number, completionTokens: number) {
+  const parsed = makeParsed({ promptTokens, completionTokens })
+  return validateRun({ parsed, metrics: computeMetrics(parsed) })
+}
 
 describe('serve-openai-providers harness', () => {
   it('ignores role-only and reasoning-only chunks for first content', async () => {
@@ -72,7 +98,7 @@ describe('serve-openai-providers harness', () => {
     assert.equal(metrics.completionTokens, 8)
   })
 
-  it('computes decode and effective prefill formulas', () => {
+  it('computes client output and effective prefill formulas', () => {
     const timings: StreamTimings = {
       requestStartS: 0,
       firstContentS: 0.5,
@@ -91,12 +117,29 @@ describe('serve-openai-providers harness', () => {
     const metrics = computeMetrics(parsed)
     assert.equal(metrics.ttftMs, 500)
     assert.equal(metrics.totalMs, 1600)
-    assert.equal(metrics.decodeWindowMs, 1000)
-    assert.equal(metrics.decodeTps, 10)
+    assert.equal(metrics.clientOutputTps, 6.875)
     assert.equal(metrics.effectivePrefillTps, 400)
   })
 
-  it('marks decode TPS unavailable for fewer than two completion tokens', () => {
+  it('computes client output throughput over the full request window', () => {
+    const metrics = computeMetrics(
+      makeParsed({
+        requestStartS: 0,
+        firstContentS: 0.5,
+        lastContentS: 1.2,
+        streamEndS: 2,
+        completionTokens: 10
+      })
+    )
+    assert.equal(metrics.clientOutputTps, 5)
+  })
+
+  it('does not expose chunk-boundary decode TPS', () => {
+    const metrics = computeMetrics(makeParsed({ completionTokens: 10 }))
+    assert.equal('decodeTps' in metrics, false)
+  })
+
+  it('computes client output throughput for one completion token', () => {
     const timings: StreamTimings = {
       requestStartS: 0,
       firstContentS: 0.1,
@@ -113,12 +156,11 @@ describe('serve-openai-providers harness', () => {
       error: null
     }
     const metrics = computeMetrics(parsed)
-    assert.equal(metrics.decodeTps, null)
-    assert.equal(metrics.decodeTpsUnavailableReason, 'completion_tokens_lt_2')
+    assert.equal(metrics.clientOutputTps, 1 / 0.3)
   })
 
   it('aggregates median quartiles and IQR for five values', () => {
-    const stats = aggregateMetric([10, 20, 30, 40, 50], 0)
+    const stats = aggregateMetric([10, 20, 30, 40, 50].map((value) => ({ value, ok: true })))
     assert.equal(stats.nValid, 5)
     assert.equal(stats.median, 30)
     assert.equal(stats.p25, 20)
@@ -127,7 +169,12 @@ describe('serve-openai-providers harness', () => {
   })
 
   it('excludes failed/null values from aggregates', () => {
-    const stats = aggregateMetric([10, null, 30], 1)
+    const stats = aggregateMetric([
+      { value: 10, ok: true },
+      { value: null, ok: true },
+      { value: 30, ok: true },
+      { value: null, ok: false }
+    ])
     assert.equal(stats.nValid, 2)
     assert.equal(stats.nFailed, 1)
     assert.equal(stats.median, 20)
@@ -170,6 +217,14 @@ describe('serve-openai-providers harness', () => {
     assert.ok(validation.reasons.includes('empty_content'))
     assert.ok(validation.reasons.includes('missing_usage'))
   })
+
+  for (const value of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5]) {
+    it(`rejects invalid completion usage ${String(value)}`, () => {
+      const validation = validateRunFromUsage(10, value)
+      assert.equal(validation.ok, false)
+      assert.ok(validation.reasons.includes('invalid_completion_tokens'))
+    })
+  }
 
   it('fails validation when think markers appear in content', () => {
     const timings: StreamTimings = {
