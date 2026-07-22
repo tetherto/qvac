@@ -108,6 +108,14 @@
       "bytes": 20836243072,
       "warm": false
     },
+    "gemma-4-26B-A4B-it-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/gemma-4-26B-A4B-it-Q8_0.gguf"
+      ],
+      "sha256": "5f7cbd0f4564e84342fc34321a09acb54b1a3da9215124e5bf444baa6dda152c",
+      "bytes": 26859861728,
+      "warm": false
+    },
     "mmproj-Qwen3.5-0.8B-F16.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
