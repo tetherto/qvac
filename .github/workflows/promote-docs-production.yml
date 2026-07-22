@@ -25,6 +25,9 @@ jobs:
   promote:
     name: Fast-forward docs-production to main
     runs-on: ubuntu-latest
+    # Gate the promotion: the job pauses for approval by a required reviewer
+    # (configured on the docs-production environment) before it can push.
+    environment: docs-production
     steps:
       - name: Checkout docs-production
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -34,10 +37,8 @@ jobs:
           # between docs-production and main.
           fetch-depth: 0
           persist-credentials: true
-          # docs-production is a protected branch, so the default GITHUB_TOKEN is
-          # blocked from pushing to it. PAT_TOKEN (already used elsewhere for
-          # privileged git operations) belongs to an account allowed to bypass
-          # the branch-protection push restriction.
+          # docs-production only accepts updates through this workflow; the push
+          # runs as PAT_TOKEN, the identity allowed to update the branch.
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Fast-forward docs-production to origin/main
@@ -49,6 +50,8 @@ jobs:
 
           echo "main            = $(git rev-parse --short origin/main)"
           echo "docs-production = $(git rev-parse --short origin/docs-production)"
+          echo "commits to promote:"
+          git log --oneline origin/docs-production..origin/main
 
           # --ff-only: promote ONLY when docs-production can fast-forward to main.
           # If the branches have diverged, this fails instead of creating a merge
