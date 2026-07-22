@@ -67,7 +67,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
     }
   })
 
-  return { inference, config }
+  return { inference }
 }
 
 // Shared helper: Run a completion and collect response
@@ -108,10 +108,12 @@ function verifyReasoningTags(t, response, testName) {
 
 // Shared helper: Verify generation continued after reasoning.
 // The EOS-inside-reasoning recovery guarantees a content token after the
-// forced `</think>` ONLY while n_predict budget remains — when the budget was
-// exhausted by thinking, ending at the close marker is legitimate. Pass the
-// second completion's stats + the configured n_predict so that case is
-// accepted instead of asserted against (it is model/GPU-numerics dependent).
+// forced `</think>` — the only legitimate empty answer is when the forced
+// close-marker tokens themselves exhausted the n_predict budget. That case
+// is detected via `stats.stopReason === 'predictionLimit'` rather than by
+// comparing `generatedTokens` to n_predict: generatedTokens is raw n_eval,
+// which the recovery's inline decodes inflate, so it can reach n_predict
+// while the logical generation loop still had budget.
 function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
   const thinkCloseIndex = response.indexOf('</think>')
   if (thinkCloseIndex === -1) {
@@ -120,11 +122,9 @@ function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
   }
 
   const textAfterThink = response.substring(thinkCloseIndex + '</think>'.length).trim()
-  const generatedTokens = toNumber(opts.generatedTokens)
-  const nPredict = toNumber(opts.nPredict)
-  if (textAfterThink.length === 0 && nPredict > 0 && generatedTokens >= nPredict) {
+  if (textAfterThink.length === 0 && opts.stopReason === 'predictionLimit') {
     t.pass(
-      `Generation ended at the n_predict cutoff (${generatedTokens}/${nPredict}) after ` +
+      `Generation hit the n_predict cutoff (stopReason=${opts.stopReason}) after ` +
         `the forced </think> tag — accepted (${testName})`
     )
     return true
@@ -174,7 +174,7 @@ safeTest(
     timeout: 600_000
   },
   async (t) => {
-    const { inference, config } = await setupReasoningModel(t, false)
+    const { inference } = await setupReasoningModel(t, false)
 
     // First completion - should work correctly
     const messages1 = createInitialMessages()
@@ -195,8 +195,7 @@ safeTest(
     // Verify the fix worked: generation continued after reasoning (or the
     // n_predict budget was exhausted, which legitimately ends the response).
     verifyContinuedAfterReasoning(t, response2, 'tools=false', {
-      generatedTokens: stats2.generatedTokens,
-      nPredict: config.n_predict
+      stopReason: stats2.stopReason
     })
   }
 )
@@ -208,7 +207,7 @@ safeTest(
     timeout: 600_000
   },
   async (t) => {
-    const { inference, config } = await setupReasoningModel(t, true)
+    const { inference } = await setupReasoningModel(t, true)
 
     // First completion - should work correctly
     const messages1 = createInitialMessages()
@@ -229,8 +228,7 @@ safeTest(
     // Verify the fix worked: generation continued after reasoning (or the
     // n_predict budget was exhausted, which legitimately ends the response).
     verifyContinuedAfterReasoning(t, response2, 'tools=true', {
-      generatedTokens: stats2.generatedTokens,
-      nPredict: config.n_predict
+      stopReason: stats2.stopReason
     })
   }
 )

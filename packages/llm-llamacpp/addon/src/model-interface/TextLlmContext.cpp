@@ -927,18 +927,15 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   if (sampledToken) {
     if (banEogAfterReasoningRecovery_) {
       banEogAfterReasoningRecovery_ = false;
-      // Ban EOG for exactly this one token, and only while the n_predict
-      // budget allows at least one more token after it: if this is the last
-      // budgeted token, ending at the forced `</think>` is legitimate.
-      // `generatedAfterAccept` counts this token (1-based).
-      if (params_.n_predict <= 0 ||
-          generatedAfterAccept < static_cast<unsigned>(params_.n_predict)) {
-        float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
-        if (logits != nullptr) {
-          // `eogTokens_` is precomputed in initializeCommonState().
-          for (const llama_token t : eogTokens_) {
-            logits[t] = -INFINITY;
-          }
+      // Ban EOG for exactly this one token. Unconditional: the generation
+      // loop only reaches this sample while the n_predict budget allows it,
+      // so banning EOG on the final budgeted sample yields one content
+      // token and never extends generation past the budget.
+      float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
+      if (logits != nullptr) {
+        // `eogTokens_` is precomputed in initializeCommonState().
+        for (const llama_token t : eogTokens_) {
+          logits[t] = -INFINITY;
         }
       }
     }

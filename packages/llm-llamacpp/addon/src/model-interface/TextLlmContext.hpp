@@ -153,6 +153,10 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
+    return generationStopReason_;
+  }
+
   [[nodiscard]] std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() override;
 
@@ -369,10 +373,11 @@ private:
   // very next sampled token is EOG again, which would defeat the recovery
   // with an empty answer. One-shot: consumed by the next sampled token.
   // Narrowed vs the original (reverted in 39a2fef88) fix: all EOG ids are
-  // banned in a single pre-sampling pass (no sample-and-reroll loop), and
-  // only while the n_predict budget still allows at least one further token
-  // after this one — when the budget is exhausted, ending at the forced
-  // close marker is legitimate and must not be overridden.
+  // banned in a single pre-sampling pass (no sample-and-reroll loop). The
+  // ban is unconditional — the generation loop only calls onLogitsReady()
+  // while the n_predict budget allows the current token, so banning EOG on
+  // the final budgeted sample yields a content token without ever
+  // extending generation past the budget.
   bool banEogAfterReasoningRecovery_ = false;
 
   // All EOG token ids of the loaded vocab, precomputed once in
