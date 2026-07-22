@@ -9,34 +9,49 @@ const { withRetry } = require('../../utils/retry')
 // Builds a QVACRegistryClient instance WITHOUT running the constructor (which
 // would open a real Corestore and join a real swarm). Only the collaborators
 // that downloadModel touches are stubbed, so the real retry path runs.
-function makeClient () {
+function makeClient() {
   const QVACRegistryClient = require('../../lib/client')
   const client = Object.create(QVACRegistryClient.prototype)
 
   const events = []
   client._events = events
 
-  client.logger = { info () {}, debug () {}, warn () {}, error () {} }
+  client.logger = { info() {}, debug() {}, warn() {}, error() {} }
 
   const core = {
     discoveryKey: Buffer.alloc(32),
-    findingPeers () { events.push('findingPeers'); return () => {} },
-    async update () { events.push('core.update') },
-    download () { return { destroy () {} } },
-    async close () {},
-    on () {},
-    off () {}
+    findingPeers() {
+      events.push('findingPeers')
+      return () => {}
+    },
+    // lunte-disable-next-line require-await
+    async update() {
+      events.push('core.update')
+    },
+    download() {
+      return { destroy() {} }
+    },
+    // lunte-disable-next-line require-await
+    async close() {},
+    on() {},
+    off() {}
   }
-  const blobs = { async close () {} }
+  // lunte-disable-next-line require-await
+  const blobs = { async close() {} }
   client._core = core
 
   client.hyperswarm = {
     suspended: false,
-    join () { events.push('swarm.join') },
-    async flush () {}
+    join() {
+      events.push('swarm.join')
+    },
+    // lunte-disable-next-line require-await
+    async flush() {}
   }
 
+  // lunte-disable-next-line require-await
   client._ensureMetadata = async () => {}
+  // lunte-disable-next-line require-await
   client.getModel = async () => ({
     name: 'tiny-model',
     blobBinding: {
@@ -46,13 +61,15 @@ function makeClient () {
       byteLength: 1000
     }
   })
+  // lunte-disable-next-line require-await
   client._getBlobsCore = async () => ({ core, blobs })
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async () => {}
 
   return client
 }
 
-function requestTimeout () {
+function requestTimeout() {
   const err = new Error('request timed out waiting for peers')
   err.code = 'REQUEST_TIMEOUT'
   return err
@@ -64,14 +81,17 @@ const COMPLETE = Buffer.alloc(1000, 2)
 // The resume speedup comes from the core's cached blocks, not the output file
 // (which `_streamBlobToFile` truncates and re-streams each attempt). The real
 // invariant is that cached blocks are not cleared until the download succeeds.
-test('downloadModel keeps cached blocks across a REQUEST_TIMEOUT retry', async t => {
+test('downloadModel keeps cached blocks across a REQUEST_TIMEOUT retry', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
   const client = makeClient()
   let clearCalls = 0
   let clearsBeforeRetrySucceeded = null
-  client._clearBlobBlocks = async () => { clearCalls++ }
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    clearCalls++
+  }
 
   let attempt = 0
   client._streamBlobToFile = async (blobs, core, pointer, filePath) => {
@@ -88,21 +108,28 @@ test('downloadModel keeps cached blocks across a REQUEST_TIMEOUT retry', async t
   t.is(clearCalls, 1, 'cached blocks cleared once, only after success')
 })
 
-test('downloadModel waits for the swarm to resume before retrying', async t => {
+test('downloadModel waits for the swarm to resume before retrying', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
   const client = makeClient()
   // Start backgrounded; foreground shortly after the first failure.
   let suspended = true
-  Object.defineProperty(client.hyperswarm, 'suspended', { get () { return suspended } })
+  Object.defineProperty(client.hyperswarm, 'suspended', {
+    get() {
+      return suspended
+    }
+  })
 
   let attempt = 0
   client._streamBlobToFile = async (blobs, core, pointer, filePath) => {
     attempt++
     client._events.push('attempt-' + attempt)
     if (attempt === 1) {
-      setTimeout(() => { suspended = false; client._events.push('resumed') }, 100)
+      setTimeout(() => {
+        suspended = false
+        client._events.push('resumed')
+      }, 100)
       throw requestTimeout()
     }
     await fs.promises.writeFile(filePath, COMPLETE)
@@ -119,7 +146,7 @@ test('downloadModel waits for the swarm to resume before retrying', async t => {
   )
 })
 
-test('downloadModel waits for a replication peer before retrying', async t => {
+test('downloadModel waits for a replication peer before retrying', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
@@ -132,7 +159,10 @@ test('downloadModel waits for a replication peer before retrying', async t => {
     attempt++
     client._events.push('attempt-' + attempt)
     if (attempt === 1) {
-      setTimeout(() => { core.peers.push({}); client._events.push('peer-connected') }, 100)
+      setTimeout(() => {
+        core.peers.push({})
+        client._events.push('peer-connected')
+      }, 100)
       throw requestTimeout()
     }
     await fs.promises.writeFile(filePath, COMPLETE)
@@ -149,7 +179,7 @@ test('downloadModel waits for a replication peer before retrying', async t => {
   )
 })
 
-test('downloadModel re-establishes peers before retrying after REQUEST_TIMEOUT', async t => {
+test('downloadModel re-establishes peers before retrying after REQUEST_TIMEOUT', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
@@ -178,19 +208,17 @@ test('downloadModel re-establishes peers before retrying after REQUEST_TIMEOUT',
     between.includes('core.update') ||
     between.includes('findingPeers') ||
     between.includes('swarm.join')
-  t.ok(
-    reconnected,
-    'peer re-discovery / core re-sync runs and is awaited before the retry'
-  )
+  t.ok(reconnected, 'peer re-discovery / core re-sync runs and is awaited before the retry')
 })
 
-test('downloadModel gives up after maxRetries on persistent REQUEST_TIMEOUT', async t => {
+test('downloadModel gives up after maxRetries on persistent REQUEST_TIMEOUT', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
   const client = makeClient()
   let attempt = 0
 
+  // lunte-disable-next-line require-await
   client._streamBlobToFile = async () => {
     attempt++
     throw requestTimeout()
@@ -204,14 +232,18 @@ test('downloadModel gives up after maxRetries on persistent REQUEST_TIMEOUT', as
   t.is(attempt, 2, 'attempted exactly maxRetries times')
 })
 
-test('downloadModel aborts the reconnect wait when the signal is cancelled', async t => {
+test('downloadModel aborts the reconnect wait when the signal is cancelled', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
   const client = makeClient()
   // Swarm never resumes, so without a cancel the reconnect wait would block up
   // to RESUME_WAIT_MAX_MS before the next attempt.
-  Object.defineProperty(client.hyperswarm, 'suspended', { get () { return true } })
+  Object.defineProperty(client.hyperswarm, 'suspended', {
+    get() {
+      return true
+    }
+  })
 
   const signal = { aborted: false }
   let attempt = 0
@@ -219,7 +251,9 @@ test('downloadModel aborts the reconnect wait when the signal is cancelled', asy
     attempt++
     if (attempt === 1) {
       // Cancel while _reconnectCore is waiting for the (never-resuming) swarm.
-      setTimeout(() => { signal.aborted = true }, 50)
+      setTimeout(() => {
+        signal.aborted = true
+      }, 50)
       throw requestTimeout()
     }
     await fs.promises.writeFile(filePath, COMPLETE)
@@ -234,23 +268,35 @@ test('downloadModel aborts the reconnect wait when the signal is cancelled', asy
 })
 
 // Locks the generic retry contract the download path relies on.
-test('withRetry retries only listed codes and stays bounded', async t => {
+test('withRetry retries only listed codes and stays bounded', async (t) => {
   let calls = 0
   await t.exception(
-    () => withRetry(
-      async () => { calls++; throw requestTimeout() },
-      { maxRetries: 3, retryCodes: ['REQUEST_TIMEOUT'] }
-    ),
+    () =>
+      withRetry(
+        // lunte-disable-next-line require-await
+        async () => {
+          calls++
+          throw requestTimeout()
+        },
+        { maxRetries: 3, retryCodes: ['REQUEST_TIMEOUT'] }
+      ),
     /request timed out/
   )
   t.is(calls, 3, 'retried up to maxRetries')
 
   let nonRetriable = 0
   await t.exception(
-    () => withRetry(
-      async () => { nonRetriable++; const e = new Error('nope'); e.code = 'OTHER'; throw e },
-      { maxRetries: 3, retryCodes: ['REQUEST_TIMEOUT'] }
-    ),
+    () =>
+      withRetry(
+        // lunte-disable-next-line require-await
+        async () => {
+          nonRetriable++
+          const e = new Error('nope')
+          e.code = 'OTHER'
+          throw e
+        },
+        { maxRetries: 3, retryCodes: ['REQUEST_TIMEOUT'] }
+      ),
     /nope/
   )
   t.is(nonRetriable, 1, 'non-retriable error propagates immediately')

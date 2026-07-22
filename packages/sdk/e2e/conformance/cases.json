@@ -1,0 +1,115 @@
+{
+  "description": "Language-neutral cross-client conformance corpus. Both the JS runner (run.mjs) and the Python runner (packages/sdk-python/tests/test_conformance.py) execute these cases against a locally-built worker and assert the same expectations, so the two clients cannot drift on the covered behaviour. `model` is the constant name each client resolves from its own registry (qvac.models / @qvac/sdk). Completion/translation are deterministic (greedy + fixed seed). Most cases run on both clients; a case whose capability only one client exposes today is driven by that client and logged as a skip by the other -- e.g. `completionOrchestrate` is the WORKER-driven tool loop, which only the Python client wraps (`completion_orchestrate`); the JS client drives tool loops client-side, so its runner skips that case rather than reimplementing the loop.",
+  "cases": [
+    {
+      "id": "completion-arithmetic-2plus2",
+      "category": "completion",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "params": {
+        "history": [{ "role": "user", "content": "What is 2+2? Answer with only the number." }],
+        "generationParams": { "temp": 0, "seed": 42, "predict": 512 }
+      },
+      "expect": { "kind": "contains", "value": "4" }
+    },
+    {
+      "id": "completion-arithmetic-5plus5",
+      "category": "completion",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "params": {
+        "history": [{ "role": "user", "content": "What is 5+5? Answer with just the number." }],
+        "generationParams": { "temp": 0, "seed": 42, "predict": 512 }
+      },
+      "expect": { "kind": "contains", "value": "10" }
+    },
+    {
+      "id": "completion-multi-turn-recall",
+      "category": "completion",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "params": {
+        "history": [
+          { "role": "user", "content": "Remember this number: 42." },
+          { "role": "assistant", "content": "I'll remember that the number is 42." },
+          {
+            "role": "user",
+            "content": "What number did I tell you to remember? Answer with just the number."
+          }
+        ],
+        "generationParams": { "temp": 0, "seed": 42, "predict": 512 }
+      },
+      "expect": { "kind": "contains", "value": "42" }
+    },
+    {
+      "id": "translation-llm-autodetect",
+      "category": "translate",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "params": { "text": "Bonjour, comment allez-vous aujourd'hui?", "to": "en" },
+      "expect": { "kind": "nonempty" }
+    },
+    {
+      "id": "embed-semantic-order",
+      "category": "embed",
+      "model": "EMBEDDINGGEMMA_300M_Q4_0",
+      "modelType": "llamacpp-embedding",
+      "params": {
+        "related": ["a small domestic cat", "a young kitten playing"],
+        "unrelated": "a commercial passenger airplane"
+      },
+      "expect": { "kind": "embedSemanticOrder" }
+    },
+    {
+      "id": "model-load-unload",
+      "category": "modelLifecycle",
+      "model": "WHISPER_EN_TINY_Q8_0",
+      "modelType": "whispercpp-transcription",
+      "params": {},
+      "expect": { "kind": "loadUnload" }
+    },
+    {
+      "id": "completion-cancel",
+      "category": "cancel",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "params": {
+        "history": [
+          {
+            "role": "user",
+            "content": "Write a long, detailed essay about the history of the Roman Empire."
+          }
+        ]
+      },
+      "expect": { "kind": "cancelled" }
+    },
+    {
+      "id": "orchestrate-tool-loop",
+      "category": "completionOrchestrate",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "modelConfig": { "n_ctx": 4096, "tools": true },
+      "params": {
+        "history": [
+          { "role": "user", "content": "Call the get_secret_code tool, then tell me the code." }
+        ],
+        "tool": {
+          "name": "get_secret_code",
+          "description": "Returns the current secret code.",
+          "result": "the secret code is 4242"
+        },
+        "generationParams": { "temp": 0, "seed": 42, "predict": 512 }
+      },
+      "expect": { "kind": "contains", "value": "4242" }
+    },
+    {
+      "id": "tts-produces-audio",
+      "category": "tts",
+      "model": "TTS_EN_SUPERTONIC_Q4_0",
+      "modelType": "tts-ggml",
+      "modelConfig": { "ttsEngine": "supertonic", "language": "en" },
+      "params": { "text": "QVAC speaks Python now." },
+      "expect": { "kind": "audioNonempty" }
+    }
+  ]
+}

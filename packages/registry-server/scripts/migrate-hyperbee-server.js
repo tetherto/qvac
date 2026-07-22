@@ -10,7 +10,7 @@ const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
 // Transform the data
 const modelStores = {}
 
-config.drives.forEach(drive => {
+config.drives.forEach((drive) => {
   const tags = drive.tags
 
   // Build the model key to match the expected format
@@ -84,7 +84,7 @@ config.drives.forEach(drive => {
   }
 
   // Handle source field - keep as array when multiple models, single object otherwise
-  const source = drive.models.map(model => ({
+  const source = drive.models.map((model) => ({
     type: model.source,
     url: model.path
   }))
