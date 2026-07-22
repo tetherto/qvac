@@ -41,5 +41,5 @@ model_parity:
   gguf_filename: Qwen3.5-9B-Q4_K_M.gguf
   # Absolute path to the shared GGUF bytes used by all providers.
   gguf_path: REPLACE_WITH_ABSOLUTE_GGUF_PATH
-  # Filled by `python benchmark.py digest` or recorded manually.
+  # Filled by `npx tsx benchmark.ts digest` or recorded manually.
   sha256: ""

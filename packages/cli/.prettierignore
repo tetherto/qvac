@@ -1,2 +1,3 @@
-# Python benchmark harness (not Prettier-formatted)
-benchmarks
+# Large fixed prompt bodies and local sweep outputs
+benchmarks/**/prompts.json
+benchmarks/**/results

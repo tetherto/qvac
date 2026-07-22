@@ -17,9 +17,9 @@ Fill this in on the benchmark host before the formal sweep. Do not put secrets h
 
 | Field | Value |
 |---|---|
-| Python | |
-| `openai` package | 1.99.9 (see `requirements.txt`) |
-| PyYAML | 6.0.2 |
+| Node.js | |
+| `openai` (npm, CLI devDependency) | |
+| `js-yaml` | (from `@qvac/cli`) |
 
 ## Model parity
 
@@ -34,7 +34,7 @@ Fill this in on the benchmark host before the formal sweep. Do not put secrets h
 Record digest with:
 
 ```bash
-python benchmark.py digest
+npx tsx benchmark.ts digest
 ```
 
 ## qvac serve
@@ -138,26 +138,26 @@ Verify the `think` / reasoning parameter name for the installed Ollama version a
 ## Runbook
 
 ```bash
-cd packages/cli/benchmarks/serve-openai-providers
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+cd packages/cli
+npm install
+npm run test:bench-serve-openai-providers
 
+cd benchmarks/serve-openai-providers
 # 1) Edit benchmark.yaml model IDs + gguf_path
 # 2) Fill this environment.md
 # 3) Start one provider at a time; keep Mac on AC power
 
-python benchmark.py digest
-python -m pytest test_benchmark.py -q
-python benchmark.py preflight
-python benchmark.py calibrate --provider qvac
+npx tsx benchmark.ts digest
+npx tsx benchmark.ts preflight
+npx tsx benchmark.ts calibrate --provider qvac
 # Adjust prompts.json if measured prompt_tokens drift far from targets, then re-preflight all three.
-python benchmark.py smoke
-python benchmark.py full
+npx tsx benchmark.ts smoke
+npx tsx benchmark.ts full
 ```
 
-CI: PR runs harness unit tests via `.github/workflows/benchmark-cli-serve-openai-providers.yml`.
-Dispatch the same workflow with `mode=smoke` or `mode=full` on a configured `qvac-macos26-arm64-gpu` runner for live providers.
+CI: PR / CLI `test:unit` runs harness unit tests. Dispatch
+`.github/workflows/benchmark-cli-serve-openai-providers.yml` with `mode=smoke` or
+`mode=full` on a configured `qvac-macos26-arm64-gpu` runner for live providers.
 
 Smoke is a hard gate: all three providers must return streaming usage, non-empty content, and reasoning-off before `full`.
 

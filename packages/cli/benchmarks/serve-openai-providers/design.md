@@ -31,8 +31,8 @@ It does not cover:
 
 ## CI
 
-- **PR / `harness-unit`**: `pytest` for the harness (no models, no live servers) via
-  `.github/workflows/benchmark-cli-serve-openai-providers.yml`
+- **PR / `harness-unit`**: TypeScript harness unit tests (no models, no live servers) via
+  `.github/workflows/benchmark-cli-serve-openai-providers.yml` and CLI `test:unit`
 - **`workflow_dispatch` `smoke` / `full`**: optional live run on a self-hosted
   `qvac-macos*-gpu` runner when providers and the shared GGUF are already configured
 
@@ -40,11 +40,11 @@ It does not cover:
 
 Self-contained package under `packages/cli/benchmarks/serve-openai-providers/`:
 
-- `benchmark.py`: provider-neutral OpenAI Python SDK streaming runner
+- `harness.ts`: provider-neutral OpenAI TypeScript SDK streaming helpers + metrics
+- `benchmark.ts`: CLI entry (`digest` / `preflight` / `smoke` / `calibrate` / `full` / `report`)
+- `harness.test.ts`: focused harness and metric tests
 - `benchmark.yaml`: provider endpoints, model IDs, and shared generation settings
 - `prompts.json`: the four fixed prompt bodies
-- `requirements.txt`: exact Python dependency versions used for the run
-- `test_benchmark.py`: focused harness and metric tests
 - `environment.md`: hardware, software, model, and launch-command manifest
 - `results/raw.json`: environment metadata and every warmup or measured run
 - `results/report.md`: aggregate results, methodology, limitations, and conclusions
@@ -113,7 +113,7 @@ The environment manifest records:
 
 ## Workload
 
-Use fixed prompt bodies adapted from the existing calibrated prompt set in `packages/llm-llamacpp/benchmarks/performance/test-prompts.json`. Store the exact text in `prompts.json`; do not generate prompts during a timed run. Calibrate sizes with `python benchmark.py calibrate` against one provider so measured `prompt_tokens` land near the nominal targets for Qwen3.5's chat template; re-check parity across all three before the sweep.
+Use fixed prompt bodies adapted from the existing calibrated prompt set in `packages/llm-llamacpp/benchmarks/performance/test-prompts.json`. Store the exact text in `prompts.json`; do not generate prompts during a timed run. Calibrate sizes with `npx tsx benchmark.ts calibrate` against one provider so measured `prompt_tokens` land near the nominal targets for Qwen3.5's chat template; re-check parity across all three before the sweep.
 
 Each request is a single user message. Insert a short run identifier near the start of the user content so a provider cannot reuse the full measured prompt prefix across runs. The run identifier is excluded from scenario naming but retained in raw request metadata. Size labels remain nominal because the run-id prefix makes `prompt_tokens` vary slightly across the five measured runs of a size; raw results keep per-run usage.
 
@@ -130,7 +130,7 @@ Run only one provider benchmark block at a time. Stop unrelated inference proces
 
 ## Streaming and Metric Definitions
 
-All providers are called with the official OpenAI Python SDK through `chat.completions.create(..., stream=True, stream_options={"include_usage": true})`. The same request builder and stream parser handle every provider.
+All providers are called with the official OpenAI TypeScript SDK through `chat.completions.create(..., stream: true, stream_options: { include_usage: true })`. The same request builder and stream parser handle every provider.
 
 The benchmark timestamps:
 
@@ -189,7 +189,7 @@ The harness writes results atomically after each run so an interruption preserve
 
 ## Harness Tests
 
-`test_benchmark.py` uses synthetic stream chunks and controlled timestamps to verify:
+`harness.test.ts` uses synthetic stream chunks and controlled timestamps to verify:
 
 - Role-only and reasoning-only chunks do not count as first content
 - First and last content timestamps are captured correctly
@@ -202,7 +202,7 @@ The harness writes results atomically after each run so an interruption preserve
 - Missing usage, malformed chunks, and empty output fail validation
 - Reasoning markers in content fail validation
 
-After unit tests pass, run one measured request per provider at the shortest prompt size (`python benchmark.py smoke`). The full sweep starts only if all three smoke runs produce valid usage and metrics, including streaming usage.
+After unit tests pass, run one measured request per provider at the shortest prompt size (`npx tsx benchmark.ts smoke`). The full sweep starts only if all three smoke runs produce valid usage and metrics, including streaming usage.
 
 ## Report
 
@@ -227,7 +227,7 @@ An optional qvac SDK-direct spot check may compare one short and one long reques
 The task is complete when:
 
 - All three providers use the exact same GGUF digest.
-- All benchmark requests use one OpenAI Python SDK client and one shared request path.
+- All benchmark requests use one OpenAI TypeScript SDK client and one shared request path.
 - Four prompt sizes each have one warmup and five attempted measured runs per provider.
 - Raw results preserve every successful and failed attempt.
 - Comparative metrics use identical definitions and measurement sources.

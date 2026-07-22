@@ -8,6 +8,8 @@ on:
   pull_request:
     paths:
       - 'packages/cli/benchmarks/serve-openai-providers/**'
+      - 'packages/cli/package.json'
+      - 'packages/cli/package-lock.json'
       - '.github/workflows/benchmark-cli-serve-openai-providers.yml'
     branches:
       - main
@@ -21,7 +23,7 @@ on:
         required: false
         type: string
       mode:
-        description: 'harness-unit (pytest only) | smoke | full'
+        description: 'harness-unit (tsx tests only) | smoke | full'
         required: true
         type: choice
         options:
@@ -39,6 +41,7 @@ concurrency:
 
 env:
   BENCH_DIR: packages/cli/benchmarks/serve-openai-providers
+  CLI_DIR: packages/cli
 
 jobs:
   harness-unit:
@@ -56,20 +59,20 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          python-version: '3.12'
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: packages/cli/package-lock.json
 
-      - name: Install harness deps
-        working-directory: ${{ env.BENCH_DIR }}
-        run: |
-          python3 -m venv .venv
-          .venv/bin/pip install --quiet -r requirements.txt
+      - name: Install CLI deps
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm install --no-fund --no-audit
 
-      - name: Pytest
-        working-directory: ${{ env.BENCH_DIR }}
-        run: .venv/bin/python -m pytest test_benchmark.py -q
+      - name: Harness unit tests
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm run test:bench-serve-openai-providers
 
   label-gate:
     name: Authorise (label-gate)
@@ -115,16 +118,16 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          python-version: '3.12'
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: packages/cli/package-lock.json
 
-      - name: Install harness deps
-        working-directory: ${{ env.BENCH_DIR }}
-        run: |
-          python3 -m venv .venv
-          .venv/bin/pip install --quiet -r requirements.txt
+      - name: Install CLI deps
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm install --no-fund --no-audit
 
       - name: Require runner config
         working-directory: ${{ env.BENCH_DIR }}
@@ -143,7 +146,9 @@ jobs:
           MODE: ${{ inputs.mode }}
         run: |
           case "$MODE" in
-            smoke|full) .venv/bin/python benchmark.py "$MODE" ;;
+            smoke|full)
+              npx tsx benchmark.ts "$MODE"
+              ;;
             *)
               echo "::error::invalid mode: $MODE"
               exit 1
