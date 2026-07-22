@@ -5,7 +5,7 @@ import type {
   StreamParseResult,
   ValidateRunParams,
   ValidationResult
-} from './types.ts'
+} from './types'
 
 export const THINK_MARKERS = ['<think>', '</think>'] as const
 

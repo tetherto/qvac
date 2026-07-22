@@ -4,20 +4,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
-import { cmdFull, cmdPreflight, defaultDependencies } from './commands.ts'
-import type { CommandDependencies } from './commands.ts'
-import {
-  atomicWriteJson,
-  buildMessages,
-  createFakeChunk,
-  loadBenchmarkConfig,
-  parseStream,
-  rotateIds,
-  verifyModelParity
-} from './harness.ts'
-import { executeCommand, runProviderLifecycle } from './lifecycle.ts'
-import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
-import { writeReport } from './report.ts'
+import { cmdFull, cmdPreflight, defaultDependencies, rotateIds } from './commands'
+import type { CommandDependencies } from './commands'
+import { loadBenchmarkConfig } from './config'
+import { atomicWriteJson, verifyModelParity } from './persistence'
+import { executeCommand, runProviderLifecycle } from './lifecycle'
+import { aggregateMetric, computeMetrics, validateRun } from './metrics'
+import { writeReport } from './report'
+import { buildMessages, createFakeChunk, parseStream } from './stream'
 import type {
   BenchmarkConfig,
   ChatClient,
@@ -26,7 +20,7 @@ import type {
   RawDocument,
   StreamParseResult,
   StreamTimings
-} from './types.ts'
+} from './types'
 
 function makeConfig(params: { ggufPath: string; sha256: string }): BenchmarkConfig {
   return {
@@ -190,7 +184,7 @@ describe('serve-openai-providers harness', () => {
 
       assert.equal(await cmdPreflight(config, promptsDoc, dir), 1)
       const raw = JSON.parse(readFileSync(join(dir, 'raw.json'), 'utf8')) as Record<string, unknown>
-      assert.deepEqual(raw.model_parity_evidence, {
+      assert.deepEqual(raw['model_parity_evidence'], {
         path: ggufPath,
         bytes: 4,
         sha256
@@ -276,7 +270,9 @@ describe('serve-openai-providers harness', () => {
       const raw = JSON.parse(readFileSync(join(dir, 'results', 'raw.json'), 'utf8')) as {
         runs: Array<Record<string, unknown>>
       }
-      const measuredFailure = raw.runs.find((run) => run.phase === 'measured' && run.ok === false)
+      const measuredFailure = raw.runs.find(
+        (run) => run['phase'] === 'measured' && run['ok'] === false
+      )
       assert.ok(measuredFailure)
     } finally {
       console.log = originalLog
@@ -381,7 +377,7 @@ describe('serve-openai-providers harness', () => {
         invalid_reasons: string[]
       }
       assert.equal(raw.parity.prompt_tokens_equal, false)
-      assert.equal(raw.runs.filter((run) => run.phase === 'measured').length, 2)
+      assert.equal(raw.runs.filter((run) => run['phase'] === 'measured').length, 2)
       assert.equal(raw.valid, false)
       assert.ok(raw.invalid_reasons.includes('prompt_tokens_parity_mismatch'))
       assert.match(

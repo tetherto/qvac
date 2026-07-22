@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import type { ProviderConfig } from './types.ts'
+import type { ProviderConfig } from './types'
 
 export const DEFAULT_COMMAND_TIMEOUT_MS = 30_000
 export const DEFAULT_KILL_GRACE_MS = 5_000

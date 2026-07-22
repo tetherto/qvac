@@ -1,67 +1,17 @@
-import { randomBytes } from 'node:crypto'
-import { mkdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import OpenAI from 'openai'
-import { computeMetrics, validateRun } from './metrics.ts'
-import { atomicWriteJson } from './persistence.ts'
+import { computeMetrics, validateRun } from './metrics'
 import type {
-  BenchmarkConfig,
   ChatChunk,
   ChatClient,
   GenerationConfig,
-  PromptDoc,
-  PromptsFile,
   RunMetrics,
   StreamParseResult,
   StreamTimings,
   ValidationResult
-} from './types.ts'
-
-export { configPlaceholders, loadBenchmarkConfig, PLACEHOLDER_PREFIXES } from './config.ts'
-export { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
-export { atomicWriteJson, sha256File, verifyModelParity } from './persistence.ts'
-export { writeReport } from './report.ts'
-export type { ModelParityEvidence } from './persistence.ts'
-export type {
-  AggregateStats,
-  BenchmarkConfig,
-  ChatChunk,
-  ChatClient,
-  GenerationConfig,
-  MetricObservation,
-  PromptDoc,
-  PromptsFile,
-  ProviderConfig,
-  ProviderLifecycle,
-  RawDocument,
-  RunMetrics,
-  StreamParseResult,
-  StreamTimings,
-  ValidateRunParams,
-  ValidationResult
-} from './types.ts'
+} from './types'
 
 export function nowSeconds(): number {
   return performance.now() / 1000
-}
-
-export function loadPrompts(path: string): PromptsFile {
-  const data = JSON.parse(readFileSync(path, 'utf8')) as PromptsFile
-  if (!data.parity || !Array.isArray(data.prompts)) {
-    throw new Error('prompts.json must contain parity and prompts')
-  }
-  return data
-}
-
-export function promptById(promptsDoc: PromptsFile, promptId: string): PromptDoc {
-  if (promptId === promptsDoc.parity.id) {
-    return { ...promptsDoc.parity }
-  }
-  const found = promptsDoc.prompts.find((prompt) => prompt.id === promptId)
-  if (!found) {
-    throw new Error(`unknown prompt id: ${promptId}`)
-  }
-  return { ...found }
 }
 
 export function buildMessages(
@@ -138,17 +88,17 @@ export async function parseStream(
       }
       const text = deltaField(delta, 'content')
       if (text) {
-        const ts = now()
+        const timestamp = now()
         if (timings.firstContentS === null) {
-          timings.firstContentS = ts
+          timings.firstContentS = timestamp
         }
-        timings.lastContentS = ts
+        timings.lastContentS = timestamp
         contentParts.push(text)
       }
     }
-  } catch (err) {
-    const name = err instanceof Error ? err.constructor.name : 'Error'
-    const message = err instanceof Error ? err.message : String(err)
+  } catch (caught) {
+    const name = caught instanceof Error ? caught.constructor.name : 'Error'
+    const message = caught instanceof Error ? caught.message : String(caught)
     error = `${name}: ${message}`
   }
 
@@ -177,65 +127,6 @@ async function* asAsyncIterable<T>(source: AsyncIterable<T> | Iterable<T>): Asyn
   }
 }
 
-export function rotateIds(ids: string[], offset: number): string[] {
-  if (ids.length === 0) {
-    return []
-  }
-  const o = ((offset % ids.length) + ids.length) % ids.length
-  return [...ids.slice(o), ...ids.slice(0, o)]
-}
-
-export function createSessionDir(base: string, date: Date = new Date()): string {
-  const stamp = date
-    .toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d{3}Z$/, 'Z')
-  const session = join(base, `session-${stamp}-${randomBytes(4).toString('hex')}`)
-  mkdirSync(session, { recursive: false })
-  return session
-}
-
-export function newRawDocument(
-  config: BenchmarkConfig,
-  sessionId: string,
-  createdAt: string = new Date().toISOString()
-): Record<string, unknown> {
-  return {
-    session_id: sessionId,
-    created_at: createdAt,
-    valid: true,
-    invalid_reasons: [],
-    orchestration_errors: [],
-    config_snapshot: {
-      generation: config.generation,
-      cooldown_seconds: config.cooldown_seconds,
-      warmup_runs: config.warmup_runs,
-      measured_runs: config.measured_runs,
-      prompt_ids: config.prompt_ids,
-      providers: config.providers.map((p) => ({
-        id: p.id,
-        base_url: p.base_url,
-        model: p.model
-      })),
-      model_parity: config.model_parity
-    },
-    provider_order: [] as string[],
-    parity: {},
-    runs: [] as unknown[]
-  }
-}
-
-export function appendRun(
-  rawPath: string,
-  raw: Record<string, unknown>,
-  run: Record<string, unknown>,
-  write: (path: string, payload: unknown) => void = atomicWriteJson
-): void {
-  const runs = raw.runs as unknown[]
-  runs.push(run)
-  write(rawPath, raw)
-}
-
 export function makeClient(baseUrl: string, apiKey: string): OpenAI {
   return new OpenAI({ baseURL: baseUrl, apiKey })
 }
@@ -259,10 +150,10 @@ export async function runStreamingCompletion(params: {
   try {
     const stream = await params.client.chat.completions.create(kwargs)
     parsed = await parseStream(stream, timings, now)
-  } catch (err) {
+  } catch (caught) {
     timings.streamEndS = now()
-    const name = err instanceof Error ? err.constructor.name : 'Error'
-    const message = err instanceof Error ? err.message : String(err)
+    const name = caught instanceof Error ? caught.constructor.name : 'Error'
+    const message = caught instanceof Error ? caught.message : String(caught)
     parsed = {
       content: '',
       reasoningContent: '',
@@ -276,17 +167,6 @@ export async function runStreamingCompletion(params: {
   const metrics = computeMetrics(parsed)
   const validation = validateRun({ parsed, metrics })
   return [parsed, metrics, validation]
-}
-
-export function metricsToJson(metrics: RunMetrics): Record<string, unknown> {
-  return {
-    ttft_ms: metrics.ttftMs,
-    total_ms: metrics.totalMs,
-    prompt_tokens: metrics.promptTokens,
-    completion_tokens: metrics.completionTokens,
-    client_output_tps: metrics.clientOutputTps,
-    effective_prefill_tps: metrics.effectivePrefillTps
-  }
 }
 
 export function createFakeChunk(params: {

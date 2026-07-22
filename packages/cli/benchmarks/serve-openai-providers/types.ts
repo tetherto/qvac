@@ -59,8 +59,14 @@ export type RawRunRecord = {
   prompt_id: string
   phase: string
   run_index: number
+  run_id?: string
+  started_at?: string
+  ended_at?: string
   ok: boolean
   validation_reasons?: string[]
+  response_model?: string | null
+  content_preview?: string
+  reasoning_preview?: string
   error?: string | null
   metrics: Record<string, number | null>
 }

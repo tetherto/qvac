@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
-import { aggregateMetric } from './metrics.ts'
-import type { AggregateStats, MetricObservation, RawDocument } from './types.ts'
+import { aggregateMetric } from './metrics'
+import type { AggregateStats, MetricObservation, RawDocument } from './types'
 
 function fmt(value: number | null, digits = 2): string {
   if (value === null) {
@@ -103,7 +103,7 @@ export function writeReport(raw: RawDocument, path: string): void {
       const observations: MetricObservation[] = measured
         .filter((run) => run.provider === provider && run.prompt_id === promptId)
         .map((run) => ({
-          value: run.metrics.effective_prefill_tps ?? null,
+          value: run.metrics['effective_prefill_tps'] ?? null,
           ok: run.ok
         }))
       const stats = aggregateMetric(observations)

@@ -1,23 +1,20 @@
 import { randomBytes } from 'node:crypto'
 import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { configPlaceholders, PLACEHOLDER_PREFIXES } from './config.ts'
+import { configPlaceholders, PLACEHOLDER_PREFIXES, promptById } from './config'
 import {
   appendRun,
-  buildMessages,
+  atomicWriteJson,
   createSessionDir,
-  makeClient,
   metricsToJson,
   newRawDocument,
-  nowSeconds,
-  promptById,
-  rotateIds,
-  runStreamingCompletion
-} from './harness.ts'
-import { executeCommand, runProviderLifecycle } from './lifecycle.ts'
-import { atomicWriteJson, sha256File, verifyModelParity } from './persistence.ts'
-import { writeReport } from './report.ts'
-import type { CommandExecutor } from './lifecycle.ts'
+  sha256File,
+  verifyModelParity
+} from './persistence'
+import { executeCommand, runProviderLifecycle } from './lifecycle'
+import { writeReport } from './report'
+import { buildMessages, makeClient, nowSeconds, runStreamingCompletion } from './stream'
+import type { CommandExecutor } from './lifecycle'
 import type {
   BenchmarkConfig,
   ChatClient,
@@ -25,8 +22,9 @@ import type {
   PromptDoc,
   PromptsFile,
   ProviderConfig,
-  RawDocument
-} from './types.ts'
+  RawDocument,
+  RawRunRecord
+} from './types'
 
 export type CommandClock = {
   now: () => number
@@ -48,6 +46,14 @@ export type CommandDependencies = {
   execute: CommandExecutor
   clock: CommandClock
   fs: CommandFilesystem
+}
+
+export function rotateIds(ids: string[], offset: number): string[] {
+  if (ids.length === 0) {
+    return []
+  }
+  const normalizedOffset = ((offset % ids.length) + ids.length) % ids.length
+  return [...ids.slice(normalizedOffset), ...ids.slice(0, normalizedOffset)]
 }
 
 function defaultCreateClient(baseUrl: string, apiKey: string): ChatClient {
@@ -98,7 +104,7 @@ export async function runOne(params: {
   phase: string
   runIndex: number
   clock?: CommandClock
-}): Promise<Record<string, unknown>> {
+}): Promise<RawRunRecord> {
   const clock = params.clock ?? defaultDependencies().clock
   const runId = randomBytes(5).toString('hex')
   const messages = buildMessages(params.prompt.content, runId)
@@ -255,10 +261,10 @@ export async function cmdSmoke(
         }),
       deps.execute
     )
-    const metrics = result.metrics as Record<string, unknown>
+    const metrics = result.metrics
     const status = result.ok ? 'OK' : 'FAIL'
     console.log(
-      `[${status}] smoke ${provider.id} ${shortest}: ttft_ms=${metrics.ttft_ms} client_output_tps=${metrics.client_output_tps} reasons=${JSON.stringify(result.validation_reasons)}`
+      `[${status}] smoke ${provider.id} ${shortest}: ttft_ms=${metrics['ttft_ms']} client_output_tps=${metrics['client_output_tps']} reasons=${JSON.stringify(result.validation_reasons)}`
     )
     if (!result.ok) {
       failed = true
@@ -313,7 +319,7 @@ export async function cmdCalibrate(
     },
     deps.execute
   )
-  return rows.every((r) => r.ok && r.measured_prompt_tokens) ? 0 : 1
+  return rows.every((row) => row['ok'] && row['measured_prompt_tokens']) ? 0 : 1
 }
 
 export async function cmdFull(
@@ -424,9 +430,9 @@ export async function cmdFull(
                   clock: deps.clock
                 })
                 appendRun(rawPath, raw, run, deps.fs.writeJson)
-                const metricsJson = run.metrics as Record<string, unknown>
+                const metricsJson = run.metrics
                 console.log(
-                  `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${metricsJson.ttft_ms} client_output_tps=${metricsJson.client_output_tps}`
+                  `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${metricsJson['ttft_ms']} client_output_tps=${metricsJson['client_output_tps']}`
                 )
               }
             }
@@ -487,9 +493,7 @@ export async function cmdFull(
   console.log(`wrote ${reportPath}`)
   console.log(`copied ${join(sessionBase, 'raw.json')} and ${join(sessionBase, 'report.md')}`)
 
-  const measuredFailures = ((raw.runs as Array<Record<string, unknown>>) ?? []).filter(
-    (r) => r.phase === 'measured' && !r.ok
-  )
+  const measuredFailures = raw.runs.filter((run) => run.phase === 'measured' && !run.ok)
   if (measuredFailures.length > 0 || raw.valid === false) {
     console.error(`FAIL: ${measuredFailures.length} measured run(s) failed; see ${rawPath}`)
     return 1

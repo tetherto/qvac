@@ -1,8 +1,8 @@
 #!/usr/bin/env npx tsx
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cmdCalibrate, cmdDigest, cmdFull, cmdPreflight, cmdReport, cmdSmoke } from './commands.ts'
-import { loadBenchmarkConfig, loadPrompts } from './harness.ts'
+import { cmdCalibrate, cmdDigest, cmdFull, cmdPreflight, cmdReport, cmdSmoke } from './commands'
+import { loadBenchmarkConfig, loadPrompts } from './config'
 
 function printUsage(): void {
   console.log(`Usage: npx tsx benchmark.ts <command> [options]

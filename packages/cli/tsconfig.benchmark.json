@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["benchmarks/serve-openai-providers/**/*.ts"],
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  }
+}

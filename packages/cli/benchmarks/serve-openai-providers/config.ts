@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { load as loadYaml } from 'js-yaml'
-import type { BenchmarkConfig } from './types.ts'
+import type { BenchmarkConfig, PromptDoc, PromptsFile } from './types'
 
 export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
 const ROOT_KEYS = new Set([
@@ -48,41 +48,39 @@ function assertGenerationConfig(value: unknown): void {
   }
   if (
     'max_tokens' in value &&
-    (!isFiniteNumber(value.max_tokens) ||
-      !Number.isInteger(value.max_tokens) ||
-      value.max_tokens <= 0)
+    (!isFiniteNumber(value['max_tokens']) ||
+      !Number.isInteger(value['max_tokens']) ||
+      value['max_tokens'] <= 0)
   ) {
     throw new TypeError('config generation.max_tokens must be a positive integer')
   }
   if (
     'temperature' in value &&
-    (!isFiniteNumber(value.temperature) || value.temperature < 0 || value.temperature > 2)
+    (!isFiniteNumber(value['temperature']) || value['temperature'] < 0 || value['temperature'] > 2)
   ) {
     throw new TypeError('config generation.temperature must be between 0 and 2')
   }
   if (
     'seed' in value &&
-    value.seed !== null &&
-    (!isFiniteNumber(value.seed) || !Number.isInteger(value.seed))
+    value['seed'] !== null &&
+    (!isFiniteNumber(value['seed']) || !Number.isInteger(value['seed']))
   ) {
     throw new TypeError('config generation.seed must be an integer or null')
   }
-  if ('stream' in value && value.stream !== true) {
+  if ('stream' in value && value['stream'] !== true) {
     throw new TypeError('config generation.stream must be true')
   }
   if ('stream_options' in value) {
-    if (!isRecord(value.stream_options)) {
+    if (!isRecord(value['stream_options'])) {
       throw new TypeError('config generation.stream_options must be a mapping')
     }
-    for (const key of Object.keys(value.stream_options)) {
+    const streamOptions = value['stream_options']
+    for (const key of Object.keys(streamOptions)) {
       if (!STREAM_OPTION_KEYS.has(key)) {
         throw new TypeError(`unknown config generation.stream_options setting: ${key}`)
       }
     }
-    if (
-      'include_usage' in value.stream_options &&
-      typeof value.stream_options.include_usage !== 'boolean'
-    ) {
+    if ('include_usage' in streamOptions && typeof streamOptions['include_usage'] !== 'boolean') {
       throw new TypeError('config generation.stream_options.include_usage must be a boolean')
     }
   }
@@ -109,7 +107,7 @@ function assertProviderLifecycle(value: unknown): void {
   }
   if (
     'timeout_seconds' in value &&
-    (!isFiniteNumber(value.timeout_seconds) || value.timeout_seconds <= 0)
+    (!isFiniteNumber(value['timeout_seconds']) || value['timeout_seconds'] <= 0)
   ) {
     throw new TypeError('config provider lifecycle.timeout_seconds must be a positive number')
   }
@@ -129,38 +127,38 @@ function assertBenchmarkConfig(data: unknown, path: string): asserts data is Ben
       throw new TypeError(`config ${key} must be a non-empty string`)
     }
   }
-  assertGenerationConfig(data.generation)
-  if ('warmup_runs' in data && !isNonNegativeInteger(data.warmup_runs)) {
+  assertGenerationConfig(data['generation'])
+  if ('warmup_runs' in data && !isNonNegativeInteger(data['warmup_runs'])) {
     throw new TypeError('config warmup_runs must be a non-negative integer')
   }
   if (
     'measured_runs' in data &&
-    (!isNonNegativeInteger(data.measured_runs) || data.measured_runs === 0)
+    (!isNonNegativeInteger(data['measured_runs']) || data['measured_runs'] === 0)
   ) {
     throw new TypeError('config measured_runs must be a positive integer')
   }
   if (
     'cooldown_seconds' in data &&
-    (!isFiniteNumber(data.cooldown_seconds) || data.cooldown_seconds < 0)
+    (!isFiniteNumber(data['cooldown_seconds']) || data['cooldown_seconds'] < 0)
   ) {
     throw new TypeError('config cooldown_seconds must be a non-negative number')
   }
   if (
-    !Array.isArray(data.prompt_ids) ||
-    data.prompt_ids.length === 0 ||
-    !data.prompt_ids.every(isNonEmptyString)
+    !Array.isArray(data['prompt_ids']) ||
+    data['prompt_ids'].length === 0 ||
+    !data['prompt_ids'].every(isNonEmptyString)
   ) {
     throw new TypeError('config prompt_ids must contain non-empty prompt IDs')
   }
-  if (!Array.isArray(data.providers) || data.providers.length === 0) {
+  if (!Array.isArray(data['providers']) || data['providers'].length === 0) {
     throw new TypeError('config providers must be non-empty')
   }
-  for (const provider of data.providers) {
+  for (const provider of data['providers']) {
     if (
       !isRecord(provider) ||
-      !isNonEmptyString(provider.id) ||
-      !isNonEmptyString(provider.base_url) ||
-      !isNonEmptyString(provider.model)
+      !isNonEmptyString(provider['id']) ||
+      !isNonEmptyString(provider['base_url']) ||
+      !isNonEmptyString(provider['model'])
     ) {
       throw new TypeError('each config provider must define non-empty id, base_url, and model')
     }
@@ -170,19 +168,21 @@ function assertBenchmarkConfig(data: unknown, path: string): asserts data is Ben
       }
     }
     if ('lifecycle' in provider) {
-      assertProviderLifecycle(provider.lifecycle)
+      assertProviderLifecycle(provider['lifecycle'])
     }
   }
-  if (!isRecord(data.model_parity) || !isNonEmptyString(data.model_parity.gguf_path)) {
+  if (!isRecord(data['model_parity'])) {
     throw new TypeError('config model_parity.gguf_path must be non-empty')
   }
-  if (!isAbsolute(data.model_parity.gguf_path)) {
+  const modelParity = data['model_parity']
+  const ggufPath = modelParity['gguf_path']
+  if (!isNonEmptyString(ggufPath)) {
+    throw new TypeError('config model_parity.gguf_path must be non-empty')
+  }
+  if (!isAbsolute(ggufPath)) {
     throw new TypeError('config model_parity.gguf_path must be absolute')
   }
-  if (
-    typeof data.model_parity.sha256 !== 'string' ||
-    !/^[0-9a-f]{64}$/.test(data.model_parity.sha256)
-  ) {
+  if (typeof modelParity['sha256'] !== 'string' || !/^[0-9a-f]{64}$/.test(modelParity['sha256'])) {
     throw new TypeError('config model_parity.sha256 must be a lowercase 64-character digest')
   }
 }
@@ -191,6 +191,25 @@ export function loadBenchmarkConfig(path: string): BenchmarkConfig {
   const data: unknown = loadYaml(readFileSync(path, 'utf8'))
   assertBenchmarkConfig(data, path)
   return data
+}
+
+export function loadPrompts(path: string): PromptsFile {
+  const data = JSON.parse(readFileSync(path, 'utf8')) as PromptsFile
+  if (!data.parity || !Array.isArray(data.prompts)) {
+    throw new Error('prompts.json must contain parity and prompts')
+  }
+  return data
+}
+
+export function promptById(promptsDoc: PromptsFile, promptId: string): PromptDoc {
+  if (promptId === promptsDoc.parity.id) {
+    return { ...promptsDoc.parity }
+  }
+  const found = promptsDoc.prompts.find((prompt) => prompt.id === promptId)
+  if (!found) {
+    throw new Error(`unknown prompt id: ${promptId}`)
+  }
+  return { ...found }
 }
 
 export function configPlaceholders(config: BenchmarkConfig): string[] {
