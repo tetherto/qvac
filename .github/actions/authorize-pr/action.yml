@@ -1,6 +1,6 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Checks actor write permission, author association, and a SHA-bound `verified` approval for external fork PRs — the label alone is not proof, the current head commit must carry the trusted qvac/fork-verified status recorded by label-gate when a merge/release member approved that exact SHA. Strips the gate label on every external-fork synchronize event to force re-review after any commit change.
+  Security gate for pull_request_target workflows. Same-repo PRs and write-access actors are trusted; every other external fork PR requires a SHA-bound `verified` approval — the label alone is not proof, the current head commit must carry the trusted qvac/fork-verified status recorded by label-gate when a merge/release member approved that exact SHA. author_association (MEMBER/OWNER/COLLABORATOR) does NOT bypass the gate for forks. Strips the gate label on every external-fork synchronize event to force re-review after any commit change.
 inputs:
   label:
     description: "Label name required for external fork PRs (default: verified)"
@@ -74,7 +74,6 @@ runs:
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         BASE_REPO: ${{ github.repository }}
         IS_DRAFT: ${{ github.event.pull_request.draft }}
-        AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
         HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
         HAS_APPROVED_SHA: ${{ steps.approved.outputs.approved }}
         LABEL_NAME: ${{ inputs.label }}
@@ -118,19 +117,21 @@ runs:
 
         echo "::notice::Actor '$GITHUB_ACTOR' write-or-higher: $HAS_WRITE"
 
-        # Actor with write (or higher) is trusted even from a fork
+        # Actor with write (or higher) is trusted even from a fork — they could
+        # push to the base repo directly, so a fork PR from them is no riskier.
         if [ "$HAS_WRITE" = "1" ]; then
           echo "::notice::Actor has write-or-higher permission — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # Org members / collaborators are trusted even from forks
-        if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
-          echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
-          echo "allowed=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
+        # NOTE: author_association (MEMBER / OWNER / COLLABORATOR) does NOT bypass
+        # the gate for EXTERNAL FORKS. An org member (or read/triage collaborator)
+        # WITHOUT repo write could otherwise run unreviewed fork code in a
+        # pull_request_target workflow without `verified` (reported by NamelsKing).
+        # Org members keep the frictionless path by working from an in-org branch
+        # (same-repo, already trusted above); a fork PR always requires the
+        # SHA-bound `verified` approval below.
 
         # External fork: require the gate label.
         HAS_LABEL=$(echo "$LABELS_JSON" | jq -r --arg l "$LABEL_NAME" \

@@ -391,14 +391,50 @@ test('authorize-pr: SHA-bound — reviewed fork at the approved head stays autho
   )
 })
 
-test('authorize-pr: SHA-bound gate is bypassed by write/member trust (unaffected)', () => {
-  // Trusted actors never needed the label/SHA gate; that stays true.
+test('authorize-pr: write access still bypasses the label/SHA gate from a fork', () => {
+  // A write-access actor could push to base directly, so trusting their fork PR
+  // is no riskier — this stays true regardless of the SHA status.
   assert.equal(
     authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false', HAS_WRITE: '1' }).allowed,
     'true',
   )
+})
+
+test('authorize-pr: author_association does NOT bypass the fork gate (NamelsKing part 1)', () => {
+  // An org member / collaborator WITHOUT repo write, from a fork, must not run
+  // fork code without a SHA-bound approval — closes the AUTHOR_ASSOC fall-through.
+  for (const assoc of ['MEMBER', 'OWNER', 'COLLABORATOR']) {
+    assert.equal(
+      authorizePr({
+        ACTION: 'opened',
+        AUTHOR_ASSOC: assoc,
+        HAS_WRITE: '0',
+        LABELS_JSON: '[]',
+      }).allowed,
+      'false',
+      `${assoc} without write must not bypass the fork label`,
+    )
+    // Even with the label present, an unapproved head SHA denies (no ordering proof).
+    assert.equal(
+      authorizePr({
+        ACTION: 'reopened',
+        AUTHOR_ASSOC: assoc,
+        HAS_WRITE: '0',
+        HAS_APPROVED_SHA: 'false',
+      }).allowed,
+      'false',
+      `${assoc} without write must not ride a stale approval on a flip`,
+    )
+  }
+  // With a genuine SHA-bound approval they ARE authorised — via the label/SHA
+  // path, not author_association.
   assert.equal(
-    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false', AUTHOR_ASSOC: 'MEMBER' }).allowed,
+    authorizePr({
+      ACTION: 'reopened',
+      AUTHOR_ASSOC: 'MEMBER',
+      HAS_WRITE: '0',
+      HAS_APPROVED_SHA: 'true',
+    }).allowed,
     'true',
   )
 })
