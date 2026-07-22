@@ -11,27 +11,27 @@ on:
   workflow_dispatch:
     inputs:
       desktop:
-        description: "Run Desktop tests"
+        description: "Desktop tests"
         type: boolean
         default: true
       electron:
-        description: "Run Electron tests"
+        description: "Electron tests"
         type: boolean
         default: false
       snap:
-        description: "Run strict Snap tests"
+        description: "Snap tests (strict confinement)"
         type: boolean
         default: false
       android:
-        description: "Run Android tests"
+        description: "Android tests"
         type: boolean
         default: true
       ios:
-        description: "Run iOS tests"
+        description: "iOS tests"
         type: boolean
         default: true
       suite:
-        description: "Suite selection (full = all tests, smoke = smoke suite, custom = use suite-custom value)"
+        description: "Test suite"
         type: choice
         options:
           - full
@@ -39,57 +39,57 @@ on:
           - custom
         default: full
       suite-custom:
-        description: "Custom suite value (only used when suite=custom). Comma-separated suite names."
+        description: "Custom suites (comma-separated; used only when suite is custom)"
         type: string
       exclude-suite:
-        description: "Exclude suites (comma-separated, e.g. 'slow,flaky'). Tests tagged with these suites are skipped."
+        description: "Suites to exclude (comma-separated, e.g. slow,flaky)"
         type: string
       filter:
-        description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
+        description: "Test filters (comma-separated categories or prefixes)"
         type: string
+      test-version:
+        description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
+        type: string
+      cache-models:
+        description: "Reuse downloaded models across runs"
+        type: boolean
+        default: true
       desktop-consumer-timeout:
-        description: "Desktop/Electron consumer timeout (seconds)"
+        description: "Desktop/Electron connection timeout (seconds)"
         type: number
         default: 60
       mobile-consumer-timeout:
-        description: "Mobile consumer timeout (seconds)"
+        description: "Mobile connection timeout (seconds)"
         type: number
         default: 1200
       device-farm-timeout:
-        description: "Device Farm session timeout (minutes)"
+        description: "Device Farm run timeout (minutes)"
         type: number
         default: 90
       device-farm-start-timeout:
-        description: "Minutes to wait for a device before failing. Kept short so a busy Device Farm fails fast instead of burning CI minutes."
+        description: "Wait for Device Farm run to start (minutes)"
         type: number
         default: 15
       android-device-pool:
-        description: "Android device pool name to run on (empty = random AWS-available pool from SDK_ANDROID_DEVICE_FARM_POOLS)."
+        description: "Android device pool (blank = random configured pool)"
         type: string
         default: ""
       ios-device-pool:
-        description: "iOS device pool name to run on (empty = random AWS-available pool from SDK_IOS_DEVICE_FARM_POOLS)."
+        description: "iOS device pool (blank = random configured pool)"
         type: string
         default: ""
       desktop-platforms:
-        description: "JSON array of runner labels for desktop tests"
+        description: "Advanced: Desktop runners (JSON array)"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
       electron-platforms:
-        description: "JSON array of runner labels for electron tests"
+        description: "Advanced: Electron runners (JSON array)"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
       snap-platforms:
-        description: "JSON array of Linux runner labels for strict Snap tests"
+        description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["ubuntu-22.04"]'
-      test-version:
-        description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
-        type: string
-      cache-models:
-        description: "Cache downloaded models between runs"
-        type: boolean
-        default: true
 
   workflow_call:
     inputs:
