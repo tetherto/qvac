@@ -1,0 +1,61 @@
+name: Stable Diffusion TypeScript Checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/diffusion-cpp/**"
+      - ".github/workflows/*diffusion*.yml"
+      - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ts-checks:
+    name: diffusion-pr-head-ts-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/diffusion-cpp
+        run: npm install --ignore-scripts --package-lock=false --registry=https://registry.npmjs.org/
+
+      - name: Type declaration check
+        working-directory: packages/diffusion-cpp
+        run: npm run test:dts
+
+      - name: Run lint
+        working-directory: packages/diffusion-cpp
+        run: npm run lint
+
+      - name: Install Bare
+        run: npm install --global --force bare --registry=https://registry.npmjs.org/
+
+      - name: Run unit tests
+        working-directory: packages/diffusion-cpp
+        run: npm run test:unit
