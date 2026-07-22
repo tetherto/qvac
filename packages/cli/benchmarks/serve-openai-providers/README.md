@@ -8,14 +8,25 @@ Design details: [`design.md`](./design.md). Host/launch checklist: [`environment
 
 ## CI
 
-| Trigger                                           | Job                          | What runs                                            |
-| ------------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
-| PR touching this folder / workflow / CLI lockfile | `harness-unit`               | `tsx` unit tests (no models, no live servers)        |
-| CLI `test:unit` (SDK Pod Checks)                  | same harness tests           | via `npm run test:bench-serve-openai-providers`      |
-| `workflow_dispatch` `mode=smoke` / `full`         | self-hosted macOS GPU runner | live providers (must be preconfigured on the runner) |
+| Trigger                                           | Job               | What runs                                                                        |
+| ------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| PR touching this folder / workflow / CLI lockfile | `harness-unit`    | `tsx` unit tests (no models, no live servers) on the PR merge SHA                |
+| CLI `test:unit` (SDK Pod Checks)                  | same harness      | via `npm run test:bench-serve-openai-providers`                                  |
+| `workflow_dispatch` (any mode)                    | `validate-target` | validates the full SHA, checks it out, and typechecks + tests it (GitHub-hosted) |
+| `workflow_dispatch` `mode=smoke` / `full`         | `live`            | live providers on the self-hosted GPU runner, gated by `benchmark-live`          |
+
+Dispatch is **immutable**: the required `target_sha` input must be a full
+40-character commit SHA (`^[0-9a-fA-F]{40}$`); branch names and tags are
+rejected. `validate-target` runs on GitHub-hosted infra and pins the exact
+commit before any self-hosted code runs. The `live` job then requires manual
+approval of the protected `benchmark-live` environment (see
+[`environment.md`](./environment.md)) before it installs or executes anything on
+the self-hosted runner.
 
 The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
-LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu` runner.
+LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`
+runner, with the runtime config and environment manifest supplied by protected
+`benchmark-live` environment variables (never from the checked-out tree).
 
 ## Local
 

@@ -157,9 +157,77 @@ npx tsx benchmark.ts full
 
 CI: PR / CLI `test:unit` runs harness unit tests. Dispatch
 `.github/workflows/benchmark-cli-serve-openai-providers.yml` with `mode=smoke` or
-`mode=full` on a configured `qvac-macos26-arm64-gpu` runner for live providers.
+`mode=full` for live providers. See "CI dispatch" below for the immutable-SHA and
+`benchmark-live` requirements.
 
 Smoke is a hard gate: all three providers must return streaming usage, non-empty content, and reasoning-off before `full`.
+
+## CI dispatch (`benchmark-live`)
+
+The live sweep runs on the self-hosted `qvac-macos26-arm64-gpu` runner and is
+protected end to end. Configure the following **before** dispatching, or the run
+will fail closed.
+
+### Immutable target SHA
+
+The workflow's only ref input is `target_sha`, which must be a full
+40-character commit SHA (`^[0-9a-fA-F]{40}$`). Branch names, tags, and short
+SHAs are rejected. A GitHub-hosted `validate-target` job checks the format,
+checks out that exact commit, and runs the harness typecheck + tests before the
+self-hosted job is allowed to start. Resolve the SHA yourself, e.g.:
+
+```bash
+git rev-parse HEAD        # or the reviewed commit you intend to benchmark
+```
+
+### `benchmark-live` environment (one-time setup)
+
+Create a repository **environment** named `benchmark-live` (Settings →
+Environments) and configure:
+
+- **Required reviewers** — at least one trusted maintainer. The `live` job pauses
+  for manual approval before it checks out, installs, or runs anything on the
+  self-hosted runner. This replaces the former label gate.
+- **Deployment branch rule** — restrict the environment to the branches that are
+  allowed to dispatch it (e.g. `main`, `release-*`). Dispatches from other
+  branches cannot access the environment's variables and are blocked.
+- **Environment variables** (not secrets — plain environment variables):
+
+  | Variable                     | Value                                                                               |
+  | ---------------------------- | ----------------------------------------------------------------------------------- |
+  | `BENCHMARK_CONFIG_PATH`      | Absolute path to the runner-local `benchmark.yaml` (filled model IDs + `gguf_path`) |
+  | `BENCHMARK_ENVIRONMENT_PATH` | Absolute path to the runner-local, filled-in copy of this `environment.md`          |
+
+Both paths must be **absolute** and must point **outside** `GITHUB_WORKSPACE`.
+The `live` job rejects unset, relative, workspace-contained, missing, or
+unreadable paths. Keeping the real config off the checked-out tree means the
+benchmarked commit cannot smuggle in its own model paths or lifecycle commands.
+
+### Runner-local files
+
+On the runner, maintain a filled-in benchmark config and environment manifest at
+the paths above:
+
+- The config is the same shape as the committed `benchmark.yaml`, but with real
+  provider `model` IDs, the absolute `gguf_path`, and its `sha256` populated.
+- The environment manifest is a filled-in copy of this file, copied into
+  `results/environment.md` **after** the sweep completes and uploaded with the
+  results artifact (`full` mode only).
+
+### Lifecycle script contracts
+
+Each provider in the runtime config may declare an optional `lifecycle` block.
+`start_command` / `stop_command` are **argv arrays** (no shell) run before and
+after that provider's block, with an optional `timeout_seconds`. Because the
+config lives on the runner (outside the repo), these commands are controlled by
+the runner operator, not by the dispatched commit. Example:
+
+```yaml
+lifecycle:
+  start_command: [/absolute/path/to/start-provider.sh]
+  stop_command: [/absolute/path/to/stop-provider.sh]
+  timeout_seconds: 30
+```
 
 ## Provider execution order
 
