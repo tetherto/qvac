@@ -46,3 +46,33 @@ jobs:
       # from advanced workflows. Skip the upload here; the severity gate and
       # TruffleHog still run (SARIF is written locally for the gate to read).
       codeql-upload: never
+
+  # Repo-local CI trust-policy + label-gate regression tests (fork CI
+  # hardening). Kept here instead of a dedicated workflow so the coverage
+  # rides along with the security baseline that already runs on every PR.
+  # Runs UNPRIVILEGED only (plain pull_request, contents: read, no secrets) —
+  # never move this under pull_request_target. NOTE: this job is repo-local and
+  # NOT part of the org reusable baseline above; preserve it across any org
+  # sync of this caller file.
+  policy-tests:
+    name: policy-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - name: Run trust-policy tests
+        run: >-
+          node --test
+          .github/actions/label-gate/test/gate.test.mjs
+          .github/actions/label-gate/test/github-client.test.mjs
+          .github/actions/label-gate/test/index.test.mjs
+          .github/scripts/test/ci-trust-policy.test.mjs
