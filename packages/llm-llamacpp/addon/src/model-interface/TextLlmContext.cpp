@@ -1123,7 +1123,9 @@ bool TextLlmContext::onGenerationFinished(
   // prefill-entry rollback checkpoint is no longer reachable. Drop
   // its temp file now instead of waiting for the next inference.
   rollbackState_.clearPrefillEntry();
-  generationStopReason_ = GenerationStopReason::None;
+  // `generationStopReason_` intentionally persists: runtime stats read
+  // it after generateResponse() returns; it is re-initialized at the
+  // next generation's entry.
   return true;
 }
 
