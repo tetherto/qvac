@@ -893,7 +893,7 @@ std::any LlamaModel::process(
       // Arm the finetune cancel so cancelById(id) reaches the finetuner; a
       // cancel parked before this point aborts the job before training starts.
       if (liveJobs_.bind(id, [this] { requestFinetuneCancel(); })) {
-        return std::any(FinetuneTerminalResult{"finetune", "cancelled"});
+        return std::any(FinetuneTerminalResult{"finetune", "PAUSED"});
       }
       return process(input);
     }

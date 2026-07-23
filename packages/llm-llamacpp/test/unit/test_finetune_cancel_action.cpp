@@ -28,8 +28,8 @@ LlamaModel::Prompt makeFinetunePrompt() {
 
 // A cancel parked between the scheduler's dequeue announcement (jobStarting)
 // and the finetune arming must abort the job before training starts:
-// process() returns a cancelled finetune terminal instead of entering the
-// finetuner.
+// process() returns the same PAUSED terminal a mid-training cancel resolves
+// with, instead of entering the finetuner.
 TEST(FinetuneCancelActionTest, ParkedCancelAbortsBeforeTrainingStarts) {
   LlamaModel model = makeUnloadedModel();
   model.jobStarting(7);
@@ -39,7 +39,7 @@ TEST(FinetuneCancelActionTest, ParkedCancelAbortsBeforeTrainingStarts) {
 
   const auto& terminal = std::any_cast<const FinetuneTerminalResult&>(output);
   EXPECT_EQ(terminal.op, "finetune");
-  EXPECT_EQ(terminal.status, "cancelled");
+  EXPECT_EQ(terminal.status, "PAUSED");
 }
 
 // Without a parked cancel the tagged finetune path arms its cancel action and
