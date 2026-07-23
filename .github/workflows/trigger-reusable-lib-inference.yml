@@ -95,44 +95,14 @@ jobs:
       publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
-      - id: logic
-        shell: bash
-        run: |
-          set -euo pipefail
-          ref_name="${GITHUB_REF_NAME}"
-          event_name="${GITHUB_EVENT_NAME}"
-
-          publish_main="false"
-          publish_release="false"
-          publish_feature="false"
-          publish_tmp="false"
-
-          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-            if [ "$ref_name" = "main" ]; then
-              publish_main="true"
-            elif [[ "$ref_name" == release-* ]]; then
-              publish_release="true"
-            elif [[ "$ref_name" == feature-* ]]; then
-              publish_feature="true"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              publish_tmp="true"
-            fi
-          fi
-
-          gpr_tag="dev"
-          if [ "$ref_name" = "main" ]; then
-            gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]]; then
-            gpr_tag="feature"
-          elif [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="temp"
-          fi
-
-          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
-          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
-          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
-          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
-          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+      - name: Checkout (composite action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/determine-publish-streams
+          sparse-checkout-cone-mode: false
+      - name: Determine publish streams
+        id: logic
+        uses: ./.github/actions/determine-publish-streams
 
   # Install deps + compile ONCE, then hand the built dist to every publish job.
   build:
@@ -146,7 +116,6 @@ jobs:
           || needs.publish-logic.outputs.publish_release == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: release
     permissions:
       contents: read
     steps:
@@ -195,6 +164,9 @@ jobs:
         with:
           name: inference-dist
           path: packages/inference/dist/
+          # Fail the build (not just warn) if the compile produced no dist,
+          # so a broken build can't green-light publish or ship empty.
+          if-no-files-found: error
           retention-days: 30
 
   publish-main-gpr-dev:

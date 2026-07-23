@@ -1,0 +1,65 @@
+name: Determine publish streams
+description: >
+  Map the current push / workflow_dispatch ref to a publish stream and GPR
+  dist-tag: main -> dev, release-* -> release, feature-* -> feature,
+  tmp-* -> tmp. Encapsulates the branch->stream logic that the
+  trigger-reusable-lib-*.yml publish workflows would otherwise duplicate inline.
+
+outputs:
+  publish_main:
+    description: "true when the ref is main (publish the dev stream)"
+    value: ${{ steps.logic.outputs.publish_main }}
+  publish_release:
+    description: "true when the ref is a release-* branch"
+    value: ${{ steps.logic.outputs.publish_release }}
+  publish_feature:
+    description: "true when the ref is a feature-* branch"
+    value: ${{ steps.logic.outputs.publish_feature }}
+  publish_tmp:
+    description: "true when the ref is a tmp-* branch"
+    value: ${{ steps.logic.outputs.publish_tmp }}
+  gpr_tag:
+    description: "GPR dist-tag for the ref (dev | feature | temp)"
+    value: ${{ steps.logic.outputs.gpr_tag }}
+
+runs:
+  using: composite
+  steps:
+    - id: logic
+      shell: bash
+      run: |
+        set -euo pipefail
+        ref_name="${GITHUB_REF_NAME}"
+        event_name="${GITHUB_EVENT_NAME}"
+
+        publish_main="false"
+        publish_release="false"
+        publish_feature="false"
+        publish_tmp="false"
+
+        if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+          if [ "$ref_name" = "main" ]; then
+            publish_main="true"
+          elif [[ "$ref_name" == release-* ]]; then
+            publish_release="true"
+          elif [[ "$ref_name" == feature-* ]]; then
+            publish_feature="true"
+          elif [[ "$ref_name" == tmp-* ]]; then
+            publish_tmp="true"
+          fi
+        fi
+
+        gpr_tag="dev"
+        if [ "$ref_name" = "main" ]; then
+          gpr_tag="dev"
+        elif [[ "$ref_name" == feature-* ]]; then
+          gpr_tag="feature"
+        elif [[ "$ref_name" == tmp-* ]]; then
+          gpr_tag="temp"
+        fi
+
+        echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+        echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+        echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+        echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+        echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
