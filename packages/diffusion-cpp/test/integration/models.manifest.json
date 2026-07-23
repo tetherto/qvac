@@ -119,7 +119,7 @@
       ],
       "sha256": "7b8850f1961e1cf8a77cca4c964a358d303f490833c6c087d0cff4b2f99db2af",
       "bytes": 11366399385,
-      "group": ["base", "wan22"]
+      "group": "base"
     },
     "clip_vision_h.safetensors": {
       "urls": [

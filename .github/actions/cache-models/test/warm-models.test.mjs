@@ -142,11 +142,10 @@ test('signed redirect URLs are redacted from warmer errors and logs', async () =
   })
 })
 
-test('group selection includes shared dependencies and honors warm:false', () => {
+test('group selection is exact and legacy selection still honors warm:false', () => {
   const manifest = {
     models: {
       'base.gguf': { group: 'base' },
-      'shared.safetensors': { group: ['base', 'wan22'] },
       'ideogram.gguf': { group: 'ideogram', warm: false },
       'ltx.gguf': { group: 'ltx' }
     }
@@ -158,17 +157,12 @@ test('group selection includes shared dependencies and honors warm:false', () =>
   )
   assert.deepEqual(
     selectManifestEntries(manifest).entries.map(([name]) => name),
-    ['base.gguf', 'shared.safetensors', 'ltx.gguf']
+    ['base.gguf', 'ltx.gguf']
   )
   assert.deepEqual(
     selectManifestEntries(manifest, '', { includeDeferred: true }).entries.map(([name]) => name),
-    ['base.gguf', 'shared.safetensors', 'ideogram.gguf', 'ltx.gguf'],
+    ['base.gguf', 'ideogram.gguf', 'ltx.gguf'],
     'cache paths retain lazily populated warm:false files'
-  )
-  assert.deepEqual(
-    selectManifestEntries(manifest, 'wan22').entries.map(([name]) => name),
-    ['shared.safetensors'],
-    'a shared dependency is selected by every declared group'
   )
   assert.throws(() => selectManifestEntries(manifest, 'missing'), /no models in group/)
 })
