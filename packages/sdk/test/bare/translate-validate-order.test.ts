@@ -55,14 +55,9 @@ test('translate: missing LLM `to` fails at schema parse before language detectio
     t.fail('expected translate to reject missing `to`')
   } catch (error) {
     t.ok(error instanceof ZodError, 'schema parse must win over language detection')
+    t.ok(!(error instanceof TranslationFailedError), 'must not surface as TranslationFailedError')
     t.ok(
-      !(error instanceof TranslationFailedError),
-      'must not surface as TranslationFailedError'
-    )
-    t.ok(
-      (error as InstanceType<typeof ZodError>).issues.some((issue) =>
-        issue.path.includes('to')
-      ),
+      (error as InstanceType<typeof ZodError>).issues.some((issue) => issue.path.includes('to')),
       'Zod issue path must point at `to`'
     )
   } finally {

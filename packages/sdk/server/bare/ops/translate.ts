@@ -89,9 +89,6 @@ export async function* translate(
   const to = isLlm ? (params as { to: string }).to : undefined
   const context = isLlm ? (params as { context?: string }).context : undefined
 
-  // Validate the wire shape before any side-effecting work (language
-  // detection). Otherwise a missing `to` + undetermined `text` surfaces as
-  // TranslationFailedError instead of the real schema error.
   translateServerParamsSchema.parse(params)
 
   // Auto-detect the source language when the caller didn't pass `from` (LLM
