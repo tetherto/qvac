@@ -278,6 +278,33 @@ TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -40);
 }
 
+TEST_F(
+    ContextSliderTest,
+    PrefillSlideAccountsForVisionKvCellsWhenCheckingCacheCapacity) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/600);
+  const std::vector<VisionBlockRange> visionBlocks = {
+      {/*startPos=*/120, /*endPos=*/220, /*cacheTokens=*/300}};
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/300, /*cacheTokens=*/500},
+      ContextUsage{/*pos=*/50, /*cacheTokens=*/50},
+      ContextUsage{/*pos=*/100, /*cacheTokens=*/300},
+      /*nDiscarded=*/100,
+      controller,
+      ops,
+      visionBlocks);
+
+  // The 100-position image block occupies 300 KV cells. Sliding through it
+  // removes 370 cache cells, making the cache-only overflow fit.
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.newNPast, 130);
+  EXPECT_EQ(outcome.discarded, 170);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 220}));
+}
+
 TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);

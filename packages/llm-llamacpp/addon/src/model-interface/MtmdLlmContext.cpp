@@ -634,6 +634,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
           rollbackOk = false;
         }
       }
+      visionBlocks_ = preRequestVisionBlocks_;
       stopGeneration_.store(false);
       return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
     }
