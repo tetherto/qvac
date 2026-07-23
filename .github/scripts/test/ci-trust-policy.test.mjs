@@ -206,11 +206,13 @@ function inferenceAuthorization(relativePath, stepName, overrides = {}) {
   const script = extractRunBlock(relativePath, stepName)
   return runScript(script, {
     EVENT: 'pull_request',
-    ACTION: 'opened',
     IS_FORK: 'false',
     IS_DRAFT: 'false',
-    HAS_VERIFIED_LABEL: 'false',
     HAS_RUN_LABEL: 'false',
+    // SHA-bound approval (qvac/fork-verified status on the current head),
+    // resolved by the job's separate read-only step; injected here for the
+    // decision-logic unit.
+    HAS_APPROVED_SHA: 'false',
     ...overrides,
   })
 }
@@ -252,19 +254,23 @@ for (const [relativePath, stepName, label, runLabel] of [
     )
   })
 
-  test(`${label} authorization: external fork needs verified and ${runLabel}`, () => {
+  test(`${label} authorization: external fork needs ${runLabel} AND a SHA-bound approval`, () => {
+    // Fork, nothing -> denied.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, { IS_FORK: 'true' })
         .allowed,
       'false',
     )
+    // Approved SHA but no tier label -> denied.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
         IS_FORK: 'true',
-        HAS_VERIFIED_LABEL: 'true',
+        HAS_APPROVED_SHA: 'true',
       }).allowed,
       'false',
     )
+    // Tier label present but the current head SHA is NOT approved (stale label /
+    // draft->ready / close->reopen flip / fresh push) -> denied.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
         IS_FORK: 'true',
@@ -272,23 +278,25 @@ for (const [relativePath, stepName, label, runLabel] of [
       }).allowed,
       'false',
     )
+    // Tier label + SHA-bound approval on the current head -> allowed.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
         IS_FORK: 'true',
-        HAS_VERIFIED_LABEL: 'true',
         HAS_RUN_LABEL: 'true',
+        HAS_APPROVED_SHA: 'true',
       }).allowed,
       'true',
     )
   })
 
-  test(`${label} authorization: fork synchronize is denied even before label strip`, () => {
+  test(`${label} authorization: a stale tier label on an unapproved (pushed) SHA is denied`, () => {
+    // The draft->ready / close->reopen flip and any later fork push land here:
+    // the label persists but the new head SHA carries no approval.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        ACTION: 'synchronize',
         IS_FORK: 'true',
-        HAS_VERIFIED_LABEL: 'true',
         HAS_RUN_LABEL: 'true',
+        HAS_APPROVED_SHA: 'false',
       }).allowed,
       'false',
     )
@@ -443,6 +451,27 @@ test('authorize-pr: external fork without the label is denied regardless of SHA 
   assert.equal(
     authorizePr({ ACTION: 'opened', LABELS_JSON: '[]', HAS_APPROVED_SHA: 'true' }).allowed,
     'false',
+  )
+})
+
+test('sdk-python full e2e: no stale-label synchronize run; checkout pinned to head SHA', () => {
+  const src = read('.github/workflows/on-pr-sdk-python-e2e-full.yml')
+  // Trigger is exactly `types: [labeled]` — no synchronize (a stale
+  // test-e2e-full label must not re-run a new, unreviewed SHA).
+  assert.match(
+    src,
+    /types:\s*\[labeled\]\s*$/m,
+    'pull_request trigger must be [labeled] only (no synchronize)',
+  )
+  assert.doesNotMatch(
+    src,
+    /action == 'synchronize'/,
+    'run gate must not authorise a synchronize with a stale test-e2e-full label',
+  )
+  assert.match(
+    src,
+    /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
+    'checkout must pin to the approved head SHA',
   )
 })
 
