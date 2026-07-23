@@ -511,6 +511,7 @@ class LlmLlamacpp {
   /// unload) safe.
   _finetuneSink(jobId) {
     return {
+      finetune: true,
       updateOutput: (data) => this._finetuneJob.output(data),
       // The finetune terminal is payload-routed (op/status) and the trailing
       // scheduler stats snapshot is not a finetune result: both no-op here.
@@ -556,6 +557,8 @@ class LlmLlamacpp {
     }
 
     const sink = typeof jobId === 'number' ? this._jobSinks.get(jobId) : null
+    // Untagged (legacy bindings) stays payload-routed; tagged must own the sink.
+    const ownsFinetune = typeof jobId === 'number' ? sink?.finetune === true : true
 
     if (eventType === 'Error') {
       this.logger.error('Job failed with error:', error)
@@ -575,7 +578,12 @@ class LlmLlamacpp {
         this.logger?.warn?.('Dropped Output event with no registered job:', jobId)
       }
     } else if (eventType === 'FinetuneProgress') {
-      if (this.opts.stats && data && data.stats) {
+      if (!ownsFinetune) {
+        this.logger?.warn?.(
+          'Dropped FinetuneProgress event with no registered finetune job:',
+          jobId
+        )
+      } else if (this.opts.stats && data && data.stats) {
         this._finetuneJob.active?.updateStats(data.stats)
       }
     } else if (eventType === 'JobEnded') {
@@ -586,10 +594,17 @@ class LlmLlamacpp {
         data.op === 'finetune' &&
         typeof data.status === 'string'
       if (isFinetuneTerminal) {
-        // Payload-routed; the sink stays registered so the scheduler's
-        // trailing jobEnded stats snapshot is consumed (and deregisters it)
-        // instead of surfacing as an unknown tagged event.
-        this._finetuneJob.end(null, data)
+        if (ownsFinetune) {
+          // The sink stays registered so the scheduler's trailing jobEnded
+          // stats snapshot is consumed (and deregisters it) instead of
+          // surfacing as an unknown tagged event.
+          this._finetuneJob.end(null, data)
+        } else {
+          this.logger?.warn?.(
+            'Dropped finetune JobEnded event with no registered finetune job:',
+            jobId
+          )
+        }
       } else if (sink) {
         if (this.opts.stats && data != null) sink.updateStats(data)
         sink.ended()
