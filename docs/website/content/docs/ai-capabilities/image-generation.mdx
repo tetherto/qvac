@@ -68,7 +68,7 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 Ideogram 4 uses a split layout with an extra **unconditional diffusion model** (`uncondModelSrc`) alongside the Qwen3-VL LLM text encoder (`llmModelSrc`) and VAE (`vaeModelSrc`). Unlike the other families, its `prompt` must be a **JSON-serialized structured caption** — an object with a `high_level_description`, a `style_description`, and a `compositional_deconstruction` that lays out each element with an explicit bounding box (`bbox`) and, for text elements, the literal `text` to render. Plain-text prompts produce degenerate or placeholder output.
 
 <Callout type="warn">
-Pass the structured caption through `JSON.stringify(...)` when calling `diffusion({ prompt })`. The bounding boxes are expressed in the target canvas coordinate space (`[x0, y0, x1, y1]`), so keep them consistent with the requested `width`/`height`.
+Pass the structured caption through `JSON.stringify(...)` when calling `diffusion({ prompt })`. The bounding boxes are expressed in the target canvas coordinate space (`[x0, y0, x1, y1]`), so keep them consistent with the requested `width`/`height`. Failure to abide by the JSON format specified within the examples, or adding NSFW prompts, will result in censored image output.
 </Callout>
 
 The following script loads Ideogram 4 in split-layout (diffusion model + unconditional model + LLM text encoder + VAE) and generates from a structured caption:
@@ -112,8 +112,6 @@ The following script shows a minimal text-to-image generation example using a si
 </WrapCode>
 </Tab>
 </Tabs>
-
-
 
 ### Image-to-image
 
