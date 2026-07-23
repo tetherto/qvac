@@ -46,6 +46,22 @@ Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. Thi
   - ❌ `run: echo "${{ github.event.pull_request.title }}"`
 - **Token scope on fork PRs**: `pull_request` from forks gets a read-only `GITHUB_TOKEN` and no secrets. Do not work around this — design fork-safe workflows or split into a `pull_request_target` follow-up that does not check out PR code.
 
+## CI trust policy for fork PRs (SHA-bound authorization)
+
+Getting fork authorization wrong is high-impact and easy to do — the failure modes are subtle (a stale approval riding a state-flip onto a new commit). These rules are mandatory for **any** workflow that runs external-fork PR code with elevated access — `pull_request_target` (secrets), **or** `pull_request` on **self-hosted runners** (`qvac-*`), **or** any job that publishes/deploys.
+
+- **Approval is bound to the exact commit SHA, never to workflow-event ordering or label presence.** A `verified`/tier label present on the PR is *not* proof a given commit was approved. Every privileged run must confirm the **current `github.event.pull_request.head.sha`** is the SHA a trusted actor approved. This closes the whole class of flip bypasses:
+  - `draft → ready_for_review` after pushing a new commit,
+  - `close → reopen` after pushing a new commit,
+  - any later `synchronize` / push while a stale label persists.
+- **Use the repository's shared SHA-bound mechanism — do not hand-roll label checks.** Bespoke `contains(labels.*.name, 'verified')` gating in a workflow's own `if:`/bash is the anti-pattern that produced these bugs.
+  - **Setter (privileged, `pull_request_target`)**: the [`label-gate`](../../../.github/actions/label-gate) composite records a `qvac/fork-verified` **commit status** on the head SHA when a **merge/release-team** member applies the label, and authorizes only when that SHA carries it. [`authorize-pr`](../../../.github/actions/authorize-pr) reads the same status. Applying the label is a merge/release-only trust decision (`qvac-internal-merge`, `qvac-internal-release`) — individual-contributor/partner teams are excluded.
+  - **Consumer (unprivileged `pull_request` self-hosted jobs)**: gate on the `qvac/fork-verified` commit status for `head.sha` (read-only, `statuses: read`) — e.g. `gh api repos/$REPO/commits/$HEAD_SHA/statuses`. Do not trust label presence. Reference: `pr-test-inference-addon-cpp{,-js}.yml`.
+  - **Approval-label-only pipelines with no status setter** (e.g. `test-e2e-full`): run **only** on the fresh `labeled` event (which pins to the head SHA at approval time) or `workflow_dispatch` — **never** re-run on `synchronize` with a persisted label. Reference: `on-pr-sdk-python-e2e-full.yml`.
+- **Pin every fork checkout to `github.event.pull_request.head.sha`** (never `head.ref`, never the implicit merge ref) so the job runs exactly the approved commit — with `persist-credentials: false`.
+- **Internal same-repo PRs** are trusted without `verified` (write access is required to push a base-repo branch); tier/opt-in labels may still gate expensive stages for them.
+- **New workflows must add coverage** to `.github/scripts/test/ci-trust-policy.test.mjs` proving the fork gate is SHA-bound (a stale label at an unapproved SHA is denied). No new privileged fork-executing workflow merges without it.
+
 ## OIDC over long-lived credentials
 
 - **Cloud authentication uses OIDC.** No long-lived access keys / service-account JSON in secrets where OIDC is supported.

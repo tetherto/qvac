@@ -33,7 +33,8 @@ const {
   DEFAULT_REPEATS,
   DEFAULT_PROMPTS_FILE,
   MODELS,
-  PARAMETER_SWEEP
+  PARAMETER_SWEEP,
+  BATCH_SWEEP
 } = require('./llm-parameter-sweep.config')
 
 async function main () {
@@ -148,7 +149,7 @@ async function main () {
   }
 
   const plannedRunsByModel = selectedModels.map((modelDef) => {
-    const cases = buildCases(modelDef, sweep)
+    const cases = buildCases(modelDef, sweep, BATCH_SWEEP)
     return { modelDef, cases }
   })
   const totalCases = plannedRunsByModel.reduce((acc, item) => acc + item.cases.length, 0)

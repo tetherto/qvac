@@ -4,7 +4,7 @@
   "pull_request": {
     "number": 4244,
     "head": {
-      "repo": { "full_name": "tetherto/qvac" },
+      "repo": { "full_name": "external-fork/qvac" },
       "ref": "feature-y",
       "sha": "1234567"
     },
