@@ -2,6 +2,7 @@
 
 Welcome to the QVAC SDK! This document outlines our contribution guidelines designed to establish **high trust, high velocity, and high reliability** development practices.
 
+
 ## 🎯 Core principles
 
 **The purpose of each contribution should be to solve a specific problem, not to add code to the SDK.**
