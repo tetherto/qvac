@@ -22,6 +22,7 @@ add_executable(
   test_sd_gen_handlers.cpp
   test_sd_vid_gen_handlers.cpp
   test_sd_video_frames.cpp
+  test_video_model_capabilities.cpp
   test_stb_image_security.cpp
   test_wan_video.cpp
   test_avi_writer.cpp
@@ -32,6 +33,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/AviWriter.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/VideoModelCapabilities.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
