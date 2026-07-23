@@ -16,14 +16,18 @@ const { createBlindPeerTestnet } = require('../helpers/blind-peer-testnet')
 const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 
 const noopLogger = {
-  info () {},
-  debug () {},
-  error () {},
-  warn () {}
+  info() {},
+  debug() {},
+  error() {},
+  warn() {}
 }
 
 test('blob cores are reseeded to blind peers and downloadable via swarm', async (t) => {
-  const { bootstrap, blindPeerKeys, peers: blindPeers } = await createBlindPeerTestnet(t, { peers: 1 })
+  const {
+    bootstrap,
+    blindPeerKeys,
+    peers: blindPeers
+  } = await createBlindPeerTestnet(t, { peers: 1 })
   const ctx = await createService(t, { swarmBootstrap: bootstrap, blindPeerKeys })
 
   const dhtKey = ctx.swarm.dht.defaultKeyPair.publicKey
@@ -63,19 +67,23 @@ test('blob cores are reseeded to blind peers and downloadable via swarm', async 
     const remoteBlobs = new Hyperblobs(remote.core)
     await remoteBlobs.ready()
 
-    const replicated = await waitFor(async () => {
-      try {
-        const buf = await remoteBlobs.get({
-          blockOffset: model.blobBinding.blockOffset,
-          blockLength: model.blobBinding.blockLength,
-          byteOffset: model.blobBinding.byteOffset,
-          byteLength: model.blobBinding.byteLength
-        })
-        return buf.equals(modelPayload)
-      } catch {
-        return false
-      }
-    }, 20000, 500)
+    const replicated = await waitFor(
+      async () => {
+        try {
+          const buf = await remoteBlobs.get({
+            blockOffset: model.blobBinding.blockOffset,
+            blockLength: model.blobBinding.blockLength,
+            byteOffset: model.blobBinding.byteOffset,
+            byteLength: model.blobBinding.byteLength
+          })
+          return buf.equals(modelPayload)
+        } catch {
+          return false
+        }
+      },
+      20000,
+      500
+    )
 
     t.ok(replicated, 'blob data downloaded via registry connection to blind peer')
 
@@ -85,31 +93,26 @@ test('blob cores are reseeded to blind peers and downloadable via swarm', async 
   }
 })
 
-async function createService (t, { storage, bootstrap, swarmBootstrap, blindPeerKeys } = {}) {
-  const basePath = storage || await createTempStorage(t)
+async function createService(t, { storage, bootstrap, swarmBootstrap, blindPeerKeys } = {}) {
+  const basePath = storage || (await createTempStorage(t))
   const store = new Corestore(basePath)
   await store.ready()
 
   const swarm = new Hyperswarm({ bootstrap: swarmBootstrap || [] })
   const config = new RegistryConfig({ logger: noopLogger })
 
-  const service = new RegistryService(
-    store.namespace(AUTOBASE_NAMESPACE),
-    swarm,
-    config,
-    {
-      logger: noopLogger,
-      ackInterval: 5,
-      autobaseBootstrap: bootstrap || null,
-      blindPeerKeys: blindPeerKeys || [],
-      skipStorageCheck: true
-    }
-  )
+  const service = new RegistryService(store.namespace(AUTOBASE_NAMESPACE), swarm, config, {
+    logger: noopLogger,
+    ackInterval: 5,
+    autobaseBootstrap: bootstrap || null,
+    blindPeerKeys: blindPeerKeys || [],
+    skipStorageCheck: true
+  })
 
   return { service, store, swarm, storage: basePath }
 }
 
-async function cleanupService ({ service, store, swarm }) {
+async function cleanupService({ service, store, swarm }) {
   if (service && service.opened) {
     await service.close()
   }
@@ -121,20 +124,21 @@ async function cleanupService ({ service, store, swarm }) {
   }
 }
 
-async function ensureIndexer (service) {
+async function ensureIndexer(service) {
   if (service.base.isIndexer) return
   await service._appendOperation(DISPATCH_ADD_INDEXER, { key: service.base.local.key })
+  // lunte-disable-next-line require-await
   await waitFor(async () => service.base.isIndexer === true, 15000)
 }
 
-async function createRemoteClient (t, bootstrap, coreKey, baseDiscoveryKey) {
+async function createRemoteClient(t, bootstrap, coreKey, baseDiscoveryKey) {
   const storage = await createTempStorage(t)
   const store = new Corestore(storage)
   await store.ready()
   const swarm = new Hyperswarm({ bootstrap })
 
   let connected = false
-  swarm.on('connection', conn => {
+  swarm.on('connection', (conn) => {
     connected = true
     store.replicate(conn)
   })

@@ -65,7 +65,53 @@ function checkModelExists (modelDir, modelName) {
   return fs.existsSync(path.join(modelDir, modelName))
 }
 
-function buildCases (modelDef, sweep) {
+// Additive batch/ubatch sweep at a fixed baseline (see BATCH_SWEEP in the sweep
+// config). Sweeps batch-size only, pinning ubatch-size === batch-size and every
+// other axis, and tags each case with the batch sweep's prompt case so it runs
+// against one fixed long prompt. Returns [] when the model lacks the baseline
+// quantization (so the main grid is unaffected).
+function buildBatchSweepCases (modelDef, batchSweep) {
+  if (!batchSweep) return []
+  const defaults = modelDef.defaults || {}
+  const quantization = batchSweep.quantization
+  const modelName = resolveModelName(modelDef, quantization)
+  if (!modelName) return []
+  const promptCase = batchSweep.promptCase
+  const devices = batchSweep.device || []
+  const batchSizes = batchSweep['batch-size'] || []
+
+  const cases = []
+  for (const device of devices) {
+    for (const batchSize of batchSizes) {
+      const runtimeConfig = {
+        ...defaults,
+        device,
+        'ctx-size': batchSweep['ctx-size'],
+        'batch-size': batchSize,
+        'ubatch-size': batchSize,
+        'flash-attn': batchSweep['flash-attn'],
+        threads: batchSweep.threads,
+        'cache-type-k': batchSweep['cache-type-k'],
+        'cache-type-v': batchSweep['cache-type-v'],
+        'reasoning-budget': batchSweep['reasoning-budget']
+      }
+      const caseId = `${modelDef.id}__q=${quantization}__dev=${device}__ctx=${batchSweep['ctx-size']}__bs=${batchSize}__ubs=${batchSize}__fa=${batchSweep['flash-attn']}__t=${batchSweep.threads}__ck=${batchSweep['cache-type-k']}__cv=${batchSweep['cache-type-v']}__rb=${batchSweep['reasoning-budget']}__pc=${promptCase}`
+      cases.push({
+        caseId,
+        parameter: 'batch-sweep',
+        value: 'combination',
+        promptCase,
+        quantization,
+        modelName,
+        runtimeConfig,
+        isBaseline: false
+      })
+    }
+  }
+  return cases
+}
+
+function buildCases (modelDef, sweep, batchSweep) {
   const baseQuant = Array.isArray(modelDef.quantizations) ? modelDef.quantizations[0] : null
   const defaults = modelDef.defaults || {}
   if (baseQuant == null) {
@@ -120,8 +166,8 @@ function buildCases (modelDef, sweep) {
     ])
 
     for (const [quantization, device, ctxSize, batchSize, ubatchSize, flashAttn, threads, cacheTypeK, cacheTypeV, reasoningBudget] of combos) {
-      if (Number(ubatchSize) > Number(batchSize)) {
-        continue // Skip combinations where ubatchSize is greater than batchSize
+      if (ubatchSize !== batchSize) {
+        continue // Benchmark only the batch===ubatch diagonal; skip mixed batch/ubatch pairs
       }
       if (cacheTypeK !== cacheTypeV) {
         continue // Benchmark only symmetric KV-cache pairs (k === v); skip mixed k/v
@@ -156,6 +202,8 @@ function buildCases (modelDef, sweep) {
       }
     }
   }
+
+  cases.push(...buildBatchSweepCases(modelDef, batchSweep))
 
   cases.sort((a, b) => Number(b.isBaseline) - Number(a.isBaseline))
   return cases
@@ -315,6 +363,7 @@ module.exports = {
   resolveModelName,
   checkModelExists,
   buildCases,
+  buildBatchSweepCases,
   isAdaptivePromptId,
   selectPromptForCase,
   getAdaptiveBaselineKey,

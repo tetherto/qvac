@@ -367,6 +367,20 @@ test('llm: Qwen3-4B — full field mapping with legacy engine + s3 source', (t) 
   t.is(exportName, 'QWEN3_4B_INST_Q4')
 })
 
+test('llm: does not duplicate params already present in the model name', (t) => {
+  const exportName = generateExportName({
+    path: 'unsloth/Qwen3-4B-GGUF/resolve/revision/Qwen3-4B-Q4_K_M.gguf',
+    engine: 'llamacpp-completion',
+    name: 'Qwen3-4B-GGUF',
+    quantization: 'q4_K_M',
+    params: '4B',
+    tags: ['generation'],
+    usedNames: new Set<string>()
+  })
+
+  t.is(exportName, 'QWEN3_4B_Q4_K_M')
+})
+
 // ---------------------------------------------------------------------------
 // LLM: Llama 3.2 (tag strips engine suffix for version recovery)
 // ---------------------------------------------------------------------------

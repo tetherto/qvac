@@ -16,7 +16,7 @@ const WHISPER_TINY_Q8 = {
   sha256: 'c2085835d3f50733e2ff6e4b41ae8a2b8d8110461e18821b09a15c40c42d1cca'
 }
 
-async function downloadBlobExample () {
+async function downloadBlobExample() {
   const t0 = Date.now()
 
   const tmpStorage = path.join(os.tmpdir(), `qvac-registry-blob-${Date.now()}`)
@@ -34,7 +34,9 @@ async function downloadBlobExample () {
 
   const outputFile = path.join(process.cwd(), 'downloaded', 'ggml-tiny-q8_0.bin')
 
-  console.log(`\nDownloading blob directly (${(WHISPER_TINY_Q8.byteLength / 1024 / 1024).toFixed(1)} MB)...`)
+  console.log(
+    `\nDownloading blob directly (${(WHISPER_TINY_Q8.byteLength / 1024 / 1024).toFixed(1)} MB)...`
+  )
   const tDownloadStart = Date.now()
 
   const result = await client.downloadBlob(WHISPER_TINY_Q8, {
