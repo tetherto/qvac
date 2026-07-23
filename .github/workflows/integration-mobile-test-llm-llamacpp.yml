@@ -337,8 +337,14 @@ jobs:
         if: matrix.platform == 'iOS' && inputs.ios_probe
         run: |
           BLOCK_FILE="$RUNNER_TEMP/ios-probe-block.txt"
+          # NOTE: pre_test/post_test run under Device Farm's "Setup Test"/"Teardown
+          # Test" suites, which collect-and-upload-logs skips. So the probe tees its
+          # output into $DEVICEFARM_LOG_DIR/logcat_full.txt, which IS captured in
+          # Customer_Artifacts.zip and extracted into the console-logs artifact.
           cat > "$BLOCK_FILE" <<'PROBE'
           |
+            {
+            set +e
             echo "[ios-probe] === start ==="
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || echo "[ios-probe] pip install failed"
@@ -355,6 +361,7 @@ jobs:
             pymobiledevice3 apps pull --documents io.tether.test.qvac ios-probe.txt /tmp/ios-probe-back.txt 2>&1 && echo "[ios-probe] PULL_OK" || echo "[ios-probe] PULL_FAIL"
             cat /tmp/ios-probe-back.txt 2>&1 || true
             echo "[ios-probe] === end (RESULT_MARKER) ==="
+            } 2>&1 | tee -a "$DEVICEFARM_LOG_DIR/logcat_full.txt"
           PROBE
           for KEY in pre post; do
             echo "${KEY}<<IOS_PROBE_EOF"
