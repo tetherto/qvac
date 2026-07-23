@@ -104,10 +104,7 @@ function getRequestedBackendFamily(platformName, useGPU, backendHint) {
 }
 
 function getArtifactFileName(benchmarkSettings) {
-  const parts = [
-    'rtf-benchmark',
-    platform
-  ]
+  const parts = ['rtf-benchmark', platform]
 
   if (benchmarkSettings.runnerLabel) {
     parts.push(sanitizeTag(benchmarkSettings.runnerLabel))
