@@ -20,7 +20,8 @@ const {
   buildManifest,
   Q4_MODELS,
   Q8_MODELS,
-  LAVASR_MODELS
+  LAVASR_MODELS,
+  QUALITY_MODELS
 } = require('../generate-mobile-model-manifest')
 
 // Deterministic stand-in for `aws s3 presign`: echoes the key so tests can
@@ -29,11 +30,19 @@ function fakePresign(entry) {
   return { name: entry.name, targetName: entry.targetName, url: `signed:${entry.s3Key}` }
 }
 
-test('the manifest exposes q4, q8 and lavasr sections', () => {
+test('the manifest exposes q4, q8, lavasr and quality sections', () => {
   const { manifest } = buildManifest(fakePresign)
   assert.ok(Array.isArray(manifest.q4) && manifest.q4.length > 0, 'q4 section is populated')
   assert.ok(Array.isArray(manifest.q8) && manifest.q8.length > 0, 'q8 section is populated')
   assert.equal(manifest.lavasr.length, 2, 'lavasr section has the enhancer + denoiser')
+  assert.equal(manifest.quality.length, 1, 'quality section has the mobile Whisper model')
+})
+
+test('the quality model uses a pinned public URL and the on-device whisper directory', () => {
+  const { manifest } = buildManifest(fakePresign)
+  assert.deepEqual(manifest.quality, QUALITY_MODELS)
+  assert.equal(manifest.quality[0].targetName, 'whisper/ggml-tiny.bin')
+  assert.match(manifest.quality[0].url, /resolve\/[0-9a-f]{40}\/ggml-tiny\.bin$/)
 })
 
 test('the lavasr section targets the on-device lavasr/ subdir names the resolver scans', () => {

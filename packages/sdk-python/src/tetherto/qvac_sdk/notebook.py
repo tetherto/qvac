@@ -114,14 +114,20 @@ class SyncClient:
         )
         self._thread.start()
         self._client: Any = None
-        if transport is not None:
-            self._transport: Transport = transport
-        else:
-            from .client import Client
+        try:
+            if transport is not None:
+                self._transport: Transport = transport
+            else:
+                from .client import Client
 
-            self._client = Client(**client_kwargs)
-            self._run(self._client.connect())
-            self._transport = self._client.transport
+                self._client = Client(**client_kwargs)
+                self._run(self._client.connect())
+                self._transport = self._client.transport
+        except BaseException:
+            # Client()/connect() can fail after the background loop is running;
+            # tear it down so a notebook retry loop doesn't leak threads.
+            self.close()
+            raise
 
     def _run(self, coro: Coroutine[Any, Any, Any]) -> Any:
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
@@ -177,7 +183,7 @@ class SyncClient:
         except ImportError as error:
             raise ImportError(
                 "pandas is not installed -- install the 'notebook' extra "
-                "(`pip install qvac[notebook]`) for DataFrame results"
+                "(`pip install tetherto-qvac-sdk[notebook]`) for DataFrame results"
             ) from error
         vectors = self.embed(model_id, texts)
         return pd.DataFrame(vectors, index=pd.Index(texts, name="text"))

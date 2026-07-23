@@ -2,6 +2,7 @@ const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
 const { Readable } = require('bare-stream')
 const path = require('bare-path')
 const os = require('bare-os')
+const { wordErrorRate, characterErrorRate } = require('./textMetrics')
 
 const WHISPER_SAMPLE_RATE = 16000
 
@@ -122,7 +123,8 @@ async function runWhisper(model, text, wavBuffer) {
   }
   console.log(`>>> [WHISPER] Full text: ${fullText}`)
   const wer = wordErrorRate(text, fullText)
-  return { wer }
+  const cer = characterErrorRate(text, fullText)
+  return { text: fullText, wer, cer }
 }
 
 async function _processResponse(response) {
@@ -139,50 +141,6 @@ async function _processResponse(response) {
     })
     .await()
   return fullText
-}
-
-function wordErrorRate(expected, actual) {
-  // Normalize text for comparison
-  const normalize = (text) => {
-    return (
-      text
-        .trim()
-        .toLowerCase()
-        // Remove punctuation (periods, commas, exclamation, question marks, etc.)
-        .replace(/[.,!?;:"""''„«»()[\]{}]/g, '')
-        // Normalize apostrophes (handle French contractions like l'aube -> l aube)
-        .replace(/[''ʼ]/g, ' ')
-        // Normalize hyphens (au-dessus -> au dessus)
-        .replace(/[-–—]/g, ' ')
-        // Collapse multiple spaces into one
-        .replace(/\s+/g, ' ')
-        .trim()
-        .split(/\s+/)
-    )
-  }
-
-  const r = normalize(expected)
-  const h = normalize(actual)
-  const d = Array(r.length + 1)
-    .fill(null)
-    .map(() => Array(h.length + 1).fill(0))
-
-  for (let i = 0; i <= r.length; i++) d[i][0] = i
-  for (let j = 0; j <= h.length; j++) d[0][j] = j
-
-  for (let i = 1; i <= r.length; i++) {
-    for (let j = 1; j <= h.length; j++) {
-      const cost = r[i - 1] === h[j - 1] ? 0 : 1
-      d[i][j] = Math.min(
-        d[i - 1][j] + 1, // deletion
-        d[i][j - 1] + 1, // insertion
-        d[i - 1][j - 1] + cost // substitution
-      )
-    }
-  }
-
-  const wer = Math.round((d[r.length][h.length] / r.length) * 10) / 10
-  return wer
 }
 
 module.exports = { loadWhisper, runWhisper }

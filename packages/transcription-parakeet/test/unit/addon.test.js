@@ -112,6 +112,27 @@ test('Model state transitions are handled correctly', async (t) => {
 })
 
 /**
+ * Test that getBackendInfo surfaces the encoder backend fields.
+ */
+test('getBackendInfo reports the encoder backend fields', async (t) => {
+  const model = createMockedModel()
+  await model.load()
+
+  const info = model.getBackendInfo()
+  t.ok(info, 'Backend info is available after load')
+  t.is(typeof info.encoderBackend, 'string', 'encoderBackend is a string')
+  t.is(typeof info.encoderOnCoreml, 'boolean', 'encoderOnCoreml is a boolean')
+  t.is(
+    info.encoderBackend,
+    info.backendName,
+    'encoderBackend mirrors backendName when the Core ML sidecar is inactive'
+  )
+  t.is(info.encoderOnCoreml, false, 'Encoder stays on the ggml backend off Apple')
+
+  await model.destroy()
+})
+
+/**
  * Test that errors during processing are properly emitted and caught.
  */
 test('Model emits error events when an error occurs during processing', async (t) => {
