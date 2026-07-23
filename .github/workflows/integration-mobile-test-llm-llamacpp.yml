@@ -146,6 +146,26 @@ on:
         type: boolean
         required: false
         default: false
+      platforms:
+        description: "Manual-run platform filter: 'Android' or 'iOS'. Default '' = both. Set 'iOS' for the iOS prestage probe."
+        type: string
+        required: false
+        default: ""
+      ios_probe:
+        description: "DIAGNOSTIC: run the iOS model-prestage feasibility probe (pymobiledevice3 push/pull into the app sandbox) on a single throwaway shard instead of the real tests. Use with platforms=iOS and device_model=iPhone. iOS only."
+        type: boolean
+        required: false
+        default: false
+      device_model:
+        description: "Device Farm MODEL filter (single-device mode). For the iOS probe pass e.g. 'iPhone' to pin exactly one device."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "MODEL filter operator for device_model: CONTAINS (default) or EQUALS."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   build-and-test:
@@ -305,6 +325,43 @@ jobs:
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # DIAGNOSTIC (iOS prestage feasibility): when ios_probe is set, emit a
+      # pymobiledevice3 push/pull probe into the app sandbox (io.tether.test.qvac
+      # declares UIFileSharingEnabled). The SAME block is injected into pre_test
+      # (before Appium installs the app) AND post_test (after the app has run) so
+      # one throwaway run reveals WHEN the app container exists and whether
+      # host->device AFC/house_arrest works on Device Farm iOS. Real callers use
+      # workflow_call, which has no ios_probe input, so this never runs for them.
+      - name: Generate iOS prestage probe commands
+        id: ios_probe
+        if: matrix.platform == 'iOS' && inputs.ios_probe
+        run: |
+          BLOCK_FILE="$RUNNER_TEMP/ios-probe-block.txt"
+          cat > "$BLOCK_FILE" <<'PROBE'
+          |
+            echo "[ios-probe] === start ==="
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || echo "[ios-probe] pip install failed"
+            which pymobiledevice3 || echo "[ios-probe] pmd3 not on PATH"
+            pymobiledevice3 version 2>&1 || python3 -m pymobiledevice3 version 2>&1 || echo "[ios-probe] cannot run pmd3"
+            echo "[ios-probe] --- apps --help (records real CLI syntax) ---"
+            pymobiledevice3 apps --help 2>&1 || true
+            echo "[ios-probe] --- installed apps ---"
+            pymobiledevice3 apps list 2>&1 | tr ',' '\n' | grep -i "io.tether.test.qvac" && echo "[ios-probe] APP_INSTALLED=yes" || echo "[ios-probe] APP_INSTALLED=no"
+            echo "ios-probe-payload" > /tmp/ios-probe.txt
+            echo "[ios-probe] --- push into Documents ---"
+            pymobiledevice3 apps push --documents io.tether.test.qvac /tmp/ios-probe.txt ios-probe.txt 2>&1 && echo "[ios-probe] PUSH_OK" || echo "[ios-probe] PUSH_FAIL"
+            echo "[ios-probe] --- pull back from Documents ---"
+            pymobiledevice3 apps pull --documents io.tether.test.qvac ios-probe.txt /tmp/ios-probe-back.txt 2>&1 && echo "[ios-probe] PULL_OK" || echo "[ios-probe] PULL_FAIL"
+            cat /tmp/ios-probe-back.txt 2>&1 || true
+            echo "[ios-probe] === end (RESULT_MARKER) ==="
+          PROBE
+          for KEY in pre post; do
+            echo "${KEY}<<IOS_PROBE_EOF"
+            cat "$BLOCK_FILE"
+            echo "IOS_PROBE_EOF"
+          done >> "$GITHUB_OUTPUT"
+
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
       # than the others. Sharded mode is wired automatically: the composite
@@ -328,12 +385,17 @@ jobs:
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
-          test-groups: ${{ inputs.test_groups }}
+          # iOS probe forces a single throwaway shard whose grep matches no test,
+          # so the run schedules exactly one spec and the test phase is a no-op.
+          test-groups: ${{ inputs.ios_probe && '[{"name":"iosprobe","grep":"__ios_probe_nomatch__"}]' || inputs.test_groups }}
           extra-device-env: ${{ inputs.device_env }}
-          # Host pre-stages this shard's models to /data/local/tmp (adb-writable
-          # + app-readable) so the phone never downloads from huggingface.co.
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
-              echo "[prestage] done"
+          # Android: host pre-stages this shard's models to /data/local/tmp
+          # (adb-writable + app-readable) so the phone never downloads from HF.
+          # iOS diagnostic probe (ios_probe): the pymobiledevice3 push/pull block is
+          # injected into BOTH pre_test and post_test to learn app-install timing
+          # and whether host->device AFC/house_arrest works on Device Farm iOS.
+          extra-pre-test-commands: ${{ (matrix.platform == 'iOS' && inputs.ios_probe) && steps.ios_probe.outputs.pre || steps.prestage.outputs.block }}
+          extra-post-test-commands: ${{ (matrix.platform == 'iOS' && inputs.ios_probe) && steps.ios_probe.outputs.post || '' }}
 
       - name: Schedule Device Farm test runs
         id: schedule
