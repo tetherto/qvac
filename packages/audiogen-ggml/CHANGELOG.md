@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial `@qvac/audiogen-ggml`: text-to-music generation addon (ggml backend)
   wrapping the ACE-Step engine from `audiogen-cpp`. Text prompt in, stereo
   48 kHz audio out.
-- `AudioGen` class with an async facade — `activate()`, `generate(caption, opts)`,
-  `cancel()`, `destroy()` — and a native output callback delivering interleaved
-  Int16 PCM chunks plus a trailing stats event (`audioDurationMs`, `totalTimeMs`).
+- `AudioGen` class implementing the shared `@qvac/infer-base` contract —
+  `load()`, `run(caption, opts)` returning a `QvacResponse` that streams
+  progress ticks + the interleaved-Int16 PCM chunk and resolves with the run
+  stats (`audioDurationMs`, `totalTimeMs`), plus `cancel()` / `unload()` /
+  `destroy()`.
 - Full ACE-Step pipeline (text-encoder → LM → DiT → Oobleck VAE) with optional
   `lyrics`, `vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `duration` and
   `seed`.
