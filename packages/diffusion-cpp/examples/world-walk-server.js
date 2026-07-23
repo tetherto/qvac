@@ -18,7 +18,8 @@
  *   scene.safetensors                  (or set ABOT_SCENE)
  *
  * Optional env: HOST (127.0.0.1), PORT (8787), ABOT_THREADS, ABOT_SEED,
- * ABOT_BACKEND (e.g. "cpu", "cuda").
+ * ABOT_BACKEND (e.g. "cpu", "cuda"), ABOT_JPEG_QUALITY (0/unset = PNG
+ * frames; 1..100 = JPEG at that quality).
  */
 
 const http = require('bare-http1')
@@ -62,7 +63,10 @@ const world = new WorldStableDiffusion({
   config: {
     threads: process.env.ABOT_THREADS || undefined,
     seed: process.env.ABOT_SEED || undefined,
-    backend: process.env.ABOT_BACKEND || undefined
+    backend: process.env.ABOT_BACKEND || undefined,
+    // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
+    // smaller frames, so remote/tunneled browsers stream far less data).
+    frameJpegQuality: process.env.ABOT_JPEG_QUALITY || undefined
   },
   opts: { stats: true }
 })
@@ -172,7 +176,12 @@ async function handle(req, res) {
       sendJson(res, 404, { error: `frame ${i} not available` })
       return
     }
-    res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': frame.png.length })
+    // frames are PNG (\x89PNG) or JPEG (\xff\xd8) depending on frameJpegQuality
+    const isJpeg = frame.png.length > 1 && frame.png[0] === 0xff && frame.png[1] === 0xd8
+    res.writeHead(200, {
+      'Content-Type': isJpeg ? 'image/jpeg' : 'image/png',
+      'Content-Length': frame.png.length
+    })
     res.end(frame.png)
     return
   }

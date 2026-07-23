@@ -339,6 +339,8 @@ createWorldInstance(js_env_t* env, js_callback_info_t* info) try {
     config.localAttnSize = std::stoi(v);
   if (auto v = lookup("offloadParamsToCpu"); v == "true")
     config.offloadParamsToCpu = true;
+  if (auto v = lookup("frameJpegQuality"); !v.empty())
+    config.frameJpegQuality = std::stoi(v);
 
   auto model = make_unique<WorldSessionModel>(std::move(config));
 

@@ -27,13 +27,15 @@ struct WorldSessionConfig {
   int numFramePerBlock = 0; // 0 = model default (3)
   int localAttnSize = 0;    // 0 = config default; latent-frame window
   bool offloadParamsToCpu = false;
+  int frameJpegQuality = 0; // 0 = lossless PNG frames; 1..100 = JPEG quality
 };
 
 } // namespace qvac_lib_inference_addon_sd
 
 // One generated block per step: the DiT denoises num_frame_per_block latent
 // frames under the given keyboard action, taehv decodes them, and each RGB
-// frame is delivered to the output callback as a PNG.
+// frame is delivered to the output callback as a PNG (default) or JPEG
+// (frameJpegQuality 1..100).
 class WorldSessionModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
       public qvac_lib_inference_addon_cpp::model::IModelCancel {

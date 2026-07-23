@@ -107,13 +107,16 @@ std::any WorldSessionModel::process(const std::any& input) {
     width = frames[i].width;
     height = frames[i].height;
     if (job.outputCallback) {
-      auto png = image_codec::encodeToPng(frames[i]);
-      if (png.empty()) {
+      const int jpegQuality = config_.frameJpegQuality;
+      auto encoded = jpegQuality > 0
+                         ? image_codec::encodeToJpeg(frames[i], jpegQuality)
+                         : image_codec::encodeToPng(frames[i]);
+      if (encoded.empty()) {
         sd_abot_session_frames_free(frames, numFrames);
         throw StatusError(
-            general_error::InternalError, "failed to encode walk frame as PNG");
+            general_error::InternalError, "failed to encode walk frame");
       }
-      job.outputCallback(png);
+      job.outputCallback(encoded);
       delivered++;
     }
   }

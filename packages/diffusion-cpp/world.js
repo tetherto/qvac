@@ -79,7 +79,8 @@ class WorldStableDiffusion {
    * @param {string} args.files.scene - Scene pack safetensors (prompt embeds,
    *        first-frame latents, reference latents). Absolute path.
    * @param {object} [args.config] - Session config: threads, seed, backend,
-   *        numFramePerBlock, localAttnSize, offloadParamsToCpu, backendsDir.
+   *        numFramePerBlock, localAttnSize, offloadParamsToCpu, backendsDir,
+   *        frameJpegQuality (0 = PNG frames, 1..100 = JPEG at that quality).
    * @param {object} [args.logger] - Structured logger for JS wrapper logs.
    * @param {object} [args.opts] - Options ({ stats: true } to receive runtime
    *        stats on stream end).
