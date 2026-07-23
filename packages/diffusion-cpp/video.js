@@ -28,6 +28,7 @@ const WAN22_MOE_PARAMS = [
   'high_noise_flow_shift',
   'moe_boundary'
 ]
+const WAN22_TI2V_MODEL_PREFIX = 'wan2_2-ti2v-'
 
 function assertAbsolute(key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -385,21 +386,21 @@ class VideoStableDiffusion {
     const { mode } = params
     // True when the caller omits both width and height, meaning C++ will infer
     // them from the input image. In that case we pre-validate that the image
-    // header dimensions are on the multiple-of-16 grid so the error message
+    // header dimensions are on the model's spatial grid so the error message
     // names the actual pixels rather than an internal derived value.
     const dimsImplicit = params.width == null && params.height == null
 
-    // LTX-2 has stricter constraints than Wan: 32x spatial VAE compression
-    // (dims multiple of 32) and 8*k+1 frame packing. Detected from the
-    // LTX-only companion files supplied at construction.
+    // LTX-2 and Wan 2.2 TI2V use 32x spatial grids. Wan 2.1 remains 16x.
+    // LTX is detected from its companion files; the only supported Wan 2.2
+    // layout is identified from its canonical TI2V GGUF filename.
     const isLtx = this._isLtx()
+    const isWan22Ti2v = this._isWan22Ti2v()
 
-    // ── Dimension alignment (multiples of 16 for Wan, 32 for LTX-2) ───────
-    // Wan's spatial compression requires 16-aligned width/height (see
-    // addon.js::_fillDimsFromImage). Only validate provided dims; C++ falls
-    // back to 480x832 (portrait, phone-screen friendly) when omitted. Override
-    // either field for landscape (832x480 is Wan 1.3B's training res).
-    const alignTo = isLtx ? 32 : 16
+    // ── Dimension alignment (Wan 2.1: 16, Wan 2.2 TI2V/LTX-2: 32) ─────────
+    // Only validate provided dimensions; C++ falls back to 480x832 when
+    // omitted. The stricter TI2V grid prevents upstream rounding from
+    // producing an AVI whose dimensions differ from the requested size.
+    const alignTo = isLtx || isWan22Ti2v ? 32 : 16
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
@@ -653,6 +654,17 @@ class VideoStableDiffusion {
    */
   _isLtx() {
     return !!this._files.embeddingsConnectors
+  }
+
+  /**
+   * Wan 2.2 TI2V's VAE and diffusion downsampling require 32-aligned output
+   * dimensions. The current supported model is the canonical Turbo GGUF, so
+   * its filename is sufficient to distinguish it from Wan 2.1 without
+   * tightening the latter's valid 16-aligned requests.
+   * @returns {boolean}
+   */
+  _isWan22Ti2v() {
+    return path.basename(this._files.model).toLowerCase().startsWith(WAN22_TI2V_MODEL_PREFIX)
   }
 }
 

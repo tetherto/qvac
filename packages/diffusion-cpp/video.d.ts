@@ -86,10 +86,10 @@ export interface VideoGenerationParams {
   negative_prompt?: string
 
   /**
-   * Video dimensions. Wan: multiples of 16 (default `480 x 832` portrait;
-   * Wan 2.1 T2V 1.3B is trained on `832 x 480` landscape and handles both
-   * orientations). LTX-2: multiples of 32 (e.g. `768 x 512`). Override
-   * either field to switch orientation.
+   * Video dimensions. Wan 2.1: multiples of 16 (default `480 x 832` portrait;
+   * Wan 2.2 TI2V and LTX-2: multiples of 32 (e.g. `768 x 512`). Wan 2.1 T2V
+   * 1.3B is trained on `832 x 480` landscape and handles both orientations.
+   * Override either field to switch orientation.
    */
   width?: number
   height?: number

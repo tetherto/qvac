@@ -33,8 +33,8 @@ const FLOW_SHIFT = parseFloat(process.env.FLOW_SHIFT || '5.0')
 const SEED = parseInt(process.env.SEED || '-1', 10)
 
 function assertRunShape() {
-  if (WIDTH <= 0 || HEIGHT <= 0 || WIDTH % 16 !== 0 || HEIGHT % 16 !== 0) {
-    throw new Error(`WIDTH and HEIGHT must be positive multiples of 16, got ${WIDTH}x${HEIGHT}`)
+  if (WIDTH <= 0 || HEIGHT <= 0 || WIDTH % 32 !== 0 || HEIGHT % 32 !== 0) {
+    throw new Error(`WIDTH and HEIGHT must be positive multiples of 32, got ${WIDTH}x${HEIGHT}`)
   }
   if (VIDEO_FRAMES < 5 || (VIDEO_FRAMES - 1) % 4 !== 0) {
     throw new Error(`FRAMES must satisfy (4*k + 1), k >= 1, got ${VIDEO_FRAMES}`)

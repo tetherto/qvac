@@ -308,11 +308,16 @@ export function validateModelName(name) {
   return name
 }
 
+function belongsToGroup(entry, group) {
+  const groups = Array.isArray(entry.group) ? entry.group : [entry.group]
+  return groups.includes(group)
+}
+
 export function selectManifestEntries(manifest, group = '', { includeDeferred = false } = {}) {
   const declared = Object.entries(manifest.models || {})
   for (const [name] of declared) validateModelName(name)
   const entries = group
-    ? declared.filter(([, entry]) => entry.group === group)
+    ? declared.filter(([, entry]) => belongsToGroup(entry, group))
     : includeDeferred
       ? declared
       : declared.filter(([, entry]) => entry.warm !== false)

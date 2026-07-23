@@ -22,7 +22,9 @@ inputs:
   group:
     description: |
       Optional manifest group to cache and warm. When set, only entries whose
-      `group` field matches are selected. Empty preserves legacy selection.
+      `group` field contains the requested group are selected. A model can
+      declare multiple groups for shared dependencies. Empty preserves legacy
+      selection.
     required: false
     default: ''
   paths:
