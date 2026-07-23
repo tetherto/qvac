@@ -11,6 +11,10 @@ function model(name, s3Key, targetName) {
   return { name, s3Key, targetName: targetName || name }
 }
 
+function publicModel(name, url, targetName) {
+  return { name, url, targetName: targetName || name }
+}
+
 const Q4_MODELS = [
   model(
     'chatterbox-t3-turbo-q4_0.gguf',
@@ -107,6 +111,14 @@ const LAVASR_MODELS = [
   )
 ]
 
+const QUALITY_MODELS = [
+  publicModel(
+    'ggml-tiny.bin',
+    'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin',
+    'whisper/ggml-tiny.bin'
+  )
+]
+
 function presignModel(bucket, entry, expiresIn) {
   const url = execFileSync(
     'aws',
@@ -132,7 +144,8 @@ function buildManifest(presign) {
   const manifest = {
     q4: Q4_MODELS.map(signOnce),
     q8: Q8_MODELS.map(signOnce),
-    lavasr: LAVASR_MODELS.map(signOnce)
+    lavasr: LAVASR_MODELS.map(signOnce),
+    quality: QUALITY_MODELS
   }
   return { manifest, signedCount: signed.size }
 }
@@ -155,4 +168,4 @@ if (require.main === module) {
   main()
 }
 
-module.exports = { buildManifest, Q4_MODELS, Q8_MODELS, LAVASR_MODELS }
+module.exports = { buildManifest, Q4_MODELS, Q8_MODELS, LAVASR_MODELS, QUALITY_MODELS }

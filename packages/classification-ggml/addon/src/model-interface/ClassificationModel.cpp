@@ -130,12 +130,11 @@ void ClassificationModel::load() {
   }
 
 #if defined(__ANDROID__) || defined(GGML_BACKEND_DL)
-  // Under GGML_BACKEND_DL (Android, and desktop Linux when gpu-backends is
-  // enabled) qvac-fabric ships per-microarch CPU variants and GPU backends as
-  // MODULE .so files loaded at runtime via dlopen. ggml_backend_cpu_init() is
-  // not statically linkable here (the symbol lives inside a variant .so), so we
-  // open the modules from <backendsDir>/<BACKENDS_SUBDIR>/ and pick a CPU
-  // device through the generic registry API.
+  // Under GGML_BACKEND_DL (Android and desktop Linux) @qvac/fabric ships
+  // per-microarch CPU variants and GPU backends as MODULE .so files loaded at
+  // runtime via dlopen (the symbols live inside a variant .so, not the core
+  // runtime), so we must open the modules from <backendsDir>/<BACKENDS_SUBDIR>/
+  // before the registry can hand out a device.
   //
   // backendsDir comes from JS (`path.join(__dirname, 'prebuilds')`, mirroring
   // the llamacpp-llm addon) and BACKENDS_SUBDIR is the compile-time
@@ -152,18 +151,23 @@ void ClassificationModel::load() {
         std::filesystem::path(backendsDir_) / BACKENDS_SUBDIR;
     ggml_backend_load_all_from_path(variantsDir.string().c_str());
   }
+#endif
 
+  // Acquire the CPU backend through the generic registry API on every platform.
+  // On macOS/Windows/iOS the CPU backend is statically compiled into
+  // qvac__fabric@0.bare and self-registers with the backend registry at module
+  // load, so no dlopen is needed. We deliberately do NOT call
+  // ggml_backend_cpu_init() directly: @qvac/fabric only implicitly exports that
+  // symbol on ELF/Mach-O. Its Windows DLL export set exposes just the generic
+  // registry API (ggml_backend_dev_by_type / ggml_backend_dev_init), so a
+  // direct ggml_backend_cpu_init() call fails to link with lld-link on
+  // win32-x64.
   ggml_backend_dev_t cpuDev =
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   if (cpuDev == nullptr) {
-    throw StatusError(
-        InternalError,
-        "No CPU backend device registered (GGML_BACKEND_DL build)");
+    throw StatusError(InternalError, "No CPU backend device registered");
   }
   backend_ = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
-#else
-  backend_ = ggml_backend_cpu_init();
-#endif
   if (backend_ == nullptr) {
     throw StatusError(InternalError, "Failed to initialize ggml CPU backend");
   }
