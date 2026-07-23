@@ -6,11 +6,8 @@ const createTestnet = require('hyperdht/testnet')
 const IdEnc = require('hypercore-id-encoding')
 const crypto = require('crypto')
 
-function deriveRpcDiscoveryKey (autobaseKey) {
-  return crypto.createHash('sha256')
-    .update(autobaseKey)
-    .update('qvac-registry-rpc')
-    .digest()
+function deriveRpcDiscoveryKey(autobaseKey) {
+  return crypto.createHash('sha256').update(autobaseKey).update('qvac-registry-rpc').digest()
 }
 
 test('peer filter accepts connection from known indexer key', async (t) => {
@@ -19,7 +16,9 @@ test('peer filter accepts connection from known indexer key', async (t) => {
   const server = new Hyperswarm({ bootstrap })
   const client = new Hyperswarm({ bootstrap })
 
-  server.on('connection', (conn) => { conn.on('error', () => {}) })
+  server.on('connection', (conn) => {
+    conn.on('error', () => {})
+  })
 
   t.teardown(async () => {
     await client.destroy().catch(() => {})
@@ -72,7 +71,9 @@ test('peer filter rejects connection when peer key not in allowlist', async (t) 
   const allowedKeys = new Set([IdEnc.normalize(fakeIndexerKey)])
   const topic = crypto.randomBytes(32)
 
-  server.on('connection', (conn) => { conn.on('error', () => {}) })
+  server.on('connection', (conn) => {
+    conn.on('error', () => {})
+  })
   server.join(topic, { server: true, client: false })
   await server.flush()
 
@@ -110,7 +111,9 @@ test('topic-based fallback connects without indexer keys', async (t) => {
   const server = new Hyperswarm({ bootstrap })
   const client = new Hyperswarm({ bootstrap })
 
-  server.on('connection', (conn) => { conn.on('error', () => {}) })
+  server.on('connection', (conn) => {
+    conn.on('error', () => {})
+  })
 
   t.teardown(async () => {
     await client.destroy().catch(() => {})

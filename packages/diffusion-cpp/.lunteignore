@@ -11,3 +11,8 @@ test/results
 examples
 addon
 *.d.ts
+index.js
+video.js
+addon.js
+addonLogging.js
+src

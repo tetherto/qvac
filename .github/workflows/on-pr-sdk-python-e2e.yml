@@ -1,0 +1,64 @@
+# QVAC sdk-python real-worker e2e - PR (verified-gated)
+#
+# The full real-worker suite builds the @qvac/sdk worker and downloads models,
+# so it runs long. Like the other SDK e2es it's gated on the `verified` label
+# rather than running on every PR — the fast leg (pr-checks-sdk-python.yml) runs
+# gen/lint/type + the mocked unit tests on every PR.
+#
+# Plain `pull_request` (not pull_request_target): the worker build uses only the
+# public-npm `@qvac/*` packages, so it needs no secrets and is fork-safe as-is.
+name: QVAC Tests (sdk-python) - PR
+
+on:
+  # Runs only when the `verified` label is applied (or on manual dispatch) —
+  # the real-worker suite downloads models and runs long, so it's opt-in per PR
+  # rather than firing on every push.
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: real-worker e2e (linux-x64)
+    # Fire only when the label just applied is `verified` (or on manual dispatch).
+    if: github.event.label.name == 'verified' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install (with transport + optional extras)
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -e ".[gen,dev,bare-rpc,vla,notebook]"
+
+      # All-public @qvac deps, no auth — same as the CLI's plain build.
+      - name: Build worker
+        run: .venv/bin/python3 scripts/build_worker.py
+
+      # Fast leg: the CLI-set minimal models (Qwen 600M, EmbeddingGemma,
+      # Whisper EN-tiny, Supertonic). The `heavy` tests (parakeet/BCI streaming)
+      # run in the broader cross-platform leg that reuses the shared model cache.
+      - name: Test (real worker, fast set)
+        run: .venv/bin/python3 -m pytest -m "not heavy" tests/ -v

@@ -40,7 +40,7 @@ function wrapVlaModel(inner: VlaModel, loadOpts: VlaLoadOptions): VlaModel & Vla
 
 export const vlaPlugin = definePlugin({
   modelType: ModelType.ggmlVla,
-  displayName: 'VLA (SmolVLA / π₀.₅ ggml)',
+  displayName: 'VLA (SmolVLA / π₀.₅ / GR00T ggml)',
   addonPackage: ADDON_VLA,
   loadConfigSchema: vlaConfigSchema,
 

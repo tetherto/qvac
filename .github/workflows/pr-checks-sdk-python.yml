@@ -41,26 +41,27 @@ jobs:
           .venv/bin/pip install --quiet -e ".[gen,dev]"
 
       # Regenerates from packages/sdk/contract/{schema,manifest}.json and
-      # fails if the committed src/qvac/_generated tree doesn't match —
+      # fails if the committed src/tetherto/qvac_sdk/_generated tree doesn't match —
       # mirrors the SDK pod's own `contract:check` step.
       - name: Contract check (generated client up to date)
         run: .venv/bin/python3 scripts/generate.py --check
 
       - name: Format check
-        run: .venv/bin/python3 -m black --check src/qvac scripts/ tests/
+        run: .venv/bin/python3 -m black --check src/tetherto/qvac_sdk scripts/ tests/
 
       - name: Lint (ruff)
-        run: .venv/bin/python3 -m ruff check src/qvac scripts/ tests/
+        run: .venv/bin/python3 -m ruff check src/tetherto/qvac_sdk scripts/ tests/
 
       - name: Typecheck (mypy)
         run: |
-          .venv/bin/python3 -m mypy -p qvac
+          .venv/bin/python3 -m mypy -p tetherto.qvac_sdk
           .venv/bin/python3 -m mypy scripts
           .venv/bin/python3 -m mypy tests
 
-      # test_poc_smoke.py/test_poc_progress.py need a real Bare worker + a
-      # downloaded model; they skip themselves unless a built worker exists
-      # at WORKER (QVAC_POC_SDK_DIR override or its monorepo-relative
-      # default), which none does here.
-      - name: Test
+      # Fast leg: mocked unit tests only. The real-worker tests (transport, poc,
+      # conformance corpus, orchestrate tool loop, disconnect) skip themselves
+      # here — no worker is built and bare-rpc isn't installed — and run in the
+      # verified-gated on-pr-sdk-python-e2e.yml instead, which is long (it
+      # downloads models).
+      - name: Test (unit)
         run: .venv/bin/python3 -m pytest tests/ -v
