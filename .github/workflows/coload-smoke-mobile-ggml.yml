@@ -16,9 +16,9 @@
 # secondary feature-test failures for a feature whose plugin is not in the
 # subset -- the co-load/bootstrap result is the signal that matters there.
 #
-# Gated behind the `verified` label (Device Farm is expensive) AND an in-repo
-# branch -- a `pull_request` from a fork cannot read the Device Farm secrets, so
-# fork PRs rely on the desktop co-load plus workflow_dispatch. iOS statically
+# Gated behind `run-mobile-addon-tests` (Device Farm is expensive) AND an
+# in-repo branch -- a `pull_request` from a fork cannot read the Device Farm
+# secrets, so fork PRs rely on the desktop co-load plus workflow_dispatch. iOS statically
 # links ggml (the dlopen class does not bite there); an iOS variant is a
 # symmetric follow-up once test-ios-sdk.yml grows the same `plugins` input.
 
@@ -26,6 +26,7 @@ name: Co-load smoke (ggml, mobile)
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     paths:
       - "packages/tts-ggml/**"
       - "packages/transcription-parakeet/**"
@@ -50,19 +51,17 @@ on:
         type: string
 
 permissions:
-  actions: read
-  id-token: write
   contents: read
-  pull-requests: write
-  packages: read
 
 jobs:
   gate:
     # Device Farm needs base-repo secrets, which a `pull_request` from a fork
-    # cannot access. Only run on explicit dispatch, or on a `verified` PR from an
-    # in-repo branch. Fork PRs are covered by the desktop co-load and can still
+    # cannot access. Only run on explicit dispatch, or on an in-repo (same-repo)
+    # PR opted-in via the `run-mobile-addon-tests` label (Device Farm is
+    # expensive - keep it opt-in). `verified` is a fork-only trust gate and is
+    # not used here. Fork PRs are covered by the desktop co-load and can still
     # be exercised on demand via workflow_dispatch from the base repo.
-    if: ${{ github.event_name == 'workflow_dispatch' || (contains(github.event.pull_request.labels.*.name, 'verified') && github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'run-mobile-addon-tests') && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
     outputs:
       combos: ${{ steps.gen.outputs.combos }}
@@ -71,6 +70,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -123,4 +123,15 @@ jobs:
       device-farm-timeout: 90
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
-    secrets: inherit
+    # AWS_OIDC_ROLE_ARN is an environment secret resolved by the called
+    # workflow's `environment: release` jobs; it is intentionally not a
+    # workflow_call secret. Pass only caller-owned repository secrets here.
+    secrets:
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
