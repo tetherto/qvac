@@ -884,6 +884,10 @@ void MtmdLlmContext::applyContextDiscard() {
 LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
+  // Per-request speculative stats.
+  draftAccepted_ = 0;
+  draftTotal_ = 0;
+
   if (spec_) {
     return runSpeculativeGeneration(outputCallback);
   }
