@@ -11,7 +11,6 @@ const test = require('brittle')
 const VideoStableDiffusion = require('../../video')
 
 const FAKE_MODEL = '/tmp/wan2.1_t2v_1.3B_fp16.safetensors'
-const FAKE_WAN22_TURBO = '/tmp/Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf'
 const FAKE_T5XXL = '/tmp/umt5_xxl_fp16.safetensors'
 const FAKE_VAE = '/tmp/wan_2.1_vae.safetensors'
 const FAKE_HIGH_NOISE = '/tmp/wan2.2_t2v_high_noise.safetensors'
@@ -57,16 +56,6 @@ function makeWanModel({ files, config, logger } = {}) {
     },
     config: config || { threads: 1 },
     logger: logger || makeQuiet()
-  })
-}
-
-function makeWan22TurboModel() {
-  return makeWanModel({
-    files: {
-      model: FAKE_WAN22_TURBO,
-      t5Xxl: FAKE_T5XXL,
-      vae: '/tmp/wan2.2_vae.safetensors'
-    }
   })
 }
 
@@ -278,22 +267,6 @@ test('run | suggests a nearby valid pair in the error message', async (t) => {
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 833, height: 481 }),
     /Use 832x480 instead/
-  )
-})
-
-test('run | rejects a 16-aligned but 32-misaligned Wan 2.2 TI2V size', async (t) => {
-  const m = makeWan22TurboModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', width: 1296, height: 704 }),
-    /width and height must be positive multiples of 32/
-  )
-})
-
-test('run | accepts a 32-aligned Wan 2.2 TI2V size', async (t) => {
-  const m = makeWan22TurboModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', width: 1280, height: 704 }),
-    /Addon not initialized/
   )
 })
 

@@ -23,6 +23,7 @@
 #include "utils/LoggingMacros.hpp"
 #include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
+#include "utils/VideoModelCapabilities.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
@@ -404,8 +405,15 @@ void SdModel::load() {
   sdCtx_.reset(raw);
 
   // LTX-2 is identified by the embeddings-connectors input, which no other
-  // model family uses. Used for model-aware per-job validation below.
+  // model family uses. Its temporal shape is used for per-job validation.
   isLtxModel_ = !config_.embeddingsConnectorsPath.empty();
+  const std::string modelPath = config_.diffusionModelPath.empty()
+                                    ? config_.modelPath
+                                    : config_.diffusionModelPath;
+  videoModelCapabilities_ =
+      qvac_lib_inference_addon_sd::inspectVideoModelCapabilities(modelPath);
+  if (isLtxModel_)
+    videoModelCapabilities_.spatialAlignment = 32;
 
   stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - tLoadStart)
@@ -983,12 +991,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "txt2vid does not accept init_image; use img2vid instead");
 
   // -- Model-aware frame/dimension validation -------------------------------
-  // The SdVidGenHandlers enforce the Wan rules (video_frames = 4*k+1, dims
-  // multiples of 16). LTX-2 has stricter constraints that the generic
-  // handlers don't capture: frames = 8*k+1 (max 257) and dims multiples of
-  // 32 (32x spatial VAE compression). Every valid 8*k+1 also satisfies
-  // 4*k+1, so the handler accepts LTX-invalid values like 13 -- re-check
-  // here now that we know the model family.
+  // The generic handler enforces Wan's 4*k+1 frame rule and 16-pixel spatial
+  // grid. Spatial alignment is derived from the model's GGUF tensor
+  // descriptors at load time, rather than the caller-controlled model path.
+  // This keeps renamed TI2V checkpoints and direct native callers on the
+  // correct 32-pixel grid.
   if (isLtxModel_) {
     if (vid.videoFrames < 9 || (vid.videoFrames - 1) % 8 != 0 ||
         vid.videoFrames > 257)
@@ -997,12 +1004,15 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
           "LTX-2 video_frames must be of the form (8*k + 1) in [9, 257] "
           "(9, 17, 25, 33, ..., 257). Got: " +
               std::to_string(vid.videoFrames));
-    if (vid.width % 32 != 0 || vid.height % 32 != 0)
-      throw StatusError(
-          general_error::InvalidArgument,
-          "LTX-2 width and height must be multiples of 32, got: " +
-              std::to_string(vid.width) + "x" + std::to_string(vid.height));
   }
+  const int spatialAlignment = videoModelCapabilities_.spatialAlignment;
+  if (vid.width % spatialAlignment != 0 || vid.height % spatialAlignment != 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "processVideo: width and height must be multiples of " +
+            std::to_string(spatialAlignment) +
+            " for the loaded video model, got: " + std::to_string(vid.width) +
+            "x" + std::to_string(vid.height));
 
   // -- Decode init / end / control-frame images -----------------------------
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
@@ -1132,12 +1142,17 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
   // -- Generate -------------------------------------------------------------
-  // Wan 2.1 / TI2V-5B invoke one sampler. Wan 2.2 A14B invokes the high-
-  // noise expert first and the low-noise expert second, so include both
-  // leading sequences in the denoise timing window. Later VAE tiling
-  // sequences remain excluded by sdProgressCallback().
+  // Wan 2.1 / TI2V-5B invoke one sampler. Wan 2.2 A14B normally invokes the
+  // high-noise expert first and the low-noise expert second, so include both
+  // leading sequences in the denoise timing window. The -1 sentinel derives
+  // the switch point from moe_boundary; a zero boundary never selects the
+  // high-noise sampler. Later VAE tiling sequences remain excluded by
+  // sdProgressCallback().
   const bool hasHighNoiseExpert = !config_.highNoiseDiffusionModelPath.empty();
-  g_progressCtx.expectedDenoiseSequences = hasHighNoiseExpert ? 2 : 1;
+  const bool skipsHighNoiseSampler =
+      vid.highNoiseSteps == -1 && vid.moeBoundary == 0.0f;
+  g_progressCtx.expectedDenoiseSequences =
+      hasHighNoiseExpert && !skipsHighNoiseSampler ? 2 : 1;
   const auto t0 = std::chrono::steady_clock::now();
 
   // Upstream's master API returns success as a bool and hands back frames /

@@ -28,7 +28,6 @@ const WAN22_MOE_PARAMS = [
   'high_noise_flow_shift',
   'moe_boundary'
 ]
-const WAN22_TI2V_MODEL_PREFIX = 'wan2_2-ti2v-'
 
 function assertAbsolute(key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -390,17 +389,15 @@ class VideoStableDiffusion {
     // names the actual pixels rather than an internal derived value.
     const dimsImplicit = params.width == null && params.height == null
 
-    // LTX-2 and Wan 2.2 TI2V use 32x spatial grids. Wan 2.1 remains 16x.
-    // LTX is detected from its companion files; the only supported Wan 2.2
-    // layout is identified from its canonical TI2V GGUF filename.
+    // LTX-2 is identified from its companion files. Wan 2.2 TI2V's spatial
+    // capability is determined natively from the loaded GGUF's tensors, so a
+    // renamed model cannot bypass its 32-pixel requirement.
     const isLtx = this._isLtx()
-    const isWan22Ti2v = this._isWan22Ti2v()
 
-    // ── Dimension alignment (Wan 2.1: 16, Wan 2.2 TI2V/LTX-2: 32) ─────────
-    // Only validate provided dimensions; C++ falls back to 480x832 when
-    // omitted. The stricter TI2V grid prevents upstream rounding from
-    // producing an AVI whose dimensions differ from the requested size.
-    const alignTo = isLtx || isWan22Ti2v ? 32 : 16
+    // ── Dimension alignment (Wan: 16, LTX-2: 32) ───────────────────────────
+    // The native layer enforces model-specific requirements. It also catches
+    // Wan 2.2 TI2V's 32-pixel grid after inspecting the actual GGUF model.
+    const alignTo = isLtx ? 32 : 16
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
@@ -654,17 +651,6 @@ class VideoStableDiffusion {
    */
   _isLtx() {
     return !!this._files.embeddingsConnectors
-  }
-
-  /**
-   * Wan 2.2 TI2V's VAE and diffusion downsampling require 32-aligned output
-   * dimensions. The current supported model is the canonical Turbo GGUF, so
-   * its filename is sufficient to distinguish it from Wan 2.1 without
-   * tightening the latter's valid 16-aligned requests.
-   * @returns {boolean}
-   */
-  _isWan22Ti2v() {
-    return path.basename(this._files.model).toLowerCase().startsWith(WAN22_TI2V_MODEL_PREFIX)
   }
 }
 
