@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 
+#include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
@@ -244,8 +245,9 @@ public:
    * @param outputCallback - the output callback.
    * @return - ok=false for context overflow; cancelled=true when generation
    * was stopped by user cancellation; rollbackOk=false when a cancellation
-   * could not restore the pre-request recurrent state and callers must skip
-   * cache persistence for this request.
+   * or prediction-limit truncation inside reasoning could not restore the
+   * pre-request recurrent state and callers must skip cache persistence for
+   * this request.
    */
   virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;
@@ -352,6 +354,16 @@ public:
    */
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
   virtual void resetThinkingBlockDiscards() {}
+
+  /**
+   * Why the most recent generation stopped (`None` when no generation
+   * has run or the context does not track it). Surfaced to runtime
+   * stats as `stopReason` so callers can distinguish a prediction-limit
+   * cutoff from a model-signalled EOS.
+   */
+  [[nodiscard]] virtual GenerationStopReason getGenerationStopReason() const {
+    return GenerationStopReason::None;
+  }
 
   /**
    * Consume the per-inference user-visible `llama_perf_context` snapshot

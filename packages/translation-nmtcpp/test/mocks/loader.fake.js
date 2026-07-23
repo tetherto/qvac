@@ -22,17 +22,15 @@ const files = {
 // (start/stop/list/getStream). It deliberately does not extend any base class
 // so the test suite carries no dependency on the deprecated @qvac/dl-* packages.
 class FakeDL {
-  async start () {
-  }
+  async start() {}
 
-  async stop () {
-  }
+  async stop() {}
 
-  async list (path) {
+  async list(path) {
     return [...Object.keys(files)]
   }
 
-  async getStream (filepath) {
+  async getStream(filepath) {
     const name = path.basename(filepath)
     return Readable.from(Buffer.from(files[name]))
   }

@@ -37,7 +37,7 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
     return
   }
 
-  const [modelName, dirPath] = await ensureModel(MODEL.name)
+  const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name })
   const modelPath = path.join(dirPath, modelName)
   const specLogger = attachSpecLogger({ forwardToConsole: true })
 

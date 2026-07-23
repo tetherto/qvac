@@ -50,14 +50,12 @@ const TEST_IMAGES_DIR = path.join(ADDON_DIR, 'test', 'images')
 // filename in test/mobile/testAssets/>]`. `resolveModelPath()` in
 // `test/integration/utils.js` looks up the destination filename when
 // running on mobile.
-const WEIGHT_FILES = [
-  ['mobilenetv3_3class_v3_fp16.gguf', 'mobilenetv3_3class_v3_fp16.gguf.bin']
-]
+const WEIGHT_FILES = [['mobilenetv3_3class_v3_fp16.gguf', 'mobilenetv3_3class_v3_fp16.gguf.bin']]
 
 const ANDROID_FLAVOURS = ['android-arm64', 'android-arm', 'android-ia32', 'android-x64']
 const IOS_FLAVOURS = ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
 
-function copyDirRecursive (src, dst) {
+function copyDirRecursive(src, dst) {
   if (!fs.existsSync(src)) return false
   fs.mkdirSync(dst, { recursive: true })
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -72,10 +70,12 @@ function copyDirRecursive (src, dst) {
   return true
 }
 
-function fanOutPrebuilds (sourceFlavour, allFlavours) {
+function fanOutPrebuilds(sourceFlavour, allFlavours) {
   const sourceDir = path.join(PREBUILDS_DIR, sourceFlavour)
   if (!fs.existsSync(sourceDir)) {
-    console.log(`[mobile:copy-prebuilds] Source prebuilds not found: ${sourceDir}; skipping fan-out for ${allFlavours.join(', ')}`)
+    console.log(
+      `[mobile:copy-prebuilds] Source prebuilds not found: ${sourceDir}; skipping fan-out for ${allFlavours.join(', ')}`
+    )
     return
   }
   for (const target of allFlavours) {
@@ -102,10 +102,14 @@ function fanOutPrebuilds (sourceFlavour, allFlavours) {
 // "/app.bundle/backend/test/images/<file>"`. Image extensions
 // (`.jpg`/`.png`) are part of React Native's default `assetExts`, so
 // no rename is required (unlike the GGUF blob).
-function copyTestImagesToTestAssets () {
+function copyTestImagesToTestAssets() {
   if (!fs.existsSync(TEST_IMAGES_DIR)) {
-    console.error(`[mobile:copy-prebuilds] FATAL: test images directory not found: ${TEST_IMAGES_DIR}`)
-    console.error('[mobile:copy-prebuilds] The integration test images must be present before mobile tests can run.')
+    console.error(
+      `[mobile:copy-prebuilds] FATAL: test images directory not found: ${TEST_IMAGES_DIR}`
+    )
+    console.error(
+      '[mobile:copy-prebuilds] The integration test images must be present before mobile tests can run.'
+    )
     process.exit(1)
   }
   fs.mkdirSync(TEST_ASSETS_DIR, { recursive: true })
@@ -119,7 +123,9 @@ function copyTestImagesToTestAssets () {
     const dst = path.join(TEST_ASSETS_DIR, entry.name)
     fs.copyFileSync(src, dst)
     const sizeKb = (fs.statSync(dst).size / 1024).toFixed(1)
-    console.log(`[mobile:copy-prebuilds] Copied test image ${entry.name} -> ${path.relative(ADDON_DIR, dst)} (${sizeKb} KB)`)
+    console.log(
+      `[mobile:copy-prebuilds] Copied test image ${entry.name} -> ${path.relative(ADDON_DIR, dst)} (${sizeKb} KB)`
+    )
     copied++
   }
   if (copied === 0) {
@@ -128,10 +134,12 @@ function copyTestImagesToTestAssets () {
   }
 }
 
-function copyWeightsToTestAssets () {
+function copyWeightsToTestAssets() {
   if (!fs.existsSync(WEIGHTS_DIR)) {
     console.error(`[mobile:copy-prebuilds] FATAL: weights directory not found: ${WEIGHTS_DIR}`)
-    console.error('[mobile:copy-prebuilds] The bundled GGUF model must be present before mobile tests can run.')
+    console.error(
+      '[mobile:copy-prebuilds] The bundled GGUF model must be present before mobile tests can run.'
+    )
     process.exit(1)
   }
   fs.mkdirSync(TEST_ASSETS_DIR, { recursive: true })
@@ -145,7 +153,9 @@ function copyWeightsToTestAssets () {
     }
     fs.copyFileSync(src, dst)
     const sizeMb = (fs.statSync(dst).size / 1024 / 1024).toFixed(1)
-    console.log(`[mobile:copy-prebuilds] Copied weights ${srcName} -> ${path.relative(ADDON_DIR, dst)} (${sizeMb} MB)`)
+    console.log(
+      `[mobile:copy-prebuilds] Copied weights ${srcName} -> ${path.relative(ADDON_DIR, dst)} (${sizeMb} MB)`
+    )
     copied++
   }
   if (copied === 0) {
@@ -154,7 +164,7 @@ function copyWeightsToTestAssets () {
   }
 }
 
-function main () {
+function main() {
   console.log(`[mobile:copy-prebuilds] Preparing mobile assets in ${ADDON_DIR}`)
   fanOutPrebuilds('android-arm64', ANDROID_FLAVOURS)
   fanOutPrebuilds('ios-arm64', IOS_FLAVOURS)

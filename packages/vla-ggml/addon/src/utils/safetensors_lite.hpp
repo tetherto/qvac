@@ -49,23 +49,22 @@ public:
     }
     in.seekg(0);
 
-    uint64_t header_len = 0;
-    in.read(reinterpret_cast<char*>(&header_len), 8);
-    if (!in || header_len == 0 ||
-        header_len > static_cast<uint64_t>(total) - 8) {
+    uint64_t headerLen = 0;
+    in.read(reinterpret_cast<char*>(&headerLen), 8);
+    if (!in || headerLen == 0 || headerLen > static_cast<uint64_t>(total) - 8) {
       throw std::runtime_error("safetensors: bad header length");
     }
-    std::string header(header_len, '\0');
-    in.read(header.data(), header_len);
+    std::string header(headerLen, '\0');
+    in.read(header.data(), headerLen);
     if (!in) {
       throw std::runtime_error("safetensors: short header read");
     }
-    parseHeader_(header);
+    parseHeader(header);
 
-    const std::streamoff blob_off = 8 + static_cast<std::streamoff>(header_len);
-    const std::streamoff blob_size = total - blob_off;
-    blob_.resize(static_cast<size_t>(blob_size));
-    in.read(reinterpret_cast<char*>(blob_.data()), blob_size);
+    const std::streamoff blobOff = 8 + static_cast<std::streamoff>(headerLen);
+    const std::streamoff blobSize = total - blobOff;
+    blob_.resize(static_cast<size_t>(blobSize));
+    in.read(reinterpret_cast<char*>(blob_.data()), blobSize);
     if (!in) {
       throw std::runtime_error("safetensors: short blob read");
     }
@@ -114,7 +113,7 @@ private:
   // a real JSON parser — strings cannot contain escapes other than \" and
   // \\, and numbers must be integers. This is enough for every safetensors
   // file the reference dump produces.
-  void parseHeader_(const std::string& h) {
+  void parseHeader(const std::string& h) {
     Pos p{h, 0};
     p.skipWs();
     p.expect('{');
@@ -127,7 +126,7 @@ private:
       if (key == "__metadata__") {
         p.skipValue();
       } else {
-        tensors_.emplace(std::move(key), parseTensorObject_(p));
+        tensors_.emplace(std::move(key), parseTensorObject(p));
       }
       p.skipWs();
       if (p.peek() == ',') {
@@ -249,7 +248,7 @@ private:
     }
   };
 
-  TensorRecord parseTensorObject_(Pos& p) {
+  TensorRecord parseTensorObject(Pos& p) {
     TensorRecord r;
     p.expect('{');
     p.skipWs();

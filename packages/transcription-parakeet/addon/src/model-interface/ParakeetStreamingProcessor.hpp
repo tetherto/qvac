@@ -12,8 +12,8 @@
 #include <parakeet/streaming.h>
 
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
-
 #include "model-interface/ParakeetTypes.hpp"
+#include "model-interface/parakeet/ParakeetConfig.hpp"
 
 namespace qvac_lib_infer_parakeet {
 
@@ -43,29 +43,27 @@ class ParakeetModel;
 class ParakeetStreamingProcessor {
 public:
   struct Config {
-    int sampleRate          = 16000;
-    int chunkMs             = 1000;
-    int historyMs           = 30000;
-    bool emitPartials       = true;
-    bool emitEnergyVad      = false;
+    int sampleRate = 16000;
+    int chunkMs = 1000;
+    int historyMs = ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
+    bool emitPartials = true;
+    bool emitEnergyVad = false;
     float diarOnsetThreshold = 0.5F;
-    int  diarMinSegmentMs   = 200;
+    int diarMinSegmentMs = 200;
     // ASR-only knobs (Sortformer ignores them). <0 means "leave the
     // parakeet engine default in place" (10000 / 2000 ms respectively).
-    int  leftContextMs      = -1;
-    int  rightLookaheadMs   = -1;
-    // === AOSC (v2.1+ Sortformer only) ====================================
-    // Forwarded into parakeet::SortformerStreamingOptions when the loaded
-    // model is a v2.1 Sortformer GGUF (auto-detected from the GGUF's
-    // `parakeet.model_variant` metadata tag). parakeet-cpp ignores these
-    // fields on v1/v2 GGUFs and on non-Sortformer engines, so they are
-    // always safe to forward.
+    int leftContextMs = -1;
+    int rightLookaheadMs = -1;
+    // AOSC (v2.1+ Sortformer only); ignored on v1/v2 and non-Sortformer.
     bool spkCacheEnable = true;
-    int spkCacheLen = 188;
-    int fifoLen = 188;
-    int chunkLeftContextMs = 80;
-    int chunkRightContextMs = 560;
-    int spkCacheUpdatePeriod = 144;
+    int spkCacheLen = ParakeetConfig::DEFAULT_STREAMING_SPK_CACHE_LEN;
+    int fifoLen = ParakeetConfig::DEFAULT_STREAMING_FIFO_LEN;
+    int chunkLeftContextMs =
+        ParakeetConfig::DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS;
+    int chunkRightContextMs =
+        ParakeetConfig::DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS;
+    int spkCacheUpdatePeriod =
+        ParakeetConfig::DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD;
   };
 
   ParakeetStreamingProcessor(
@@ -107,6 +105,7 @@ private:
   void onAsrSegment(const parakeet::StreamingSegment& seg);
   void onDiarSegment(const parakeet::StreamingDiarizationSegment& seg);
   void emitPending();
+  void joinWorkerOnce();
 
   ParakeetModel& model_;
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> output_queue_;
@@ -130,12 +129,7 @@ private:
   std::atomic_bool worker_done_{false};
   std::thread thread_;
 
-  // Serialises end() / cancel() / dtor so the worker thread is joined
-  // exactly once even when end() races with cancel(), or two cancel()
-  // calls race, or the dtor's fallback cancel() races with an explicit
-  // end()/cancel() from the binding. Without this, the loser of the race
-  // observed thread_.joinable() == true and called join() on an already
-  // joined thread, which raises std::system_error.
+  // Joins the worker exactly once across racing end()/cancel()/dtor calls.
   std::once_flag teardown_once_;
 
   // Wall-clock seconds of audio fed so far; mirrors what the legacy

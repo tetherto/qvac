@@ -67,6 +67,25 @@ public:
 
 private:
   void processLoop();
+  whisper_vad_params buildVadParams() const;
+  float speechPadSeconds() const;
+  float segmentEndSeconds(whisper_vad_segments* segments, int index) const;
+  int secondsToSample(float seconds) const;
+  bool hasEnoughNewAudioForVad(int bufferSize, bool done) const;
+  void drainPendingAudio(bool& done, bool& wasCancelled);
+  void runVadSegmentation(const whisper_vad_params& vadParams, bool done);
+  void updateSpeakingState(
+      whisper_vad_segments* segments, int nSeg, float totalDurationS,
+      int bufferSize);
+  int findLastCompleteSegment(
+      whisper_vad_segments* segments, int nSeg, float totalDurationS,
+      bool done) const;
+  void dispatchCompleteSegments(
+      whisper_vad_segments* segments, int lastComplete, int bufferSize);
+  void trimProcessedAudio(
+      whisper_vad_segments* segments, int lastComplete, int bufferSize);
+  void forceProcessOnOverflow();
+  void finalizeStream();
   void processAudioRange(int startSample, int endSample);
   void emitConversationEvents(bool speaking, float probability);
 

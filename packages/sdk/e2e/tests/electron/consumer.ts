@@ -34,14 +34,12 @@ import {
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q8_0,
-  PARAKEET_CTC_0_6B_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  PARAKEET_EOU_120M_V1_Q8_0,
+  PARAKEET_TDT_0_6B_V3_Q4_0,
+  PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
+  PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  SALAMANDRATA_2B_INST_Q4,
-  AFRICAN_4B_TRANSLATION_Q4_K_M,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
@@ -83,6 +81,10 @@ import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
+import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
+
+const isSnapConsumer = process.env['QVAC_TEST_PLATFORM'] === 'snap-linux'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -241,27 +243,6 @@ resources.define('bergamot-es-it-pivot', {
   }
 })
 
-resources.define('salamandra', {
-  constant: SALAMANDRATA_2B_INST_Q4,
-  type: 'llamacpp-completion'
-})
-
-resources.define('afriquegemma', {
-  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    tools: true,
-    ctx_size: 2048,
-    top_k: 1,
-    top_p: 1,
-    temp: 0,
-    repeat_penalty: 1,
-    seed: 42,
-    predict: 256,
-    stop_sequences: ['\n']
-  }
-})
-
 resources.define('tts-chatterbox', {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: 'tts-ggml',
@@ -330,25 +311,25 @@ resources.define('tts-supertonic-enhanced', {
 })
 
 resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
+  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q8_0,
+  constant: PARAKEET_CTC_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
+  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  constant: PARAKEET_EOU_120M_V1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
@@ -388,6 +369,11 @@ function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
 }
 
+function resolveElectronRuntimeDir() {
+  const snapCommon = process.env['SNAP_USER_COMMON']
+  return snapCommon ? path.join(snapCommon, 'qvac-test-runtime') : process.cwd()
+}
+
 function resolveBatchAttachmentPath(inputPath: string) {
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
@@ -395,18 +381,22 @@ function resolveBatchAttachmentPath(inputPath: string) {
 }
 
 function ensureElectronE2EConfig() {
-  const electronFixturePath = path.resolve(process.cwd(), 'fixtures/qvac.config.electron.json')
-  const e2eFixturePath = path.resolve(process.cwd(), 'fixtures/qvac.config.e2e.json')
+  const configDir = process.cwd()
+  const runtimeDir = resolveElectronRuntimeDir()
+  const electronFixturePath = path.resolve(configDir, 'fixtures/qvac.config.electron.json')
+  const e2eFixturePath = path.resolve(configDir, 'fixtures/qvac.config.e2e.json')
   const existingPath = process.env['QVAC_CONFIG_PATH']
   const electronFixtureConfig = readJsonConfig(electronFixturePath)
   const e2eFixtureConfig = readJsonConfig(e2eFixturePath)
-  const existingConfig = existingPath ? readJsonConfig(existingPath) : {}
+  const existingConfig =
+    existingPath && fs.existsSync(existingPath) ? readJsonConfig(existingPath) : {}
   const mergedConfig = {
     ...electronFixtureConfig,
     ...e2eFixtureConfig,
     ...existingConfig
   }
-  const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
+  fs.mkdirSync(runtimeDir, { recursive: true })
+  const generatedPath = path.resolve(runtimeDir, 'qvac.config.e2e.generated.json')
 
   fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
@@ -427,8 +417,20 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
   await resources.downloadAllOnce(console.log, { allowedDeps })
 }
 
+export async function runSnapRefreshProbe() {
+  await executeSnapRefreshProbe(ensureElectronE2EConfig)
+}
+
+const snapStorageHandler = isSnapConsumer
+  ? new SnapStorageExecutor()
+  : new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    )
+
 export const executor = createExecutor({
   handlers: [
+    snapStorageHandler,
     // Electron keeps the stable desktop/shared surface enabled, but excludes
     // suites that are resource-heavy or incompatible with the packaged
     // Electron worker lifecycle.

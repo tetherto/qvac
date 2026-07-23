@@ -7,7 +7,7 @@ const { execFileSync } = require('child_process')
 const DEFAULT_EXPIRES_IN = '604800'
 const outputPath = path.resolve(__dirname, '../test/mobile/testAssets/model-manifest.json')
 
-function model (name, s3Key, targetName) {
+function model(name, s3Key, targetName) {
   return { name, s3Key, targetName: targetName || name }
 }
 
@@ -41,6 +41,13 @@ const Q4_MODELS = [
     'supertonic2-q4_0.gguf',
     'qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf',
     'supertonic2.gguf'
+  ),
+  // Supertonic 3 encodes the quant in the on-disk name (unlike v1/v2), so the
+  // target keeps the quant-tagged filename that ensureSupertonic3Model expects.
+  model(
+    'supertonic3-q4_0.gguf',
+    'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf',
+    'supertonic3-q4_0.gguf'
   )
 ]
 
@@ -77,7 +84,30 @@ const Q8_MODELS = [
   )
 ]
 
-function presignModel (bucket, entry, expiresIn) {
+// LavaSR enhancer + denoiser are orthogonal to the engine quant (q4/q8): the
+// benchmark's `enhancer`/`denoiser=lavasr` rows layer them on any engine. Only
+// the published fp16 tier is pre-staged for mobile (the enhancer quant-tier
+// sweep is desktop-only). The target keeps the on-disk names the on-device
+// resolver expects under a `lavasr/` subdir (ensureLavaSR*Gguf scans
+// <modelsDir>/lavasr), so they never collide with the flat engine GGUFs.
+// The registry dates below must match REGISTRY_DATE_LAVASR /
+// REGISTRY_DATE_LAVASR_DENOISER in test/utils/downloadModel.js (the resolver that
+// fetches the same GGUFs); generate-mobile-model-manifest.test.js pins them so a
+// drift fails there, since this Node script can't require that Bare-only module.
+const LAVASR_MODELS = [
+  model(
+    'lavasr-enhancer-f16.gguf',
+    'qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f16.gguf',
+    'lavasr/lavasr-enhancer.gguf'
+  ),
+  model(
+    'lavasr-denoiser-f16.gguf',
+    'qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf',
+    'lavasr/lavasr-denoiser.gguf'
+  )
+]
+
+function presignModel(bucket, entry, expiresIn) {
   const url = execFileSync(
     'aws',
     ['s3', 'presign', `s3://${bucket}/${entry.s3Key}`, '--expires-in', expiresIn],
@@ -90,29 +120,39 @@ function presignModel (bucket, entry, expiresIn) {
   }
 }
 
-function main () {
+// Sign each model once (by name, so a GGUF shared across q4/q8 is only signed
+// once) via the injected `presign`. Injecting it keeps the manifest shape
+// unit-testable without shelling out to `aws`.
+function buildManifest(presign) {
+  const signed = new Map()
+  const signOnce = (entry) => {
+    if (!signed.has(entry.name)) signed.set(entry.name, presign(entry))
+    return signed.get(entry.name)
+  }
+  const manifest = {
+    q4: Q4_MODELS.map(signOnce),
+    q8: Q8_MODELS.map(signOnce),
+    lavasr: LAVASR_MODELS.map(signOnce)
+  }
+  return { manifest, signedCount: signed.size }
+}
+
+function main() {
   const bucket = process.env.MODEL_S3_BUCKET
   if (!bucket) {
     throw new Error('MODEL_S3_BUCKET env var is required')
   }
 
   const expiresIn = process.env.MODEL_MANIFEST_EXPIRES_IN || DEFAULT_EXPIRES_IN
-  const signed = new Map()
-
-  const manifest = {
-    q4: Q4_MODELS.map((entry) => {
-      if (!signed.has(entry.name)) signed.set(entry.name, presignModel(bucket, entry, expiresIn))
-      return signed.get(entry.name)
-    }),
-    q8: Q8_MODELS.map((entry) => {
-      if (!signed.has(entry.name)) signed.set(entry.name, presignModel(bucket, entry, expiresIn))
-      return signed.get(entry.name)
-    })
-  }
+  const { manifest, signedCount } = buildManifest((entry) => presignModel(bucket, entry, expiresIn))
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
   fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2) + '\n')
-  console.log(`Wrote ${outputPath} with ${signed.size} presigned model URL(s)`)
+  console.log(`Wrote ${outputPath} with ${signedCount} presigned model URL(s)`)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = { buildManifest, Q4_MODELS, Q8_MODELS, LAVASR_MODELS }

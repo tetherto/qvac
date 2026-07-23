@@ -42,7 +42,7 @@ const EXPECTED_FILES = [
 
 const KNOWN_DATE_PREFIXES = ['2026-07-01', '2026-05-11', '2026-05-27', '2026-05-20']
 
-function loadManifest () {
+function loadManifest() {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
 }
 
@@ -53,7 +53,10 @@ test('manifest: contains only cache-key-bearing fields', (t) => {
     ['cacheEpoch', 'models', 'source'],
     'top level excludes prose and unrelated metadata'
   )
-  t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is a positive integer')
+  t.ok(
+    Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0,
+    'cacheEpoch is a positive integer'
+  )
   t.is(manifest.source, 's3', 'source is s3')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
@@ -76,7 +79,9 @@ test('manifest: every entry has a well-formed s3Path + pinned integrity', (t) =>
   const manifest = loadManifest()
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.is(typeof entry.s3Path, 'string', `${name}: s3Path is a string`)
-    const m = entry.s3Path.match(/^qvac_models_compiled\/ggml\/parakeet\/(\d{4}-\d{2}-\d{2})\/(.+)$/)
+    const m = entry.s3Path.match(
+      /^qvac_models_compiled\/ggml\/parakeet\/(\d{4}-\d{2}-\d{2})\/(.+)$/
+    )
     t.ok(m, `${name}: s3Path matches registry layout`)
     if (m) {
       t.ok(KNOWN_DATE_PREFIXES.includes(m[1]), `${name}: date prefix ${m[1]} is known`)
@@ -84,7 +89,10 @@ test('manifest: every entry has a well-formed s3Path + pinned integrity', (t) =>
     }
 
     t.ok(/^[0-9a-f]{64}$/.test(entry.sha256), `${name}: sha256 is pinned as 64-hex`)
-    t.ok(Number.isInteger(entry.bytes) && entry.bytes > 0, `${name}: bytes is pinned as a positive int`)
+    t.ok(
+      Number.isInteger(entry.bytes) && entry.bytes > 0,
+      `${name}: bytes is pinned as a positive int`
+    )
   }
 })
 
@@ -94,6 +102,9 @@ test('manifest: filenames + date prefixes are referenced by helpers.js', (t) => 
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.ok(helpers.includes(name), `${name}: referenced in helpers.js MODEL_CONFIGS`)
     const datePrefix = entry.s3Path.split('/')[3]
-    t.ok(helpers.includes(datePrefix), `${name}: registry date ${datePrefix} referenced in helpers.js`)
+    t.ok(
+      helpers.includes(datePrefix),
+      `${name}: registry date ${datePrefix} referenced in helpers.js`
+    )
   }
 })

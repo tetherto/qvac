@@ -201,6 +201,11 @@ jobs:
         shell: bash
         run: npm install
 
+      - name: Format
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm run format
+
       - name: Lint
         working-directory: ${{ env.PKG_DIR }}
         shell: bash

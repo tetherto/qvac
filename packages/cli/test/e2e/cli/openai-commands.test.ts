@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
 
-// openai coverage is omitted — it needs network or a cached OpenAPI spec.
 describe('cli: openai spec', () => {
   it('emits a valid OpenAPI JSON document to stdout', async () => {
     const r = await runCli(['openai', 'spec'])
@@ -32,5 +31,35 @@ describe('cli: openai spec', () => {
     assert.equal(r.code, 0)
     const doc = JSON.parse(await readFile(out, 'utf8')) as { openapi: string }
     assert.match(doc.openapi, /^3\./)
+  })
+})
+
+// Runs against the built dist/index.js and the live upstream OpenAI spec —
+// the only way to exercise the real default router path and catch spec drift
+// (e.g. a qvac-only endpoint that isn't in QVAC_EXTENSION_ENDPOINTS).
+describe('cli: openai coverage', () => {
+  it('reports coverage against the live OpenAI spec with no errors', async () => {
+    const r = await runCli(['openai', 'coverage'], { timeoutMs: 60_000 })
+    assert.equal(r.code, 0, r.output)
+    assert.ok(!r.output.includes('ENOENT'), r.output)
+    assert.ok(r.stdout.includes('qvac serve openai — coverage'))
+    assert.ok(r.stdout.includes('qvac extension endpoints beyond the OpenAI spec'))
+    assert.ok(r.stdout.includes('GET /v1/audio/models'))
+    assert.ok(r.stdout.includes('GET /v1/audio/voices'))
+  })
+
+  it('--json emits a valid coverage report with implemented routes and extensions', async () => {
+    const r = await runCli(['openai', 'coverage', '--json'], { timeoutMs: 60_000 })
+    assert.equal(r.code, 0, r.output)
+    const report = JSON.parse(r.stdout) as {
+      rows: Array<{ key: string; implemented: boolean }>
+      extensions: string[]
+    }
+    assert.ok(report.rows.length > 0)
+    const chat = report.rows.find((row) => row.key === 'POST /v1/chat/completions')
+    assert.ok(chat)
+    assert.equal(chat.implemented, true)
+    assert.ok(report.extensions.includes('GET /v1/audio/models'))
+    assert.ok(report.extensions.includes('GET /v1/audio/voices'))
   })
 })

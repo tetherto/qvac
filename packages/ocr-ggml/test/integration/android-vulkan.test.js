@@ -33,80 +33,90 @@ const { platform, getImagePath, ensureModelPath, safeUnload } = require('./utils
 const TEST_TIMEOUT = 300 * 1000
 const shouldSkip = platform !== 'android'
 
-test('android vulkan: selects Vulkan or reports CPU fallback, with correct OCR output', { timeout: TEST_TIMEOUT, skip: shouldSkip }, async function (t) {
-  const detectorPath = await ensureModelPath('detector_craft')
-  const recognizerPath = await ensureModelPath('recognizer_latin')
-  const imagePath = getImagePath('/test/images/basic_test.bmp')
+test(
+  'android vulkan: selects Vulkan or reports CPU fallback, with correct OCR output',
+  { timeout: TEST_TIMEOUT, skip: shouldSkip },
+  async function (t) {
+    const detectorPath = await ensureModelPath('detector_craft')
+    const recognizerPath = await ensureModelPath('recognizer_latin')
+    const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en'],
-      backendDevice: 'vulkan'
-    },
-    opts: { stats: true }
-  })
-
-  await ocrGgml.load()
-  t.pass('loaded with backendDevice: vulkan')
-
-  const backendInfo = ocrGgml.getBackendInfo()
-  t.ok(backendInfo, 'getBackendInfo() returns backend info after load')
-  t.is(backendInfo.requested, 'vulkan', 'requested device recorded as vulkan')
-  // Probe: surface the actual device GPU (name + description) in Device Farm logs.
-  t.comment('Resolved backend info: ' + JSON.stringify(backendInfo))
-
-  const vulkanSelected =
-    backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'
-
-  if (vulkanSelected) {
-    t.is(backendInfo.fallbackReason, '', 'no fallback reason when Vulkan is selected')
-    t.ok(/vulkan/i.test(backendInfo.backendName), 'selected backend name mentions Vulkan (' + backendInfo.backendName + ')')
-  } else {
-    // No usable Vulkan device (none present, or rejected e.g. Adreno): the
-    // fallback to CPU MUST be reported explicitly.
-    t.is(backendInfo.backendDevice, 'CPU', 'fell back to the CPU device')
-    t.ok(backendInfo.fallbackReason.length > 0, 'explicit CPU fallback reason reported')
-    t.comment('CPU fallback reason: ' + backendInfo.fallbackReason)
-  }
-
-  try {
-    const response = await ocrGgml.run({
-      path: imagePath,
-      options: { paragraph: false }
+    const ocrGgml = new OcrGgml({
+      params: {
+        pathDetector: detectorPath,
+        pathRecognizer: recognizerPath,
+        langList: ['en'],
+        backendDevice: 'vulkan'
+      },
+      opts: { stats: true }
     })
 
-    let outputTexts = []
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'output should be an array')
-        outputTexts = output.map(o => o[1])
+    await ocrGgml.load()
+    t.pass('loaded with backendDevice: vulkan')
+
+    const backendInfo = ocrGgml.getBackendInfo()
+    t.ok(backendInfo, 'getBackendInfo() returns backend info after load')
+    t.is(backendInfo.requested, 'vulkan', 'requested device recorded as vulkan')
+    // Probe: surface the actual device GPU (name + description) in Device Farm logs.
+    t.comment('Resolved backend info: ' + JSON.stringify(backendInfo))
+
+    const vulkanSelected =
+      backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'
+
+    if (vulkanSelected) {
+      t.is(backendInfo.fallbackReason, '', 'no fallback reason when Vulkan is selected')
+      t.ok(
+        /vulkan/i.test(backendInfo.backendName),
+        'selected backend name mentions Vulkan (' + backendInfo.backendName + ')'
+      )
+    } else {
+      // No usable Vulkan device (none present, or rejected e.g. Adreno): the
+      // fallback to CPU MUST be reported explicitly.
+      t.is(backendInfo.backendDevice, 'CPU', 'fell back to the CPU device')
+      t.ok(backendInfo.fallbackReason.length > 0, 'explicit CPU fallback reason reported')
+      t.comment('CPU fallback reason: ' + backendInfo.fallbackReason)
+    }
+
+    try {
+      const response = await ocrGgml.run({
+        path: imagePath,
+        options: { paragraph: false }
       })
-      .onError(error => {
-        t.fail('unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
 
-    const stats = response.stats || {}
-    t.comment('Native addon stats: ' + JSON.stringify(stats))
+      let outputTexts = []
+      await response
+        .onUpdate((output) => {
+          t.ok(Array.isArray(output), 'output should be an array')
+          outputTexts = output.map((o) => o[1])
+        })
+        .onError((error) => {
+          t.fail('unexpected error: ' + JSON.stringify(error))
+        })
+        .await()
 
-    // The numeric `backendIsGpu` stat must agree with the resolved device.
-    t.is(
-      stats.backendIsGpu,
-      vulkanSelected ? 1 : 0,
-      'backendIsGpu stat matches the resolved backend (' + backendInfo.backendDevice + ')'
-    )
+      const stats = response.stats || {}
+      t.comment('Native addon stats: ' + JSON.stringify(stats))
 
-    // Accuracy/parity gate: whichever backend ran, the output must be correct.
-    // A numerically-broken Vulkan device that was NOT rejected would produce
-    // garbage here and fail — this is the Adreno safety net required by the task.
-    t.ok(outputTexts.length > 0, 'inference produced text regions')
-    t.ok(outputTexts.includes('normal'), 'recognized expected text "normal" (backend: ' + backendInfo.backendDevice + ')')
+      // The numeric `backendIsGpu` stat must agree with the resolved device.
+      t.is(
+        stats.backendIsGpu,
+        vulkanSelected ? 1 : 0,
+        'backendIsGpu stat matches the resolved backend (' + backendInfo.backendDevice + ')'
+      )
 
-    t.pass('android vulkan path exercised (' + backendInfo.backendDevice + ')')
-  } finally {
-    await safeUnload(ocrGgml)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+      // Accuracy/parity gate: whichever backend ran, the output must be correct.
+      // A numerically-broken Vulkan device that was NOT rejected would produce
+      // garbage here and fail — this is the Adreno safety net required by the task.
+      t.ok(outputTexts.length > 0, 'inference produced text regions')
+      t.ok(
+        outputTexts.includes('normal'),
+        'recognized expected text "normal" (backend: ' + backendInfo.backendDevice + ')'
+      )
+
+      t.pass('android vulkan path exercised (' + backendInfo.backendDevice + ')')
+    } finally {
+      await safeUnload(ocrGgml)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
   }
-})
+)

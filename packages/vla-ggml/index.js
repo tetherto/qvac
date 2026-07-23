@@ -17,17 +17,20 @@ const LOG_METHODS = ['error', 'warn', 'info', 'debug']
 // unless explicitly raised.
 const DEFAULT_NATIVE_VERBOSITY = 2 // INFO
 
-function pickPrimaryGgufPath (files) {
+function pickPrimaryGgufPath(files) {
   const FIRST_SHARD_REGEX = /-0*1-of-\d+\.gguf$/
   return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0]
 }
 
-function validateRunInput (input, hparams) {
+function validateRunInput(input, hparams) {
   if (!input || typeof input !== 'object') {
     throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input must be an object' })
   }
   if (!Array.isArray(input.images) || input.images.length === 0) {
-    throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.images must be a non-empty array of Float32Array' })
+    throw new QvacErrorAddonVla({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'input.images must be a non-empty array of Float32Array'
+    })
   }
   const imgWidth = input.imgWidth ?? DEFAULT_IMAGE_SIZE
   const imgHeight = input.imgHeight ?? DEFAULT_IMAGE_SIZE
@@ -46,39 +49,131 @@ function validateRunInput (input, hparams) {
       })
     }
   }
+  // Pixel-plane models (smolvla, pi05) take `3 · w · h` floats per camera.
+  // GR00T takes images already patchified by Gr00tPolicy — a
+  // `patches · patch_flat` buffer whose exact length the native side copies
+  // blindly (no source-length check before the memcpy), so it MUST be validated
+  // here. The length is fixed per model (imgWidth is pinned to visionImageSize),
+  // surfaced as `hparams.imagePatchElems`. `imageInputMode` is the
+  // distinguishing axis (both groot and smolvla are `continuous` state).
+  const imagesArePatches = hparams && hparams.imageInputMode === 'patches'
+  const patchElems = imagesArePatches ? hparams.imagePatchElems : 0
+  const patchElemsKnown = Number.isInteger(patchElems) && patchElems > 0
   const expectedPerImage = 3 * imgWidth * imgHeight
   for (let i = 0; i < input.images.length; i++) {
     const img = input.images[i]
     if (!(img instanceof Float32Array)) {
-      throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: `input.images[${i}] must be a Float32Array` })
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `input.images[${i}] must be a Float32Array`
+      })
     }
-    if (img.length !== expectedPerImage) {
-      throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: `input.images[${i}] length ${img.length} != 3*${imgWidth}*${imgHeight}` })
+    if (imagesArePatches) {
+      // Exact length guards the native memcpy against an OOB read. The native
+      // side copies patchElems floats per image blindly (no source-length
+      // check), so the expected length MUST be known here; if the addon didn't
+      // surface imagePatchElems (version skew), fail closed rather than pass an
+      // unvalidated buffer to that memcpy.
+      if (!patchElemsKnown) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.images[${i}] (patches): addon did not surface hparams.imagePatchElems, cannot validate patch buffer length`
+        })
+      }
+      if (img.length !== patchElems) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.images[${i}] (patches) length ${img.length} != ${patchElems}`
+        })
+      }
+    } else if (img.length !== expectedPerImage) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `input.images[${i}] length ${img.length} != 3*${imgWidth}*${imgHeight}`
+      })
     }
   }
   if (!(input.state instanceof Float32Array)) {
-    throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.state must be a Float32Array' })
+    throw new QvacErrorAddonVla({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'input.state must be a Float32Array'
+    })
   }
   if (!(input.tokens instanceof Int32Array)) {
-    throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.tokens must be an Int32Array' })
+    throw new QvacErrorAddonVla({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'input.tokens must be an Int32Array'
+    })
   }
   if (!(input.mask instanceof Uint8Array)) {
-    throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.mask must be a Uint8Array' })
+    throw new QvacErrorAddonVla({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'input.mask must be a Uint8Array'
+    })
   }
   if (input.mask.length !== input.tokens.length) {
-    throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.mask and input.tokens must have the same length' })
+    throw new QvacErrorAddonVla({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'input.mask and input.tokens must have the same length'
+    })
   }
   if (input.noise !== undefined && input.noise !== null && !(input.noise instanceof Float32Array)) {
-    throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_INPUT, adds: 'input.noise must be a Float32Array when provided' })
+    throw new QvacErrorAddonVla({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: 'input.noise must be a Float32Array when provided'
+    })
   }
 
-  if (hparams && hparams.stateInputMode === 'continuous' &&
-      Number.isInteger(hparams.maxStateDim)) {
+  if (hparams && hparams.stateInputMode === 'continuous' && Number.isInteger(hparams.maxStateDim)) {
     if (input.state.length === 0 || input.state.length > hparams.maxStateDim) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_INPUT,
         adds: `state.length (${input.state.length}) must be > 0 and <= hparams.maxStateDim (${hparams.maxStateDim})`
       })
+    }
+  }
+
+  // GR00T (imageInputMode 'patches') is a continuous-state flow-matching model
+  // that does NOT sample noise internally — GrootModel::infer hard-rejects a
+  // null noise. The discrete branch below already enforces this for pi05; do the
+  // same for the continuous/patches path so a missing prior surfaces as a clean
+  // INVALID_INPUT rather than an opaque INFERENCE_FAILED from the worker.
+  if (hparams && hparams.imageInputMode === 'patches') {
+    // Fail closed on GR00T's fixed-shape embodiment contract before the noise
+    // checks. GrootModel::infer derives the image-placeholder count from
+    // nImages and accepts nImages >= 1, so a one-camera input against a
+    // two-camera checkpoint would silently produce actions for the wrong camera
+    // layout instead of a clean INVALID_INPUT. The shared continuous-state
+    // check above allows state.length <= maxStateDim; GR00T needs it exact.
+    if (Number.isInteger(hparams.numCameras) && input.images.length !== hparams.numCameras) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `groot requires exactly ${hparams.numCameras} patch image buffers (got ${input.images.length})`
+      })
+    }
+    if (Number.isInteger(hparams.maxStateDim) && input.state.length !== hparams.maxStateDim) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `groot requires state.length === ${hparams.maxStateDim} (got ${input.state.length})`
+      })
+    }
+    if (!input.noise || !(input.noise instanceof Float32Array) || input.noise.length === 0) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'groot requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
+      })
+    }
+    // Exact length guards the native memcpy against an OOB read: GrootModel::infer
+    // copies chunkSize*maxActionDim floats blindly from this buffer (no source-length
+    // check), so a short array reads adjacent heap memory into the action prior.
+    if (Number.isInteger(hparams.chunkSize) && Number.isInteger(hparams.maxActionDim)) {
+      const expectedNoise = hparams.chunkSize * hparams.maxActionDim
+      if (input.noise.length !== expectedNoise) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.noise length ${input.noise.length} != ${expectedNoise} (chunkSize*maxActionDim)`
+        })
+      }
     }
   }
 
@@ -89,7 +184,10 @@ function validateRunInput (input, hparams) {
         adds: `pi05 requires exactly ${hparams.numCameras} camera images (got ${input.images.length})`
       })
     }
-    if (Number.isInteger(hparams.tokenizerMaxLength) && input.tokens.length !== hparams.tokenizerMaxLength) {
+    if (
+      Number.isInteger(hparams.tokenizerMaxLength) &&
+      input.tokens.length !== hparams.tokenizerMaxLength
+    ) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_INPUT,
         adds: `pi05 requires tokens.length === ${hparams.tokenizerMaxLength} (got ${input.tokens.length})`
@@ -101,22 +199,43 @@ function validateRunInput (input, hparams) {
         adds: 'pi05 requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
       })
     }
+    // Same native-memcpy OOB guard as the groot branch: pi05 xT is action_horizon *
+    // action_dim floats, surfaced as chunkSize * maxActionDim (max_action_dim maps
+    // to action_dim for pi05), copied blindly from this buffer.
+    if (Number.isInteger(hparams.chunkSize) && Number.isInteger(hparams.maxActionDim)) {
+      const expectedNoise = hparams.chunkSize * hparams.maxActionDim
+      if (input.noise.length !== expectedNoise) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.noise length ${input.noise.length} != ${expectedNoise} (chunkSize*maxActionDim)`
+        })
+      }
+    }
   }
 
   return { imgWidth, imgHeight }
 }
 
 class VlaModel {
-  constructor ({ files, config = {}, logger = null, opts = {} } = {}) {
+  constructor({ files, config = {}, logger = null, opts = {} } = {}) {
     if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-      throw new QvacErrorAddonVla({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'files.model (non-empty array of absolute paths)' })
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.MISSING_REQUIRED_PARAMETER,
+        adds: 'files.model (non-empty array of absolute paths)'
+      })
     }
     for (const [i, entry] of files.model.entries()) {
       if (typeof entry !== 'string' || entry.length === 0) {
-        throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_CONFIG, adds: `files.model[${i}] must be an absolute path string` })
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_CONFIG,
+          adds: `files.model[${i}] must be an absolute path string`
+        })
       }
       if (!path.isAbsolute(entry)) {
-        throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_CONFIG, adds: `files.model[${i}] must be an absolute path (got: ${entry})` })
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_CONFIG,
+          adds: `files.model[${i}] must be an absolute path (got: ${entry})`
+        })
       }
     }
     this._files = files.model
@@ -140,7 +259,7 @@ class VlaModel {
     this.state = { configLoaded: false, weightsLoaded: false }
   }
 
-  _connectNativeLogger () {
+  _connectNativeLogger() {
     if (this._nativeLoggerActive) return
     try {
       binding.setLogger((priority, message) => {
@@ -149,10 +268,13 @@ class VlaModel {
           this.logger[method](`[C++] ${message}`)
         }
       })
-      const verbosity = (this._config && Number.isInteger(this._config.verbosity))
-        ? this._config.verbosity
-        : DEFAULT_NATIVE_VERBOSITY
-      try { binding.setVerbosity(verbosity) } catch (_) {}
+      const verbosity =
+        this._config && Number.isInteger(this._config.verbosity)
+          ? this._config.verbosity
+          : DEFAULT_NATIVE_VERBOSITY
+      try {
+        binding.setVerbosity(verbosity)
+      } catch (_) {}
       this._nativeLoggerActive = true
     } catch (err) {
       this.logger.warn('Failed to connect native logger:', err && err.message)
@@ -171,7 +293,7 @@ class VlaModel {
   // `model.run(input)` Promise resolves with `{ actions, stats }` once both
   // halves have arrived — preserving the previous external API even though
   // the underlying dispatch is now asynchronous.
-  _onAddonEvent (_jsHandle, eventTypeName, outputData, errorData) {
+  _onAddonEvent(_jsHandle, eventTypeName, outputData, errorData) {
     // `_hasActiveResponse` is cleared by the response promise's .finally() in
     // _runInternal, NOT here — see the rationale block there. Doing it from
     // this callback would mean the flag stays set forever if the worker
@@ -199,15 +321,20 @@ class VlaModel {
     }
   }
 
-  _releaseNativeLogger () {
+  _releaseNativeLogger() {
     if (!this._nativeLoggerActive) return
-    try { binding.releaseLogger() } catch (_) {}
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
     this._nativeLoggerActive = false
   }
 
-  async load ({ backend = 'auto' } = {}) {
+  async load({ backend = 'auto' } = {}) {
     if (backend !== 'auto' && backend !== 'cpu') {
-      throw new QvacErrorAddonVla({ code: ERR_CODES.INVALID_CONFIG, adds: `backend must be 'auto' or 'cpu' (got: ${backend})` })
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_CONFIG,
+        adds: `backend must be 'auto' or 'cpu' (got: ${backend})`
+      })
     }
     return this._run(async () => {
       if (this.state.configLoaded) return
@@ -217,7 +344,7 @@ class VlaModel {
     })
   }
 
-  async _load (backend) {
+  async _load(backend) {
     this.logger.info('Starting model load')
     this._connectNativeLogger()
     const ggufPath = pickPrimaryGgufPath(this._files)
@@ -234,9 +361,10 @@ class VlaModel {
       // Canonical instance lifecycle (mirrors LLM/embed/NMT):
       // createInstance(jsHandle, params, outputCb) — the framework's
       // JobRunner thread consumes runJob() and feeds the outputCb.
-      const backendsDir = (this._config && this._config.backendsDir)
-        ? this._config.backendsDir
-        : path.join(__dirname, 'prebuilds')
+      const backendsDir =
+        this._config && this._config.backendsDir
+          ? this._config.backendsDir
+          : path.join(__dirname, 'prebuilds')
       this._handle = binding.createInstance(
         this,
         { ggufPath, backend, backendsDir },
@@ -252,25 +380,35 @@ class VlaModel {
     } catch (loadError) {
       this.logger.error('Error during model load:', loadError)
       if (this._handle) {
-        try { binding.destroyInstance(this._handle) } catch (_) {}
+        try {
+          binding.destroyInstance(this._handle)
+        } catch (_) {}
         this._handle = null
       }
       // Same logger-leak guard as the missing-file path above.
       this._releaseNativeLogger()
-      throw new QvacErrorAddonVla({ code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS, adds: loadError.message, cause: loadError })
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        adds: loadError.message,
+        cause: loadError
+      })
     }
     this.logger.info('Model load completed successfully')
   }
 
-  get hparams () { return this._hparams }
+  get hparams() {
+    return this._hparams
+  }
 
-  get backendName () { return this._backendName }
+  get backendName() {
+    return this._backendName
+  }
 
-  async run (input) {
+  async run(input) {
     return this._run(() => this._runInternal(input))
   }
 
-  async _runInternal (input) {
+  async _runInternal(input) {
     if (!this._handle) {
       throw new QvacErrorAddonVla({ code: ERR_CODES.INSTANCE_NOT_INITIALIZED })
     }
@@ -340,15 +478,19 @@ class VlaModel {
     return response
   }
 
-  async pause () { /* no-op: SmolVLA inference has no per-step cancel point */ }
+  async pause() {
+    /* no-op: SmolVLA inference has no per-step cancel point */
+  }
 
-  async cancel () {
+  async cancel() {
     if (this._handle) {
-      try { await binding.cancel(this._handle) } catch (_) {}
+      try {
+        await binding.cancel(this._handle)
+      } catch (_) {}
     }
   }
 
-  async unload () {
+  async unload() {
     return this._run(async () => {
       await this.cancel()
       if (this._job.active) {
@@ -362,7 +504,11 @@ class VlaModel {
         } catch (destroyError) {
           this._handle = null
           this._releaseNativeLogger()
-          throw new QvacErrorAddonVla({ code: ERR_CODES.FAILED_TO_DESTROY, adds: destroyError.message, cause: destroyError })
+          throw new QvacErrorAddonVla({
+            code: ERR_CODES.FAILED_TO_DESTROY,
+            adds: destroyError.message,
+            cause: destroyError
+          })
         }
         this._handle = null
       }
@@ -374,7 +520,9 @@ class VlaModel {
     })
   }
 
-  getState () { return this.state }
+  getState() {
+    return this.state
+  }
 }
 
 module.exports = VlaModel

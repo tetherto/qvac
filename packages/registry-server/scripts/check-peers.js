@@ -11,7 +11,7 @@ const RegistryConfig = require('../lib/config')
 const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS, 10) || 30000
 const WAIT_FOR_PEERS_MS = parseInt(process.env.WAIT_FOR_PEERS_MS, 10) || 5000
 
-function parseArgs () {
+function parseArgs() {
   const args = process.argv.slice(2)
   const result = { key: null }
 
@@ -38,7 +38,7 @@ Environment:
   return result
 }
 
-async function checkPeers (options = {}) {
+async function checkPeers(options = {}) {
   const config = new RegistryConfig()
   const key = options.key || config.getRegistryCoreKey()
 
@@ -107,7 +107,7 @@ async function checkPeers (options = {}) {
 
     // Wait additional time to discover more peers
     console.log(`\nWaiting ${WAIT_FOR_PEERS_MS}ms for more peers...`)
-    await new Promise(resolve => setTimeout(resolve, WAIT_FOR_PEERS_MS))
+    await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_PEERS_MS))
 
     // Force sync with peers - wait for acknowledgment
     console.log('Syncing with peers...')
@@ -122,7 +122,7 @@ async function checkPeers (options = {}) {
     // Wait a bit more for async contiguous length updates to propagate
     // Hypercore's contiguousLength lags by 1-2 blocks and updates within ~100ms
     console.log('Waiting for contiguous length updates...')
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
     await core.update()
 
     // Check length after sync
@@ -144,9 +144,7 @@ async function checkPeers (options = {}) {
     } else {
       console.log('Peer details:')
       for (const peer of core.peers) {
-        const peerKey = peer.remotePublicKey
-          ? IdEnc.normalize(peer.remotePublicKey)
-          : 'unknown'
+        const peerKey = peer.remotePublicKey ? IdEnc.normalize(peer.remotePublicKey) : 'unknown'
 
         console.log(`\n  Peer: ${peerKey}`)
         console.log(`    Remote length: ${peer.remoteLength}`)
@@ -175,7 +173,7 @@ async function checkPeers (options = {}) {
 
 if (require.main === module) {
   const args = parseArgs()
-  checkPeers(args).catch(err => {
+  checkPeers(args).catch((err) => {
     console.error('Fatal error:', err.message)
     process.exit(1)
   })

@@ -5,6 +5,8 @@ import { requestSchema, responseSchema } from '@/schemas/common'
 import { methodShapes, type MethodName } from '@/server/rpc/method-shapes'
 import { constantsRegistry } from '@/schemas/constants-registry'
 import { buildModelsRegistry } from './build-models-registry'
+import { buildModelTypeMaps } from './build-model-type-maps'
+import { buildErrorCodes } from './build-error-codes'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
 
@@ -452,7 +454,11 @@ function titleNestedSchemas(root: JsonSchema, rootTitle: string, seenTitles: Set
   }
 }
 
-function toWireJsonSchema(schema: z.ZodType, io: 'input' | 'output', defName: string): JsonSchema {
+export function toWireJsonSchema(
+  schema: z.ZodType,
+  io: 'input' | 'output',
+  defName: string
+): JsonSchema {
   const json = z.toJSONSchema(schema, {
     target: 'draft-2020-12',
     io,
@@ -668,9 +674,13 @@ async function formatJson(value: unknown, fileName: string) {
 export async function renderContractFiles() {
   const { schemaDocument, manifest } = buildContract()
   const modelsRegistry = buildModelsRegistry()
+  const modelTypeMaps = buildModelTypeMaps()
+  const errorCodes = buildErrorCodes()
   return {
     'schema.json': await formatJson(schemaDocument, 'schema.json'),
     'manifest.json': await formatJson(manifest, 'manifest.json'),
-    'models.json': await formatJson(modelsRegistry, 'models.json')
+    'models.json': await formatJson(modelsRegistry, 'models.json'),
+    'model-type-maps.json': await formatJson(modelTypeMaps, 'model-type-maps.json'),
+    'error-codes.json': await formatJson(errorCodes, 'error-codes.json')
   }
 }

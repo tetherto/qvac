@@ -10,11 +10,11 @@ const DEFAULT_SAMPLE_INTERVAL_MS = 25
 // chance to return freed pages to the OS.
 const RECLAIM_SETTLE_MS = 250
 
-function isPositiveNumber (value) {
+function isPositiveNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
-function readRssFromBareOs () {
+function readRssFromBareOs() {
   try {
     const usage = require('bare-os').memoryUsage()
     return usage && isPositiveNumber(usage.rss) ? usage.rss : 0
@@ -23,7 +23,7 @@ function readRssFromBareOs () {
   }
 }
 
-function resolveProcess () {
+function resolveProcess() {
   if (globalThis.process && typeof globalThis.process.memoryUsage === 'function') {
     return globalThis.process
   }
@@ -35,7 +35,7 @@ function resolveProcess () {
   }
 }
 
-function readRssFromProcess () {
+function readRssFromProcess() {
   try {
     const proc = resolveProcess()
     const usage = proc && proc.memoryUsage()
@@ -45,27 +45,27 @@ function readRssFromProcess () {
   }
 }
 
-function readRssBytes () {
+function readRssBytes() {
   return readRssFromBareOs() || readRssFromProcess()
 }
 
-function filterPositive (samples) {
+function filterPositive(samples) {
   return (Array.isArray(samples) ? samples : []).filter(isPositiveNumber)
 }
 
-function sumValues (values) {
+function sumValues(values) {
   return values.reduce((total, value) => total + value, 0)
 }
 
-function maxValue (values) {
+function maxValue(values) {
   return values.reduce((current, value) => (value > current ? value : current), values[0])
 }
 
-function minValue (values) {
+function minValue(values) {
   return values.reduce((current, value) => (value < current ? value : current), values[0])
 }
 
-function summarizeSamples (samples) {
+function summarizeSamples(samples) {
   const values = filterPositive(samples)
   if (values.length === 0) {
     return { count: 0, avgBytes: 0, peakBytes: 0, minBytes: 0 }
@@ -78,18 +78,18 @@ function summarizeSamples (samples) {
   }
 }
 
-function meanOfPositive (values) {
+function meanOfPositive(values) {
   const positives = filterPositive(values)
   if (positives.length === 0) return 0
   return sumValues(positives) / positives.length
 }
 
-function maxWithFloor (values, floor) {
+function maxWithFloor(values, floor) {
   const list = Array.isArray(values) ? values : []
   return list.reduce((current, value) => (value > current ? value : current), floor || 0)
 }
 
-function scheduleSample (state) {
+function scheduleSample(state) {
   state.timer = setTimeout(() => {
     if (!state.running) return
     collectSample(state)
@@ -100,20 +100,20 @@ function scheduleSample (state) {
   }
 }
 
-function collectSample (state) {
+function collectSample(state) {
   const rss = readRssBytes()
   if (rss > 0) state.samples.push(rss)
   return rss
 }
 
-function startSampler (state) {
+function startSampler(state) {
   if (state.running) return
   state.running = true
   collectSample(state)
   scheduleSample(state)
 }
 
-function stopSampler (state) {
+function stopSampler(state) {
   state.running = false
   if (state.timer) {
     clearTimeout(state.timer)
@@ -123,7 +123,7 @@ function stopSampler (state) {
   return summarizeSamples(state.samples)
 }
 
-function createMemorySampler (options) {
+function createMemorySampler(options) {
   const state = {
     intervalMs: (options && options.intervalMs) || DEFAULT_SAMPLE_INTERVAL_MS,
     samples: [],
@@ -134,15 +134,17 @@ function createMemorySampler (options) {
     start: () => startSampler(state),
     stop: () => stopSampler(state),
     sampleOnce: () => collectSample(state),
-    get samples () { return state.samples }
+    get samples() {
+      return state.samples
+    }
   }
 }
 
-function toBytes (value) {
+function toBytes(value) {
   return isPositiveNumber(value) ? value : 0
 }
 
-function computeReclaim (input) {
+function computeReclaim(input) {
   const afterLoad = toBytes(input && input.rssAfterLoadBytes)
   const peak = toBytes(input && input.peakRssBytes)
   const afterUnload = toBytes(input && input.rssAfterUnloadBytes)
@@ -154,18 +156,18 @@ function computeReclaim (input) {
   }
 }
 
-function roundTo (value, digits) {
+function roundTo(value, digits) {
   const factor = 10 ** digits
   return Math.round(value * factor) / factor
 }
 
-function bytesToMb (bytes, digits) {
+function bytesToMb(bytes, digits) {
   if (!isPositiveNumber(bytes)) return 0
   const mb = bytes / BYTES_PER_MB
   return typeof digits === 'number' ? roundTo(mb, digits) : mb
 }
 
-function buildMemorySummary (input) {
+function buildMemorySummary(input) {
   const source = input || {}
   const rssAfterLoadBytes = toBytes(source.rssAfterLoadBytes)
   const peakRssBytes = Math.max(toBytes(source.peakRssBytes), rssAfterLoadBytes)
@@ -183,46 +185,50 @@ function buildMemorySummary (input) {
   }
 }
 
-function toRunResults (runResults) {
+function toRunResults(runResults) {
   return Array.isArray(runResults) ? runResults : []
 }
 
 // Sample-count-weighted mean so runs that contributed more RSS samples carry
 // proportionally more weight; a plain mean-of-means would skew the average when
 // runs have different sample counts.
-function collectWeightedRss (runResults) {
-  return toRunResults(runResults).reduce((acc, result) => {
-    const avg = result && result.avgRssBytes
-    const count = result && result.rssSampleCount
-    if (isPositiveNumber(avg) && isPositiveNumber(count)) {
-      acc.weightedSum += avg * count
-      acc.totalCount += count
-    }
-    return acc
-  }, { weightedSum: 0, totalCount: 0 })
+function collectWeightedRss(runResults) {
+  return toRunResults(runResults).reduce(
+    (acc, result) => {
+      const avg = result && result.avgRssBytes
+      const count = result && result.rssSampleCount
+      if (isPositiveNumber(avg) && isPositiveNumber(count)) {
+        acc.weightedSum += avg * count
+        acc.totalCount += count
+      }
+      return acc
+    },
+    { weightedSum: 0, totalCount: 0 }
+  )
 }
 
-function weightedMeanBytes (runResults) {
+function weightedMeanBytes(runResults) {
   const { weightedSum, totalCount } = collectWeightedRss(runResults)
   return totalCount > 0 ? weightedSum / totalCount : 0
 }
 
-function sumSampleCounts (runResults) {
+function sumSampleCounts(runResults) {
   return toRunResults(runResults).reduce(
-    (total, result) => total + (isPositiveNumber(result && result.rssSampleCount) ? result.rssSampleCount : 0),
+    (total, result) =>
+      total + (isPositiveNumber(result && result.rssSampleCount) ? result.rssSampleCount : 0),
     0
   )
 }
 
-function peakBytesSamples (runResults) {
-  return toRunResults(runResults).map(result => result && result.peakRssBytes)
+function peakBytesSamples(runResults) {
+  return toRunResults(runResults).map((result) => result && result.peakRssBytes)
 }
 
 // Aggregates per-run RSS samplers into a single memory summary. Kept pure (no
 // model/timer access) so the weighting, the after-load fallback and the peak
 // floor are unit-testable; the live gc + settle-then-sample orchestration stays
 // in the benchmark harness.
-function summarizeRunMemory (runResults, context) {
+function summarizeRunMemory(runResults, context) {
   const ctx = context || {}
   const rssAfterLoadBytes = toBytes(ctx.rssAfterLoadBytes)
   return buildMemorySummary({

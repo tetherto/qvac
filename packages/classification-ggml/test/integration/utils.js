@@ -22,11 +22,15 @@ try {
   // No-op fallback for published-tarball runs that lack scripts/.
   createPerformanceReporter = function (opts) {
     return {
-      record () {},
-      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
-      writeReport () {},
-      writeStepSummary () {},
-      get length () { return 0 }
+      record() {},
+      toJSON() {
+        return { schema_version: '1.0', addon: opts.addon, results: [] }
+      },
+      writeReport() {},
+      writeStepSummary() {},
+      get length() {
+        return 0
+      }
     }
   }
 }
@@ -39,7 +43,7 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve(__dirname, '../../test/results/performance-report.json')
 let _exitHookInstalled = false
 
-function _installExitHook () {
+function _installExitHook() {
   if (_exitHookInstalled) return
   _exitHookInstalled = true
   // Final write only triggers the GitHub Step Summary; the JSON file
@@ -52,7 +56,7 @@ function _installExitHook () {
   })
 }
 
-function _flushReport () {
+function _flushReport() {
   if (_perfReporter.length === 0) return
   // Persist after every metric so SIGSEGV mid-suite still leaves a
   // partial report on disk.
@@ -63,7 +67,7 @@ const DESKTOP_TIMEOUT = 120 * 1000
 const MOBILE_TIMEOUT = 600 * 1000
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
-function createLogger () {
+function createLogger() {
   return {
     error: (msg) => console.log('[C++ ERROR]:', msg),
     warn: (msg) => console.log('[C++ WARN]:', msg),
@@ -93,11 +97,11 @@ const MOBILE_MODEL_FILENAME = MODEL_FILENAME + '.bin'
 
 // Regex strips both `file://` and `file:///abs/path` correctly; a
 // `.slice('file://'.length)` would leave a stray leading `/`.
-function _stripFileUrlPrefix (mapped) {
+function _stripFileUrlPrefix(mapped) {
   return mapped.replace(/^file:\/\//, '')
 }
 
-function _resolveMobileAsset (filename) {
+function _resolveMobileAsset(filename) {
   if (!isMobile || typeof global === 'undefined' || !global.assetPaths) {
     return null
   }
@@ -119,14 +123,16 @@ function _resolveMobileAsset (filename) {
  * default. Mobile: throws synchronously when the asset is missing —
  * a rejected promise during load() aborts the bare worklet.
  */
-function resolveModelPath () {
+function resolveModelPath() {
   if (isMobile) {
     const resolved = _resolveMobileAsset(MOBILE_MODEL_FILENAME)
     if (resolved) return resolved
     throw new Error(
       `Mobile asset not found in global.assetPaths: ${MOBILE_MODEL_FILENAME}. ` +
-      "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
-      'and is `test/mobile/testAssets/' + MOBILE_MODEL_FILENAME + '` present?'
+        "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
+        'and is `test/mobile/testAssets/' +
+        MOBILE_MODEL_FILENAME +
+        '` present?'
     )
   }
 
@@ -143,28 +149,31 @@ function resolveModelPath () {
 
 // Mobile: throw synchronously on miss for the same reason as
 // resolveModelPath() — see comment above.
-function _resolveImagePath (name) {
+function _resolveImagePath(name) {
   if (isMobile) {
     const resolved = _resolveMobileAsset(name)
     if (resolved) return resolved
-    const known = (typeof global !== 'undefined' && global.assetPaths)
-      ? Object.keys(global.assetPaths).slice(0, 8).join(', ')
-      : '(no global.assetPaths)'
+    const known =
+      typeof global !== 'undefined' && global.assetPaths
+        ? Object.keys(global.assetPaths).slice(0, 8).join(', ')
+        : '(no global.assetPaths)'
     throw new Error(
       `Mobile test image not found in global.assetPaths: ${name}. ` +
-      "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
-      'and is `test/mobile/testAssets/' + name + '` present? ' +
-      `assetPaths sample keys: [${known}]`
+        "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
+        'and is `test/mobile/testAssets/' +
+        name +
+        '` present? ' +
+        `assetPaths sample keys: [${known}]`
     )
   }
   return path.join(IMAGE_DIR, name)
 }
 
-function loadImage (name) {
+function loadImage(name) {
   return fs.readFileSync(_resolveImagePath(name))
 }
 
-function makeClassifier (overrides) {
+function makeClassifier(overrides) {
   const opts = {
     modelPath: resolveModelPath(),
     logger: createLogger()
@@ -175,29 +184,37 @@ function makeClassifier (overrides) {
 
 // Errors swallowed so a failing teardown can't mask the assertion
 // that triggered it.
-async function cleanupClassifier (classifier) {
+async function cleanupClassifier(classifier) {
   if (!classifier) return
   try {
     await classifier.unload()
   } catch (_) {}
 }
 
-function recordMetric (label, totalTimeMs, input) {
-  _perfReporter.record(label, {
-    total_time_ms: Math.round(totalTimeMs)
-  }, {
-    input: input || null
-  })
+function recordMetric(label, totalTimeMs, input) {
+  _perfReporter.record(
+    label,
+    {
+      total_time_ms: Math.round(totalTimeMs)
+    },
+    {
+      input: input || null
+    }
+  )
   _installExitHook()
   _flushReport()
 }
 
-function recordLoadTime (label, loadTimeMs) {
-  _perfReporter.record(label, {
-    total_time_ms: Math.round(loadTimeMs)
-  }, {
-    input: 'load'
-  })
+function recordLoadTime(label, loadTimeMs) {
+  _perfReporter.record(
+    label,
+    {
+      total_time_ms: Math.round(loadTimeMs)
+    },
+    {
+      input: 'load'
+    }
+  )
   _installExitHook()
   _flushReport()
 }

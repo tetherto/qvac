@@ -1,4 +1,4 @@
-import { createExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -21,16 +21,15 @@ import {
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q8_0,
-  PARAKEET_CTC_0_6B_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  PARAKEET_EOU_120M_V1_Q8_0,
+  PARAKEET_TDT_0_6B_V3_Q4_0,
+  PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
+  PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
+  GROOT_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  SALAMANDRATA_2B_INST_Q4,
-  AFRICAN_4B_TRANSLATION_Q4_K_M,
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
@@ -186,6 +185,15 @@ resources.define('vla-pi05', {
   config: { backend: 'cpu' }
 })
 
+// Desktop-only resource. Uses the smaller q5 profile (~2.74 GB) to keep load
+// time down. Not smoke-tagged (too heavy for the quick smoke path), and mobile
+// does not define this resource, so the mobile suite skips the groot tests.
+resources.define('vla-groot', {
+  constant: GROOT_Q5_VF16,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define('classification', {
@@ -259,27 +267,6 @@ resources.define('bergamot-es-it-pivot', {
   }
 })
 
-resources.define('salamandra', {
-  constant: SALAMANDRATA_2B_INST_Q4,
-  type: 'llamacpp-completion'
-})
-
-resources.define('afriquegemma', {
-  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    tools: true,
-    ctx_size: 2048,
-    top_k: 1,
-    top_p: 1,
-    temp: 0,
-    repeat_penalty: 1,
-    seed: 42,
-    predict: 256,
-    stop_sequences: ['\n']
-  }
-})
-
 resources.define('tts-chatterbox', {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: 'tts-ggml',
@@ -348,25 +335,25 @@ resources.define('tts-supertonic-enhanced', {
 })
 
 resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
+  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q8_0,
+  constant: PARAKEET_CTC_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
+  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  constant: PARAKEET_EOU_120M_V1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
@@ -387,7 +374,7 @@ resources.define('vision', {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
+    ctx_size: 4096,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })
@@ -525,6 +512,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    ),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath

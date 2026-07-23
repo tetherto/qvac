@@ -46,6 +46,17 @@ export default {
       packageManager: 'npm',
       packageScript: 'package:electron'
     },
+    snap: {
+      runtime: 'electron',
+      entry: './app/resources/app/dist/tests/electron/consumer.js',
+      appDir: '.',
+      snapName: 'qvac-sdk-e2e',
+      appCommand: 'qvac-sdk-e2e',
+      artifactPath: './snap/dist/qvac-sdk-e2e.snap',
+      snapConfigDir: './app/resources/app',
+      packageManager: 'npm',
+      packageScript: 'package:snap'
+    },
     mobile: {
       platforms: ['ios', 'android'],
       entry: './dist/tests/mobile/consumer.js',

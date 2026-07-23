@@ -1,0 +1,241 @@
+name: "SDK Device Farm - Select Pool"
+description: >-
+  Selects a single AWS Device Farm device pool from a candidate list. When a
+  pool name is given, that pool is used as-is without touching Device Farm. When
+  no name is given, a random candidate is chosen, using the device availability
+  hint (via ListDevices) only as a soft preference — public-device availability
+  is a likelihood, not a guarantee, so it never fails on it. The downstream
+  "wait-device-farm-running" gate remains the real readiness arbiter. Output is
+  a single-element JSON array suitable for a matrix.
+
+inputs:
+  pools:
+    description: >-
+      JSON array of candidate device pools [{name, arn, r?}]. The optional "r"
+      flag (default true) controls random eligibility: entries with "r": false
+      are excluded from random selection and reachable only by explicit
+      pool-name (e.g. manual-only devices), so PR/random runs never land on them.
+    required: true
+  pool-name:
+    description: >-
+      Explicit pool name to select. When set, that pool is used as-is (no
+      availability check) and may be any candidate, including "r": false
+      entries. When empty, a random candidate is chosen among the
+      random-eligible pools (r != false), with availability as a soft preference.
+    required: false
+    default: ""
+
+outputs:
+  pool:
+    description: "Single-element JSON array with the selected pool: [{name, arn}]."
+    value: ${{ steps.select.outputs.pool }}
+  name:
+    description: "Selected pool name."
+    value: ${{ steps.select.outputs.name }}
+  arn:
+    description: "Selected pool ARN."
+    value: ${{ steps.select.outputs.arn }}
+  availability:
+    description: "Selected pool availability at scheduling time (HIGHLY_AVAILABLE | AVAILABLE | BUSY | TEMPORARY_NOT_AVAILABLE | UNKNOWN)."
+    value: ${{ steps.select.outputs.availability }}
+
+runs:
+  using: composite
+  steps:
+    - name: Select device pool
+      id: select
+      shell: bash
+      env:
+        POOLS: ${{ inputs.pools }}
+        POOL_NAME: ${{ inputs.pool-name }}
+      run: |
+        set -euo pipefail
+
+        # Validate the candidate list up front so a malformed variable fails
+        # fast with a clear message instead of an obscure jq/matrix error.
+        if ! echo "$POOLS" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+          echo "::error::device pools input is not a non-empty JSON array: $POOLS"
+          exit 1
+        fi
+
+        emit_pool() {
+          local name="$1" arn="$2" reason="$3" availability="${4:-UNKNOWN}"
+          local json
+          json=$(jq -cn --arg n "$name" --arg a "$arn" '[{name: $n, arn: $a}]')
+          {
+            echo "pool=$json"
+            echo "name=$name"
+            echo "arn=$arn"
+            echo "availability=$availability"
+          } >> "$GITHUB_OUTPUT"
+          echo "Selected device pool: '$name' ($reason)"
+          echo "  arn: $arn"
+          {
+            echo "### Selected device pool: \`$name\`"
+            echo ""
+            echo "- reason: $reason"
+            echo "- availability: $availability"
+            echo "- arn: \`$arn\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+        }
+
+        # --- Named pool: no Device Farm calls, use the given pool as-is --------
+        if [ -n "$POOL_NAME" ]; then
+          MATCH=$(echo "$POOLS" | jq -c --arg n "$POOL_NAME" '[.[] | select(.name == $n)]')
+          if [ "$(echo "$MATCH" | jq 'length')" -eq 0 ]; then
+            echo "::error::device pool '$POOL_NAME' not found in candidate list"
+            echo "Available pools:"
+            echo "$POOLS" | jq -r '.[].name | "  - " + .'
+            exit 1
+          fi
+          NAME=$(echo "$MATCH" | jq -r '.[0].name')
+          ARN=$(echo "$MATCH" | jq -r '.[0].arn')
+          emit_pool "$NAME" "$ARN" "named: selected by name" "UNKNOWN"
+          exit 0
+        fi
+
+        # --- No name given: pick a random pool, availability as soft hint -----
+        # For public devices, availability is a *likelihood* over the fleet of a
+        # model+OS, not a per-unit free/busy flag, so we use it only to prefer a
+        # candidate more likely to start quickly and never fail on it: Device
+        # Farm queues the run until a unit frees up, and wait-device-farm-running
+        # is the real readiness/timeout arbiter.
+
+        # Resolve the device ARNs referenced by a pool's rules (GetDevicePool),
+        # returned as a compact JSON array of strings. Pools defined by explicit
+        # device ARNs expose them directly; attribute-based pools (MODEL/OS
+        # filters) do not, yielding "[]" so the availability hint is skipped.
+        # AWS errors are surfaced, not swallowed.
+        resolve_device_arns() {
+          local pool_arn="$1" rules err_file
+          err_file="$(mktemp)"
+          if ! rules=$(aws devicefarm get-device-pool --arn "$pool_arn" --query 'devicePool.rules' --output json 2>"$err_file"); then
+            echo "    get-device-pool failed: $(tr '\n' ' ' <"$err_file")" >&2
+            rm -f "$err_file"
+            echo "[]"
+            return 0
+          fi
+          rm -f "$err_file"
+          echo "$rules" | jq -r '.. | strings' 2>/dev/null \
+            | { grep -oE 'arn:aws:devicefarm:[a-z0-9-]+:[0-9]*:device:[A-Za-z0-9_/-]+' || true; } \
+            | sort -u \
+            | jq -Rsc 'split("\n") | map(select(length > 0))'
+        }
+
+        # Best availability across a pool's device ARNs via ListDevices (the OIDC
+        # role is granted ListDevices but not GetDevice). A pool is considered
+        # available if ANY of its devices is; returns a single token, or UNKNOWN
+        # on any failure/denial. Priority: HIGHLY_AVAILABLE > AVAILABLE > BUSY >
+        # TEMPORARY_NOT_AVAILABLE.
+        get_availability() {
+          local arns_json="$1" filters devices err_file
+          err_file="$(mktemp)"
+          filters=$(jq -cn --argjson v "$arns_json" '[{attribute: "ARN", operator: "IN", values: $v}]')
+          if devices=$(aws devicefarm list-devices --filters "$filters" --query 'devices[].{name: name, os: os, availability: availability}' --output json 2>"$err_file"); then
+            rm -f "$err_file"
+            # Per-device breakdown to the log (stderr) so the raw Device Farm
+            # response is visible; stdout stays the single reduced token.
+            echo "$devices" | jq -r '.[] | "      \u2022 " + (.name // "?") + " (os " + (.os // "?") + "): " + (.availability // "null")' >&2
+            echo "$devices" | jq -r '
+              [.[].availability] | map(select(. != null)) as $a
+              | if   ($a | index("HIGHLY_AVAILABLE"))        != null then "HIGHLY_AVAILABLE"
+                elif ($a | index("AVAILABLE"))               != null then "AVAILABLE"
+                elif ($a | index("BUSY"))                    != null then "BUSY"
+                elif ($a | index("TEMPORARY_NOT_AVAILABLE")) != null then "TEMPORARY_NOT_AVAILABLE"
+                else "UNKNOWN" end'
+          else
+            echo "    list-devices failed: $(tr '\n' ' ' <"$err_file")" >&2
+            rm -f "$err_file"
+            echo "UNKNOWN"
+          fi
+        }
+
+        # Random selection considers only random-eligible pools: entries with
+        # "r": false (e.g. manual-only devices) are excluded here and reachable
+        # solely via an explicit pool-name above.
+        RANDOM_POOLS=$(echo "$POOLS" | jq -c '[.[] | select(.r != false)]')
+        if [ "$(echo "$RANDOM_POOLS" | jq 'length')" -eq 0 ]; then
+          echo "::error::no random-eligible device pool (every candidate has \"r\": false); pass a pool-name to select one explicitly"
+          exit 1
+        fi
+
+        COUNT=$(echo "$RANDOM_POOLS" | jq 'length')
+        mapfile -t NAMES < <(echo "$RANDOM_POOLS" | jq -r '.[].name')
+        mapfile -t ARNS < <(echo "$RANDOM_POOLS" | jq -r '.[].arn')
+
+        # Manual-only pools (r=false) are excluded from random selection; they
+        # are probed and listed after the random candidates for transparency.
+        mapfile -t EXCL_NAMES < <(echo "$POOLS" | jq -r '.[] | select(.r == false) | .name')
+        mapfile -t EXCL_ARNS < <(echo "$POOLS" | jq -r '.[] | select(.r == false) | .arn')
+
+        echo "Probing $COUNT random-eligible device pool(s) (availability = soft preference)..."
+
+        # Probe every candidate first so the full availability picture for all
+        # random-eligible pools is visible in the log, then choose. Candidates
+        # are visited in a random order so load spreads across pools/devices
+        # over time, and the first one visited is the best-effort fallback.
+        HIGH_IDX=""
+        AVAIL_IDX=""
+        FALLBACK_IDX=""
+        declare -a AVAIL_BY_IDX
+
+        for i in $(seq 0 $((COUNT - 1)) | shuf); do
+          NAME="${NAMES[$i]}"
+          ARN="${ARNS[$i]}"
+
+          if [ -z "$FALLBACK_IDX" ]; then
+            FALLBACK_IDX="$i"
+          fi
+
+          DEVICE_ARNS=$(resolve_device_arns "$ARN")
+          if [ "$(echo "$DEVICE_ARNS" | jq 'length')" -eq 0 ]; then
+            echo "  - '$NAME': no device ARN in pool rules; skipping availability hint"
+            AVAIL_BY_IDX[$i]="UNKNOWN"
+            continue
+          fi
+
+          echo "  - '$NAME':"
+          AVAIL=$(get_availability "$DEVICE_ARNS")
+          AVAIL_BY_IDX[$i]="$AVAIL"
+
+          if [ "$AVAIL" = "HIGHLY_AVAILABLE" ] && [ -z "$HIGH_IDX" ]; then
+            HIGH_IDX="$i"
+          fi
+          if [ "$AVAIL" = "AVAILABLE" ] && [ -z "$AVAIL_IDX" ]; then
+            AVAIL_IDX="$i"
+          fi
+        done
+
+        # List manual-only pools (r=false) with their availability, marked as
+        # skipped — they exist and are selectable only via an explicit pool-name.
+        # The per-device breakdown from get_availability is suppressed here to
+        # keep each excluded pool on a single, compact line.
+        if [ "${#EXCL_NAMES[@]}" -gt 0 ]; then
+          echo ""
+          echo "Excluded from random (${#EXCL_NAMES[@]} manual-only pool(s), r=false; selectable by name):"
+          for j in "${!EXCL_NAMES[@]}"; do
+            E_ARNS=$(resolve_device_arns "${EXCL_ARNS[$j]}")
+            if [ "$(echo "$E_ARNS" | jq 'length')" -eq 0 ]; then
+              echo "  - '${EXCL_NAMES[$j]}': UNKNOWN (skipped)"
+            else
+              E_AVAIL=$(get_availability "$E_ARNS" 2>/dev/null)
+              echo "  - '${EXCL_NAMES[$j]}': $E_AVAIL (skipped)"
+            fi
+          done
+        fi
+
+        echo ""
+
+        # Prefer HIGHLY_AVAILABLE, then AVAILABLE. Availability is only a hint for
+        # public devices, so if none report ready proceed with a best-effort pick
+        # and warn loudly — Device Farm queues the run and wait-device-farm-running
+        # fails fast (short start-timeout) so a busy fleet surfaces quickly.
+        if [ -n "$HIGH_IDX" ]; then
+          emit_pool "${NAMES[$HIGH_IDX]}" "${ARNS[$HIGH_IDX]}" "random: HIGHLY_AVAILABLE" "HIGHLY_AVAILABLE"
+        elif [ -n "$AVAIL_IDX" ]; then
+          emit_pool "${NAMES[$AVAIL_IDX]}" "${ARNS[$AVAIL_IDX]}" "random: AVAILABLE" "AVAILABLE"
+        else
+          SEL_AVAIL="${AVAIL_BY_IDX[$FALLBACK_IDX]:-UNKNOWN}"
+          echo "::warning::Device Farm busy: no candidate pool reported AVAILABLE/HIGHLY_AVAILABLE (best pick '${NAMES[$FALLBACK_IDX]}' is $SEL_AVAIL). Proceeding, but the run will fail fast if no device starts within the start-timeout."
+          emit_pool "${NAMES[$FALLBACK_IDX]}" "${ARNS[$FALLBACK_IDX]}" "random: best-effort ($SEL_AVAIL)" "$SEL_AVAIL"
+        fi

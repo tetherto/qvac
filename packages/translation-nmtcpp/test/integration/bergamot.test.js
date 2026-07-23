@@ -64,162 +64,182 @@ const BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/bergamot.quality.json
 
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
-    test(`Bergamot backend [GPU device ${gpuIdx}] - English to Italian translation`, { timeout: TEST_TIMEOUT }, async function (t) {
-      const modelDir = await ensureBergamotModel()
-      const allFiles = fs.readdirSync(modelDir)
-      const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
-      const vocabFile = allFiles.find(f => f.includes('.spm'))
+    test(
+      `Bergamot backend [GPU device ${gpuIdx}] - English to Italian translation`,
+      { timeout: TEST_TIMEOUT },
+      async function (t) {
+        const modelDir = await ensureBergamotModel()
+        const allFiles = fs.readdirSync(modelDir)
+        const modelFile = allFiles.find((f) => f.includes('.intgemm') && f.includes('.bin'))
+        const vocabFile = allFiles.find((f) => f.includes('.spm'))
 
-      const devices = await discoverGpuDevices()
-      const device = devices[gpuIdx]
+        const devices = await discoverGpuDevices()
+        const device = devices[gpuIdx]
 
-      if (!device) {
-        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
-        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
-        return
-      }
+        if (!device) {
+          t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
+          t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+          return
+        }
 
-      const label = `[GPU:${device.index} ${device.name}]`
-      t.ok(modelDir, `${label} Bergamot model path should be available`)
-      t.comment(`${label} Model directory: ` + modelDir)
-      t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-      t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
+        const label = `[GPU:${device.index} ${device.name}]`
+        t.ok(modelDir, `${label} Bergamot model path should be available`)
+        t.comment(`${label} Model directory: ` + modelDir)
+        t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+        t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
 
-      const fullVocabPath = path.join(modelDir, vocabFile)
-      const logger = createLogger()
-      const perfCollector = createPerformanceCollector()
-      let model
+        const fullVocabPath = path.join(modelDir, vocabFile)
+        const logger = createLogger()
+        const perfCollector = createPerformanceCollector()
+        let model
 
-      try {
-        model = new TranslationNmtcpp({
-          files: {
-            model: path.join(modelDir, modelFile),
-            srcVocab: fullVocabPath,
-            dstVocab: fullVocabPath
-          },
-          params: { srcLang: 'en', dstLang: 'it' },
-          config: {
-            modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-            beamsize: 1,
-            normalize: 1,
-            use_gpu: true,
-            gpu_device: device.index
-          },
-          logger,
-          opts: { stats: true }
-        })
-        model.logger.setLevel('debug')
-        await model.load()
-        t.pass(`${label} Bergamot model loaded successfully`)
+        try {
+          model = new TranslationNmtcpp({
+            files: {
+              model: path.join(modelDir, modelFile),
+              srcVocab: fullVocabPath,
+              dstVocab: fullVocabPath
+            },
+            params: { srcLang: 'en', dstLang: 'it' },
+            config: {
+              modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+              beamsize: 1,
+              normalize: 1,
+              use_gpu: true,
+              gpu_device: device.index
+            },
+            logger,
+            opts: { stats: true }
+          })
+          model.logger.setLevel('debug')
+          await model.load()
+          t.pass(`${label} Bergamot model loaded successfully`)
 
-        const testSentence = 'Hello, how are you?'
-        t.comment(`${label} Translating: "` + testSentence + '"')
+          const testSentence = 'Hello, how are you?'
+          t.comment(`${label} Translating: "` + testSentence + '"')
 
-        perfCollector.start()
-        const response = await model.run(testSentence)
-        await response
-          .onUpdate(data => { perfCollector.onToken(data) })
-          .await()
+          perfCollector.start()
+          const response = await model.run(testSentence)
+          await response
+            .onUpdate((data) => {
+              perfCollector.onToken(data)
+            })
+            .await()
 
-        const addonStats = response.stats || {}
-        t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
-        const metrics = perfCollector.getMetrics(testSentence, addonStats)
-        t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
-          fixturePath: BERGAMOT_FIXTURE,
-          srcLang: 'en',
-          dstLang: 'it'
-        }))
+          const addonStats = response.stats || {}
+          t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+          const metrics = perfCollector.getMetrics(testSentence, addonStats)
+          t.comment(
+            formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
+              fixturePath: BERGAMOT_FIXTURE,
+              srcLang: 'en',
+              dstLang: 'it'
+            })
+          )
 
-        t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
-        t.pass(`${label} Bergamot translation completed successfully`)
-      } catch (e) {
-        t.fail(`${label} Bergamot test failed: ` + e.message)
-        throw e
-      } finally {
-        if (model) {
-          try { await model.unload() } catch (e) {
-            t.comment(`${label} unload() error: ` + e.message)
+          t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+          t.pass(`${label} Bergamot translation completed successfully`)
+        } catch (e) {
+          t.fail(`${label} Bergamot test failed: ` + e.message)
+          throw e
+        } finally {
+          if (model) {
+            try {
+              await model.unload()
+            } catch (e) {
+              t.comment(`${label} unload() error: ` + e.message)
+            }
           }
         }
       }
-    })
+    )
   }
 }
 
 // CPU test (always runs)
-test('Bergamot backend [CPU] - English to Italian translation', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const label = '[CPU]'
-  t.ok(modelDir, `${label} Bergamot model path should be available`)
-  t.comment(`${label} Model directory: ` + modelDir)
-  t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+test(
+  'Bergamot backend [CPU] - English to Italian translation',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const label = '[CPU]'
+    t.ok(modelDir, `${label} Bergamot model path should be available`)
+    t.comment(`${label} Model directory: ` + modelDir)
+    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
 
-  const allFiles = fs.readdirSync(modelDir)
-  const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
-  const vocabFile = allFiles.find(f => f.includes('.spm'))
+    const allFiles = fs.readdirSync(modelDir)
+    const modelFile = allFiles.find((f) => f.includes('.intgemm') && f.includes('.bin'))
+    const vocabFile = allFiles.find((f) => f.includes('.spm'))
 
-  t.ok(modelFile, `${label} model file should exist`)
-  t.ok(vocabFile, `${label} vocab file should exist`)
+    t.ok(modelFile, `${label} model file should exist`)
+    t.ok(vocabFile, `${label} vocab file should exist`)
 
-  const fullVocabPath = path.join(modelDir, vocabFile)
-  const logger = createLogger()
-  const perfCollector = createPerformanceCollector()
-  let model
+    const fullVocabPath = path.join(modelDir, vocabFile)
+    const logger = createLogger()
+    const perfCollector = createPerformanceCollector()
+    let model
 
-  t.comment(`${label} Testing with use_gpu: false`)
+    t.comment(`${label} Testing with use_gpu: false`)
 
-  try {
-    model = new TranslationNmtcpp({
-      files: {
-        model: path.join(modelDir, modelFile),
-        srcVocab: fullVocabPath,
-        dstVocab: fullVocabPath
-      },
-      params: { srcLang: 'en', dstLang: 'it' },
-      config: {
-        modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-        beamsize: 1,
-        normalize: 1,
-        use_gpu: false
-      },
-      logger,
-      opts: { stats: true }
-    })
-    model.logger.setLevel('debug')
-    await model.load()
-    t.pass(`${label} Bergamot model loaded successfully`)
+    try {
+      model = new TranslationNmtcpp({
+        files: {
+          model: path.join(modelDir, modelFile),
+          srcVocab: fullVocabPath,
+          dstVocab: fullVocabPath
+        },
+        params: { srcLang: 'en', dstLang: 'it' },
+        config: {
+          modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+          beamsize: 1,
+          normalize: 1,
+          use_gpu: false
+        },
+        logger,
+        opts: { stats: true }
+      })
+      model.logger.setLevel('debug')
+      await model.load()
+      t.pass(`${label} Bergamot model loaded successfully`)
 
-    const testSentence = 'Hello, how are you?'
-    t.comment(`${label} Translating: "` + testSentence + '"')
+      const testSentence = 'Hello, how are you?'
+      t.comment(`${label} Translating: "` + testSentence + '"')
 
-    perfCollector.start()
-    const response = await model.run(testSentence)
-    await response
-      .onUpdate(data => { perfCollector.onToken(data) })
-      .await()
+      perfCollector.start()
+      const response = await model.run(testSentence)
+      await response
+        .onUpdate((data) => {
+          perfCollector.onToken(data)
+        })
+        .await()
 
-    const addonStats = response.stats || {}
-    t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
-    const metrics = perfCollector.getMetrics(testSentence, addonStats)
-    t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
-      fixturePath: BERGAMOT_FIXTURE,
-      srcLang: 'en',
-      dstLang: 'it'
-    }))
+      const addonStats = response.stats || {}
+      t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+      const metrics = perfCollector.getMetrics(testSentence, addonStats)
+      t.comment(
+        formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
+          fixturePath: BERGAMOT_FIXTURE,
+          srcLang: 'en',
+          dstLang: 'it'
+        })
+      )
 
-    t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
-    t.pass(`${label} Bergamot translation completed successfully`)
-  } catch (e) {
-    t.fail(`${label} Bergamot test failed: ` + e.message)
-    throw e
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (e) {
-        t.comment(`${label} unload() error: ` + e.message)
+      t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+      t.pass(`${label} Bergamot translation completed successfully`)
+    } catch (e) {
+      t.fail(`${label} Bergamot test failed: ` + e.message)
+      throw e
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (e) {
+          t.comment(`${label} unload() error: ` + e.message)
+        }
       }
     }
   }
-})
+)
 
 // ===========================================================================
 // Standalone Bergamot coverage (QVAC-19836)
@@ -236,10 +256,10 @@ test('Bergamot backend [CPU] - English to Italian translation', { timeout: TEST_
  * Builds standalone Bergamot constructor args for the EN->IT model on disk.
  * Centralises the model/vocab file discovery the per-test bodies share.
  */
-function createStandaloneBergamotArgs (modelDir, logger, extraConfig = {}) {
+function createStandaloneBergamotArgs(modelDir, logger, extraConfig = {}) {
   const allFiles = fs.readdirSync(modelDir)
-  const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
-  const vocabFile = allFiles.find(f => f.includes('.spm'))
+  const modelFile = allFiles.find((f) => f.includes('.intgemm') && f.includes('.bin'))
+  const vocabFile = allFiles.find((f) => f.includes('.spm'))
   const fullVocabPath = path.join(modelDir, vocabFile)
 
   return {
@@ -269,32 +289,38 @@ function createStandaloneBergamotArgs (modelDir, logger, extraConfig = {}) {
 // today, so a standalone-batch regression would ship uncaught.
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - standalone batch translation via runBatch()', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  let model
+test(
+  'Bergamot [CPU] - standalone batch translation via runBatch()',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    let model
 
-  try {
-    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-    await model.load()
+    try {
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
 
-    const inputs = ['Hello, how are you?', 'The weather is beautiful today.']
-    const results = await model.runBatch(inputs)
+      const inputs = ['Hello, how are you?', 'The weather is beautiful today.']
+      const results = await model.runBatch(inputs)
 
-    t.ok(Array.isArray(results), 'batch results should be an array')
-    t.is(results.length, inputs.length, `should return ${inputs.length} translations`)
-    for (let i = 0; i < results.length; i++) {
-      t.ok(typeof results[i] === 'string', `result[${i}] should be a string`)
-      t.ok(results[i].length > 0, `result[${i}] should not be empty`)
-      t.comment(`  "${inputs[i]}" -> "${results[i]}"`)
-    }
-    t.pass('Standalone Bergamot batch translation completed')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.ok(Array.isArray(results), 'batch results should be an array')
+      t.is(results.length, inputs.length, `should return ${inputs.length} translations`)
+      for (let i = 0; i < results.length; i++) {
+        t.ok(typeof results[i] === 'string', `result[${i}] should be a string`)
+        t.ok(results[i].length > 0, `result[${i}] should not be empty`)
+        t.comment(`  "${inputs[i]}" -> "${results[i]}"`)
+      }
+      t.pass('Standalone Bergamot batch translation completed')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // #4 — Load -> use -> unload -> reload -> use cycle
@@ -317,7 +343,11 @@ test('Bergamot [CPU] - load, unload, reload cycle', { timeout: TEST_TIMEOUT }, a
 
     const response1 = await model.run('The meeting starts at 10 AM.')
     let output1 = ''
-    await response1.onUpdate(data => { output1 += data }).await()
+    await response1
+      .onUpdate((data) => {
+        output1 += data
+      })
+      .await()
     t.ok(output1.length > 0, `First translation produced output: "${output1}"`)
 
     await model.unload()
@@ -328,13 +358,19 @@ test('Bergamot [CPU] - load, unload, reload cycle', { timeout: TEST_TIMEOUT }, a
 
     const response2 = await model.run('Please pass the salt.')
     let output2 = ''
-    await response2.onUpdate(data => { output2 += data }).await()
+    await response2
+      .onUpdate((data) => {
+        output2 += data
+      })
+      .await()
     t.ok(output2.length > 0, `Second translation after reload produced output: "${output2}"`)
 
     t.pass('Load -> unload -> reload cycle completed successfully')
   } finally {
     if (model) {
-      try { await model.unload() } catch (_) {}
+      try {
+        await model.unload()
+      } catch (_) {}
     }
   }
 })
@@ -366,7 +402,9 @@ test('Bergamot [CPU] - run after unload throws', { timeout: TEST_TIMEOUT }, asyn
     }
   } finally {
     if (model) {
-      try { await model.unload() } catch (_) {}
+      try {
+        await model.unload()
+      } catch (_) {}
     }
   }
 })
@@ -381,30 +419,36 @@ test('Bergamot [CPU] - run after unload throws', { timeout: TEST_TIMEOUT }, asyn
 // backend-introspection getters are proven to reset on teardown.
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - backend reports Unloaded after unload', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  let model
+test(
+  'Bergamot [CPU] - backend reports Unloaded after unload',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    let model
 
-  try {
-    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-    await model.load()
+    try {
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
 
-    const loadedBackend = model.getActiveBackendName()
-    t.comment(`Backend while loaded: ${loadedBackend}`)
-    t.comment(`Backend description while loaded: "${model.getActiveBackendDescription()}"`)
-    t.not(loadedBackend, 'Unloaded', 'backend should not report Unloaded while loaded')
+      const loadedBackend = model.getActiveBackendName()
+      t.comment(`Backend while loaded: ${loadedBackend}`)
+      t.comment(`Backend description while loaded: "${model.getActiveBackendDescription()}"`)
+      t.not(loadedBackend, 'Unloaded', 'backend should not report Unloaded while loaded')
 
-    await model.unload()
+      await model.unload()
 
-    t.is(model.getActiveBackendName(), 'Unloaded', 'backend reports Unloaded after unload')
-    t.is(model.getActiveBackendDescription(), '', 'backend description is empty after unload')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.is(model.getActiveBackendName(), 'Unloaded', 'backend reports Unloaded after unload')
+      t.is(model.getActiveBackendDescription(), '', 'backend description is empty after unload')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // #9 — Streaming onUpdate fires at least once
@@ -414,28 +458,39 @@ test('Bergamot [CPU] - backend reports Unloaded after unload', { timeout: TEST_T
 // incremental progress (typing indicator).
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - streaming onUpdate fires at least once', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  let model
+test(
+  'Bergamot [CPU] - streaming onUpdate fires at least once',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    let model
 
-  try {
-    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-    await model.load()
+    try {
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
 
-    let updateCount = 0
-    let output = ''
-    const response = await model.run('Good morning, how are you?')
-    await response.onUpdate(data => { updateCount++; output += data }).await()
+      let updateCount = 0
+      let output = ''
+      const response = await model.run('Good morning, how are you?')
+      await response
+        .onUpdate((data) => {
+          updateCount++
+          output += data
+        })
+        .await()
 
-    t.ok(updateCount >= 1, `onUpdate fired ${updateCount} time(s) (expected >= 1)`)
-    t.ok(output.length > 0, 'streamed output is not empty')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.ok(updateCount >= 1, `onUpdate fired ${updateCount} time(s) (expected >= 1)`)
+      t.ok(output.length > 0, 'streamed output is not empty')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // #10 — Stats object has the expected shape
@@ -445,32 +500,39 @@ test('Bergamot [CPU] - streaming onUpdate fires at least once', { timeout: TEST_
 // it. We assert shape only — never specific values (hardware varies).
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - stats object has expected shape', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  let model
+test(
+  'Bergamot [CPU] - stats object has expected shape',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    let model
 
-  try {
-    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-    await model.load()
+    try {
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
 
-    const response = await model.run('Hello world')
-    await response.onUpdate(() => {}).await()
+      const response = await model.run('Hello world')
+      await response.onUpdate(() => {}).await()
 
-    const stats = response.stats
-    t.ok(stats && typeof stats === 'object', 'stats is an object')
-    t.comment('Stats keys: ' + Object.keys(stats || {}).join(', '))
-    t.ok(typeof stats.totalTokens === 'number', 'stats.totalTokens is a number')
-    const hasTiming = typeof stats.totalTime === 'number' ||
-      typeof stats.decodeTime === 'number' ||
-      Object.keys(stats).some(k => k.endsWith('TPS'))
-    t.ok(hasTiming, 'stats has a timing field (totalTime/decodeTime/TPS)')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      const stats = response.stats
+      t.ok(stats && typeof stats === 'object', 'stats is an object')
+      t.comment('Stats keys: ' + Object.keys(stats || {}).join(', '))
+      t.ok(typeof stats.totalTokens === 'number', 'stats.totalTokens is a number')
+      const hasTiming =
+        typeof stats.totalTime === 'number' ||
+        typeof stats.decodeTime === 'number' ||
+        Object.keys(stats).some((k) => k.endsWith('TPS'))
+      t.ok(hasTiming, 'stats has a timing field (totalTime/decodeTime/TPS)')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // #14 — Multi-cycle load/unload stress (accumulation leak catcher)
@@ -481,40 +543,50 @@ test('Bergamot [CPU] - stats object has expected shape', { timeout: TEST_TIMEOUT
 // so the allocator can reclaim pages before the next load.
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  const CYCLES = 6
+test(
+  'Bergamot [CPU] - multi-cycle load/unload stress',
+  { timeout: TEST_TIMEOUT * 2 },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    const CYCLES = 6
 
-  for (let i = 1; i <= CYCLES; i++) {
-    let model
-    const started = Date.now()
-    try {
-      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-      await model.load()
+    for (let i = 1; i <= CYCLES; i++) {
+      let model
+      const started = Date.now()
+      try {
+        model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+        await model.load()
 
-      const response = await model.run('Thank you very much')
-      let output = ''
-      await response.onUpdate(data => { output += data }).await()
-      t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
-    } finally {
-      if (model) {
-        try { await model.unload() } catch (e) {
-          t.comment(`cycle ${i} unload error: ${e.message}`)
+        const response = await model.run('Thank you very much')
+        let output = ''
+        await response
+          .onUpdate((data) => {
+            output += data
+          })
+          .await()
+        t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
+      } finally {
+        if (model) {
+          try {
+            await model.unload()
+          } catch (e) {
+            t.comment(`cycle ${i} unload error: ${e.message}`)
+          }
         }
       }
-    }
-    t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
+      t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
 
-    // Mobile allocators (Android Scudo) need a moment to reclaim pages
-    // before the next load, otherwise a fresh allocation can abort.
-    if (isMobile) {
-      await new Promise(resolve => setTimeout(resolve, 200))
+      // Mobile allocators (Android Scudo) need a moment to reclaim pages
+      // before the next load, otherwise a fresh allocation can abort.
+      if (isMobile) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
     }
+
+    t.pass(`Completed ${CYCLES} load/unload cycles without failure`)
   }
-
-  t.pass(`Completed ${CYCLES} load/unload cycles without failure`)
-})
+)
 
 // ---------------------------------------------------------------------------
 // #7 — Cancel mid-inference, then prove the model is still usable
@@ -524,35 +596,51 @@ test('Bergamot [CPU] - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT 
 // corrupts intgemm state would go undetected without this test.
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - cancel mid-inference leaves model reusable', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  let model
-
-  try {
-    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-    await model.load()
-
-    const response = await model.run(CANCEL_LONG_TEXT_EN)
-    await response.cancel()
-    t.pass('cancel() during translation did not crash')
-
-    try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
+test(
+  'Bergamot [CPU] - cancel mid-inference leaves model reusable',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    let model
 
     try {
-      const r2 = await model.run('Thank you')
-      let out2 = ''
-      await r2.onUpdate(data => { out2 += data }).await()
-      t.pass(`second run() after cancel completed (output: "${out2 || '<empty — sync cancel landed post-completion>'}")`)
-    } catch (e) {
-      t.fail('run() after cancel threw: ' + (e instanceof Error ? e.message : e))
-    }
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
+
+      const response = await model.run(CANCEL_LONG_TEXT_EN)
+      await response.cancel()
+      t.pass('cancel() during translation did not crash')
+
+      try {
+        await response.await()
+      } catch (_) {
+        /* cancelled job may settle as error */
+      }
+
+      try {
+        const r2 = await model.run('Thank you')
+        let out2 = ''
+        await r2
+          .onUpdate((data) => {
+            out2 += data
+          })
+          .await()
+        t.pass(
+          `second run() after cancel completed (output: "${out2 || '<empty — sync cancel landed post-completion>'}")`
+        )
+      } catch (e) {
+        t.fail('run() after cancel threw: ' + (e instanceof Error ? e.message : e))
+      }
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // #15 — Cancel then immediate destroy (race condition)
@@ -562,27 +650,33 @@ test('Bergamot [CPU] - cancel mid-inference leaves model reusable', { timeout: T
 // intgemm path.
 // ---------------------------------------------------------------------------
 
-test('Bergamot [CPU] - cancel then immediate destroy does not crash', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelDir = await ensureBergamotModel()
-  const logger = createLogger()
-  let model
+test(
+  'Bergamot [CPU] - cancel then immediate destroy does not crash',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const modelDir = await ensureBergamotModel()
+    const logger = createLogger()
+    let model
 
-  try {
-    model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
-    await model.load()
+    try {
+      model = new TranslationNmtcpp(createStandaloneBergamotArgs(modelDir, logger))
+      await model.load()
 
-    const response = await model.run(CANCEL_LONG_TEXT_EN)
-    response.cancel()
-    await model.destroy()
+      const response = await model.run(CANCEL_LONG_TEXT_EN)
+      response.cancel()
+      await model.destroy()
 
-    t.pass('cancel() then destroy() did not crash')
-    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
-  } finally {
-    if (model && !model.getState().destroyed) {
-      try { await model.destroy() } catch (_) {}
+      t.pass('cancel() then destroy() did not crash')
+      t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+    } finally {
+      if (model && !model.getState().destroyed) {
+        try {
+          await model.destroy()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // #16 — run() after destroy() must throw
@@ -612,7 +706,9 @@ test('Bergamot [CPU] - run after destroy throws', { timeout: TEST_TIMEOUT }, asy
     }
   } finally {
     if (model && !model.getState().destroyed) {
-      try { await model.destroy() } catch (_) {}
+      try {
+        await model.destroy()
+      } catch (_) {}
     }
   }
 })
