@@ -48,13 +48,32 @@ jobs:
       packages: read
     steps:
       - name: Check tests status
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           failed=0
-          echo "Labels: ${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-          if [[ ! " ${{ join(github.event.pull_request.labels.*.name, ' ') }} " =~ " verified " ]]; then
-            echo "::error title=PR is not verified::This PR needs the 'verified' label to be merged"
-            echo "Warning:Label 'verified' must be present on the PR to run the full suite of checks"
-            failed=1
+          echo "Labels: $PR_LABELS"
+          # `verified` is required for EXTERNAL FORK PRs only. Internal same-repo
+          # PRs are inherently trusted (write access is required to push a branch
+          # to the base repo), so they merge without it. A missing/empty
+          # head.repo is treated as a fork (fail closed); compared case-insensitively.
+          IS_SAME_REPO=false
+          shopt -s nocasematch
+          if [[ -n "$HEAD_REPO" && "$HEAD_REPO" == "$BASE_REPO" ]]; then
+            IS_SAME_REPO=true
+          fi
+          shopt -u nocasematch
+          if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]] && [[ "$IS_SAME_REPO" != "true" ]]; then
+            HAS_VERIFIED=$(jq -r 'if type == "array" then any(. == "verified") else false end' <<< "$PR_LABELS_JSON")
+            if [[ "$HAS_VERIFIED" != "true" ]]; then
+              echo "::error title=PR is not verified::External fork PRs need the 'verified' label to be merged"
+              echo "Warning:Label 'verified' must be present on external fork PRs to run the full suite of checks"
+              failed=1
+            fi
           fi
           if [[ "${{ inputs.sanity-checks-status }}" != "" && "${{ inputs.sanity-checks-status }}" != "true" ]]; then
             echo "::error title=Sanity checks have not returned success::Some sanity checks have not returned success"

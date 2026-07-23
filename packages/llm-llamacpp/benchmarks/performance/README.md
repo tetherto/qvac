@@ -75,15 +75,19 @@ matrix (models, quantizations, reasoning-budget, KV-cache types, repeats) is
 fixed in the scripts; edit those to change what runs.
 
 The **mobile** sweep runs one Device Farm session per
-`(size, quant, KV-cache)` combination. Those combinations live in a single
-source of truth, `test/integration/_benchmark-matrix.js`. The per-combination
-test files (`test/integration/benchmark-perf-*.test.js`) and the workflow's
-mobile `test_groups` are derived from it and the shard files are **not
-committed** — regenerate them with `npm run generate:benchmark-shards` (the CI
-mobile job does this automatically before the Device Farm bundle is built, and
-fails hard if any shard is missing). To change the mobile grid, edit
-`_benchmark-matrix.js`, run `npm run generate:benchmark-shards` and
-`npm run test:mobile:generate`, then update the workflow groups from
+`(size, quant, KV-cache)` combination, plus a small additive batch group
+(`size x batch` at a fixed `Q4_0` / `f16` baseline) that sweeps `batch-size`
+without crossing it into the full matrix — batch is orthogonal to quant and
+KV-cache, so it is measured once rather than replicated across every cell. Those
+combinations live in a single source of truth,
+`test/integration/_benchmark-matrix.js`. The per-combination test files
+(`test/integration/benchmark-perf-*.test.js`) and the workflow's mobile
+`test_groups` are derived from it and the shard files are **not committed** —
+regenerate them with `npm run generate:benchmark-shards` (the CI mobile job does
+this automatically before the Device Farm bundle is built, and fails hard if any
+shard is missing). To change the mobile grid, edit `_benchmark-matrix.js`, run
+`npm run generate:benchmark-shards` and `npm run test:mobile:generate`, then
+update the workflow groups from
 `node scripts/generate-benchmark-shards.js --groups` and commit
 `integration.auto.cjs`. `npm run verify:benchmark-shards` checks they are all in
 sync.
@@ -171,15 +175,24 @@ comma-separated values to widen any dimension into the full grid.
 
 ## Prompt Cases
 
-The sweep currently runs a single prompt case, `long` (the focused ~512-token
-benchmark prompt) — `PROMPT_CASES = ['long']` in `case-runner.js`. The
-`ctx-filling` / `span-fill` fixtures below still exist in `test-prompts.json`
-and can be re-enabled by extending `PROMPT_CASES`.
+The main grid runs the `long` prompt case (the focused ~512-token benchmark
+prompt) — `PROMPT_CASES = ['long']` in `case-runner.js`. The additive batch
+sweep (`BATCH_SWEEP` in `llm-parameter-sweep.config.js`) runs the `ctx-filling`
+case at `ctx-size` 8192 instead: `batch-size` only affects prefill throughput
+when the prompt is at least batch-length, so a single fixed ~7k-token prompt is
+used across all batch sizes to keep `ppTPS` directly comparable. The `span-fill`
+fixture still exists in `test-prompts.json` and can be enabled by tagging cases
+with it.
+
+The desktop batch sweep holds `Q4_K_M` / `f16` and the mobile batch sweep holds
+`Q4_0` / `f16`. Because the batch-scaling curve is invariant across
+quantization, the specific baseline quant is arbitrary and the two are not meant
+to be compared at an equal quant — each measures its own device's batch curve.
 
 | Case | Description | Prompt Selection |
 |------|-------------|-----------------|
-| `long` | Long-output generation (active) | Static `long` prompt |
-| `ctx-filling` | Maximizes context fill | `ctx-filling__ctx={ctx-size}` |
+| `long` | Long-output generation (main grid) | Static `long` prompt |
+| `ctx-filling` | Maximizes context fill (batch sweep) | `ctx-filling__ctx={ctx-size}` |
 | `span-fill` | Spans multiple prefill batches | `batch-spanning__ctx={ctx-size}__bs={batch-size}` |
 
 Prompts are static fixtures in `test-prompts.json`. To regenerate after changing prompt tooling:

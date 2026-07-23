@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.15.1",
+  "version": "0.16.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -18,6 +18,7 @@
     "generate:ideogram-coffee": "bare examples/generate-ideogram-coffee.js",
     "generate:ideogram-tcg": "bare examples/generate-ideogram-tcg.js",
     "generate:video": "bare examples/generate-video-wan.js",
+    "generate:wan22": "bare examples/generate-video-wan22.js",
     "generate:ltx": "bare examples/generate-video-ltx.js",
     "test": "npm run test:types && npm run test:integration",
     "test:ltx": "npm run build:ts && bare test/integration/generate-video-ltx.test.js --exit",

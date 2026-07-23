@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-07-21
+
+### Fixed
+
+- The C++ → JS logger callback invoked the sink method detached from its instance (`const write = sink[level]; write(message)`). Logger implementations that rely on `this` internally (such as `@qvac/logging`'s `QvacLogger`) threw on every call, and the surrounding `try {} catch {}` silently dropped each native log line. The callback now invokes `sink[level](message)` as a method (same bug class fixed in ocr-ggml and translation-nmtcpp under QVAC-22177).
+
 ## [0.13.0] - 2026-07-20
 
 ### Changed
