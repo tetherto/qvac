@@ -105,7 +105,7 @@ console.log(`  Schema output: ${SCHEMA_DIR}`)
 console.log(`  DB spec output: ${DB_DIR}`)
 console.log(`  Dispatch output: ${DISPATCH_DIR}`)
 
-function removeUnusedRuntimeImport (indexPath) {
+function removeUnusedRuntimeImport(indexPath) {
   const content = fs.readFileSync(indexPath, 'utf8')
   const updated = content.replace(
     "const { IndexEncoder, c, b4a } = require('hyperdb/runtime')",

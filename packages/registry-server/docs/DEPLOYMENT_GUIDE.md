@@ -55,23 +55,23 @@ For single-writer quickstart, see the [main README](../README.md#quick-start-sin
 
 ### Key Terminology
 
-| Term | Description |
-|------|-------------|
-| **Autobase key** | Identifies the shared log; additional writers bootstrap with this key |
-| **Local key** | Each writer's unique public key (`service.base.local.key`) |
-| **View key** | Identifies the HyperDB view that clients replicate |
-| **Discovery key** | Derived from view key; used for DHT announcements |
-| **Writer key** | RPC client keypair for authorized write operations |
-| **DHT public key** | Hyperswarm identity; blind peers trust this key |
+| Term               | Description                                                           |
+| ------------------ | --------------------------------------------------------------------- |
+| **Autobase key**   | Identifies the shared log; additional writers bootstrap with this key |
+| **Local key**      | Each writer's unique public key (`service.base.local.key`)            |
+| **View key**       | Identifies the HyperDB view that clients replicate                    |
+| **Discovery key**  | Derived from view key; used for DHT announcements                     |
+| **Writer key**     | RPC client keypair for authorized write operations                    |
+| **DHT public key** | Hyperswarm identity; blind peers trust this key                       |
 
 ### Key Formats
 
 Keys appear in two formats throughout the system:
 
-| Format | Example | Usage |
-|--------|---------|-------|
+| Format        | Example               | Usage                                       |
+| ------------- | --------------------- | ------------------------------------------- |
 | **z-base-32** | `es4n7ty45odd1udf...` | CLI output, blind peer keys, human-readable |
-| **hex** | `a1b2c3d4e5f6...` | `.env` files, programmatic usage |
+| **hex**       | `a1b2c3d4e5f6...`     | `.env` files, programmatic usage            |
 
 Both formats are interchangeable. The `hypercore-id-encoding` library handles conversion.
 
@@ -89,11 +89,13 @@ Both formats are interchangeable. The `hypercore-id-encoding` library handles co
 The registry uses HyperDHT for peer discovery and UDP hole punching for P2P connectivity.
 
 **Known facts:**
+
 - Connects to public DHT bootstrap nodes (default: `node1.hyperdht.org:49737`, `node2.hyperdht.org:49737`, `node3.hyperdht.org:49737`)
 - Uses UDP hole punching – works behind most NATs without explicit port forwarding
 - DHT port binding is dynamic by default (can be set with `--port` flag)
 
 **TODO: Document based on production experience:**
+
 - Specific firewall rules for corporate networks
 - Bandwidth requirements for model distribution
 - Latency considerations for geographically distributed writers
@@ -145,6 +147,7 @@ node scripts/bin.js init-writer --storage ./writer-storage
 ```
 
 This command:
+
 1. Creates a deterministic keypair from the storage path
 2. Prints the public key (z-base-32 and hex)
 3. Appends the hex key to `QVAC_ALLOWED_WRITER_KEYS` in `.env`
@@ -181,6 +184,7 @@ node scripts/bin.js run --storage ./prod-corestore
 ```
 
 During startup with blind peers, the registry will:
+
 1. Initialize blind peer replication
 2. Mirror existing blob cores to blind peers
 3. Wait for initial sync (if cores pending)
@@ -444,6 +448,7 @@ TODO: automate this check (we can also introduce health endpoint)
 In a P2P multi-writer architecture with blind peers, data is inherently replicated across all peers. Traditional backups are not recommended – restoring from backup could cause consistency issues with the distributed state.
 
 **Redundancy strategy:**
+
 - Run 3+ writers for write availability
 - Run 2+ blind peers for read availability
 - Geographic distribution across regions for disaster recovery
@@ -457,6 +462,7 @@ The RPC client couldn't discover any writer via DHT.
 **Solutions:**
 
 1. **Verify `.env` has correct keys:**
+
    ```bash
    cat .env
    # QVAC_REGISTRY_CORE_KEY should match "Registry view key" from writer logs
@@ -476,6 +482,7 @@ The RPC client couldn't discover any writer via DHT.
 The service automatically waits for indexer status. This error is rare.
 
 **Why it can happen:**
+
 - RPC client connected during startup
 - Timeout waiting for indexer status (30s default)
 
@@ -519,17 +526,18 @@ node scripts/bin.js run --storage ./new-writer --bootstrap <key> --skip-storage-
 ### "Blind peer not replicating"
 
 **Check:**
+
 - Trust is configured: Blind peer must trust the registry's **RPC server public key**
 - Network connectivity between registry and blind peer
 - Registry logs show `addCore` calls for blob cores
 
 ### First-Time Setup vs Subsequent Restarts
 
-| Aspect | First-Time Setup | Subsequent Restarts |
-|--------|------------------|---------------------|
-| DHT discovery | 30-60 second wait | Instant (keys persist) |
-| Admin command retries | May need 1-2 retries | Usually works first try |
-| Writer coordination | Manual timing recommended | Automated/scripted works |
+| Aspect                | First-Time Setup          | Subsequent Restarts      |
+| --------------------- | ------------------------- | ------------------------ |
+| DHT discovery         | 30-60 second wait         | Instant (keys persist)   |
+| Admin command retries | May need 1-2 retries      | Usually works first try  |
+| Writer coordination   | Manual timing recommended | Automated/scripted works |
 
 ## Monitoring
 
@@ -556,23 +564,23 @@ node scripts/bin.js run --storage ./corestore --metrics-port 0
 - **Holepunch P2P metrics** (via `hypercore-stats`, `hyperswarm-stats`): aggregate core stats, swarm connections, DHT activity, UDX bytes/packets. Per-core labeled metrics are not exposed — `hypermetrics` is abandoned and incompatible with Hypercore v11, so per-core visibility is provided by the QVAC-specific `registry_blob_core_*` / `registry_view_core_*` gauges below.
 - **QVAC-specific metrics:**
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `qvac_registry_model_count` | Gauge | Number of models in the registry (refreshed every 5 min and on local writes) |
-| `qvac_registry_total_blob_bytes` | Gauge | Sum of `blobBinding.byteLength` across every model record in the view |
-| `qvac_registry_totals_refreshed_age_seconds` | Gauge | Seconds since `total_blob_bytes` / `model_count` were last recomputed (-1 if never) |
-| `qvac_registry_blob_core_count` | Gauge | Number of blob cores opened locally on this node |
-| `qvac_registry_blob_core_peers` | Gauge | Peers connected to this node's local blob core (may be partial replicas) |
-| `qvac_registry_blob_core_seeders` | Gauge | Peers holding this node's local blob core fully and uploading (full replicas) |
-| `qvac_registry_blob_core_length` | Gauge | This node's local blob core length in blocks |
-| `qvac_registry_blob_core_contiguous_length` | Gauge | Blob core contiguous length in blocks (gap indicates missing blocks on disk) |
-| `qvac_registry_blob_core_byte_length` | Gauge | Byte length of this node's local blob core |
-| `qvac_registry_view_core_length` | Gauge | View core length (total blocks) |
-| `qvac_registry_view_core_contiguous_length` | Gauge | View core contiguous length (gap indicates replication lag) |
-| `qvac_registry_view_core_seeders` | Gauge | Peers holding the view core fully and willing to upload (full replicas in the swarm) |
-| `qvac_registry_rpc_requests_total` | Counter | RPC requests by method |
-| `qvac_registry_rpc_errors_total` | Counter | RPC errors by method |
-| `qvac_registry_is_indexer` | Gauge | Whether this node is an indexer |
+| Metric                                       | Type    | Description                                                                          |
+| -------------------------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `qvac_registry_model_count`                  | Gauge   | Number of models in the registry (refreshed every 5 min and on local writes)         |
+| `qvac_registry_total_blob_bytes`             | Gauge   | Sum of `blobBinding.byteLength` across every model record in the view                |
+| `qvac_registry_totals_refreshed_age_seconds` | Gauge   | Seconds since `total_blob_bytes` / `model_count` were last recomputed (-1 if never)  |
+| `qvac_registry_blob_core_count`              | Gauge   | Number of blob cores opened locally on this node                                     |
+| `qvac_registry_blob_core_peers`              | Gauge   | Peers connected to this node's local blob core (may be partial replicas)             |
+| `qvac_registry_blob_core_seeders`            | Gauge   | Peers holding this node's local blob core fully and uploading (full replicas)        |
+| `qvac_registry_blob_core_length`             | Gauge   | This node's local blob core length in blocks                                         |
+| `qvac_registry_blob_core_contiguous_length`  | Gauge   | Blob core contiguous length in blocks (gap indicates missing blocks on disk)         |
+| `qvac_registry_blob_core_byte_length`        | Gauge   | Byte length of this node's local blob core                                           |
+| `qvac_registry_view_core_length`             | Gauge   | View core length (total blocks)                                                      |
+| `qvac_registry_view_core_contiguous_length`  | Gauge   | View core contiguous length (gap indicates replication lag)                          |
+| `qvac_registry_view_core_seeders`            | Gauge   | Peers holding the view core fully and willing to upload (full replicas in the swarm) |
+| `qvac_registry_rpc_requests_total`           | Counter | RPC requests by method                                                               |
+| `qvac_registry_rpc_errors_total`             | Counter | RPC errors by method                                                                 |
+| `qvac_registry_is_indexer`                   | Gauge   | Whether this node is an indexer                                                      |
 
 `qvac_registry_total_blob_bytes` is derived from the view, not from the on-disk blob cores, so it reports the logical registry size consistently on every node (indexers that do not store blobs locally still report the same value).
 
@@ -678,32 +686,32 @@ Use Holepunch's pre-built [Grafana dashboard](https://grafana.com/grafana/dashbo
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `QVAC_AUTOBASE_KEY` | Autobase bootstrap key (auto-generated on first run) |
-| `QVAC_REGISTRY_CORE_KEY` | Registry view key (auto-generated on first run) |
-| `QVAC_ADDITIONAL_INDEXERS` | Comma-separated writer local keys to promote to indexers |
-| `QVAC_REMOVE_INDEXERS` | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
-| `QVAC_ALLOWED_WRITER_KEYS` | Comma-separated hex keys allowed to call add-model RPC |
-| `QVAC_INDEXER_KEYS` | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below) |
-| `QVAC_BLIND_PEER_KEYS` | Comma-separated blind peer public keys for replication |
-| `QVAC_PRIMARY_KEY` | Optional: Deterministic key generation (testing only) |
-| `QVAC_WRITER_PRIMARY_KEY` | Optional: Deterministic writer key (testing only) |
+| Variable                   | Description                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `QVAC_AUTOBASE_KEY`        | Autobase bootstrap key (auto-generated on first run)                                       |
+| `QVAC_REGISTRY_CORE_KEY`   | Registry view key (auto-generated on first run)                                            |
+| `QVAC_ADDITIONAL_INDEXERS` | Comma-separated writer local keys to promote to indexers                                   |
+| `QVAC_REMOVE_INDEXERS`     | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
+| `QVAC_ALLOWED_WRITER_KEYS` | Comma-separated hex keys allowed to call add-model RPC                                     |
+| `QVAC_INDEXER_KEYS`        | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below)   |
+| `QVAC_BLIND_PEER_KEYS`     | Comma-separated blind peer public keys for replication                                     |
+| `QVAC_PRIMARY_KEY`         | Optional: Deterministic key generation (testing only)                                      |
+| `QVAC_WRITER_PRIMARY_KEY`  | Optional: Deterministic writer key (testing only)                                          |
 
 ### Command Reference
 
-| Command | Description |
-|---------|-------------|
-| `node scripts/bin.js run --storage <path>` | Start a writer |
-| `node scripts/bin.js run --bootstrap <key>` | Join existing cluster |
-| `node scripts/bin.js run --blind-peers <keys>` | Enable blind peer replication |
-| `node scripts/bin.js run --metrics-port <port>` | Prometheus metrics port (default: 9210, 0 to disable) |
-| `node scripts/bin.js run --metrics-host <host>` | Prometheus metrics bind address (default: 127.0.0.1; use 0.0.0.0 or a private NIC IP to expose) |
-| `node scripts/bin.js run --skip-storage-check` | Bypass storage/bootstrap key mismatch check |
-| `node scripts/bin.js init-writer --storage <path>` | Initialize/authorize a writer client |
-| `node scripts/bin.js sync-models --file <path>` | Sync models from JSON config |
-| `npm run add-model -- <url> --storage <path>` | Add a single model |
-| `npm run run-blind-peer -- --storage <path> --trusted <key>` | Start a blind peer |
+| Command                                                      | Description                                                                                     |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `node scripts/bin.js run --storage <path>`                   | Start a writer                                                                                  |
+| `node scripts/bin.js run --bootstrap <key>`                  | Join existing cluster                                                                           |
+| `node scripts/bin.js run --blind-peers <keys>`               | Enable blind peer replication                                                                   |
+| `node scripts/bin.js run --metrics-port <port>`              | Prometheus metrics port (default: 9210, 0 to disable)                                           |
+| `node scripts/bin.js run --metrics-host <host>`              | Prometheus metrics bind address (default: 127.0.0.1; use 0.0.0.0 or a private NIC IP to expose) |
+| `node scripts/bin.js run --skip-storage-check`               | Bypass storage/bootstrap key mismatch check                                                     |
+| `node scripts/bin.js init-writer --storage <path>`           | Initialize/authorize a writer client                                                            |
+| `node scripts/bin.js sync-models --file <path>`              | Sync models from JSON config                                                                    |
+| `npm run add-model -- <url> --storage <path>`                | Add a single model                                                                              |
+| `npm run run-blind-peer -- --storage <path> --trusted <key>` | Start a blind peer                                                                              |
 
 ### Reproducible Keys (Testing Only)
 
@@ -724,5 +732,3 @@ node scripts/bin.js run --primary-key <hex-key> --storage ./corestore
 ```
 
 **Security Warning**: Reproducible keys are for testing/development only. In production, use random key generation (default).
-
-

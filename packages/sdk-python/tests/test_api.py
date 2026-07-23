@@ -1,7 +1,7 @@
-"""Unit tests for qvac.api's hand-written wrappers: pure request-shaping and
+"""Unit tests for tetherto.qvac_sdk.api's hand-written wrappers: pure request-shaping and
 response-validation logic, so these run against a fake transport rather than
-a spawned worker (see test_poc_progress.py / test_poc_smoke.py for the real
-end-to-end coverage)."""
+a spawned worker (see test_bare_rpc_transport.py / test_conformance.py for the
+real end-to-end coverage)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from qvac import api
+from tetherto.qvac_sdk import _api as api
 
 
 class FakeTransport:
@@ -70,7 +70,7 @@ async def test_cancel_broad_by_model_id():
 
 async def test_cancel_requires_request_id_or_model_id():
     transport = FakeTransport({"type": "cancel", "success": True})
-    with pytest.raises(ValueError):
+    with pytest.raises(api.InvalidCancelParamsError):
         await api.cancel(transport)
 
 
