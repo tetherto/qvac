@@ -594,8 +594,6 @@ protected:
   GenerateResponseResult runSpeculativeGeneration(
       const std::function<void(const std::string&)>& outputCallback) {
     specBeginGeneration(outputCallback);
-    draftAccepted_ = 0;
-    draftTotal_ = 0;
 
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
