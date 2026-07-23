@@ -13,21 +13,14 @@
 #
 # Body is a verbatim copy of the registry port (2026-07-03, port-version 5)
 # with only REF + SHA512 changed to PR #22's head commit.
+# Engine pinned to PR #22 head (includes the RTX 5090 bounded-history/KV
+# work and the Mac Metal KV-cache fixes: capture pinning + decode/append
+# overlap serialization on shared backends).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF a98abc4678ad52ddd66be9ab221de0cf6a2b9097
-    SHA512 955a563b975b0e8abaf0304b98b00b4ec8512bdc94d1716e22b05b1c1e7c0382d1ff4f0b463dc8cde4fc18d8a4a7ed7ce7ea6f251e6d48ef83d7754bd1b97eae
-    PATCHES
-        # RTX 5090 validation fixes, submitted to PR #22 (drop this patch and
-        # bump REF once they land on feature-abot-dit):
-        # - bounded-history walk graph (pin block 0 + trailing window) - fixes
-        #   ~1.3 GiB/block VRAM growth that OOM'd a 32 GiB GPU at walk block 5
-        # - opt-in per-layer KV cache (ABOT_KV_CACHE=1): 8.5 s -> 1.9 s/block
-        # - taehv decode overlapped with the cache-append pass (second GPU via
-        #   backend spec "diffusion=cuda0,vae=cuda1")
-        # Parity 7/7 + golden-replay walk verified on both paths.
-        abot-bounded-history.patch
+    REF 13a3583753ca2a8e6cdc239a248885e7c0227888
+    SHA512 8527e082d21a0257d3c89bc28e775885d664b9fdc975489a0575ea6b2f04a338674682e5463f2a342f6cde5f237b1bcacf9bac7d8cb3d04fe82223585d75aecf
 )
 
 set(SD_FLASH_ATTN OFF)
