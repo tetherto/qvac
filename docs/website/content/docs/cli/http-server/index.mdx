@@ -315,7 +315,7 @@ The following OpenAI parameters are forwarded to the model on each request:
 | `seed` | `seed` | Random seed for deterministic output |
 | `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
 | `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
-| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not accept a numeric token budget. |
+| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not take a positive token cap — only the booleans (or their numeric equivalents `-1`/`0`). |
 
 #### Reasoning (`reasoning_content`)
 
@@ -324,7 +324,7 @@ Models that emit `<think>…</think>` blocks (e.g. Qwen3.5) have their reasoning
 - **Blocking** — the reasoning is returned in `choices[0].message.reasoning_content`; `content` carries only the final answer.
 - **Streaming** — reasoning arrives as `choices[0].delta.reasoning_content` chunks, interleaved with the regular `delta.content` chunks.
 
-`reasoning_content` is present only when the model actually produced a reasoning block. Set `reasoning_budget: 0` (see above) to disable reasoning entirely.
+`reasoning_content` is present only when the model actually produced a reasoning block. Set `reasoning_budget: false` (see above) to disable reasoning entirely. Numeric `0` is also accepted; positive token caps are not.
 
 #### Structured output (`response_format`)
 
@@ -352,6 +352,10 @@ curl http://localhost:11434/v1/chat/completions \
 
 <Callout type="warn">
 Structured output (`json_object` / `json_schema`) cannot be combined with `tools`. Sending both returns `400 invalid_response_format`.
+</Callout>
+
+<Callout type="warn">
+On hybrid-thinking models, structured output with a tight `max_tokens` can hit `finish_reason: length` while generation is still inside the reasoning channel, leaving `content` empty. Disable reasoning (`reasoning_budget: false`) or raise `max_tokens` to avoid this.
 </Callout>
 
 #### Unsupported parameters
