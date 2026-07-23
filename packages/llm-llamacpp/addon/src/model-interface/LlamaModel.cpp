@@ -1152,6 +1152,8 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"draftAccepted", static_cast<int64_t>(0)},
+      {"draftTotal", static_cast<int64_t>(0)},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
