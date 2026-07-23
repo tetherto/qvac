@@ -173,9 +173,11 @@ classDiagram
     class LlamaInterface {
         +activate() Promise~void~
         +loadWeights(chunk) Promise~void~
-        +runJob(inputs) Promise~boolean~
-        +finetune(params) Promise~boolean~
+        +runJob(inputs) Promise~AdmissionResult~
+        +finetune(params) Promise~JobIdOrFalse~
         +cancel() Promise~void~
+        +cancelJob(id) Promise~void~
+        +activeJobs() number
         +unload() Promise~void~
     }
 
@@ -207,6 +209,11 @@ classDiagram
     JobHandler ..> QvacResponse : creates
 ```
 
+`runJob()` resolves to `{ accepted, id, ids? }`: the scheduler-minted job id
+for a single run, or the group id plus per-item `ids` for a batch. `finetune()`
+resolves to that same kind of numeric id, or `false` when admission is
+rejected.
+
 <details>
 <summary>📊 LLM-Friendly: Class Responsibilities</summary>
 
@@ -214,10 +221,11 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| LlmLlamacpp | Orchestrate model lifecycle, stream weights, submit jobs, handle events | Created by user, persistent | LlamaInterface, createJobHandler, exclusiveRunQueue |
+| LlmLlamacpp | Orchestrate model lifecycle, stream weights, submit jobs, handle events | Created by user, persistent | LlamaInterface, createJobHandler, BatchHandler, exclusiveRunQueue |
 | LlamaInterface | JS wrapper around the native addon (handle, callbacks) | Created lazily in `_load()` | binding.js |
-| JobHandler (createJobHandler) | Track the current job, create `QvacResponse`, route `output`/`end`/`fail` | One per LlmLlamacpp instance | None |
-| exclusiveRunQueue | Serialize `run()` / `finetune()` / `unload()` into single-in-flight FIFO | One per LlmLlamacpp instance | None |
+| JobHandler (createJobHandler) | Finetune-only response holder; tagged finetune events reach it through a `_jobSinks` adapter registered under the finetune job's native id | One per LlmLlamacpp instance (finetune only) | None |
+| BatchHandler | Admits batch runs, owns `_groups` (native job id → batch group state) and `_chunkRoutes` (per-prompt id → native job id) so concurrent batch runs stay isolated | One per LlmLlamacpp instance | QvacResponse |
+| exclusiveRunQueue | Serialize `run()` / `finetune()` / `unload()` admission into single-in-flight FIFO; admitted jobs then run concurrently | One per LlmLlamacpp instance | None |
 | QvacResponse | Stream inference output, expose `await()`/`iterate()`/`onUpdate()` | Created per job, short-lived | None |
 
 **Key Relationships:**
@@ -225,8 +233,9 @@ classDiagram
 | From | To | Type | Purpose |
 |------|-----|------|---------|
 | LlmLlamacpp | LlamaInterface | Composition | Native addon bridge |
-| LlmLlamacpp | JobHandler | Composition | Per-job lifecycle + response |
-| LlmLlamacpp | exclusiveRunQueue | Composition | Serialize public API calls |
+| LlmLlamacpp | JobHandler | Composition | Finetune job lifecycle + response |
+| LlmLlamacpp | BatchHandler | Composition | Batch admission + group routing |
+| LlmLlamacpp | exclusiveRunQueue | Composition | Serialize public API admission |
 | LlmLlamacpp | bare-fs | Direct use | Stream shard files in `_streamShards()` |
 
 **Constructor signature (new):**
@@ -368,8 +377,10 @@ graph TB
 - Configuration parsing
 
 **Composition (no base class):**
-- `this._job = createJobHandler({ cancel: () => this.addon.cancel() })` — single active job + response
-- `this._run = exclusiveRunQueue()` — serialized `run()` / `finetune()` / `unload()`
+- `this._jobSinks = new Map()` — native job id → response, one entry per in-flight single run or finetune job
+- `this._finetuneJob = createJobHandler({ cancel: () => this.addon?.cancel() })` — the finetune-only response; tagged finetune events reach it through a sink adapter registered in `_jobSinks` under the finetune job's native id
+- `this._batchHandler = new BatchHandler({...})` — owns `_groups` (native job id → batch group state) and `_chunkRoutes` (per-prompt id → native job id) so concurrent batch runs stay isolated
+- `this._run = exclusiveRunQueue()` — serializes `run()` / `finetune()` / `unload()` admission only; once admitted, jobs run concurrently under `parallel >= 2`
 - `this.addon = new LlamaInterface(...)` — native bridge, created lazily in `_load()`
 - `normalizeGenerationParams()` validates/normalizes run-time overrides before the request crosses the JS/C++ boundary.
 
@@ -381,7 +392,7 @@ graph TB
 - Clean JavaScript API over raw C++ bindings
 - Native handle lifecycle management
 - Type conversion between JS and native
-- `mapAddonEvent()` routes `Output`, `JobEnded`, `RuntimeStats`, `FinetuneProgress`, and `LogMsg`; it also coalesces finetune terminal events with following runtime stats so responses do not finish twice.
+- `mapAddonEvent()` normalizes raw native events into `Output`, `JobEnded` (covers both a job's terminal stats snapshot and a finetune's terminal payload), `FinetuneProgress`, `BatchOutput`, `BatchResult`, `Error`, and `LogMsg`. It is a stateless, one-event-in-one-event-out mapping with no coalescing. What keeps a finetune job's terminal event and its trailing stats snapshot from settling the response twice lives in `index.js`'s `_handleAddonOutputEvent`/`_jobSinks`, not here: the finetune sink stays registered across the finetune terminal and is only deregistered when the trailing stats-shaped `JobEnded` lands.
 
 ### C++ Components
 
@@ -901,4 +912,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 - [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
 - [continuous-batching.md](continuous-batching.md) - Continuous batching architecture (`parallel`, `ContinuousBatchScheduler`, slot lifecycle, cancellation)
 
-**Last Updated:** 2026-05-07
+**Last Updated:** 2026-07-23
