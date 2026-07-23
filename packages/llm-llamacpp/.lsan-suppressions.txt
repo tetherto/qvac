@@ -1,0 +1,5 @@
+# Known false positive with N-API callbacks under ASan
+leak:TextLlmContext::generateResponse
+leak:MtmdLlmContext::generateResponse
+leak:TextLlmContext::evalMessageWithTools
+leak:TextLlmContext::evalMessage

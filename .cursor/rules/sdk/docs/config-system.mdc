@@ -1,0 +1,190 @@
+---
+description: SDK Configuration System - Immutable Config Loaded at Initialization
+alwaysApply: false
+---
+
+# SDK Configuration System
+
+## Concept
+
+The SDK uses **immutable configuration loaded at initialization**:
+- Config is resolved from files or environment variables ONCE when SDK starts
+- Config is sent to the worker during initialization via internal `__init_config` message
+- Config cannot be changed at runtime (requires app restart)
+- Config is stored in worker memory and accessible throughout server-side code
+
+**Key Design Principle:** Configuration happens at initialization, not at runtime. This ensures predictable behavior and eliminates race conditions.
+
+## System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     INITIALIZATION FLOW                           │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  1. RPC Client Initialization (getRPC())                         │
+│     ├─► client/rpc/node-rpc-client.ts                            │
+│     ├─► client/rpc/expo-rpc-client.ts                            │
+│     └─► client/rpc/bare-client.ts                                │
+│                                                                   │
+│  2. Config Resolution (initializeConfig)                         │
+│     ├─► client/init-hooks.ts                                     │
+│     │   initializeConfig(rpc, resolveConfig, runtimeContext?)     │
+│     └─► Per-runtime config loader:                               │
+│         ├─► client/config-loader/resolve-config.node.ts          │
+│         ├─► client/config-loader/resolve-config.bare.ts          │
+│         ├─► client/config-loader/resolve-config.expo.ts          │
+│         └─► client/config-loader/config-utils.ts (shared)        │
+│             ├─► Check process.env["QVAC_CONFIG_PATH"]            │
+│             ├─► Runtime-specific file discovery                  │
+│             ├─► Look for qvac.config.{ts,js,json}                │
+│             └─► Validate with schemas/sdk-config.ts              │
+│                                                                   │
+│  3. Send Config + RuntimeContext to Worker                        │
+│     └─► Internal RPC message: { type: "__init_config" }          │
+│     └─► Skipped entirely if both config and runtimeContext       │
+│         are undefined (no config file found, no runtime ctx)     │
+│                                                                   │
+│  4. Worker Receives Config                                       │
+│     ├─► server/rpc/handler-utils.ts (intercepts message)         │
+│     │   ├─► isInitConfigMessage() — type guard                   │
+│     │   └─► handleInitConfig() — dispatches to registries        │
+│     ├─► server/bare/registry/config-registry.ts                  │
+│     │   └─► setSDKConfig(config) → stored in memory (once only)  │
+│     └─► server/bare/registry/runtime-context-registry.ts         │
+│         └─► setRuntimeContext(ctx) → stored in memory             │
+│                                                                   │
+│  5. Config Available Throughout Server Code                      │
+│     └─► Any handler can call getSDKConfig() / getRuntimeContext()│
+│                                                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+## Adding a New Config Option
+
+### Step 1: Update Schema
+
+**File:** `schemas/sdk-config.ts` — Add the new field to `qvacConfigSchema`. Type is auto-inferred via `z.infer`. Make fields optional unless you want to break existing configs.
+
+### Step 2: Update Config Registry
+
+**File:** `server/bare/registry/config-registry.ts` — Add the field to the `configRegistry` object AND add an assignment block in `setSDKConfig()`. If you only add it to the schema, it will be validated on the client side but **not persisted** on the worker side (see `httpConnectionTimeoutMs` caveat in the config options table).
+
+### Step 3: Use Config in Server Code
+
+```typescript
+import { getSDKConfig } from "@/server/bare/registry/config-registry";
+
+export async function myHandler(request: MyRequest) {
+  const config = getSDKConfig();
+  const myValue = config.myNewOption;
+}
+```
+
+### Step 4: Document the Option
+
+Update this file's "Available Config Options" table with the new option.
+
+## Key Implementation Files
+
+### Client Side — Config Resolution
+
+Config loading is split per runtime under `client/config-loader/`:
+
+| File | Purpose |
+|------|---------|
+| `config-utils.ts` | Shared utilities: `validateConfig()` (Zod validation), `parseJsonConfig()` |
+| `resolve-config.node.ts` | Node.js resolver: `resolveConfig()`, `findProjectRoot()`, `findConfigFile()`, `findPackagedConfig()` (Electron) |
+| `resolve-config.bare.ts` | Bare resolver: same structure, uses `bare-fs`/`bare-path`/`bare-process`, `findProjectRoot()` returns `process.cwd()` directly |
+| `resolve-config.expo.ts` | Expo resolver: uses `expo-file-system`, JSON configs only, default path `${Paths.document.uri}qvac.config.json` |
+| `client/init-hooks.ts` | `initializeConfig(rpc, resolveConfig, runtimeContext?)` — sends `__init_config` to worker. Returns early if both config and runtimeContext are undefined. Failure is logged but not re-thrown. |
+
+### Server Side — Config Storage
+
+| File | Purpose |
+|------|---------|
+| `server/rpc/handler-utils.ts` | Intercepts `__init_config` messages via `isInitConfigMessage()` type guard, dispatches to `setSDKConfig()` and `setRuntimeContext()` |
+| `server/bare/registry/config-registry.ts` | Immutable store. `setSDKConfig()` validates cacheDirectory (absolute, writable), assigns each field individually with null/undefined guards, sets `configIsSet = true`. `getSDKConfig()` returns a shallow copy. |
+| `server/bare/registry/runtime-context-registry.ts` | Stores runtime context (runtime type, platform) |
+
+**Key behaviors of `config-registry.ts`:**
+- `setSDKConfig()` throws `ConfigAlreadySetError` if called twice
+- `cacheDirectory` is validated: must be absolute, writable (test file created then deleted)
+- `loggerLevel` and `loggerConsoleOutput` trigger side effects: `setGlobalLogLevel()` / `setGlobalConsoleOutput()`
+- `getSDKConfig()` returns a shallow copy — primitive fields are safe, but nested references (`swarmRelays`, `deviceDefaults`) share underlying objects
+- Config is stored in worker memory; lost on crash but resent during RPC reconnection
+
+### Mock RPC Client (Bare Client)
+
+**File:** `client/rpc/bare-client.ts` — The mock RPC client (used when running in Bare without actual worker) handles `__init_config` inline, dispatching to both registries directly. `getRPC()` constructs a `RuntimeContext` from `bare-os` and passes it to `initializeConfig`.
+
+## Config Resolution Priority
+
+### Node.js (`resolve-config.node.ts`)
+1. `QVAC_CONFIG_PATH` environment variable — absolute path to config file
+2. Packaged Electron app — checks `process.resourcesPath` for bundled `qvac.config.json`
+3. Project root discovery — traverses up from cwd() looking for `package.json`, then searches for `qvac.config.ts` → `qvac.config.js` → `qvac.config.json`
+4. SDK defaults — returns `undefined` (empty config)
+
+### Bare (`resolve-config.bare.ts`)
+1. `QVAC_CONFIG_PATH` environment variable — via `bare-process`
+2. Project root — uses `process.cwd()` directly (no traversal), then searches for `qvac.config.ts` → `qvac.config.js` → `qvac.config.json`
+3. SDK defaults — returns `undefined` (empty config)
+
+### Expo (`resolve-config.expo.ts`)
+1. `QVAC_CONFIG_PATH` environment variable — if `process` is available
+2. Expo document directory — `${Paths.document.uri}qvac.config.json` (JSON only)
+3. SDK defaults — returns `undefined` (empty config)
+
+## Internal Message Protocol
+
+The `__init_config` message carries `config` (QvacConfig) and optional `runtimeContext` (RuntimeContext). It's intercepted in `server/rpc/handler-utils.ts` before normal request parsing. See that file for the message shape and response format.
+
+## Available Config Options
+
+| Option | Type | Required | Default | Stored in configRegistry | Description |
+|--------|------|----------|---------|--------------------------|-------------|
+| `cacheDirectory` | `string` | No | `~/.qvac/models` | Yes | Absolute path to directory where models are cached. Must be writable. Trailing slashes are stripped via Zod transform. |
+| `swarmRelays` | `string[]` | No | `undefined` | Yes | Hyperswarm relay public keys (hex) for P2P NAT traversal |
+| `loggerLevel` | `"error" \| "warn" \| "info" \| "debug"` | No | `"info"` | Yes | Global log level for all SDK loggers. Side effect: calls `setGlobalLogLevel()` on both client and server. |
+| `loggerConsoleOutput` | `boolean` | No | `true` | Yes | Enable/disable console output for SDK loggers. Side effect: calls `setGlobalConsoleOutput()` on both client and server. |
+| `httpDownloadConcurrency` | `number` (positive int) | No | `3` | Yes | Max concurrent HTTP downloads for sharded models |
+| `httpConnectionTimeoutMs` | `number` (positive int) | No | `10000` | **No** | Timeout in ms for HTTP connection establishment. **Bug:** Validated in schema but `setSDKConfig()` does not copy it to `configRegistry`. Server code falls back to `DEFAULT_HTTP_CONNECTION_TIMEOUT_MS`. User-configured value is effectively ignored. |
+| `deviceDefaults` | `DevicePattern[]` | No | `undefined` | Yes | Device-specific config defaults. First matching pattern wins. See `schemas/sdk-config.ts` for schema. |
+| `plugins` | `string[]` | No | `undefined` | Yes | Plugin specifiers for worker bundling (`bundleSdk`). Each entry must end with `/plugin`. When omitted, all built-in plugins are included. |
+| `bareRuntimeVersion` | `string` | No | `undefined` | Yes | Bare runtime semver for native addon ABI verification (`verifyBundle`). When omitted, auto-detected from `node_modules`. |
+
+## Debugging Config Issues
+
+### Client-Side Logging
+
+`initializeConfig` logs to console:
+- `📦 Initializing SDK config` / `📱 Runtime context: { runtime, platform }` / `✅ Initialization complete`
+- On failure: `❌ Initialization failed: <error>`
+
+### Server-Side Access
+
+```typescript
+import { getSDKConfig } from "@/server/bare/registry/config-registry";
+console.log("Worker config:", getSDKConfig());
+```
+
+### Common Issues
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Config not loaded | File not found, `QVAC_CONFIG_PATH` not absolute, both config and runtimeContext undefined | Verify file location and env var |
+| Validation errors | Config doesn't match `qvacConfigSchema` | Check Zod error messages (throws `ConfigValidationFailedError`) |
+| Config not applied | Worker didn't receive message | Check `setSDKConfig()` was called in `handler-utils.ts` |
+| Field always `undefined` on worker | `setSDKConfig()` missing assignment block for the field | Add corresponding assignment in `config-registry.ts` (see `httpConnectionTimeoutMs`) |
+
+## Design Rationale
+
+**Why immutable config?** Predictable behavior, no race conditions, simpler mental model, easier debugging. Tradeoff: requires app restart to change config.
+
+**Why file-based?** Version controlled, type-safe with TypeScript configs, conventional pattern (like eslint/prettier), no API surface. Tradeoff: requires filesystem access.
+
+## Related Documentation
+
+- **Error Handling:** `.cursor/rules/sdk/error-handling.mdc`
+- **Cache Management:** `.cursor/rules/sdk/docs/cache-management-api.mdc`

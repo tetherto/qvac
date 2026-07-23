@@ -1,0 +1,142 @@
+# Multi-addon co-load smoke (ggml addons).
+#
+# Per-addon CI loads exactly one addon per run, so it cannot catch the class of
+# bug where addon A and addon B each pass alone but crash when both are
+# dlopen'd into one process (the @qvac/tts-ggml@0.2.1 ggml_backend_is_cpu
+# crash). This workflow runs packages/ggml-coload-smoke, which require()s
+# several @qvac ggml addons into ONE Bare process, across a matrix of
+# combinations (see packages/ggml-coload-smoke/scripts/coload-combinations.mjs):
+# the full set, each ggml stack, cross-stack pairs, and -- on PRs -- combos
+# focused on the addon(s) the PR changed.
+#
+# IMPORTANT: it installs the *published* addons from npm and co-loads those, so
+# on a PR it validates the current REGISTRY BASELINE, not the PR's own diff (a
+# PR's freshly-built change is guarded by the Phase-1 prebuild symbol gate).
+# Follow-up: overlay the PR's freshly-built prebuild for the changed addon
+# (download its prebuild artifact into node_modules/@qvac/<addon>/prebuilds) so
+# the co-load also exercises unpublished changes; the run stays model-free/cheap.
+
+name: Co-load smoke (ggml)
+
+on:
+  pull_request:
+    paths:
+      - "packages/tts-ggml/**"
+      - "packages/transcription-parakeet/**"
+      - "packages/transcription-whispercpp/**"
+      - "packages/bci-whispercpp/**"
+      - "packages/llm-llamacpp/**"
+      - "packages/embed-llamacpp/**"
+      - "packages/classification-ggml/**"
+      - "packages/vla-ggml/**"
+      - "packages/ocr-ggml/**"
+      - "packages/translation-nmtcpp/**"
+      - "packages/diffusion-cpp/**"
+      - "packages/ggml-coload-smoke/**"
+      - ".github/workflows/coload-smoke-ggml.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "full (every combo) or changed (focus on --addons)"
+        type: choice
+        options: [full, changed]
+        default: full
+      addons:
+        description: "changed-mode: comma-separated addon short names (e.g. tts-ggml,llm-llamacpp)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      combos: ${{ steps.gen.outputs.combos }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Compute co-load combinations
+        id: gen
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_ADDONS: ${{ inputs.addons }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          SCRIPT=packages/ggml-coload-smoke/scripts/coload-combinations.mjs
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DISPATCH_MODE" = "changed" ] && [ -n "$DISPATCH_ADDONS" ]; then
+              node "$SCRIPT" --changed "$DISPATCH_ADDONS"
+            else
+              node "$SCRIPT"
+            fi
+          else
+            git diff --name-only "$BASE_SHA" HEAD > /tmp/coload-changed.txt || true
+            node "$SCRIPT" --changed-files /tmp/coload-changed.txt
+          fi
+
+  coload:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.combos != '' && needs.prepare.outputs.combos != '[]' }}
+    # github-hosted runner: released @qvac addons resolve from public npm with no
+    # secrets, so this runs on fork PRs too. It co-loads the PUBLISHED addons;
+    # overlaying the PR's freshly built prebuild is a documented follow-up.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        combo: ${{ fromJSON(needs.prepare.outputs.combos) }}
+    name: coload-${{ matrix.combo.name }}
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Install bare tooling
+        shell: bash
+        run: npm install -g --force bare bare-make
+
+      - name: Install co-load harness deps
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        run: npm install
+
+      - name: Install addons under test (published)
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        env:
+          ADDONS: ${{ matrix.combo.addons }}
+        run: |
+          set -euo pipefail
+          PKGS=""
+          for a in ${ADDONS//,/ }; do PKGS="$PKGS @qvac/$a"; done
+          echo "Installing combo '${{ matrix.combo.name }}': $PKGS"
+          npm install --no-save $PKGS
+
+      - name: Co-load smoke
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        env:
+          COLOAD_ADDONS: ${{ matrix.combo.addons }}
+        run: bare test/coload.test.js

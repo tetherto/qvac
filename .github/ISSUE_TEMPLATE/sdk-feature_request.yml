@@ -1,0 +1,108 @@
+name: "🚀 SDK Feature Request"
+description: "Propose a new feature or enhancement for the SDK"
+title: "[Feature]: "
+labels: ["enhancement", "triage", "SDK"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before submitting
+
+        - Search existing issues to avoid duplicates
+        - Remember: **The best code is the code you don't write**
+        - Features should solve a specific problem, not just add code to the SDK
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "🎯 Problem Statement"
+      description: "What problem are you trying to solve? Be specific about the pain point."
+      placeholder: |
+        - What limitation or gap exists today?
+        - How does this impact your workflow or users?
+        - What workarounds (if any) are you currently using?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "💡 Proposed Solution"
+      description: "Describe your ideal solution. Include API examples if applicable."
+      placeholder: |
+        Describe the feature and how it would work.
+
+        ```typescript
+        // Example API usage
+        const result = await newFeature({ ... });
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: "📋 Use Cases"
+      description: "List concrete scenarios where this feature would be used."
+      placeholder: |
+        1. **Use case 1**: Description of when/how this would be used
+        2. **Use case 2**: Another scenario
+        3. **Use case 3**: Additional scenario (if applicable)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: "📊 Expected Impact"
+      description: "How broadly would this feature benefit SDK users?"
+      options:
+        - "Critical - Enables major functionality currently impossible"
+        - "High - Improves common workflows"
+        - "Medium - Enhances specific use cases"
+        - "Low - Nice to have"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "🔄 Alternatives Considered"
+      description: "What other approaches did you consider? Why is this the best option?"
+      placeholder: |
+        - **Alternative 1**: Description and why it was rejected
+        - **Alternative 2**: Description and why it was rejected
+        - **Do nothing**: Why the current state is insufficient
+    validations:
+      required: false
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: "⚠️ Constraints & Considerations"
+      description: "Any technical constraints, breaking changes, or compatibility concerns?"
+      placeholder: |
+        - Platform compatibility (Node, Bare, Expo)?
+        - Performance implications?
+        - Breaking changes to existing APIs?
+        - Dependencies required?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: "🤝 Contribution"
+      description: "Would you be willing to help implement this feature?"
+      options:
+        - label: "I would be willing to submit a PR for this feature"
+          required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "📎 Additional Context"
+      description: "Any other context, screenshots, links, or references?"
+    validations:
+      required: false
+

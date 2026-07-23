@@ -1,0 +1,71 @@
+name: Create Release Tag
+
+# Creates a git tag for a published package WITHOUT creating a GitHub Release.
+# Only the SDK publishes GitHub Releases (see publish-sdk.yml /
+# create-github-release.yml); every other package just gets a version tag for
+# traceability, keeping the Releases page focused on the SDK.
+#
+# The tag is a lightweight, UNSIGNED tag created via the REST API with the
+# default GITHUB_TOKEN. This matches the previous behaviour of
+# softprops/action-gh-release (its tags were never signed either). Signed tags
+# are intentionally not attempted here: GITHUB_TOKEN cannot sign, and GitHub's
+# server-side web-flow signing covers API-created commits but NOT tag objects
+# (verified empirically -- an API-created annotated tag comes back
+# "reason: unsigned"). A Verified tag would require a GPG/SSH signing key.
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        description: "Tag prefix; tag is '<repo_name>-v<published_version>' unless tag_name is set"
+        required: false
+        type: string
+      published_version:
+        description: "Version published in the publish workflow (tagging is skipped when empty)"
+        required: false
+        type: string
+      tag_name:
+        description: "Optional explicit tag name; overrides the '<repo_name>-v<published_version>' default"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  create-tag:
+    if: inputs.published_version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create git tag (no GitHub Release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ inputs.repo_name }}
+          PUBLISHED_VERSION: ${{ inputs.published_version }}
+          TAG_OVERRIDE: ${{ inputs.tag_name }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${TAG_OVERRIDE}" ]; then
+            tag="${TAG_OVERRIDE}"
+          else
+            if [ -z "${REPO_NAME}" ]; then
+              echo "::error::Either repo_name or tag_name must be provided"
+              exit 1
+            fi
+            tag="${REPO_NAME}-v${PUBLISHED_VERSION}"
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists; nothing to do."
+            exit 0
+          fi
+
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/${tag}" \
+            -f sha="${TARGET_SHA}"
+
+          echo "Created tag ${tag} -> ${TARGET_SHA}"

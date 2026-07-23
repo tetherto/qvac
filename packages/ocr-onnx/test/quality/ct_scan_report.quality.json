@@ -1,0 +1,53 @@
+{
+  "id": "ct-scan-chest-abdomen",
+  "description": "Diagnostic imaging CT scan report (chest and abdomen plain) from Allied Care Experts Medical Center-Bohol — long-form prose with medical terminology",
+  "image": "ct_scan_report.png",
+
+  "required_keywords": [
+    "ALLIED CARE EXPERTS",
+    "MEDICAL CENTER",
+    "DIAGNOSTIC IMAGING CENTER",
+    "COMPUTED TOMOGRAPHY",
+    "CHEST AND ABDOMEN PLAIN",
+    "EXECUTIVE CHECK UP",
+    "EXAMINATION",
+    "CLINICAL DATA",
+    "REPORTS",
+    "Plain CT scan",
+    "lung",
+    "mediastinal",
+    "bronchial",
+    "pleural",
+    "mediastinum",
+    "vascular",
+    "adenopathies",
+    "trachea",
+    "bronchi",
+    "hilar",
+    "thorax",
+    "liver",
+    "spleen",
+    "gallbladder",
+    "pancreas",
+    "bile duct",
+    "parenchyma",
+    "hypodense",
+    "intrapancreatic",
+    "Radiologist",
+    "Chief Radiologic Technologist",
+    "OPD",
+    "MALE",
+    "074011"
+  ],
+
+  "key_values": [
+    { "key": "PATIENT NO", "value": "074011" },
+    { "key": "ROOM NO", "value": "OPD" },
+    { "key": "REQUEST NO", "value": "CTV215873" },
+    { "key": "GENDER", "value": "MALE" },
+    { "key": "EXAMINATION", "value": "CHEST AND ABDOMEN PLAIN" },
+    { "key": "CLINICAL DATA", "value": "EXECUTIVE CHECK UP" }
+  ],
+
+  "reference_text": "ALLIED CARE EXPERTS MEDICAL CENTER-BOHOL 369 Carlos P. Garcia East Avenue, Mansasa District, Bohol, Philippines 6300 info@ace-mc-bohol.com DIAGNOSTIC IMAGING CENTER COMPUTED TOMOGRAPHY PATIENT NO 074011 ROOM NO OPD DATE&TIME REQUESTED 10/10/2025 REQUEST NO CTV215873 GENDER MALE EXAMINATION: CHEST AND ABDOMEN PLAIN CLINICAL DATA: EXECUTIVE CHECK UP REPORTS: Plain CT scan of the chest in both lung and mediastinal window shows both lung fields are clear with distinct not dilated vascular markings. The bronchial walls are not thickened. The pleural lines are not thickened. The mediastinum is not widened and no calcific densities within. The anterior, middle and posterior mediastinal area are free of masses or calcific densities. No adenopathies noted. The major vascular structures are not dilated. The heart is not enlarged and at the midline. The trachea is at the midline and well aerated, and the wall is not thickened. The carinal area shows no adenopathies or masses noted. The major bronchi and hilar areas are not enlarged with no adenopathies noted. The bony thorax is intact and not barrel chest. No fractures or bone erosions noted. Plain CT scan of the whole abdomen shows the liver and spleen are normally positioned and has normal size and smooth borders. Its internal structures and attenuation values are normal. The vascular structures are not dilated or displaced. No hypo or hyperdense masses noted. The perihepatic, subhepatic and perisplenic areas appear unremarkable. The gallbladder is physiologically distended. The wall is not thickened and smooth. The lumen is hypodense with no intrinsic filing defects noted. The intra and extrahepatic bile ducts are not dilated. The common bile duct is not dilated with normal course. The pancreas presents a normal location, size and shapes with smooth borders. The lobulations are normal and appropriate for the age of the patient. The parenchyma shows normal internal structure and attenuation values with no hypo or hyperdense intrapancreatic changes. The pancreatic duct shows normal course and caliber. Chief Radiologic Technologist Radiologist Thank you for the referral. These findings are based entirely on imaging studies, and clinical correlation is suggested."
+}

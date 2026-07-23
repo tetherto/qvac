@@ -1,0 +1,152 @@
+#pragma once
+
+#include <any>
+#include <atomic>
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <whisper.h>
+
+#include "BCIConfig.hpp"
+#include "NeuralProcessor.hpp"
+#include "model-interface/BCITypes.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
+
+namespace qvac_lib_inference_addon_bci {
+
+class BCIModel
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
+public:
+  using OutputCallback = std::function<void(const Transcript&)>;
+  using ValueType = float;
+  using Input = std::vector<uint8_t>;
+  using Output = std::vector<Transcript>;
+
+  struct AnyInput {
+    Input input;
+    OutputCallback outputCallback = nullptr;
+  };
+
+  explicit BCIModel(BCIConfig config);
+  ~BCIModel() noexcept;
+
+  void initializeBackend() {}
+  void setConfig(const BCIConfig& config);
+
+  auto setOnSegmentCallback(const OutputCallback& callback) -> void {
+    on_segment_ = callback;
+  }
+  auto addTranscription(const Transcript& transcript) -> void {
+    output_.push_back(transcript);
+  }
+  auto hasSegmentCallback() const -> bool {
+    return static_cast<bool>(on_segment_);
+  }
+  auto emitSegment(const Transcript& transcript) -> void {
+    if (on_segment_) {
+      on_segment_(transcript);
+    }
+  }
+
+  std::string getName() const override { return "BCIModel"; }
+  std::any process(const std::any& input) override;
+  void cancel() const override;
+
+  void process(const Input& input);
+
+  void load();
+  void unload();
+  void unloadWeights() { unload(); }
+  void reload();
+  void reset();
+  void waitForLoadInitialization() override { load(); }
+  void setWeightsForFile(
+      const std::string&,
+      std::unique_ptr<std::basic_streambuf<char>>&&) override {}
+  bool isLoaded() const { return is_loaded_; }
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
+  void warmup();
+
+  void saveLoadParams(const BCIConfig& config);
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_same_v<std::decay_t<T>, BCIConfig>, void>
+  saveLoadParams(T&&, Args&&...) {}
+
+  void recordSegmentStats(int nTokens) {
+    totalSegments_ += 1;
+    if (nTokens > 0) {
+      totalTokens_ += static_cast<int64_t>(nTokens);
+    }
+  }
+
+private:
+  static bool configContextIsChanged(
+      const BCIConfig& oldCfg, const BCIConfig& newCfg);
+  void resetContext();
+  void loadEmbedderIfNeeded();
+  int injectNeuralMelAndRunWhisper(
+      const std::vector<float>& melFeatures, int melFrames, int melBins,
+      whisper_full_params& params);
+
+  void ensureContextInitialized() const;
+  void throwIfCancelled() const;
+  int resolveDayIdx() const;
+  void warnIfDayIdxOutOfRange(int dayIdx) const;
+  void accumulateWhisperTimings();
+  whisper_full_params buildNeuralProcessParams();
+  int runWhisperTimed(
+      const std::vector<float>& melFeatures, int melFrames, int melBins,
+      whisper_full_params& params);
+  void throwIfWhisperFailed(int result) const;
+
+  BCIConfig cfg_;
+  NeuralProcessor neuralProcessor_;
+  OutputCallback on_segment_;
+  Output output_;
+
+  struct WhisperContextDeleter {
+    void operator()(whisper_context* ctx) const noexcept {
+      if (ctx != nullptr) {
+        whisper_free(ctx);
+      }
+    }
+  };
+
+  std::unique_ptr<whisper_context, WhisperContextDeleter> ctx_{nullptr};
+  bool is_loaded_ = false;
+  bool is_warmed_up_ = false;
+
+  // Active backend identity + device-memory snapshot, populated once at load()
+  // time (after ggml backends are registered) and reported via runtimeStats().
+  // gpu_mem_total_mb_ / gpu_mem_free_mb_ are device-reported megabytes at
+  // load() time; -1 means the device does not report memory.
+  int64_t backend_device_ = 0;
+  int64_t backend_id_ = 0;
+  int64_t gpu_mem_total_mb_ = -1;
+  int64_t gpu_mem_free_mb_ = -1;
+  std::string backend_name_ = "CPU";
+  std::string gpu_device_description_;
+  void resetBackendInfoToCpu();
+  void captureActiveBackendInfo(bool useGpu, int gpuDeviceIndex);
+
+  int64_t totalTokens_ = 0;
+  int64_t totalSegments_ = 0;
+  int64_t processCalls_ = 0;
+  double totalWallMs_ = 0.0;
+
+  // whisper.cpp internal stage timings aggregated across process() calls.
+  double whisperSampleMs_ = 0.0;
+  double whisperEncodeMs_ = 0.0;
+  double whisperDecodeMs_ = 0.0;
+  double whisperBatchdMs_ = 0.0;
+  double whisperPromptMs_ = 0.0;
+
+  mutable std::atomic_bool cancelRequested_{false};
+};
+
+} // namespace qvac_lib_inference_addon_bci

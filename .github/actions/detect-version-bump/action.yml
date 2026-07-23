@@ -1,0 +1,60 @@
+name: Detect Version Bump
+description: Detects a version bump by comparing package.json at a previous SHA.
+inputs:
+  prev_sha:
+    description: "Previous commit SHA for version comparison"
+    required: false
+  current_version:
+    description: "Current version (required)"
+    required: true
+  workdir:
+     description: "Working directory (optional)"
+     required: false
+     default: "."
+outputs:
+  bumped:
+    description: "true if version differs from previous SHA"
+    value: ${{ steps.detect.outputs.bumped }}
+  current:
+    description: "Current version"
+    value: ${{ steps.detect.outputs.current }}
+  previous:
+    description: "Previous version (from prev_sha)"
+    value: ${{ steps.detect.outputs.previous }}
+runs:
+  using: "composite"
+  steps:
+    - id: detect
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -euo pipefail
+        current_version="${{ inputs.current_version }}"
+        if [ -z "${current_version}" ]; then
+          echo "Missing required input: current_version"
+          exit 1
+        fi
+        echo "current=${current_version}" >> "${GITHUB_OUTPUT}"
+
+        prev_sha="${{ inputs.prev_sha }}"
+        if [ -z "${prev_sha}" ]; then
+          echo "previous=" >> "${GITHUB_OUTPUT}"
+          echo "bumped=false" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        workdir="${{ inputs.workdir }}"
+        if [ -z "${workdir}" ] || [ "${workdir}" = "." ]; then
+          package_json_path="package.json"
+        else
+          package_json_path="${workdir%/}/package.json"
+        fi
+
+        prev_version=$(git show "${prev_sha}:${package_json_path}" | node -e "const fs=require('fs');const data=fs.readFileSync(0,'utf8');console.log(JSON.parse(data).version);")
+        echo "previous=${prev_version}" >> "${GITHUB_OUTPUT}"
+
+        if [ "${current_version}" = "${prev_version}" ]; then
+          echo "bumped=false" >> "${GITHUB_OUTPUT}"
+        else
+          echo "bumped=true" >> "${GITHUB_OUTPUT}"
+        fi

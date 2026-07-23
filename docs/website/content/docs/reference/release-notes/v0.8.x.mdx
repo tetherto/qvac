@@ -1,0 +1,476 @@
+---
+title: SDK Release Notes — v0.8.x
+description: Lists all releases from v0.8.0 to v0.8.3.
+---
+
+## v0.8.0
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.0
+
+This release adds Parakeet as a new transcription engine alongside Whisper, decouples builtin plugins from the core load path for a cleaner architecture, adds CTC and Sortformer transcription models, introduces a built-in profiler for diagnosing performance, and brings Bergamot pivot translation support. Several addon logging and delegation bugs have also been resolved.
+
+---
+
+#### Breaking Changes
+
+##### Embedding Model Config Uses Structured Fields
+
+The embedding addon no longer accepts the raw tab-delimited config string. Use the structured fields instead.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelSrc: EMBEDDINGS_NOMIC_EMBED_TEXT_V1_5,
+  modelType: "embeddings",
+  modelConfig: {
+    rawConfig: "-ngl\t99\n-dev\tgpu\n--batch_size\t1024",
+  },
+});
+```
+
+**After:**
+
+```typescript
+await loadModel({
+  modelSrc: EMBEDDINGS_NOMIC_EMBED_TEXT_V1_5,
+  modelType: "embeddings",
+  modelConfig: {
+    gpuLayers: 99,
+    device: "gpu",
+    batchSize: 1024,
+  },
+});
+```
+
+##### Companion Model Sources Moved Into `modelConfig`
+
+Top-level companion source fields (`projectionModelSrc`, `vadModelSrc`, `srcVocabSrc`, `dstVocabSrc`) have been removed from `loadModel`. They now live inside `modelConfig`. The unused `toolFormat` field has also been removed.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelType: "llm",
+  modelSrc: ".../model.gguf",
+  projectionModelSrc: ".../mmproj.gguf",
+});
+
+await loadModel({
+  modelType: "whisper",
+  modelSrc: ".../model.bin",
+  vadModelSrc: ".../vad.bin",
+});
+
+await loadModel({
+  modelType: "nmt",
+  modelSrc: ".../model.intgemm.alphas.bin",
+  srcVocabSrc: ".../srcvocab.spm",
+  dstVocabSrc: ".../trgvocab.spm",
+});
+```
+
+**After:**
+
+```typescript
+await loadModel({
+  modelType: "llm",
+  modelSrc: ".../model.gguf",
+  modelConfig: {
+    projectionModelSrc: ".../mmproj.gguf",
+  },
+});
+
+await loadModel({
+  modelType: "whisper",
+  modelSrc: ".../model.bin",
+  modelConfig: {
+    vadModelSrc: ".../vad.bin",
+  },
+});
+
+await loadModel({
+  modelType: "nmt",
+  modelSrc: ".../model.intgemm.alphas.bin",
+  modelConfig: {
+    srcVocabSrc: ".../srcvocab.spm",
+    dstVocabSrc: ".../trgvocab.spm",
+  },
+});
+```
+
+Additionally, custom plugins must now provide a `loadConfigSchema`. For plugins that accept any config, use a passthrough schema:
+
+```typescript
+const myPlugin: QvacPlugin = {
+  modelType: "my-plugin",
+  displayName: "My Plugin",
+  addonPackage: "@my/addon",
+  loadConfigSchema: z.object({}).catchall(z.unknown()),
+  createModel: (params) => ({ model, loader }),
+  handlers: {},
+};
+```
+
+##### Parakeet Model Constants Renamed
+
+All existing Parakeet model constants now include a variant prefix (`TDT_`) to distinguish them from the new CTC and Sortformer variants. This is a find-and-replace migration:
+
+| Old Constant | New Constant |
+|---|---|
+| `PARAKEET_ENCODER_*` | `PARAKEET_TDT_ENCODER_*` |
+| `PARAKEET_DECODER_*` | `PARAKEET_TDT_DECODER_*` |
+| `PARAKEET_VOCAB` | `PARAKEET_TDT_VOCAB` |
+| `PARAKEET_PREPROCESSOR_*` | `PARAKEET_TDT_PREPROCESSOR_*` |
+
+---
+
+#### New APIs
+
+##### Parakeet Transcription Plugin
+
+NVIDIA Parakeet ONNX models are now supported as an alternative transcription engine alongside Whisper.cpp. Parakeet uses a multi-file model architecture (encoder, encoder-data, decoder, vocab, preprocessor) resolved through the QVAC Registry.
+
+```typescript
+import {
+  PARAKEET_TDT_ENCODER_FP32,
+  PARAKEET_TDT_ENCODER_DATA_FP32,
+  PARAKEET_TDT_DECODER_FP32,
+  PARAKEET_TDT_VOCAB,
+  PARAKEET_TDT_PREPROCESSOR_FP32,
+} from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelType: "parakeet",
+  modelSrc: PARAKEET_TDT_ENCODER_FP32,
+  modelConfig: {
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
+    parakeetEncoderDataSrc: PARAKEET_TDT_ENCODER_DATA_FP32,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
+  },
+});
+
+const stream = transcribeStream({ modelId, audioInput: "./audio.mp3" });
+for await (const chunk of stream) {
+  process.stdout.write(chunk);
+}
+```
+
+Supports MP3, WAV, OGG, M4A, RAW, and FLAC audio formats. The plugin filters `[No speech detected]` chunks automatically, mirroring Whisper's `[BLANK_AUDIO]` filtering.
+
+##### Bergamot Pivot Translation
+
+Translate between language pairs that don't have a direct model by chaining through a pivot language (typically English). Configure the pivot model inside `modelConfig`:
+
+```typescript
+await loadModel({
+  modelSrc: BERGAMOT_ES_EN,
+  modelType: "nmt",
+  modelConfig: {
+    engine: "Bergamot",
+    from: "es",
+    to: "it",
+    pivotModel: {
+      modelSrc: BERGAMOT_EN_IT,
+      beamsize: 4,
+      temperature: 0.3,
+      topk: 100,
+      normalize: 1,
+      lengthpenalty: 1.2,
+    },
+  },
+});
+```
+
+##### SDK Profiler
+
+A built-in profiler lets you measure SDK operation performance at runtime. Enable it globally or on a per-call basis:
+
+```typescript
+import { profiler } from "@qvac/sdk";
+
+profiler.enable({
+  mode: "verbose",
+  includeServerBreakdown: true,
+});
+
+// Run operations, then export results
+console.log(profiler.exportSummary());
+console.log(profiler.exportTable());
+console.log(profiler.exportJSON({ includeRecentEvents: true }));
+
+profiler.disable();
+```
+
+Per-call profiling control is also available on `embed`, `completion`, `transcribe`, `translate`, `ragSearch`, and `invokePlugin`:
+
+```typescript
+await embed(
+  { modelId, text: "hello" },
+  { profiling: { enabled: true } },
+);
+```
+
+---
+
+#### Features
+
+##### CTC and Sortformer Transcription Models
+
+The SDK now supports two additional Parakeet model variants beyond the existing TDT models:
+
+**CTC transcription** for fast, streaming-friendly speech-to-text:
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: PARAKEET_CTC_FP32_1,
+  modelType: "parakeet",
+  modelConfig: {
+    modelType: "ctc",
+    parakeetCtcModelSrc: PARAKEET_CTC_FP32_1,
+    parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32_1,
+    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
+  },
+});
+const text = await transcribe({ modelId, audioChunk: "/path/to/audio.wav" });
+```
+
+**Sortformer diarization** for speaker identification:
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: PARAKEET_SORTFORMER_FP32,
+  modelType: "parakeet",
+  modelConfig: {
+    modelType: "sortformer",
+    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
+  },
+});
+const diarization = await transcribe({ modelId, audioChunk: "/path/to/audio.wav" });
+// Returns: "Speaker 0: 0.00s - 4.24s\nSpeaker 1: 4.65s - 14.32s\n..."
+```
+
+##### AfriqueGemma Support
+
+AfriqueGemma models for African language translation are now available through the SDK.
+
+##### Profiler Operation Transport and Metrics
+
+The profiler now captures detailed load/download metrics and stream profiling data, giving deeper visibility into SDK operation performance.
+
+---
+
+#### Bug Fixes
+
+- **Addon logging fixed across all plugins** — Logging callbacks were not being properly attached to some addon plugins, resulting in missing addon-level logs. All plugins now correctly route native addon logs through the SDK logging system.
+- **Parakeet addon logger** now uses the correct `params.modelId` for log routing.
+- **RPC race condition** in `getRPCInstance` resolved — concurrent initialization calls no longer create duplicate worker instances.
+- **Delegated model unload** now correctly unloads the model on the provider device instead of only removing the local registry entry.
+- **Stale delegated model entries** are replaced on re-registration instead of accumulating.
+
+---
+
+#### Model Changes
+
+##### Added Models
+
+**OCR:**
+- `OCR_DETECTOR_DB_MOBILENET_V3_LARGE`
+- `OCR_DETECTOR_DB_RESNET50`
+- `OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL`
+- `OCR_RECOGNIZER_PARSEQ`
+
+**Parakeet (CTC):**
+- `PARAKEET_CTC_FP32`, `PARAKEET_CTC_DATA_FP32`, `PARAKEET_CTC_VOCAB`, `PARAKEET_CTC_INT8`, `PARAKEET_CTC_CONFIG`
+- `PARAKEET_CTC_FP32_1`, `PARAKEET_CTC_DATA_FP32_1`, `PARAKEET_CTC_TOKENIZER`
+
+**Parakeet (Sortformer / EOU):**
+- `PARAKEET_SORTFORMER_FP32`
+- `PARAKEET_EOU_ENCODER_FP32`, `PARAKEET_EOU_DECODER_FP32`, `PARAKEET_EOU_TOKENIZER`
+
+**Parakeet (TDT — renamed from unprefixed):**
+- `PARAKEET_TDT_ENCODER_FP32`, `PARAKEET_TDT_ENCODER_DATA_FP32`, `PARAKEET_TDT_DECODER_FP32`, `PARAKEET_TDT_VOCAB`, `PARAKEET_TDT_PREPROCESSOR_FP32`
+- `PARAKEET_TDT_ENCODER_INT8`, `PARAKEET_TDT_DECODER_INT8`, `PARAKEET_TDT_PREPROCESSOR_INT8`
+
+##### Removed Models
+
+The following unprefixed Parakeet constants were replaced by their `TDT_` equivalents (see breaking changes):
+
+- `PARAKEET_ENCODER_FP32`, `PARAKEET_ENCODER_DATA_FP32`, `PARAKEET_DECODER_FP32`, `PARAKEET_VOCAB`, `PARAKEET_PREPROCESSOR_FP32`
+- `PARAKEET_ENCODER_INT8`, `PARAKEET_DECODER_INT8`, `PARAKEET_PREPROCESSOR_INT8`
+
+---
+
+#### Other Changes
+
+- Consolidated transcription schemas and shared ops into a unified structure.
+- Updated `@qvac/tts-onnx` to v0.6.1 and `@qvac/transcription-whispercpp` addon.
+- Aligned TTS plugin artifact patterns.
+- Ported Android E2E test workflow to the monorepo.
+- Improved changelog aggregation to prefer `CHANGELOG_LLM.md` when available.
+- Reorganized monorepo documentation structure.
+- Ported logging executor to direct assertions and added missing test handlers.
+- Enabled profiling in test-qvac desktop and mobile consumers.
+
+## v0.8.3
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.3
+
+This is a patch release that fixes a race condition in the KV cache save path during tool-calling completions, improving stability for multi-turn conversations that use tool integration.
+
+---
+
+#### Bug Fixes
+
+##### KV Cache Save Race Condition in Tool-Calling Completions
+
+The KV cache save during tool-calling completions could race with ongoing inference because the session path was not passed to the save command and the save response was not awaited. This could result in corrupted or missing session state between tool-call rounds.
+
+The fix ensures the save command receives the correct session path and the SDK awaits the save response before proceeding. If the save fails, the error is now logged as a warning instead of propagating as an unhandled exception, so inference can continue gracefully.
+
+**What changed:**
+
+- The cache save now explicitly passes the session path alongside the save instruction, preventing the addon from writing to a stale or missing path
+- The save response is awaited so subsequent inference steps don't race against an in-flight disk write
+- A new `logCacheSaveError` helper captures save failures as warnings, keeping the completion stream alive even if the cache write fails
+
+---
+
+#### Documentation
+
+- Added npm keywords to `package.json` for better discoverability on the npm registry, covering AI/ML, inference engines, supported platforms, and P2P capabilities.
+- Added a link to the consolidated plaintext documentation export (`llms-full.txt`) in the SDK README for AI/LLM tool consumption.
+
+## v0.8.2
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.2
+
+This is a maintenance release that refreshes the SDK README with a streamlined quickstart guide and updated documentation links pointing to the new docs site at docs.qvac.tether.io.
+
+---
+
+#### Documentation
+
+##### README Rewrite
+
+The SDK README has been rewritten to provide a cleaner onboarding experience. The verbose installation, usage, and feature sections have been replaced with a concise quickstart that gets users running in four steps, and all documentation links now point to the new docs site.
+
+Key changes:
+
+- **Simplified quickstart** — A minimal four-step guide (create workspace, install, write script, run) replaces the previous multi-section setup
+- **Updated links** — Documentation URLs now point to `docs.qvac.tether.io` instead of `qvac.tether.dev`
+- **Support channel** — The support link now points to the Discord channel instead of FeatureBase
+- **Leaner content** — Detailed platform instructions (Expo, Linux), feature lists, and example indexes have been moved to the docs site to keep the README focused
+
+---
+
+#### Infrastructure
+
+- SDK dependency installs in CI publish and pod check workflows are now frozen to prevent unexpected version drift during builds.
+
+## v0.8.1
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.1
+
+This release introduces a heartbeat mechanism for proactive provider health monitoring in delegated inference, and adds RPC health probes with delegated cancellation support. Several stability fixes address RPC progress throttling, registry download progress accuracy, and security alerts.
+
+---
+
+#### Breaking Changes
+
+##### Heartbeat Replaces Ping
+
+The `ping()` function has been replaced by `heartbeat()`, which extends health checking to support delegated (remote) providers. Local usage is a straightforward rename, while the new delegated mode lets consumers verify provider connectivity before initiating model loads or inference.
+
+**Before:**
+
+```typescript
+import { ping } from "@qvac/sdk";
+const pong = await ping();
+```
+
+**After:**
+
+```typescript
+import { heartbeat } from "@qvac/sdk";
+
+// Local heartbeat (replaces ping)
+await heartbeat();
+
+// Delegated heartbeat — verify a remote provider is reachable
+await heartbeat({
+  delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
+});
+```
+
+---
+
+#### New APIs
+
+##### RPC Health Probe for Delegation
+
+Delegated model loading now supports an optional `healthCheckTimeout` parameter. When set, the SDK performs an RPC-level health probe before attempting the load, and stale connections are cleaned up centrally rather than per-caller.
+
+```typescript
+await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  modelType: "llm",
+  delegate: {
+    topic: topicHex,
+    providerPublicKey,
+    timeout: 30_000,
+    healthCheckTimeout: 2000, // optional, defaults to 1500ms
+  },
+});
+```
+
+##### Delegated Cancellation
+
+Cancel operations now route automatically to remote providers when the target model is delegated. Inference cancellation requires no API change — the SDK detects delegation from the model registry. Remote download cancellation accepts an optional `delegate` field.
+
+```typescript
+// Cancel delegated inference (routes automatically via model registry)
+await cancel({ operation: "inference", modelId: "delegated-model-id" });
+
+// Cancel delegated remote download
+await cancel({
+  operation: "downloadAsset",
+  downloadKey: "download-key",
+  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
+});
+```
+
+---
+
+#### Bug Fixes
+
+- **IndicTrans model type unblocked** — The NMT translation plugin no longer incorrectly blocks IndicTrans models from loading, restoring multi-engine translation support.
+- **Accurate download progress** — Registry downloads now report progress from the network layer instead of disk I/O polling, giving real-time progress that reflects actual bytes received.
+- **RPC progress throttling** — Progress frames sent over RPC are now throttled to prevent call stack overflow when large models produce rapid progress updates.
+- **VLM addon classification** — The model registry has been regenerated to correctly classify VLM (Vision-Language Model) addons, fixing misrouted model loads.
+- **Security alerts resolved** — Code scanning alerts across SDK pod packages have been addressed.
+
+---
+
+#### Documentation
+
+- All SDK READMEs now reference the `@qvac` npm namespace instead of the legacy `@tetherto` scope.
+
+---
+
+#### Testing
+
+- New E2E tests cover parallel download scenarios and cancel isolation to prevent race conditions between concurrent operations.
+- The mobile E2E test executor has been refactored to an asset-based architecture for more reliable cross-platform testing.
+
+

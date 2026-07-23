@@ -1,0 +1,56 @@
+name: SDK E2E Fail On Failures
+description: >
+  Fails the calling step if any reports/results-*.json inside the given
+  report directory has summary.failed > 0, or if results are missing or
+  malformed. Designed to run as an inline step in the per-platform test
+  job so the red X appears on the exact matrix leg that failed.
+
+inputs:
+  report-dir:
+    description: Directory containing results-*.json files
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check e2e results
+      shell: node {0}
+      working-directory: ${{ inputs.report-dir }}
+      run: |
+        const fs = require('fs');
+
+        const resultFiles = fs.readdirSync('.')
+          .filter((file) => file.startsWith('results-') && file.endsWith('.json'))
+          .sort();
+        if (resultFiles.length === 0) {
+          console.error('❌ No results-*.json files found; cannot verify e2e result summary.');
+          process.exit(1);
+        }
+
+        let failed = 0;
+        let total = 0;
+        for (const file of resultFiles) {
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch (err) {
+            console.error(`❌ Failed to parse ${file}: ${err.message}`);
+            process.exit(1);
+          }
+          if (!report.summary || typeof report.summary.failed !== 'number') {
+            console.error(`❌ ${file} does not contain a numeric summary.failed value.`);
+            process.exit(1);
+          }
+
+          const fileTotal = typeof report.summary.total === 'number' ? report.summary.total : 0;
+          failed += report.summary.failed;
+          total += fileTotal;
+          console.log(`${file}: ${report.summary.failed} failed / ${fileTotal} total`);
+        }
+
+        if (failed > 0) {
+          console.error(`❌ E2E results contain ${failed} failed test(s) across ${resultFiles.length} report(s).`);
+          process.exit(1);
+        }
+
+        console.log(`✅ E2E result summaries are green (${total} total tests across ${resultFiles.length} report(s)).`);

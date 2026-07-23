@@ -1,0 +1,7 @@
+# Dependencies for export_easyocr_onnx.py
+#
+# Install: pip install -r requirements-export.txt
+
+easyocr>=1.7.0
+torch>=2.0.0
+onnx>=1.14.0

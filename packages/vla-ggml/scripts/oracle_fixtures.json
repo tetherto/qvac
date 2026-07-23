@@ -1,0 +1,13 @@
+{
+  "activations_sha256": "b7ded843ec8c6132c020596bc39dfad93a0b50df95a3b79fd65e87878188e848",
+  "checkpoint": "lerobot/pi05_base",
+  "checkpoint_revision": "9e55186ad36e66b95cda57bc47818d9e6237ae30",
+  "fixture_sha256": "7ff68e17415ef61f4e42c05054e585228a086802bb6fb80afb1f7e5fb700b029",
+  "lerobot_commit": "n/a (installed from PyPI lerobot==0.5.2)",
+  "lerobot_version": "0.5.2",
+  "num_keys": 52,
+  "python_executable": "/home/olya/lerobot/.venv/bin/python",
+  "seed": 0,
+  "torch_version": "2.10.0+cu128",
+  "transformers_version": "5.3.0"
+}

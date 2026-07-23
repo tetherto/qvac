@@ -1,0 +1,49 @@
+name: Autoformat yaml files
+description: Fail and print diff if yaml files are not formatted correctly
+
+inputs:
+  workdir:
+    description: "Working directory inside the repo (monorepo package path)"
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Make sure tree is clean
+      shell: bash
+      run: |
+        if git diff --quiet; then
+          exit 0
+        fi
+        echo "Error: working tree is not clean"
+        exit 1
+
+    - name: Set up Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # 6.3.0
+      with:
+        go-version: '>=1.22'
+
+    - name: install yamlfmt
+      shell: bash
+      run: go install github.com/google/yamlfmt/cmd/yamlfmt@v0.17.0
+
+    - name: yamlfmt
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: yamlfmt -formatter retain_line_breaks_single=true .
+
+    - name: Check for diffs
+      shell: bash
+      run: |
+        # Only consider diffs under workdir (monorepo-safe)
+        if git diff --quiet -- "${{ inputs.workdir }}"; then
+          exit 0
+        fi
+        echo "Some yaml files are not formatted correctly. Run yamlfmt"
+        echo "or apply the following diff manually:"
+        echo
+        git diff -- "${{ inputs.workdir }}" | cat
+        # Clean tree for subsequent steps (only workdir)
+        git checkout -- "${{ inputs.workdir }}"
+        exit 1

@@ -1,0 +1,88 @@
+name: On PR Close (Whispercpp)
+
+on:
+  pull_request:
+    types:
+      - closed
+    paths:
+      - "packages/transcription-whispercpp/**"
+      - ".github/workflows/*whispercpp*.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version to target for deletion"
+        required: false
+        type: string
+      pr-number:
+        description: "PR number to target for deletion"
+        required: false
+        type: string
+      pattern:
+        description: "Pattern to target for deletion"
+        required: false
+        type: string
+      packages:
+        description: "Packages to target for deletion, space separated"
+        required: false
+        type: string
+        default: "transcription-whispercpp"
+      dry-run:
+        description: "Is dry run? If true, lists versions without deleting."
+        type: boolean
+        default: true
+
+run-name: >-
+  Delete NPM Versions (whispercpp) v=${{ inputs.version }} pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }} dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+
+permissions:
+  contents: read
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  print-context:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - run: |
+          echo "Inputs Context: $INPUTS_CONTEXT"
+        env:
+          INPUTS_CONTEXT: ${{ toJSON(inputs) }}
+      - run: |
+          echo "GitHub Context: $GITHUB_CONTEXT"
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+
+  delete-npm-versions-trigger:
+    permissions:
+      packages: write
+    uses: ./.github/workflows/public-delete-npm-versions.yml
+    with:
+      version: ${{ inputs.version }}
+      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+      pattern: ${{ inputs.pattern }}
+      packages: ${{ inputs.packages || 'transcription-whispercpp' }}
+      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+    needs:
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true'
+

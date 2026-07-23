@@ -1,0 +1,79 @@
+/**
+ * Logger Instance Registry (Per-Process)
+ *
+ * Manages the lifecycle of all Logger instances in the CURRENT PROCESS.
+ * Client and server run as separate processes, each with their own registry instance.
+ *
+ * Purpose:
+ * - Tracks all Logger objects in this process (getLogger, createStreamLogger, etc.)
+ * - Enables process-wide log level control via setGlobalLogLevel()
+ * - Enables process-wide console output control via setGlobalConsoleOutput()
+ * - Ensures proper cleanup when loggers are no longer needed
+ *
+ * Config Integration:
+ * - loggerLevel and loggerConsoleOutput from config file apply to both processes
+ * - Client applies settings after loading config, server applies during __init_config
+ *
+ * NOTE: This is separate from server/bare/registry/logging-stream-registry.ts
+ * which manages RPC subscriptions for streaming logs to connected clients.
+ *
+ * IMPORTANT: Some bundlers may evaluate the same logical module multiple times with
+ * subpath imports like `#rpc`, which can duplicate internal module state.
+ * We use globalThis + Symbol.for() to guarantees a single instance across all
+ * module evaluations and runtimes.
+ */
+
+import type { LogLevel } from '@qvac/logging'
+import type { Logger } from './types'
+
+const REGISTRY_KEY = Symbol.for('@qvac/sdk:logger-registry')
+const GLOBAL_LEVEL_KEY = Symbol.for('@qvac/sdk:global-log-level')
+const GLOBAL_CONSOLE_KEY = Symbol.for('@qvac/sdk:global-console-output')
+
+type GlobalState = {
+  [REGISTRY_KEY]?: Set<Logger>
+  [GLOBAL_LEVEL_KEY]?: LogLevel
+  [GLOBAL_CONSOLE_KEY]?: boolean
+}
+
+function getGlobal(): GlobalState {
+  return globalThis as GlobalState
+}
+
+function getRegistry(): Set<Logger> {
+  const global = getGlobal()
+  if (!global[REGISTRY_KEY]) {
+    global[REGISTRY_KEY] = new Set<Logger>()
+  }
+  return global[REGISTRY_KEY]
+}
+
+export function registerLogger(logger: Logger) {
+  const global = getGlobal()
+  getRegistry().add(logger)
+
+  if (global[GLOBAL_LEVEL_KEY] !== undefined) {
+    logger.setLevel(global[GLOBAL_LEVEL_KEY])
+  }
+  if (global[GLOBAL_CONSOLE_KEY] !== undefined) {
+    logger.setConsoleOutput(global[GLOBAL_CONSOLE_KEY])
+  }
+}
+
+export function unregisterLogger(logger: Logger) {
+  getRegistry().delete(logger)
+}
+
+export function setGlobalLogLevel(level: LogLevel) {
+  getGlobal()[GLOBAL_LEVEL_KEY] = level
+  for (const logger of getRegistry()) {
+    logger.setLevel(level)
+  }
+}
+
+export function setGlobalConsoleOutput(enabled: boolean) {
+  getGlobal()[GLOBAL_CONSOLE_KEY] = enabled
+  for (const logger of getRegistry()) {
+    logger.setConsoleOutput(enabled)
+  }
+}

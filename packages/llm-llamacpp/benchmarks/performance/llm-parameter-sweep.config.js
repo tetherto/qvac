@@ -1,0 +1,152 @@
+'use strict'
+
+const fs = require('bare-fs')
+const path = require('bare-path')
+const os = require('bare-os')
+
+const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
+const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
+const MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
+const RESOLVED_MODELS_PATH = path.resolve(__dirname, 'resolved-models.json')
+const DEFAULT_PROMPTS_FILE = path.resolve(__dirname, 'test-prompts.json')
+const DEFAULT_REPEATS = 5
+
+// Benchmark baseline defaults
+const BENCH_DEFAULT_RUNTIME = {
+  device: 'gpu',
+  'gpu-layers': '99',
+  'ctx-size': '2048',
+  verbosity: '0',
+  'batch-size': '512',
+  'ubatch-size': '512',
+  'flash-attn': 'off',
+  temp: '0.1', // Override: addon default 0.8, using 0.1 for reproducibility
+  seed: '42', // Override: addon default -1, using 42 for determinism
+  'n-predict': '1024', // Override: addon default -1, using 1024 for long-output benchmarking
+  'top-p': '0.9', // Addon default
+  'top-k': '40', // Addon default
+  'repeat-penalty': '1.1', // Addon default
+  'presence-penalty': '0', // Addon default
+  'frequency-penalty': '0' // Addon default
+  // Not set (use llama.cpp defaults): threads, cache-type-k, cache-type-v
+}
+
+// Optional per-model runtime overrides for local testing
+// Example: { 'qwen3-1.7b': { 'gpu-layers': '35' } }
+const MODEL_RUNTIME_OVERRIDES = {
+}
+
+function getDefaultSweepDevices () {
+  const platform = os.platform()
+  // Default to GPU on desktop and most platforms; keep CPU in Android defaults.
+  return platform === 'android' ? ['cpu', 'gpu'] : ['gpu']
+}
+
+function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
+  const manifestQuants = Array.isArray(manifestModel.gguf && manifestModel.gguf.quantizations)
+    ? manifestModel.gguf.quantizations
+    : []
+
+  if (resolvedModelEntry && resolvedModelEntry.gguf && resolvedModelEntry.gguf.files) {
+    const normalized = {}
+    for (const [quantization, localPath] of Object.entries(resolvedModelEntry.gguf.files)) {
+      normalized[quantization] = path.basename(localPath)
+    }
+    return normalized
+  }
+
+  const fallback = {}
+  for (const quantization of manifestQuants) {
+    fallback[quantization] = null
+  }
+  return fallback
+}
+
+function loadModelsFromManifest () {
+  const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
+  let resolved = null
+  if (fs.existsSync(RESOLVED_MODELS_PATH)) {
+    resolved = JSON.parse(fs.readFileSync(RESOLVED_MODELS_PATH, 'utf8'))
+  }
+
+  const manifestModels = manifest.models || []
+  return manifestModels.map((model) => {
+    const resolvedEntry = resolved && resolved.models ? resolved.models[model.id] : null
+    const quantizationFiles = buildQuantizationFiles(model, resolvedEntry)
+    const defaults = {
+      ...BENCH_DEFAULT_RUNTIME,
+      ...(MODEL_RUNTIME_OVERRIDES[model.id] || {})
+    }
+    return {
+      id: model.id,
+      source: `https://huggingface.co/${model.gguf.repo}`,
+      modelDir: DEFAULT_MODELS_DIR,
+      quantizations: Array.isArray(model.gguf.quantizations) ? model.gguf.quantizations : [],
+      quantizationFiles,
+      defaults
+    }
+  })
+}
+
+const MODELS = loadModelsFromManifest()
+
+// Parameter sweep (cartesian product). Tuned to the focused sweep:
+// quantization, KV-cache type, and reasoning-budget vary; every other dimension
+// is pinned to a single value. Edit these arrays to sweep more dimensions.
+// KV-cache is swept symmetrically (cache-type-k === cache-type-v): the cartesian
+// produces every k/v combination, but case-runner skips the mixed ones, so only
+// f16/q8_0/q4_0 symmetric pairs run. flash-attn is ON: a quantized KV-cache
+// (q8_0/q4_0) requires flash-attention — without it the context fails to
+// initialize ("Failed to initialize context") on both CUDA and Metal. f16 runs
+// fine with flash-attn on, so the whole KV sweep shares one flash-attn setting.
+const PARAMETER_SWEEP = {
+  quantization: ['Q4_0', 'Q4_1', 'Q4_K_M', 'Q6_K', 'Q8_0'],
+  device: getDefaultSweepDevices(),
+  'ctx-size': ['2048'],
+  threads: ['4'],
+  'batch-size': ['512'],
+  'ubatch-size': ['512'],
+  'flash-attn': ['on'],
+  'cache-type-k': ['f16', 'q8_0', 'q4_0'],
+  'cache-type-v': ['f16', 'q8_0', 'q4_0'],
+  'reasoning-budget': ['-1', '0']
+  // verbosity: fixed at '0' (not swept)
+}
+
+// Additive batch/ubatch sweep, run once at a fixed representative baseline
+// rather than crossed with PARAMETER_SWEEP. batch-size/ubatch-size only affect
+// prefill throughput (ppTPS), and the ppTPS-vs-batch curve is invariant across
+// quantization and KV-cache type, so crossing batch with those axes would only
+// replicate the same curve; measuring it once at the baseline keeps the cost
+// additive (+batch cells) instead of multiplicative. batch-size === ubatch-size
+// (the diagonal; mixed pairs are not benchmarked). Every batch is measured
+// against the SAME fixed long prompt — the ctx-filling case at ctx-size 8192
+// (~7k tokens) — so each batch chunks a full prefill and the ppTPS numbers are
+// directly comparable across batch sizes (a batch-matched prompt would vary the
+// prompt length per batch and confound the comparison).
+const BATCH_SWEEP = {
+  promptCase: 'ctx-filling',
+  quantization: 'Q4_K_M',
+  device: getDefaultSweepDevices(),
+  'ctx-size': '8192',
+  'batch-size': ['512', '1024', '2048', '4096'],
+  'flash-attn': 'on',
+  'cache-type-k': 'f16',
+  'cache-type-v': 'f16',
+  'reasoning-budget': '-1',
+  threads: '4'
+}
+
+module.exports = {
+  DEFAULT_RESULTS_DIR,
+  DEFAULT_MODELS_DIR,
+  MANIFEST_PATH,
+  RESOLVED_MODELS_PATH,
+  DEFAULT_REPEATS,
+  DEFAULT_PROMPTS_FILE,
+  BENCH_DEFAULT_RUNTIME,
+  MODEL_RUNTIME_OVERRIDES,
+  MODELS,
+  PARAMETER_SWEEP,
+  BATCH_SWEEP
+}

@@ -1,0 +1,85 @@
+{
+  "name": "@qvac/rag",
+  "version": "0.6.4",
+  "main": "index.js",
+  "scripts": {
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "test:unit": "brittle-bare test/unit/*.test.js",
+    "test:integration": "brittle-bare test/integration/*.test.js",
+    "test": "npm run lint && npm run format && npm run test:unit && npm run test:integration",
+    "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.js"
+  },
+  "license": "Apache-2.0",
+  "author": "Tether",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/rag"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "files": [
+    "src",
+    "index.js",
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "types": "index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./errors": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    },
+    "./errors.js": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    }
+  },
+  "imports": {
+    "#crypto": {
+      "bare": "bare-crypto",
+      "node": "node:crypto",
+      "react-native": "./src/shims/crypto.js",
+      "default": "./src/shims/crypto.js"
+    },
+    "#fetch": {
+      "bare": "bare-fetch",
+      "node": "./src/shims/fetch.js",
+      "react-native": "./src/shims/fetch.js",
+      "default": "./src/shims/fetch.js"
+    }
+  },
+  "devDependencies": {
+    "@qvac/embed-llamacpp": "^0.14.0",
+    "@qvac/llm-llamacpp": "^0.16.0",
+    "@qvac/registry-client": "^0.6.0",
+    "bare-fs": "^4.1.6",
+    "bare-path": "^3.0.0",
+    "brittle": "^3.14.0",
+    "corestore": "^7.4.7",
+    "lunte": "^1.8.1",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "test-tmp": "^1.4.0"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.1",
+    "bare-crypto": "^1.13.4",
+    "bare-fetch": "^3.0.1",
+    "hyperdb": "^6.7.0",
+    "hyperdht": "^6.23.0",
+    "hyperschema": "^1.13.0",
+    "llm-splitter": "^0.2.0",
+    "ready-resource": "^1.1.2",
+    "zod": "^4.1.13"
+  }
+}

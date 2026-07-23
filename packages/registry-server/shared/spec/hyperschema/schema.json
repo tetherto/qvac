@@ -1,0 +1,214 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "name": "model-blob-binding",
+      "namespace": "qvac-main-registry",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "coreKey",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "blockOffset",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "blockLength",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "byteOffset",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "byteLength",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "sha256",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "license",
+      "namespace": "qvac-main-registry",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "spdxId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "url",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "text",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "model",
+      "namespace": "qvac-main-registry",
+      "compact": false,
+      "flagsPosition": 5,
+      "fields": [
+        {
+          "name": "path",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "source",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "engine",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "licenseId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "blobBinding",
+          "required": true,
+          "type": "@qvac-main-registry/model-blob-binding",
+          "version": 1
+        },
+        {
+          "name": "quantization",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "params",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "description",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "notes",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "tags",
+          "required": false,
+          "array": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "deprecated",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "deprecatedAt",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "replacedBy",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "deprecationReason",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "ggufMetadata",
+          "required": false,
+          "type": "string",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "name": "model-key",
+      "namespace": "qvac-main-registry",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "path",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "source",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "writer",
+      "namespace": "qvac-main-registry",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}

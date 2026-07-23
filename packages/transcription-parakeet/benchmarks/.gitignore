@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Results (keep only .gitkeep)
+results/*
+!results/.gitkeep

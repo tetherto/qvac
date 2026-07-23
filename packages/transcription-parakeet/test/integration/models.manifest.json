@@ -1,0 +1,71 @@
+{
+  "cacheEpoch": 1,
+  "source": "s3",
+  "models": {
+    "parakeet-tdt-0.6b-v3.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+      "sha256": "896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416",
+      "bytes": 1407544256
+    },
+    "parakeet-ctc-0.6b.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf",
+      "sha256": "b4e813c1b6057c4c005e9996a0724b02aedc339f5d1b7c9c0c5a8b4ebdeb75cf",
+      "bytes": 1371674432
+    },
+    "parakeet-eou-120m-v1.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+      "sha256": "d474dacc63ad8df1a9003f888bcb48c476d7dadec3e2ef5106a75f426e47cb63",
+      "bytes": 257939840
+    },
+    "sortformer-4spk-v1.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
+      "sha256": "c6206e62af54a4ebb2fb07847dc6e6b58c3938a210fabfd81a1e1f21a9362b76",
+      "bytes": 275697312
+    },
+    "parakeet-ctc-0.6b.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf",
+      "sha256": "2b7fce0479f6f18e90a0ff50d644bc9cee6b2382fddf8fca88364bbf729343da",
+      "bytes": 389648768
+    },
+    "parakeet-tdt-0.6b-v3.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+      "sha256": "0f26bd6cfe8ba53624ea67ed2df7ddaa70179efc82160264561a0f05b70ba23d",
+      "bytes": 749625216
+    },
+    "parakeet-ctc-0.6b.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf",
+      "sha256": "934a88915e4bbd87c067ea4a149d711238a516f75d336a74d47dc0a7828ddda4",
+      "bytes": 731222912
+    },
+    "parakeet-eou-120m-v1.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+      "sha256": "c7b7f62d27791ef96049955667de5650684617f4a29f4cf5810e9ab831492cd3",
+      "bytes": 138051456
+    },
+    "sortformer-4spk-v1.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf",
+      "sha256": "a86507784387612b1fe737cdc52378f6f277dd5e7794166278043b24bcda6541",
+      "bytes": 147436704
+    },
+    "parakeet-tdt-0.6b-v3.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+      "sha256": "e29d2749b0d38d827f9649c410a075894a329409f750287b8e7dfb1c6e2e7b5e",
+      "bytes": 398735040
+    },
+    "parakeet-eou-120m-v1.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+      "sha256": "a1fb4ab2a6dd8a931e67d08b24e6e277e5163d26abb495fe730a23385964fc36",
+      "bytes": 74110976
+    },
+    "sortformer-4spk-v1.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf",
+      "sha256": "f1f9f6215ee535b2d07e26e398ced16d2d598a330a33d75297d1fafa65a4075f",
+      "bytes": 79031136
+    },
+    "diar_streaming_sortformer_4spk-v2.1.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+      "sha256": "1d593b947fbf5dca16f6d17266e4c587f01fb265994b2612783287c5cd735d15",
+      "bytes": 140717952
+    }
+  }
+}

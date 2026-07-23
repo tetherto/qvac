@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "asana": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-asana"],
+      "env": {
+        "ASANA_ACCESS_TOKEN": "${ASANA_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

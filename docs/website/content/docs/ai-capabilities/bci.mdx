@@ -1,0 +1,88 @@
+---
+title: BCI
+description: Brain–computer interface (BCI) transcription — decode multi-channel neural signals into text.
+schemaType: HowTo
+---
+
+## Overview
+
+Brain–computer interface (BCI) transcription uses a **GGML** engine ([`@qvac/bci-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp), built on the [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) fork) to decode multi-channel neural signals (e.g., 512-channel microelectrode-array recordings) into text. Load a model using `modelType: "bci"`.
+
+BCI consumes a **neural-signal buffer**. Provide the signal as `neuralData`, either as a file path (string, to a `.bin` file) or an in-memory `Uint8Array` buffer.
+
+`bciTranscribe()` returns the complete transcript as a `string`, or — with `metadata: true` (as in the batch example below) — an array of segments, each with `text` and `startMs`/`endMs` timing. If you need partial results as they become available, use `bciTranscribeStream()` to open a duplex session that decodes a sliding window over the signal and yields transcript text as data arrives.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`bciTranscribe()`](/reference/api#bcitranscribe) or [`bciTranscribeStream()`](/reference/api#bcitranscribestream)
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+<Callout type="info">
+**Neural signal format:** the `neuralData` input is a binary `.bin` file (or equivalent `Uint8Array`) with an 8-byte header — `[timesteps: uint32 LE, channels: uint32 LE]` — followed by row-major `float32` feature data (`features[t * channels + c]`). Each timestep represents a 20 ms bin of neural activity; channels correspond to individual electrodes in a microelectrode array (typically 512 channels). When streaming, this same header must lead the written bytes (`timesteps` is then ignored; `channels` must be non-zero).
+</Callout>
+
+<Callout type="info">
+**On the day index:** sessions recorded on different days use different day-specific projections. Set `modelConfig.bciConfig.day_idx` in `loadModel()` to match the recording session of the input signal — otherwise the decoded text will be misleading.
+</Callout>
+
+## Models
+
+BCI transcription loads a **companion set** of two files, both required for inference:
+- `ggml-bci-windowed.bin` — the GGML model: Whisper encoder/decoder (LoRA-merged), tokenizer, positional embedding, and windowed-attention header. Available constant: `BCI_WINDOWED`.
+- `bci-embedder.bin` — day-projection weights: per-recording-day low-rank matrices, month projections, and session-to-day mapping. Available constant: `BCI_EMBEDDER`.
+
+For model artifacts available as constants, see [SDK — Models](/introduction#models).
+
+## Examples
+
+### Batch
+
+The following script transcribes a full neural signal up-front and prints the decoded text:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/bci/bci-filesystem.js title="bci-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/bci/bci-filesystem.ts title="bci-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Streaming
+
+The following script feeds neural-signal chunks into a duplex session and prints transcript text as it is decoded:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/bci/bci-filesystem-streaming.js title="bci-filesystem-streaming.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/bci/bci-filesystem-streaming.ts title="bci-filesystem-streaming.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>

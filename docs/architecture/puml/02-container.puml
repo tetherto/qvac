@@ -1,0 +1,36 @@
+@startuml
+!include <C4/C4_Container>
+
+title QVAC SDK – Container Diagram
+
+Person(dev, "Application Developer", "Integrates SDK into desktop or mobile apps")
+
+System_Boundary(sdk, "QVAC SDK") {
+    Container(client, "@qvac/sdk Client", "TypeScript", "Public API, config loading, RPC transport")
+    Container(worker, "Worker", "TypeScript/C++ on Bare Runtime", "RPC server, plugin host, inference engines")
+    ContainerDb(cache, "Model Cache", "Filesystem", "Downloaded models (~/.qvac/models)")
+    ContainerDb(rag_store, "RAG Storage", "HyperDB / Corestore", "Vector embeddings per workspace")
+}
+
+System_Ext(dht, "Hyperswarm DHT", "P2P peer discovery")
+System_Ext(hyperdrive, "Hyperdrive Peers", "P2P model hosting")
+System_Ext(cdn, "HTTP Servers", "CDN / direct download")
+System_Ext(registry, "QVAC Model Registry", "Catalog and HTTP downloads")
+System_Ext(providers, "Remote Providers", "Delegated inference via P2P")
+
+Rel_D(dev, client, "Calls SDK API")
+Rel_D(client, worker, "JSON-RPC over IPC / native bridge")
+Rel_L(worker, cache, "Reads/writes model files")
+Rel_R(worker, rag_store, "Persists/queries vectors")
+Rel_D(worker, dht, "Discovers peers via DHT")
+Rel_D(worker, hyperdrive, "Downloads models via P2P")
+Rel_D(worker, cdn, "Downloads models via HTTP")
+Rel_D(worker, registry, "Queries catalog, downloads models")
+Rel_D(worker, providers, "Delegates inference requests")
+
+Lay_R(dht, hyperdrive)
+Lay_R(hyperdrive, cdn)
+Lay_R(cdn, registry)
+Lay_R(registry, providers)
+
+@enduml

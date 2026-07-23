@@ -1,0 +1,17 @@
+{
+  "name": "release-merge-guard",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.0",
+    "@actions/github": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@vercel/ncc": "^0.38.4",
+    "typescript": "^6.0.2"
+  }
+}

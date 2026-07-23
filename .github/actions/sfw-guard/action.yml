@@ -1,0 +1,90 @@
+name: "Socket Firewall Guard"
+description: "Auto-wrap npm/yarn/pnpm, pip/uv, cargo via PATH shims so later steps are scanned"
+inputs:
+  managers:
+    description: "Comma-separated managers to guard"
+    required: false
+    default: "npm,yarn,pnpm,pip,pip3,uv,cargo"
+  clear-caches:
+    description: "Clear package-manager caches to avoid bypassing network scans"
+    required: false
+    default: "false"
+  firewall-mode:
+    description: "SocketDev/action mode (firewall-free or firewall-enterprise)"
+    required: false
+    default: "firewall-free"
+  socket-token:
+    description: "Required only for firewall-enterprise"
+    required: false
+    default: ""
+  workdir: 
+    default: "."
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Socket Firewall
+      id: sfw
+      uses: SocketDev/action@937f824ec476dfd164d4a4d9995751427b0be143 # 1.3.0
+      with:
+        mode: ${{ inputs.firewall-mode }}
+        socket-token: ${{ inputs.socket-token }}
+
+    - name: Create shims (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir="${{ github.workspace }}/.sfw-shims"
+        mkdir -p "$dir"
+        IFS=, read -ra M <<< "${{ inputs.managers }}"
+        make_shim () {
+          local name="$1"
+          printf '#!/usr/bin/env bash\nexec sfw %q "$@"\n' "$name" > "$dir/$name"
+          chmod +x "$dir/$name"
+        }
+        for m in "${M[@]}"; do make_shim "$m"; done
+        echo "$dir" >> "$GITHUB_PATH"
+
+    - name: Create shims (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir="${{ github.workspace }}\\.sfw-shims"
+        mkdir -p "$dir"
+        IFS=, read -ra M <<< "${{ inputs.managers }}"
+        for m in "${M[@]}"; do
+          cat > "$dir/${m}.cmd" <<EOF
+        @echo off
+        sfw ${m} %*
+        EOF
+          printf '#!/usr/bin/env bash\nexec sfw %q "$@"\n' "$m" > "$dir/$m"
+        done
+        chmod +x "$dir"/* || true
+        echo "$dir" >> "$GITHUB_PATH"
+
+    - name: (Optional) Clear package caches
+      if: inputs.clear-caches == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        (npm cache clean --force || true)
+        (pnpm store prune || true)
+        (yarn cache clean || true)
+        (pip cache purge || true)
+        (uv cache prune || true)
+        (rm -rf "${CARGO_HOME:-$HOME/.cargo}/registry" "${CARGO_HOME:-$HOME/.cargo}/git" || true)
+
+    - name: Diagnostics — prove guard is active
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "workdir: ${{ inputs.workdir }}"
+        echo "sfw version:"; sfw --version || true
+        echo "PATH head:"; echo "$PATH" | awk -F: '{print $1}'
+        for exe in npm pip pip3 uv cargo; do
+          which "$exe" && ls -l "$(command -v "$exe")" || true
+        done
+        echo "Note: The .sfw-shims dir should appear first, and executables should resolve there."

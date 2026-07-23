@@ -1,0 +1,45 @@
+# Build-only workflow. Publishing is handled by on-merge-ocr-ggml.yml.
+name: "Prebuilds (OCR-GGML)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/ocr-ggml"
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/ocr-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: ggml-ocr-
+      include-vulkan-sdk: true
+    secrets: inherit

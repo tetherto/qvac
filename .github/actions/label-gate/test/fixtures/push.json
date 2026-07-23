@@ -1,0 +1,11 @@
+{
+  "ref": "refs/heads/release-1.x",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "1111111111111111111111111111111111111111",
+  "repository": {
+    "full_name": "tetherto/qvac"
+  },
+  "sender": {
+    "login": "alice-team-member"
+  }
+}

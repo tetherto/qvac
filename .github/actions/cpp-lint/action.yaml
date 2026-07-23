@@ -1,0 +1,167 @@
+name: C++ lint check
+description: "Run C++ lint check"
+
+inputs:
+  secret-token:
+    description: "Secret token"
+    required: true
+  pat-token:
+    description: "PAT token"
+    required: false
+  ref:
+    description: "Ref"
+    required: false
+  repository:
+    description: "Repository"
+    required: false
+  target_sha:
+    description: "SHA"
+    required: false
+  pr_head_sha:
+    description: "PR head SHA"
+    required: false
+  workdir: 
+    default: "."
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout PR head and target
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        token: ${{ inputs.pat-token }}
+        fetch-depth: 0
+
+    - name: Configure git
+      shell: bash
+      run: git config --global --add url."https://${{ inputs.pat-token }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: 18
+
+    - name: Restore npm cache
+      id: cache-npm
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      with:
+        key: npm-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+        path: ~/.npm
+        restore-keys: npm-${{ runner.os }}-
+
+    - run: |
+        # @qvac/* from npmjs.org
+        echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+        echo "//registry.npmjs.org/:_authToken=${{ inputs.secret-token }}" >> .npmrc
+
+        # @tetherto/* from GitHub Packages
+        echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${{ inputs.pat-token }}" >> .npmrc
+
+        git config --global url."https://${{  inputs.pat-token }}:@github.com/".insteadOf "https://github.com/"
+      shell: bash
+
+    - name: Install dependencies
+      shell: bash
+      continue-on-error: true
+      working-directory: ${{ inputs.workdir }}
+      run: npm install
+
+    - name: Configure vcpkg
+      shell: bash
+      run: |
+        echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+        export VCPKG_BINARY_SOURCES="clear;files,$GITHUB_WORKSPACE/vcpkg/cache,readwrite"
+
+    - name: Create vcpkg cache location
+      shell: bash
+      run: mkdir -p vcpkg/cache
+ 
+    - name: Get vcpkg cache
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      with:
+        key: linux-x64-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
+        path: vcpkg/cache
+        restore-keys: linux-x64-
+
+    - name: Install bare-make
+      id: install_bare_make
+      continue-on-error: true
+      shell: bash
+      run: |
+        npm install -g --force bare-make
+
+    - name: Install vulkan
+      continue-on-error: true
+      shell: bash
+      run: |
+        wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+        sudo apt update
+        sudo apt install vulkan-sdk
+
+    - name: Setup LLVM
+      uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+
+    - name: Generate build system
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        which bare-make|| echo "bare-make not found"
+        bare-make --version || echo "bare-make command failed"
+        if ! command -v bare-make >/dev/null; then
+          echo "bare-make not installed, skipping"
+          exit 0
+        fi
+        bare-make generate -D BUILD_TESTING=ON
+
+    - name: Check C++ files format
+      continue-on-error: true
+      shell: bash
+      env:
+        TARGET_SHA: ${{ inputs.target_sha }}
+        PR_HEAD_SHA: ${{ inputs.pr_head_sha }}
+      run: |
+        if [ -z "$TARGET_SHA" ] || [ -z "$PR_HEAD_SHA" ]; then
+          echo "No target or head SHA specified, skipping format check."
+          exit 0
+        fi
+
+        OUTPUT=$(git-clang-format --binary clang-format --diff "$TARGET_SHA" "$PR_HEAD_SHA" 2>&1)
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+          if echo "$OUTPUT" | grep -q "no modified files to format"; then
+            echo "No modified C++ files to format, skipping error."
+            exit 0
+          else
+            echo "::error title=Unformatted C++ files::Please format your C++ files."
+            echo "$OUTPUT"
+            exit 1
+          fi
+        fi
+
+    - name: Build
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        if ! command -v bare-make >/dev/null; then
+          echo "bare-make not installed, skipping build"
+          exit 0
+        fi
+        bare-make build
+
+    - name: Run C++ tests
+      shell: bash
+      continue-on-error: true
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        if ! command -v bare-make >/dev/null; then
+          echo "bare-make not installed, skipping tests"
+          exit 0
+        fi
+        bare-make test

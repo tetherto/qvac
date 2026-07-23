@@ -1,0 +1,63 @@
+name: Docs Website PR Checks
+
+on:
+  pull_request:
+    paths:
+      - 'docs/website/**'
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-website-pr-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: docs/website
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          # Pinned (vs `latest`) so a compromised Bun release can't be picked
+          # up automatically on the next CI run, including for fork PRs.
+          # Keep in sync with the `bun: ^1.3.11` devDep in docs/website/package.json.
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build and validate
+        # The API summary `index.mdx` (and its older-version siblings) lives
+        # at `content/docs/reference/api/`. It is committed to the repo and
+        # refreshed locally by the `qv-sdk-changelog` skill (Step 8) during
+        # SDK release prep, so every PR checkout already has it on disk — no
+        # placeholder step is needed here. (The historical placeholder
+        # targeted the legacy `content/docs/sdk/api/` path, which the build
+        # never read.)
+        run: bun run build
+
+      - name: Run docs tests
+        run: bun run vitest run --exclude '**/tsdoc-completeness*'
+
+      - name: Install SDK dependencies
+        id: sdk-install
+        continue-on-error: true
+        run: bun install
+        working-directory: packages/sdk
+
+      - name: TSDoc completeness audit (warning mode)
+        if: steps.sdk-install.outcome == 'success'
+        continue-on-error: true
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: bun run vitest run tests/tsdoc-completeness.test.ts

@@ -1,0 +1,96 @@
+@startuml
+title Domain Model
+
+top to bottom direction
+
+class Plugin {
+    modelType: string
+    displayName: string
+    addonPackage: string
+    handlers: Record<string, HandlerDef>
+    createModel(params): PluginModelResult
+}
+
+class Model {
+    modelId: string
+    modelType: string
+    config: object
+    name?: string
+}
+
+class ModelConstant {
+    name: string
+    src: string
+    modelId: string
+    hyperdriveKey: string
+    expectedSize: number
+    sha256Checksum: string
+    addon: string
+}
+
+class ModelSource {
+    <<union>>
+    pear://key/path
+    https://url
+    /local/path
+    ModelConstant object
+}
+
+class Message {
+    role: string
+    content: string
+}
+
+class Attachment {
+    path: string
+    type: image
+}
+
+class Tool {
+    name: string
+    schema: JSONSchema
+}
+
+class Response {
+    tokenStream: AsyncIterator
+    stats: object
+    toolCalls: ToolCall[]
+}
+
+class RAGWorkspace {
+    workspaceId: string
+    embeddingModelId: string
+}
+
+class RAGDocument {
+    docId: string
+    content: string
+    metadata: object
+}
+
+class Provider {
+    topic: string
+    firewall: allow|deny
+}
+
+class Consumer {
+    providerPublicKey: string
+    topic: string
+}
+
+Plugin "1" --> "0..*" Model : creates
+ModelSource "1" --> "1" Model : loads
+ModelConstant --|> ModelSource : is a
+
+Message "0..*" --> "0..*" Attachment : contains
+Message "0..*" ..> Model : input to (llm)
+Tool "0..*" ..> Model : registered with (llm)
+Model "1" --> "1" Response : produces
+
+RAGWorkspace "1" --> "1" Model : uses (embeddings)
+RAGWorkspace "1" --> "0..*" RAGDocument : stores
+
+Provider "1" --> "1" Model : exposes
+Consumer "0..*" --> "1" Provider : delegates to
+
+@enduml

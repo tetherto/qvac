@@ -1,0 +1,46 @@
+name: PR Validation (SDK Pod)
+
+permissions:
+  contents: read
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+    paths:
+      - "packages/sdk/**"
+      - "packages/cli/**"
+      - "packages/rag/**"
+      - "packages/logging/**"
+      - "packages/error/**"
+      - "packages/ai-sdk-provider/**"
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Validate PR title and description
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        shell: bash
+        run: |
+          echo "🔍 Validating PR..."
+          echo "Title: $PR_TITLE"
+          echo ""
+
+          # Run validator
+          node scripts/sdk/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"

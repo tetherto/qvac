@@ -1,0 +1,45 @@
+---
+description: Defines SDK pod packages - the central source of truth for package scope
+alwaysApply: true
+---
+
+# SDK Pod Packages
+
+The following packages belong to the SDK pod:
+
+- `packages/sdk`
+- `packages/cli`
+- `packages/rag`
+- `packages/logging`
+- `packages/error`
+- `packages/ai-sdk-provider`
+- `packages/inference`
+- `packages/registry-server`
+
+When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
+
+## Glob Patterns
+
+For rules that need glob patterns:
+
+```yaml
+globs:
+  - packages/sdk/**
+  - packages/cli/**
+  - packages/rag/**
+  - packages/logging/**
+  - packages/error/**
+  - packages/ai-sdk-provider/**
+  - packages/inference/**
+  - packages/registry-server/**
+```
+
+## Skill Naming Convention
+
+Skills for SDK pod should use the `qv-sdk-` prefix:
+
+- `qv-sdk-pr-create`
+- `qv-sdk-changelog`
+- `qv-sdk-backmerge`
+- `qv-sdk-e2e-create`
+- `qv-sdk-pr-status`

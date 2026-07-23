@@ -1,0 +1,16 @@
+dist
+.DS_Store
+node_modules
+*.gguf
+.rag-*
+.npmrc
+package-lock.json
+e2e/reports/*
+!e2e/reports/.gitkeep
+.env
+.secrets
+.artifacts
+qvac/
+PR_DESCRIPTION.md
+examples/finetune/results/
+*.tgz

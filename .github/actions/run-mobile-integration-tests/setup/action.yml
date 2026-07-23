@@ -1,0 +1,308 @@
+name: Mobile Test — Setup
+description: |
+  Phase 1 of the mobile integration test pipeline.
+
+  Frees up disk space (Linux runners), checks out the qvac-test-addon-mobile
+  framework into ./test-framework, sets up Node.js, installs the Expo CLI,
+  resolves the addon's prebuilds (PR artifacts -> npm fallback -> committed),
+  and prunes desktop prebuilds to keep the runner from running out of disk.
+
+  Prebuild precedence: CI artifacts win by default (artifact-first). A caller
+  that needs a PINNED published version instead (e.g. the baseline session of a
+  candidate-vs-baseline benchmark) MUST set force-npm-prebuild=true alongside
+  package-version — artifact presence alone would otherwise silently shadow the
+  pin with binaries built in the same run (QVAC-21879). Any addon workflow that
+  adds a pinned-npm session must wire this input the way
+  integration-mobile-test-llm-llamacpp.yml does.
+
+  Pre-condition: the consumer has already checked out the addon repository
+  at ./addon/. We do NOT check the addon out here so the consumer can run
+  addon-specific pre-steps between checkout and this phase (NMT model URLs,
+  OCR S3 fetches, etc.).
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  addon-workdir:
+    description: "Relative path to the addon package within the addon checkout"
+    required: true
+  addon-npm-name:
+    description: "NPM package name (used for npm fallback prebuild download)"
+    required: true
+  prebuild-artifact-prefix:
+    description: "Prefix used for prebuild artifact names (empty if none)"
+    required: false
+    default: ""
+  skip-prebuilds:
+    description: |
+      When 'true', skip every prebuild handling step (artifact download,
+      npm fallback, verify, prune). Used by addons whose native code is
+      provided transitively (e.g. decoder-audio relies on bare-ffmpeg's
+      prebuilds, not its own).
+    required: false
+    default: "false"
+  pat-token:
+    description: "GitHub PAT used to clone qvac-test-addon-mobile"
+    required: true
+  test-framework-ref:
+    description: "Branch/tag of qvac-test-addon-mobile to check out"
+    required: false
+    default: "main"
+  package-version:
+    description: |
+      NPM dist-tag / version, OR a full scoped package spec pulled when the
+      consumer pins a published build (e.g. "1.4.0", "latest", or
+      "@qvac/transcription-parakeet@1.0.0"). A value starting with "@scope/" is
+      treated as a complete name@version spec and passed to `npm pack` verbatim;
+      a bare version/tag is prefixed with `addon-npm-name`. Defaults to "latest"
+      when empty. Whisper / TTS / Parakeet / benchmark callers wire their
+      dispatch `version` or `prebuild_package` input through here so runs can pin
+      a specific published version.
+    required: false
+    default: ""
+  force-npm-prebuild:
+    description: |
+      When "true", ignore ALL CI prebuild artifacts (per-matrix and the merged
+      `prebuilds` artifact) and pull the native prebuild from npm at
+      `package-version`. Used by the baseline leg of a candidate-vs-baseline
+      benchmark: without this, the merged `prebuilds` artifact (built from the
+      candidate in the same run) is pulled in when the per-matrix artifact is
+      absent, so the baseline session would silently run the candidate binary.
+      Defaults to "false" so existing artifact-first callers are unchanged.
+    required: false
+    default: "false"
+  allow-npm-fallback:
+    description: |
+      Whether the npm fallback (npm pack <addon>@<version>) is allowed when
+      no CI prebuild artifacts are present. Defaults to "false" so that
+      PR-triggered runs (pull_request / pull_request_target) NEVER silently
+      test the published release instead of the PR's own binaries — a missing
+      artifact hard-fails in the "Verify and prepare prebuilds" step instead.
+      Regardless of this input, the fallback is implicitly enabled for every
+      NON-PR event (workflow_dispatch, schedule, push/on-merge, benchmarks),
+      where testing a published package is the intended behaviour. Set to
+      "true" to force-enable the fallback in a PR context.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Free up disk space (Android, github-hosted only)
+      if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        echo "Disk space before cleanup:"
+        df -h
+        sudo rm -rf /usr/share/dotnet || true
+        sudo rm -rf /opt/ghc || true
+        sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+        sudo rm -rf /opt/hostedtoolcache/go || true
+        sudo rm -rf /opt/hostedtoolcache/Python || true
+        sudo rm -rf /opt/hostedtoolcache/Ruby || true
+        sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+        sudo rm -rf /usr/local/share/boost || true
+        sudo rm -rf /usr/share/swift || true
+        sudo docker image prune --all --force || true
+        sudo apt-get clean || true
+        echo "Disk space after cleanup:"
+        df -h
+
+    - name: Checkout mobile test framework
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        repository: tetherto/qvac-test-addon-mobile
+        ref: ${{ inputs.test-framework-ref }}
+        token: ${{ inputs.pat-token }}
+        path: test-framework
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: lts/*
+
+    - name: Install global dependencies
+      shell: bash
+      run: |
+        echo "Installing global dependencies..."
+        npm install -g --force @expo/cli@latest
+
+    - name: Download Android prebuilds (from artifacts)
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+        pattern: ${{ inputs.prebuild-artifact-prefix }}android-*
+        merge-multiple: true
+      continue-on-error: true
+
+    - name: Download iOS prebuilds (from artifacts)
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'iOS'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+        pattern: ${{ inputs.prebuild-artifact-prefix }}ios-*
+        merge-multiple: true
+      continue-on-error: true
+
+    # Did the per-matrix `<prefix><platform>-*` artifacts populate prebuilds/?
+    # On a prebuild CACHE HIT the build matrix is skipped, so those per-matrix
+    # artifacts do not exist this run — only the merged `prebuilds` artifact
+    # (re-published by the cache-restore job) does. Detect that here so the
+    # next step can recover the real PR binaries from the merged artifact
+    # instead of letting the npm fallback silently pull the published release.
+    - name: Check whether per-matrix prebuilds were found
+      id: check_prebuilds
+      if: inputs.skip-prebuilds != 'true'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        if [ -d prebuilds ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "present=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Fallback for the cache-hit path: pull the merged `prebuilds` artifact
+    # (well-known name produced by reusable-prebuilds.yml; contains every
+    # platform dir, including android-*/ios-*). This keeps mobile E2E running
+    # against the PR's own binaries on JS-only pushes instead of @latest from
+    # npm. No-op for addons / runs that never produced this artifact (e.g.
+    # genuine workflow_dispatch), where the npm fallback below still applies.
+    - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: prebuilds
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+      continue-on-error: true
+
+    # npm fallback — DISABLED for PR-triggered runs.
+    # On a PR (pull_request / pull_request_target) the only acceptable
+    # prebuild sources are CI artifacts (per-matrix `<prefix><platform>-*`
+    # or the merged `prebuilds` artifact handled above). If neither is
+    # present the run must hard-fail in "Verify and prepare prebuilds"
+    # below rather than silently `npm pack`-ing the PUBLISHED release and
+    # going green against the wrong binaries. For every non-PR event
+    # (workflow_dispatch, schedule, push/on-merge, benchmarks) testing a
+    # published package is the intended behaviour, so the fallback stays on.
+    # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
+    - name: Download prebuilds (from npm — fallback when no artifacts found)
+      if: inputs.skip-prebuilds != 'true' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      env:
+        ADDON_NPM_NAME: ${{ inputs.addon-npm-name }}
+        PACKAGE_VERSION: ${{ inputs.package-version }}
+        FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
+      run: |
+        if [ -d "prebuilds" ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
+          if [ "$FORCE_NPM_PREBUILD" = "true" ]; then
+            # force-npm-prebuild guarantees the npm prebuild at package-version.
+            # Anything already in prebuilds/ (an artifact that slipped past the
+            # gated download steps, committed prebuilds, a future step reordering)
+            # would silently shadow the pin — the exact failure mode this input
+            # exists to prevent (QVAC-21879: the benchmark's mobile baseline
+            # session ran the candidate binary under a npm:<pin> label). Discard
+            # it and install the pinned version.
+            echo "force-npm-prebuild: discarding pre-existing prebuilds/ so the pinned npm version cannot be shadowed:"
+            ls -la prebuilds/
+            rm -rf prebuilds
+          else
+            echo "Prebuilds already present from artifacts — skipping npm fallback"
+            ls -la prebuilds/
+            exit 0
+          fi
+        fi
+        # package-version may be either a bare version / dist-tag (e.g. "1.4.0",
+        # "latest") OR a full scoped package spec (e.g.
+        # "@qvac/transcription-parakeet@1.0.0") — the desktop benchmark leg forwards
+        # the same `prebuild_package` name@version spec here. A full scoped spec
+        # always starts with "@scope/"; a bare version/tag never contains "/", so
+        # detect the spec form and pass it verbatim instead of re-prefixing the name.
+        case "$PACKAGE_VERSION" in
+          @*/*) SPEC="$PACKAGE_VERSION" ;;
+          "")   SPEC="$ADDON_NPM_NAME@latest" ;;
+          *)    SPEC="$ADDON_NPM_NAME@$PACKAGE_VERSION" ;;
+        esac
+        echo "No prebuilds from artifacts — downloading $SPEC from npm..."
+        if ! npm pack "$SPEC"; then
+          echo "ERROR: Failed to download $SPEC from npm"
+          echo "Please check that it exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
+          exit 1
+        fi
+        tar -xzf *.tgz
+        if [ ! -d "package/prebuilds" ]; then
+          echo "ERROR: No prebuilds directory found in package"
+          exit 1
+        fi
+        # Provenance assertion: when the caller pinned a version, prove the packed
+        # tarball IS that version before its prebuilds are used. npm pack of an
+        # exact spec cannot legitimately resolve elsewhere, so a mismatch means the
+        # pin was not honored — fail loudly instead of measuring the wrong binary.
+        # The pin may arrive as a bare version or a full name@version spec; the
+        # version to assert against is the segment after the last '@' in either
+        # form ("@qvac/foo@1.0.0" -> "1.0.0", "1.0.0" -> "1.0.0"). Only assert
+        # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
+        # ^1.2.0) legitimately resolves to a different concrete version, so
+        # comparing the packed version to the tag string would false-fail.
+        if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
+          EXPECTED_VERSION="${PACKAGE_VERSION##*@}"
+          case "$EXPECTED_VERSION" in
+            [0-9]*.[0-9]*.[0-9]*)
+              PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
+              if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
+                echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
+                exit 1
+              fi
+              echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
+              ;;
+            *)
+              echo "package-version '$EXPECTED_VERSION' is a dist-tag/range; skipping exact-version provenance assertion"
+              ;;
+          esac
+        fi
+        mv package/prebuilds ./prebuilds
+        rm -rf package *.tgz
+        echo "Prebuilds downloaded from npm:"
+        ls -la prebuilds/
+
+    - name: Verify and prepare prebuilds
+      if: inputs.skip-prebuilds != 'true'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Checking for prebuilds..."
+        if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
+          echo "Prebuilds found:"
+          ls -la prebuilds/
+        else
+          echo "ERROR: No prebuilds found! Run prebuild job first or commit prebuilds."
+          exit 1
+        fi
+
+        echo "Preparing mobile prebuilds for all architectures..."
+        if [ -d "prebuilds/android-arm64" ]; then
+          cp -r prebuilds/android-arm64 prebuilds/android-ia32 2>/dev/null || true
+          cp -r prebuilds/android-arm64 prebuilds/android-arm   2>/dev/null || true
+          cp -r prebuilds/android-arm64 prebuilds/android-x64   2>/dev/null || true
+        fi
+        if [ -d "prebuilds/ios-arm64" ]; then
+          cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || true
+          cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator   2>/dev/null || true
+        fi
+        echo "Mobile prebuilds prepared"
+        ls -la prebuilds/
+
+    - name: Remove desktop prebuilds to save disk space
+      if: inputs.skip-prebuilds != 'true'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        echo "Removing desktop prebuilds (keeping Android + iOS)..."
+        rm -rf prebuilds/darwin-* prebuilds/win32-* prebuilds/linux-* 2>/dev/null || true
+        echo "After cleanup:"
+        du -sh prebuilds/* 2>/dev/null || true
+        df -h

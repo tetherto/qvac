@@ -1,0 +1,28 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Results (generated during benchmarking)
+results/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

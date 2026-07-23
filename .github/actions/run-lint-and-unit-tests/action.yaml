@@ -1,0 +1,78 @@
+name: Run lint & unit tests
+description: "Run linting and unit tests"
+
+inputs:
+  npm-token:
+    description: "Auth token for registry.npmjs.org (for @qvac/*)"
+    required: false
+  gpr-token:
+    description: "Auth token for GitHub Packages (for @tetherto/*) — can be the GitHub Actions GITHUB_TOKEN"
+    required: true
+  pat-token:
+    description: "Optional PAT for fetching GitHub deps via HTTPS (git dependencies)"
+    required: false
+  registry-type:
+    description: "Type of registry to use"
+    required: true
+    default: "gpr"
+  workdir: 
+    default: "."
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: "18.x"
+
+    - name: Restore npm cache
+      id: cache-npm
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
+        restore-keys: npm-${{ runner.os }}-
+
+    - name: Configure .npmrc for both npmjs and GitHub Packages
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+        PAT_TOKEN: ${{ inputs.pat-token }}
+      run: |
+        # Clean slate .npmrc in workspace
+        : > .npmrc
+
+        # Default public registry
+        echo "registry=https://registry.npmjs.org/" >> .npmrc
+
+        # @qvac/* from npmjs.org (public, auth optional)
+        echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+        if [ -n "${NPM_TOKEN}" ]; then
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+        fi
+
+        # @tetherto/* from GitHub Packages (only when pat-token provided)
+        if [ -n "${PAT_TOKEN}" ]; then
+          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+          git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+        fi
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+    - name: Install dependencies
+      shell: bash
+      run: npm install
+      working-directory: ${{ inputs.workdir }}
+    - name: Run linting
+      shell: bash
+      run: npm run lint
+      working-directory: ${{ inputs.workdir }}
+    - name: Install bare
+      shell: bash
+      run: npm install -g --force bare
+      working-directory: ${{ inputs.workdir }}
+    - name: Run tests
+      shell: bash
+      run: npm run test:unit --if-present
+      working-directory: ${{ inputs.workdir }}

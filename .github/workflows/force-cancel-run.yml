@@ -1,0 +1,106 @@
+# Manually force-cancel a workflow run that the normal "Cancel run" button
+# cannot stop.
+#
+# WHY THIS EXISTS
+#   Heavy integration-test jobs occasionally wedge (the test process hangs).
+#   GitHub's normal cancellation (the UI button and concurrency
+#   `cancel-in-progress`) sends SIGINT/SIGTERM but does not reliably kill a
+#   wedged job, so the run stays `in_progress`, holds its concurrency group,
+#   and blocks the next push (which sits in `pending`). The REST
+#   `force-cancel` endpoint bypasses the conditions that block a normal
+#   cancel and is the reliable escape hatch.
+#
+# USAGE
+#   Actions tab -> "Force-cancel stuck run" -> Run workflow -> paste the
+#   numeric run ID from the run URL (…/actions/runs/<RUN_ID>).
+#
+# SWEEP (run locally when several runs are wedged; excludes nothing, so
+# review the list first — mobile suites legitimately run 2-3h):
+#   gh run list --repo tetherto/qvac --status in_progress \
+#     --json databaseId,createdAt \
+#     --jq '.[] | select((now - (.createdAt|fromdate)) > 3600) | .databaseId' \
+#   | while read -r id; do \
+#       gh api -X POST "repos/tetherto/qvac/actions/runs/$id/force-cancel"; \
+#     done
+name: Force-cancel stuck run
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Workflow run ID to force-cancel (numeric, from the run URL)"
+        type: string
+        required: true
+      dry_run:
+        description: "Only report the run's current state; do not cancel"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+# Never cancel a force-cancel in progress; serialise per target run instead.
+concurrency:
+  group: force-cancel-${{ github.event.inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  force-cancel:
+    name: Force-cancel run ${{ github.event.inputs.run_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Validate run ID
+        env:
+          RUN_ID: ${{ github.event.inputs.run_id }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$RUN_ID" | grep -Eq '^[0-9]+$'; then
+            echo "::error::run_id must be numeric, got: '$RUN_ID'"
+            exit 1
+          fi
+
+      - name: Show run state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/actions/runs/$RUN_ID" \
+            --jq '"name=\(.name)  status=\(.status)  conclusion=\(.conclusion)  branch=\(.head_branch)  event=\(.event)"'
+
+      - name: Force-cancel
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "Force-cancelling run $RUN_ID in $REPO"
+          gh api -X POST "repos/$REPO/actions/runs/$RUN_ID/force-cancel"
+          echo "force-cancel request accepted."
+
+      - name: Confirm cancellation
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for i in {1..12}; do
+            state="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.status')"
+            echo "attempt $i: status=$state"
+            if [ "$state" = "completed" ]; then
+              conclusion="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion')"
+              echo "Run $RUN_ID completed with conclusion=$conclusion"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::Run $RUN_ID still not completed after polling; verify manually."

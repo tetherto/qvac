@@ -1,0 +1,336 @@
+name: GPR Publish
+description: "Publish a package to GitHub Packages (GPR) via npm"
+
+inputs:
+  secret-token:
+    description: "GitHub Packages token (NODE_AUTH_TOKEN) used for publishing"
+    required: true
+  pat-token:
+    description: "PAT token"
+    required: false
+  release:
+    description: "Use tag. Release stream, temporary here for compatibility with old workflows"
+    required: false
+  tag:
+    description: "Release Stream (npm tag)"
+    required: false
+  path:
+    description: "Path to artifact/package directory to publish (optional; falls back to workdir)"
+    required: false
+  workdir:
+    description: "Directory containing package.json (default '.')"
+    default: "."
+    type: string
+  name-suffix:
+    description: "Optional suffix to append to package name (e.g. -mono)"
+    required: false
+    default: ""
+
+outputs:
+  gpr_published_version:
+    description: "The version that was published to GitHub Packages"
+    value: ${{ steps.gpr_publish.outputs.gpr_published_version }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: lts/*
+        registry-url: https://npm.pkg.github.com/
+        scope: "@tetherto"
+
+    - name: Resolve publish directory
+      id: resolve_dir
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        dir="${{ inputs.path }}"
+        if [[ -z "$dir" ]]; then
+          dir="${{ inputs.workdir }}"
+        fi
+
+        dir="${dir%/}"
+        [[ -z "$dir" ]] && dir="."
+
+        # Safety rails
+        if [[ "$dir" == /* || "$dir" == *".."* ]]; then
+          echo "ERROR: invalid dir: $dir" >&2
+          exit 1
+        fi
+        if [[ ! -d "$dir" ]]; then
+          echo "ERROR: dir not found: $dir" >&2
+          exit 1
+        fi
+
+        echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+    - name: Determine dist-tag
+      id: determine_tag
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag }}"
+        RELEASE="${{ inputs.release }}"
+
+        if [ -z "$RELEASE" ]; then
+          RELEASE="tmp"
+        fi
+        if [ -z "$TAG" ]; then
+          TAG=$RELEASE
+        fi
+
+        echo "Base branch: ${{ github.ref }}"
+        echo "Event name: ${{ github.event_name }}"
+
+        if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.ref_name }}" == release-* ]]; then
+            TAG="latest"
+          fi
+        fi
+
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+    - name: Determine version
+      id: determine_version
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      shell: bash
+      run: |
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        TAG="${{ steps.determine_tag.outputs.tag }}"
+        PR_NUM=""
+        if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request_target" ]; then
+          PR_NUM="${{ github.event.pull_request.number }}"
+        fi
+
+        if [ "$TAG" = "latest" ]; then
+          VERSION="${PACKAGE_VERSION}"
+        elif [ -n "$PR_NUM" ]; then
+          VERSION="${PACKAGE_VERSION}-tmp.pr-${PR_NUM}.runid-${GITHUB_RUN_ID}"
+        else
+          VERSION="${PACKAGE_VERSION}-tmp.runid-${GITHUB_RUN_ID}"
+        fi
+
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Maybe update package version
+      shell: bash
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      if: steps.determine_version.outputs.version != steps.determine_version.outputs.package_version
+      run: |
+        echo "Updating version to ${{ steps.determine_version.outputs.version }}"
+        npm version ${{ steps.determine_version.outputs.version }} --no-git-tag-version --allow-same-version
+
+    - name: Check version exists in GitHub Packages
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
+      run: |
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        VERSION="${{ steps.determine_version.outputs.version }}"
+
+        if npm view "${PACKAGE_NAME}@${VERSION}" version > /dev/null 2>&1; then
+          echo "::error::Version ${VERSION} of ${PACKAGE_NAME} already exists in GitHub Packages registry"
+        fi
+
+    - name: Check publish conditions
+      id: check_publish
+      shell: bash
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      env:
+        REPO_NAME: ${{ github.repository }}
+        EVENT_NAME: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        REF_NAME: ${{ github.ref_name }}
+        HEAD_REF: ${{ github.head_ref }}
+      run: |
+        SHOULD_PUBLISH=false
+
+        REPO_SHORT_NAME="${REPO_NAME#*/}"
+
+        # normalize branch name across events
+        BRANCH_NAME="$REF_NAME"
+        if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+          BRANCH_NAME="$HEAD_REF"
+        fi
+
+        echo "🔎 debug: event=$EVENT_NAME repo=$REPO_SHORT_NAME branch=$BRANCH_NAME"
+
+         # Check if it's a merge event to main
+        if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
+          echo "✅ Publishing: push to main"
+          SHOULD_PUBLISH=true
+        fi
+
+        # feature/tmp dev streams publish to GPR (see ci-validation.md)
+        if [[ "$EVENT_NAME" == "push" && "$BRANCH_NAME" == feature-* ]]; then
+          echo "✅ Publishing: push to feature branch"
+          SHOULD_PUBLISH=true
+        fi
+
+        if [[ "$EVENT_NAME" == "push" && "$BRANCH_NAME" == tmp-* ]]; then
+          echo "✅ Publishing: push to tmp branch"
+          SHOULD_PUBLISH=true
+        fi
+
+        # manual dispatch
+        if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          echo "✅ Publishing: manual workflow_dispatch"
+          SHOULD_PUBLISH=true
+        fi
+
+        # PR label "publish"
+        if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+          if [[ "${{ toJSON(github.event.pull_request.labels.*.name) }}" =~ "publish" ]]; then
+            echo "✅ Publishing: PR has publish label"
+            SHOULD_PUBLISH=true
+          fi
+        fi
+
+        # Check if repo is in always-publish list
+        ALWAYS_PUBLISH_REPOS=(
+          qvac-devops
+          oss-actions
+          qvac-examples
+          qvac-ext-lib-mlc
+          qvac-ext-lib-tokenizers-cpp
+          decoder-audio
+          inference-addon-mlc-ecog
+          llm-llamacpp
+          translation-nmtcpp
+          transcription-whispercpp
+          onnx-vad
+          embed-llamacpp
+          ocr-onnx
+        )
+
+        if printf '%s\n' "${ALWAYS_PUBLISH_REPOS[@]}" | grep -qx "$REPO_SHORT_NAME"; then
+          echo "✅ Publishing: repo is in always-publish list"
+          SHOULD_PUBLISH=true
+        fi
+
+        if [[ "$SHOULD_PUBLISH" == "false" ]]; then
+          echo "❌ Skipping publish: no publish conditions met"
+        fi
+
+        echo "should_publish=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
+
+    - name: Normalize package name for GitHub Packages publishing
+      id: normalize_name
+      shell: bash
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      run: |
+        set -euo pipefail
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        SUFFIX="${{ inputs.name-suffix }}"
+
+        echo "Detected package name: $PACKAGE_NAME"
+
+        # Normalize scope to @tetherto
+        if [[ "$PACKAGE_NAME" == @qvac/* ]]; then
+          PACKAGE_NAME="${PACKAGE_NAME/@qvac\//@tetherto/}"
+          echo "⚙️ Rewriting scope to: $PACKAGE_NAME"
+        fi
+
+        # Append suffix to the *name* portion only (keep scope)
+        if [[ -n "$SUFFIX" ]]; then
+          SCOPE="${PACKAGE_NAME%%/*}"
+          NAME="${PACKAGE_NAME#*/}"
+          PACKAGE_NAME="${SCOPE}/${NAME}${SUFFIX}"
+          echo "🧪 Applying suffix, new name: $PACKAGE_NAME"
+        fi
+
+        ORIGINAL_NAME=$(node -p "require('./package.json').name")
+        tmpfile=$(mktemp)
+        jq --arg new_name "$PACKAGE_NAME" '.name = $new_name' package.json > "$tmpfile" && mv "$tmpfile" package.json
+
+        # cmake-bare derives the prebuild filename from package.json name
+        # (@scope/pkg -> scope__pkg.bare). When we rename @qvac/foo to
+        # @tetherto/foo-mono the on-disk bare modules keep their build-time
+        # names (e.g. qvac__fabric.bare); add symlinks so consumers resolve.
+        old_bare="$(
+          node -e "const n=process.argv[1]; console.log(n.replace(/^@/,'').replace('/','__') + '.bare')" "${ORIGINAL_NAME}"
+        )"
+        new_bare="$(
+          node -e "const n=process.argv[1]; console.log(n.replace(/^@/,'').replace('/','__') + '.bare')" "${PACKAGE_NAME}"
+        )"
+        if [ "${old_bare}" != "${new_bare}" ] && [ -d prebuilds ]; then
+          old_exports="${old_bare%.bare}.bare.exports"
+          new_exports="${new_bare%.bare}.bare.exports"
+          echo "Linking prebuild aliases: ${old_bare} -> ${new_bare}"
+          shopt -s nullglob
+          for platform_dir in prebuilds/*/; do
+            [ -f "${platform_dir}${old_bare}" ] || continue
+            ln -sf "${old_bare}" "${platform_dir}${new_bare}"
+            if [ -f "${platform_dir}${old_exports}" ]; then
+              ln -sf "${old_exports}" "${platform_dir}${new_exports}"
+            fi
+          done
+        fi
+
+        echo "✅ Final publish name: $(node -p "require('./package.json').name")"
+        echo "published_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+
+    - name: Publish to GitHub Packages (GPR)
+      id: gpr_publish
+      if: steps.check_publish.outputs.should_publish == 'true'
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
+      run: |
+        echo "Publishing to GitHub Packages (GPR) with dist-tag: ${{ steps.determine_tag.outputs.tag }}"
+        echo "Publishing version: ${{ steps.determine_version.outputs.version }}"
+
+        if npm publish --tag ${{ steps.determine_tag.outputs.tag }}; then
+          PUBLISH_STATUS=0
+          echo "✅ gpr publish successful"
+          echo "Published version: ${{ steps.gpr_publish.outputs.gpr_published_version }}"
+          echo "GPR: published version: ${{ steps.gpr_publish.outputs.gpr_published_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=GPR Published::v${{ steps.determine_version.outputs.version }}"
+        else
+          PUBLISH_STATUS=1
+          echo "❌ gpr publish failed"
+          echo "GPR: publish failed" >> $GITHUB_STEP_SUMMARY
+          echo "::error title=GPR Publish Failed::v${{ steps.determine_version.outputs.version }}"
+        fi
+
+        echo "publish_status=$PUBLISH_STATUS" >> $GITHUB_OUTPUT
+        echo "gpr_published_version=${{ steps.determine_version.outputs.version }}" >> $GITHUB_OUTPUT
+
+    - name: Publish status
+      shell: bash
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
+      if: steps.check_publish.outputs.should_publish == 'true'
+      run: |
+        if [ "${{ steps.gpr_publish.outputs.publish_status }}" -eq 0 ]; then
+          echo "✅ gpr publish successful"
+
+          # Prefer the known published name from the normalize step; fallback to package.json
+          PACKAGE_NAME="${{ steps.normalize_name.outputs.published_name }}"
+          if [ -z "$PACKAGE_NAME" ]; then
+            PACKAGE_NAME=$(node -p "require('./package.json').name")
+          fi
+
+          VERSION="${{ steps.gpr_publish.outputs.gpr_published_version }}"
+
+          echo "## Installation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Install from the command line:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
+          echo "npm install ${PACKAGE_NAME}@${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Install via package.json:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`json" >> "$GITHUB_STEP_SUMMARY"
+          echo "\"${PACKAGE_NAME}\": \"${VERSION}\"" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "❌ gpr publish failed"
+          exit ${{ steps.gpr_publish.outputs.publish_status }}
+        fi

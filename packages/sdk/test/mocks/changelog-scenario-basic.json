@@ -1,0 +1,39 @@
+{
+  "description": "Basic release with mixed PR types",
+  "input": {
+    "commitLog": [
+      "abc1234 Merge pull request #123 from user/feat-streaming",
+      "def5678 Merge pull request #124 from user/fix-memory-leak",
+      "ghi9012 Merge pull request #125 from user/chore-deps"
+    ],
+    "prs": [
+      {
+        "number": 123,
+        "title": "QVAC-100 feat[api]: add streaming support",
+        "body": "## New API\n\n```typescript\nfor await (const token of stream) {}\n```",
+        "url": "https://github.com/tetherto/qvac/pull/123"
+      },
+      {
+        "number": 124,
+        "title": "QVAC-101 fix: resolve memory leak in cache",
+        "body": "Fixed memory leak when unloading models.",
+        "url": "https://github.com/tetherto/qvac/pull/124"
+      },
+      {
+        "number": 125,
+        "title": "QVAC-102 chore[skiplog]: update dependencies",
+        "body": "Bumped deps.",
+        "url": "https://github.com/tetherto/qvac/pull/125"
+      }
+    ]
+  },
+  "expected": {
+    "prNumbers": [123, 124, 125],
+    "includedInChangelog": [123, 124],
+    "excludedBySkiplog": [125],
+    "sections": {
+      "api": 1,
+      "fix": 1
+    }
+  }
+}

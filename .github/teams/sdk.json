@@ -1,0 +1,22 @@
+{
+  "name": "SDK Pod",
+  "leads": ["NamelsKing", "opaninakuffo"],
+  "members": [
+    "lauripiisang",
+    "simon-iribarren",
+    "Victor-Rodzko",
+    "arun-mani-j"
+  ],
+  "ownedPaths": [
+    "packages/sdk/",
+    "packages/cli/",
+    "packages/rag/",
+    "packages/logging/",
+    "packages/error/",
+    "packages/ai-sdk-provider/",
+    "packages/inference/",
+    "packages/registry-server/",
+    "plugins/opencode/",
+    "plugins/openclaw/"
+  ]
+}

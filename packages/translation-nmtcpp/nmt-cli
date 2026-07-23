@@ -1,0 +1,623 @@
+#!/usr/bin/env bare
+'use strict'
+
+// QVAC NMT CLI - Neural Machine Translation Command-Line Tool
+//
+// IMPORTANT: This tool is used by the quality evaluation framework
+// (benchmarks/quality_eval/translators/qvac.py). Please maintain backward
+// compatibility when making changes.
+//
+// Usage: bare nmt-cli [OPTIONS] <source_lang> <target_lang>
+// Reads text from stdin (one sentence per line) and outputs translations to stdout
+
+const process = require('bare-process')
+const TranslationNmtcpp = require('./index.js')
+const { TranslationInterface } = require('./marian.js')
+
+const VERSION = '0.1.4'
+const fs = require('bare-fs')
+const path = require('bare-path')
+const os = require('bare-os')
+
+// Supported OPUS/IndicTrans language pairs. Models are loaded from a local
+// GGML file (via --model or QVAC_MODEL_PATH); Bergamot mode (--bergamot) has
+// its own model discovery and ignores this list.
+const SUPPORTED_PAIRS = [
+  'en-it', 'en-de', 'en-es', 'de-en', 'de-es', 'de-it',
+  'es-de', 'es-en', 'es-it', 'it-de', 'it-en', 'it-es',
+  // Portuguese pairs
+  'en-pt', 'pt-en',
+  // French pairs
+  'en-fr', 'fr-en', 'fr-de', 'fr-es', 'fr-it', 'de-fr', 'es-fr', 'it-fr',
+  // Additional language pairs
+  'en-zh', 'zh-en', 'en-ar', 'ar-en', 'en-ja', 'ja-en', 'en-ko', 'ko-en',
+  'en-ru', 'ru-en', 'en-hi', 'hi-en', 'en-tr', 'tr-en', 'en-vi', 'vi-en',
+  'en-fa', 'fa-en', 'en-th', 'th-en', 'en-pl', 'pl-en', 'en-uk', 'uk-en',
+  'en-nl', 'nl-en', 'en-ro', 'ro-en', 'en-id', 'id-en', 'en-bn', 'bn-en',
+  'en-ur', 'ur-en', 'en-el', 'el-en', 'en-cs', 'cs-en', 'en-sv', 'sv-en',
+  'en-hu', 'hu-en', 'en-he', 'he-en', 'en-fi', 'fi-en', 'en-no', 'no-en',
+  'en-da', 'da-en', 'en-bg', 'bg-en', 'en-sk', 'sk-en', 'en-lt', 'lt-en',
+  'en-lv', 'lv-en', 'en-sl', 'sl-en', 'en-et', 'et-en', 'en-hr', 'hr-en',
+  'en-sr', 'sr-en', 'en-ca', 'ca-en'
+]
+
+function showHelp () {
+  console.log(`
+QVAC NMT CLI v${VERSION} - Neural Machine Translation Command-Line Tool
+
+USAGE:
+  bare nmt-cli [OPTIONS] <source_lang> <target_lang>
+
+DESCRIPTION:
+  Translates text from stdin using QVAC NMT models. Reads one sentence per line
+  from stdin and outputs translations to stdout. A model must be provided via
+  --model or QVAC_MODEL_PATH (local GGML file), or via --bergamot (Firefox models).
+
+OPTIONS:
+  -h, --help              Show this help message and exit
+  -v, --version           Show version information and exit
+  -m, --model PATH        Path to local GGML model file (overrides QVAC_MODEL_PATH)
+  --cpu                   Use CPU instead of GPU for translation (default: GPU)
+  --bergamot              Use Bergamot model format (Firefox translations models)
+  --batch                 Use batch translation API (Bergamot only, faster for multiple texts)
+  --model-dir PATH        Directory containing Bergamot models (default: ~/.local/share/bergamot/models/firefox)
+
+HYPERPARAMETERS:
+  --beamsize NUM          Beam size for translation (1=greedy, 4=default)
+  --lengthpenalty NUM     Length penalty (0.0-2.0, default: 1.0)
+  --repetitionpenalty NUM Repetition penalty (1.0-2.0, default: 1.0)
+  --norepeatngramsize NUM No-repeat N-gram size (0-10, default: 0)
+  --temperature NUM       Sampling temperature (0.0-2.0, default: 1.0)
+  --topk NUM              Top-K sampling (0=disabled, default: 0)
+  --topp NUM              Top-P nucleus sampling (0.0-1.0, default: 1.0)
+  --maxlength NUM         Maximum output length (default: 512)
+
+ARGUMENTS:
+  <source_lang>           Source language code (e.g., en, de, es, it)
+  <target_lang>           Target language code (e.g., en, de, es, it)
+
+SUPPORTED LANGUAGE PAIRS:
+  ${SUPPORTED_PAIRS.join(', ')}
+
+ENVIRONMENT VARIABLES:
+  QVAC_MODEL_PATH         Path to local GGML model file (alternative to --model)
+  FIREFOX_MODELS_DIR      Directory for Bergamot models (alternative to --model-dir)
+
+EXAMPLES:
+  # Translate from English to Italian using a local model file
+  echo "Hello world" | bare nmt-cli --model ./models/en-it.bin en it
+
+  # Translate using Bergamot/Firefox model format
+  echo "Hello world" | bare nmt-cli --bergamot --cpu en it
+
+  # Translate with custom Bergamot model directory
+  echo "Hello world" | bare nmt-cli --bergamot --model-dir ./firefox-models --cpu en it
+
+  # Batch translation with Bergamot (faster for multiple texts)
+  cat input.txt | bare nmt-cli --bergamot --batch --cpu en it > output.txt
+
+  # Batch translation from file
+  cat input.txt | bare nmt-cli en de > output.txt
+
+  # Using environment variable for model path
+  export QVAC_MODEL_PATH=/path/to/model.bin
+  echo "Hello world" | bare nmt-cli en it
+
+NOTES:
+  - This tool is used by benchmarks/quality_eval for BLEU score evaluation
+  - Model configuration uses beam search (size=4) without sampling for deterministic output
+  - Run this script from the translation-nmtcpp repository root directory
+  - Bergamot models require .intgemm.alphas.bin model files and .spm vocabulary files
+`)
+}
+
+function showVersion () {
+  console.log(`nmt-cli version ${VERSION}`)
+  console.log('QVAC Neural Machine Translation CLI Tool')
+}
+
+function parseArgs () {
+  const args = process.argv.slice(2)
+  const options = {
+    help: false,
+    version: false,
+    model: null,
+    modelDir: null,
+    bergamot: false,
+    batch: false,
+    cpu: false,
+    srcLang: null,
+    dstLang: null,
+    // Hyperparameters with defaults
+    beamsize: 4,
+    lengthpenalty: 1.0,
+    repetitionpenalty: 1.0,
+    norepeatngramsize: 0,
+    temperature: 1.0,
+    topk: 0,
+    topp: 1.0,
+    maxlength: 512
+  }
+
+  let i = 0
+  while (i < args.length) {
+    const arg = args[i]
+
+    if (arg === '-h' || arg === '--help') {
+      options.help = true
+      i++
+    } else if (arg === '-v' || arg === '--version') {
+      options.version = true
+      i++
+    } else if (arg === '-m' || arg === '--model') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --model requires a path argument')
+        process.exit(1)
+      }
+      options.model = args[i + 1]
+      i += 2
+    } else if (arg === '--cpu') {
+      options.cpu = true
+      i++
+    } else if (arg === '--bergamot') {
+      options.bergamot = true
+      i++
+    } else if (arg === '--batch') {
+      options.batch = true
+      i++
+    } else if (arg === '--model-dir') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --model-dir requires a path argument')
+        process.exit(1)
+      }
+      options.modelDir = args[i + 1]
+      i += 2
+    } else if (arg === '--beamsize') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --beamsize requires a numeric argument')
+        process.exit(1)
+      }
+      options.beamsize = parseInt(args[i + 1])
+      i += 2
+    } else if (arg === '--lengthpenalty') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --lengthpenalty requires a numeric argument')
+        process.exit(1)
+      }
+      options.lengthpenalty = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--repetitionpenalty') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --repetitionpenalty requires a numeric argument')
+        process.exit(1)
+      }
+      options.repetitionpenalty = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--norepeatngramsize') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --norepeatngramsize requires a numeric argument')
+        process.exit(1)
+      }
+      options.norepeatngramsize = parseInt(args[i + 1])
+      i += 2
+    } else if (arg === '--temperature') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --temperature requires a numeric argument')
+        process.exit(1)
+      }
+      options.temperature = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--topk') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --topk requires a numeric argument')
+        process.exit(1)
+      }
+      options.topk = parseInt(args[i + 1])
+      i += 2
+    } else if (arg === '--topp') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --topp requires a numeric argument')
+        process.exit(1)
+      }
+      options.topp = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--maxlength') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --maxlength requires a numeric argument')
+        process.exit(1)
+      }
+      options.maxlength = parseInt(args[i + 1])
+      i += 2
+    } else if (!arg.startsWith('-')) {
+      // Positional arguments (language codes)
+      if (!options.srcLang) {
+        options.srcLang = arg
+      } else if (!options.dstLang) {
+        options.dstLang = arg
+      } else {
+        console.error(`Error: Unexpected argument '${arg}'`)
+        process.exit(1)
+      }
+      i++
+    } else {
+      console.error(`Error: Unknown option '${arg}'`)
+      console.error('Run with --help for usage information')
+      process.exit(1)
+    }
+  }
+
+  return options
+}
+
+/**
+ * Find Bergamot model files for a language pair
+ * Searches in Firefox translations model directory structure
+ * @param {string} modelsDir - Base models directory
+ * @param {string} srcLang - Source language code
+ * @param {string} dstLang - Target language code
+ * @returns {Object|null} - Object with model, srcVocab, dstVocab paths or null if not found
+ */
+function findBergamotModel (modelsDir, srcLang, dstLang) {
+  const pairCode = `${srcLang}${dstLang}`
+
+  // Try base-memory first, then fall back to tiny
+  for (const variant of ['base-memory', 'tiny']) {
+    const candidateDir = path.join(modelsDir, variant, pairCode)
+
+    try {
+      if (!fs.statSync(candidateDir).isDirectory()) {
+        continue
+      }
+    } catch {
+      continue
+    }
+
+    // Check for required Firefox model files
+    const modelFile = path.join(candidateDir, `model.${pairCode}.intgemm.alphas.bin`)
+    const lexFile = path.join(candidateDir, `lex.50.50.${pairCode}.s2t.bin`)
+
+    // Check for vocab files - some pairs have single vocab, others have src/trg vocabs
+    const sharedVocab = path.join(candidateDir, `vocab.${pairCode}.spm`)
+    const srcVocab = path.join(candidateDir, `srcvocab.${pairCode}.spm`)
+    const dstVocab = path.join(candidateDir, `trgvocab.${pairCode}.spm`)
+
+    // Check model file exists
+    try {
+      fs.statSync(modelFile)
+    } catch {
+      continue
+    }
+
+    // Check vocab files
+    let srcVocabPath, dstVocabPath
+    try {
+      fs.statSync(sharedVocab)
+      srcVocabPath = sharedVocab
+      dstVocabPath = sharedVocab
+      console.error(`[BERGAMOT] Using shared vocabulary: ${sharedVocab}`)
+    } catch {
+      try {
+        fs.statSync(srcVocab)
+        fs.statSync(dstVocab)
+        srcVocabPath = srcVocab
+        dstVocabPath = dstVocab
+        console.error(`[BERGAMOT] Using separate vocabularies: ${srcVocab}, ${dstVocab}`)
+      } catch {
+        continue
+      }
+    }
+
+    console.error(`[BERGAMOT] Found Firefox model in ${variant}: ${pairCode}`)
+    return {
+      modelPath: modelFile,
+      srcVocabPath,
+      dstVocabPath,
+      variant
+    }
+  }
+
+  return null
+}
+
+async function main () {
+  const options = parseArgs()
+
+  // Handle help and version flags
+  if (options.help) {
+    showHelp()
+    process.exit(0)
+  }
+
+  if (options.version) {
+    showVersion()
+    process.exit(0)
+  }
+
+  // Validate required arguments
+  if (!options.srcLang || !options.dstLang) {
+    console.error('Error: Both source and target language codes are required')
+    console.error('Run with --help for usage information')
+    process.exit(1)
+  }
+
+  // Validate --batch requires --bergamot
+  if (options.batch && !options.bergamot) {
+    console.error('Error: --batch flag requires --bergamot flag (batch API is Bergamot-only)')
+    process.exit(1)
+  }
+
+  const srcLang = options.srcLang
+  const dstLang = options.dstLang
+  const pairKey = `${srcLang}-${dstLang}`
+
+  // Check if language pair is supported (skip for Bergamot mode which has its own model discovery)
+  if (!options.bergamot && !SUPPORTED_PAIRS.includes(pairKey)) {
+    console.error(`Error: Language pair '${pairKey}' is not supported`)
+    console.error('Supported pairs:', SUPPORTED_PAIRS.join(', '))
+    process.exit(1)
+  }
+
+  // Read all input from stdin
+  let inputText = ''
+
+  // Read stdin in chunks
+  for await (const chunk of process.stdin) {
+    inputText += chunk.toString()
+  }
+
+  // Split into lines and filter empty
+  const inputLines = inputText
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+
+  if (inputLines.length === 0) {
+    console.error('Error: No input provided on stdin')
+    process.exit(1)
+  }
+
+  // Model configuration - use values from CLI options
+  const config = {
+    beamsize: options.beamsize,
+    lengthpenalty: options.lengthpenalty,
+    maxlength: options.maxlength,
+    repetitionpenalty: options.repetitionpenalty,
+    norepeatngramsize: options.norepeatngramsize,
+    temperature: options.temperature,
+    topk: options.topk,
+    topp: options.topp
+  }
+
+  // Handle Bergamot model mode
+  if (options.bergamot) {
+    // Determine models directory: CLI option > env var > default
+    const defaultModelsDir = path.join(os.homedir(), '.local/share/bergamot/models/firefox')
+    const modelsDir = options.modelDir || process.env.FIREFOX_MODELS_DIR || defaultModelsDir
+
+    console.error(`[BERGAMOT] Looking for models in: ${modelsDir}`)
+
+    // Find Bergamot model files
+    let bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+
+    if (!bergamotModel) {
+      // Auto-download from the Firefox Remote Settings CDN
+      console.error('[BERGAMOT] Model not found locally, attempting download...')
+      try {
+        const { ensureBergamotModelFiles } = require('./lib/bergamot-model-fetcher.js')
+        const pairCode = `${srcLang}${dstLang}`
+        const downloadDir = path.join(modelsDir, 'base-memory', pairCode)
+        await ensureBergamotModelFiles(srcLang, dstLang, downloadDir)
+        bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+      } catch (dlErr) {
+        console.error(`[BERGAMOT] Download failed: ${dlErr.message}`)
+      }
+
+      if (!bergamotModel) {
+        console.error(`Error: Bergamot model not found for ${pairKey}`)
+        console.error(`Checked: ${path.join(modelsDir, 'base-memory', srcLang + dstLang)}`)
+        console.error(`Checked: ${path.join(modelsDir, 'tiny', srcLang + dstLang)}`)
+        process.exit(1)
+      }
+    }
+
+    console.error(`[BERGAMOT] Model: ${bergamotModel.modelPath}`)
+    console.error(`[BERGAMOT] Source vocab: ${bergamotModel.srcVocabPath}`)
+    console.error(`[BERGAMOT] Target vocab: ${bergamotModel.dstVocabPath}`)
+
+    // Logger - output to stderr for debugging
+    const logger = {
+      error: (msg) => console.error(`[C++ ERROR] ${msg}`),
+      warn: (msg) => console.error(`[C++ WARN] ${msg}`),
+      info: (msg) => console.error(`[C++ INFO] ${msg}`),
+      debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
+    }
+
+    // Create Bergamot model configuration
+    const bergamotConfig = {
+      path: bergamotModel.modelPath,
+      config: {
+        ...config,
+        src_vocab: bergamotModel.srcVocabPath,
+        dst_vocab: bergamotModel.dstVocabPath
+      },
+      use_gpu: !options.cpu,
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot
+    }
+
+    let pendingJob = null
+
+    const addon = new TranslationInterface(
+      bergamotConfig,
+      (addon, event, data, error) => {
+        if (!pendingJob) return
+        if (typeof data === 'object' && data !== null && 'TPS' in data) {
+          const result = pendingJob.batchResult || pendingJob.buffer.trim()
+          pendingJob.resolve(result)
+          pendingJob = null
+          return
+        }
+        if (event.includes('Error')) {
+          pendingJob.reject(new Error(error || String(data)))
+          pendingJob = null
+          return
+        }
+        if (typeof data === 'string') {
+          pendingJob.buffer += data
+        } else if (Array.isArray(data)) {
+          pendingJob.batchResult = data
+        }
+      },
+      logger
+    )
+
+    try {
+      const activateStart = Date.now()
+      console.error(`[${Date.now()}] Activating Bergamot addon...`)
+      await addon.activate()
+      console.error(`[${Date.now()}] Bergamot addon activated in ${Date.now() - activateStart}ms`)
+
+      if (options.batch) {
+        const batchStart = Date.now()
+        console.error(`[${Date.now()}] Starting batch translation of ${inputLines.length} texts...`)
+
+        try {
+          const translations = await new Promise((resolve, reject) => {
+            pendingJob = { buffer: '', batchResult: null, resolve, reject }
+            addon.runJob({ type: 'sequences', input: inputLines })
+          })
+
+          for (const translation of translations) {
+            console.log(translation)
+          }
+          console.error(`[${Date.now()}] Batch translation completed in ${Date.now() - batchStart}ms`)
+        } catch (err) {
+          console.error(`[${Date.now()}] Batch translation failed: ${err.message}`)
+          for (let i = 0; i < inputLines.length; i++) {
+            console.log('')
+          }
+        }
+      } else {
+        for (let i = 0; i < inputLines.length; i++) {
+          const line = inputLines[i]
+          const lineStart = Date.now()
+          console.error(`[${Date.now()}] Starting Bergamot translation ${i + 1}/${inputLines.length}`)
+
+          try {
+            const translation = await new Promise((resolve, reject) => {
+              pendingJob = { buffer: '', batchResult: null, resolve, reject }
+              addon.runJob({ type: 'text', input: line })
+            })
+
+            console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
+            console.log(translation)
+          } catch (err) {
+            console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
+            console.log('')
+          }
+        }
+      }
+
+      console.error(`[${Date.now()}] Destroying Bergamot addon...`)
+      await addon.destroy()
+      console.error(`[${Date.now()}] Done`)
+    } catch (err) {
+      console.error('Error: Failed to load or run Bergamot translation model')
+      console.error(err)
+      process.exit(1)
+    }
+
+    return
+  }
+
+  // Determine model path: CLI option > env var (a local model is required)
+  const localModelPath = options.model || process.env.QVAC_MODEL_PATH
+
+  if (localModelPath) {
+    // Load from local file using TranslationInterface
+
+    const logger = {
+      error: (msg) => console.error(`[C++ ERROR] ${msg}`),
+      warn: (msg) => console.error(`[C++ WARN] ${msg}`),
+      info: (msg) => console.error(`[C++ INFO] ${msg}`),
+      debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
+    }
+
+    let pendingJob = null
+
+    const addon = new TranslationInterface(
+      { path: localModelPath, config, use_gpu: !options.cpu },
+      (addon, event, data, error) => {
+        if (!pendingJob) return
+        if (typeof data === 'object' && data !== null && 'TPS' in data) {
+          pendingJob.resolve(pendingJob.buffer.trim())
+          pendingJob = null
+          return
+        }
+        if (event.includes('Error')) {
+          pendingJob.reject(new Error(error || String(data)))
+          pendingJob = null
+          return
+        }
+        if (typeof data === 'string') {
+          pendingJob.buffer += data
+        }
+      },
+      logger
+    )
+
+    try {
+      const activateStart = Date.now()
+      console.error(`[${Date.now()}] Activating addon...`)
+      await addon.activate()
+      console.error(`[${Date.now()}] Addon activated in ${Date.now() - activateStart}ms`)
+
+      for (let i = 0; i < inputLines.length; i++) {
+        let line = inputLines[i]
+
+        if (srcLang === 'en' && dstLang === 'pt') {
+          line = `>>por<< ${line}`
+        }
+
+        const lineStart = Date.now()
+        console.error(`[${Date.now()}] Starting translation ${i + 1}/${inputLines.length}`)
+
+        try {
+          let translation = await new Promise((resolve, reject) => {
+            pendingJob = { buffer: '', resolve, reject }
+            addon.runJob({ type: 'text', input: line })
+          })
+
+          if (srcLang === 'en' && dstLang === 'pt') {
+            translation = translation.replace(/^>>[a-z]+\s*<<\s*/i, '')
+          }
+
+          console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
+          console.log(translation)
+        } catch (err) {
+          console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
+          console.log('')
+        }
+      }
+
+      console.error(`[${Date.now()}] Destroying addon...`)
+      await addon.destroy()
+      console.error(`[${Date.now()}] Done`)
+    } catch (err) {
+      console.error('Error: Failed to load or run translation model')
+      console.error(err)
+      process.exit(1)
+    }
+  } else {
+    // No local model available. Remote model loading (previously via Hyperdrive)
+    // has been removed — a model file must be supplied explicitly.
+    console.error(`Error: No model specified for '${pairKey}'.`)
+    console.error('Provide a local GGML model with --model <path> or QVAC_MODEL_PATH,')
+    console.error('or use --bergamot to load Firefox translation models.')
+    process.exit(1)
+  }
+}
+
+main().catch(err => {
+  console.error('Fatal error:', err.message)
+  process.exit(1)
+})

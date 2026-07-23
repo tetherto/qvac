@@ -1,0 +1,9 @@
+[
+  "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+  "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+  "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
+  "https://huggingface.co/unsloth/gpt-oss-20b-GGUF/blob/main/gpt-oss-20b-Q4_K_M.gguf",
+  "https://huggingface.co/Qwen/Qwen3-8B-GGUF/blob/main/Qwen3-8B-Q4_K_M.gguf",
+  "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
+  "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf"
+]

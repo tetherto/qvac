@@ -1,0 +1,27 @@
+@startuml
+!include <C4/C4_Component>
+
+title QVAC SDK - RAG Components
+
+Container_Boundary(client_api, "Client API") {
+    Component(rag_api, "RAG API", "TypeScript", "ragSave, ragSearch, ragIngest, ragDelete")
+}
+
+Container_Boundary(server_rag, "Server (RAG Subsystem)") {
+    Component(handlers, "RAG Handlers", "TypeScript", "save, search, ingest, chunk, delete, reindex")
+    Component(op_mgr, "Operation Manager", "Handler", "Track operations, handle cancellation")
+    Component(ws_mgr, "Workspace Manager", "Manager", "Create/open/close workspaces, enforce embedding model binding")
+    ComponentDb(hyperdb, "HyperDB", "Corestore", "Vector storage")
+}
+
+Container_Boundary(embed_model, "Embedding Model") {
+    Component(embed, "embed()", "Native Addon", "llama.cpp embeddings")
+}
+
+Rel(rag_api, handlers, "Calls")
+Rel(op_mgr, handlers, "Tracks", "cancellation")
+Rel(handlers, ws_mgr, "Uses")
+Rel(ws_mgr, hyperdb, "Persists to")
+Rel(handlers, embed, "Generates embeddings")
+
+@enduml

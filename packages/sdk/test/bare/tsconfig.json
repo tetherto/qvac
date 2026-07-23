@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["./**/*", "../../types/**/*"],
+  "exclude": [
+    "../../node_modules",
+    "../../dist",
+    "../../e2e",
+    "../../examples",
+    "../unit",
+    "../dist"
+  ],
+  "compilerOptions": {
+    "outDir": "../dist",
+    "rootDir": "../..",
+    "declaration": false,
+    "declarationMap": false,
+    "noImplicitAny": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmitOnError": false
+  }
+}

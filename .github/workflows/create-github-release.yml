@@ -1,0 +1,56 @@
+name: Create GitHub Release
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        description: "Short repository name for tag prefix (e.g., 'llamacpp-llm', 'tts-ggml')"
+        required: true
+        type: string
+      release_name:
+        description: "Display name for the release (e.g., 'QVAC LLM Addon')"
+        required: true
+        type: string
+      published_version:
+        description: "Version published in prebuild workflow"
+        required: false
+        type: string
+      prev_sha:
+        description: "Previous commit SHA for version comparison"
+        required: false
+        type: string
+      workdir:
+        description: "Working directory (package path in monorepo)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    if: inputs.published_version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify release notes exist in CHANGELOG
+        id: changelog
+        uses: ./.github/actions/verify-changelog-notes
+        with:
+          changelog-path: ${{ inputs.workdir }}/CHANGELOG.md
+          version: ${{ inputs.published_version }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # 2.6.1
+        with:
+          tag_name: ${{ inputs.repo_name }}-v${{ inputs.published_version }}
+          name: ${{ inputs.release_name }} v${{ inputs.published_version }}
+          body_path: ${{ steps.changelog.outputs.release-notes-path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
