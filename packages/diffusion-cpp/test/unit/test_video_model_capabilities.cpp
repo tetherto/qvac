@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include "utils/VideoModelCapabilities.hpp"
+#include "utils/VideoProgress.hpp"
 
 namespace {
 
@@ -68,4 +69,24 @@ TEST(VideoModelCapabilities, FallsBackToWan21CompatibleAlignment) {
           "/missing/model.gguf");
 
   EXPECT_EQ(capabilities.spatialAlignment, 16);
+}
+
+TEST(
+    VideoProgress,
+    LoadedHighNoiseExpertWithZeroBoundarySentinelUsesOneDenoiseSequence) {
+  EXPECT_EQ(
+      qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
+          /*hasLoadedHighNoiseExpert=*/true,
+          /*highNoiseSteps=*/-1,
+          /*moeBoundary=*/0.0f),
+      1);
+}
+
+TEST(VideoProgress, LoadedHighNoiseExpertWithPositiveStepsUsesTwoSequences) {
+  EXPECT_EQ(
+      qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
+          /*hasLoadedHighNoiseExpert=*/true,
+          /*highNoiseSteps=*/8,
+          /*moeBoundary=*/0.0f),
+      2);
 }

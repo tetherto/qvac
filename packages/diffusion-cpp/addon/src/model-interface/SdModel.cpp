@@ -24,6 +24,7 @@
 #include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
 #include "utils/VideoModelCapabilities.hpp"
+#include "utils/VideoProgress.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
@@ -1149,10 +1150,9 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // high-noise sampler. Later VAE tiling sequences remain excluded by
   // sdProgressCallback().
   const bool hasHighNoiseExpert = !config_.highNoiseDiffusionModelPath.empty();
-  const bool skipsHighNoiseSampler =
-      vid.highNoiseSteps == -1 && vid.moeBoundary == 0.0f;
   g_progressCtx.expectedDenoiseSequences =
-      hasHighNoiseExpert && !skipsHighNoiseSampler ? 2 : 1;
+      qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
+          hasHighNoiseExpert, vid.highNoiseSteps, vid.moeBoundary);
   const auto t0 = std::chrono::steady_clock::now();
 
   // Upstream's master API returns success as a bool and hands back frames /
