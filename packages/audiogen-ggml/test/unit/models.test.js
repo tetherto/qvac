@@ -42,10 +42,7 @@ test('manifest: 3 fixed stages are constant, only the DiT changes', (t) => {
 
 test('modelSources: shape consumed by the SDK plugin', (t) => {
   const src = m.modelSources('turbo-q8')
-  t.alike(
-    Object.keys(src).sort(),
-    ['ditModelSrc', 'lmModelSrc', 'textEncModelSrc', 'vaeModelSrc']
-  )
+  t.alike(Object.keys(src).sort(), ['ditModelSrc', 'lmModelSrc', 'textEncModelSrc', 'vaeModelSrc'])
   t.ok(src.ditModelSrc.endsWith('acestep-v15-turbo-Q8_0.gguf'))
   t.ok(src.textEncModelSrc.startsWith(m.REGISTRY_PREFIX + '/'))
 })
@@ -55,4 +52,43 @@ test('allRegistryPaths: 6 distinct paths (3 fixed + 3 DiT), all under prefix', (
   t.is(all.length, 6, '3 fixed + 3 DiT variants')
   t.is(new Set(all).size, 6, 'all distinct')
   for (const p of all) t.ok(p.startsWith(m.REGISTRY_PREFIX + '/'), `under prefix: ${p}`)
+})
+
+test('resolveDitModelPath: explicit ditModel always wins', (t) => {
+  t.is(
+    m.resolveDitModelPath({ ditModel: '/abs/custom-dit.gguf', modelDir: '/m', ditVariant: 'sft' }),
+    '/abs/custom-dit.gguf',
+    'explicit path takes precedence over variant/modelDir'
+  )
+})
+
+test('resolveDitModelPath: variant + modelDir composes the DiT path', (t) => {
+  t.is(
+    m.resolveDitModelPath({ modelDir: '/models/acestep', ditVariant: 'turbo-q4' }),
+    '/models/acestep/acestep-v15-turbo-Q4_K_M.gguf'
+  )
+  t.is(
+    m.resolveDitModelPath({ modelDir: '/models/acestep///', ditVariant: 'sft' }),
+    '/models/acestep/acestep-v15-sft-Q8_0.gguf',
+    'trailing separators are stripped'
+  )
+})
+
+test('resolveDitModelPath: undefined when neither ditModel nor ditVariant given', (t) => {
+  t.is(m.resolveDitModelPath({ modelDir: '/models/acestep' }), undefined)
+  t.is(m.resolveDitModelPath({}), undefined)
+})
+
+test('resolveDitModelPath: ditVariant without modelDir throws', (t) => {
+  t.exception(
+    () => m.resolveDitModelPath({ ditVariant: 'turbo-q4' }),
+    /`ditVariant` needs `modelDir`/
+  )
+})
+
+test('resolveDitModelPath: unknown variant throws', (t) => {
+  t.exception(
+    () => m.resolveDitModelPath({ modelDir: '/m', ditVariant: 'nope' }),
+    /unknown ditVariant/
+  )
 })

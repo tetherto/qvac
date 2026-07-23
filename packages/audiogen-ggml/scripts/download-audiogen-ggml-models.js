@@ -27,15 +27,21 @@ const {
   allRegistryPaths
 } = require('../models.js')
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const args = { output: null, variant: DEFAULT_DIT_VARIANT }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const next = argv[i + 1]
     if (flag === '--output' || flag === '-o') {
+      if (next === undefined || next.startsWith('-')) {
+        throw new Error(`${flag} requires a directory path`)
+      }
       args.output = path.resolve(next)
       i++
     } else if (flag === '--variant' || flag === '-v') {
+      if (next === undefined || next.startsWith('-')) {
+        throw new Error(`${flag} requires a value (${ditVariants().join('|')}|all)`)
+      }
       args.variant = next
       i++
     } else if (flag === '--help' || flag === '-h') {
@@ -47,7 +53,7 @@ function parseArgs (argv) {
   return args
 }
 
-function usage () {
+function usage() {
   console.log(`Usage: node scripts/download-audiogen-ggml-models.js --output <dir> [--variant <v>]
 
 Download the ACE-Step GGUFs from the QVAC model registry into <dir>.
@@ -60,13 +66,13 @@ Download the ACE-Step GGUFs from the QVAC model registry into <dir>.
 
 // Registry paths to fetch for the requested variant (3 fixed + its DiT), or
 // everything for "all".
-function pathsFor (variant) {
+function pathsFor(variant) {
   if (variant === 'all') return allRegistryPaths()
   const m = modelManifest(variant) // throws on an unknown variant
   return [m.textEnc, m.lm, m.dit, m.vae]
 }
 
-function humanBytes (n) {
+function humanBytes(n) {
   if (!n) return '?'
   const u = ['B', 'KB', 'MB', 'GB']
   let i = 0
@@ -78,14 +84,14 @@ function humanBytes (n) {
   return `${v.toFixed(1)} ${u[i]}`
 }
 
-async function downloadOne (client, registryPath, outputDir) {
+async function downloadOne(client, registryPath, outputDir) {
   const name = path.basename(registryPath)
   const dest = path.join(outputDir, name)
   if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
-    console.log(`  ✓ ${name} (already present)`)
+    console.log(`  [ok] ${name} (already present)`)
     return
   }
-  process.stdout.write(`  ▶ ${name} ... `)
+  process.stdout.write(`  -> ${name} ... `)
   let lastPct = -1
   await client.downloadModel(registryPath, REGISTRY_SOURCE, {
     outputFile: dest,
@@ -95,14 +101,16 @@ async function downloadOne (client, registryPath, outputDir) {
       const pct = Math.floor((downloaded / total) * 100)
       if (pct !== lastPct) {
         lastPct = pct
-        process.stdout.write(`\r  ▶ ${name} ... ${pct}% (${humanBytes(downloaded)}/${humanBytes(total)})   `)
+        process.stdout.write(
+          `\r  -> ${name} ... ${pct}% (${humanBytes(downloaded)}/${humanBytes(total)})   `
+        )
       }
     }
   })
-  process.stdout.write(`\r  ✓ ${name} (downloaded)                              \n`)
+  process.stdout.write(`\r  [ok] ${name} (downloaded)                              \n`)
 }
 
-async function main () {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help) return usage()
   if (!args.output) {
@@ -119,7 +127,9 @@ async function main () {
   try {
     for (const p of paths) await downloadOne(client, p, args.output)
   } finally {
-    try { await client.close() } catch (_) {}
+    try {
+      await client.close()
+    } catch (_) {}
   }
   console.log('Done.')
 }

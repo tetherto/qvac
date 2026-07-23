@@ -1,0 +1,360 @@
+// @qvac/audiogen-ggml
+//
+// Audio generation (music) addon for qvac, ggml backend. Text prompt in ->
+// stereo audio out, powered by the ACE-Step engine in audiogen-cpp
+// (text-encoder + LM + DiT + VAE), compiled natively per-platform and linked
+// via vcpkg — same shape as @qvac/tts-ggml.
+//
+// The high-level `AudioGen` class implements the shared qvac addon contract:
+// `load()` once, then `run()` returns a `@qvac/infer-base` `QvacResponse` that
+// streams the engine's output (progress ticks + one interleaved-Int16 PCM
+// chunk) and resolves with the run stats.
+
+import { createJobHandler, type JobHandler, type QvacResponse } from '@qvac/infer-base'
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
+import QvacLogger = require('@qvac/logging')
+
+import {
+  AudioGenInterface,
+  type AudioGenBinding,
+  type AudioGenConfigurationParams,
+  type AudioGenOutputCallback
+} from './audiogen'
+import { resolveDitModelPath, type DitVariant } from './models'
+import { encodePcm, type EncodeOptions, type EncodedAudio, type OutputFormat } from './lib/audio-format'
+
+export const ENGINE_ACESTEP = 'acestep'
+
+/** Model file paths for the four ACE-Step stages. */
+export interface AudioGenFiles {
+  /** Directory holding the four ACE-Step GGUFs (engine auto-classifies them). */
+  modelDir?: string
+  /** Explicit text-encoder GGUF path. */
+  textEncModel?: string
+  /** Explicit LM GGUF path. */
+  lmModel?: string
+  /** Explicit DiT GGUF path (wins over `ditVariant`). */
+  ditModel?: string
+  /** Selects the DiT GGUF from `modelDir` when `ditModel` is not given. */
+  ditVariant?: DitVariant
+  /** Explicit VAE GGUF path. */
+  vaeModel?: string
+}
+
+/** Runtime knobs handed to the native engine. */
+export interface AudioGenRuntimeConfig {
+  /** 0 = engine auto-picks per DiT architecture (turbo 8 / sft 50). */
+  inferenceSteps?: number
+  /** 0 = engine auto-picks per DiT architecture (turbo 3.0 / sft 1.0). */
+  shift?: number
+  useGPU?: boolean
+  /** GPU layers to offload when `useGPU` is set (99 = all). Ignored when off. */
+  nGpuLayers?: number
+  /** 0 = engine auto-picks. */
+  threads?: number
+}
+
+export interface AudioGenOptions {
+  /** Model file paths for the four stages. */
+  files?: AudioGenFiles
+  /** Runtime knobs (steps, shift, GPU, threads). */
+  config?: AudioGenRuntimeConfig
+  /** Underlying logger; wrapped by a level-gated QvacLogger (defaults to off). */
+  logger?: QvacLogger.LoggerInterface
+}
+
+export interface GenerateOptions {
+  lyrics?: string
+  seed?: number
+  vocalLanguage?: string
+  /** Beats per minute; 0/undefined lets the LM infer it. */
+  bpm?: number
+  /** Key + scale, e.g. "C minor". */
+  keyscale?: string
+  /** Time signature, e.g. "4/4". */
+  timesignature?: string
+  /** Target length in seconds; undefined lets the LM decide the full length. */
+  duration?: number
+}
+
+/** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
+export interface AudiogenProgress {
+  stage: string
+  step: number
+  total: number
+}
+
+/** One interleaved-Int16 PCM chunk emitted by the engine. */
+export interface AudiogenPcmChunk {
+  outputArray: Int16Array
+  sampleRate: number
+  channels: number
+}
+
+/** A progress tick delivered through the run's output stream. */
+export interface AudiogenProgressChunk {
+  progress: AudiogenProgress
+}
+
+/** Items streamed by the `QvacResponse` returned from `run()`. */
+export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk
+
+/** Terminal run stats, resolved by `QvacResponse.await()`. */
+export interface AudiogenStats {
+  sampleRate?: number
+  channels?: number
+  audioDurationMs?: number
+  totalTimeMs?: number
+  totalSamples?: number
+}
+
+/** Raw shape of the native output-callback payload. */
+interface NativeAudiogenData {
+  outputArray?: Int16Array
+  sampleRate?: number
+  channels?: number
+  audioDurationMs?: number
+  totalTimeMs?: number
+  totalSamples?: number
+  progressStage?: string
+  progressStep?: number
+  progressTotal?: number
+}
+
+function asNativeData (data: unknown): NativeAudiogenData | null {
+  if (typeof data !== 'object' || data === null) return null
+  return data
+}
+
+/**
+ * GGML-backed music generation via the ACE-Step engine. Owns a persistent
+ * native engine: the four model stages are loaded once by `load()` and reused
+ * by every `run()`.
+ */
+export class AudioGen {
+  static readonly inferenceManagerConfig = {
+    noAdditionalDownload: true
+  }
+
+  static readonly ENGINE_ACESTEP = ENGINE_ACESTEP
+
+  addon: AudioGenInterface | null
+  private readonly _job: JobHandler
+  private readonly _configuration: AudioGenConfigurationParams
+  private readonly _logger: QvacLogger
+
+  constructor (options: AudioGenOptions = {}) {
+    this._logger = new QvacLogger(options.logger)
+    const files = options.files ?? {}
+    const config = options.config ?? {}
+
+    // DiT selection: an explicit `ditModel` path always wins; otherwise a
+    // `ditVariant` enum picks which DiT GGUF to load from `modelDir` (the three
+    // other stages are fixed, so the variant is the only real choice).
+    const ditModelPath = resolveDitModelPath({
+      modelDir: files.modelDir,
+      ditModel: files.ditModel,
+      ditVariant: files.ditVariant
+    })
+
+    // The native side carries NO defaults: it requires every numeric/bool field
+    // and throws if one is missing. JS is the single place that decides defaults.
+    // 0 for inferenceSteps/shift/threads means "auto"; nGpuLayers 99 = all layers
+    // (only applied by the engine when useGPU is true).
+    const useGpu = config.useGPU ?? false
+    this._configuration = {
+      engineType: ENGINE_ACESTEP,
+      modelDir: files.modelDir,
+      textEncModelPath: files.textEncModel,
+      lmModelPath: files.lmModel,
+      ditModelPath,
+      vaeModelPath: files.vaeModel,
+      inferenceSteps: config.inferenceSteps ?? 0,
+      shift: config.shift ?? 0,
+      useGPU: useGpu,
+      nGpuLayers: config.nGpuLayers ?? 99,
+      threads: config.threads ?? 0
+    }
+
+    this.addon = null
+    this._job = createJobHandler({
+      cancel: () => this.addon?.cancel() ?? Promise.resolve()
+    })
+  }
+
+  /** Create the native engine and load every stage GGUF. Idempotent. */
+  async load (): Promise<void> {
+    if (this.addon) return
+    this._logger.info('audiogen-ggml: loading ACE-Step engine')
+    this.addon = this._createAddon(
+      this._configuration,
+      this._addonOutputCallback.bind(this)
+    )
+    await this.addon.activate()
+    this._logger.info('audiogen-ggml: engine ready')
+  }
+
+  /** @deprecated Use {@link load}. Kept for backward compatibility. */
+  async activate (): Promise<void> {
+    return this.load()
+  }
+
+  /**
+   * Generate music from a text prompt. Returns a `QvacResponse` that streams
+   * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
+   */
+  async run (caption: string, opts: GenerateOptions = {}): Promise<QvacResponse<AudiogenOutputChunk>> {
+    // start() is typed QvacResponse<any>; run()'s explicit return type narrows
+    // the public surface to QvacResponse<AudiogenOutputChunk>.
+    this._logger.debug(
+      `audiogen-ggml: run (caption ${caption.length} chars, lyrics=${opts.lyrics ? 'yes' : 'no'})`
+    )
+    const response = this._job.start()
+    try {
+      await this._requireAddon().runJob({
+        type: 'text',
+        input: caption,
+        lyrics: opts.lyrics ?? '[Instrumental]',
+        seed: opts.seed,
+        vocalLanguage: opts.vocalLanguage,
+        bpm: opts.bpm,
+        keyscale: opts.keyscale,
+        timesignature: opts.timesignature,
+        duration: opts.duration
+      })
+    } catch (error) {
+      this._logger.error(
+        `audiogen-ggml: run failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+      this._job.fail(error instanceof Error ? error : new Error(String(error)))
+      throw error
+    }
+    return response
+  }
+
+  async cancel (): Promise<void> {
+    await this.addon?.cancel()
+  }
+
+  async unload (): Promise<void> {
+    const addon = this.addon
+    this.addon = null
+    if (addon) {
+      await addon.destroyInstance()
+      this._logger.debug('audiogen-ggml: engine unloaded')
+    }
+  }
+
+  async destroy (): Promise<void> {
+    await this.unload()
+  }
+
+  /**
+   * Encode interleaved Int16 PCM into one or more output formats. Pass a single
+   * format for one file, or an array to produce several at once (input order).
+   * See {@link OUTPUT_FORMATS} for the allowed values.
+   */
+  static encode (pcm: Uint8Array, format?: OutputFormat, opts?: EncodeOptions): EncodedAudio
+  static encode (pcm: Uint8Array, formats: OutputFormat[], opts?: EncodeOptions): EncodedAudio[]
+  static encode (
+    pcm: Uint8Array,
+    formats?: OutputFormat | OutputFormat[],
+    opts?: EncodeOptions
+  ): EncodedAudio | EncodedAudio[] {
+    return Array.isArray(formats)
+      ? encodePcm(pcm, formats, opts)
+      : encodePcm(pcm, formats, opts)
+  }
+
+  static getModelKey (_params?: unknown): string {
+    void _params
+    return 'audiogen-ggml'
+  }
+
+  private _createAddon (
+    configuration: AudioGenConfigurationParams,
+    outputCallback: AudioGenOutputCallback
+  ): AudioGenInterface {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved from package prebuilds.
+    const binding = require('./binding') as AudioGenBinding
+    return new AudioGenInterface(binding, configuration, outputCallback)
+  }
+
+  private _addonOutputCallback (
+    _handle: unknown,
+    _event: unknown,
+    data: unknown,
+    error: unknown
+  ): void {
+    if (typeof error === 'string' && error.length > 0) {
+      this._logger.error(`audiogen-ggml: engine error: ${error}`)
+      this._job.fail(new Error(error))
+      return
+    }
+    const d = asNativeData(data)
+    if (!d) return
+
+    if (typeof d.progressTotal === 'number') {
+      this._job.output({
+        progress: {
+          stage: d.progressStage ?? '',
+          step: d.progressStep ?? 0,
+          total: d.progressTotal
+        }
+      })
+      return
+    }
+
+    if (d.outputArray) {
+      this._job.output({
+        outputArray: d.outputArray,
+        sampleRate: d.sampleRate ?? 0,
+        channels: d.channels ?? 0
+      })
+      return
+    }
+
+    if (typeof d.audioDurationMs === 'number' || typeof d.totalTimeMs === 'number') {
+      const stats: AudiogenStats = {
+        ...(typeof d.sampleRate === 'number' ? { sampleRate: d.sampleRate } : {}),
+        ...(typeof d.channels === 'number' ? { channels: d.channels } : {}),
+        ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
+        ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
+        ...(typeof d.totalSamples === 'number' ? { totalSamples: d.totalSamples } : {})
+      }
+      this._job.end(stats, stats)
+    }
+  }
+
+  private _requireAddon (): AudioGenInterface {
+    if (!this.addon) throw new Error('AudioGen addon is not loaded (call load() first)')
+    return this.addon
+  }
+}
+
+export {
+  REGISTRY_SOURCE,
+  REGISTRY_PREFIX,
+  FIXED_MODELS,
+  DIT_VARIANTS,
+  DEFAULT_DIT_VARIANT,
+  ditVariants,
+  ditFilename,
+  registryPath,
+  modelFilenames,
+  modelManifest,
+  modelSources,
+  resolveDitModelPath,
+  allRegistryPaths
+} from './models'
+export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOptions } from './models'
+
+export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
+export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
+
+export type {
+  AudioGenConfigurationParams,
+  AudioGenJobData,
+  AudioGenBinding,
+  AudioGenOutputCallback
+} from './audiogen'

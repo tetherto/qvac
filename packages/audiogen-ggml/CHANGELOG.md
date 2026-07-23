@@ -25,5 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional GPU acceleration (Metal / CUDA / Vulkan) via `useGpu`, with CPU
   fallback.
 - Output peak-normalized to -0.9 dBFS before int16 conversion to avoid clipping.
-- WAV and raw-PCM output encoding via `AudioGen.encode`.
-- Unit tests for the model manifest and a registry existence check (no download).
+- Multi-format output encoding via `AudioGen.encode(pcm, formats, opts)`: `pcm`
+  and `wav` are dependency-free (pure JS); `flac`, `alac`, `aiff`, `caf`, `m4a`,
+  `aac`, `opus`, `ogg`, `ac3`, `wma` and `mp2` are encoded with `bare-ffmpeg`
+  (every encoder/muxer verified present in the vendored build). MP3 is not
+  offered — that build ships no MP3 encoder. Accepts a single format or an array
+  (one file per format, input order); each result carries `{ format, data,
+  extension, mimeType }`. `OUTPUT_FORMATS` exports the allowed list.
+- Unit tests for the model manifest, output-format encoding (WAV header,
+  multi-format, container magic bytes) and a registry existence check.

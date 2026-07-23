@@ -56,9 +56,10 @@ void AcestepModel::loadLocked() {
   opts.lm_model_path = cfg_.lmModelPath;
   opts.dit_model_path = cfg_.ditModelPath;
   opts.vae_model_path = cfg_.vaeModelPath;
-  opts.n_threads = cfg_.threads.value_or(0);
-  opts.n_gpu_layers = cfg_.useGpu.value_or(false) ? cfg_.nGpuLayers.value_or(99)
-                                                  : cfg_.nGpuLayers.value_or(0);
+  opts.n_threads = cfg_.threads;
+  // useGpu gates offloading: when off, no layers go to the GPU regardless of
+  // nGpuLayers. JS supplies both values (no C++ default).
+  opts.n_gpu_layers = cfg_.useGpu ? cfg_.nGpuLayers : 0;
   if (const char * vb = std::getenv("AUDIOGEN_VERBOSE")) {
     opts.verbose = (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' || vb[0] == 'Y');
   }
@@ -121,8 +122,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
-  params.inference_steps = cfg_.inferenceSteps.value_or(0);
-  params.shift = cfg_.shift.value_or(0.0F);
+  params.inference_steps = cfg_.inferenceSteps;
+  params.shift = cfg_.shift;
 
   auto progress = [this](const std::string& stage, int step, int total) -> bool {
     if (progressSink_) progressSink_(AcestepProgress{stage, step, total});
@@ -138,9 +139,15 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // addon path had (vs. the clean CLI output). Normalising to -0.9 dBFS keeps
   // headroom and removes the clipping. Single-shot output, so a 2-pass over the
   // full track is trivial.
-  float peak = 1e-9F;
+  //
+  // Only normalise when the track actually clips (peak > 1.0) or is loud enough
+  // to be worth scaling up. A silent/near-silent result (peak below a small
+  // threshold) is left untouched: seeding the peak at ~0 and dividing would turn
+  // low-level noise into a ~-0.9 dBFS blast. kMinNormPeak ~= -60 dBFS.
+  constexpr float kMinNormPeak = 1e-3F;
+  float peak = 0.0F;
   for (float s : result.pcm) peak = std::fmax(peak, std::fabs(s));
-  const float gain = 0.9F / peak;
+  const float gain = peak > kMinNormPeak ? 0.9F / peak : 1.0F;
 
   Output pcm;
   pcm.reserve(result.pcm.size());
@@ -150,10 +157,10 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
   totalSamples_ = static_cast<int64_t>(pcm.size());
   sampleRate_ = result.sample_rate;
-  const int channels = result.channels > 0 ? result.channels : 2;
+  channels_ = result.channels;
   audioDurationMs_ =
-      sampleRate_ > 0
-          ? (static_cast<double>(totalSamples_) / channels / sampleRate_) * 1000.0
+      (sampleRate_ > 0 && channels_ > 0)
+          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) * 1000.0
           : 0.0;
   realTimeFactor_ = audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
 

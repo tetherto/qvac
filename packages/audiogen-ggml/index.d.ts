@@ -1,79 +1,124 @@
-export const ENGINE_ACESTEP: 'acestep'
-
-/** The interchangeable DiT stage; the other three stages are fixed. */
-export type DitVariant = 'turbo-q4' | 'turbo-q8' | 'sft'
-
+import { type QvacResponse } from '@qvac/infer-base';
+import QvacLogger = require('@qvac/logging');
+import { AudioGenInterface } from './audiogen';
+import { type DitVariant } from './models';
+import { type EncodeOptions, type EncodedAudio, type OutputFormat } from './lib/audio-format';
+export declare const ENGINE_ACESTEP = "acestep";
+/** Model file paths for the four ACE-Step stages. */
+export interface AudioGenFiles {
+    /** Directory holding the four ACE-Step GGUFs (engine auto-classifies them). */
+    modelDir?: string;
+    /** Explicit text-encoder GGUF path. */
+    textEncModel?: string;
+    /** Explicit LM GGUF path. */
+    lmModel?: string;
+    /** Explicit DiT GGUF path (wins over `ditVariant`). */
+    ditModel?: string;
+    /** Selects the DiT GGUF from `modelDir` when `ditModel` is not given. */
+    ditVariant?: DitVariant;
+    /** Explicit VAE GGUF path. */
+    vaeModel?: string;
+}
+/** Runtime knobs handed to the native engine. */
+export interface AudioGenRuntimeConfig {
+    /** 0 = engine auto-picks per DiT architecture (turbo 8 / sft 50). */
+    inferenceSteps?: number;
+    /** 0 = engine auto-picks per DiT architecture (turbo 3.0 / sft 1.0). */
+    shift?: number;
+    useGPU?: boolean;
+    /** GPU layers to offload when `useGPU` is set (99 = all). Ignored when off. */
+    nGpuLayers?: number;
+    /** 0 = engine auto-picks. */
+    threads?: number;
+}
 export interface AudioGenOptions {
-  modelDir?: string
-  textEncModel?: string
-  lmModel?: string
-  ditModel?: string
-  /** Selects the DiT GGUF from `modelDir` when `ditModel` is not given. */
-  ditVariant?: DitVariant
-  vaeModel?: string
-  inferenceSteps?: number
-  shift?: number
-  useGpu?: boolean
-  threads?: number
+    /** Model file paths for the four stages. */
+    files?: AudioGenFiles;
+    /** Runtime knobs (steps, shift, GPU, threads). */
+    config?: AudioGenRuntimeConfig;
+    /** Underlying logger; wrapped by a level-gated QvacLogger (defaults to off). */
+    logger?: QvacLogger.LoggerInterface;
 }
-
-export interface ModelManifest {
-  textEnc: string
-  lm: string
-  dit: string
-  vae: string
-}
-
-export interface ModelSources {
-  textEncModelSrc: string
-  lmModelSrc: string
-  ditModelSrc: string
-  vaeModelSrc: string
-}
-
-/** Source name for the model registry (the `source` arg of downloadModel/getModel). */
-export const REGISTRY_SOURCE: string
-/** Registry build folder holding the published ACE-Step GGUFs. */
-export const REGISTRY_PREFIX: string
-/** DiT variant -> GGUF filename. */
-export const DIT_VARIANTS: Record<DitVariant, string>
-export const DEFAULT_DIT_VARIANT: DitVariant
-export function ditVariants (): DitVariant[]
-export function ditFilename (variant?: DitVariant): string
-export function modelFilenames (variant?: DitVariant): ModelManifest
-export function modelManifest (variant?: DitVariant): ModelManifest
-export function modelSources (variant?: DitVariant): ModelSources
-export function allRegistryPaths (): string[]
-
 export interface GenerateOptions {
-  lyrics?: string
-  seed?: number
-  vocalLanguage?: string
+    lyrics?: string;
+    seed?: number;
+    vocalLanguage?: string;
+    /** Beats per minute; 0/undefined lets the LM infer it. */
+    bpm?: number;
+    /** Key + scale, e.g. "C minor". */
+    keyscale?: string;
+    /** Time signature, e.g. "4/4". */
+    timesignature?: string;
+    /** Target length in seconds; undefined lets the LM decide the full length. */
+    duration?: number;
 }
-
-export interface GenerateResult {
-  outputArray: Int16Array
-  sampleRate: number
-  channels: number
-  metadata: {
-    caption?: string
-    lyrics?: string
-    keyscale?: string
-    bpm?: number
-    timesignature?: number
-    vocalLanguage?: string
-    seed?: number
-    codes?: number
-  }
+/** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
+export interface AudiogenProgress {
+    stage: string;
+    step: number;
+    total: number;
 }
-
-export type OutputCallback = (event: unknown) => void
-
-export class AudioGen {
-  constructor (options?: AudioGenOptions, outputCb?: OutputCallback | null)
-  activate (): Promise<void>
-  generate (caption: string, opts?: GenerateOptions): Promise<GenerateResult>
-  cancel (): Promise<void>
-  destroy (): Promise<void>
-  unload (): Promise<void>
+/** One interleaved-Int16 PCM chunk emitted by the engine. */
+export interface AudiogenPcmChunk {
+    outputArray: Int16Array;
+    sampleRate: number;
+    channels: number;
 }
+/** A progress tick delivered through the run's output stream. */
+export interface AudiogenProgressChunk {
+    progress: AudiogenProgress;
+}
+/** Items streamed by the `QvacResponse` returned from `run()`. */
+export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk;
+/** Terminal run stats, resolved by `QvacResponse.await()`. */
+export interface AudiogenStats {
+    sampleRate?: number;
+    channels?: number;
+    audioDurationMs?: number;
+    totalTimeMs?: number;
+    totalSamples?: number;
+}
+/**
+ * GGML-backed music generation via the ACE-Step engine. Owns a persistent
+ * native engine: the four model stages are loaded once by `load()` and reused
+ * by every `run()`.
+ */
+export declare class AudioGen {
+    static readonly inferenceManagerConfig: {
+        noAdditionalDownload: boolean;
+    };
+    static readonly ENGINE_ACESTEP = "acestep";
+    addon: AudioGenInterface | null;
+    private readonly _job;
+    private readonly _configuration;
+    private readonly _logger;
+    constructor(options?: AudioGenOptions);
+    /** Create the native engine and load every stage GGUF. Idempotent. */
+    load(): Promise<void>;
+    /** @deprecated Use {@link load}. Kept for backward compatibility. */
+    activate(): Promise<void>;
+    /**
+     * Generate music from a text prompt. Returns a `QvacResponse` that streams
+     * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
+     */
+    run(caption: string, opts?: GenerateOptions): Promise<QvacResponse<AudiogenOutputChunk>>;
+    cancel(): Promise<void>;
+    unload(): Promise<void>;
+    destroy(): Promise<void>;
+    /**
+     * Encode interleaved Int16 PCM into one or more output formats. Pass a single
+     * format for one file, or an array to produce several at once (input order).
+     * See {@link OUTPUT_FORMATS} for the allowed values.
+     */
+    static encode(pcm: Uint8Array, format?: OutputFormat, opts?: EncodeOptions): EncodedAudio;
+    static encode(pcm: Uint8Array, formats: OutputFormat[], opts?: EncodeOptions): EncodedAudio[];
+    static getModelKey(_params?: unknown): string;
+    private _createAddon;
+    private _addonOutputCallback;
+    private _requireAddon;
+}
+export { REGISTRY_SOURCE, REGISTRY_PREFIX, FIXED_MODELS, DIT_VARIANTS, DEFAULT_DIT_VARIANT, ditVariants, ditFilename, registryPath, modelFilenames, modelManifest, modelSources, resolveDitModelPath, allRegistryPaths } from './models';
+export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOptions } from './models';
+export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
+export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
+export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

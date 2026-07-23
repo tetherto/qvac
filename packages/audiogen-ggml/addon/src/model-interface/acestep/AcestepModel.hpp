@@ -87,6 +87,7 @@ public:
   }
 
   int sampleRate() const { return sampleRate_; }
+  int channels() const { return channels_; }
 
 private:
   Output generate(const AnyInput& in);
@@ -108,7 +109,8 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
-  int sampleRate_ = 48000;
+  int sampleRate_ = 0;  // populated from the engine result in generate()
+  int channels_ = 0;    // populated from the engine result in generate()
 
   std::string backendName_ = "CPU";
 };

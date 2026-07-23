@@ -27,14 +27,18 @@ namespace js = qvac_lib_inference_addon_cpp::js;
 using acestep::AcestepModel;
 
 // Emits the generated track as interleaved stereo Int16 + sample rate, mirror
-// of ttsggml::JsAudioOutputHandler.
+// of ttsggml::JsAudioOutputHandler. The rate/channels are sourced from the model
+// (which reads them from the engine's decode result) rather than hardcoded, so
+// the values reported alongside the PCM always match the runtime stats. PCM is
+// emitted once, after generate() completes, so the model already holds the real
+// engine values by the time this runs.
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
-  explicit JsAudioOutputHandler(int sampleRate)
+  explicit JsAudioOutputHandler(const AcestepModel* model)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
-            [this, sampleRate](
+            [this, model](
                 const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
@@ -43,9 +47,10 @@ struct JsAudioOutputHandler
               result.setProperty(this->env_, "outputArray", typedArray);
               result.setProperty(
                   this->env_, "sampleRate",
-                  js::Number::create(this->env_, sampleRate));
+                  js::Number::create(this->env_, model->sampleRate()));
               result.setProperty(
-                  this->env_, "channels", js::Number::create(this->env_, 2));
+                  this->env_, "channels",
+                  js::Number::create(this->env_, model->channels()));
               return result;
             }) {}
 };
@@ -86,10 +91,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   auto model = make_unique<AcestepModel>(std::move(cfg));
   AcestepModel* modelPtr = model.get();
-  const int sampleRate = 48000;
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRate));
+  outHandlers.add(make_shared<JsAudioOutputHandler>(modelPtr));
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),

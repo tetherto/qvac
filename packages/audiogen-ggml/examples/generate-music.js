@@ -55,41 +55,28 @@ async function main () {
   console.log('[audiogen] prompt: ' + caption)
   console.log('[audiogen] lyrics: ' + (opts.lyrics.split('\n')[0] || '').slice(0, 60))
 
-  // PCM is delivered through the native output callback (interleaved stereo
-  // Int16 + sampleRate/channels). runJob returns as soon as the job is queued,
-  // so completion is signalled by the trailing stats event (audioDurationMs) or
-  // an error string — gate on a promise that those resolve.
-  const chunks = []
-  let sampleRate = 48000
-  let channels = 2
-  let done
-  const finished = new Promise((resolve, reject) => { done = { resolve, reject } })
+  const gen = new AudioGen({ files: { modelDir, ditModel }, config: { useGPU } })
+  await gen.load()
 
-  const outputCb = (_handle, _event, data, error) => {
-    if (typeof error === 'string' && error.length > 0) {
-      done.reject(new Error(error))
-      return
-    }
-    if (data && data.outputArray) {
-      if (data.sampleRate != null) sampleRate = data.sampleRate
-      if (data.channels != null) channels = data.channels
-      chunks.push(Buffer.from(data.outputArray.buffer.slice(
-        data.outputArray.byteOffset,
-        data.outputArray.byteOffset + data.outputArray.byteLength)))
-      return
-    }
-    if (data && (typeof data.audioDurationMs === 'number' ||
-                 typeof data.totalTimeMs === 'number')) {
-      done.resolve()
+  // run() returns a @qvac/infer-base QvacResponse: iterate() streams progress
+  // ticks + the interleaved-Int16 PCM chunk(s); await() resolves with the run
+  // stats. PCM chunks carry their own sampleRate/channels (from the engine).
+  const t0 = Date.now()
+  const response = await gen.run(caption, opts)
+
+  const chunks = []
+  let sampleRate = 0
+  let channels = 0
+  for await (const item of response.iterate()) {
+    if (item.outputArray) {
+      sampleRate = item.sampleRate
+      channels = item.channels
+      chunks.push(Buffer.from(item.outputArray.buffer.slice(
+        item.outputArray.byteOffset,
+        item.outputArray.byteOffset + item.outputArray.byteLength)))
     }
   }
-
-  const gen = new AudioGen({ modelDir, ditModel, useGpu: useGPU }, outputCb)
-  await gen.activate()
-
-  const t0 = Date.now()
-  await gen.generate(caption, opts)
-  await finished
+  await response.await()
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
 
   const pcm = Buffer.concat(chunks)

@@ -46,29 +46,32 @@ at the folder that holds them.
 ```js
 const { AudioGen } = require('@qvac/audiogen-ggml')
 
-// modelDir is a local folder with the 4 GGUFs; ditVariant picks the DiT.
-const gen = new AudioGen(
-  { modelDir: '/path/to/acestep/models', ditVariant: 'turbo-q4', useGpu: true },
-  (handle, event, data, error) => {
-    if (error) throw new Error(error)
-    if (data?.outputArray) {
-      // data.outputArray: interleaved stereo Int16 @ data.sampleRate — a chunk
-      // of audio. Collect these as they stream in.
-    }
-    // The final event carries stats (data.audioDurationMs, data.totalTimeMs).
-  }
-)
-
-await gen.activate()                       // loads the 4 model stages
-await gen.generate('lo-fi hip hop, mellow piano, rainy night', {
-  lyrics: '[Instrumental]'                 // no vocals
+// files.modelDir is a local folder with the 4 GGUFs; files.ditVariant picks the DiT.
+const gen = new AudioGen({
+  files: { modelDir: '/path/to/acestep/models', ditVariant: 'turbo-q4' },
+  config: { useGPU: true }
 })
+
+await gen.load() // loads the 4 model stages
+
+// run() returns a @qvac/infer-base QvacResponse: iterate() streams progress
+// ticks + the interleaved-Int16 PCM chunk(s); await() resolves the run stats.
+const response = await gen.run('lo-fi hip hop, mellow piano, rainy night', {
+  lyrics: '[Instrumental]' // no vocals
+})
+for await (const item of response.iterate()) {
+  if (item.outputArray) {
+    // item.outputArray: interleaved stereo Int16 @ item.sampleRate — collect
+    // these chunks as they stream in.
+  }
+}
+const stats = await response.await() // { sampleRate, channels, audioDurationMs, ... }
+
 await gen.destroy()
 ```
 
-> `generate()` resolves as soon as the job is queued — the audio arrives later
-> through the callback, and completion is signalled by the final stats event.
-> Wait for that event before you use the audio or call `destroy()`;
+> The audio arrives as PCM chunks over the `QvacResponse` stream; `await()`
+> resolves with the run stats once generation completes.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm
@@ -77,7 +80,7 @@ Pass `lyrics` for vocals, and steer the LM with musical hints — `bpm`,
 `keyscale`, `timesignature`, `vocalLanguage` and target `duration`:
 
 ```js
-await gen.generate('energetic cumbia, brass stabs, live percussion, party vibe', {
+const response = await gen.run('energetic cumbia, brass stabs, live percussion, party vibe', {
   vocalLanguage: 'es',        // language the vocals are sung in
   bpm: 98,                    // tempo
   keyscale: 'A minor',        // key / scale
@@ -100,32 +103,85 @@ DiT you loaded (turbo vs sft), so you normally don't set them.
 
 ### Turning PCM into a file
 
-The callback gives you raw PCM chunks. Concatenate them and encode to WAV:
+The run streams raw PCM chunks. Concatenate them and encode to a file. The
+addon receives the format(s) **by parameter**: pass one format for a single
+file, or an array to produce several at once (one file per format):
 
 ```js
 const { AudioGen } = require('@qvac/audiogen-ggml')
-const { data } = AudioGen.encode(pcmBuffer, 'wav', { sampleRate: 48000, channels: 2 })
-require('fs').writeFileSync('song.wav', data)   // 'wav' | 'pcm'
+const fs = require('fs')
+
+// Single format -> { format, data, extension, mimeType }
+const wav = AudioGen.encode(pcmBuffer, 'wav', { sampleRate: 48000, channels: 2 })
+fs.writeFileSync(`song.${wav.extension}`, wav.data)
+
+// Several formats at once -> one result per format, in the requested order
+const files = AudioGen.encode(pcmBuffer, ['wav', 'flac', 'm4a', 'opus'], {
+  sampleRate: 48000,
+  channels: 2
+})
+for (const f of files) fs.writeFileSync(`song.${f.extension}`, f.data)
 ```
+
+#### Supported output formats
+
+`pcm` and `wav` are dependency-free (pure JS). Everything else is encoded with
+[`bare-ffmpeg`](https://www.npmjs.com/package/bare-ffmpeg) (the same FFmpeg build
+vendored for `@qvac/decoder-audio`), so the matching encoder must be compiled
+into that build.
+
+| `format` | Container / codec | Extension | MIME | Notes |
+|----------|-------------------|-----------|------|-------|
+| `pcm` | raw interleaved Int16 | `pcm` | `audio/L16` | no container, dependency-free |
+| `wav` | WAV / PCM s16le | `wav` | `audio/wav` | dependency-free (pure-JS header) |
+| `flac` | FLAC | `flac` | `audio/flac` | lossless |
+| `alac` | MP4 / ALAC | `m4a` | `audio/mp4` | Apple Lossless (shares the `.m4a` extension) |
+| `aiff` | AIFF / PCM s16be | `aiff` | `audio/aiff` | uncompressed |
+| `caf` | CAF / PCM s16le | `caf` | `audio/x-caf` | Apple Core Audio Format, uncompressed |
+| `m4a` | MP4 / AAC | `m4a` | `audio/mp4` | AAC in an MP4/M4A container |
+| `aac` | ADTS / AAC | `aac` | `audio/aac` | raw AAC stream |
+| `opus` | Ogg / Opus | `opus` | `audio/opus` | resampled to 48 kHz (libopus requirement) |
+| `ogg` | Ogg / Vorbis | `ogg` | `audio/ogg` | Vorbis |
+| `ac3` | AC-3 | `ac3` | `audio/ac3` | Dolby Digital |
+| `wma` | ASF / WMA v2 | `wma` | `audio/x-ms-wma` | Windows Media Audio |
+| `mp2` | MPEG-1 Layer II | `mp2` | `audio/mpeg` | legacy MPEG audio |
+
+> `mp3` is intentionally **not** listed: the vendored FFmpeg build ships no MP3
+> encoder (`libmp3lame`). Unknown/unsupported formats throw.
+>
+> `AudioGen.encode(pcm, formats, opts)` returns `{ format, data, extension,
+> mimeType }` for a single format, or an array of those (input order) for an
+> array. `OUTPUT_FORMATS` exports the full allowed list.
 
 See [`examples/generate-music.js`](examples/generate-music.js) for a full,
 runnable end-to-end script (`npm run example`).
 
 ## Options
 
-**Constructor** (`new AudioGen(options, outputCb)`):
+**Constructor** (`new AudioGen({ files, config, logger })`):
+
+`files` — model paths:
 
 | Option | Meaning |
 |--------|---------|
 | `modelDir` | Folder holding the GGUFs (stages auto-classified by name). |
 | `ditVariant` | Which DiT to load from `modelDir`: `turbo-q4` \| `turbo-q8` \| `sft`. |
 | `textEncModel` / `lmModel` / `ditModel` / `vaeModel` | Explicit per-stage paths (override `modelDir`). |
-| `useGpu` | Run on GPU (Metal / CUDA / Vulkan); falls back to CPU. |
+
+`config` — runtime knobs:
+
+| Option | Meaning |
+|--------|---------|
+| `useGPU` | Run on GPU (Metal / CUDA / Vulkan); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
+| `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
 
-**`generate(caption, opts)`**: `lyrics`, `vocalLanguage`, `bpm`, `keyscale`,
-`timesignature`, `duration`, `seed`.
+`logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
+wrapped by a level-gated `QvacLogger`.
+
+**`run(caption, opts)`** returns a `QvacResponse`; `opts`: `lyrics`,
+`vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `duration`, `seed`.
 
 ## Models
 

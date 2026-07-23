@@ -57,14 +57,18 @@ function _findGguf (dir, needle) {
   return hit ? path.join(dir, hit) : undefined
 }
 
-function _makeGen (modelDir, outputCb) {
+function _makeGen (modelDir) {
   return new AudioGen({
-    modelDir,
-    ditModel: _findGguf(modelDir, 'turbo'),
-    inferenceSteps: TURBO_STEPS,
-    shift: TURBO_SHIFT,
-    useGpu: false
-  }, outputCb)
+    files: {
+      modelDir,
+      ditModel: _findGguf(modelDir, 'turbo')
+    },
+    config: {
+      inferenceSteps: TURBO_STEPS,
+      shift: TURBO_SHIFT,
+      useGPU: false
+    }
+  })
 }
 
 // Wrap interleaved Int16 PCM in a canonical 44-byte PCM WAV header. Kept inline
@@ -110,9 +114,9 @@ async function testLoadModels () {
   console.log('[audiogen-mobile] model dir: ' + modelDir)
   console.log('[audiogen-mobile] files: ' + fs.readdirSync(modelDir).join(', '))
 
-  const gen = _makeGen(modelDir, () => {})
+  const gen = _makeGen(modelDir)
   const t0 = Date.now()
-  await gen.activate()
+  await gen.load()
   const loadMs = Date.now() - t0
   await gen.destroy()
 
@@ -130,31 +134,23 @@ async function testGenerateMusic () {
   const chunks = []
   let sampleRate = 48000
   let channels = 2
-  let resolveDone
-  let rejectDone
-  const finished = new Promise((resolve, reject) => { resolveDone = resolve; rejectDone = reject })
 
-  const outputCb = (_handle, _event, data, error) => {
-    if (typeof error === 'string' && error.length > 0) { rejectDone(new Error(error)); return }
-    if (data && data.outputArray) {
-      if (data.sampleRate != null) sampleRate = data.sampleRate
-      if (data.channels != null) channels = data.channels
-      chunks.push(Buffer.from(data.outputArray.buffer.slice(
-        data.outputArray.byteOffset,
-        data.outputArray.byteOffset + data.outputArray.byteLength)))
-      return
-    }
-    if (data && (typeof data.audioDurationMs === 'number' || typeof data.totalTimeMs === 'number')) {
-      resolveDone()
-    }
-  }
-
-  const gen = _makeGen(modelDir, outputCb)
-  await gen.activate()
+  const gen = _makeGen(modelDir)
+  await gen.load()
 
   const t0 = Date.now()
-  await gen.generate(SMOKE_CAPTION, { lyrics: '[Instrumental]', duration: SMOKE_DURATION_S })
-  await finished
+  // run() returns a @qvac/infer-base QvacResponse: iterate() streams progress
+  // ticks + the interleaved-Int16 PCM chunk(s); await() resolves the run stats.
+  const response = await gen.run(SMOKE_CAPTION, { lyrics: '[Instrumental]', duration: SMOKE_DURATION_S })
+  for await (const item of response.iterate()) {
+    if (!item.outputArray) continue
+    if (item.sampleRate != null) sampleRate = item.sampleRate
+    if (item.channels != null) channels = item.channels
+    chunks.push(Buffer.from(item.outputArray.buffer.slice(
+      item.outputArray.byteOffset,
+      item.outputArray.byteOffset + item.outputArray.byteLength)))
+  }
+  await response.await()
   const elapsedMs = Date.now() - t0
 
   await gen.destroy()
