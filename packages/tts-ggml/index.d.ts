@@ -2,7 +2,8 @@ import { type QvacResponse } from "@qvac/infer-base";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC;
+declare const ENGINE_PARLER = "parler";
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_PARLER;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -29,6 +30,10 @@ interface TTSGgmlFiles {
     supertonicModel?: string;
     supertonicModelPath?: string;
     supertonic?: string;
+    /** Parler single-file GGUF path (mini/large/indic). Overrides `modelDir`. */
+    parlerModel?: string;
+    parlerModelPath?: string;
+    parler?: string;
     /**
      * LavaSR enhancer GGUF: single-file Vocos bandwidth extension produced by
      * tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. When supplied, output
@@ -104,7 +109,26 @@ interface LavaSRDenoiserOptions {
     /** Denoiser GGUF path (alternative to `files.lavasrDenoiser`). */
     denoiserPath?: string;
 }
-interface TTSGgmlOptions {
+/**
+ * Parler voice-description inputs. Either a free-text `description` (alias
+ * `voiceDescription`) or the template fields, rendered natively through
+ * tts-cpp's build_description(); mixing the two at the same level is rejected.
+ * Accepted at construction, on `reload()`, and per call (Parler only).
+ */
+interface ParlerDescriptionFields {
+    description?: string;
+    voiceDescription?: string;
+    /** Parler voice-template field; also Supertonic's baked voice id. */
+    voice?: string;
+    emotion?: string;
+    pitch?: string;
+    pace?: string;
+    expressivity?: string;
+    noise?: string;
+    reverb?: string;
+    quality?: string;
+}
+interface TTSGgmlOptions extends ParlerDescriptionFields {
     files?: TTSGgmlFiles;
     config?: TTSGgmlRuntimeConfig;
     logger?: object;
@@ -196,6 +220,18 @@ interface TTSGgmlOptions {
     mecabDictDir?: string;
     /** Chatterbox MTL Cangjie TSV path for Chinese. */
     cangjieTsvPath?: string;
+    /**
+     * Parler sampling / generation knobs; each unset defers to the GGUF's
+     * generation defaults (temperature 1.0, top-k 50, ~30 s max length).
+     */
+    temperature?: number;
+    topK?: number;
+    topP?: number;
+    /** Parler generation-length cap in decoder steps (~86/s); 0 = model default. */
+    maxFrames?: number;
+    minNewTokens?: number;
+    /** Parler prompt digit expansion (engine default: enabled). */
+    normalizeNumbers?: boolean;
     opts?: object;
     exclusiveRun?: boolean;
 }
@@ -235,13 +271,13 @@ interface SentenceStreamChunkMeta {
      */
     isLast?: boolean;
 }
-interface SentenceStreamOptions {
+interface SentenceStreamOptions extends ParlerDescriptionFields {
     /** BCP-47 locale for `Intl.Segmenter` when available. */
     locale?: string;
     /** Maximum graphemes per chunk; defaults to 300, or 120 for Korean. */
     maxChunkScalars?: number;
 }
-interface RunStreamingOptions {
+interface RunStreamingOptions extends ParlerDescriptionFields {
     accumulateSentences?: boolean;
     sentenceDelimiter?: RegExp;
     sentenceDelimiterPreset?: SentenceDelimiterPreset;
@@ -250,7 +286,7 @@ interface RunStreamingOptions {
 }
 /** Input accepted by `runStreaming`. */
 type TextStreamInput = string | string[] | Iterable<string> | AsyncIterable<string>;
-interface TTSRunInput {
+interface TTSRunInput extends ParlerDescriptionFields {
     type?: string;
     input: string;
     streamOutput?: boolean;
@@ -279,6 +315,7 @@ declare class TTSGgml {
     };
     static readonly ENGINE_CHATTERBOX = "chatterbox";
     static readonly ENGINE_SUPERTONIC = "supertonic";
+    static readonly ENGINE_PARLER = "parler";
     opts: object;
     exclusiveRun: boolean;
     logger: object;
@@ -318,10 +355,33 @@ declare class TTSGgml {
     private _backendsDir?;
     private _openclCacheDir?;
     private _vulkanCacheDir?;
+    private _parlerModelPath?;
+    private _description?;
+    private _emotion?;
+    private _pitch?;
+    private _pace?;
+    private _expressivity?;
+    private _noise?;
+    private _reverb?;
+    private _quality?;
+    private _temperature?;
+    private _topK?;
+    private _topP?;
+    private _maxFrames?;
+    private _minNewTokens?;
+    private _normalizeNumbers?;
     constructor(options?: TTSGgmlOptions);
     private _resolveEngineAndModelPaths;
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
+    private _assertParlerOptionConsistency;
+    /**
+     * Extract + validate the per-call parler description/template fields from a
+     * run input or streaming options. Returns undefined when none are present.
+     * Parler-only; a per-call template cannot be merged with a constructor-level
+     * free-text description.
+     */
+    private _resolveParlerJobFields;
     getEngineType(): EngineType;
     getApiDefinition(): string;
     getState(): InferenceState;
@@ -358,6 +418,7 @@ declare class TTSGgml {
     private _buildTtsParams;
     private _buildChatterboxParams;
     private _buildSupertonicParams;
+    private _buildParlerParams;
     private _assignCommonNativeParams;
     private _createAddon;
     unload(): Promise<void>;
