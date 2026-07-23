@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.16.0] - 2026-07-23
+
+This release makes TypeScript the source of truth for the diffusion runtime
+wrappers and their public declarations. It also strengthens performance
+regression coverage for the per-phase generation metrics introduced in 0.15.0.
+
+### Changed
+
+#### TypeScript-generated runtime wrappers and declarations
+
+The image, video, native-addon, and logging wrappers are now authored in
+TypeScript, with published JavaScript and declaration files generated during
+builds and packaging. CommonJS and ESM exports remain compatible, while strict
+type checking, linting, and generated-output validation reduce the risk of
+runtime behavior drifting from the public types.
+
+#### Per-phase timing regression coverage
+
+Integration performance reports now capture `conditionerMs`, `denoiseMs`,
+`vaeMs`, `postProcessMs`, and `stepsPerSecond` across image and img2img flows.
+The tests verify phase totals and throughput consistency, and mobile CI now
+surfaces these metrics from iOS artifacts and multi-device Android runs.
+
+### Pull Requests
+
+- [#3341](https://github.com/tetherto/qvac/pull/3341) - QVAC-22469 test: profile diffusion per-phase runtime stats in integration tests
+- [#3350](https://github.com/tetherto/qvac/pull/3350) - QVAC-22462 mod: migrate diffusion-cpp to TypeScript
+
 ## [0.15.1] - 2026-07-17
 
 ### Fixed

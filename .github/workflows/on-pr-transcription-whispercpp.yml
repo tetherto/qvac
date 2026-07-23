@@ -408,7 +408,7 @@ jobs:
         with:
           pattern: rtf-results-*
           path: benchmark-artifacts/desktop
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Download mobile performance artifacts
         continue-on-error: true
