@@ -178,12 +178,17 @@ jobs:
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
+      # No token: fetch the (untrusted) PR ref with the default GITHUB_TOKEN and
+      # persist-credentials:false so no credential is written into
+      # addon/.git/config, which the fork-controlled steps below could read.
+      # Matches the prebuild-android/ios checkouts. If a private fork ever 404s
+      # here, re-add token to ALL checkouts WITH persist-credentials:false.
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
           path: addon
           fetch-depth: 0
 
