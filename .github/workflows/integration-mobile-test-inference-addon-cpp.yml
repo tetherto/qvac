@@ -152,6 +152,9 @@ jobs:
       - prebuild-ios
     runs-on: ${{ matrix.runner }}
     environment: release
+    # Exceeds the 30m default budget: this job builds the mobile app and then
+    # runs the suite on real devices via AWS Device Farm (queue + upload +
+    # provisioning + on-device execution), which routinely takes >30m.
     timeout-minutes: 120
     continue-on-error: true # advisory until on-device flake is characterised
     permissions:
