@@ -182,7 +182,12 @@ function assertBenchmarkConfig(data: unknown, path: string): asserts data is Ben
   if (!isAbsolute(ggufPath)) {
     throw new TypeError('config model_parity.gguf_path must be absolute')
   }
-  if (typeof modelParity['sha256'] !== 'string' || !/^[0-9a-f]{64}$/.test(modelParity['sha256'])) {
+  const sha256 = modelParity['sha256']
+  if (
+    sha256 !== undefined &&
+    sha256 !== '' &&
+    (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256))
+  ) {
     throw new TypeError('config model_parity.sha256 must be a lowercase 64-character digest')
   }
 }

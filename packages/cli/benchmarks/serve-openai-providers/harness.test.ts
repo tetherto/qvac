@@ -518,6 +518,46 @@ describe('serve-openai-providers harness', () => {
     }
   })
 
+  it('runs the digest command with an empty configured digest', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+    const originalLog = console.log
+    try {
+      console.log = ignoreError
+      const path = join(dir, 'benchmark.yaml')
+      const ggufPath = join(dir, 'model.gguf')
+      const promptsPath = join(dir, 'prompts.json')
+      const config = makeConfig({
+        ggufPath,
+        sha256: ''
+      })
+      writeFileSync(ggufPath, 'gguf')
+      writeFileSync(promptsPath, JSON.stringify(promptsDoc), 'utf8')
+      writeConfig(path, config)
+
+      assert.equal(await main(['digest', '--config', path, '--prompts', promptsPath]), 0)
+    } finally {
+      console.log = originalLog
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('loads a benchmark config with a missing digest for the digest command', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+    try {
+      const path = join(dir, 'benchmark.yaml')
+      const config = makeConfig({
+        ggufPath: join(dir, 'model.gguf'),
+        sha256: 'a'.repeat(64)
+      })
+      delete config.model_parity.sha256
+      writeConfig(path, config)
+
+      assert.deepEqual(loadBenchmarkConfig(path), config)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   for (const [name, update] of [
     ['empty providers', { providers: [] }],
     ['empty prompt IDs', { prompt_ids: [] }],
