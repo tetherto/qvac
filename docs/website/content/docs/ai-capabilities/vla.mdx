@@ -10,7 +10,11 @@ Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`
 
 The same `vla()` interface drives multiple policy families that differ in (i) how many camera views they expect, (ii) how they consume the robot state, and (iii) how they consume camera frames. `vlaHparams()` reports these per-model traits — `numCameras`, `stateInputMode`, and `imageInputMode` — so you can shape your inputs accordingly without hardcoding to a single architecture.
 
-`imageInputMode` is either `"pixels"` (each `images[]` entry is a `3·w·h` pixel plane, as prepared by `vlaPreprocessImage()`) or `"patches"` (each entry is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats that the consumer produces by running the model's own vision patch-embed over each camera frame). `vla()` returns the produced action chunk together with per-stage timing stats.
+`imageInputMode` is either `"pixels"` or `"patches"`:
+- `"pixels"`: each `images[]` entry is a `3·w·h` pixel plane, as prepared by `vlaPreprocessImage()`.
+- `"patches"`: each `images[]` entry is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats, not a `3·w·h` pixel plane. A real consumer patchifies each camera frame the way `Gr00tPolicy` does, and the model's learned patch-embed runs inside the addon.
+
+`vla()` returns the produced action chunk together with per-stage timing stats.
 
 ## Functions
 
