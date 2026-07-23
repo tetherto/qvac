@@ -1,5 +1,6 @@
 #include "SdModel.hpp"
 
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -22,6 +23,8 @@
 #include "utils/LoggingMacros.hpp"
 #include "utils/SdErrors.hpp"
 #include "utils/SdVideoFrames.hpp"
+#include "utils/VideoModelCapabilities.hpp"
+#include "utils/VideoProgress.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
@@ -403,8 +406,15 @@ void SdModel::load() {
   sdCtx_.reset(raw);
 
   // LTX-2 is identified by the embeddings-connectors input, which no other
-  // model family uses. Used for model-aware per-job validation below.
+  // model family uses. Its temporal shape is used for per-job validation.
   isLtxModel_ = !config_.embeddingsConnectorsPath.empty();
+  const std::string modelPath = config_.diffusionModelPath.empty()
+                                    ? config_.modelPath
+                                    : config_.diffusionModelPath;
+  videoModelCapabilities_ =
+      qvac_lib_inference_addon_sd::inspectVideoModelCapabilities(modelPath);
+  if (isLtxModel_)
+    videoModelCapabilities_.spatialAlignment = 32;
 
   stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - tLoadStart)
@@ -938,12 +948,34 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
       vid, parsed.get<picojson::object>());
+  const auto& paramsObject = parsed.get<picojson::object>();
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid")
     throw StatusError(
         general_error::InvalidArgument,
         "processVideo: unsupported mode '" + vid.mode +
             "' (expected txt2vid or img2vid)");
+
+  // Keep the direct native entry point consistent with video.js: an A14B MoE
+  // tuning knob without a high-noise expert is always a caller error, not a
+  // silent no-op. Dense Wan 2.2 TI2V-5B and Wan 2.1 use only sample_params.
+  if (config_.highNoiseDiffusionModelPath.empty()) {
+    static constexpr std::array<const char*, 6> kWan22MoeParams = {
+        "high_noise_steps",
+        "high_noise_sampler",
+        "high_noise_scheduler",
+        "high_noise_cfg_scale",
+        "high_noise_flow_shift",
+        "moe_boundary"};
+    for (const char* key : kWan22MoeParams) {
+      if (paramsObject.find(key) != paramsObject.end())
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string(key) +
+                " requires high_noise_diffusion_model_path (Wan 2.2 "
+                "T2V-A14B MoE)");
+    }
+  }
 
   // -- Mode-vs-inputs invariants --------------------------------------------
   // These checks mirror the JS-layer validation but are duplicated here so
@@ -960,12 +992,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "txt2vid does not accept init_image; use img2vid instead");
 
   // -- Model-aware frame/dimension validation -------------------------------
-  // The SdVidGenHandlers enforce the Wan rules (video_frames = 4*k+1, dims
-  // multiples of 16). LTX-2 has stricter constraints that the generic
-  // handlers don't capture: frames = 8*k+1 (max 257) and dims multiples of
-  // 32 (32x spatial VAE compression). Every valid 8*k+1 also satisfies
-  // 4*k+1, so the handler accepts LTX-invalid values like 13 -- re-check
-  // here now that we know the model family.
+  // The generic handler enforces Wan's 4*k+1 frame rule and 16-pixel spatial
+  // grid. Spatial alignment is derived from the model's GGUF tensor
+  // descriptors at load time, rather than the caller-controlled model path.
+  // This keeps renamed TI2V checkpoints and direct native callers on the
+  // correct 32-pixel grid.
   if (isLtxModel_) {
     if (vid.videoFrames < 9 || (vid.videoFrames - 1) % 8 != 0 ||
         vid.videoFrames > 257)
@@ -974,12 +1005,15 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
           "LTX-2 video_frames must be of the form (8*k + 1) in [9, 257] "
           "(9, 17, 25, 33, ..., 257). Got: " +
               std::to_string(vid.videoFrames));
-    if (vid.width % 32 != 0 || vid.height % 32 != 0)
-      throw StatusError(
-          general_error::InvalidArgument,
-          "LTX-2 width and height must be multiples of 32, got: " +
-              std::to_string(vid.width) + "x" + std::to_string(vid.height));
   }
+  const int spatialAlignment = videoModelCapabilities_.spatialAlignment;
+  if (vid.width % spatialAlignment != 0 || vid.height % spatialAlignment != 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "processVideo: width and height must be multiples of " +
+            std::to_string(spatialAlignment) +
+            " for the loaded video model, got: " + std::to_string(vid.width) +
+            "x" + std::to_string(vid.height));
 
   // -- Decode init / end / control-frame images -----------------------------
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
@@ -1109,9 +1143,16 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
   // -- Generate -------------------------------------------------------------
-  // The supported single-expert video path samples one full video-latent
-  // tensor. Wan 2.2's two-expert path is intentionally out of scope here.
-  g_progressCtx.expectedDenoiseSequences = 1;
+  // Wan 2.1 / TI2V-5B invoke one sampler. Wan 2.2 A14B normally invokes the
+  // high-noise expert first and the low-noise expert second, so include both
+  // leading sequences in the denoise timing window. The -1 sentinel derives
+  // the switch point from moe_boundary; a zero boundary never selects the
+  // high-noise sampler. Later VAE tiling sequences remain excluded by
+  // sdProgressCallback().
+  const bool hasHighNoiseExpert = !config_.highNoiseDiffusionModelPath.empty();
+  g_progressCtx.expectedDenoiseSequences =
+      qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
+          hasHighNoiseExpert, vid.highNoiseSteps, vid.moeBoundary);
   const auto t0 = std::chrono::steady_clock::now();
 
   // Upstream's master API returns success as a bool and hands back frames /
@@ -1180,11 +1221,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       std::chrono::duration<double, std::milli>(t1 - t0).count());
   stats_.totalGenerationMs += genMsI;
   stats_.totalWallMs += genMsI;
-  // totalSteps accumulates both experts for Wan 2.2 runs; for Wan 2.1 the
-  // high-noise expert isn't loaded, so highNoiseSteps goes to waste counting
-  // here but isn't actually consumed. Keep it simple and sum both.
+  // A Wan 2.2 A14B run consumes both expert schedules. Single-expert paths
+  // only count the primary schedule. -1 is the native A14B sentinel that
+  // derives the split from moe_boundary, not a separately counted schedule.
   stats_.totalSteps += vid.sampleSteps;
-  if (!config_.highNoiseDiffusionModelPath.empty())
+  if (hasHighNoiseExpert && vid.highNoiseSteps > 0)
     stats_.totalSteps += vid.highNoiseSteps;
   stats_.totalGenerations++;
   stats_.totalVideos++;

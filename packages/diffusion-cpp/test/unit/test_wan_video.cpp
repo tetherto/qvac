@@ -179,6 +179,19 @@ TEST_F(SdWanValidationTest, NonStringModeRejected) {
   expectThrowContains(std::move(job), "mode must be a string");
 }
 
+TEST_F(SdWanValidationTest, RejectsMoEControlsWithoutHighNoiseExpert) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "txt2vid",
+    "prompt": "test",
+    "high_noise_steps": 8,
+    "moe_boundary": 0.5
+  })";
+  expectThrowContains(
+      std::move(job),
+      "high_noise_steps requires high_noise_diffusion_model_path");
+}
+
 // ---------------------------------------------------------------------------
 // img2vid missing init_image
 // ---------------------------------------------------------------------------
