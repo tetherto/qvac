@@ -387,10 +387,16 @@ export async function processBranchCleanup ({ github, context, core, env = proce
 
   function safelistReason (branch) {
     if (branch.name === defaultBranch || branch.name === 'main') return 'default branch'
-    if (branch.protected) return 'protected branch'
     if (openPrRefs.has(branch.name)) return 'open PR'
     if (WIP_RE.test(branch.name)) return 'WIP flag'
     if (latestReleaseBranches.has(branch.name)) return 'latest published version'
+    // The `protected` flag safelists genuinely locked branches, but many repos use a
+    // ruleset that marks EVERY release-* branch protected purely for merge governance
+    // (PR review / status checks). That must not exempt out-of-window release lines
+    // from the semver-window trim below — they are tag-backed and safe to delete. So
+    // `protected` only safelists non-release branches; release branches are governed
+    // by the window + latest-published rules instead.
+    if (branch.protected && branch.info.type !== 'release') return 'protected branch'
     return null
   }
 

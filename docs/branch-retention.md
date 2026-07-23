@@ -48,8 +48,15 @@ holds:
   release git tags, not an external registry).
 - It is the **head or base of an open / unmerged PR** (active until the PR is merged or
   closed).
-- It is under **active branch protection** or is used as a **required CI status
-  target** (detected via the branch's `protected` flag / branch-protection rules).
+- It is a **non-release** branch under **active branch protection** or used as a
+  **required CI status target** (detected via the branch's `protected` flag /
+  branch-protection rules). **Release branches are the exception:** many repos use a
+  ruleset that marks *every* `release-*` branch protected purely for merge governance
+  (PR review / status checks). That protection does **not** exempt an out-of-window
+  release line from the [semver-window trim](#release-branches-nested-semver-retention)
+  — those branches are tag-backed and safe to delete, so they are governed by the
+  release rule (plus the latest-published / open-PR safelist), not by the `protected`
+  flag. Deletion works because the merge-governance ruleset carries no *deletion* rule.
 - It is flagged **WIP**.
 
 > **WIP naming caveat.** Git ref names cannot contain `[` or `]`, so a literal
