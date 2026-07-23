@@ -8,8 +8,9 @@
 //
 // Each shard sweeps its model across both devices (gpu, cpu) and both
 // reasoning-budget values (-1, 0), recording TTFT / TPS / ppTPS. The full
-// matrix (2 sizes x 5 quants x 7 KV-cache types x 2 devices x 2 budgets) is
-// split across the shard files; nothing here reduces it.
+// matrix (2 sizes x 5 quants x 7 KV-cache types x 2 devices x 2 budgets), plus
+// the additive batch group (2 sizes x 2 batch sizes at a fixed Q4_0 / f16
+// baseline), is split across the shard files; nothing here reduces it.
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
@@ -38,6 +39,20 @@ const PROMPT = [
     role: 'user',
     content:
       'Summarize the following passage and explain its key technical implications for on-device inference.\n\nModern large language models have transformed natural language processing. Unlike earlier systems that relied on handcrafted features and task-specific architectures, transformer-based models learn general-purpose representations that transfer across many tasks. This shift enabled strong performance in text generation, translation, question answering, and code synthesis, frequently matching expert humans on established benchmarks.\n\nThe scaling laws governing these models describe a consistent relationship between compute, training data, and model capacity. As researchers grow model size and dataset volume, capabilities tend to improve smoothly and predictably, with occasional emergent abilities appearing at particular scale thresholds. This predictability has guided the design of increasingly capable systems, while raising real questions about energy use and cost.\n\nInference efficiency is now a central challenge. Quantization reduces the memory footprint and increases throughput by storing weights at lower numerical precision, allowing deployment on edge devices that would otherwise lack the necessary memory bandwidth. Speculative decoding and continuous batching push throughput further by using available compute more fully during autoregressive generation. Together these techniques make it practical to run capable models locally on consumer hardware, cutting latency and preserving privacy because data never leaves the device.\n\nReasoning quality continues to improve through chain-of-thought prompting and reinforcement learning from human feedback. Models with an explicit reasoning budget can spend more computation on hard problems while staying efficient on simple queries by disabling the reasoning trace entirely. Balancing this budget against latency and battery on mobile hardware is an open and practical engineering problem that the field is only beginning to address in production systems.\n\nOn mobile devices the constraints are sharper than on servers. Memory is limited, thermal headroom is small, and sustained throughput drops as the device heats up under a long generation. Prefill throughput, measured as prompt tokens processed per second, often behaves very differently from decode throughput, because prefill is compute bound across the whole prompt while decode is memory bound on a single token at a time. Quantization format interacts with both phases in ways that are hard to predict from first principles, which is exactly why empirical benchmarks across formats and devices matter. A format that is fast to decode on a desktop GPU may be slower on a phone because of how its blocks map onto the available kernels and cache hierarchy. Measuring time to first token, decode tokens per second, and prefill tokens per second across each quantization and reasoning setting gives the clearest practical picture of what users will actually experience.'
+  }
+]
+
+// ~971-token prompt (verified against the Qwen3.5 tokenizer) for the batch
+// sweep. batch-size only affects prefill throughput when the prompt spans more
+// than one micro-batch, so this prompt is long enough that bs=512 chunks it into
+// two prefill passes while bs=1024 does it in one — making the two batch sizes
+// distinguishable at ctx-size 2048 (971 + 512 generated tokens stays in budget).
+const BATCH_PROMPT = [
+  { role: 'system', content: 'You are a helpful assistant.' },
+  {
+    role: 'user',
+    content:
+      "Summarize the following passage and explain its key technical implications for on-device inference.\n\nModern large language models have transformed natural language processing. Unlike earlier systems that relied on handcrafted features and task-specific architectures, transformer-based models learn general-purpose representations that transfer across many tasks. This shift enabled strong performance in text generation, translation, question answering, and code synthesis, frequently matching expert humans on established benchmarks.\n\nThe scaling laws governing these models describe a consistent relationship between compute, training data, and model capacity. As researchers grow model size and dataset volume, capabilities tend to improve smoothly and predictably, with occasional emergent abilities appearing at particular scale thresholds. This predictability has guided the design of increasingly capable systems, while raising real questions about energy use and cost.\n\nInference efficiency is now a central challenge. Quantization reduces the memory footprint and increases throughput by storing weights at lower numerical precision, allowing deployment on edge devices that would otherwise lack the necessary memory bandwidth. Speculative decoding and continuous batching push throughput further by using available compute more fully during autoregressive generation. Together these techniques make it practical to run capable models locally on consumer hardware, cutting latency and preserving privacy because data never leaves the device.\n\nOn mobile devices the constraints are sharper than on servers. Memory is limited, thermal headroom is small, and sustained throughput drops as the device heats up under a long generation. Prefill throughput, measured as prompt tokens processed per second, often behaves very differently from decode throughput, because prefill is compute bound across the whole prompt while decode is memory bound on a single token at a time.\n\nThe batch size and micro-batch size control how many prompt tokens the backend submits to the compute graph at once during prefill. They determine how the prompt is split into passes and how completely each pass saturates the accelerator. On a long prompt a larger micro-batch fills the available compute more fully, up to the point where occupancy saturates and scheduling overhead or cache pressure begins to erode the gain. That turning point differs by device and by model, which is precisely why the optimum is measured empirically rather than assumed.\n\nA configuration that is fast on a desktop GPU may be slower on a phone because of how its kernels map onto the available compute units and cache hierarchy. Adreno, Mali, and Apple GPUs each schedule work differently, so the batch size that maximizes prefill on one can leave another underutilized or thrashing memory. Measuring time to first token, decode tokens per second, and prefill tokens per second across each batch setting on real hardware gives the clearest practical picture of what users will actually experience during the first moments of a response.\n\nReasoning quality continues to improve through chain-of-thought prompting and reinforcement learning from human feedback. Models with an explicit reasoning budget can spend more computation on hard problems while staying efficient on simple queries by disabling the reasoning trace entirely. Balancing that budget against latency and battery on mobile hardware is an open and practical engineering problem, and the right answer depends on the prefill and decode throughput a given batch configuration actually delivers on the device in the user's hand.\n\nThe key-value cache adds another dimension to the prefill picture. As each prompt token is processed its attention keys and values are written to a cache whose memory footprint grows with context length, so a long prompt is bound not only by compute but by the bandwidth needed to populate and read that cache. Quantizing the cache reduces the footprint at some cost to accuracy, and its interaction with batch size is not obvious in advance: a larger micro-batch touches more of the cache per pass and can either hide or expose that bandwidth depending on the accelerator.\n\nThermal behavior complicates every measurement taken over more than a few seconds. A phone that starts a benchmark cool will throttle its clocks as the silicon warms, so a configuration measured first can look faster than an identical one measured later purely because of heat. Warming the kernels once before the timed runs, repeating each measurement several times, and reporting the spread are all necessary to separate a genuine batch-size effect from the drift introduced by thermal throttling and background system activity.\n\nFinally, the practical goal is not a single headline number but a map from configuration to experience. A product team choosing how to ship a model wants to know which batch size gives the lowest time to first token on the devices its users actually own, how that trades against sustained decode speed, and where the curve flattens so that spending more memory buys nothing. Building that map means sweeping the batch axis on real hardware and recording prefill throughput, decode throughput, and latency for each setting, then reading the results per device rather than averaging across a fleet that behaves nothing alike."
   }
 ]
 
@@ -101,14 +116,25 @@ function recordCrashedPlaceholder(label, device, model) {
 // support quantized KV cache, and TurboQuant/PolarQuant (tbq*/pq*) ship Vulkan
 // + CPU kernels only (rejected on Metal/iOS, unsupported on some GPUs), so
 // those combos may crash or fail to load — reported as Crashed.
-function benchmarkModel(size, quant, cacheK, cacheV) {
+//
+// batchSize is set only by the additive batch-sweep shards (see BATCH_SWEEP in
+// _benchmark-matrix.js). When set, it pins batch-size === ubatch-size at load
+// time, runs the longer BATCH_PROMPT so the batch actually spans multiple
+// prefill passes, and tags the row label with [bs=N]. When null (every
+// cross-product shard) the runner is byte-for-byte unchanged.
+function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
   const spec = modelSpec(size, quant)
   // kvLabel uses the k/v form when key and value differ (e.g. TurboQuant
   // tbq3_0/pq3_0), matching the renderer's [kv=...] tag. kvId is the
   // slash-free token used for the model id and per-run identifiers.
   const kvLabel = cacheK === cacheV ? cacheK : `${cacheK}/${cacheV}`
   const kvId = cacheK === cacheV ? cacheK : `${cacheK}-${cacheV}`
-  const id = `${spec.id}-${kvId}`
+  const bsLabel = batchSize !== null ? ` [bs=${batchSize}]` : ''
+  const bsId = batchSize !== null ? `-bs${batchSize}` : ''
+  const batchConfig =
+    batchSize !== null ? { 'batch-size': String(batchSize), 'ubatch-size': String(batchSize) } : {}
+  const prompt = batchSize !== null ? BATCH_PROMPT : PROMPT
+  const id = `${spec.id}-${kvId}${bsId}`
   safeTest(
     `Mobile perf benchmark: ${id} (TTFT / TPS / ppTPS)`,
     {
@@ -130,7 +156,7 @@ function benchmarkModel(size, quant, cacheK, cacheV) {
         for (const device of DEVICES) {
           for (const rb of REASONING_BUDGETS) {
             recordCrashedPlaceholder(
-              `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]`,
+              `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]${bsLabel}`,
               device,
               `${id}-${device}-rb${rb}`
             )
@@ -138,14 +164,20 @@ function benchmarkModel(size, quant, cacheK, cacheV) {
         }
 
         for (const device of DEVICES) {
-          const labelFor = (rb) => `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]`
+          const labelFor = (rb) => `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]${bsLabel}`
           const modelFor = (rb) => `${id}-${device}-rb${rb}`
 
           let addon = null
           try {
             addon = new LlmLlamacpp({
               files: { model: [modelPath] },
-              config: { ...RUNTIME, device, 'cache-type-k': cacheK, 'cache-type-v': cacheV },
+              config: {
+                ...RUNTIME,
+                device,
+                'cache-type-k': cacheK,
+                'cache-type-v': cacheV,
+                ...batchConfig
+              },
               logger: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} },
               opts: { stats: true }
             })
@@ -171,7 +203,7 @@ function benchmarkModel(size, quant, cacheK, cacheV) {
               for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
                 const { endTime, startTime } = await runInference(
                   addon,
-                  PROMPT,
+                  prompt,
                   REASONING_BUDGETS[0]
                 )
                 t.comment(
@@ -189,7 +221,7 @@ function benchmarkModel(size, quant, cacheK, cacheV) {
                 for (let run = 1; run <= PERF_RUNS; run++) {
                   const { output, startTime, endTime, stats } = await runInference(
                     addon,
-                    PROMPT,
+                    prompt,
                     rb
                   )
                   // Real metrics supersede the Crashed placeholder in the renderer.
