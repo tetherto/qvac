@@ -1005,6 +1005,68 @@ TEST_F(MtmdLlmContextTest, LoadCacheTreatsLegacyFourFieldAsMiss) {
   fs::remove(cachePath);
 }
 
+TEST_F(MtmdLlmContextTest, LoadCacheRejectsInvalidVisionMetadataWithoutHalfApply) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr);
+  auto* lctx = model->getContext();
+  ASSERT_NE(lctx, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_GT(ctx->getNPast(), 0);
+
+  MtmdSessionMetadata badMeta;
+  badMeta.nPast = ctx->getNPast();
+  badMeta.firstMsgTokens = ctx->getFirstMsgTokens();
+  badMeta.cacheTokens = ctx->getCacheTokens();
+  badMeta.firstMsgCacheTokens = ctx->getFirstMsgCacheTokens();
+  // Overlapping ranges are structurally shaped but semantically invalid.
+  badMeta.visionBlocks = {{1, 5, 4}, {4, 8, 4}};
+  std::vector<llama_token> tokens = encodeMtmdSessionMetadata(badMeta);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-mtmd-invalid-vision-meta.bin";
+  fs::remove(cachePath);
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          lctx,
+          cachePath.string().c_str(),
+          seqId,
+          tokens.data(),
+          tokens.size()),
+      0u);
+
+  ctx->resetState(true);
+  auto* mem = llama_get_memory(lctx);
+  ASSERT_NE(mem, nullptr);
+  ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u);
+
+  EXPECT_THROW(
+      { (void)ctx->loadCache(cachePath.string(), 0); },
+      qvac_errors::StatusError);
+  EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
+      << "invalid metadata must clear restored KV";
+  EXPECT_EQ(ctx->getNPast(), 0)
+      << "invalid metadata must not leave a half-applied cursor";
+  EXPECT_TRUE(ctx->getVisionBlocks().empty());
+
+  fs::remove(cachePath);
+}
+
 TEST_F(MtmdLlmContextTest, InvalidMedia) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
@@ -1301,6 +1363,29 @@ TEST(MtmdSessionMetadataCodec, RejectsOverlappingOrOutOfRangeBlocks) {
   outOfRange.cacheTokens = 100;
   outOfRange.visionBlocks = {{80, 120, 40}};
   EXPECT_FALSE(validateMtmdVisionBlocks(outOfRange));
+}
+
+TEST(MtmdSessionMetadataCodec, RejectsWrongVersionAndMismatchedBlockCount) {
+  MtmdSessionMetadata ok;
+  ok.nPast = 100;
+  ok.firstMsgTokens = 10;
+  ok.cacheTokens = 120;
+  ok.firstMsgCacheTokens = 10;
+  ok.visionBlocks = {{20, 40, 30}};
+  std::vector<llama_token> wrongVersion = encodeMtmdSessionMetadata(ok);
+  wrongVersion[0] = MTMD_SESSION_METADATA_VERSION + 1;
+  MtmdSessionMetadata decoded;
+  EXPECT_EQ(
+      decodeMtmdSessionMetadata(
+          wrongVersion.data(), wrongVersion.size(), decoded),
+      MtmdSessionMetadataDecodeStatus::Invalid);
+
+  std::vector<llama_token> mismatched = encodeMtmdSessionMetadata(ok);
+  // Claim two blocks but only serialize one triple.
+  mismatched[5] = 2;
+  EXPECT_EQ(
+      decodeMtmdSessionMetadata(mismatched.data(), mismatched.size(), decoded),
+      MtmdSessionMetadataDecodeStatus::Invalid);
 }
 
 TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {

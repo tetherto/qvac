@@ -165,9 +165,10 @@ struct LlmModelContext {
   const llama_vocab* vocab = nullptr;
 };
 
-/// Canonical layout of the per-session cache metadata that every cache
-/// (de)serializer must persist and restore. Any driver implementing
-/// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
+/// Canonical four-field cursor layout for text session caches. Text drivers
+/// persist exactly these fields in this order. Multimodal drivers wrap them
+/// in a versioned header that also stores vision-block ranges (see
+/// `MTMD_SESSION_METADATA_VERSION` in MtmdLlmContext.hpp).
 ///
 /// `cacheTokens`/`firstMsgCacheTokens` (physical KV-cell usage) are owned
 /// separately from `nPast`/`firstMsgTokens` (logical positional span) because
@@ -524,6 +525,11 @@ public:
     }
     if (count < SESSION_METADATA_FIELD_COUNT) {
       return SessionMetadataApplyResult::CacheMiss;
+    }
+    // Text caches use an exact four-field contract. Larger payloads belong to
+    // versioned multimodal metadata and must not be partially applied here.
+    if (count > SESSION_METADATA_FIELD_COUNT) {
+      return SessionMetadataApplyResult::Invalid;
     }
     setNPast(static_cast<llama_pos>(tokens[static_cast<size_t>(
         SessionMetadataField::NPast)]));

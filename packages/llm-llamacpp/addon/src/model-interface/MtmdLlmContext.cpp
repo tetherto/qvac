@@ -780,7 +780,14 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   });
 
   protectedPrefix_ = preRequestProtectedPrefix_;
-  visionBlocks_ = preRequestVisionBlocks_;
+  // Vision ranges must stay aligned with live KV. Restore the pre-request
+  // snapshot only when cancel returned the cursor to that snapshot. A
+  // generation slide that discarded past the snapshot is not undone by
+  // cancel; keeping the live (already rebased) ranges avoids stranding
+  // mismatched image/tile boundaries on the slid KV.
+  if (current_.pos == preRequestUsage_.pos) {
+    visionBlocks_ = preRequestVisionBlocks_;
+  }
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -2027,6 +2034,13 @@ size_t MtmdLlmContext::sessionMetadataCapacity() const {
 }
 
 std::vector<llama_token> MtmdLlmContext::encodeSessionMetadata() const {
+  if (visionBlocks_.size() > MTMD_MAX_VISION_BLOCKS) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        "MtmdLlmContext::encodeSessionMetadata: vision-block count exceeds "
+        "session metadata capacity");
+  }
   MtmdSessionMetadata metadata;
   metadata.nPast = getNPast();
   metadata.firstMsgTokens = getFirstMsgTokens();

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <atomic>
 #include <optional>
 #include <vector>
@@ -77,8 +76,9 @@ enum class MtmdSessionMetadataDecodeStatus {
 
 [[nodiscard]] inline std::vector<llama_token> encodeMtmdSessionMetadata(
     const MtmdSessionMetadata& metadata) {
-  const size_t blockCount =
-      std::min(metadata.visionBlocks.size(), MTMD_MAX_VISION_BLOCKS);
+  // Callers must reject oversized block lists before save; never silently
+  // truncate boundaries that sliding later depends on.
+  const size_t blockCount = metadata.visionBlocks.size();
   std::vector<llama_token> tokens;
   tokens.reserve(
       MTMD_SESSION_METADATA_HEADER_COUNT +
@@ -89,8 +89,7 @@ enum class MtmdSessionMetadataDecodeStatus {
   tokens.push_back(static_cast<llama_token>(metadata.cacheTokens));
   tokens.push_back(static_cast<llama_token>(metadata.firstMsgCacheTokens));
   tokens.push_back(static_cast<llama_token>(blockCount));
-  for (size_t i = 0; i < blockCount; ++i) {
-    const auto& block = metadata.visionBlocks[i];
+  for (const auto& block : metadata.visionBlocks) {
     tokens.push_back(static_cast<llama_token>(block.startPos));
     tokens.push_back(static_cast<llama_token>(block.endPos));
     tokens.push_back(static_cast<llama_token>(block.cacheTokens));
