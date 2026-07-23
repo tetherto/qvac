@@ -1,0 +1,248 @@
+name: Benchmark CLI — OpenAI serve provider compare
+
+# Harness unit tests on PRs that touch the benchmark or this workflow.
+# Live smoke/full sweeps are dispatch-only and require an immutable full commit
+# SHA. The SHA is validated and its harness is typechecked/tested on
+# GitHub-hosted infra first, then a protected `benchmark-live` environment gates
+# the self-hosted macOS GPU runner (LM Studio, Ollama, and qvac serve must
+# already be configured there). Runtime config and the environment manifest are
+# supplied by the runner via protected environment variables pointing outside
+# GITHUB_WORKSPACE — nothing sensitive is read from the checked-out tree.
+
+on:
+  pull_request:
+    paths:
+      - "packages/cli/benchmarks/serve-openai-providers/**"
+      - "packages/cli/package.json"
+      - "packages/cli/tsconfig.benchmark.json"
+      - ".github/workflows/benchmark-cli-serve-openai-providers.yml"
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Full 40-char commit SHA to run (required; validated as ^[0-9a-fA-F]{40}$)"
+        required: true
+        type: string
+      mode:
+        description: "harness-unit (tsx tests only) | smoke | full"
+        required: true
+        type: choice
+        options:
+          - harness-unit
+          - smoke
+          - full
+        default: harness-unit
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  BENCH_DIR: packages/cli/benchmarks/serve-openai-providers
+  CLI_DIR: packages/cli
+
+jobs:
+  harness-unit:
+    name: Harness unit tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "22"
+          # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
+
+      - name: Install CLI deps
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm install --include=dev --no-fund --no-audit
+
+      - name: Typecheck benchmark harness
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm run typecheck:bench-serve-openai-providers
+
+      - name: Harness unit tests
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm run test:bench-serve-openai-providers
+
+  validate-target:
+    name: Validate target SHA
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      target_sha: ${{ steps.resolve.outputs.target_sha }}
+    steps:
+      - name: Validate immutable target SHA
+        id: resolve
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        shell: bash
+        run: |
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::target_sha must be a full 40-character commit SHA."
+            exit 1
+          fi
+          normalized_target_sha="${TARGET_SHA,,}"
+          printf 'target_sha=%s\n' "$normalized_target_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout target SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ steps.resolve.outputs.target_sha }}
+
+      - name: Verify checked out target SHA
+        env:
+          EXPECTED_TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        shell: bash
+        run: |
+          actual_target_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_target_sha" != "$EXPECTED_TARGET_SHA" ]]; then
+            echo "::error::checked out SHA $actual_target_sha does not match target $EXPECTED_TARGET_SHA."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "22"
+          # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
+
+      - name: Install CLI deps
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm install --include=dev --no-fund --no-audit
+
+      - name: Typecheck benchmark harness
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm run typecheck:bench-serve-openai-providers
+
+      - name: Harness unit tests
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm run test:bench-serve-openai-providers
+
+  live:
+    name: Live provider ${{ inputs.mode }}
+    needs: validate-target
+    if: >
+      github.event_name == 'workflow_dispatch' && (inputs.mode == 'smoke' || inputs.mode == 'full')
+    environment: benchmark-live
+    runs-on: [self-hosted, qvac-macos26-arm64-gpu]
+    timeout-minutes: 180
+    env:
+      BENCHMARK_CONFIG_PATH: ${{ vars.BENCHMARK_CONFIG_PATH }}
+      BENCHMARK_ENVIRONMENT_PATH: ${{ vars.BENCHMARK_ENVIRONMENT_PATH }}
+    steps:
+      - name: Manual workspace cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout validated SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.validate-target.outputs.target_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "22"
+          # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
+
+      - name: Require runner-local config and environment manifest
+        shell: bash
+        run: |
+          if ! workspace_path="$(node -e 'process.stdout.write(require("node:fs").realpathSync(process.argv[1]))' "$GITHUB_WORKSPACE")"; then
+            echo "::error::GITHUB_WORKSPACE could not be resolved."
+            exit 1
+          fi
+
+          require_external_file() {
+            name="$1"
+            value="$2"
+            if [[ -z "$value" ]]; then
+              echo "::error::$name is unset. Define it as a benchmark-live environment variable."
+              exit 1
+            fi
+            if [[ "$value" != /* ]]; then
+              echo "::error::$name must be an absolute path."
+              exit 1
+            fi
+            case "$value" in
+              *$'\n'* | *$'\r'*)
+                echo "::error::$name must not contain line breaks."
+                exit 1
+                ;;
+            esac
+            if [[ ! -f "$value" || ! -r "$value" ]]; then
+              echo "::error::$name is missing or unreadable."
+              exit 1
+            fi
+            if ! resolved_path="$(node -e 'process.stdout.write(require("node:fs").realpathSync(process.argv[1]))' "$value")"; then
+              echo "::error::$name could not be resolved."
+              exit 1
+            fi
+            case "$resolved_path" in
+              *$'\n'* | *$'\r'*)
+                echo "::error::$name resolves to a path containing line breaks."
+                exit 1
+                ;;
+            esac
+            case "$resolved_path" in
+              "$workspace_path" | "$workspace_path"/*)
+                echo "::error::$name resolves inside GITHUB_WORKSPACE."
+                exit 1
+                ;;
+            esac
+          }
+          require_external_file BENCHMARK_CONFIG_PATH "$BENCHMARK_CONFIG_PATH"
+          config_path="$resolved_path"
+          require_external_file BENCHMARK_ENVIRONMENT_PATH "$BENCHMARK_ENVIRONMENT_PATH"
+          environment_path="$resolved_path"
+          printf 'BENCHMARK_CONFIG_PATH=%s\n' "$config_path" >> "$GITHUB_ENV"
+          printf 'BENCHMARK_ENVIRONMENT_PATH=%s\n' "$environment_path" >> "$GITHUB_ENV"
+
+      - name: Install CLI deps
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm install --include=dev --no-fund --no-audit
+
+      - name: Run live mode
+        working-directory: ${{ env.BENCH_DIR }}
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE" in
+            smoke | full) ;;
+            *)
+              echo "::error::invalid mode: $MODE"
+              exit 1
+              ;;
+          esac
+          npx tsx benchmark.ts "$MODE" --config "$BENCHMARK_CONFIG_PATH"
+
+      - name: Attach environment manifest to results
+        if: always() && inputs.mode == 'full'
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          mkdir -p results
+          cp "$BENCHMARK_ENVIRONMENT_PATH" results/environment.md
+
+      - name: Upload results
+        if: always() && inputs.mode == 'full'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: serve-openai-providers-${{ github.run_id }}
+          path: ${{ env.BENCH_DIR }}/results/
+          if-no-files-found: warn

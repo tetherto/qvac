@@ -16,6 +16,16 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runBenchmarkPerf08bQ40F16Bs1024Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Bs1024Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-bs1024.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16Bs512Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Bs512Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-bs512.test.js', options)
+}
+
 async function runBenchmarkPerf08bQ40F16Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Test')) return __FILTERED
   return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16.test.js', options)
@@ -189,6 +199,16 @@ async function runBenchmarkPerf08bQ80Tbq30Pq30Test (options = {}) { // eslint-di
 async function runBenchmarkPerf08bQ80Tbq40Pq40Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ80Tbq40Pq40Test')) return __FILTERED
   return runIntegrationModule('../integration/benchmark-perf-08b-q8-0-tbq4-0-pq4-0.test.js', options)
+}
+
+async function runBenchmarkPerf2bQ40F16Bs1024Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf2bQ40F16Bs1024Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-2b-q4-0-f16-bs1024.test.js', options)
+}
+
+async function runBenchmarkPerf2bQ40F16Bs512Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf2bQ40F16Bs512Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-2b-q4-0-f16-bs512.test.js', options)
 }
 
 async function runBenchmarkPerf2bQ40F16Test (options = {}) { // eslint-disable-line no-unused-vars
