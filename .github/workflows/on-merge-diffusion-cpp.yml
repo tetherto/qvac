@@ -149,6 +149,14 @@ jobs:
           name: prebuilds
           path: packages/diffusion-cpp/prebuilds
 
+      - name: Install dependencies
+        working-directory: packages/diffusion-cpp
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/diffusion-cpp
+        run: npm run build:ts
+
       - name: Scope package as @tetherto for GPR
         shell: bash
         run: |
@@ -208,6 +216,14 @@ jobs:
         with:
           name: prebuilds
           path: packages/diffusion-cpp/prebuilds
+
+      - name: Install dependencies
+        working-directory: packages/diffusion-cpp
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/diffusion-cpp
+        run: npm run build:ts
 
       - name: Scope package as @qvac for npm
         working-directory: packages/diffusion-cpp

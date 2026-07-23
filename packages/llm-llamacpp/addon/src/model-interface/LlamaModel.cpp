@@ -1194,6 +1194,17 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getNSlides())},
       {"thinkingBlockDiscards",
        static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
+      // Why the generation stopped, as the numeric GenerationStopReason
+      // value; addon.js maps it to a string (same pattern as
+      // backendDevice). Prefill-only requests report None rather than
+      // echoing the previous generation's reason. Single-sequence
+      // semantics — intentionally NOT emitted from
+      // batchRuntimeStatsLocked, where one reason cannot describe
+      // multiple aggregated requests.
+      {"stopReason",
+       static_cast<int64_t>(
+           wasPrefill ? GenerationStopReason::None
+                      : state_->llmContext_->getGenerationStopReason())},
       // Vision-encode time + slice count for the most recent inference.
       // Single-sequence semantics: the context accumulator resets per prompt,
       // so these are only meaningful on this single-prompt path — intentionally
