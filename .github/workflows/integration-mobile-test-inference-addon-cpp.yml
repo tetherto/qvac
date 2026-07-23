@@ -9,7 +9,9 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # prebuild-ios jobs and hands them to the shared
 # run-mobile-integration-tests/setup action via per-matrix artifacts
 # (`infer-cpp-<platform>-arm64`). Everything downstream (app build, Device Farm
-# upload/schedule/monitor) is the shared composite action, unchanged.
+# upload/schedule/monitor) is the shared composite action, unchanged — but the
+# build and Device-Farm phases run in SEPARATE jobs so no fork code executes in a
+# job that holds AWS/OIDC access (see the build/device-farm split below).
 #
 # Test scope (phase 1): the js-create-double marshalling test only. Advisory
 # (continue-on-error) until on-device flake is characterised. See
@@ -142,26 +144,38 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # Build the Device Farm app around the prebuilt addon and run the suite on
-  # real devices. Identical shape to integration-mobile-test-embed-llamacpp.yml.
+  # SECURITY SPLIT (QVAC review): the build and the Device-Farm phases run in
+  # SEPARATE jobs so that no fork-controlled code ever executes in a job that
+  # holds AWS/OIDC access.
+  #
+  #   build       — runs untrusted PR code (npm run validate, npm install of the
+  #                 fork, expo/gradle/xcode). Has the Apple signing secrets and
+  #                 PAT, but NO `id-token: write` and NO AWS. Produces the app +
+  #                 the trusted test-framework e2e bundle as an artifact.
+  #   device-farm — has `id-token: write` + AWS, runs ONLY trusted code
+  #                 (test-framework e2e packaging + AWS API calls). Never checks
+  #                 out or executes fork code; it only consumes the artifact.
+  #
+  # This removes the job-wide OIDC/AWS-role-assumption capability from the
+  # fork-code job. The Apple cert necessarily stays in `build` because iOS
+  # signing needs the built (fork) code and the cert together.
   # ---------------------------------------------------------------------------
-  build-and-test:
-    name: Build ${{ matrix.platform }} and Run E2E Tests
+  build:
+    name: Build ${{ matrix.platform }} app
     needs:
       - prebuild-android
       - prebuild-ios
     runs-on: ${{ matrix.runner }}
     environment: release
-    # Exceeds the 30m default budget: this job builds the mobile app and then
-    # runs the suite on real devices via AWS Device Farm (queue + upload +
-    # provisioning + on-device execution), which routinely takes >30m.
-    timeout-minutes: 120
+    # Exceeds the 30m default: builds the mobile app (npm install + expo prebuild
+    # + Gradle/xcodebuild). No device execution here — that's the device-farm job.
+    timeout-minutes: 90
     continue-on-error: true # advisory until on-device flake is characterised
+    # No id-token / AWS here: this job runs untrusted fork code and must not be
+    # able to mint an OIDC token or assume the AWS role.
     permissions:
       contents: read
       packages: read
-      pull-requests: write
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -221,15 +235,95 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Stage exactly what the device-farm job's upload-to-devicefarm step needs:
+      # the built app, the (trusted) test-framework e2e runner with its generated
+      # tests/app.test.js, and the addon's read-only test/mobile data (used only
+      # for the monitor legend). Nothing here is executed by the device-farm job.
+      - name: Stage Device Farm handoff bundle
+        shell: bash
+        env:
+          APP_PATH: ${{ steps.build.outputs.app-path }}
+          APP_NAME: ${{ steps.build.outputs.app-name }}
+        run: |
+          mkdir -p df-app
+          cp "$APP_PATH" "df-app/$APP_NAME"
+          echo "Staged app: df-app/$APP_NAME"
+          ls -la df-app
+          ls -la test-framework/e2e
+          ls -la "addon/${ADDON_WORKDIR}/test/mobile"
+
+      - name: Upload Device Farm handoff bundle
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: mobile-bundle-${{ matrix.platform }}
+          # Paths are workspace-relative; the artifact preserves this structure
+          # and the device-farm job restores it verbatim into its workspace.
+          path: |
+            df-app
+            test-framework/e2e
+            addon/${{ env.ADDON_WORKDIR }}/test/mobile
+          if-no-files-found: error
+          retention-days: 1
+
+  device-farm:
+    name: Device Farm ${{ matrix.platform }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    # Exceeds the 30m default: waits on the AWS Device Farm run (queue + device
+    # provisioning + on-device execution), which routinely takes >30m.
+    timeout-minutes: 120
+    continue-on-error: true # advisory until on-device flake is characterised
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # comment results on the PR
+      id-token: write # AWS OIDC — this job runs NO fork code
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # app_name/app_type are deterministic from platform (set by
+          # build-mobile-app's resolve_app), so we hardcode them here instead of
+          # threading matrix-job outputs (which don't survive a matrix fan-out).
+          - platform: Android
+            app_type: ANDROID_APP
+            app_name: test-app-Android.apk
+          - platform: iOS
+            app_type: IOS_APP
+            app_name: test-app-iOS.ipa
+
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      # Restores df-app/, test-framework/e2e/, and addon/<workdir>/test/mobile/
+      # into the workspace — the only inputs upload-to-devicefarm reads. No fork
+      # code is executed; these are consumed as data / a prebuilt binary.
+      - name: Download Device Farm handoff bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: mobile-bundle-${{ matrix.platform }}
+          path: .
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
         with:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ env.ADDON_WORKDIR }}
-          app-path: ${{ steps.build.outputs.app-path }}
-          app-type: ${{ steps.build.outputs.app-type }}
-          app-name: ${{ steps.build.outputs.app-name }}
+          app-path: ${{ github.workspace }}/df-app/${{ matrix.app_name }}
+          app-type: ${{ matrix.app_type }}
+          app-name: ${{ matrix.app_name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
           enables-perf: 'false'
