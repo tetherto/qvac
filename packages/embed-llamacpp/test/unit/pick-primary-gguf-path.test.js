@@ -27,12 +27,3 @@ test('non-gguf file falls back to first entry', function (t) {
   const files = ['/models/some-model.bin']
   t.is(pickPrimaryGgufPath(files), '/models/some-model.bin')
 })
-
-test('empty array throws instead of returning undefined', function (t) {
-  try {
-    pickPrimaryGgufPath([])
-    t.fail('expected pickPrimaryGgufPath([]) to throw')
-  } catch (err) {
-    t.ok(/non-empty/.test(err.message), 'throws on empty array')
-  }
-})

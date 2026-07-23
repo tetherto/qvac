@@ -163,7 +163,7 @@ export class BertInterface implements Addon {
 
   /** Activates the model to start processing the queue. */
   async activate(): Promise<void> {
-    await this._binding.activate(this._handle);
+    return this._binding.activate(this._handle);
   }
 
   /** Stops the addon process and clears resources (including memory). */

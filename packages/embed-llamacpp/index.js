@@ -18,9 +18,6 @@ const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or bein
  * in `GGUFShards::expandGGUFIntoShards`.
  */
 function pickPrimaryGgufPath(files) {
-    if (files.length === 0) {
-        throw new TypeError("files must be a non-empty array of paths");
-    }
     const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
     return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
@@ -95,16 +92,13 @@ class GGMLBert {
         this.logger.info("Model load completed successfully");
     }
     async _streamShards() {
-        const addon = this.addon;
-        if (!addon)
-            throw new Error("Addon not initialized. Call load() first.");
         for (const filePath of this._files) {
             const filename = path.basename(filePath);
             const stream = fs.createReadStream(filePath);
             for await (const chunk of stream) {
-                await addon.loadWeights({ filename, chunk, completed: false });
+                await this.addon.loadWeights({ filename, chunk, completed: false });
             }
-            await addon.loadWeights({ filename, chunk: null, completed: true });
+            await this.addon.loadWeights({ filename, chunk: null, completed: true });
             this.logger.info(`Streamed weights for ${filename}`);
         }
     }

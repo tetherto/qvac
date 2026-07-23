@@ -67,7 +67,7 @@ class BertInterface {
     }
     /** Activates the model to start processing the queue. */
     async activate() {
-        await this._binding.activate(this._handle);
+        return this._binding.activate(this._handle);
     }
     /** Stops the addon process and clears resources (including memory). */
     // eslint-disable-next-line @typescript-eslint/require-await -- async so a synchronous destroyInstance throw surfaces as a rejected promise, matching the pre-migration contract
