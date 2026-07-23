@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Long audio no longer crashes or exhausts memory during offline transcription.
+  The batch `transcribe` path ran the Parakeet encoder over the entire input in
+  one pass, whose self-attention grows with the square of the audio length, so
+  multi-hour files were killed by the OS (a ~90 min file peaked at ~100 GB). The
+  bundled `parakeet-cpp` (bumped to `2026-07-21#0`) now slides the encoder over
+  long inputs in overlapping windows with bounded memory; short inputs keep the
+  identical single-pass path. `transcribeStream` was already bounded and is
+  unchanged.
+
 ## [0.10.1] - 2026-07-20
 
 ### Changed
