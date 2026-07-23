@@ -133,6 +133,15 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
       stable-diffusion::stable-diffusion
   )
 
+  # ggml's exported cmake config does not propagate its CUDA runtime
+  # dependencies; without an explicit link the shared .bare module builds with
+  # __cudaRegisterFatBinary et al. unresolved (shared links tolerate undefined
+  # symbols) and fails only at dlopen. Link the toolkit runtime directly.
+  if(SD_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(${inference-addon-sd} PRIVATE CUDA::cudart CUDA::cublas CUDA::cublasLt)
+  endif()
+
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
 target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")

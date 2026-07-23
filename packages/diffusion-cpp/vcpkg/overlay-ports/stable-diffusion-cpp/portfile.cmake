@@ -18,6 +18,16 @@ vcpkg_from_github(
     REPO tetherto/qvac-ext-stable-diffusion.cpp
     REF a98abc4678ad52ddd66be9ab221de0cf6a2b9097
     SHA512 955a563b975b0e8abaf0304b98b00b4ec8512bdc94d1716e22b05b1c1e7c0382d1ff4f0b463dc8cde4fc18d8a4a7ed7ce7ea6f251e6d48ef83d7754bd1b97eae
+    PATCHES
+        # RTX 5090 validation fixes, submitted to PR #22 (drop this patch and
+        # bump REF once they land on feature-abot-dit):
+        # - bounded-history walk graph (pin block 0 + trailing window) - fixes
+        #   ~1.3 GiB/block VRAM growth that OOM'd a 32 GiB GPU at walk block 5
+        # - opt-in per-layer KV cache (ABOT_KV_CACHE=1): 8.5 s -> 1.9 s/block
+        # - taehv decode overlapped with the cache-append pass (second GPU via
+        #   backend spec "diffusion=cuda0,vae=cuda1")
+        # Parity 7/7 + golden-replay walk verified on both paths.
+        abot-bounded-history.patch
 )
 
 set(SD_FLASH_ATTN OFF)
