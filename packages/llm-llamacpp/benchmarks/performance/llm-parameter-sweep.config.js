@@ -113,6 +113,30 @@ const PARAMETER_SWEEP = {
   // verbosity: fixed at '0' (not swept)
 }
 
+// Additive batch/ubatch sweep, run once at a fixed representative baseline
+// rather than crossed with PARAMETER_SWEEP. batch-size/ubatch-size only affect
+// prefill throughput (ppTPS), and the ppTPS-vs-batch curve is invariant across
+// quantization and KV-cache type, so crossing batch with those axes would only
+// replicate the same curve; measuring it once at the baseline keeps the cost
+// additive (+batch cells) instead of multiplicative. batch-size === ubatch-size
+// (the diagonal; mixed pairs are not benchmarked). Every batch is measured
+// against the SAME fixed long prompt — the ctx-filling case at ctx-size 8192
+// (~7k tokens) — so each batch chunks a full prefill and the ppTPS numbers are
+// directly comparable across batch sizes (a batch-matched prompt would vary the
+// prompt length per batch and confound the comparison).
+const BATCH_SWEEP = {
+  promptCase: 'ctx-filling',
+  quantization: 'Q4_K_M',
+  device: getDefaultSweepDevices(),
+  'ctx-size': '8192',
+  'batch-size': ['512', '1024', '2048', '4096'],
+  'flash-attn': 'on',
+  'cache-type-k': 'f16',
+  'cache-type-v': 'f16',
+  'reasoning-budget': '-1',
+  threads: '4'
+}
+
 module.exports = {
   DEFAULT_RESULTS_DIR,
   DEFAULT_MODELS_DIR,
@@ -123,5 +147,6 @@ module.exports = {
   BENCH_DEFAULT_RUNTIME,
   MODEL_RUNTIME_OVERRIDES,
   MODELS,
-  PARAMETER_SWEEP
+  PARAMETER_SWEEP,
+  BATCH_SWEEP
 }
