@@ -1,19 +1,19 @@
 # whisper-cpp: pinned at tetherto/qvac-ext-lib-whisper.cpp@master
-# cb91a378 (Pull latest from upstream whisper.cpp (v1.9.1) (#73)).
+# post repo-reorg (QIP #94, PR stack #93/#95/#102): whisper now lives under
+# third_party/whisper.cpp as an upstream git subtree with a declared QVAC
+# delta (see PATCHES.md there). The GNUInstallDirs ordering patch this port
+# used to carry is absorbed into that delta, so PATCHES is gone.
 # This port moves together with parakeet-cpp and tts-cpp so all three registry
 # ports source the same master commit and the same archive SHA512.
 #
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-ext-lib-whisper.cpp
-  REF 8193cb2cc8ae23c0eb5df4560b1258ad9f07f544
-  SHA512 38df227c8223d4a5aac79068152818e7cf3a0f36379077558f645fe13ee828f9c72a4f1a46425a58961dc4d842f3d00a4be81ac8167fe3e2611903e70086ea52
+  REF 88b690c051666a63d6f5494a68596c4e785468ef
+  SHA512 a1adf1fc953e4c8210e120fc2859aece34a0c738407a346dadaa4bc1762b3f6f6f65ddaceb5ee6d470f56e209ae1d6f49a671cc844f3dfdd8c8a46bf53b426f0
   HEAD_REF master
 )
 
-# Repo reorg (QIP #94): whisper now lives under third_party/whisper.cpp as a
-# git subtree; the GNUInstallDirs ordering patch was absorbed into the
-# subtree delta (third_party/whisper.cpp/PATCHES.md), so no PATCHES here.
 set(SOURCE_PATH "${SOURCE_PATH}/third_party/whisper.cpp")
 
 # whisper-cpp consumes the system-installed ggml provided by the `ggml-speech`

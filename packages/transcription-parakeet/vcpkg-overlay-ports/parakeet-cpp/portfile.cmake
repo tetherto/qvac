@@ -1,20 +1,18 @@
 # parakeet-cpp: NVIDIA Parakeet ASR + Sortformer diarization in pure C++/ggml.
-# Sourced from the parakeet-cpp/ subfolder of tetherto/qvac-ext-lib-whisper.cpp;
+# Sourced from the engines/parakeet/ subfolder of tetherto/qvac-ext-lib-whisper.cpp;
 # consumes the ggml-speech port.
 #
-# Pinned at master ecac5bb7 (PR #85), layered on top of the 2e2f4d5 pin
-# (PR #87: CPU repack of quantized encoder GEMM weights, q4_0/q8_0 ->
-# interleaved 4x8/8x8 layouts, closing the CPU-side q4_0 speed penalty) and
-# the previous df54e37 pin (TDT multi-layer LSTM state, PR #83). Runs the EOU
-# RNN-T decoder as ggml graphs on GPU backends (Metal / CUDA / Vulkan):
-# span-batched joint scoring 16 frames per launch, persistent LSTM/pred state
-# and full-window enc-projection on device, on-device argmax, on-device <EOU>
-# state reset. Scalar host decode stays for CPU and ggml-opencl. RTX 4000
-# Vulkan RTF for EOU drops 0.0052 -> 0.0031 (decoder ~54 -> ~14.5 ms per 20 s
-# file). Requires ggml-speech >= 2026-07-13 (qvac-ext-ggml PR #40): Vulkan
-# row-wise shader OOB-write guards, without which the EOU encoder garbles the
-# first utterance of any file longer than 512 encoder frames (~41 s) on
-# Vulkan.
+# Long-audio memory fix: bound offline-transcription memory. transcribe_samples
+# / transcribe_samples_stream previously ran the conformer encoder over the whole
+# input in a single graph (O(T_enc^2) self-attention), OOMing on multi-hour files
+# (~100 GB for a 90 min file, SIGKILL). This pin computes the mel once (global
+# CMVN) and slides the encoder over it in overlapping windows, trimming the
+# shared context at the interior seams; inputs that fit one window keep the
+# bit-identical single-pass path. Requires ggml-speech >= 2026-07-15 (unchanged
+# from the previous pin).
+#
+# Pinned at tetherto/qvac-ext-lib-whisper.cpp master 88b690c0 (PR #101), the
+# merged long-form windowed-encoder change on the engines/parakeet layout.
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
 set(VCPKG_BUILD_TYPE release)
@@ -22,15 +20,15 @@ set(VCPKG_BUILD_TYPE release)
 vcpkg_from_github(
     OUT_SOURCE_PATH WHISPER_CPP_SRC
     REPO tetherto/qvac-ext-lib-whisper.cpp
-    REF 8193cb2cc8ae23c0eb5df4560b1258ad9f07f544
-    SHA512 38df227c8223d4a5aac79068152818e7cf3a0f36379077558f645fe13ee828f9c72a4f1a46425a58961dc4d842f3d00a4be81ac8167fe3e2611903e70086ea52
+    REF 88b690c051666a63d6f5494a68596c4e785468ef
+    SHA512 a1adf1fc953e4c8210e120fc2859aece34a0c738407a346dadaa4bc1762b3f6f6f65ddaceb5ee6d470f56e209ae1d6f49a671cc844f3dfdd8c8a46bf53b426f0
     HEAD_REF master
 )
 
 set(SOURCE_PATH "${WHISPER_CPP_SRC}/engines/parakeet")
 if (NOT EXISTS "${SOURCE_PATH}/CMakeLists.txt")
     message(FATAL_ERROR
-        "parakeet-cpp: ${SOURCE_PATH}/CMakeLists.txt missing; the parakeet-cpp/ "
+        "parakeet-cpp: ${SOURCE_PATH}/CMakeLists.txt missing; the engines/parakeet/ "
         "subfolder layout in qvac-ext-lib-whisper.cpp may have changed.")
 endif()
 

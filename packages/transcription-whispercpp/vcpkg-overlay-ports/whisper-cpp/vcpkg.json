@@ -1,14 +1,15 @@
 {
   "name": "whisper-cpp",
-  "version": "2026-07-17",
-  "description": "High-performance inference of OpenAI's Whisper automatic speech recognition (ASR) model",
+  "version": "1.9.1",
+  "port-version": 5,
+  "description": "This pin crosses the qvac-ext-lib-whisper.cpp repo reorg (QIP #94: symmetric engines/ layout, upstream whisper.cpp vendored as a git subtree under third_party/whisper.cpp with a declared, CI-guarded delta): tts-cpp sources moved tts-cpp/ -> engines/tts/, parakeet-cpp/ -> engines/parakeet/, whisper root -> third_party/whisper.cpp/. Path updates validated end-to-end pre-merge via overlay ports (tetherto/qvac#3310): Device Farm mobile e2e 3/3 addons, desktop integration across platforms. tts-cpp additionally picks up the Parler-TTS engine (mini-v1/large-v1, CPU; qvac-ext-lib-whisper.cpp#92). High-performance inference of OpenAI's Whisper automatic speech recognition (ASR) model",
   "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp",
   "license": "MIT",
   "dependencies": [
     {
       "name": "ggml-speech",
       "default-features": false,
-      "version>=": "2026-07-14"
+      "version>=": "2026-07-15"
     },
     {
       "name": "vcpkg-cmake",

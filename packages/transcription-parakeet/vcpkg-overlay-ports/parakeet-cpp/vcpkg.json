@@ -1,13 +1,14 @@
 {
   "name": "parakeet-cpp",
-  "version-date": "2026-07-17",
-  "description": "Parakeet (NVIDIA FastConformer ASR + Sortformer diarization) inference in pure C++/ggml. Ships CTC, TDT, EOU and Sortformer engines under one Engine umbrella, plus the cross-engine StreamEvent API (VadStateChanged / EndOfTurn). Sourced from tetherto/qvac-ext-lib-whisper.cpp parakeet-cpp/ subfolder; consumes the ggml-speech port. This pin (master ecac5bb7, PR #85) runs the EOU RNN-T decoder as ggml graphs on GPU backends: span-batched joint (16 frames per launch), persistent LSTM/pred state and full-window enc-projection on device, on-device argmax and <EOU> state reset; scalar host decode stays for CPU and OpenCL. RTX 4000 Vulkan EOU RTF drops 0.0052 to 0.0031. Prior pin (master 2e2f4d5, PR #87) places the quantized conformer encoder GEMM weights in the CPU repack extra buffer type on CPU-only runs (q4_0->q4_0_4x8, q8_0->q8_0_4x8), replacing the generic vec_dot path with the block-parallel dotprod/i8mm/AVX2 kernels and closing the CPU-side q4_0-slower-than-q8_0 penalty. Prior pin (master df54e37, PR #83) fixed the on-device TDT predictor multi-layer state persistence.",
-  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/parakeet-cpp",
+  "version-date": "2026-07-21",
+  "port-version": 0,
+  "description": "Parakeet (NVIDIA FastConformer ASR + Sortformer diarization) inference in pure C++/ggml. Ships CTC, TDT, EOU and Sortformer engines under one Engine umbrella, plus the cross-engine StreamEvent API (VadStateChanged / EndOfTurn). Sourced from tetherto/qvac-ext-lib-whisper.cpp engines/parakeet/ subfolder; consumes the ggml-speech port. This pin bounds offline-transcription memory on long audio: transcribe_samples / transcribe_samples_stream used to run the conformer encoder over the whole input in one graph (O(T_enc^2) self-attention), OOMing on multi-hour files (~100 GB for 90 min); the encoder now computes the mel once (global CMVN) and slides over it in overlapping windows with context trimmed at the seams, while inputs that fit one window keep the bit-identical single-pass path. Layered on master ecac5bb7 (PR #85, EOU RNN-T decoder as ggml graphs on GPU: span-batched joint, persistent LSTM/pred state and full-window enc-projection on device, on-device argmax and <EOU> reset; RTX 4000 Vulkan EOU RTF 0.0052 -> 0.0031). Earlier pins: master 2e2f4d5 (PR #87, CPU repack of quantized encoder GEMM weights) and df54e37 (PR #83, on-device TDT predictor multi-layer state).",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/engines/parakeet",
   "license": "MIT",
   "dependencies": [
     {
       "name": "ggml-speech",
-      "version>=": "2026-07-14"
+      "version>=": "2026-07-15"
     },
     {
       "name": "vcpkg-cmake",
