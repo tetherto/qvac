@@ -1,0 +1,51 @@
+# OpenAI-compatible server benchmark config (qvac serve vs LM Studio vs Ollama).
+# Fill provider model IDs after each server loads the shared GGUF.
+
+session_dir: results
+cooldown_seconds: 90
+warmup_runs: 1
+measured_runs: 5
+api_key: local-benchmark-key
+
+# Shared OpenAI chat.completions request fields only.
+generation:
+  max_tokens: 128
+  temperature: 0
+  seed: 42
+  stream: true
+  stream_options:
+    include_usage: true
+
+parity_prompt_id: parity
+
+# Prompt execution order is rotated per provider block; this is the base order.
+prompt_ids:
+  - p512
+  - p2000
+  - p4000
+  - p7000
+
+# Each provider may declare an optional lifecycle block. When present, its
+# argv arrays run shell-free before and after that provider's benchmark block:
+#   lifecycle:
+#     start_command: [REPLACE_WITH_START_ARGV_ITEM, REPLACE_WITH_START_ARGV_ITEM]
+#     stop_command: [REPLACE_WITH_STOP_ARGV_ITEM]
+#     timeout_seconds: 30
+providers:
+  - id: qvac
+    base_url: http://127.0.0.1:11435/v1
+    model: REPLACE_WITH_QVAC_SERVE_ALIAS
+  - id: ollama
+    base_url: http://127.0.0.1:11434/v1
+    model: REPLACE_WITH_OLLAMA_MODEL_NAME
+  - id: lmstudio
+    base_url: http://127.0.0.1:1234/v1
+    model: REPLACE_WITH_LMSTUDIO_MODEL_ID
+
+model_parity:
+  registry_constant: QWEN3_5_9B_MULTIMODAL_Q4_K_M
+  gguf_filename: Qwen3.5-9B-Q4_K_M.gguf
+  # Absolute path to the shared GGUF bytes used by all providers.
+  gguf_path: REPLACE_WITH_ABSOLUTE_GGUF_PATH
+  # Filled by `npx tsx benchmark.ts digest` or recorded manually.
+  sha256: ''
