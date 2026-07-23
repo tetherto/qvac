@@ -573,3 +573,5 @@ This project is licensed under the Apache-2.0 License – see the LICENSE file f
 
 For questions or issues, please open an issue on the GitHub repository.
 
+
+<!-- CI mobile source-build baseline probe (no functional change) -->
