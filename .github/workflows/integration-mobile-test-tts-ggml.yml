@@ -168,6 +168,7 @@ jobs:
           ENHANCER: ${{ matrix.enhancer || 'none' }}
           ENHANCER_VARIANT: ${{ matrix.enhancer_variant || 'f16' }}
           DENOISER: ${{ matrix.denoiser || 'none' }}
+          QUALITY_MODEL: ggml-tiny.bin
         run: |
           echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
           # Tag the label with the LavaSR axes so enhancer/denoiser rows don't
@@ -188,6 +189,8 @@ jobs:
             if (key === 'QVAC_TTS_GGML_BENCHMARK_ENHANCER') return '$ENHANCER'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT') return '$ENHANCER_VARIANT'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_DENOISER') return '$DENOISER'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_QUALITY') return 'true'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL') return '$QUALITY_MODEL'
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined
           }
           NODE
@@ -205,6 +208,7 @@ jobs:
           TTS_GGML_MOBILE_BENCHMARK_VARIANT: ${{ matrix.variant }}
           TTS_GGML_MOBILE_BENCHMARK_ENHANCER: ${{ matrix.enhancer || 'none' }}
           TTS_GGML_MOBILE_BENCHMARK_DENOISER: ${{ matrix.denoiser || 'none' }}
+          TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'true'
         run: |
           node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
           {

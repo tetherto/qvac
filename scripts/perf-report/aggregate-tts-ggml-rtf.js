@@ -202,6 +202,7 @@ function expandCanonicalReport (report, sourceFile) {
         enhancer,
         enhancerVariant,
         denoiser,
+        qualityModel: result.qualityModel || null,
         platform,
         platformName: platformFamily,
         deviceLabel: device.name,
@@ -224,6 +225,7 @@ function expandCanonicalReport (report, sourceFile) {
         enhancer,
         enhancerVariant,
         denoiser,
+        qualityModel: result.qualityModel || null,
         platform,
         platformName: platformFamily,
         deviceLabel: device.name,
@@ -339,6 +341,7 @@ function normalizeDesktopRecord (report, sourceFile) {
     tokensPerSecond: toNumberOrNull(tps.mean),
     meanWer: toNumberOrNull(quality.wer && quality.wer.mean),
     meanCer: toNumberOrNull(quality.cer && quality.cer.mean),
+    qualityModel: quality.model || null,
     noisy: deriveNoisy(rtf, summary),
     runId: (report.correlation && report.correlation.githubRunId) || '',
     sha: (report.correlation && report.correlation.githubSha) || '',
@@ -386,6 +389,7 @@ function normalizeMobileRecord (record, sourceFile) {
     tokensPerSecond: toNumberOrNull(tps.mean),
     meanWer: toNumberOrNull(quality.wer && quality.wer.mean),
     meanCer: toNumberOrNull(quality.cer && quality.cer.mean),
+    qualityModel: record.qualityModel || quality.model || null,
     noisy: deriveNoisy(rtf, summary),
     runId: (record.correlation && record.correlation.githubRunId) || '',
     sha: (record.correlation && record.correlation.githubSha) || '',
@@ -432,6 +436,7 @@ function normalizeManualRecord (record, sourceFile) {
     tokensPerSecond: toNumberOrNull(record.tokensPerSecond),
     meanWer: toNumberOrNull(record.meanWer),
     meanCer: toNumberOrNull(record.meanCer),
+    qualityModel: record.qualityModel || null,
     noisy: typeof record.noisy === 'boolean' ? record.noisy : null,
     runId: '',
     sha: '',
@@ -569,6 +574,7 @@ function dedupeRecords (records) {
       record.backend,
       record.device,
       record.label || '',
+      record.qualityModel || '',
       record.numThreads !== undefined && record.numThreads !== null ? String(record.numThreads) : ''
     ].join('::')
     if (!byKey.has(key)) {
@@ -641,8 +647,8 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean WER | Mean CER | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------|----------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean WER | Mean CER | Quality Model | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------|----------|---------------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -663,6 +669,7 @@ function renderMarkdown (records, streamingRecords) {
       formatNumber(r.coldRtf),
       formatErrorRate(r.meanWer),
       formatErrorRate(r.meanCer),
+      r.qualityModel || 'n/a',
       formatMaybeInteger(r.wallMs),
       formatMaybeInteger(r.modelLoadMs),
       formatMaybeInteger(r.avgRssMb),

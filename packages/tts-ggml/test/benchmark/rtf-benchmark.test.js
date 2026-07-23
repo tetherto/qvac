@@ -103,7 +103,7 @@ const VALID_ENGINES = [
 // so the variant is a label, not a model selector. The list stays permissive so
 // future re-quantised registry drops can be tagged without a code change here.
 const VALID_VARIANTS = ['q4', 'q8', 'f16', 'mixed']
-const VALID_WHISPER_MODELS = ['ggml-small.bin', 'ggml-medium.bin']
+const VALID_WHISPER_MODELS = ['ggml-tiny.bin', 'ggml-small.bin', 'ggml-medium.bin']
 // Schema version for the rich on-disk `rtf-benchmark-*.json` artifact
 // consumed by `scripts/perf-report/aggregate-tts-ggml-rtf.js`.
 const RTF_REPORT_SCHEMA_VERSION = 3
@@ -189,6 +189,7 @@ function buildCanonicalReport(settings, summary, backend) {
         enhancer,
         enhancerVariant,
         denoiser,
+        qualityModel: quality.model || null,
         metrics: {
           real_time_factor: typeof rtf.mean === 'number' ? rtf.mean : null,
           rtf_p50: typeof rtf.p50 === 'number' ? rtf.p50 : null,
@@ -442,6 +443,23 @@ function getCorpus(engine) {
 
 function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
+}
+
+function writeQualityInput(iteration, wavBuffer) {
+  const dir = path.join(getBaseDir(), 'benchmarks', 'quality-inputs')
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const filePath = path.join(dir, `rtf-quality-${Date.now()}-${iteration}.wav`)
+  fs.writeFileSync(filePath, wavBuffer)
+  return filePath
+}
+
+function cleanupQualityInputs(inputs) {
+  for (const input of inputs) {
+    if (!input.wavPath) continue
+    try {
+      if (fs.existsSync(input.wavPath)) fs.unlinkSync(input.wavPath)
+    } catch (_) {}
+  }
 }
 
 async function loadModelForEngine(settings) {
@@ -733,11 +751,17 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
       }
       runs.push(run)
       if (settings.qualityEnabled && result.data && result.data.wavBuffer) {
-        qualityInputs.push({
-          runIndex: runs.length - 1,
-          reference: text,
-          wavBuffer: Buffer.from(result.data.wavBuffer)
-        })
+        try {
+          qualityInputs.push({
+            runIndex: runs.length - 1,
+            reference: text,
+            wavPath: writeQualityInput(i + 1, result.data.wavBuffer)
+          })
+        } catch (qualityWriteError) {
+          console.log(
+            `  Warning: could not persist quality input for run ${i + 1}: ${qualityWriteError.message}`
+          )
+        }
       }
 
       console.log(
@@ -776,52 +800,67 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
     })
 
     let qualitySummary = null
+    let qualityUnavailableReason = null
     if (settings.qualityEnabled) {
-      if (qualityInputs.length !== runs.length) {
-        throw new Error(
-          `Quality evaluation requires WAV output for every run (got ${qualityInputs.length}/${runs.length})`
-        )
-      }
-
-      const whisperModelDir = path.join(getBaseDir(), 'models', 'whisper')
-      const whisperModelPath = path.join(whisperModelDir, settings.whisperModel)
-      console.log(`\nLoading Whisper quality model: ${settings.whisperModel}...`)
-      const whisperDownload = await ensureWhisperModel(whisperModelPath)
-      if (!whisperDownload || !whisperDownload.success) {
-        throw new Error(`Whisper model unavailable: ${whisperModelPath}`)
-      }
-      whisperModel = await loadWhisper({
-        modelName: settings.whisperModel,
-        diskPath: whisperModelDir,
-        language: isMultilingualEngine(settings.engine) ? 'es' : 'en'
-      })
-
-      const wordErrorRates = []
-      const characterErrorRates = []
-      for (let i = 0; i < qualityInputs.length; i++) {
-        const input = qualityInputs[i]
-        console.log(`\n[quality ${i + 1}/${qualityInputs.length}]`)
-        const quality = await runWhisper(whisperModel, input.reference, input.wavBuffer)
-        wordErrorRates.push(quality.wer)
-        characterErrorRates.push(quality.cer)
-        runs[input.runIndex].quality = {
-          transcription: quality.text,
-          wer: quality.wer,
-          cer: quality.cer
+      try {
+        if (qualityInputs.length !== runs.length) {
+          throw new Error(
+            `quality input unavailable for one or more runs (${qualityInputs.length}/${runs.length})`
+          )
         }
-        console.log(
-          `  WER=${(quality.wer * 100).toFixed(2)}%  CER=${(quality.cer * 100).toFixed(2)}%`
-        )
-      }
 
-      await whisperModel.unload()
-      whisperModel = null
-      qualitySummary = {
-        evaluator: 'whisper',
-        model: settings.whisperModel,
-        language: isMultilingualEngine(settings.engine) ? 'es' : 'en',
-        wer: computeStats(wordErrorRates),
-        cer: computeStats(characterErrorRates)
+        const whisperModelDir = path.join(getBaseDir(), 'models', 'whisper')
+        const whisperModelPath = path.join(whisperModelDir, settings.whisperModel)
+        console.log(`\nLoading Whisper quality model: ${settings.whisperModel}...`)
+        const whisperDownload = await ensureWhisperModel(whisperModelPath)
+        if (!whisperDownload || !whisperDownload.success) {
+          throw new Error(`Whisper model unavailable: ${whisperModelPath}`)
+        }
+        whisperModel = await loadWhisper({
+          modelName: settings.whisperModel,
+          diskPath: whisperModelDir,
+          language: isMultilingualEngine(settings.engine) ? 'es' : 'en'
+        })
+
+        const wordErrorRates = []
+        const characterErrorRates = []
+        for (let i = 0; i < qualityInputs.length; i++) {
+          const input = qualityInputs[i]
+          console.log(`\n[quality ${i + 1}/${qualityInputs.length}]`)
+          const wavBuffer = fs.readFileSync(input.wavPath)
+          const quality = await runWhisper(whisperModel, input.reference, wavBuffer)
+          wordErrorRates.push(quality.wer)
+          characterErrorRates.push(quality.cer)
+          runs[input.runIndex].quality = {
+            transcription: quality.text,
+            wer: quality.wer,
+            cer: quality.cer
+          }
+          console.log(
+            `  WER=${(quality.wer * 100).toFixed(2)}%  CER=${(quality.cer * 100).toFixed(2)}%`
+          )
+        }
+
+        qualitySummary = {
+          evaluator: 'whisper',
+          model: settings.whisperModel,
+          language: isMultilingualEngine(settings.engine) ? 'es' : 'en',
+          wer: computeStats(wordErrorRates),
+          cer: computeStats(characterErrorRates)
+        }
+      } catch (qualityError) {
+        qualityUnavailableReason = qualityError.message
+        qualitySummary = null
+        for (const run of runs) delete run.quality
+        t.comment(`CER/WER unavailable: ${qualityUnavailableReason}`)
+        console.log(`\nWarning: CER/WER unavailable: ${qualityUnavailableReason}`)
+      } finally {
+        if (whisperModel) {
+          try {
+            await whisperModel.unload()
+          } catch (_) {}
+          whisperModel = null
+        }
       }
     }
 
@@ -877,6 +916,9 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
       console.log(`    Mean CER:     ${(qualitySummary.cer.mean * 100).toFixed(2)}%`)
       console.log(`    WER P95:      ${(qualitySummary.wer.p95 * 100).toFixed(2)}%`)
       console.log(`    CER P95:      ${(qualitySummary.cer.p95 * 100).toFixed(2)}%`)
+    } else if (qualityUnavailableReason) {
+      console.log('')
+      console.log(`  Round-trip speech quality: unavailable (${qualityUnavailableReason})`)
     }
     console.log('='.repeat(70) + '\n')
 
@@ -948,6 +990,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         rssAfterUnloadBytes: rssAfterUnload,
         memory: memorySummary,
         quality: qualitySummary,
+        qualityUnavailableReason,
         modelSizeBytes,
         backendId: observedBackendId,
         activeBackend,
@@ -1031,6 +1074,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
 
     console.log('RTF benchmark completed successfully.\n')
   } finally {
+    cleanupQualityInputs(qualityInputs)
     if (model) {
       try {
         await model.unload()
