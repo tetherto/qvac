@@ -145,19 +145,25 @@ index.js: BatchHandler.isBatchInput() => true
         |
         v
 _runBatchInternal():
-  items = BatchHandler._unwrapItems(batchInput)
-  response = new QvacResponse(...)
-  job.startWith(response)
-  result = await _runJob(items)   // calls addon.runJob(items) via LlamaInterface
+  response = await this._batchHandler.run(batchInput)
+        |
+        v
+BatchHandler.run():
+  items = _unwrapItems(batchInput)
+  result = await this._runJob(items)   // calls addon.runJob(items) via LlamaInterface
+  jobId = result.id                    // native group id, minted at admission
+  this._groups.set(jobId, { ids: result.ids, response, pendingResult: null })
+  for (id of result.ids) this._chunkRoutes.set(id, jobId)
         |
         v
 AddonJs.hpp: runJob() [C++ binding]
   getLlamaModel(instance)->supportsBatching() check
-  parsePromptBatch(items) -> vector<Prompt>
-  LlamaModel::processPromptBatch(prompts)
+  parseBatchInputs(items) -> vector<Prompt>, per-item ids
+  addonCpp->runJob(prompts) -> optional<JobId>   // scheduler mints the group id
+  returns { accepted, ids, id }
         |
         v
-LlamaModel::processPromptBatchImpl():
+LlamaModel::processPromptBatch() / processPromptBatchImpl():
   validateBitnetQuantization()
   check duplicate saveCacheToDisk keys (throws InvalidArgument)
   ContinuousBatchScheduler::processBatch(requests)
@@ -506,8 +512,10 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
 }
 ```
 
-A single `run(batch)` call with nothing else in flight (legacy bundled batch,
-untagged) keeps the generic aggregate snapshot unchanged.
+A single `run(batch)` call with nothing else in flight is still tagged with
+its own native group id, registered in `BatchHandler._groups` like any other
+job; it just has no concurrent traffic to diverge from, so its own figures
+happen to equal the generic aggregate snapshot.
 
 ### 4. One batched run of exactly `parallel` prompts (full width)
 
