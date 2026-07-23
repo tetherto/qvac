@@ -347,12 +347,21 @@ jobs:
             set +e
             echo "[ios-probe] === start ==="
             export PATH="$HOME/.local/bin:$PATH"
+            # Device Farm runs the host phase under sudo, so SUDO_UID/SUDO_GID are
+            # set. pymobiledevice3 then tries to chown ~/.pymobiledevice3 to that
+            # uid/gid and fails with EPERM (run #2 evidence). Unsetting them makes
+            # pmd3 skip the chown (chown_to_non_sudo_if_needed returns early).
+            unset SUDO_UID SUDO_GID
             python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || echo "[ios-probe] pip install failed"
             which pymobiledevice3 || echo "[ios-probe] pmd3 not on PATH"
             pymobiledevice3 version 2>&1 || python3 -m pymobiledevice3 version 2>&1 || echo "[ios-probe] cannot run pmd3"
+            echo "[ios-probe] --- usbmux device list ---"
+            pymobiledevice3 usbmux list 2>&1 || echo "[ios-probe] usbmux list failed"
             echo "[ios-probe] --- apps --help (records real CLI syntax) ---"
             pymobiledevice3 apps --help 2>&1 || true
-            echo "[ios-probe] --- installed apps ---"
+            echo "[ios-probe] --- installed apps (raw) ---"
+            pymobiledevice3 apps list --no-color 2>&1 || pymobiledevice3 apps list 2>&1 || echo "[ios-probe] apps list failed"
+            echo "[ios-probe] --- app match check ---"
             pymobiledevice3 apps list 2>&1 | tr ',' '\n' | grep -i "io.tether.test.qvac" && echo "[ios-probe] APP_INSTALLED=yes" || echo "[ios-probe] APP_INSTALLED=no"
             echo "ios-probe-payload" > /tmp/ios-probe.txt
             echo "[ios-probe] --- push into Documents ---"
