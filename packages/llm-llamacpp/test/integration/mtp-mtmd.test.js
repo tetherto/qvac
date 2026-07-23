@@ -63,14 +63,14 @@ async function loadMtmdMtp() {
     modelName: MODEL.name,
     downloadUrl: MODEL.url
   })
-  const [projName] = await ensureModel({
+  const [projName, projDir] = await ensureModel({
     modelName: MMPROJ.name,
     downloadUrl: MMPROJ.url
   })
   const addon = new LlmLlamacpp({
     files: {
       model: [path.join(dirPath, modelName)],
-      projectionModel: path.join(dirPath, projName)
+      projectionModel: path.join(projDir, projName)
     },
     config: {
       device: useCpu ? 'cpu' : 'gpu',
