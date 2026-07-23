@@ -194,7 +194,7 @@ jobs:
 
       - name: Validate mobile tests are up-to-date
         working-directory: addon/${{ env.ADDON_WORKDIR }}
-        run: npm run test:mobile:validate || true
+        run: npm run test:mobile:validate
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup
