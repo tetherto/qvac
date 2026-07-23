@@ -19,7 +19,12 @@ type RunStreamingModel = {
     options?: Record<string, unknown>
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
-    stats?: { audioDurationMs?: number; totalSamples?: number }
+    stats?: {
+      audioDurationMs?: number
+      totalSamples?: number
+      enhancerBackendDevice?: number
+      enhancerBackendId?: number
+    }
   }>
 }
 

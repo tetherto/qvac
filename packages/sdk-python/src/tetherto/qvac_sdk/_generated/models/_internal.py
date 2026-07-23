@@ -5038,6 +5038,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     cfm_steps: Annotated[
         int | None, Field(alias="cfmSteps", ge=0, le=9007199254740991)
     ] = None
+    cfg_rate: Annotated[float | None, Field(alias="cfgRate", ge=0.0)] = None
     threads: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
     n_gpu_layers: Annotated[
         int | None, Field(alias="nGpuLayers", ge=-9007199254740991, le=9007199254740991)
@@ -5245,6 +5246,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
     output_sample_rate: Annotated[
         int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    vulkan_cache_dir: Annotated[
+        str | None, Field(alias="vulkanCacheDir", min_length=1)
     ] = None
     lavasr_enhancer_model_src: Annotated[
         str
@@ -7836,6 +7840,12 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     )
     audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
     total_samples: Annotated[float | None, Field(alias="totalSamples")] = None
+    enhancer_backend_device: Annotated[
+        float | None, Field(alias="enhancerBackendDevice")
+    ] = None
+    enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
+        None
+    )
 
 
 class TextToSpeechResponse(GeneratedBaseModel):
@@ -7886,6 +7896,12 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     )
     audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
     total_samples: Annotated[float | None, Field(alias="totalSamples")] = None
+    enhancer_backend_device: Annotated[
+        float | None, Field(alias="enhancerBackendDevice")
+    ] = None
+    enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
+        None
+    )
 
 
 class TextToSpeechStreamResponse(GeneratedBaseModel):

@@ -131,7 +131,7 @@ export const vlaRunRequestSchema = z.object({
     .string()
     .regex(BASE64_PATTERN)
     .describe(
-      'Base64-encoded `Float32Array`. For continuous-state models (SmolVLA) ' +
+      'Base64-encoded `Float32Array`. For continuous-state models (SmolVLA, GR00T) ' +
         'this is length `hparams.maxStateDim` — use ' +
         '`vlaPadState(state, hparams.maxStateDim)` to zero-pad. For ' +
         "discrete-state models (π₀.₅, `stateInputMode: 'discrete'`) the state " +

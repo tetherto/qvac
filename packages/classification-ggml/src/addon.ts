@@ -86,10 +86,13 @@ function ensureLoggerInstalled(binding: ClassificationBinding): void {
     const sink = activeLoggerSink;
     if (!sink) return;
     const level = levels[priority] || "info";
-    const write = sink[level];
-    if (typeof write === "function") {
+    // Invoke as a method on the sink — logger implementations such as
+    // QvacLogger rely on `this` internally, so the call must not be
+    // detached (a detached call would throw here and the log line would
+    // be silently dropped by the catch).
+    if (typeof sink[level] === "function") {
       try {
-        write(message);
+        sink[level](message);
       } catch {}
     }
   });

@@ -1,5 +1,15 @@
 const path = require('bare-path')
 
+// Index-matched to the C++ GenerationStopReason enum (SequenceDriver.hpp).
+const STOP_REASONS = [
+  'none',
+  'eos',
+  'antiprompt',
+  'predictionLimit',
+  'sequenceLimit',
+  'contextOverflow'
+]
+
 /**
  * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
  * `FinetuneProgress`, or `null` to drop it. `state.skipNextRuntimeStats`
@@ -24,6 +34,9 @@ function mapAddonEvent(rawEvent, rawData, rawError, state) {
       stats.backendDevice = 'cpu'
     } else if (stats.backendDevice === 1) {
       stats.backendDevice = 'gpu'
+    }
+    if (typeof stats.stopReason === 'number') {
+      stats.stopReason = STOP_REASONS[stats.stopReason] || 'none'
     }
     return { type: 'JobEnded', data: stats, error: null }
   }
