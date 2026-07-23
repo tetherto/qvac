@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include <llama.h>
 
 class ToolsCompactController;
@@ -27,6 +29,17 @@ const IContextSliderOps& defaultContextSliderOps();
 
 struct ContextUsage {
   llama_pos pos = 0;
+  llama_pos cacheTokens = 0;
+};
+
+/// Positional range occupied by one independently decodable vision tile.
+///
+/// The range is tracked in the same position coordinate space used by
+/// llama_memory_seq_rm. A multi-tile image therefore contributes one range per
+/// tile, which permits eviction tile-by-tile without splitting a tile.
+struct VisionBlockRange {
+  llama_pos startPos = 0;
+  llama_pos endPos = 0;
   llama_pos cacheTokens = 0;
 };
 
@@ -79,7 +92,8 @@ ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
     ToolsCompactController& tools,
-    const IContextSliderOps& ops = defaultContextSliderOps());
+    const IContextSliderOps& ops = defaultContextSliderOps(),
+    const std::vector<VisionBlockRange>& visionBlocks = {});
 
 /// Attempts to slide the context window during generation phase.
 ///
@@ -104,7 +118,8 @@ ContextSlideOutcome trySlideGeneration(
     llama_pos firstMsgTokens, llama_pos nDiscarded,
     ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps(),
-    llama_pos effectiveCtx = -1, llama_pos nCacheTokens = -1);
+    llama_pos effectiveCtx = -1, llama_pos nCacheTokens = -1,
+    const std::vector<VisionBlockRange>& visionBlocks = {});
 
 /// Outcome of an in-place KV-cache range compaction.
 struct CompactRangeOutcome {

@@ -1,5 +1,8 @@
 #include "ContextSlider.hpp"
 
+#include <algorithm>
+#include <vector>
+
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
@@ -8,6 +11,22 @@
 using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace {
+llama_pos cacheTokensDiscardedBy(
+    llama_pos protectedPrefixPos, llama_pos discard,
+    const std::vector<VisionBlockRange>& visionBlocks) {
+  const llama_pos discardEnd = protectedPrefixPos + discard;
+  llama_pos cacheDiscard = discard;
+  for (const auto& block : visionBlocks) {
+    if (block.startPos >= protectedPrefixPos && block.endPos <= discardEnd) {
+      const llama_pos positionTokens = block.endPos - block.startPos;
+      const llama_pos blockCacheTokens =
+          block.cacheTokens > 0 ? block.cacheTokens : positionTokens;
+      cacheDiscard += blockCacheTokens - positionTokens;
+    }
+  }
+  return cacheDiscard;
+}
+
 class ContextSliderOps final : public IContextSliderOps {
 public:
   llama_pos nCtx(llama_context* lctx) const override {
@@ -35,7 +54,7 @@ ContextSlideOutcome trySlidePrefillImpl(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
     ToolsCompactController& tools, const IContextSliderOps& ops,
-    llama_pos effectiveCtx) {
+    llama_pos effectiveCtx, const std::vector<VisionBlockRange>& visionBlocks) {
 
   // In batch mode the slot's usable window is the per-sequence cap, smaller
   // than the whole context; <= 0 means single-sequence, use the full context.
@@ -54,12 +73,26 @@ ContextSlideOutcome trySlidePrefillImpl(
 
   // Clamp discard so it never eats into tool tokens
   llama_pos discard = tools.clampDiscard(nDiscarded, protectedPrefixPos);
+  // Image embeddings must remain an atomic unit. If the nominal trim edge
+  // lands inside a tile, extend it to the tile's end so the oldest affected
+  // tile is dropped whole. Text-only ranges retain the configured partial
+  // trim behavior.
+  const llama_pos nominalEnd = protectedPrefixPos + discard;
+  llama_pos alignedEnd = nominalEnd;
+  for (const auto& block : visionBlocks) {
+    if (block.startPos < nominalEnd && nominalEnd < block.endPos) {
+      alignedEnd = std::max(alignedEnd, block.endPos);
+    }
+  }
+  discard = alignedEnd - protectedPrefixPos;
   llama_pos leftTokens = currentPos - protectedPrefixPos - discard;
+  const llama_pos cacheDiscard =
+      cacheTokensDiscardedBy(protectedPrefixPos, discard, visionBlocks);
 
   // Try partial slide
   if (leftTokens >= 0 && discard > 0 &&
       currentPos + appendPos - discard < nCtx &&
-      currentCacheTokens + appendCacheTokens - discard < nCtx) {
+      currentCacheTokens + appendCacheTokens - cacheDiscard < nCtx) {
     auto mem = ops.memory(lctx);
     if (!ops.seqRm(
             mem, seqId, protectedPrefixPos, protectedPrefixPos + discard)) {
@@ -94,13 +127,15 @@ ContextSlideOutcome trySlidePrefill(
       nDiscarded,
       tools,
       ops,
-      effectiveCtx);
+      effectiveCtx,
+      {});
 }
 
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops) {
+    ToolsCompactController& tools, const IContextSliderOps& ops,
+    const std::vector<VisionBlockRange>& visionBlocks) {
   constexpr llama_pos effectiveCtx = -1;
   return trySlidePrefillImpl(
       lctx,
@@ -111,7 +146,8 @@ ContextSlideOutcome trySlidePrefill(
       nDiscarded,
       tools,
       ops,
-      effectiveCtx);
+      effectiveCtx,
+      visionBlocks);
 }
 
 CompactRangeOutcome compactKvRange(
@@ -135,7 +171,8 @@ ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
     llama_pos firstMsgTokens, llama_pos nDiscarded,
     ToolsCompactController& tools, const IContextSliderOps& ops,
-    llama_pos effectiveCtx, llama_pos nCacheTokens) {
+    llama_pos effectiveCtx, llama_pos nCacheTokens,
+    const std::vector<VisionBlockRange>& visionBlocks) {
 
   const auto nCtx = effectiveCtx > 0 ? effectiveCtx : ops.nCtx(lctx);
   const llama_pos cacheTokens = nCacheTokens >= 0 ? nCacheTokens : nPast;
@@ -179,6 +216,15 @@ ContextSlideOutcome trySlideGeneration(
             tools.enabled() ? "true" : "false"));
     return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
+
+  const llama_pos nominalEnd = firstMsgTokens + discard;
+  llama_pos alignedEnd = nominalEnd;
+  for (const auto& block : visionBlocks) {
+    if (block.startPos < nominalEnd && nominalEnd < block.endPos) {
+      alignedEnd = std::max(alignedEnd, block.endPos);
+    }
+  }
+  discard = alignedEnd - firstMsgTokens;
 
   // Perform the slide
   auto mem = ops.memory(lctx);

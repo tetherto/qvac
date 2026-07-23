@@ -321,6 +321,10 @@ private:
   /// text spans, so every position advance keeps the KV-cell count honest.
   void advanceTextSpan(llama_pos newPos);
   void applyContextDiscard();
+  void recordVisionBlock(
+      llama_pos startPos, llama_pos endPos, llama_pos cacheTokens);
+  void applyVisionBlockSlide(
+      llama_pos protectedPrefixPos, llama_pos discarded);
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
@@ -387,6 +391,10 @@ private:
   mtmd::input_chunks stagedChunks_;
   ContextUsage current_;
   ContextUsage protectedPrefix_;
+  /// Decoded image/tile position ranges currently resident in the KV cache.
+  /// Ranges are rebased after every slide and restored on cancellation.
+  std::vector<VisionBlockRange> visionBlocks_;
+  std::vector<VisionBlockRange> preRequestVisionBlocks_;
   llama_pos perSeqCtxCeiling_ = -1;
   double visionEncodeMs_ = 0.0;
   int32_t visionEncodeTiles_ = 0;

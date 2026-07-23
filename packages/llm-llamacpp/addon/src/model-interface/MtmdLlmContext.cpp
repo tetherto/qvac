@@ -506,11 +506,13 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         ContextUsage{nPositions, nTokens},
         shifter_.discardBudget(),
         tools_,
-        defaultContextSliderOps());
+        defaultContextSliderOps(),
+        visionBlocks_);
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
       current_.pos = outcome.newNPast;
       refreshCurrentCacheTokensFromMemory();
+      applyVisionBlockSlide(protectedPrefix_.pos, outcome.discarded);
       shifter_.noteSlide();
       QLOG_IF(
           Priority::DEBUG,
@@ -653,6 +655,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       // fabric expose the encode time so this copy can be dropped and the
       // helper called directly.
       const auto encT0 = std::chrono::steady_clock::now();
+      const llama_pos imageStart = nPastLocal;
+      const llama_pos imageCacheStart = static_cast<llama_pos>(
+          llama_memory_seq_token_count(llama_get_memory(modelCtx_.lctx), seqId_));
       res = mtmd_encode_chunk(visionContext(), chunk);
       visionEncodeMs_ += std::chrono::duration<double, std::milli>(
                              std::chrono::steady_clock::now() - encT0)
@@ -671,6 +676,13 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             &nPastLocal,
             /*callback=*/nullptr,
             /*user_data=*/nullptr);
+        if (res == 0) {
+          const llama_pos imageCacheEnd = static_cast<llama_pos>(
+              llama_memory_seq_token_count(
+                  llama_get_memory(modelCtx_.lctx), seqId_));
+          recordVisionBlock(
+              imageStart, nPastLocal, imageCacheEnd - imageCacheStart);
+        }
       }
     } else {
       res = mtmd_helper_eval_chunk_single(
@@ -767,6 +779,7 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   });
 
   protectedPrefix_ = preRequestProtectedPrefix_;
+  visionBlocks_ = preRequestVisionBlocks_;
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -799,11 +812,38 @@ void MtmdLlmContext::applyContextDiscard() {
       protectedPrefix_.pos,
       /*effectiveCtx=*/-1,
       current_.cacheTokens,
-      "[MtmdLlm]");
+      "[MtmdLlm]",
+      defaultContextSliderOps(),
+      visionBlocks_);
   if (outcome.kind == ContextShifter::Outcome::Kind::Slid) {
     current_.pos = outcome.newPos;
     refreshCurrentCacheTokensFromMemory();
+    applyVisionBlockSlide(protectedPrefix_.pos, outcome.discarded);
   }
+}
+
+void MtmdLlmContext::recordVisionBlock(
+    llama_pos startPos, llama_pos endPos, llama_pos cacheTokens) {
+  if (endPos > startPos) {
+    visionBlocks_.push_back({startPos, endPos, cacheTokens});
+  }
+}
+
+void MtmdLlmContext::applyVisionBlockSlide(
+    llama_pos protectedPrefixPos, llama_pos discarded) {
+  const llama_pos removedEnd = protectedPrefixPos + discarded;
+  std::vector<VisionBlockRange> remaining;
+  remaining.reserve(visionBlocks_.size());
+  for (const auto& block : visionBlocks_) {
+    if (block.endPos <= protectedPrefixPos) {
+      remaining.push_back(block);
+    } else if (block.startPos >= removedEnd) {
+      remaining.push_back(
+          {block.startPos - discarded, block.endPos - discarded,
+           block.cacheTokens});
+    }
+  }
+  visionBlocks_ = std::move(remaining);
 }
 
 LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
@@ -1474,6 +1514,8 @@ void MtmdLlmContext::resetState(bool resetStats) {
   tools_.reset();
   current_ = {};
   protectedPrefix_ = {};
+  visionBlocks_.clear();
+  preRequestVisionBlocks_.clear();
 
   // On partial reset (resetStats=false), preserve the slide counter,
   // block discards, and vision-encode accumulators so `runtimeStats()`
@@ -1710,6 +1752,12 @@ llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
         mediaIndex,
         res);
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
+  }
+  if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+    recordVisionBlock(
+        pos,
+        newPos,
+        static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk)));
   }
 
   // Commit accounting only after a successful eval, so a throwing/failing
@@ -2021,6 +2069,8 @@ bool MtmdLlmContext::loadCache(
     }
     current_ = {};
     protectedPrefix_ = {};
+    visionBlocks_.clear();
+    preRequestVisionBlocks_.clear();
     tools_.reset();
   });
 
@@ -2101,6 +2151,11 @@ bool MtmdLlmContext::loadCache(
   }
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
+  // Sequence state restores KV cells and position metadata, but not the
+  // per-request mtmd chunk boundaries. Clear any stale ranges rather than
+  // applying offsets from an unrelated in-memory sequence.
+  visionBlocks_.clear();
+  preRequestVisionBlocks_.clear();
   restoredKvGuard.dismiss();
   return true;
 }
@@ -2138,6 +2193,7 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
 void MtmdLlmContext::snapshotPreRequestCursor() {
   preRequestUsage_ = current_;
   preRequestProtectedPrefix_ = protectedPrefix_;
+  preRequestVisionBlocks_ = visionBlocks_;
 }
 
 void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {

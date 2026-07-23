@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include <llama.h>
 
@@ -64,7 +65,8 @@ public:
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       llama_pos protectedPrefixPos, llama_pos effectiveCtx,
       llama_pos cacheTokens, const char* labelTag,
-      const IContextSliderOps& ops = defaultContextSliderOps());
+      const IContextSliderOps& ops = defaultContextSliderOps(),
+      const std::vector<VisionBlockRange>& visionBlocks = {});
 
 private:
   ReasoningBlockCompactor& compactor_;

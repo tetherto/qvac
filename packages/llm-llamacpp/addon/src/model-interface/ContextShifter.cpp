@@ -26,7 +26,8 @@ ContextShifter::ContextShifter(
 ContextShifter::Outcome ContextShifter::applyGenerationDiscard(
     ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
     llama_pos protectedPrefixPos, llama_pos effectiveCtx, llama_pos cacheTokens,
-    const char* labelTag, const IContextSliderOps& ops) {
+    const char* labelTag, const IContextSliderOps& ops,
+    const std::vector<VisionBlockRange>& visionBlocks) {
   // Slide notification is routed through the compactor's tools
   // controller so we keep a single tools reference per inference.
   auto outcome = trySlideGeneration(
@@ -38,7 +39,8 @@ ContextShifter::Outcome ContextShifter::applyGenerationDiscard(
       compactor_.toolsController(),
       ops,
       effectiveCtx,
-      cacheTokens);
+      cacheTokens,
+      visionBlocks);
 
   Outcome out;
   if (outcome.kind == ContextSlideOutcome::Kind::Slid) {

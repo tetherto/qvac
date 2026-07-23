@@ -442,7 +442,8 @@ graph TB
 
 - Saves/loads llama.cpp KV cache to disk for conversation continuity
 - Handles cache invalidation on context changes
-- Configurable discard policy via `n_discarded` parameter
+- Configurable discard policy via `n_discarded` parameter; multimodal slides
+  retain whole decoded image/tile blocks rather than trimming through them
 - Connected to JS `runOptions.cacheKey` and `runOptions.saveCacheToDisk`, which select and persist per-request inference context.
 
 #### **Notable C++ modules**

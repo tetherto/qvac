@@ -148,6 +148,110 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -100);
 }
 
+TEST_F(ContextSliderTest, PrefillSlideDropsSingleVisionBlockAtomically) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  const std::vector<VisionBlockRange> visionBlocks = {{120, 220}};
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/300, /*cacheTokens=*/300},
+      ContextUsage{/*pos=*/50, /*cacheTokens=*/50},
+      ContextUsage{/*pos=*/180, /*cacheTokens=*/180},
+      /*nDiscarded=*/100,
+      controller,
+      ops,
+      visionBlocks);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.discarded, 170);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 220}));
+}
+
+TEST_F(ContextSliderTest, PrefillSlideDropsOnlyOldestVisionTile) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  const std::vector<VisionBlockRange> visionBlocks = {{100, 180}, {180, 260}};
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/300, /*cacheTokens=*/300},
+      ContextUsage{/*pos=*/50, /*cacheTokens=*/50},
+      ContextUsage{/*pos=*/180, /*cacheTokens=*/180},
+      /*nDiscarded=*/100,
+      controller,
+      ops,
+      visionBlocks);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.discarded, 130);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 180}));
+}
+
+TEST_F(ContextSliderTest, PrefillSlideKeepsPartialTextTrimBeforeVisionBlock) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  const std::vector<VisionBlockRange> visionBlocks = {{180, 260}};
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/300, /*cacheTokens=*/300},
+      ContextUsage{/*pos=*/50, /*cacheTokens=*/50},
+      ContextUsage{/*pos=*/180, /*cacheTokens=*/180},
+      /*nDiscarded=*/100,
+      controller,
+      ops,
+      visionBlocks);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.discarded, 100);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 150}));
+}
+
+TEST_F(ContextSliderTest, PrefillSlideDropsImageOnlyWindowAtomically) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  const std::vector<VisionBlockRange> visionBlocks = {{0, 300}};
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/300, /*cacheTokens=*/300},
+      ContextUsage{/*pos=*/0, /*cacheTokens=*/0},
+      ContextUsage{/*pos=*/150, /*cacheTokens=*/150},
+      /*nDiscarded=*/100,
+      controller,
+      ops,
+      visionBlocks);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.newNPast, 0);
+  EXPECT_EQ(outcome.discarded, 300);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 0, 300}));
+}
+
+TEST_F(ContextSliderTest, PrefillSlideWithoutVisionBlocksKeepsTextBehavior) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/300, /*cacheTokens=*/300},
+      ContextUsage{/*pos=*/50, /*cacheTokens=*/50},
+      ContextUsage{/*pos=*/180, /*cacheTokens=*/180},
+      /*nDiscarded=*/100,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.discarded, 100);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 150}));
+}
+
 TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
@@ -335,6 +439,28 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 170);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 400);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -120);
+}
+
+TEST_F(ContextSliderTest, GenerationSlideDropsVisionBlockAtomically) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  const std::vector<VisionBlockRange> visionBlocks = {{120, 220}};
+
+  const auto outcome = trySlideGeneration(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*nPast=*/400,
+      /*firstMsgTokens=*/50,
+      /*nDiscarded=*/100,
+      controller,
+      ops,
+      /*effectiveCtx=*/-1,
+      /*nCacheTokens=*/-1,
+      visionBlocks);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.discarded, 170);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 220}));
 }
 
 TEST_F(

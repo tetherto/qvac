@@ -367,9 +367,12 @@ safeTest(
     )
     assertCachedStats(t, first.stats, 'first multimodal turn')
     t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
-    await runNoCacheSeparator(t, addon, 'after first multimodal turn')
 
-    const prefillSlide = await runAndCollect(
+    // Keep the image-bearing cache resident for this request. The nominal
+    // 1024-token trim edge lands inside Qwen3.5-VL's image KV region, so this
+    // covers the in-memory atomic vision-block slide rather than only a cache
+    // restore path.
+    const atomicPrefillSlide = await runAndCollect(
       addon,
       makePrefillPressureTurn(first.stats.CacheTokens),
       {
@@ -377,18 +380,19 @@ safeTest(
         prefill: true
       }
     )
-    t.is(prefillSlide.text, '', 'prefill stress run emits no text')
+    t.is(atomicPrefillSlide.text, '', 'atomic image prefill stress emits no text')
     t.is(
-      toNumber(prefillSlide.stats.generatedTokens),
+      toNumber(atomicPrefillSlide.stats.generatedTokens),
       0,
-      'prefill stress run reports zero generated tokens'
+      'atomic image prefill stress reports zero generated tokens'
     )
     t.ok(
-      toNumber(prefillSlide.stats.contextSlides) > 0,
-      `prefill stress run triggered context sliding (${prefillSlide.stats.contextSlides})`
+      toNumber(atomicPrefillSlide.stats.contextSlides) > 0,
+      'atomic image prefill stress triggered context sliding ' +
+        `(${atomicPrefillSlide.stats.contextSlides})`
     )
-    assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
-    await runNoCacheSeparator(t, addon, 'after prefill stress run')
+    assertCachedStats(t, atomicPrefillSlide.stats, 'atomic image prefill stress')
+    await runNoCacheSeparator(t, addon, 'after atomic image prefill stress')
 
     const canceledPrefillResult = await runAndCancelDuringPrefill(
       addon,
@@ -398,7 +402,7 @@ safeTest(
         prefill: true
       }
     )
-    assertCanceledPrefillRolledBack(t, prefillSlide.stats, canceledPrefillResult)
+    assertCanceledPrefillRolledBack(t, atomicPrefillSlide.stats, canceledPrefillResult)
     await runNoCacheSeparator(t, addon, 'after canceled prefill')
 
     const afterPrefillCancel = await runAndCollect(
