@@ -548,3 +548,68 @@ safeTest(
     )
   }
 )
+
+safeTest(
+  'Qwen3.5-VL restored image cache slides without splitting vision blocks',
+  {
+    timeout: 1_200_000,
+    skip: skipStress
+  },
+  async (t) => {
+    const imagePath = getMediaPath('fruitPlate.png')
+    t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
+    const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
+
+    const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-restored-vision-slide-${Date.now()}.bin`)
+    cleanupIntegrationCacheFiles(cachePath)
+    t.teardown(() => {
+      try {
+        fs.unlinkSync(cachePath)
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err
+      }
+    })
+
+    // Persist an image-bearing session, then reload it in a fresh addon so the
+    // only vision-block metadata available is what the versioned cache header
+    // restored from disk.
+    {
+      const writer = await setupModel(t, {
+        n_discarded: String(N_DISCARDED),
+        ctx_size: String(CTX_SIZE)
+      })
+      const primed = await runAndCollect(writer, makeFixedImagePrefillTurn(imageBytes, 'persist'), {
+        cacheKey: cachePath,
+        saveCacheToDisk: true,
+        prefill: true
+      })
+      t.is(primed.text, '', 'persisted image prefill emits no text')
+      t.ok(
+        toNumber(primed.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
+        `persisted image cache holds vision cells (${primed.stats.CacheTokens})`
+      )
+      t.ok(fs.existsSync(cachePath), 'versioned multimodal cache file was written')
+      await writer.unload().catch(() => {})
+    }
+
+    const reader = await setupModel(t, {
+      n_discarded: String(N_DISCARDED),
+      ctx_size: String(CTX_SIZE)
+    })
+    const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true }
+
+    const restoredPressure = await runAndCollect(
+      reader,
+      makePrefillPressureTurn(MIN_QWEN35_IMAGE_CACHE_TOKENS),
+      {
+        ...cacheOpts,
+        generationParams: { predict: 16 }
+      }
+    )
+    t.ok(
+      toNumber(restoredPressure.stats.contextSlides) > 0,
+      `restored image cache slides under prefill pressure (${restoredPressure.stats.contextSlides})`
+    )
+    assertCachedStats(t, restoredPressure.stats, 'restored image cache slide')
+  }
+)

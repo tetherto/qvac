@@ -2013,18 +2013,53 @@ void MtmdLlmContext::validatePromptPolicy(
   tools_.validatePrompt(chatMsgs, tools, layout, hasKvCacheContext);
 }
 
-/// Prompt caching on the multimodal batch path round-trips the full four-field
-/// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
-/// exactly as `CacheManager` does. All four fields are required: copying only
-/// the text path's two positional fields would drop
-/// `cacheTokens`/`firstMsgCacheTokens`, and for M-RoPE media those KV-cell
-/// counts diverge from the positional span (`current_.pos` vs
-/// `current_.cacheTokens`), so losing them would break context shifting after
-/// restore.
+/// Prompt caching on the multimodal path round-trips versioned session
+/// metadata: the four cursor fields plus each tracked vision-block range.
+/// Legacy exact-four-field headers are a cache miss (re-prime) so a later
+/// slide cannot split restored image tokens that lack boundary metadata.
 static_assert(
     SESSION_METADATA_FIELD_COUNT == 4,
-    "MTMD cache (de)serialization must persist all four session-metadata "
-    "fields; update the implementation when the contract changes");
+    "MTMD cache (de)serialization builds on the four cursor fields; update "
+    "the versioned encoder when the base contract changes");
+
+size_t MtmdLlmContext::sessionMetadataCapacity() const {
+  return MTMD_SESSION_METADATA_CAPACITY;
+}
+
+std::vector<llama_token> MtmdLlmContext::encodeSessionMetadata() const {
+  MtmdSessionMetadata metadata;
+  metadata.nPast = getNPast();
+  metadata.firstMsgTokens = getFirstMsgTokens();
+  metadata.cacheTokens = getCacheTokens();
+  metadata.firstMsgCacheTokens = getFirstMsgCacheTokens();
+  metadata.visionBlocks = visionBlocks_;
+  return encodeMtmdSessionMetadata(metadata);
+}
+
+SessionMetadataApplyResult MtmdLlmContext::applySessionMetadata(
+    const llama_token* tokens, size_t count) {
+  MtmdSessionMetadata metadata;
+  const auto status = decodeMtmdSessionMetadata(tokens, count, metadata);
+  switch (status) {
+  case MtmdSessionMetadataDecodeStatus::LegacyFourField:
+    return SessionMetadataApplyResult::CacheMiss;
+  case MtmdSessionMetadataDecodeStatus::Invalid:
+    return SessionMetadataApplyResult::Invalid;
+  case MtmdSessionMetadataDecodeStatus::Ok:
+    break;
+  }
+  if (!validateMtmdVisionBlocks(metadata)) {
+    return SessionMetadataApplyResult::Invalid;
+  }
+
+  setNPast(metadata.nPast);
+  setFirstMsgTokens(metadata.firstMsgTokens);
+  setCacheTokens(metadata.cacheTokens);
+  setFirstMsgCacheTokens(metadata.firstMsgCacheTokens);
+  visionBlocks_ = std::move(metadata.visionBlocks);
+  preRequestVisionBlocks_.clear();
+  return SessionMetadataApplyResult::Applied;
+}
 
 bool MtmdLlmContext::loadCache(
     const std::string& cacheKey, llama_pos configuredNDiscarded) {
@@ -2033,19 +2068,16 @@ bool MtmdLlmContext::loadCache(
     return false;
   }
 
-  // Restore the full four-field metadata contract (SessionMetadataField order:
-  // NPast, FirstMsgTokens, CacheTokens, FirstMsgCacheTokens). For M-RoPE media
-  // the KV-cell counts diverge from the positional span, so all four must
-  // survive — see the static_assert above. The per-cell llama_kv_cell_ext
-  // (x/y) is restored by the GGSQ sequence-state loader itself.
+  // Restore versioned multimodal metadata (cursors + vision-block ranges).
+  // The per-cell llama_kv_cell_ext (x/y) is restored by the GGSQ loader.
   size_t tokenCount = 0;
-  llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {0, 0, 0, 0};
+  std::vector<llama_token> sessionTokens(MTMD_SESSION_METADATA_CAPACITY, 0);
   const auto loadedBytes = llama_state_seq_load_file(
       modelCtx_.lctx,
       cacheKey.c_str(),
       seqId_,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT,
+      sessionTokens.data(),
+      sessionTokens.size(),
       &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
@@ -2075,27 +2107,21 @@ bool MtmdLlmContext::loadCache(
     tools_.reset();
   });
 
-  // Accepting a partial header would leave `cacheTokens`/`firstMsgCacheTokens`
-  // defaulted to zero (they diverge from `nPast` under M-RoPE, breaking later
-  // cap checks). Require the full four-field contract; the guard above clears
-  // the restored KV on reject, mirroring `CacheManager::loadCache`.
-  if (!mtmdSessionMetadataIsComplete(tokenCount)) {
+  const auto applyResult =
+      applySessionMetadata(sessionTokens.data(), tokenCount);
+  if (applyResult == SessionMetadataApplyResult::CacheMiss) {
+    // Legacy four-field multimodal caches lack vision-block boundaries.
+    // Clear restored KV and report a miss so the session re-primes.
+    return false;
+  }
+  if (applyResult != SessionMetadataApplyResult::Applied) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
         "MtmdLlmContext::loadCache: cache '" + cacheKey +
-            "' has incomplete session metadata (" + std::to_string(tokenCount) +
-            " of " + std::to_string(SESSION_METADATA_FIELD_COUNT) + " fields)");
+            "' has unsupported or corrupt session metadata (" +
+            std::to_string(tokenCount) + " fields)");
   }
-
-  setNPast(sessionTokens[static_cast<size_t>(SessionMetadataField::NPast)]);
-  setFirstMsgTokens(
-      sessionTokens[static_cast<size_t>(SessionMetadataField::FirstMsgTokens)]);
-  setCacheTokens(
-      sessionTokens[static_cast<size_t>(SessionMetadataField::CacheTokens)]);
-  setFirstMsgCacheTokens(
-      sessionTokens[static_cast<size_t>(
-          SessionMetadataField::FirstMsgCacheTokens)]);
 
   if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(
@@ -2152,11 +2178,6 @@ bool MtmdLlmContext::loadCache(
   }
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
-  // Sequence state restores KV cells and position metadata, but not the
-  // per-request mtmd chunk boundaries. Clear any stale ranges rather than
-  // applying offsets from an unrelated in-memory sequence.
-  visionBlocks_.clear();
-  preRequestVisionBlocks_.clear();
   restoredKvGuard.dismiss();
   return true;
 }
@@ -2166,20 +2187,15 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
     return;
   }
 
-  // Persist all four metadata fields in SessionMetadataField order so the
-  // physical KV-cell counts that diverge under M-RoPE survive restore.
-  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(getNPast()),
-      static_cast<llama_token>(getFirstMsgTokens()),
-      static_cast<llama_token>(getCacheTokens()),
-      static_cast<llama_token>(getFirstMsgCacheTokens())};
+  // Persist versioned metadata so vision-block boundaries survive reload.
+  const std::vector<llama_token> sessionTokens = encodeSessionMetadata();
   const std::string tmpCacheKey = cacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
       seqId_,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT);
+      sessionTokens.data(),
+      sessionTokens.size());
   if (savedBytes == 0) {
     std::error_code ec;
     std::filesystem::remove(tmpCacheKey, ec);

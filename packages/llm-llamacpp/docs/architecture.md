@@ -444,6 +444,10 @@ graph TB
 - Handles cache invalidation on context changes
 - Configurable discard policy via `n_discarded` parameter; multimodal slides
   retain whole decoded image/tile blocks rather than trimming through them
+- Multimodal sessions persist a versioned metadata payload (cursor fields plus
+  each image/tile boundary) so restored caches keep atomic slide behavior.
+  Legacy exact-four-field multimodal caches are treated as a miss and re-primed
+  instead of sliding through untracked vision tokens
 - Connected to JS `runOptions.cacheKey` and `runOptions.saveCacheToDisk`, which select and persist per-request inference context.
 
 #### **Notable C++ modules**

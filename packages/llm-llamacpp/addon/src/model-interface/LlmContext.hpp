@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
@@ -183,6 +184,13 @@ enum class SessionMetadataField : uint8_t {
 
 /// Number of `llama_token` fields in the session metadata contract above.
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+
+/// Result of applying session-file metadata tokens onto a live context.
+enum class SessionMetadataApplyResult {
+  Applied,  // Metadata accepted and applied to the context
+  CacheMiss, // Layout is recognised as unsupported/legacy; caller clears KV
+  Invalid,  // Corrupt or unexpected layout; caller should throw
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -484,6 +492,49 @@ public:
   /// per-slot batch drivers, or null for text-only contexts. Used by the
   /// scheduler factory to detect media capability without a `dynamic_cast`.
   [[nodiscard]] virtual mtmd_context* visionContext() const { return nullptr; }
+
+  /// Capacity of the token buffer passed to `llama_state_seq_load_file`.
+  /// Text contexts keep the four-field contract; multimodal contexts may
+  /// request a larger buffer for versioned vision-block metadata.
+  [[nodiscard]] virtual size_t sessionMetadataCapacity() const {
+    return SESSION_METADATA_FIELD_COUNT;
+  }
+
+  /// Encode the session metadata that should be persisted alongside the
+  /// sequence KV state. Default is the four-field cursor contract.
+  [[nodiscard]] virtual std::vector<llama_token> encodeSessionMetadata() const {
+    return {
+        static_cast<llama_token>(getNPast()),
+        static_cast<llama_token>(getFirstMsgTokens()),
+        static_cast<llama_token>(getCacheTokens()),
+        static_cast<llama_token>(getFirstMsgCacheTokens()),
+    };
+  }
+
+  /// Apply metadata tokens restored from a session file. Must not mutate
+  /// the context on `CacheMiss` / `Invalid` so callers can clear stranded
+  /// KV without leaving a half-applied cursor.
+  [[nodiscard]] virtual SessionMetadataApplyResult applySessionMetadata(
+      const llama_token* tokens, size_t count) {
+    if (tokens == nullptr) {
+      return SessionMetadataApplyResult::Invalid;
+    }
+    if (count > 1 && count < SESSION_METADATA_FIELD_COUNT) {
+      return SessionMetadataApplyResult::Invalid;
+    }
+    if (count < SESSION_METADATA_FIELD_COUNT) {
+      return SessionMetadataApplyResult::CacheMiss;
+    }
+    setNPast(static_cast<llama_pos>(tokens[static_cast<size_t>(
+        SessionMetadataField::NPast)]));
+    setFirstMsgTokens(static_cast<llama_pos>(tokens[static_cast<size_t>(
+        SessionMetadataField::FirstMsgTokens)]));
+    setCacheTokens(static_cast<llama_pos>(tokens[static_cast<size_t>(
+        SessionMetadataField::CacheTokens)]));
+    setFirstMsgCacheTokens(static_cast<llama_pos>(tokens[static_cast<size_t>(
+        SessionMetadataField::FirstMsgCacheTokens)]));
+    return SessionMetadataApplyResult::Applied;
+  }
 
 protected:
   void clearSequenceMemory(

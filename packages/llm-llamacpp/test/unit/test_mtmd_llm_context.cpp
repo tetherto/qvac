@@ -740,13 +740,18 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
   ASSERT_GT(ctx->getNPast(), 0);
 
   // Persist the genuine KV but with a doctored NPast that exceeds the
-  // context window. All four metadata fields are present so the
-  // completeness gate passes and execution reaches the NPast bounds check.
+  // context window. Use the versioned multimodal header so the completeness
+  // gate passes and execution reaches the NPast bounds check.
   const llama_token overflowNPast =
       static_cast<llama_token>(llama_n_ctx(lctx)) + 1;
   const llama_token plausible = static_cast<llama_token>(ctx->getNPast());
-  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
-      overflowNPast, plausible, plausible, plausible};
+  MtmdSessionMetadata overflowMeta;
+  overflowMeta.nPast = overflowNPast;
+  overflowMeta.firstMsgTokens = plausible;
+  overflowMeta.cacheTokens = plausible;
+  overflowMeta.firstMsgCacheTokens = plausible;
+  const std::vector<llama_token> sessionTokens =
+      encodeMtmdSessionMetadata(overflowMeta);
 
   const fs::path cachePath =
       fs::temp_directory_path() / "qvac-mtmd-loadcache-rollback.bin";
@@ -755,8 +760,8 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
       lctx,
       cachePath.string().c_str(),
       seqId,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT);
+      sessionTokens.data(),
+      sessionTokens.size());
   ASSERT_GT(savedBytes, 0u);
 
   // Clear the sequence so restoration is observable from a clean baseline.
@@ -827,32 +832,36 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   fs::remove(nPastMismatchPath);
   fs::remove(cacheTokensMismatchPath);
 
-  const llama_token nPastMismatch[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(nPast + 1),
-      firstMsgTokens,
-      cacheTokens,
-      firstMsgCacheTokens};
+  MtmdSessionMetadata nPastMismatchMeta;
+  nPastMismatchMeta.nPast = nPast + 1;
+  nPastMismatchMeta.firstMsgTokens = firstMsgTokens;
+  nPastMismatchMeta.cacheTokens = cacheTokens;
+  nPastMismatchMeta.firstMsgCacheTokens = firstMsgCacheTokens;
+  const std::vector<llama_token> nPastMismatch =
+      encodeMtmdSessionMetadata(nPastMismatchMeta);
   ASSERT_GT(
       llama_state_seq_save_file(
           lctx,
           nPastMismatchPath.string().c_str(),
           seqId,
-          nPastMismatch,
-          SESSION_METADATA_FIELD_COUNT),
+          nPastMismatch.data(),
+          nPastMismatch.size()),
       0u);
 
-  const llama_token cacheTokensMismatch[SESSION_METADATA_FIELD_COUNT] = {
-      nPast,
-      firstMsgTokens,
-      static_cast<llama_token>(cacheTokens + 1),
-      firstMsgCacheTokens};
+  MtmdSessionMetadata cacheTokensMismatchMeta;
+  cacheTokensMismatchMeta.nPast = nPast;
+  cacheTokensMismatchMeta.firstMsgTokens = firstMsgTokens;
+  cacheTokensMismatchMeta.cacheTokens = cacheTokens + 1;
+  cacheTokensMismatchMeta.firstMsgCacheTokens = firstMsgCacheTokens;
+  const std::vector<llama_token> cacheTokensMismatch =
+      encodeMtmdSessionMetadata(cacheTokensMismatchMeta);
   ASSERT_GT(
       llama_state_seq_save_file(
           lctx,
           cacheTokensMismatchPath.string().c_str(),
           seqId,
-          cacheTokensMismatch,
-          SESSION_METADATA_FIELD_COUNT),
+          cacheTokensMismatch.data(),
+          cacheTokensMismatch.size()),
       0u);
 
   ctx->resetState(true);
@@ -880,6 +889,120 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
 
   fs::remove(nPastMismatchPath);
   fs::remove(cacheTokensMismatchPath);
+}
+
+TEST_F(MtmdLlmContextTest, LoadCacheRestoresVisionBlocksFromDisk) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  const fs::path imagePath = multimodalTestImagePath();
+  ASSERT_TRUE(fs::exists(imagePath)) << imagePath.string();
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-mtmd-vision-block-roundtrip.bin";
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Describe the image briefly."}])";
+  prompt.media.push_back(readBinaryFile(imagePath));
+  prompt.prefill = true;
+  prompt.cacheKey = cachePath.string();
+  prompt.saveCacheToDisk = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_TRUE(fs::exists(cachePath));
+  ASSERT_FALSE(ctx->getVisionBlocks().empty())
+      << "image prefill must record at least one vision block";
+  const auto savedBlocks = ctx->getVisionBlocks();
+  const llama_pos savedNPast = ctx->getNPast();
+  const llama_pos savedCacheTokens = ctx->getCacheTokens();
+
+  ctx->resetState(true);
+  ASSERT_TRUE(ctx->getVisionBlocks().empty());
+  ASSERT_EQ(ctx->getNPast(), 0);
+
+  ASSERT_TRUE(ctx->loadCache(cachePath.string(), 0));
+  EXPECT_EQ(ctx->getNPast(), savedNPast);
+  EXPECT_EQ(ctx->getCacheTokens(), savedCacheTokens);
+  ASSERT_EQ(ctx->getVisionBlocks().size(), savedBlocks.size());
+  for (size_t i = 0; i < savedBlocks.size(); ++i) {
+    EXPECT_EQ(ctx->getVisionBlocks()[i].startPos, savedBlocks[i].startPos);
+    EXPECT_EQ(ctx->getVisionBlocks()[i].endPos, savedBlocks[i].endPos);
+    EXPECT_EQ(
+        ctx->getVisionBlocks()[i].cacheTokens, savedBlocks[i].cacheTokens);
+    EXPECT_GT(ctx->getVisionBlocks()[i].endPos, ctx->getVisionBlocks()[i].startPos);
+    EXPECT_LE(ctx->getVisionBlocks()[i].endPos, ctx->getNPast());
+  }
+
+  fs::remove(cachePath);
+}
+
+TEST_F(MtmdLlmContextTest, LoadCacheTreatsLegacyFourFieldAsMiss) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr);
+  auto* lctx = model->getContext();
+  ASSERT_NE(lctx, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_GT(ctx->getNPast(), 0);
+
+  const llama_token legacy[SESSION_METADATA_FIELD_COUNT] = {
+      static_cast<llama_token>(ctx->getNPast()),
+      static_cast<llama_token>(ctx->getFirstMsgTokens()),
+      static_cast<llama_token>(ctx->getCacheTokens()),
+      static_cast<llama_token>(ctx->getFirstMsgCacheTokens())};
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-mtmd-legacy-four-field.bin";
+  fs::remove(cachePath);
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          lctx,
+          cachePath.string().c_str(),
+          seqId,
+          legacy,
+          SESSION_METADATA_FIELD_COUNT),
+      0u);
+
+  ctx->resetState(true);
+  auto* mem = llama_get_memory(lctx);
+  ASSERT_NE(mem, nullptr);
+  ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u);
+
+  EXPECT_FALSE(ctx->loadCache(cachePath.string(), 0))
+      << "legacy four-field multimodal caches must be treated as a miss";
+  EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
+      << "legacy miss must clear restored KV so the session re-primes";
+  EXPECT_EQ(ctx->getNPast(), 0);
+  EXPECT_TRUE(ctx->getVisionBlocks().empty());
+
+  fs::remove(cachePath);
 }
 
 TEST_F(MtmdLlmContextTest, InvalidMedia) {
@@ -1110,18 +1233,74 @@ TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
 }
 
 /// `loadCache` may only restore a multimodal session when the GGSQ header
-/// carried all four `SessionMetadataField` values. The old gate accepted any
-/// `tokenCount > 1`, so a partial header (2 or 3 fields) was restored with
-/// `cacheTokens`/`firstMsgCacheTokens` defaulted to zero — which diverges from
-/// `nPast` under M-RoPE and corrupts later cap checks. An over-long layout
-/// (`> 4`) is equally unexpected. Only an exact four-field header is complete.
-TEST(MtmdSessionMetadataGate, AcceptsOnlyTheFullFourFieldContract) {
+/// carries the versioned multimodal metadata layout. Legacy exact-four-field
+/// headers are treated as a cache miss; truncated or non-triple-aligned
+/// versioned payloads are invalid.
+TEST(MtmdSessionMetadataGate, AcceptsOnlyVersionedMultimodalMetadata) {
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(0));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(1));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(2));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(3));
-  EXPECT_TRUE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT));
-  EXPECT_FALSE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT + 1));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(5));
+  EXPECT_TRUE(
+      mtmdSessionMetadataIsComplete(MTMD_SESSION_METADATA_HEADER_COUNT));
+  EXPECT_TRUE(mtmdSessionMetadataIsComplete(
+      MTMD_SESSION_METADATA_HEADER_COUNT + MTMD_VISION_BLOCK_FIELD_COUNT));
+  EXPECT_FALSE(mtmdSessionMetadataIsComplete(
+      MTMD_SESSION_METADATA_HEADER_COUNT + 1));
+  EXPECT_TRUE(mtmdSessionMetadataIsLegacyFourField(
+      SESSION_METADATA_FIELD_COUNT));
+}
+
+TEST(MtmdSessionMetadataCodec, RoundTripsVisionBlocks) {
+  MtmdSessionMetadata original;
+  original.nPast = 400;
+  original.firstMsgTokens = 40;
+  original.cacheTokens = 520;
+  original.firstMsgCacheTokens = 40;
+  original.visionBlocks = {{80, 180, 160}, {220, 320, 180}};
+
+  const std::vector<llama_token> tokens = encodeMtmdSessionMetadata(original);
+  MtmdSessionMetadata decoded;
+  ASSERT_EQ(
+      decodeMtmdSessionMetadata(tokens.data(), tokens.size(), decoded),
+      MtmdSessionMetadataDecodeStatus::Ok);
+  EXPECT_TRUE(validateMtmdVisionBlocks(decoded));
+  EXPECT_EQ(decoded.nPast, original.nPast);
+  EXPECT_EQ(decoded.firstMsgTokens, original.firstMsgTokens);
+  EXPECT_EQ(decoded.cacheTokens, original.cacheTokens);
+  EXPECT_EQ(decoded.firstMsgCacheTokens, original.firstMsgCacheTokens);
+  ASSERT_EQ(decoded.visionBlocks.size(), 2u);
+  EXPECT_EQ(decoded.visionBlocks[0].startPos, 80);
+  EXPECT_EQ(decoded.visionBlocks[0].endPos, 180);
+  EXPECT_EQ(decoded.visionBlocks[0].cacheTokens, 160);
+  EXPECT_EQ(decoded.visionBlocks[1].startPos, 220);
+  EXPECT_EQ(decoded.visionBlocks[1].endPos, 320);
+  EXPECT_EQ(decoded.visionBlocks[1].cacheTokens, 180);
+}
+
+TEST(MtmdSessionMetadataCodec, LegacyFourFieldIsCacheMiss) {
+  const llama_token legacy[SESSION_METADATA_FIELD_COUNT] = {100, 20, 140, 20};
+  MtmdSessionMetadata decoded;
+  EXPECT_EQ(
+      decodeMtmdSessionMetadata(legacy, SESSION_METADATA_FIELD_COUNT, decoded),
+      MtmdSessionMetadataDecodeStatus::LegacyFourField);
+  EXPECT_TRUE(decoded.visionBlocks.empty());
+}
+
+TEST(MtmdSessionMetadataCodec, RejectsOverlappingOrOutOfRangeBlocks) {
+  MtmdSessionMetadata overlapping;
+  overlapping.nPast = 200;
+  overlapping.cacheTokens = 200;
+  overlapping.visionBlocks = {{10, 50, 40}, {40, 80, 40}};
+  EXPECT_FALSE(validateMtmdVisionBlocks(overlapping));
+
+  MtmdSessionMetadata outOfRange;
+  outOfRange.nPast = 100;
+  outOfRange.cacheTokens = 100;
+  outOfRange.visionBlocks = {{80, 120, 40}};
+  EXPECT_FALSE(validateMtmdVisionBlocks(outOfRange));
 }
 
 TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <optional>
 #include <vector>
@@ -19,14 +20,155 @@
 #include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
-/// A multimodal session cache is only safe to restore when its header carries
-/// the full four-field metadata contract (`SessionMetadataField`). The GGSQ
-/// loader restores the sequence KV before this check, so any other count — a
-/// truncated/legacy header (`< 4`) or an unexpected layout (`> 4`) — must be
-/// rejected and the restored KV cleared, never accepted with defaulted
-/// `cacheTokens`/`firstMsgCacheTokens`. See `MtmdLlmContext::loadCache`.
-[[nodiscard]] inline bool mtmdSessionMetadataIsComplete(size_t tokenCount) {
+/// Versioned multimodal session-metadata layout (llama_token array):
+///   [0] version (== MTMD_SESSION_METADATA_VERSION)
+///   [1] nPast
+///   [2] firstMsgTokens
+///   [3] cacheTokens
+///   [4] firstMsgCacheTokens
+///   [5] visionBlockCount
+///   [6..] triples (startPos, endPos, cacheTokens) per vision tile
+///
+/// Legacy exact-four-field headers are treated as a cache miss so restored
+/// sessions re-prime rather than sliding through untracked image blocks.
+inline constexpr llama_token MTMD_SESSION_METADATA_VERSION = 1;
+inline constexpr size_t MTMD_SESSION_METADATA_HEADER_COUNT = 6;
+inline constexpr size_t MTMD_VISION_BLOCK_FIELD_COUNT = 3;
+inline constexpr size_t MTMD_MAX_VISION_BLOCKS = 512;
+inline constexpr size_t MTMD_SESSION_METADATA_CAPACITY =
+    MTMD_SESSION_METADATA_HEADER_COUNT +
+    (MTMD_VISION_BLOCK_FIELD_COUNT * MTMD_MAX_VISION_BLOCKS);
+
+struct MtmdSessionMetadata {
+  llama_pos nPast = 0;
+  llama_pos firstMsgTokens = 0;
+  llama_pos cacheTokens = 0;
+  llama_pos firstMsgCacheTokens = 0;
+  std::vector<VisionBlockRange> visionBlocks;
+};
+
+enum class MtmdSessionMetadataDecodeStatus {
+  Ok,
+  LegacyFourField,
+  Invalid,
+};
+
+[[nodiscard]] inline bool mtmdSessionMetadataIsLegacyFourField(
+    size_t tokenCount) {
   return tokenCount == SESSION_METADATA_FIELD_COUNT;
+}
+
+[[nodiscard]] inline bool mtmdSessionMetadataHasVersionedShape(
+    size_t tokenCount) {
+  if (tokenCount < MTMD_SESSION_METADATA_HEADER_COUNT) {
+    return false;
+  }
+  const size_t trailing = tokenCount - MTMD_SESSION_METADATA_HEADER_COUNT;
+  return trailing % MTMD_VISION_BLOCK_FIELD_COUNT == 0 &&
+         (trailing / MTMD_VISION_BLOCK_FIELD_COUNT) <= MTMD_MAX_VISION_BLOCKS;
+}
+
+/// Complete means a versioned header that is safe to decode (not legacy four-
+/// field, not truncated, not over-long). Semantic range validation happens
+/// separately against the restored sequence.
+[[nodiscard]] inline bool mtmdSessionMetadataIsComplete(size_t tokenCount) {
+  return mtmdSessionMetadataHasVersionedShape(tokenCount);
+}
+
+[[nodiscard]] inline std::vector<llama_token> encodeMtmdSessionMetadata(
+    const MtmdSessionMetadata& metadata) {
+  const size_t blockCount =
+      std::min(metadata.visionBlocks.size(), MTMD_MAX_VISION_BLOCKS);
+  std::vector<llama_token> tokens;
+  tokens.reserve(
+      MTMD_SESSION_METADATA_HEADER_COUNT +
+      (blockCount * MTMD_VISION_BLOCK_FIELD_COUNT));
+  tokens.push_back(MTMD_SESSION_METADATA_VERSION);
+  tokens.push_back(static_cast<llama_token>(metadata.nPast));
+  tokens.push_back(static_cast<llama_token>(metadata.firstMsgTokens));
+  tokens.push_back(static_cast<llama_token>(metadata.cacheTokens));
+  tokens.push_back(static_cast<llama_token>(metadata.firstMsgCacheTokens));
+  tokens.push_back(static_cast<llama_token>(blockCount));
+  for (size_t i = 0; i < blockCount; ++i) {
+    const auto& block = metadata.visionBlocks[i];
+    tokens.push_back(static_cast<llama_token>(block.startPos));
+    tokens.push_back(static_cast<llama_token>(block.endPos));
+    tokens.push_back(static_cast<llama_token>(block.cacheTokens));
+  }
+  return tokens;
+}
+
+[[nodiscard]] inline MtmdSessionMetadataDecodeStatus decodeMtmdSessionMetadata(
+    const llama_token* tokens, size_t tokenCount,
+    MtmdSessionMetadata& metadata) {
+  metadata = {};
+  if (tokens == nullptr) {
+    return MtmdSessionMetadataDecodeStatus::Invalid;
+  }
+  if (mtmdSessionMetadataIsLegacyFourField(tokenCount)) {
+    return MtmdSessionMetadataDecodeStatus::LegacyFourField;
+  }
+  if (!mtmdSessionMetadataHasVersionedShape(tokenCount)) {
+    return MtmdSessionMetadataDecodeStatus::Invalid;
+  }
+  if (tokens[0] != MTMD_SESSION_METADATA_VERSION) {
+    return MtmdSessionMetadataDecodeStatus::Invalid;
+  }
+
+  const auto blockCount = static_cast<size_t>(tokens[5]);
+  if (blockCount > MTMD_MAX_VISION_BLOCKS) {
+    return MtmdSessionMetadataDecodeStatus::Invalid;
+  }
+  if (tokenCount != MTMD_SESSION_METADATA_HEADER_COUNT +
+                        (blockCount * MTMD_VISION_BLOCK_FIELD_COUNT)) {
+    return MtmdSessionMetadataDecodeStatus::Invalid;
+  }
+
+  metadata.nPast = static_cast<llama_pos>(tokens[1]);
+  metadata.firstMsgTokens = static_cast<llama_pos>(tokens[2]);
+  metadata.cacheTokens = static_cast<llama_pos>(tokens[3]);
+  metadata.firstMsgCacheTokens = static_cast<llama_pos>(tokens[4]);
+  metadata.visionBlocks.reserve(blockCount);
+  for (size_t i = 0; i < blockCount; ++i) {
+    const size_t base =
+        MTMD_SESSION_METADATA_HEADER_COUNT + (i * MTMD_VISION_BLOCK_FIELD_COUNT);
+    VisionBlockRange block{
+        static_cast<llama_pos>(tokens[base]),
+        static_cast<llama_pos>(tokens[base + 1]),
+        static_cast<llama_pos>(tokens[base + 2])};
+    metadata.visionBlocks.push_back(block);
+  }
+  return MtmdSessionMetadataDecodeStatus::Ok;
+}
+
+[[nodiscard]] inline bool validateMtmdVisionBlocks(
+    const MtmdSessionMetadata& metadata) {
+  if (metadata.nPast < 0 || metadata.cacheTokens < 0 ||
+      metadata.firstMsgTokens < 0 || metadata.firstMsgCacheTokens < 0) {
+    return false;
+  }
+  if (metadata.firstMsgTokens > metadata.nPast ||
+      metadata.firstMsgCacheTokens > metadata.cacheTokens) {
+    return false;
+  }
+
+  llama_pos prevEnd = 0;
+  for (const auto& block : metadata.visionBlocks) {
+    if (block.endPos <= block.startPos) {
+      return false;
+    }
+    if (block.startPos < 0 || block.endPos > metadata.nPast) {
+      return false;
+    }
+    if (block.cacheTokens <= 0) {
+      return false;
+    }
+    if (block.startPos < prevEnd) {
+      return false;
+    }
+    prevEnd = block.endPos;
+  }
+  return true;
 }
 
 /// Multimodal LLM context. Implements both the legacy `LlmContext` API
@@ -273,13 +415,23 @@ public:
       const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
       bool hasKvCacheContext) const override;
 
-  /// Disk prompt-cache for a multimodal batch slot, round-tripping the full
-  /// four-field session metadata (see MtmdLlmContext.cpp). `loadCache` records
-  /// the discard budget and returns false (cache miss) on an empty key, a
-  /// missing file, or a header that fails the four-field metadata check.
+  /// Disk prompt-cache for a multimodal batch slot, round-tripping the
+  /// versioned session metadata (cursors + vision-block ranges). `loadCache`
+  /// records the discard budget and returns false (cache miss) on an empty
+  /// key, a missing file, or a legacy four-field header.
   [[nodiscard]] bool loadCache(
       const std::string& cacheKey, llama_pos configuredNDiscarded) override;
   void saveCache(const std::string& cacheKey) const override;
+
+  [[nodiscard]] size_t sessionMetadataCapacity() const override;
+  [[nodiscard]] std::vector<llama_token> encodeSessionMetadata() const override;
+  [[nodiscard]] SessionMetadataApplyResult applySessionMetadata(
+      const llama_token* tokens, size_t count) override;
+
+  /// Decoded image/tile ranges currently tracked for atomic sliding.
+  [[nodiscard]] const std::vector<VisionBlockRange>& getVisionBlocks() const {
+    return visionBlocks_;
+  }
 
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;

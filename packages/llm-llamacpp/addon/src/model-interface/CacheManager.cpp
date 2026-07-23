@@ -1,8 +1,8 @@
 #include "CacheManager.hpp"
 
-#include <array>
 #include <filesystem>
 #include <system_error>
+#include <vector>
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
@@ -18,54 +18,6 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
-
-namespace {
-
-struct SessionMetadata {
-  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
-
-  static SessionMetadata fromContext(const LlmContext& context) {
-    SessionMetadata metadata;
-    auto& tokens = metadata.tokens;
-    using Field = SessionMetadataField;
-    tokens[static_cast<size_t>(Field::NPast)] =
-        static_cast<llama_token>(context.getNPast());
-    tokens[static_cast<size_t>(Field::FirstMsgTokens)] =
-        static_cast<llama_token>(context.getFirstMsgTokens());
-    tokens[static_cast<size_t>(Field::CacheTokens)] =
-        static_cast<llama_token>(context.getCacheTokens());
-    tokens[static_cast<size_t>(Field::FirstMsgCacheTokens)] =
-        static_cast<llama_token>(context.getFirstMsgCacheTokens());
-    return metadata;
-  }
-
-  llama_token* data() { return tokens.data(); }
-  const llama_token* data() const { return tokens.data(); }
-  size_t size() const { return tokens.size(); }
-
-  llama_token field(SessionMetadataField which) const {
-    return tokens[static_cast<size_t>(which)];
-  }
-  llama_token nPast() const { return field(SessionMetadataField::NPast); }
-  llama_token firstMsgTokens() const {
-    return field(SessionMetadataField::FirstMsgTokens);
-  }
-  llama_token cacheTokens() const {
-    return field(SessionMetadataField::CacheTokens);
-  }
-  llama_token firstMsgCacheTokens() const {
-    return field(SessionMetadataField::FirstMsgCacheTokens);
-  }
-
-  void applyTo(LlmContext& context) const {
-    context.setNPast(nPast());
-    context.setFirstMsgTokens(firstMsgTokens());
-    context.setCacheTokens(cacheTokens());
-    context.setFirstMsgCacheTokens(firstMsgCacheTokens());
-  }
-};
-
-} // namespace
 
 CacheManager::CacheManager(
     LlmContext* llmContext, llama_pos configuredNDiscarded,
@@ -184,7 +136,8 @@ bool CacheManager::loadCache() {
 
   auto* ctx = llmContext_->getCtx();
   size_t nTokenCount = 0;
-  SessionMetadata sessionMetadata;
+  std::vector<llama_token> sessionTokens(
+      llmContext_->sessionMetadataCapacity(), 0);
 
   QLOG_IF(
       Priority::DEBUG,
@@ -204,8 +157,8 @@ bool CacheManager::loadCache() {
           ctx,
           sessionPath_.c_str(),
           llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size(),
+          sessionTokens.data(),
+          sessionTokens.size(),
           &nTokenCount) == 0) {
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
@@ -228,7 +181,9 @@ bool CacheManager::loadCache() {
     }
   });
 
-  if (nTokenCount > 1 && nTokenCount < sessionMetadata.size()) {
+  const auto applyResult =
+      llmContext_->applySessionMetadata(sessionTokens.data(), nTokenCount);
+  if (applyResult == SessionMetadataApplyResult::Invalid) {
     std::string errorMsg = string_format(
         "%s: cache file '%s' uses an unsupported metadata layout with %zu "
         "fields\n",
@@ -238,22 +193,21 @@ bool CacheManager::loadCache() {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
   }
-
-  if (nTokenCount < sessionMetadata.size()) {
+  if (applyResult == SessionMetadataApplyResult::CacheMiss) {
     return false;
   }
-  if (sessionMetadata.nPast() > llama_n_ctx(ctx)) {
+
+  if (llmContext_->getNPast() > llama_n_ctx(ctx)) {
     std::string errorMsg = string_format(
         "%s: cache file '%s' contains %zu tokens, which exceeds the current "
         "context size of %d tokens\n",
         __func__,
         sessionPath_.c_str(),
-        static_cast<size_t>(sessionMetadata.nPast()),
+        static_cast<size_t>(llmContext_->getNPast()),
         llama_n_ctx(ctx));
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);
   }
-  sessionMetadata.applyTo(*llmContext_);
 
   if (configuredNDiscarded_ >
       llama_n_ctx(ctx) - llmContext_->getFirstMsgTokens()) {
@@ -276,7 +230,7 @@ bool CacheManager::loadCache() {
 
   const llama_pos restoredNPast =
       llama_memory_seq_pos_max(mem, llmContext_->getSeqId()) + 1;
-  const auto expectedNPast = static_cast<llama_pos>(sessionMetadata.nPast());
+  const llama_pos expectedNPast = llmContext_->getNPast();
   if (restoredNPast != expectedNPast) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -291,8 +245,7 @@ bool CacheManager::loadCache() {
   }
   const llama_pos restoredCacheTokens = static_cast<llama_pos>(
       llama_memory_seq_token_count(mem, llmContext_->getSeqId()));
-  const auto expectedCacheTokens =
-      static_cast<llama_pos>(sessionMetadata.cacheTokens());
+  const llama_pos expectedCacheTokens = llmContext_->getCacheTokens();
   if (restoredCacheTokens != expectedCacheTokens) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -305,7 +258,7 @@ bool CacheManager::loadCache() {
             restoredCacheTokens,
             expectedCacheTokens));
   }
-  llama_memory_seq_rm(mem, -1, sessionMetadata.nPast(), -1);
+  llama_memory_seq_rm(mem, -1, expectedNPast, -1);
   restoredKvGuard.dismiss();
   return true;
 }
@@ -370,14 +323,14 @@ void CacheManager::writeCacheFile(const std::string& path) {
   QLOG_IF(
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
-  const SessionMetadata sessionMetadata =
-      SessionMetadata::fromContext(*llmContext_);
+  const std::vector<llama_token> sessionTokens =
+      llmContext_->encodeSessionMetadata();
   if (llama_state_seq_save_file(
           ctx,
           tmpPath.c_str(),
           llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size()) == 0) {
+          sessionTokens.data(),
+          sessionTokens.size()) == 0) {
     std::error_code ec;
     std::filesystem::remove(tmpPath, ec);
     throw qvac_errors::StatusError(

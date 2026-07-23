@@ -166,7 +166,32 @@ TEST_F(ContextSliderTest, PrefillSlideDropsSingleVisionBlockAtomically) {
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
   EXPECT_EQ(outcome.discarded, 170);
-  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 220}));
+}
+
+/// Same alignment policy used after a disk-cache restore: ranges hydrated
+/// from versioned session metadata must still force an atomic tile drop.
+TEST_F(ContextSliderTest, RestoredVisionBlocksForceAtomicPrefillSlide) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+  const std::vector<VisionBlockRange> restoredVisionBlocks = {
+      {/*startPos=*/90, /*endPos=*/190, /*cacheTokens=*/180},
+      {/*startPos=*/190, /*endPos=*/290, /*cacheTokens=*/180}};
+
+  const auto outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/320, /*cacheTokens=*/500},
+      ContextUsage{/*pos=*/40, /*cacheTokens=*/40},
+      ContextUsage{/*pos=*/100, /*cacheTokens=*/100},
+      /*nDiscarded=*/120,
+      controller,
+      ops,
+      restoredVisionBlocks);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.discarded, 150);
+  ASSERT_FALSE(ops.seqRmCalls().empty());
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 40, 190}));
 }
 
 TEST_F(ContextSliderTest, PrefillSlideDropsOnlyOldestVisionTile) {
