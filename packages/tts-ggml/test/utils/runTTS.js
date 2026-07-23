@@ -92,10 +92,11 @@ async function runTTSWithSplit(model, params, expectation = {}, options = {}) {
 
     const combined = concatenatePcmChunks(pcmChunks)
     const sampleCount = combined.length
-    const durationMs = (sampleCount / sampleRate) * 1000
+    const outputSampleRate = lastReportedSampleRate || sampleRate
+    const durationMs = (sampleCount / outputSampleRate) * 1000
 
     const passed = checkExpectations(sampleCount, durationMs, expectation)
-    const wavBuffer = createWavBuffer(Array.from(combined), sampleRate)
+    const wavBuffer = createWavBuffer(Array.from(combined), outputSampleRate)
 
     saveWavIfNeeded(params, wavBuffer, tag)
 
@@ -108,7 +109,7 @@ async function runTTSWithSplit(model, params, expectation = {}, options = {}) {
         samples: Array.from(combined),
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate: lastReportedSampleRate,
         wavBuffer,
         stats: { totalTime, totalSamples, audioDurationMs: durationMs }
@@ -194,10 +195,11 @@ async function runTTS(model, params, expectation = {}, options = {}) {
 
     let passed = true
     const sampleCount = outputArray.length
+    const outputSampleRate = reportedSampleRate || sampleRate
     const durationMs =
       response.stats?.audioDurationMs ||
       jobStats?.audioDurationMs ||
-      sampleCount / (sampleRate / 1000)
+      sampleCount / (outputSampleRate / 1000)
 
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) {
       passed = false
@@ -212,7 +214,7 @@ async function runTTS(model, params, expectation = {}, options = {}) {
       passed = false
     }
 
-    const wavBuffer = createWavBuffer(outputArray, sampleRate)
+    const wavBuffer = createWavBuffer(outputArray, outputSampleRate)
 
     if (params.saveWav === true) {
       if (isMobile && !params.wavOutputPath) {
@@ -267,7 +269,7 @@ async function runTTS(model, params, expectation = {}, options = {}) {
         samples: outputArray,
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate,
         wavBuffer,
         stats: roundedStats
