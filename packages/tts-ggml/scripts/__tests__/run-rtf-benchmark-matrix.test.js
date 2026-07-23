@@ -142,3 +142,20 @@ test('buildEnv forwards the enhancer quant tier, defaulting to fp16', () => {
     else process.env.QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT = savedTier
   }
 })
+
+test('buildEnv forwards optional CER and WER settings', () => {
+  const env = buildEnv(
+    {
+      engine: 'chatterbox',
+      quality: true,
+      whisperModel: 'ggml-small.bin',
+      werUpperBound: 0.4,
+      cerUpperBound: 0.2
+    },
+    0
+  )
+  assert.equal(env.QVAC_TTS_GGML_BENCHMARK_QUALITY, 'true')
+  assert.equal(env.QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL, 'ggml-small.bin')
+  assert.equal(env.QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND, '0.4')
+  assert.equal(env.QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND, '0.2')
+})
