@@ -8,7 +8,10 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
-    "audiogen-cpp"
+    {
+      "name": "audiogen-cpp",
+      "version>=": "2026-07-22"
+    }
   ],
   "features": {
     "tests": {

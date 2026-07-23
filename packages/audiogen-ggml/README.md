@@ -6,8 +6,9 @@ pipeline (text-encoder → LM → DiT → VAE), compiled natively per-platform a
 linked against `audiogen-cpp` via vcpkg — the same shape as `@qvac/tts-ggml`.
 
 > The native addon wraps the `tts_cpp::acestep::Engine` shipped by the
-> `audiogen-cpp` engine library (a sibling of `tts-cpp` / `parakeet-cpp` in the
-> qvac-ext-lib-whisper.cpp repo), built on our ggml-speech fork (CPU-first).
+> `audiogen-cpp` engine library (`engines/audiogen`, a sibling of `engines/tts`
+> / `engines/parakeet` in the qvac-ext-lib-whisper.cpp repo), built on our
+> ggml-speech fork (CPU-first).
 >
 > No binaries: the addon compiles the C++ for every platform audiogen-cpp supports.
 

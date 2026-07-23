@@ -50,6 +50,30 @@ struct JsAudioOutputHandler
             }) {}
 };
 
+// Emits a mid-generation progress tick as { progressStage, progressStep,
+// progressTotal }. The JS side (plugin sink) distinguishes it from PCM/stats by
+// the presence of `progressTotal`.
+struct JsProgressOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          acestep::AcestepProgress> {
+  JsProgressOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            acestep::AcestepProgress>(
+            [this](const acestep::AcestepProgress& p) -> js_value_t* {
+              auto result = js::Object::create(this->env_);
+              result.setProperty(
+                  this->env_, "progressStage",
+                  js::String::create(this->env_, p.stage));
+              result.setProperty(
+                  this->env_, "progressStep",
+                  js::Number::create(this->env_, p.step));
+              result.setProperty(
+                  this->env_, "progressTotal",
+                  js::Number::create(this->env_, p.total));
+              return result;
+            }) {}
+};
+
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -61,15 +85,26 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto cfg = adapter.buildAcestepConfig(configurationParams, env);
 
   auto model = make_unique<AcestepModel>(std::move(cfg));
+  AcestepModel* modelPtr = model.get();
   const int sampleRate = 48000;
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRate));
+  outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  // Route per-step engine progress into the output queue so it reaches JS via
+  // the same output callback as PCM/stats. The model runs on the job worker
+  // thread; OutputQueue::queueResult is thread-safe (locks + uv_async_send).
+  auto outputQueue = addon->addonCpp->outputQueue;
+  modelPtr->setProgressSink([outputQueue](const acestep::AcestepProgress& p) {
+    outputQueue->queueResult(std::any(p));
+  });
+
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH

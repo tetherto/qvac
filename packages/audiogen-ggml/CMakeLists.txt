@@ -123,3 +123,35 @@ if(APPLE)
       -Wl,-exported_symbol,_bare_register_module_v0
   )
 endif()
+
+# iOS: the bare module is linked with `-undefined dynamic_lookup`, which lets
+# ObjC/Metal/libc++ symbols resolve at load time against the OS dylibs. But the
+# clang compiler-rt builtin `___isPlatformVersionAtLeast` (emitted by ggml-metal's
+# `@available(iOS 16, *)` checks, since the deployment target is < 16) lives only
+# in the static libclang_rt archive, not in any dylib. Under dynamic_lookup it
+# stays unresolved -> its stub jumps to 0x0 -> the kernel kills the process with a
+# "CODESIGNING Invalid Page" fault the moment Metal initialises. Explicitly link
+# the compiler-rt builtins so that symbol (and any other builtin) is defined.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # Resolve the clang resource dir via xcrun (CMAKE_C_COMPILER is a cross wrapper
+  # here and doesn't reliably answer -print-resource-dir).
+  execute_process(
+    COMMAND xcrun --find clang
+    OUTPUT_VARIABLE _xcrun_clang
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(
+    COMMAND ${_xcrun_clang} -print-resource-dir
+    OUTPUT_VARIABLE _clang_resource_dir
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+    set(_clang_rt_builtins "${_clang_resource_dir}/lib/darwin/libclang_rt.iossim.a")
+  else()
+    set(_clang_rt_builtins "${_clang_resource_dir}/lib/darwin/libclang_rt.ios.a")
+  endif()
+  if(EXISTS "${_clang_rt_builtins}")
+    message(STATUS "audiogen-ggml: linking compiler-rt builtins: ${_clang_rt_builtins}")
+    target_link_libraries(${audiogen-ggml}_module PRIVATE "${_clang_rt_builtins}")
+  else()
+    message(WARNING "audiogen-ggml: compiler-rt builtins not found at ${_clang_rt_builtins}")
+  endif()
+endif()

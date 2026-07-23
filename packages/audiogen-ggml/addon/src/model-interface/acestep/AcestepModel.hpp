@@ -3,6 +3,7 @@
 #include <any>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -18,6 +19,16 @@ class Engine;
 }
 
 namespace qvac::audiogenggml::acestep {
+
+// One progress tick surfaced mid-generation. `stage` is "lm" | "dit" | "vae";
+// `step`/`total` count within that stage (the DiT stage streams every Euler
+// step, which is the bulk of the work). Emitted through the same output queue
+// as PCM so the JS side receives it via the output callback.
+struct AcestepProgress {
+  std::string stage;
+  int         step  = 0;
+  int         total = 0;
+};
 
 // Music-generation model interface for the audiogen-ggml addon. Wraps
 // tts_cpp::acestep::Engine (text-enc + LM + DiT + VAE) behind the
@@ -69,6 +80,12 @@ public:
   void setConfig(AcestepConfig config) { cfg_ = std::move(config); }
   const AcestepConfig& config() const { return cfg_; }
 
+  // Install a sink for mid-generation progress ticks. Set once at construction
+  // (before any job runs), invoked on the job worker thread during generate().
+  void setProgressSink(std::function<void(const AcestepProgress&)> sink) {
+    progressSink_ = std::move(sink);
+  }
+
   int sampleRate() const { return sampleRate_; }
 
 private:
@@ -84,6 +101,8 @@ private:
 
   mutable std::atomic_bool cancelRequested_{false};
   std::atomic_bool jobInProgress_{false};
+
+  std::function<void(const AcestepProgress&)> progressSink_;
 
   double totalTime_ = 0.0;
   double audioDurationMs_ = 0.0;

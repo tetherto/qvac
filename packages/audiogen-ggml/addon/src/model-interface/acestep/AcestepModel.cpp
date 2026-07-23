@@ -1,6 +1,8 @@
 #include "model-interface/acestep/AcestepModel.hpp"
 
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
 #include <stdexcept>
 #include <utility>
 
@@ -57,6 +59,9 @@ void AcestepModel::loadLocked() {
   opts.n_threads = cfg_.threads.value_or(0);
   opts.n_gpu_layers = cfg_.useGpu.value_or(false) ? cfg_.nGpuLayers.value_or(99)
                                                   : cfg_.nGpuLayers.value_or(0);
+  if (const char * vb = std::getenv("AUDIOGEN_VERBOSE")) {
+    opts.verbose = (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' || vb[0] == 'Y');
+  }
 
   engine_ = tts_cpp::acestep::Engine::create(opts);
   if (!engine_) {
@@ -119,15 +124,27 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.inference_steps = cfg_.inferenceSteps.value_or(0);
   params.shift = cfg_.shift.value_or(0.0F);
 
-  auto progress = [this](const std::string&, int, int) -> bool {
+  auto progress = [this](const std::string& stage, int step, int total) -> bool {
+    if (progressSink_) progressSink_(AcestepProgress{stage, step, total});
     return !cancelRequested_.load();
   };
 
   tts_cpp::acestep::GenerateResult result = engine->generate(params, progress);
 
+  // Peak-normalise before the int16 quantisation, exactly like the music CLI's
+  // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
+  // samples slightly outside [-1, 1]; converting those straight to int16 hard-
+  // clips at full scale and produces the harsh, distorted "horrible" audio the
+  // addon path had (vs. the clean CLI output). Normalising to -0.9 dBFS keeps
+  // headroom and removes the clipping. Single-shot output, so a 2-pass over the
+  // full track is trivial.
+  float peak = 1e-9F;
+  for (float s : result.pcm) peak = std::fmax(peak, std::fabs(s));
+  const float gain = 0.9F / peak;
+
   Output pcm;
   pcm.reserve(result.pcm.size());
-  for (float s : result.pcm) pcm.push_back(f32_to_i16(s));
+  for (float s : result.pcm) pcm.push_back(f32_to_i16(s * gain));
 
   const auto t1 = std::chrono::steady_clock::now();
   totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
