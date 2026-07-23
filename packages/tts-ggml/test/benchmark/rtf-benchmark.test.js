@@ -268,8 +268,7 @@ function getSettings() {
   const numThreadsParsed = Number.parseInt(numThreadsRaw, 10)
   const numThreads =
     Number.isFinite(numThreadsParsed) && numThreadsParsed > 0 ? numThreadsParsed : undefined
-  const whisperModel =
-    getEnv('QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL') || 'ggml-small.bin'
+  const whisperModel = getEnv('QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL') || 'ggml-small.bin'
   if (!VALID_WHISPER_MODELS.includes(whisperModel)) {
     throw new Error(
       `Invalid Whisper quality model: ${whisperModel}. Valid: ${VALID_WHISPER_MODELS.join(', ')}`
@@ -810,7 +809,9 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
           wer: quality.wer,
           cer: quality.cer
         }
-        console.log(`  WER=${(quality.wer * 100).toFixed(2)}%  CER=${(quality.cer * 100).toFixed(2)}%`)
+        console.log(
+          `  WER=${(quality.wer * 100).toFixed(2)}%  CER=${(quality.cer * 100).toFixed(2)}%`
+        )
       }
 
       await whisperModel.unload()
