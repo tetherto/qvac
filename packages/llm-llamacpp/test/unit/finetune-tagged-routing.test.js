@@ -95,6 +95,39 @@ test('a tagged finetune Error rejects the finetune response and deregisters the 
   t.absent(model._jobSinks.has(7), 'a failed finetune must deregister its sink')
 })
 
+test('stale finetune progress and terminal must not touch the active finetune', async (t) => {
+  const model = createModelWithMockAddon()
+  model.addon.finetune.callsFake(() => 43)
+
+  const response = await model.finetune(FINETUNE_OPTS)
+
+  let statsUpdated = false
+  const active = model._finetuneJob.active
+  const originalUpdateStats = active.updateStats
+  active.updateStats = (...args) => {
+    statsUpdated = true
+    return originalUpdateStats.apply(active, args)
+  }
+
+  // Progress and finetune-shaped terminal tagged with a stale job id must be
+  // dropped, not applied to the active finetune.
+  model._addonOutputCallback(
+    null,
+    'Output',
+    { type: 'finetune_progress', stats: { epoch: 9 } },
+    null,
+    42
+  )
+  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'CANCELLED' }, null, 42)
+
+  t.absent(statsUpdated, 'stale tagged progress must not update the active finetune stats')
+  t.ok(model._finetuneJob.active, 'a stale tagged terminal must not settle the active finetune')
+
+  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null, 43)
+  const result = await response.await()
+  t.is(result.status, 'COMPLETED', 'the owning terminal must still resolve the finetune')
+})
+
 test('legacy boolean admission skips sink registration and keeps untagged routing', async (t) => {
   const model = createModelWithMockAddon()
   model.addon.finetune.callsFake(() => true)
