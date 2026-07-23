@@ -9,21 +9,27 @@
   "scripts": {
     "build": "bare-make generate && bare-make build && bare-make install",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
+    "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "test": "npm run test:unit && npm run test:integration",
     "lint": "prettier --check \"*.js\" \"lib/*.js\" && lunte \"*.js\" \"lib/*.js\"",
     "format": "prettier --write \"*.js\" \"lib/*.js\""
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js"
+    ".": "./index.js",
+    "./models": "./models.js"
   },
   "files": [
     "binding.js",
     "index.js",
     "index.d.ts",
+    "models.js",
     "lib",
     "prebuilds",
     "test/mobile",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "license": "Apache-2.0",

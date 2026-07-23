@@ -13,6 +13,8 @@
 
 const binding = require('./binding')
 const { encodePcm, pcmToWav, SUPPORTED_FORMATS } = require('./lib/audio-format')
+const models = require('./models')
+const { ditFilename } = models
 
 const ENGINE_ACESTEP = 'acestep'
 
@@ -23,24 +25,47 @@ class AudioGen {
    * @param {string} [options.textEncModel] Explicit text-encoder GGUF path.
    * @param {string} [options.lmModel]     Explicit LM GGUF path.
    * @param {string} [options.ditModel]    Explicit DiT GGUF path.
+   * @param {('turbo-q4'|'turbo-q8'|'sft')} [options.ditVariant] Which DiT to use
+   *   from `modelDir` when no explicit `ditModel` is given. The other three
+   *   stages (text-enc, LM, VAE) are fixed; only the DiT varies. See models.js.
    * @param {string} [options.vaeModel]    Explicit VAE GGUF path.
-   * @param {number} [options.inferenceSteps=8]
-   * @param {number} [options.shift=3.0]
+   * @param {number} [options.inferenceSteps] Omit to let the engine auto-pick
+   *   per DiT architecture (turbo 8 / sft 50).
+   * @param {number} [options.shift] Omit to let the engine auto-pick per DiT
+   *   architecture (turbo 3.0 / sft 1.0).
    * @param {boolean} [options.useGpu]
    * @param {number} [options.threads]
    * @param {Function} [outputCb] Native output events (pcm chunks, stats).
    */
-  constructor (options = {}, outputCb = null) {
+  constructor(options = {}, outputCb = null) {
+    // DiT selection: an explicit `ditModel` path always wins; otherwise a
+    // `ditVariant` enum picks which DiT GGUF to load from `modelDir` (the three
+    // other stages are fixed, so the variant is the only real choice).
+    let ditModelPath = options.ditModel
+    if (!ditModelPath && options.ditVariant) {
+      if (!options.modelDir) {
+        throw new Error(
+          'AudioGen: `ditVariant` needs `modelDir` (the folder holding the DiT ' +
+            'GGUF); otherwise pass an explicit `ditModel` path.'
+        )
+      }
+      const dir = options.modelDir.replace(/[/\\]+$/, '')
+      ditModelPath = `${dir}/${ditFilename(options.ditVariant)}`
+    }
+
     // Flat config keys, read 1:1 by the native JSAdapter (buildAcestepConfig).
+    // inferenceSteps/shift are intentionally passed through as-is (undefined =>
+    // engine auto-detects turbo vs sft and picks the right schedule), so
+    // selecting the `sft` DiT actually runs its 50-step pass, not turbo's 8.
     const configuration = {
       engineType: ENGINE_ACESTEP,
       modelDir: options.modelDir,
       textEncModelPath: options.textEncModel,
       lmModelPath: options.lmModel,
-      ditModelPath: options.ditModel,
+      ditModelPath,
       vaeModelPath: options.vaeModel,
-      inferenceSteps: options.inferenceSteps ?? 8,
-      shift: options.shift ?? 3.0,
+      inferenceSteps: options.inferenceSteps,
+      shift: options.shift,
       useGPU: options.useGpu,
       threads: options.threads
     }
@@ -49,7 +74,7 @@ class AudioGen {
   }
 
   /** Finish async model load; resolves once every stage GGUF is parsed. */
-  async activate () {
+  async activate() {
     return this._binding.activate(this._handle)
   }
 
@@ -65,7 +90,7 @@ class AudioGen {
    * @param {string} [opts.timesignature] e.g. "4/4".
    * @param {number} [opts.duration]   Target seconds (undefined => LM decides).
    */
-  async generate (caption, opts = {}) {
+  async generate(caption, opts = {}) {
     return this._binding.runJob(this._handle, {
       type: 'text',
       input: caption,
@@ -79,18 +104,18 @@ class AudioGen {
     })
   }
 
-  async cancel () {
+  async cancel() {
     return this._binding.cancel(this._handle)
   }
 
-  async destroy () {
-    if (this._handle == null) return
+  async destroy() {
+    if (this._handle === null) return
     const h = this._handle
     this._handle = null
     return this._binding.destroyInstance(h)
   }
 
-  async unload () {
+  async unload() {
     return this.destroy()
   }
 
@@ -102,7 +127,7 @@ class AudioGen {
    * @param {Object} [opts] { sampleRate=48000, channels=2 }
    * @returns {{ data: Buffer, extension: string }}
    */
-  static encode (pcm, format = 'wav', opts = {}) {
+  static encode(pcm, format = 'wav', opts = {}) {
     return encodePcm(pcm, format, opts)
   }
 }
@@ -112,5 +137,17 @@ module.exports = {
   ENGINE_ACESTEP,
   encodePcm,
   pcmToWav,
-  OUTPUT_FORMATS: SUPPORTED_FORMATS
+  OUTPUT_FORMATS: SUPPORTED_FORMATS,
+  // Model manifest (registry paths, DiT-variant enum, resolvers) — the single
+  // source of truth for the download layer, SDK plugin, tests and examples.
+  DIT_VARIANTS: models.DIT_VARIANTS,
+  DEFAULT_DIT_VARIANT: models.DEFAULT_DIT_VARIANT,
+  ditVariants: models.ditVariants,
+  ditFilename: models.ditFilename,
+  modelFilenames: models.modelFilenames,
+  modelManifest: models.modelManifest,
+  modelSources: models.modelSources,
+  allRegistryPaths: models.allRegistryPaths,
+  REGISTRY_SOURCE: models.REGISTRY_SOURCE,
+  REGISTRY_PREFIX: models.REGISTRY_PREFIX
 }

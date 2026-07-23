@@ -10,7 +10,7 @@
 
 const SUPPORTED_FORMATS = ['pcm', 'wav']
 
-function writeIntLE (buf, value, offset, byteLength) {
+function writeIntLE(buf, value, offset, byteLength) {
   for (let i = 0; i < byteLength; i++) {
     buf[offset + i] = value & 0xff
     value = Math.floor(value / 256)
@@ -25,7 +25,7 @@ function writeIntLE (buf, value, offset, byteLength) {
  * @param {number} [opts.channels=2]
  * @returns {Buffer}
  */
-function pcmToWav (pcm, { sampleRate = 48000, channels = 2 } = {}) {
+function pcmToWav(pcm, { sampleRate = 48000, channels = 2 } = {}) {
   const bytesPerSample = 2
   const blockAlign = channels * bytesPerSample
   const byteRate = sampleRate * blockAlign
@@ -37,8 +37,8 @@ function pcmToWav (pcm, { sampleRate = 48000, channels = 2 } = {}) {
   out.write('WAVE', 8, 'ascii')
 
   out.write('fmt ', 12, 'ascii')
-  writeIntLE(out, 16, 16, 4)                 // fmt chunk size
-  writeIntLE(out, 1, 20, 2)                  // PCM
+  writeIntLE(out, 16, 16, 4) // fmt chunk size
+  writeIntLE(out, 1, 20, 2) // PCM
   writeIntLE(out, channels, 22, 2)
   writeIntLE(out, sampleRate, 24, 4)
   writeIntLE(out, byteRate, 28, 4)
@@ -59,7 +59,7 @@ function pcmToWav (pcm, { sampleRate = 48000, channels = 2 } = {}) {
  * @param {Object} opts sampleRate / channels
  * @returns {{ data: Buffer, extension: string }}
  */
-function encodePcm (pcm, format, opts = {}) {
+function encodePcm(pcm, format, opts = {}) {
   const fmt = String(format || 'wav').toLowerCase()
   if (fmt === 'pcm') {
     return { data: Buffer.from(pcm), extension: 'pcm' }
@@ -69,7 +69,8 @@ function encodePcm (pcm, format, opts = {}) {
   }
   throw new Error(
     `Unsupported outputFormat "${format}". Supported: ${SUPPORTED_FORMATS.join(', ')}. ` +
-    'Compressed formats (mp3/ogg/...) require an external encoder and are not bundled.')
+      'Compressed formats (mp3/ogg/...) require an external encoder and are not bundled.'
+  )
 }
 
 module.exports = { SUPPORTED_FORMATS, pcmToWav, encodePcm }
