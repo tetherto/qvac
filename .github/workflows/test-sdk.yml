@@ -8,11 +8,9 @@
 name: QVAC Tests (sdk)
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch'
-    && format('SDK e2e · {0} · {1} · {2} · @{3}',
-      inputs.test-version || github.ref_name,
+    && format('SDK e2e · Suite: {0} · Filter: {1}',
       inputs.suite || 'full',
-      inputs.filter || 'all tests',
-      github.actor)
+      inputs.filter || 'all tests')
     || github.event.pull_request.title }}
 
 on:
