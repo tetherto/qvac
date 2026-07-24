@@ -1,5 +1,4 @@
 const scripts = [
-  'test:contracts',
   'test:supervisor',
   'test:agents',
   'test:sync',

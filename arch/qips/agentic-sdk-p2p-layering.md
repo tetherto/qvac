@@ -55,7 +55,6 @@ flowchart TB
   sdkClient["Typed SDK client"]
   sdkRuntime["@qvac/sdk: separate Bare runtime"]
   supervisor["@qvac/supervisor: lifecycle library, no runtime"]
-  contracts["Shared runtime-contract module: placement gated in Phase 0"]
   peers["Paired devices"]
 
   app --> assistant
@@ -73,11 +72,6 @@ flowchart TB
   assistant -.->|"uses"| supervisor
   syncSidecar -.->|"uses"| supervisor
   harnessSidecar -.->|"uses"| supervisor
-  assistant -.->|"uses"| contracts
-  syncSidecar -.->|"uses"| contracts
-  harnessSidecar -.->|"uses"| contracts
-  sdkClient -.->|"uses"| contracts
-  sdkRuntime -.->|"uses"| contracts
 ```
 
 The two SDK paths are alternatives. Harness owns the SDK runtime in the composed agent path; the SDK client owns it when an application consumes SDK directly.
@@ -102,12 +96,9 @@ application
 @qvac/assistant -> @qvac/supervisor
 @qvac/sync      -> @qvac/supervisor
 @qvac/harness   -> @qvac/supervisor
-
-Assistant, Sync, Harness, and SDK clients/runtimes
-  -> shared runtime-contract module (package placement decided in Phase 0)
 ```
 
-There is no dependency from Sync to Harness, Agents, or SDK. There is no dependency from SDK to Sync, Harness, or Agents. Harness does not depend on Assistant. Supervisor has no dependency on any product package. Shared HRPC and contract primitives live in a lower-level runtime-contract module to avoid package cycles. Whether that module is a published package or an internal shared package is a Phase 0 decision; extraction cannot begin until its ownership and versioning are fixed.
+There is no dependency from Sync to Harness, Agents, or SDK. There is no dependency from SDK to Sync, Harness, or Agents. Harness does not depend on Assistant. Supervisor has no dependency on any product package. Sync, Harness, and SDK each own their generated wire contract, runtime information, protocol version, errors, and compatibility tests. Assistant owns compatibility logic for the package contracts it composes, while Harness owns compatibility with SDK. Small structural types may be duplicated where that preserves these boundaries; there is no shared runtime-contract package.
 
 ## Component ownership
 
@@ -341,7 +332,7 @@ No execution guarantee is approved yet. The current proof of concept must be tre
 
 ### Typed HRPC contracts
 
-Every sidecar exposes a generated typed client and a versioned HRPC contract. Client-compatible exports must run in Node/Bun, Electron, Expo/React Native/Hermes, and Bare-compatible hosts. Server entries remain Bare-only.
+Every sidecar package owns and exposes its generated typed client and versioned HRPC contract. Client-compatible exports must run in Node/Bun, Electron, Expo/React Native/Hermes, and Bare-compatible hosts. Server entries remain Bare-only. Generic structural types may be repeated between packages rather than introducing a shared protocol dependency.
 
 Each connection starts with a handshake containing at least:
 
@@ -514,7 +505,7 @@ The spikes prove feasibility only. Their resulting contracts and budgets require
 | **G1 - Claim guarantee** | Production durable delegation | Chosen delivery/execution guarantee plus normative acquire, lease, renew, fence, expire, reclaim, cancel, terminal, retry, and idempotency semantics. |
 | **G2 - Mobile topology and P9** | Implementation beyond the architecture spike | S1/S2 report and accepted numeric resource budgets. Failure returns the locked three-runtime decision to approvers. |
 | **G3 - Standalone SDK recovery** | Claiming P8 coverage for direct SDK consumers | Desktop and mobile owner/recovery contract plus passing S6 evidence. |
-| **G4 - Shared runtime contracts** | Package extraction that would create type/protocol cycles | Named module/package placement, owner, protocol versioning policy, and dependency rule. |
+| **G4 - Contract ownership** | Package extraction that would create type/protocol cycles | Resolved by the PoC: package-owned HRPC schemas, generated clients, runtime information, errors, and protocol versions; compatibility logic belongs to the caller composing each boundary. |
 | **G5 - Delegation migration** | Removing SDK `delegate`/`provide` | Consumer inventory, compatibility/parity checklist, deprecation release and duration, migration guide, and approved removal version. |
 | **G6 - Offline and host lifecycle** | Declaring Assistant's normal API ready | Passing S7 plus a per-host lifecycle policy backed by S8. |
 
@@ -524,10 +515,9 @@ The spikes prove feasibility only. Their resulting contracts and budgets require
 2. Whether durable execution targets at-most-once execution or at-least-once delivery with idempotent effects. Exactly-once effects are not assumed.
 3. Lease duration, renewal ownership, fencing representation, and stale-claim resolution during long tool calls or partitions.
 4. Whether sidecars outlive a client disconnect on each host, and what mobile background/OS-kill behavior is achievable.
-5. Whether shared HRPC/contract primitives become a published package or an internal shared package.
-6. Numeric startup, memory, and binary-size budgets for the constrained-device profile.
-7. Exact SDK delegation deprecation and removal releases, pending consumer inventory.
-8. Whether post-revocation confidentiality requires key rotation only, data re-encryption, tombstones, or a new mesh. Data already copied to a peer cannot be recalled.
+5. Numeric startup, memory, and binary-size budgets for the constrained-device profile.
+6. Exact SDK delegation deprecation and removal releases, pending consumer inventory.
+7. Whether post-revocation confidentiality requires key rotation only, data re-encryption, tombstones, or a new mesh. Data already copied to a peer cannot be recalled.
 
 ## Alternatives considered
 
@@ -547,7 +537,7 @@ Each phase must leave Assistant and SDK shippable and keep existing proof-of-con
 
 | Phase | Deliverable | Primary owner |
 | --- | --- | --- |
-| 0 | Complete S1-S8 and approve G0-G6: mobile topology/footprint, P5 trust contracts, claim semantics, standalone SDK recovery, shared runtime-contract placement, delegation migration policy, offline readiness, and per-host lifecycle behavior. Also lock package dependencies, HRPC handshake, log/error/trace envelope, transportable state/checkpoints, and the default Assistant state profile. | Joint |
+| 0 | Complete S1-S8 and approve G0-G6: mobile topology/footprint, P5 trust contracts, claim semantics, standalone SDK recovery, package-owned contract policies, delegation migration policy, offline readiness, and per-host lifecycle behavior. Also lock package dependencies, HRPC handshake, log/error/trace envelope, transportable state/checkpoints, and the default Assistant state profile. | Joint |
 | 1 | Extract and stabilize `@qvac/supervisor` from the existing draft, including generic lifecycle semantics and component-adapter conventions. Keep package-specific HRPC/process logic outside it. | Runtime + Joint |
 | 2 | After G0/G1/G4 pass, extract the current replicated `Core`, generated client, mesh, watches, blobs, and durable operation model into `@qvac/sync`. Hide storage/schema defaults behind its normal client and adopt a Sync-owned Supervisor subtree. | Assistant |
 | 3 | Extract portable framework contracts and loop primitives into `@qvac/agents`: tools, guards, approval semantics, events, checkpoint interfaces, and stable IDs. | Assistant |
@@ -607,8 +597,7 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 6. Migration compatibility between existing Assistant meshes and the extracted Sync schema.
 7. Mobile mechanism for three independent Bare runtimes and accepted P9 budgets.
 8. Exact delegation compatibility release, deprecation duration, and removal version under G5.
-9. Shared runtime-contract module package placement and release ownership.
-10. Per-host disconnect/background/kill behavior and sidecar ownership.
+9. Per-host disconnect/background/kill behavior and sidecar ownership.
 
 ## Out of scope
 
@@ -635,7 +624,7 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 | Draft `qvac-supervisor` package | `@qvac/supervisor` |
 | Coding-agent tools and workspace policy | application package, outside the six target components |
 
-The current Harness dependency on Assistant for shared RPC types must be removed. Shared protocol utilities belong in a lower-level runtime contract module.
+The current Harness dependency on Assistant for RPC types must be removed. Harness owns its wire schema and generated client types; Sync and SDK own theirs. Callers map and negotiate these package contracts without introducing a shared protocol dependency.
 
 ## Appendix B - SDK delegation removal
 

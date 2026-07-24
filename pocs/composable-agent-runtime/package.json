@@ -9,7 +9,6 @@
   ],
   "scripts": {
     "test": "bun run scripts/test.ts",
-    "test:contracts": "bun run --cwd packages/runtime-contracts test",
     "test:supervisor": "bun run --cwd packages/supervisor test",
     "test:agents": "bun run --cwd packages/agents test",
     "test:sync": "bun run --cwd packages/sync test",

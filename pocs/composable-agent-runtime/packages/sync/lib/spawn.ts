@@ -2,7 +2,7 @@ import Sidecar from 'bare-sidecar'
 import { wrap, type IPC } from 'bare-stow/host'
 import type { SyncCoreOptions } from './core.ts'
 import { SyncClient } from './client.ts'
-import { RuntimeComponentStartError } from '@qvac/runtime-contracts'
+import { SyncComponentStartError } from './errors.ts'
 
 export interface SpawnSyncOptions extends SyncCoreOptions {
   readonly entry: string
@@ -128,7 +128,7 @@ async function rejectEarlyExit(
 }
 
 function startupError(error: Error, diagnostics: SyncSidecarDiagnostics) {
-  const result = new RuntimeComponentStartError('sync', error)
+  const result = new SyncComponentStartError(error)
   Reflect.set(result, 'diagnostics', { ...diagnostics })
   return result
 }

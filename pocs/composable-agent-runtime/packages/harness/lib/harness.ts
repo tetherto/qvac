@@ -1,13 +1,13 @@
+import QvacLogger from '@qvac/logging'
 import {
-  RuntimeExecutionError,
-  createRuntimeLogger,
-  serializeError,
-  type RuntimeLoggingConfig
-} from '@qvac/runtime-contracts'
+  HarnessExecutionError,
+  serializeHarnessError
+} from './errors.ts'
 import { createMemoryStateAdapter } from './memory-state.ts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
 import type {
   HarnessEvent,
+  HarnessLoggingConfig,
   HarnessRunInput,
   HarnessRuntime,
   HarnessStateAdapter
@@ -16,7 +16,7 @@ import type {
 export interface CreateHarnessOptions {
   readonly sdk: SdkRuntimePort
   readonly state?: HarnessStateAdapter
-  readonly logging?: RuntimeLoggingConfig
+  readonly logging?: HarnessLoggingConfig
 }
 
 export function createHarness({
@@ -25,12 +25,20 @@ export function createHarness({
   logging
 }: CreateHarnessOptions): HarnessRuntime {
   let closed = false
-  const logger = createRuntimeLogger('harness', logging)
+  const write = (...values: unknown[]) => console.error(...values)
+  const logger = new QvacLogger({
+    error: write,
+    warn: write,
+    info: write,
+    debug: write
+  })
+  logger.setLevel(logging?.level ?? 'off')
+  const logPrefix = '[harness]'
 
   async function* run(input: HarnessRunInput): AsyncGenerator<HarnessEvent> {
     if (closed) throw new Error('harness is closed')
     const traceId = input.traceId ?? input.runId
-    logger.info('run started', { runId: input.runId, traceId })
+    logger.info(logPrefix, 'run started', { runId: input.runId, traceId })
     if (input.signal.aborted) {
       yield await persist(state, input.runId, { type: 'aborted' })
       return
@@ -76,8 +84,8 @@ export function createHarness({
           mapped.type === 'error' && mapped.error === undefined
             ? {
                 ...mapped,
-                error: serializeError(
-                  new RuntimeExecutionError(
+                error: serializeHarnessError(
+                  new HarnessExecutionError(
                     'harness->sdk',
                     new Error(mapped.message)
                   ),
@@ -94,12 +102,19 @@ export function createHarness({
         return
       }
       const message = cause instanceof Error ? cause.message : String(cause)
-      const error = new RuntimeExecutionError('harness->sdk', cause)
-      logger.error('run failed', { runId: input.runId, traceId, error: message })
+      const error = new HarnessExecutionError('harness->sdk', cause)
+      logger.error(logPrefix, 'run failed', {
+        runId: input.runId,
+        traceId,
+        error: message
+      })
       yield await persist(state, input.runId, {
         type: 'error',
         message,
-        error: serializeError(error, { traceId, boundary: 'harness->sdk' })
+        error: serializeHarnessError(error, {
+          traceId,
+          boundary: 'harness->sdk'
+        })
       })
     } finally {
       input.signal.removeEventListener('abort', cancel)
@@ -108,7 +123,7 @@ export function createHarness({
     if (input.signal.aborted && !emittedAborted) {
       yield await persist(state, input.runId, { type: 'aborted' })
     }
-    logger.info('run completed', { runId: input.runId, traceId })
+    logger.info(logPrefix, 'run completed', { runId: input.runId, traceId })
   }
 
   return {

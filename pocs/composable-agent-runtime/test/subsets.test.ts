@@ -5,7 +5,6 @@ import { join } from 'node:path'
 const ROOT = new URL('..', import.meta.url).pathname
 const VERSION = '0.0.0-poc'
 const PRODUCT_PACKAGES = [
-  '@qvac/runtime-contracts',
   '@qvac/supervisor',
   '@qvac/agents',
   '@qvac/sync',
@@ -14,17 +13,16 @@ const PRODUCT_PACKAGES = [
 ] as const
 
 const ALLOWED = new Map<string, readonly string[]>([
-  ['@qvac/runtime-contracts', []],
   ['@qvac/supervisor', []],
   ['@qvac/agents', []],
-  ['@qvac/sync', ['@qvac/runtime-contracts', '@qvac/supervisor']],
+  ['@qvac/sync', ['@qvac/supervisor']],
   [
     '@qvac/harness',
-    ['@qvac/agents', '@qvac/runtime-contracts', '@qvac/supervisor', '@qvac/sync']
+    ['@qvac/agents', '@qvac/supervisor']
   ],
   [
     '@qvac/assistant',
-    ['@qvac/harness', '@qvac/runtime-contracts', '@qvac/supervisor', '@qvac/sync']
+    ['@qvac/harness', '@qvac/supervisor', '@qvac/sync']
   ]
 ])
 
@@ -82,11 +80,7 @@ describe('package subsets', function () {
 
     expect(internalDependencies(manifests.get('@qvac/agents'))).toEqual([])
     expect(internalDependencies(manifests.get('@qvac/supervisor'))).toEqual([])
-    expect(internalDependencies(manifests.get('@qvac/runtime-contracts'))).toEqual([])
-    expect(internalDependencies(manifests.get('@qvac/sync'))).toEqual([
-      '@qvac/runtime-contracts',
-      '@qvac/supervisor'
-    ])
+    expect(internalDependencies(manifests.get('@qvac/sync'))).toEqual(['@qvac/supervisor'])
     for (const manifest of manifests.values()) {
       expect(manifest.dependencies?.['@qvac/ai-sdk-provider']).toBeUndefined()
     }

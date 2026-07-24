@@ -5,7 +5,6 @@ import { join } from 'node:path'
 const root = new URL('..', import.meta.url).pathname
 const packagesDirectory = join(root, 'packages')
 const packageNames = [
-  '@qvac/runtime-contracts',
   '@qvac/supervisor',
   '@qvac/agents',
   '@qvac/sync',
@@ -15,14 +14,12 @@ const packageNames = [
 const subsets = new Map<string, readonly string[]>([
   ['supervisor', ['@qvac/supervisor']],
   ['agents', ['@qvac/agents']],
-  ['sync', ['@qvac/runtime-contracts', '@qvac/supervisor', '@qvac/sync']],
+  ['sync', ['@qvac/supervisor', '@qvac/sync']],
   [
     'harness',
     [
-      '@qvac/runtime-contracts',
       '@qvac/supervisor',
       '@qvac/agents',
-      '@qvac/sync',
       '@qvac/harness'
     ]
   ],

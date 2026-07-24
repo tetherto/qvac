@@ -1,5 +1,5 @@
-import { RuntimeComponentExitedError } from '@qvac/runtime-contracts'
 import Supervisor from '@qvac/supervisor'
+import { HarnessSdkExitedError } from './errors.ts'
 import type { SdkRuntimePort } from './sdk-runtime-port.ts'
 
 export function createSupervisedSdkPort(createSdk: () => Promise<SdkRuntimePort>): SdkRuntimePort {
@@ -14,7 +14,7 @@ export function createSupervisedSdkPort(createSdk: () => Promise<SdkRuntimePort>
           const runtime = await createSdk()
           runtime.exited?.then((exit) => {
             context.onDeath(
-              new RuntimeComponentExitedError('sdk', exit)
+              new HarnessSdkExitedError(exit)
             )
           }, context.onDeath)
           return runtime

@@ -1,5 +1,8 @@
-import type { JsonValue } from '@qvac/runtime-contracts'
-import type { HarnessAbortSignal, HarnessMessage } from './types.ts'
+import type {
+  HarnessAbortSignal,
+  HarnessJsonValue,
+  HarnessMessage
+} from './types.ts'
 
 export type SdkRuntimeEvent =
   | { readonly type: 'content-delta' | 'contentDelta'; readonly text: string }
@@ -7,12 +10,12 @@ export type SdkRuntimeEvent =
   | {
       readonly type: 'tool-call' | 'toolCall'
       readonly name: string
-      readonly arguments: Readonly<Record<string, JsonValue>>
+      readonly arguments: Readonly<Record<string, HarnessJsonValue>>
     }
   | {
       readonly type: 'tool-result' | 'toolResult'
       readonly name: string
-      readonly result: JsonValue
+      readonly result: HarnessJsonValue
     }
   | { readonly type: 'metrics'; readonly metrics: Readonly<Record<string, number>> }
   | { readonly type: 'error'; readonly message: string }

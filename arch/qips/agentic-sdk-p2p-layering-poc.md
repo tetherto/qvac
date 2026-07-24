@@ -91,12 +91,17 @@ feasibility probe, not a production implementation.
   replicated collection. Desktop and mobile adapters must project only their
   application task namespaces; otherwise internal event arrays appear as Qwen
   output.
+- The initial `@qvac/runtime-contracts` package duplicated concerns already
+  owned by each package's HRPC schema and runtime boundary. It was removed:
+  Sync and Harness now own their wire types, errors, protocol information, and
+  logging integration; Assistant owns composition compatibility and trace ID
+  generation.
 
 ## Verification results
 
-Results were reproduced on 2026-07-22 with `bun run verify` from
-`pocs/composable-agent-runtime/` after the Sync supervision migration. The full
-command completed in 443 seconds with exit code 0. A missing result is not a
+Results were reproduced on 2026-07-24 with `bun run verify` from
+`pocs/composable-agent-runtime/` after the package-owned contract refactor. The full
+command completed in 433 seconds with exit code 0. A missing result is not a
 pass.
 
 ### Package graph and generated contracts
@@ -112,14 +117,13 @@ directions, the runtime graph separates HRPC from the SDK adapter and native
 calls, and the task flow keeps human profile and task policy in application
 code.
 
-Three static package tests with 95 assertions parse manifests and imports,
+Three static package tests with 51 assertions parse manifests and imports,
 enforce exact private-package versions, reject product dependency cycles and
 forbidden directions, and confirm that `@qvac/ai-sdk-provider` is absent from
 the Bare runtime graph.
 
 ### Library suites
 
-- Runtime contracts: 7 tests and 26 assertions pass under Node, Bun, and Bare.
 - Supervisor: 49 tests and 115 assertions pass under Node and Bare, covering
   bounded restart, concurrent failure reconciliation, reload, stow sidecars,
   nested entry escalation, and the mobile relay transport.
@@ -135,8 +139,8 @@ the Bare runtime graph.
 - Harness: 9 deterministic and HRPC tests with 33 assertions pass under Bun
   and Bare. Two additional spawned-sidecar tests pass through HRPC, including
   forced child termination without host termination.
-- Assistant: 5 Vitest composition tests pass, including recovery after a real
-  Sync child process exit.
+- Assistant: 8 Vitest composition and compatibility tests pass, including
+  recovery after a real Sync child process exit.
 - Task CLI: 8 Vitest tests pass and the gated real-Qwen service test remains
   skipped by default. Coverage includes separate host processes, long-running
   service behavior, partial snapshots, stale work, and shutdown state.
@@ -191,10 +195,10 @@ Assistant subsets without workspace state.
   configuration reaches the child. Library logs use stderr so application JSON
   on stdout remains stable.
 - Runtime startup, compatibility, exit, and execution failures use
-  `@qvac/error` codes. The Harness HRPC schema carries a serializable error
-  envelope with code, recovery intent, trace ID, boundary, and bounded causes.
-  Child stdout and stderr are retained as local diagnostics but excluded from
-  public error messages.
+  package-owned `@qvac/error` codes. The Harness-owned HRPC schema carries its
+  serializable error envelope with code, recovery intent, trace ID, boundary,
+  and bounded causes. Child stdout and stderr are retained as local diagnostics
+  but excluded from public error messages.
 - Assistant creates or accepts one trace ID, Harness forwards it across HRPC,
   and the same ID reaches model load and completion on the SDK runtime port.
   Structured errors retain that ID on the response path.

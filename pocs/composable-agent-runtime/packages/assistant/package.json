@@ -11,8 +11,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@qvac/error": "^0.1.1",
     "@qvac/harness": "0.0.0-poc",
-    "@qvac/runtime-contracts": "0.0.0-poc",
+    "@qvac/logging": "^0.1.0",
     "@qvac/supervisor": "0.0.0-poc",
     "@qvac/sync": "0.0.0-poc",
     "bare-stow": "0.1.4"

@@ -1,5 +1,5 @@
-import type { JsonValue } from '@qvac/runtime-contracts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
+import type { HarnessJsonValue } from './types.ts'
 
 interface SdkCompletionEvent {
   readonly type:
@@ -13,7 +13,7 @@ interface SdkCompletionEvent {
   readonly text?: string
   readonly call?: {
     readonly name: string
-    readonly arguments: Readonly<Record<string, JsonValue>>
+    readonly arguments: Readonly<Record<string, HarnessJsonValue>>
   }
   readonly error?: { readonly message: string }
   readonly stats?: Readonly<Record<string, number | string | undefined>>

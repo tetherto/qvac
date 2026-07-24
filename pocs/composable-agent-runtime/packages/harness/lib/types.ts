@@ -1,7 +1,26 @@
-import type {
-  JsonValue,
-  RuntimeErrorEnvelope
-} from '@qvac/runtime-contracts'
+import type { LogLevel } from '@qvac/logging'
+
+export type HarnessJsonValue =
+  | boolean
+  | number
+  | string
+  | null
+  | HarnessJsonValue[]
+  | { [key: string]: HarnessJsonValue }
+
+export interface HarnessErrorEnvelope {
+  readonly name: string
+  readonly message: string
+  readonly code?: string
+  readonly recoverable: boolean
+  readonly traceId?: string
+  readonly boundary?: string
+  readonly cause?: HarnessErrorEnvelope
+}
+
+export interface HarnessLoggingConfig {
+  readonly level?: LogLevel
+}
 
 export interface HarnessMessage {
   readonly role: 'system' | 'user' | 'assistant' | 'tool'
@@ -25,18 +44,18 @@ export type HarnessEvent =
   | {
       readonly type: 'tool-call'
       readonly name: string
-      readonly args: Readonly<Record<string, JsonValue>>
+      readonly args: Readonly<Record<string, HarnessJsonValue>>
     }
   | {
       readonly type: 'tool-result'
       readonly name: string
-      readonly result: JsonValue
+      readonly result: HarnessJsonValue
     }
   | { readonly type: 'metrics'; readonly metrics: Readonly<Record<string, number>> }
   | {
       readonly type: 'error'
       readonly message: string
-      readonly error?: RuntimeErrorEnvelope
+      readonly error?: HarnessErrorEnvelope
     }
   | { readonly type: 'aborted' }
 

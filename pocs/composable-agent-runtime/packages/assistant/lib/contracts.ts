@@ -3,10 +3,7 @@ import type {
   HarnessMessage,
   HarnessRuntime
 } from '@qvac/harness'
-import type {
-  RuntimeHandshake,
-  RuntimeLoggingConfig
-} from '@qvac/runtime-contracts'
+import type { LogLevel } from '@qvac/logging'
 import type {
   SyncCoreOptions,
   SyncPairingInvite,
@@ -15,6 +12,9 @@ import type {
   SyncTaskStatus,
   SyncUserProfile
 } from '@qvac/sync'
+import type { ComponentHandshake } from './compatibility.ts'
+
+export type AssistantComponentHandshake = ComponentHandshake
 
 export interface AssistantStateEndpoint {
   getIdentity(): Promise<{ deviceId: Buffer }>
@@ -49,7 +49,7 @@ export interface AssistantStateEndpoint {
 }
 
 export interface AssistantComponent {
-  readonly handshake: RuntimeHandshake
+  readonly handshake: AssistantComponentHandshake
   readonly exited?: Promise<{
     readonly code: number | null
     readonly signal: string | null
@@ -84,7 +84,7 @@ export interface CreateAssistantOptions {
   readonly storagePath?: string
   readonly sync?: Omit<SyncCoreOptions, 'storagePath'>
   readonly inference?: AssistantInference
-  readonly logging?: RuntimeLoggingConfig
+  readonly logging?: { readonly level?: LogLevel }
   readonly components?: AssistantComponents
 }
 

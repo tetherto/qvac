@@ -23,8 +23,11 @@ export type {
 export { serveHarness } from './lib/serve.ts'
 export { duplexPair, type HarnessStream, type HarnessTransport } from './lib/transport.ts'
 export type {
+  HarnessErrorEnvelope,
   HarnessEvent,
   HarnessAbortSignal,
+  HarnessJsonValue,
+  HarnessLoggingConfig,
   HarnessMessage,
   HarnessRunInput,
   HarnessRuntime,

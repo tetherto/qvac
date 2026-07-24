@@ -1,6 +1,5 @@
 import test from 'brittle'
 import AbortController from '#abort-controller'
-import { createTraceId } from '@qvac/runtime-contracts'
 import {
   connectHarness,
   createHarness,
@@ -9,6 +8,10 @@ import {
   type HarnessEvent,
   type SdkRuntimePort
 } from '../index.ts'
+
+function createTraceId() {
+  return `harness-wire-test-${Math.random().toString(36).slice(2)}`
+}
 
 async function collect(events: AsyncIterable<HarnessEvent>) {
   const result: HarnessEvent[] = []
@@ -83,6 +86,6 @@ test('wire mapping never silently drops an unknown SDK event', async (t) => {
   t.is(event?.type, 'error')
   if (event?.type === 'error') {
     t.is(event.message, 'unmapped SDK event: future-event')
-    t.is(event.error?.code, '59004')
+    t.is(event.error?.code, '59202')
   }
 })

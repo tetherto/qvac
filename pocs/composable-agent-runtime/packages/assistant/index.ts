@@ -1,16 +1,17 @@
 import type { HarnessEvent } from '@qvac/harness'
+import QvacLogger from '@qvac/logging'
+import Supervisor from '@qvac/supervisor'
 import {
   checkCompatibility,
-  createRuntimeLogger,
-  createTraceId,
-  RuntimeCompatibilityError,
-  RuntimeComponentExitedError,
-  RuntimeComponentStartError,
   type CompatibilityResult,
-  type RuntimeLogger,
-  type RuntimeHandshake
-} from '@qvac/runtime-contracts'
-import Supervisor from '@qvac/supervisor'
+  type ComponentHandshake
+} from './lib/compatibility.ts'
+import {
+  AssistantCompatibilityError,
+  AssistantComponentExitedError,
+  AssistantComponentStartError
+} from './lib/errors.ts'
+import { createTraceId } from './lib/trace.ts'
 import {
   expectedHarnessHandshake,
   expectedSyncHandshake,
@@ -65,7 +66,14 @@ export function createAssistant(
   options: CreateAssistantOptions = {}
 ): AssistantFacade {
   const supervisor = new Supervisor()
-  const logger = createRuntimeLogger('assistant', options.logging)
+  const write = (...values: unknown[]) => console.error(...values)
+  const logger = new QvacLogger({
+    error: write,
+    warn: write,
+    info: write,
+    debug: write
+  })
+  logger.setLevel(options.logging?.level ?? 'off')
   const lifecycle = createLifecycleEvents(supervisor, logger)
   let sdkStarts = 0
   const components =
@@ -131,7 +139,7 @@ export function createAssistant(
     await supervisor.ready()
     const harness = supervisor.get<AssistantHarnessComponent>('harness')
     const controller = input.signal ? null : new AbortController()
-    logger.info('run started', { runId, traceId })
+    logger.info('[assistant]', 'run started', { runId, traceId })
     yield* harness.harness.run({
       runId,
       traceId,
@@ -139,7 +147,7 @@ export function createAssistant(
       messages: input.messages,
       signal: input.signal ?? controller?.signal ?? abortedSignal()
     })
-    logger.info('run completed', { runId, traceId })
+    logger.info('[assistant]', 'run completed', { runId, traceId })
   }
 
   const state = createStateFacade(supervisor)
@@ -237,11 +245,11 @@ function defaultComponents(
   }
 }
 
-function createLifecycleEvents(supervisor: Supervisor, logger: RuntimeLogger) {
+function createLifecycleEvents(supervisor: Supervisor, logger: QvacLogger) {
   const listeners = new Set<(event: AssistantLifecycleEvent) => void>()
 
   function publish(event: AssistantLifecycleEvent) {
-    logger.info('lifecycle', event)
+    logger.info('[assistant]', 'lifecycle', event)
     for (const listener of listeners) listener(event)
   }
 
@@ -312,8 +320,8 @@ function createRunId() {
 
 async function negotiate(
   name: string,
-  local: RuntimeHandshake,
-  remote: RuntimeHandshake,
+  local: ComponentHandshake,
+  remote: ComponentHandshake,
   close: () => Promise<void>
 ) {
   const result = checkCompatibility(local, remote)
@@ -328,7 +336,7 @@ function handshakeError(name: string, result: CompatibilityResult) {
     ...result.missingRemoteCapabilities
   ]
   const suffix = missing.length > 0 ? ` (${missing.join(', ')})` : ''
-  return new RuntimeCompatibilityError(
+  return new AssistantCompatibilityError(
     name,
     `${result.reason ?? 'incompatible'}${suffix}`
   )
@@ -347,8 +355,8 @@ async function startComponent<T>(
   try {
     return await start()
   } catch (cause) {
-    if (cause instanceof RuntimeCompatibilityError) throw cause
-    throw new RuntimeComponentStartError(name, cause)
+    if (cause instanceof AssistantCompatibilityError) throw cause
+    throw new AssistantComponentStartError(name, cause)
   }
 }
 
@@ -356,19 +364,19 @@ function observeExit(
   name: string,
   component: AssistantSyncComponent | AssistantHarnessComponent,
   onDeath: (error?: Error) => void,
-  logger: RuntimeLogger
+  logger: QvacLogger
 ) {
   component.exited?.then(
     (exit) => {
-      const error = new RuntimeComponentExitedError(name, exit)
-      logger.warn('runtime exited', {
+      const error = new AssistantComponentExitedError(name, exit)
+      logger.warn('[assistant]', 'runtime exited', {
         component: name,
         code: exit.code,
         signal: exit.signal
       })
       onDeath(error)
     },
-    (cause) => onDeath(new RuntimeComponentExitedError(name, {
+    (cause) => onDeath(new AssistantComponentExitedError(name, {
       code: null,
       signal: null
     }, cause))

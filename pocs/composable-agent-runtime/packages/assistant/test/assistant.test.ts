@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
-import { createTraceId } from '@qvac/runtime-contracts'
 import {
   createAssistant,
   DEFAULT_ASSISTANT_INFERENCE,
@@ -13,6 +12,7 @@ import {
   type AssistantHarnessComponent,
   type AssistantSyncComponent
 } from '../index.ts'
+import { createTraceId } from '../lib/trace.ts'
 
 const temporaryPaths: string[] = []
 

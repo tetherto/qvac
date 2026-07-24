@@ -32,7 +32,6 @@ flowchart TB
   sdkClient["Typed SDK client"]
   sdkRuntime["@qvac/sdk<br/>separate inference Bare runtime"]
   supervisor["@qvac/supervisor<br/>shared lifecycle library"]
-  contracts["Shared runtime contracts<br/>package placement gated"]
 
   app --> assistant
   assistant -->|"HRPC"| syncSidecar
@@ -46,11 +45,6 @@ flowchart TB
   assistant -.->|"uses"| supervisor
   syncSidecar -.->|"uses"| supervisor
   harnessSidecar -.->|"uses"| supervisor
-  assistant -.->|"uses"| contracts
-  syncSidecar -.->|"uses"| contracts
-  harnessSidecar -.->|"uses"| contracts
-  sdkClient -.->|"uses"| contracts
-  sdkRuntime -.->|"uses"| contracts
 ```
 
 Harness owns the SDK runtime in the composed path; the SDK client owns it when an application uses SDK directly.
@@ -62,7 +56,7 @@ Harness owns the SDK runtime in the composed path; the SDK client owns it when a
 - **SDK** owns local inference, addons, models, downloads, and standalone worker behavior.
 - **Supervisor** owns reusable dependency-aware lifecycle and restart mechanics.
 
-Dependencies remain one-way: Sync has no agent or inference logic; SDK has no mesh or durable delegation logic; Agents owns no runtime or storage; Harness does not depend on Assistant; Supervisor has no product semantics. Shared runtime-contract placement and ownership are Phase 0 decisions.
+Dependencies remain one-way: Sync has no agent or inference logic; SDK has no mesh or durable delegation logic; Agents owns no runtime or storage; Harness does not depend on Assistant; Supervisor has no product semantics. Sync, Harness, and SDK each own their generated wire contract, runtime information, protocol version, errors, and compatibility tests. Callers negotiate the package contracts they compose; no shared runtime-contract package is required.
 
 ## Developer experience
 
@@ -133,7 +127,7 @@ Phase 0 must turn the current assumptions into evidence and approved contracts b
 | Mobile topology and P9 | Identify a mobile topology that contains native SDK crashes, validate lifecycle and restart behavior on iOS and Android, and approve measured startup, memory, and binary-size budgets. |
 | Trust and claims | Approve selective visibility, capabilities, revocation/key epochs, lease/fencing semantics, duplicate handling, and tool idempotency. |
 | SDK and host recovery | Prove standalone SDK recovery plus offline, disconnect, background, kill, and relaunch behavior for every supported host. |
-| Shared contracts | Place, own, and version the lower-level HRPC/runtime-contract module before extraction. |
+| Contract ownership | Resolved by the PoC: keep HRPC schemas, generated clients, runtime information, errors, and protocol versions in their owning packages; keep caller-side compatibility logic with the caller. |
 | Delegation migration | Inventory consumers and approve parity, deprecation duration, migration guidance, and the removal version. |
 
 ## Migration shape

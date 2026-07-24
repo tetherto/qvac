@@ -11,7 +11,6 @@ import {
   type TaskRunEvent,
   type WatchTaskOptions
 } from '@qvac-poc/task-shared'
-import { createTraceId } from '@qvac/runtime-contracts'
 import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +20,7 @@ import { createTaskCliStore } from './lib/task-store.ts'
 
 const QWEN_CACHE_FILE =
   '3a65a2a3c6a30a47_Qwen3.5-4B-Q4_K_M.gguf'
+let traceSequence = 0
 
 type TaskCommand =
   | {
@@ -477,6 +477,15 @@ function writeRuntimeIdentities(enabled: boolean, assistant: AssistantFacade) {
       }
     }
   }
+}
+
+function createTraceId() {
+  traceSequence = (traceSequence + 1) % Number.MAX_SAFE_INTEGER
+  return `trc_${Date.now().toString(36)}_${traceSequence.toString(36)}_${Math.floor(
+    Math.random() * 0x1_0000_0000
+  )
+    .toString(36)
+    .padStart(7, '0')}`
 }
 
 const isMain =

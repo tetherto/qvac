@@ -34,15 +34,16 @@ flowchart TB
     assistant --> sync["@qvac/sync"]
     assistant --> harness["@qvac/harness"]
     assistant --> supervisor["@qvac/supervisor"]
-    assistant --> contracts["@qvac/runtime-contracts"]
     sync --> supervisor
-    sync --> contracts
     harness --> agents["@qvac/agents"]
     harness --> sdk["@qvac/sdk"]
     harness --> supervisor
-    harness --> contracts
-    contracts --> logging["@qvac/logging"]
-    contracts --> errors["@qvac/error"]
+    assistant --> logging["@qvac/logging"]
+    assistant --> errors["@qvac/error"]
+    sync --> logging
+    sync --> errors
+    harness --> logging
+    harness --> errors
   end
 
   subgraph artifacts["Desktop artifact assembly"]
@@ -78,7 +79,9 @@ and lifecycle path.
 
 Sync and Harness are siblings in Assistant's package and artifact hierarchy.
 Neither package depends on the other. The current PoC's Sync-backed Harness
-state adapter lives in Assistant.
+state adapter lives in Assistant. Each runtime package owns its generated HRPC
+schema, runtime information, errors, and protocol version. Assistant owns the
+small compatibility check that composes those independent contracts.
 
 ## Sync lifecycle tree
 

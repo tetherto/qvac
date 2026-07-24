@@ -106,7 +106,7 @@ test('sync: spawned Bare startup failure preserves diagnostics off the public me
     await spawnSync({ entry, storagePath: path.join(dir, 'unused') })
     t.ok(false, 'spawnSync should reject')
   } catch (error) {
-    t.is(Reflect.get(error as object, 'name'), 'RUNTIME_COMPONENT_START_FAILED')
+    t.is(Reflect.get(error as object, 'name'), 'SYNC_COMPONENT_START_FAILED')
     t.is(Reflect.get(error as object, 'code'), 59001)
     t.absent(
       String(Reflect.get(error as object, 'message')).includes(

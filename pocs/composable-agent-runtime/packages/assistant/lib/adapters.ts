@@ -4,14 +4,11 @@ import {
   type HarnessStateAdapter,
   type HarnessRuntime
 } from '@qvac/harness'
-import type {
-  RuntimeHandshake,
-  RuntimeLoggingConfig
-} from '@qvac/runtime-contracts'
 import {
   spawnSync,
   type SyncCoreOptions
 } from '@qvac/sync'
+import type { ComponentHandshake } from './compatibility.ts'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
@@ -19,13 +16,14 @@ import { fileURLToPath } from 'node:url'
 import type {
   AssistantHarnessComponent,
   AssistantInference,
+  CreateAssistantOptions,
   AssistantStateEndpoint,
   AssistantSyncComponent
 } from './contracts.ts'
 
 const BUILD_VERSION = '0.0.0-poc'
 
-export function syncHandshake(): RuntimeHandshake {
+export function syncHandshake(): ComponentHandshake {
   return {
     contract: 'qvac.sync',
     protocolVersion: 1,
@@ -41,7 +39,7 @@ export function syncHandshake(): RuntimeHandshake {
   }
 }
 
-export function harnessHandshake(): RuntimeHandshake {
+export function harnessHandshake(): ComponentHandshake {
   return {
     contract: 'qvac.harness',
     protocolVersion: 1,
@@ -51,7 +49,7 @@ export function harnessHandshake(): RuntimeHandshake {
   }
 }
 
-export function expectedSyncHandshake(): RuntimeHandshake {
+export function expectedSyncHandshake(): ComponentHandshake {
   return {
     ...syncHandshake(),
     requiredPeerCapabilities: [
@@ -63,7 +61,7 @@ export function expectedSyncHandshake(): RuntimeHandshake {
   }
 }
 
-export function expectedHarnessHandshake(): RuntimeHandshake {
+export function expectedHarnessHandshake(): ComponentHandshake {
   return {
     ...harnessHandshake(),
     requiredPeerCapabilities: ['execution.run', 'state.sync']
@@ -100,7 +98,7 @@ export async function startHarnessComponent(
   state: AssistantStateEndpoint,
   inference: AssistantInference,
   onSdkStart: () => void,
-  logging?: RuntimeLoggingConfig
+  logging?: CreateAssistantOptions['logging']
 ): Promise<AssistantHarnessComponent> {
   const bundles = acquireBundleLease()
   const stateAdapter = createSyncStateAdapter(state)
@@ -224,7 +222,7 @@ function handshakeFrom(identity: {
   readonly protocolVersion: number
   readonly capabilities: readonly string[]
   readonly buildVersion: string
-}): RuntimeHandshake {
+}): ComponentHandshake {
   return {
     contract: identity.contract,
     protocolVersion: identity.protocolVersion,

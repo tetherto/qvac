@@ -1,4 +1,10 @@
-import type { RuntimeHandshake } from '@qvac/runtime-contracts'
+export interface SyncRuntimeHandshake {
+  readonly contract: 'qvac.sync'
+  readonly protocolVersion: number
+  readonly capabilities: readonly string[]
+  readonly requiredPeerCapabilities: readonly string[]
+  readonly buildVersion: string
+}
 
 export const SYNC_HANDSHAKE = {
   contract: 'qvac.sync',
@@ -12,7 +18,7 @@ export const SYNC_HANDSHAKE = {
   ],
   requiredPeerCapabilities: [],
   buildVersion: '0.0.0-poc'
-} satisfies RuntimeHandshake
+} satisfies SyncRuntimeHandshake
 
 export { SyncClient } from './lib/client.ts'
 export { SyncCore, type SyncCoreOptions } from './lib/core.ts'

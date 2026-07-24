@@ -6,17 +6,13 @@ import Hyperswarm from 'hyperswarm'
 import ReadyResource from 'ready-resource'
 import type { Duplex } from 'streamx'
 import Supervisor, { type ChildInfo, type StartContext } from '@qvac/supervisor'
+import QvacLogger, { type LogLevel } from '@qvac/logging'
 import { bindApi } from '../spec/rpc/bind.js'
 import HRPC from '../spec/rpc/hrpc/index.js'
 import { createApi } from './api.ts'
 import { openLocalStore, type LocalStore } from './local.ts'
 import { Mesh } from './mesh.ts'
 import { PairingCoordinator, pairWithHost } from './pairing.ts'
-import {
-  createRuntimeLogger,
-  type RuntimeLogger,
-  type RuntimeLoggingConfig
-} from '@qvac/runtime-contracts'
 
 const DEVICE_KEYPAIR = 'qvac-sync/poc/device'
 const LOCAL_METADATA_STORE = 'local-metadata-store'
@@ -45,7 +41,7 @@ export interface SyncCoreOptions {
   readonly meshKey?: Buffer
   readonly pairingInvite?: Buffer
   readonly runtimeProcessId?: number
-  readonly logging?: RuntimeLoggingConfig
+  readonly logging?: { readonly level?: LogLevel }
 }
 
 export class SyncCore extends ReadyResource {
@@ -55,12 +51,19 @@ export class SyncCore extends ReadyResource {
   private identity: IdentityResource | null = null
   private network: NetworkResource | null = null
   private readonly streams = new Set<Duplex>()
-  private readonly logger: RuntimeLogger
+  private readonly logger: QvacLogger
 
   constructor(options: SyncCoreOptions = {}) {
     super()
     this.options = options
-    this.logger = createRuntimeLogger('sync', options.logging)
+    const write = (...values: unknown[]) => console.error(...values)
+    this.logger = new QvacLogger({
+      error: write,
+      warn: write,
+      info: write,
+      debug: write
+    })
+    this.logger.setLevel(options.logging?.level ?? 'off')
   }
 
   get deviceId() {
@@ -92,7 +95,7 @@ export class SyncCore extends ReadyResource {
   async _open() {
     const storagePath = this.options.storagePath
     if (!storagePath) throw new Error('storagePath is required')
-    this.logger.info('runtime opening', {
+    this.logger.info('[sync]', 'runtime opening', {
       processId: this.options.runtimeProcessId ?? process.pid
     })
 
@@ -103,11 +106,11 @@ export class SyncCore extends ReadyResource {
       this.local = supervisor.get<LocalStore>(LOCAL_METADATA_STORE)
       this.identity = supervisor.get<IdentityResource>(IDENTITY_CORESTORE)
       this.network = supervisor.get<NetworkResource>(REPLICATED_MESH_NETWORK)
-      this.logger.info('runtime ready', {
+      this.logger.info('[sync]', 'runtime ready', {
         processId: this.options.runtimeProcessId ?? process.pid
       })
     } catch (error) {
-      this.logger.error('runtime failed to open', error)
+      this.logger.error('[sync]', 'runtime failed to open', error)
       await supervisor.close()
       this.clearResourceHandles()
       throw error
@@ -133,7 +136,7 @@ export class SyncCore extends ReadyResource {
   }
 
   async _close() {
-    this.logger.info('runtime closing')
+    this.logger.info('[sync]', 'runtime closing')
     for (const stream of this.streams) stream.destroy()
     this.streams.clear()
     await this.supervisor?.close()
@@ -254,7 +257,7 @@ export class SyncCore extends ReadyResource {
     try {
       await close()
     } catch (error) {
-      this.logger.error(`failed to close ${name}`, error)
+      this.logger.error('[sync]', `failed to close ${name}`, error)
     }
   }
 

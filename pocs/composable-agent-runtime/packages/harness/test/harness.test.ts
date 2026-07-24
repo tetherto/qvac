@@ -1,12 +1,15 @@
 import test from 'brittle'
 import AbortController from '#abort-controller'
-import { createTraceId } from '@qvac/runtime-contracts'
 import {
   createHarness,
   createMemoryStateAdapter,
   type HarnessEvent,
   type SdkRuntimePort
 } from '../index.ts'
+
+function createTraceId() {
+  return `harness-test-${Math.random().toString(36).slice(2)}`
+}
 
 async function collect(events: AsyncIterable<HarnessEvent>) {
   const result: HarnessEvent[] = []
@@ -107,7 +110,7 @@ test('serializes SDK failures with the end-to-end trace ID', async (t) => {
   t.is(event?.type, 'error')
   if (event?.type === 'error') {
     t.is(event.message, 'model failed')
-    t.is(event.error?.code, '59004')
+    t.is(event.error?.code, '59202')
     t.is(event.error?.traceId, traceId)
     t.is(event.error?.boundary, 'harness->sdk')
     t.is(event.error?.cause?.message, 'model failed')

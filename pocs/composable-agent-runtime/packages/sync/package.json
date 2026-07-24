@@ -37,7 +37,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@qvac/runtime-contracts": "0.0.0-poc",
+    "@qvac/error": "^0.1.1",
+    "@qvac/logging": "^0.1.0",
     "@qvac/supervisor": "0.0.0-poc",
     "autobee": "^1.0.10",
     "bare-fs": "^4.7.2",

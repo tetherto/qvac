@@ -4,11 +4,11 @@ import type { SdkRuntimePort } from './sdk-runtime-port.ts'
 import type { HarnessStream } from './transport.ts'
 import { createSupervisedSdkPort } from './supervised-sdk-port.ts'
 import type { HarnessRuntimeInfo } from './connect.ts'
-import type { RuntimeLoggingConfig } from '@qvac/runtime-contracts'
+import type { HarnessLoggingConfig } from './types.ts'
 
 export interface ChildEntryOptions {
   readonly createSdk: () => Promise<SdkRuntimePort>
-  readonly logging?: RuntimeLoggingConfig
+  readonly logging?: HarnessLoggingConfig
   readonly describeRuntime?: () => HarnessRuntimeInfo
   readonly serve?: (
     stream: HarnessStream,

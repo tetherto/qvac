@@ -1,7 +1,11 @@
 import HarnessRPC, { type GeneratedRunStream, type WireValue } from '../spec/hrpc/index.js'
-import type { HarnessEvent, HarnessRunInput, HarnessRuntime } from './types.ts'
+import type {
+  HarnessErrorEnvelope,
+  HarnessEvent,
+  HarnessRunInput,
+  HarnessRuntime
+} from './types.ts'
 import type { HarnessStream, HarnessTransport } from './transport.ts'
-import type { RuntimeErrorEnvelope } from '@qvac/runtime-contracts'
 
 export interface RemoteHarness extends HarnessRuntime {
   readonly lives: number
@@ -193,8 +197,8 @@ function fromWire(frame: Record<string, WireValue>): HarnessEvent {
         type,
         message:
           typeof frame.message === 'string' ? frame.message : 'harness error',
-        ...(isRuntimeErrorEnvelope(frame.error)
-          ? { error: frame.error as unknown as RuntimeErrorEnvelope }
+        ...(isHarnessErrorEnvelope(frame.error)
+          ? { error: frame.error as unknown as HarnessErrorEnvelope }
           : {})
       }
     case 'aborted':
@@ -221,7 +225,7 @@ function numericRecord(value: WireValue | undefined) {
   return metrics
 }
 
-function isRuntimeErrorEnvelope(
+function isHarnessErrorEnvelope(
   value: WireValue | undefined
 ): boolean {
   return (

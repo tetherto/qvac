@@ -1,7 +1,12 @@
-import type { JsonValue } from '@qvac/runtime-contracts'
 import type { HarnessStream } from '../../lib/transport.ts'
 
-export type WireValue = JsonValue
+export type WireValue =
+  | boolean
+  | number
+  | string
+  | null
+  | WireValue[]
+  | { [key: string]: WireValue }
 
 export interface GeneratedRunStream extends AsyncIterable<Record<string, WireValue>> {
   on(event: 'data', listener: (frame: Record<string, WireValue>) => void): object
