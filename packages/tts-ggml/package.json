@@ -72,6 +72,7 @@
     "test/utils/wav-helper.js",
     "test/utils/pcmConcatenator.js",
     "test/utils/runWhisper.js",
+    "test/utils/textMetrics.js",
     "test/data/sentences-medium.js",
     "test/data/sentences-long.js",
     "LICENSE"

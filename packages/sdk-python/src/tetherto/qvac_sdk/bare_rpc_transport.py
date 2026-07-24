@@ -39,7 +39,7 @@ class BareRpcNotInstalledError(ImportError):
     def __init__(self) -> None:
         super().__init__(
             "bare_rpc is not installed -- install the 'bare-rpc' extra "
-            "(`pip install qvac[bare-rpc]`) to use BareRpcTransport"
+            "(`pip install tetherto-qvac-sdk[bare-rpc]`) to use BareRpcTransport"
         )
 
 
@@ -164,32 +164,36 @@ class BareRpcTransport:
         spawn_config = json.dumps(
             {"QVAC_IPC_SOCKET_PATH": endpoint, "HOME_DIR": self._home_dir}
         )
-        self._proc = await asyncio.create_subprocess_exec(*self._command, spawn_config)
-
-        def send(frame: bytes) -> None:
-            # bare_rpc only calls send once it has a connection, at which
-            # point on_client above has already set the writer.
-            assert self._writer is not None
-            self._writer.write(frame)
-
-        self.rpc = bare_rpc.RPC(send=send)
         try:
+            self._proc = await asyncio.create_subprocess_exec(
+                *self._command, spawn_config
+            )
+
+            def send(frame: bytes) -> None:
+                # bare_rpc only calls send once it has a connection, at which
+                # point on_client above has already set the writer.
+                assert self._writer is not None
+                self._writer.write(frame)
+
+            self.rpc = bare_rpc.RPC(send=send)
             await asyncio.wait_for(connected, timeout=timeout)
-        except asyncio.TimeoutError:
+            # Apply SDK config before any method call, mirroring the JS client's
+            # `__init_config` on connect (server/rpc/handle-request.ts routes it).
+            if self._config:
+                _json_or_raise(
+                    await self.rpc.request(
+                        command=0,
+                        data=json.dumps(
+                            {"type": "__init_config", "config": self._config}
+                        ).encode("utf-8"),
+                    )
+                )
+            return self
+        except BaseException:
+            # Spawn / connect / init-config failures must tear down the
+            # loopback server bound above; otherwise the port stays open.
             await self.close()
             raise
-        # Apply SDK config before any method call, mirroring the JS client's
-        # `__init_config` on connect (server/rpc/handle-request.ts routes it).
-        if self._config:
-            _json_or_raise(
-                await self.rpc.request(
-                    command=0,
-                    data=json.dumps(
-                        {"type": "__init_config", "config": self._config}
-                    ).encode("utf-8"),
-                )
-            )
-        return self
 
     async def close(self) -> None:
         if self._read_task:

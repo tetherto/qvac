@@ -6,7 +6,8 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  ModelNotLoadedError
+  ModelNotLoadedError,
+  TranslationFailedError
 } from '@/utils/errors-server'
 
 test('reconstructError: RequestRejectedByPolicyError round-trips via name + typedFields', (t) => {
@@ -158,4 +159,18 @@ test('reconstructError: remote stack/timestamp attach onto the reconstructed ins
   // the server included a stack (it does for QvacErrors).
   t.ok(reconstructed.timestamp, 'remote timestamp should attach')
   t.ok(reconstructed.stack && reconstructed.stack.includes('Worker Stack'))
+})
+
+test('reconstructError: TranslationFailedError round-trips', (t) => {
+  const original = new TranslationFailedError('could not detect source language')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof TranslationFailedError)
+  t.is((reconstructed as TranslationFailedError).code, 52405)
+  t.ok(
+    reconstructed.message.includes('could not detect source language'),
+    'message survives the envelope'
+  )
 })

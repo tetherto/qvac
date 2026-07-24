@@ -202,6 +202,7 @@ function expandCanonicalReport (report, sourceFile) {
         enhancer,
         enhancerVariant,
         denoiser,
+        qualityModel: result.qualityModel || null,
         platform,
         platformName: platformFamily,
         deviceLabel: device.name,
@@ -224,6 +225,7 @@ function expandCanonicalReport (report, sourceFile) {
         enhancer,
         enhancerVariant,
         denoiser,
+        qualityModel: result.qualityModel || null,
         platform,
         platformName: platformFamily,
         deviceLabel: device.name,
@@ -246,6 +248,10 @@ function expandCanonicalReport (report, sourceFile) {
             avgRssMb: toNumberOrNull(m.avg_rss_mb),
             peakRssMb: toNumberOrNull(m.peak_rss_mb),
             reclaimedMb: toNumberOrNull(m.reclaimed_mb)
+          },
+          quality: {
+            wer: { mean: toNumberOrNull(m.word_error_rate) },
+            cer: { mean: toNumberOrNull(m.character_error_rate) }
           }
         },
         correlation: { githubRunId: report.run_number }
@@ -296,6 +302,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const quality = summary.quality || {}
   const memory = memoryFromSummary(summary)
   const platformName = report.platformName || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
@@ -332,6 +339,9 @@ function normalizeDesktopRecord (report, sourceFile) {
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : (report.model && report.model.sizeBytes ? Number(report.model.sizeBytes) / 1024 / 1024 : null),
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
+    meanWer: toNumberOrNull(quality.wer && quality.wer.mean),
+    meanCer: toNumberOrNull(quality.cer && quality.cer.mean),
+    qualityModel: quality.model || null,
     noisy: deriveNoisy(rtf, summary),
     runId: (report.correlation && report.correlation.githubRunId) || '',
     sha: (report.correlation && report.correlation.githubSha) || '',
@@ -344,6 +354,7 @@ function normalizeMobileRecord (record, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const quality = summary.quality || {}
   const memory = memoryFromSummary(summary)
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
@@ -376,6 +387,9 @@ function normalizeMobileRecord (record, sourceFile) {
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : null,
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
+    meanWer: toNumberOrNull(quality.wer && quality.wer.mean),
+    meanCer: toNumberOrNull(quality.cer && quality.cer.mean),
+    qualityModel: record.qualityModel || quality.model || null,
     noisy: deriveNoisy(rtf, summary),
     runId: (record.correlation && record.correlation.githubRunId) || '',
     sha: (record.correlation && record.correlation.githubSha) || '',
@@ -420,6 +434,9 @@ function normalizeManualRecord (record, sourceFile) {
     modelSizeMb: toNumberOrNull(record.modelSizeMb),
     wallMs: toNumberOrNull(record.wallMs),
     tokensPerSecond: toNumberOrNull(record.tokensPerSecond),
+    meanWer: toNumberOrNull(record.meanWer),
+    meanCer: toNumberOrNull(record.meanCer),
+    qualityModel: record.qualityModel || null,
     noisy: typeof record.noisy === 'boolean' ? record.noisy : null,
     runId: '',
     sha: '',
@@ -557,6 +574,7 @@ function dedupeRecords (records) {
       record.backend,
       record.device,
       record.label || '',
+      record.qualityModel || '',
       record.numThreads !== undefined && record.numThreads !== null ? String(record.numThreads) : ''
     ].join('::')
     if (!byKey.has(key)) {
@@ -600,6 +618,11 @@ function formatModelSize (mb) {
   return mb.toFixed(1)
 }
 
+function formatErrorRate (rate) {
+  if (rate === null || rate === undefined || Number.isNaN(rate)) return 'n/a'
+  return `${(rate * 100).toFixed(2)}%`
+}
+
 function formatEnhancerCell (enhancer, enhancerVariant) {
   const name = enhancer || 'none'
   if (name === 'none') return name
@@ -620,10 +643,12 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('')
   lines.push('RTF = generation_time / audio_duration. Lower is faster. RTF < 1 is faster than real-time.')
   lines.push('')
+  lines.push('WER and CER are optional Whisper round-trip quality metrics. Lower is better.')
+  lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean WER | Mean CER | Quality Model | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------|----------|---------------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -642,6 +667,9 @@ function renderMarkdown (records, streamingRecords) {
       formatNumber(r.p50),
       formatNumber(r.p95),
       formatNumber(r.coldRtf),
+      formatErrorRate(r.meanWer),
+      formatErrorRate(r.meanCer),
+      r.qualityModel || 'n/a',
       formatMaybeInteger(r.wallMs),
       formatMaybeInteger(r.modelLoadMs),
       formatMaybeInteger(r.avgRssMb),
