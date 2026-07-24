@@ -16,7 +16,10 @@ name: QVAC Tests (sdk-python) full - PR
 
 on:
   pull_request:
-    types: [labeled, synchronize]
+    # Only `labeled` (fresh approval, pinned to the head SHA at approval time) —
+    # NOT `synchronize`. A later fork push must be re-approved rather than riding
+    # a stale `test-e2e-full` label onto a new, unreviewed SHA on the GPU runners.
+    types: [labeled]
     paths:
       - "packages/sdk-python/**"
       - "packages/sdk/**"
@@ -32,12 +35,14 @@ concurrency:
 jobs:
   test:
     name: full e2e (${{ matrix.os }})
-    # Only once `test-e2e-full` is applied (or already present, on later pushes),
-    # or on manual dispatch.
+    # SHA-bound approval: only a FRESH `test-e2e-full` application (labeled event,
+    # tied to the head SHA at approval time) or a manual dispatch runs the
+    # self-hosted GPU suite. A later fork push must be re-approved — a stale label
+    # must not authorise a new, unreviewed SHA. See
+    # .cursor/rules/devops/github-actions.mdc "CI trust policy for fork PRs".
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.action == 'labeled' && github.event.label.name == 'test-e2e-full') ||
-      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'test-e2e-full'))
+      (github.event.action == 'labeled' && github.event.label.name == 'test-e2e-full')
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +65,13 @@ jobs:
         working-directory: .
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
 
+      # Pin to the exact approved head SHA (not the mutable PR merge ref) so the
+      # GPU suite runs the commit `test-e2e-full` was applied to — closing the
+      # label-at-A / push-B TOCTOU window. Empty on workflow_dispatch → default ref.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       # Use the runner's own Python. actions/setup-python doesn't work on these
       # self-hosted GPU runners: its python-versions tarball ships a setup.sh

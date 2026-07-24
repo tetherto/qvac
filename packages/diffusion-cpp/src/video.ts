@@ -13,6 +13,13 @@ import type { CacheMode, SamplerMethod, ScheduleType, SdConfig } from './index'
 
 export type VideoMode = 'txt2vid' | 'img2vid'
 
+/**
+ * File paths for a video model context (Wan 2.1 / 2.2 or LTX-2 / LTXAV).
+ *
+ * Wan 2.2 TI2V-5B uses only `model`, like Wan 2.1, but requires the matching
+ * Wan 2.2 VAE. Wan 2.2 T2V-A14B uses both `model` (low noise) and
+ * `highNoiseDiffusionModel` (high noise).
+ */
 export interface VideoDiffusionFiles {
   model: string
   highNoiseDiffusionModel?: string
@@ -33,9 +40,15 @@ export interface VideoStableDiffusionArgs {
 }
 
 export interface VideoGenerationParams {
+  /** Required. Selects the generation branch. */
   mode: VideoMode
   prompt: string
   negative_prompt?: string
+  /**
+   * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V and LTX-2 use a
+   * 32-pixel spatial grid; native validation derives the TI2V requirement from
+   * the loaded GGUF instead of the filename.
+   */
   width?: number
   height?: number
   video_frames?: number
@@ -46,11 +59,13 @@ export interface VideoGenerationParams {
   scheduler?: ScheduleType
   cfg_scale?: number
   flow_shift?: number
+  /** High-noise sample count; `-1` uses native moe_boundary-based routing. */
   high_noise_steps?: number
   high_noise_sampler?: SamplerMethod
   high_noise_scheduler?: ScheduleType
   high_noise_cfg_scale?: number
   high_noise_flow_shift?: number
+  /** Normalized timestep boundary between high- and low-noise experts. [0, 1]. */
   moe_boundary?: number
   strength?: number
   vace_strength?: number
@@ -109,6 +124,14 @@ const COMPANION_FILE_KEYS = [
 ] as const
 
 const VIDEO_MODES = new Set<VideoMode>(['txt2vid', 'img2vid'])
+const WAN22_MOE_PARAMS = [
+  'high_noise_steps',
+  'high_noise_sampler',
+  'high_noise_scheduler',
+  'high_noise_cfg_scale',
+  'high_noise_flow_shift',
+  'moe_boundary'
+] as const
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 function assertAbsolute(key: string, value: unknown): asserts value is string {
@@ -506,26 +529,12 @@ export default class VideoStableDiffusion {
       )
     }
 
-    const hasHighNoiseExpert = !!this._files.highNoiseDiffusionModel
-    if (hasHighNoiseExpert) {
-      this.logger.warn(
-        'Wan 2.2 phase timing stats currently cover only single-expert generation; ' +
-          'the high- and low-noise sampling stages are not yet measured together.'
-      )
-    } else {
-      const highNoiseParams = [
-        'high_noise_steps',
-        'high_noise_sampler',
-        'high_noise_scheduler',
-        'high_noise_cfg_scale',
-        'high_noise_flow_shift',
-        'moe_boundary'
-      ]
-      const used = highNoiseParams.filter((key) => params[key] != null)
+    if (!this._files.highNoiseDiffusionModel) {
+      const used = WAN22_MOE_PARAMS.filter((key) => params[key] != null)
       if (used.length > 0) {
-        this.logger.warn(
-          `${used.join(', ')} supplied but files.highNoiseDiffusionModel ` +
-            'is not set — these params are Wan 2.2-only and will be ignored.'
+        throw new Error(
+          `${used.join(', ')} requires files.highNoiseDiffusionModel. ` +
+            'These parameters are only supported by Wan 2.2 T2V-A14B MoE models.'
         )
       }
     }

@@ -125,4 +125,12 @@ jobs:
 
       - name: Run C++ tests
         working-directory: ${{ env.WORKDIR }}
+        env:
+          # addon-test links AddressSanitizer but dynamically loads the
+          # non-ASan, -static-libstdc++ @qvac/fabric prebuild. Cross-module
+          # new/delete and fabric's intentional long-lived runtime allocations
+          # would otherwise abort the run, so relax exactly those two checks.
+          # See packages/classification-ggml/test/unit/CMakeLists.txt for the
+          # full rationale. Harmless on win32 (nothing is ASan-linked there).
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: npm run test:cpp:run

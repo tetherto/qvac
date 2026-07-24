@@ -193,7 +193,13 @@ function backendIdToName(id) {
 }
 
 function getArtifactFileName(benchmarkSettings) {
-  const parts = ['rtf-benchmark', platform, benchmarkSettings.modelType]
+  const parts = ['rtf-benchmark', platform]
+
+  if (benchmarkSettings.runnerLabel) {
+    parts.push(sanitizeTag(benchmarkSettings.runnerLabel))
+  }
+
+  parts.push(benchmarkSettings.modelType)
 
   // Quant goes between model type and device so multi-quant sweeps on the
   // same runner don't clobber each other's artifacts.

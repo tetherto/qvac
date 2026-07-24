@@ -289,13 +289,14 @@ TEST(SdVidGenHandlers_FlowShift, AcceptsFloats) {
 // 8. High-noise expert sample params (Wan 2.2)
 // -----------------------------------------------------------------------------
 
-TEST(SdVidGenHandlers_HighNoiseSteps, PositiveAccepted) {
+TEST(SdVidGenHandlers_HighNoiseSteps, PositiveAndNativeSentinelAccepted) {
   EXPECT_EQ(applyOne("high_noise_steps", num(25)).highNoiseSteps, 25);
+  EXPECT_EQ(applyOne("high_noise_steps", num(-1)).highNoiseSteps, -1);
 }
 
-TEST(SdVidGenHandlers_HighNoiseSteps, ZeroOrNegativeRejected) {
+TEST(SdVidGenHandlers_HighNoiseSteps, ZeroAndValuesBelowSentinelRejected) {
   expectThrows("high_noise_steps", num(0));
-  expectThrows("high_noise_steps", num(-1));
+  expectThrows("high_noise_steps", num(-2));
 }
 
 TEST(SdVidGenHandlers_HighNoiseSampler, SupportedNamesMap) {
@@ -501,6 +502,7 @@ TEST(SdVidGenHandlers_Defaults, MatchWan21T2vRecommendedConfig) {
   EXPECT_EQ(cfg.scheduler, SIMPLE_SCHEDULER);
   EXPECT_FLOAT_EQ(cfg.cfgScale, 6.0f);
   EXPECT_FLOAT_EQ(cfg.flowShift, 0.0f);
+  EXPECT_EQ(cfg.highNoiseSteps, -1);
   EXPECT_FLOAT_EQ(cfg.moeBoundary, 0.875f);
   EXPECT_FLOAT_EQ(cfg.strength, 0.75f);
   EXPECT_FLOAT_EQ(cfg.vaceStrength, 1.0f);
