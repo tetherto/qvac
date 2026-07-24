@@ -211,6 +211,7 @@ declare namespace TranscriptionParakeet {
         backendDevice: number;
         backendId: number;
         gpuUnsupported: number;
+        encoderOnCoreml: number;
     }
     type BackendInfo = ParakeetBackendInfo;
     type ParakeetRunOutput = TranscriptionSegment[] | TranscriptionSegment;

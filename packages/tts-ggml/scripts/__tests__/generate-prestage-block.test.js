@@ -23,6 +23,7 @@ const {
   resolveVariant,
   requestedLavasrKinds,
   lavasrEntries,
+  qualityEntries,
   selectEntries,
   buildTsv,
   buildPrestageScript,
@@ -48,6 +49,13 @@ const MANIFEST = {
       name: 'lavasr-denoiser-f16.gguf',
       targetName: 'lavasr/lavasr-denoiser.gguf',
       url: 'https://s3/den.gguf'
+    }
+  ],
+  quality: [
+    {
+      name: 'ggml-tiny.bin',
+      targetName: 'whisper/ggml-tiny.bin',
+      url: 'https://hf/ggml-tiny.bin'
     }
   ]
 }
@@ -92,6 +100,11 @@ test('lavasrEntries is empty when the manifest has no lavasr section', () => {
   assert.deepEqual(lavasrEntries({ q4: [] }, { enhancer: 'lavasr', denoiser: 'lavasr' }), [])
 })
 
+test('qualityEntries selects the Whisper model only when quality is enabled', () => {
+  assert.deepEqual(qualityEntries(MANIFEST, false), [])
+  assert.deepEqual(qualityEntries(MANIFEST, true), MANIFEST.quality)
+})
+
 test('selectEntries keeps an engine-only row byte-identical to pre-LavaSR', () => {
   const engineOnly = selectEntries(MANIFEST, { variant: 'q4', enhancer: 'none', denoiser: 'none' })
   assert.deepEqual(engineOnly, MANIFEST.q4)
@@ -116,6 +129,19 @@ test('selectEntries appends only the requested LavaSR GGUF after the engine mode
   assert.deepEqual(
     withBoth.map((e) => e.targetName),
     ['supertonic.gguf', 'lavasr/lavasr-enhancer.gguf', 'lavasr/lavasr-denoiser.gguf']
+  )
+})
+
+test('selectEntries appends the mobile Whisper model when quality is enabled', () => {
+  const entries = selectEntries(MANIFEST, {
+    variant: 'q4',
+    enhancer: 'none',
+    denoiser: 'none',
+    quality: true
+  })
+  assert.deepEqual(
+    entries.map((entry) => entry.targetName),
+    ['supertonic.gguf', 'whisper/ggml-tiny.bin']
   )
 })
 
@@ -164,11 +190,12 @@ test('buildPrestageBlock for a lavasr row stages the engine model and the enhanc
   assert.ok(!tsv.includes('lavasr-denoiser'), 'denoiser not staged when only enhancer is on')
 })
 
-test('readOptionsFromEnv defaults the LavaSR axes to none', () => {
+test('readOptionsFromEnv defaults the LavaSR axes to none and quality to enabled', () => {
   assert.deepEqual(readOptionsFromEnv({ TTS_GGML_MOBILE_BENCHMARK_VARIANT: 'q8' }), {
     variant: 'q8',
     enhancer: 'none',
-    denoiser: 'none'
+    denoiser: 'none',
+    quality: true
   })
   assert.deepEqual(
     readOptionsFromEnv({
@@ -176,6 +203,7 @@ test('readOptionsFromEnv defaults the LavaSR axes to none', () => {
       TTS_GGML_MOBILE_BENCHMARK_ENHANCER: 'lavasr',
       TTS_GGML_MOBILE_BENCHMARK_DENOISER: 'lavasr'
     }),
-    { variant: 'q4', enhancer: 'lavasr', denoiser: 'lavasr' }
+    { variant: 'q4', enhancer: 'lavasr', denoiser: 'lavasr', quality: true }
   )
+  assert.equal(readOptionsFromEnv({ TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'false' }).quality, false)
 })

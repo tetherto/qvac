@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-07-23
+
+This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. ggml is now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.
+
+### Changed
+
+- The ggml runtime and its compute backends are now provided by the `@qvac/fabric` npm dependency (`^0.2.0`) rather than the static `qvac-fabric` vcpkg port. The addon no longer bundles ggml; on desktop it resolves the single `@qvac/fabric` install and loads the backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile (where the package tree isn't resolvable from the packed worklet bundle). Run `npm install` so `@qvac/fabric` is present before `bare-make generate`/`build`, and ensure the dependency isn't pruned at runtime.
+- The ggml CPU backend is now acquired via the registry API (`ggml_backend_dev_by_type` + `ggml_backend_dev_init`) on every platform, replacing the direct `ggml_backend_cpu_init` call. `@qvac/fabric` does not export `ggml_backend_cpu_init` from its Windows DLL import library, so the previous approach failed to link `win32-x64` prebuilds; `GGML_BACKEND_DL` dlopen is retained only for loading the Linux/Android backend modules.
+
+### Pull Requests
+
+- [#3301](https://github.com/tetherto/qvac/pull/3301) - QVAC-22035 feat: migrate classification-ggml to shared @qvac/fabric runtime
+
 ## [0.13.1] - 2026-07-21
 
 ### Fixed
