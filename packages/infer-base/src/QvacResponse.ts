@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment -- Preserve the published untyped CommonJS response/result contract and runtime coercion. */
 
+import type { AbortSignal } from "bare-abort-controller";
 import EventEmitter = require("bare-events");
 
 const statuses = Object.freeze({

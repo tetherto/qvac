@@ -1,3 +1,4 @@
+import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("./src/QvacResponse");
 import exclusiveRunQueue = require("./src/utils/exclusiveRunQueue");
 import getApiDefinition = require("./src/utils/getApiDefinition");

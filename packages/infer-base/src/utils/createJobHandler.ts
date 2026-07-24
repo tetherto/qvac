@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports -- Preserve the published untyped CommonJS job payload contract. */
 
+import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("../QvacResponse");
 
 interface CreateJobHandlerOptions {

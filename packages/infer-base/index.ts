@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports -- Preserve the published untyped CommonJS compatibility surface. */
 
+import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("./src/QvacResponse");
 import createJobHandlerImplementation = require("./src/utils/createJobHandler");
 import exclusiveRunQueue = require("./src/utils/exclusiveRunQueue");

@@ -1,3 +1,4 @@
+import type { AbortSignal } from "bare-abort-controller";
 import EventEmitter = require("bare-events");
 /**
  * QvacResponse provides an interface for handling asynchronous responses
