@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
@@ -56,34 +57,65 @@ const trackedGeneratedOutputs = trackedResult.stdout
   .filter(Boolean)
   .filter((filePath) => !isHandwritten(filePath))
 
-const generatedOutputs = [...new Set([...expectedOutputs, ...trackedGeneratedOutputs])].sort()
-
-for (const outputPath of generatedOutputs) {
-  fs.rmSync(path.join(packageRoot, outputPath), { force: true })
-}
-
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const buildResult = run(npmCommand, ['run', 'build:ts'], { stdio: 'inherit' })
-if (buildResult.status !== 0) {
-  process.exit(buildResult.status ?? 1)
-}
-
-const untrackedResult = run('git', ['ls-files', '--others', '--', ...generatedOutputs])
-if (untrackedResult.status !== 0) {
-  process.stderr.write(untrackedResult.stderr)
-  process.exit(untrackedResult.status ?? 1)
-}
-
-if (untrackedResult.stdout.trim()) {
-  process.stderr.write(`Generated infer-base files are not tracked:\n${untrackedResult.stdout}`)
+const trackedGeneratedOutputSet = new Set(trackedGeneratedOutputs)
+const missingTrackedOutputs = expectedOutputs.filter(
+  (outputPath) => !trackedGeneratedOutputSet.has(outputPath)
+)
+if (missingTrackedOutputs.length > 0) {
+  process.stderr.write(
+    `Generated infer-base files are not tracked:\n${missingTrackedOutputs.join('\n')}\n`
+  )
   process.exit(1)
 }
 
-const diffResult = run('git', ['diff', '--exit-code', '--', ...generatedOutputs], {
-  stdio: 'inherit'
-})
-if (diffResult.status !== 0) {
-  process.exit(diffResult.status ?? 1)
+const expectedOutputSet = new Set(expectedOutputs)
+const unexpectedTrackedOutputs = trackedGeneratedOutputs.filter(
+  (outputPath) => !expectedOutputSet.has(outputPath)
+)
+if (unexpectedTrackedOutputs.length > 0) {
+  process.stderr.write(
+    `Tracked infer-base outputs have no TypeScript source:\n${unexpectedTrackedOutputs.join('\n')}\n`
+  )
+  process.exit(1)
+}
+
+const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'infer-base-generated-'))
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+let status = 1
+
+try {
+  const buildResult = run(npmCommand, ['run', 'build:ts', '--', '--outDir', temporaryRoot], {
+    stdio: 'inherit'
+  })
+
+  if (buildResult.status !== 0) {
+    status = buildResult.status ?? 1
+  } else {
+    const changedOutputs = expectedOutputs.filter((outputPath) => {
+      const committedPath = path.join(packageRoot, outputPath)
+      const generatedPath = path.join(temporaryRoot, outputPath)
+      return (
+        !fs.existsSync(committedPath) ||
+        !fs.existsSync(generatedPath) ||
+        !fs.readFileSync(committedPath).equals(fs.readFileSync(generatedPath))
+      )
+    })
+
+    if (changedOutputs.length > 0) {
+      process.stderr.write(
+        `Generated infer-base files are out of date:\n${changedOutputs.join('\n')}\n`
+      )
+      status = 1
+    } else {
+      status = 0
+    }
+  }
+} finally {
+  fs.rmSync(temporaryRoot, { recursive: true, force: true })
+}
+
+if (status !== 0) {
+  process.exit(status)
 }
 
 console.log('Generated infer-base files are up to date.')

@@ -27,6 +27,7 @@
   ],
   "license": "Apache-2.0",
   "dependencies": {
+    "bare-abort-controller": "^1.1.2",
     "bare-events": "^2.9.1",
     "bare-os": "^3.2.0"
   },

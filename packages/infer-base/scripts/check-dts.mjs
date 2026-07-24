@@ -7,62 +7,85 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'infer-base-dts-'))
-const temporaryPackage = path.join(temporaryRoot, 'node_modules', '@qvac', 'infer-base')
-
-function walk(directory) {
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const entryPath = path.join(directory, entry.name)
-    return entry.isDirectory() ? walk(entryPath) : [entryPath]
-  })
-}
+const packDirectory = path.join(temporaryRoot, 'pack')
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 function copyFile(source, destination) {
   fs.mkdirSync(path.dirname(destination), { recursive: true })
   fs.copyFileSync(source, destination)
 }
 
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: packageRoot,
+    encoding: 'utf8',
+    ...options
+  })
+
+  if (result.error) throw result.error
+  return result
+}
+
 let status = 1
 
 try {
-  for (const relativePath of ['package.json', 'index.d.ts']) {
-    copyFile(path.join(packageRoot, relativePath), path.join(temporaryPackage, relativePath))
-  }
+  fs.mkdirSync(packDirectory)
 
-  for (const sourcePath of walk(path.join(packageRoot, 'src'))) {
-    if (!sourcePath.endsWith('.d.ts')) continue
-    const relativePath = path.relative(packageRoot, sourcePath)
-    copyFile(sourcePath, path.join(temporaryPackage, relativePath))
-  }
-
-  fs.cpSync(
-    path.join(packageRoot, 'node_modules', 'bare-events'),
-    path.join(temporaryRoot, 'node_modules', 'bare-events'),
-    { recursive: true }
-  )
-
-  fs.cpSync(path.join(packageRoot, 'test', 'types'), path.join(temporaryRoot, 'test', 'types'), {
-    recursive: true
-  })
-  copyFile(
-    path.join(packageRoot, 'tsconfig.dts.json'),
-    path.join(temporaryRoot, 'tsconfig.dts.json')
-  )
-
-  const result = spawnSync(
-    process.execPath,
-    [
-      path.join(packageRoot, 'node_modules', 'typescript', 'bin', 'tsc'),
-      '--project',
-      path.join(temporaryRoot, 'tsconfig.dts.json')
-    ],
-    {
-      cwd: temporaryRoot,
-      stdio: 'inherit'
+  const packResult = run(npmCommand, ['pack', '--json', '--pack-destination', packDirectory])
+  if (packResult.status !== 0) {
+    process.stderr.write(packResult.stderr)
+  } else {
+    const packEntries = JSON.parse(packResult.stdout)
+    if (packEntries.length !== 1 || typeof packEntries[0].filename !== 'string') {
+      throw new Error('npm pack did not report exactly one infer-base tarball')
     }
-  )
 
-  if (result.error) throw result.error
-  status = result.status ?? 1
+    const tarballPath = path.join(packDirectory, packEntries[0].filename)
+    const installResult = run(
+      npmCommand,
+      [
+        'install',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--no-package-lock',
+        '--no-save',
+        tarballPath
+      ],
+      {
+        cwd: temporaryRoot,
+        stdio: 'inherit'
+      }
+    )
+
+    if (installResult.status !== 0) {
+      status = installResult.status ?? 1
+    } else {
+      copyFile(
+        path.join(packageRoot, 'test', 'types', 'commonjs-api.ts'),
+        path.join(temporaryRoot, 'test', 'types', 'commonjs-api.ts')
+      )
+      copyFile(
+        path.join(packageRoot, 'tsconfig.dts.json'),
+        path.join(temporaryRoot, 'tsconfig.dts.json')
+      )
+
+      const typecheckResult = run(
+        process.execPath,
+        [
+          path.join(packageRoot, 'node_modules', 'typescript', 'bin', 'tsc'),
+          '--project',
+          path.join(temporaryRoot, 'tsconfig.dts.json')
+        ],
+        {
+          cwd: temporaryRoot,
+          stdio: 'inherit'
+        }
+      )
+
+      status = typecheckResult.status ?? 1
+    }
+  }
 } finally {
   fs.rmSync(temporaryRoot, { recursive: true, force: true })
 }
@@ -71,4 +94,4 @@ if (status !== 0) {
   process.exit(status)
 }
 
-console.log('Published infer-base declarations type-check for a CommonJS consumer.')
+console.log('Packed infer-base declarations type-check for a CommonJS consumer.')
