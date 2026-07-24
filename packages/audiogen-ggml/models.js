@@ -100,7 +100,10 @@ function resolveDitModelPath({ modelDir, ditModel, ditVariant } = {}) {
         throw new Error('AudioGen: `ditVariant` needs `modelDir` (the folder holding the DiT ' +
             'GGUF); otherwise pass an explicit `ditModel` path.');
     }
-    // Strip trailing separators without a backtracking-prone regex.
+    // Join with the separator the caller's path already uses so we never emit a
+    // mixed path like `C:\models/file.gguf` on Windows. Strip trailing separators
+    // first (without a backtracking-prone regex).
+    const sep = modelDir.includes('\\') ? '\\' : '/';
     let dir = modelDir;
     while (dir.length > 1) {
         const last = dir[dir.length - 1];
@@ -108,7 +111,7 @@ function resolveDitModelPath({ modelDir, ditModel, ditVariant } = {}) {
             break;
         dir = dir.slice(0, -1);
     }
-    return `${dir}/${ditFilename(ditVariant)}`;
+    return `${dir}${sep}${ditFilename(ditVariant)}`;
 }
 // Every distinct registry path across all variants (3 fixed + every DiT), for
 // existence checks / prefetch of the whole model set.
