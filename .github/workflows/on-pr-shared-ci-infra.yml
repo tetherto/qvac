@@ -63,6 +63,11 @@ jobs:
   # so an untrusted fork PR cannot alter the authorisation logic. Skipped on
   # workflow_dispatch so the workflow can be exercised on a feature branch
   # before it is merged (pull_request_target always runs the base-branch copy).
+  #
+  # Every PR-head checkout below pins `ref` to the immutable
+  # github.event.pull_request.head.SHA (never head.ref): label-gate/authorize-pr
+  # bind trust to a specific commit, so checking out a mutable branch ref could
+  # run code that was pushed AFTER authorisation with secrets like HF_TOKEN.
   label-gate:
     name: Authorise (label-gate)
     if: github.event_name != 'workflow_dispatch'
@@ -118,7 +123,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -149,7 +154,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -180,6 +185,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
       - name: Verify qvac-fabric versions are lockstep
         uses: ./.github/actions/verify-qvac-fabric-lockstep
