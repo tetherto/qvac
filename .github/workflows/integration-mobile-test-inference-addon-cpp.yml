@@ -36,6 +36,15 @@ on:
         required: false
         default: ""
 
+# Guards the workflow_dispatch path so two manual dispatches don't run — and bill
+# — concurrent Device Farm runs. The workflow_call path is additionally covered by
+# the caller's own concurrency. NOTE: the group key is a literal, NOT
+# `github.workflow` — under workflow_call that resolves to the CALLER's name and
+# would collide with on-pr-inference-addon-cpp.yml's concurrency group.
+concurrency:
+  group: mobile-df-inference-addon-cpp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   ADDON_WORKDIR: packages/inference-addon-cpp/mobile
   PREBUILD_PREFIX: infer-cpp-
