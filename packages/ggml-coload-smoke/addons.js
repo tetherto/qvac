@@ -19,6 +19,15 @@
 // mobile (Device Farm) co-load to build a consumer bundling only this subset.
 // Addons with no built-in SDK plugin (bci-whispercpp, classification-ggml,
 // ocr-ggml) are desktop-only for co-load.
+//
+// Optional `lifecycle` opts an addon into the model-free reload cycle
+// (coload.js#runLifecycle): `{ ctorArgs: [], dispose: 'destroy' }` builds a
+// weight-less instance and tears it down `COLOAD_CYCLES` times, interleaved
+// across addons, to exercise ggml teardown/re-init interposition. It is left
+// UNSET here on purpose: only add it for an addon once its constructor + dispose
+// are confirmed to run without model weights on a real runner, otherwise the
+// smoke would fail for a reason unrelated to co-loading. Model-driven
+// load/unload (with weights) belongs in the SDK e2e, not this model-free smoke.
 const ADDONS = {
   'tts-ggml': { specifier: '@qvac/tts-ggml', stack: 'speech', plugin: 'tts-ggml' },
   'transcription-parakeet': { specifier: '@qvac/transcription-parakeet', stack: 'speech', plugin: 'parakeet-transcription' },
