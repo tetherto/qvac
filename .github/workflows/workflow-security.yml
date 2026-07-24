@@ -74,6 +74,12 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
+  # Deliberate deviation from the github-actions.mdc § Concurrency guidance that
+  # state-mutating workflows use cancel-in-progress: false. This job's only
+  # external mutation is an idempotent upsert of a single PR comment, so
+  # newest-commit-wins is the desired behavior: superseding an in-flight run
+  # avoids racing an older commit's scan to overwrite the comment with stale
+  # results. Cancellation is therefore benign, not lossy, here.
   cancel-in-progress: true
 
 jobs:
@@ -264,7 +270,11 @@ jobs:
                   `pipx run zizmor==${zizmorVersion} --offline .github/`,
                   '```',
                 ].join('\n');
-            const { data: comments } = await github.rest.issues.listComments({
+            // Paginate over ALL issue comments, not just page 1: on a busy PR
+            // (>100 comments) the marker comment falls off the first page, so a
+            // single listComments call would miss it and post a duplicate every
+            // run — breaking the single-upserted-comment (idempotency) contract.
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
