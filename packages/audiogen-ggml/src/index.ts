@@ -99,23 +99,27 @@ export interface AudiogenProgressChunk {
 /** Items streamed by the `QvacResponse` returned from `run()`. */
 export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk
 
-/** Terminal run stats, resolved by `QvacResponse.await()`. */
+/**
+ * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
+ * what the native `AcestepModel::runtimeStats()` emits — `totalTimeMs`,
+ * `realTimeFactor` and `audioDurationMs`. Sample rate and channel count are NOT
+ * here: they ride on each PCM chunk instead (see `AudiogenPcmChunk`).
+ */
 export interface AudiogenStats {
-  sampleRate?: number
-  channels?: number
   audioDurationMs?: number
   totalTimeMs?: number
-  totalSamples?: number
+  realTimeFactor?: number
 }
 
 /** Raw shape of the native output-callback payload. */
 interface NativeAudiogenData {
   outputArray?: Int16Array
+  // sampleRate/channels are attached to the PCM chunk, not the stats frame.
   sampleRate?: number
   channels?: number
   audioDurationMs?: number
   totalTimeMs?: number
-  totalSamples?: number
+  realTimeFactor?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -123,6 +127,8 @@ interface NativeAudiogenData {
 
 function asNativeData (data: unknown): NativeAudiogenData | null {
   if (typeof data !== 'object' || data === null) return null
+  // `object` is assignable to NativeAudiogenData (every field is optional); the
+  // per-field `typeof` guards below do the real runtime narrowing.
   return data
 }
 
@@ -186,17 +192,26 @@ export class AudioGen {
   async load (): Promise<void> {
     if (this.addon) return
     this._logger.info('audiogen-ggml: loading ACE-Step engine')
-    this.addon = this._createAddon(
+    const addon = this._createAddon(
       this._configuration,
       this._addonOutputCallback.bind(this)
     )
-    await this.addon.activate()
+    this.addon = addon
+    // If activation fails, tear down the half-initialized native handle and
+    // clear `this.addon` so a later load() can retry instead of no-op'ing on a
+    // dead instance. Mirrors the cleanup pattern in tts-ggml._load().
+    try {
+      await addon.activate()
+    } catch (error) {
+      try {
+        await addon.destroyInstance()
+      } catch {
+        // best-effort teardown; surface the original activation error below.
+      }
+      if (this.addon === addon) this.addon = null
+      throw error
+    }
     this._logger.info('audiogen-ggml: engine ready')
-  }
-
-  /** @deprecated Use {@link load}. Kept for backward compatibility. */
-  async activate (): Promise<void> {
-    return this.load()
   }
 
   /**
@@ -261,9 +276,7 @@ export class AudioGen {
     formats?: OutputFormat | OutputFormat[],
     opts?: EncodeOptions
   ): EncodedAudio | EncodedAudio[] {
-    return Array.isArray(formats)
-      ? encodePcm(pcm, formats, opts)
-      : encodePcm(pcm, formats, opts)
+    return encodePcm(pcm, formats, opts)
   }
 
   static getModelKey (_params?: unknown): string {
@@ -316,11 +329,9 @@ export class AudioGen {
 
     if (typeof d.audioDurationMs === 'number' || typeof d.totalTimeMs === 'number') {
       const stats: AudiogenStats = {
-        ...(typeof d.sampleRate === 'number' ? { sampleRate: d.sampleRate } : {}),
-        ...(typeof d.channels === 'number' ? { channels: d.channels } : {}),
         ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
         ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
-        ...(typeof d.totalSamples === 'number' ? { totalSamples: d.totalSamples } : {})
+        ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {})
       }
       this._job.end(stats, stats)
     }

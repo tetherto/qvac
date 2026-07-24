@@ -22,6 +22,8 @@ exports.ENGINE_ACESTEP = 'acestep';
 function asNativeData(data) {
     if (typeof data !== 'object' || data === null)
         return null;
+    // `object` is assignable to NativeAudiogenData (every field is optional); the
+    // per-field `typeof` guards below do the real runtime narrowing.
     return data;
 }
 /**
@@ -78,13 +80,26 @@ class AudioGen {
         if (this.addon)
             return;
         this._logger.info('audiogen-ggml: loading ACE-Step engine');
-        this.addon = this._createAddon(this._configuration, this._addonOutputCallback.bind(this));
-        await this.addon.activate();
+        const addon = this._createAddon(this._configuration, this._addonOutputCallback.bind(this));
+        this.addon = addon;
+        // If activation fails, tear down the half-initialized native handle and
+        // clear `this.addon` so a later load() can retry instead of no-op'ing on a
+        // dead instance. Mirrors the cleanup pattern in tts-ggml._load().
+        try {
+            await addon.activate();
+        }
+        catch (error) {
+            try {
+                await addon.destroyInstance();
+            }
+            catch {
+                // best-effort teardown; surface the original activation error below.
+            }
+            if (this.addon === addon)
+                this.addon = null;
+            throw error;
+        }
         this._logger.info('audiogen-ggml: engine ready');
-    }
-    /** @deprecated Use {@link load}. Kept for backward compatibility. */
-    async activate() {
-        return this.load();
     }
     /**
      * Generate music from a text prompt. Returns a `QvacResponse` that streams
@@ -130,9 +145,7 @@ class AudioGen {
         await this.unload();
     }
     static encode(pcm, formats, opts) {
-        return Array.isArray(formats)
-            ? (0, audio_format_1.encodePcm)(pcm, formats, opts)
-            : (0, audio_format_1.encodePcm)(pcm, formats, opts);
+        return (0, audio_format_1.encodePcm)(pcm, formats, opts);
     }
     static getModelKey(_params) {
         void _params;
@@ -172,11 +185,9 @@ class AudioGen {
         }
         if (typeof d.audioDurationMs === 'number' || typeof d.totalTimeMs === 'number') {
             const stats = {
-                ...(typeof d.sampleRate === 'number' ? { sampleRate: d.sampleRate } : {}),
-                ...(typeof d.channels === 'number' ? { channels: d.channels } : {}),
                 ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
                 ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
-                ...(typeof d.totalSamples === 'number' ? { totalSamples: d.totalSamples } : {})
+                ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {})
             };
             this._job.end(stats, stats);
         }

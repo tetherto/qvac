@@ -19,6 +19,15 @@
       "dependencies": [
         "gtest"
       ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "audiogen-cpp",
+          "features": ["vulkan"]
+        }
+      ]
     }
   }
 }

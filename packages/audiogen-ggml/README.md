@@ -26,7 +26,7 @@ hands you the audio:
 You get the audio as **interleaved Int16 PCM** through an output callback
 (streamed in chunks), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
-opens them. GPU (Metal / CUDA / Vulkan) is used when you ask for it, with a CPU
+opens them. GPU (Metal / Vulkan) is used when you ask for it, with a CPU
 fallback.
 
 ## Install & build
@@ -65,7 +65,7 @@ for await (const item of response.iterate()) {
     // these chunks as they stream in.
   }
 }
-const stats = await response.await() // { sampleRate, channels, audioDurationMs, ... }
+const stats = await response.await() // { audioDurationMs, totalTimeMs, realTimeFactor }
 
 await gen.destroy()
 ```
@@ -172,7 +172,7 @@ runnable end-to-end script (`npm run example`).
 
 | Option | Meaning |
 |--------|---------|
-| `useGPU` | Run on GPU (Metal / CUDA / Vulkan); falls back to CPU. |
+| `useGPU` | Run on GPU (Metal / Vulkan); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |

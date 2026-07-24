@@ -89,3 +89,12 @@ export function encodePcm (
   formats: OutputFormat[],
   opts?: EncodeOptions
 ): EncodedAudio[]
+// Implementation-compatible overload: lets callers delegate a value that is
+// itself `OutputFormat | OutputFormat[]` (e.g. AudioGen.encode) without a
+// redundant Array.isArray() branch. Direct callers still hit the precise
+// single/array overloads above.
+export function encodePcm (
+  pcm: Uint8Array,
+  formats?: OutputFormat | OutputFormat[],
+  opts?: EncodeOptions
+): EncodedAudio | EncodedAudio[]

@@ -16,7 +16,7 @@
 //   AUDIOGEN_SEED        RNG seed
 //   AUDIOGEN_FORMAT      output format: "wav" (default) or "pcm"
 //   AUDIOGEN_GPU         "1" to run the whole pipeline (LM/DiT/encoders AND the
-//                        VAE) on GPU (Metal/CUDA/Vulkan). Falls back to CPU if
+//                        VAE) on GPU (Metal/Vulkan). Falls back to CPU if
 //                        no GPU backend is available.
 //   AUDIOGEN_OUT         output path (extension auto-added if missing)
 
@@ -36,7 +36,7 @@ async function main () {
     'Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook'
   const modelDir = process.env.AUDIOGEN_MODEL_DIR
   const ditModel = process.env.AUDIOGEN_DIT || undefined
-  // GPU (Metal/CUDA/Vulkan) for the whole pipeline including the VAE (its
+  // GPU (Metal/Vulkan) for the whole pipeline including the VAE (its
   // snake/col2im_1d ops now have Metal kernels). Falls back to CPU if no GPU.
   const useGPU = /^(1|true|yes|on)$/i.test(process.env.AUDIOGEN_GPU || '')
   const outFormat = (process.env.AUDIOGEN_FORMAT || 'wav').toLowerCase()

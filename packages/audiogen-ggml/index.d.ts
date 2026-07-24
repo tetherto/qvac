@@ -70,13 +70,16 @@ export interface AudiogenProgressChunk {
 }
 /** Items streamed by the `QvacResponse` returned from `run()`. */
 export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk;
-/** Terminal run stats, resolved by `QvacResponse.await()`. */
+/**
+ * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
+ * what the native `AcestepModel::runtimeStats()` emits — `totalTimeMs`,
+ * `realTimeFactor` and `audioDurationMs`. Sample rate and channel count are NOT
+ * here: they ride on each PCM chunk instead (see `AudiogenPcmChunk`).
+ */
 export interface AudiogenStats {
-    sampleRate?: number;
-    channels?: number;
     audioDurationMs?: number;
     totalTimeMs?: number;
-    totalSamples?: number;
+    realTimeFactor?: number;
 }
 /**
  * GGML-backed music generation via the ACE-Step engine. Owns a persistent
@@ -95,8 +98,6 @@ export declare class AudioGen {
     constructor(options?: AudioGenOptions);
     /** Create the native engine and load every stage GGUF. Idempotent. */
     load(): Promise<void>;
-    /** @deprecated Use {@link load}. Kept for backward compatibility. */
-    activate(): Promise<void>;
     /**
      * Generate music from a text prompt. Returns a `QvacResponse` that streams
      * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.

@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AudioGen` class implementing the shared `@qvac/infer-base` contract —
   `load()`, `run(caption, opts)` returning a `QvacResponse` that streams
   progress ticks + the interleaved-Int16 PCM chunk and resolves with the run
-  stats (`audioDurationMs`, `totalTimeMs`), plus `cancel()` / `unload()` /
-  `destroy()`.
+  stats (`audioDurationMs`, `totalTimeMs`, `realTimeFactor`), plus `cancel()` /
+  `unload()` / `destroy()`.
 - Full ACE-Step pipeline (text-encoder → LM → DiT → Oobleck VAE) with optional
   `lyrics`, `vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `duration` and
   `seed`.
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stages plus a `ditVariant` enum (`turbo-q4` | `turbo-q8` | `sft`), and helpers
   to resolve registry paths / sources. `inferenceSteps` / `shift` auto-tune per
   DiT architecture (turbo vs sft) when unset.
-- Optional GPU acceleration (Metal / CUDA / Vulkan) via `useGpu`, with CPU
+- Optional GPU acceleration (Metal / Vulkan) via `useGPU`, with CPU
   fallback.
 - Output peak-normalized to -0.9 dBFS before int16 conversion to avoid clipping.
 - Multi-format output encoding via `AudioGen.encode(pcm, formats, opts)`: `pcm`
@@ -34,5 +34,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   offered — that build ships no MP3 encoder. Accepts a single format or an array
   (one file per format, input order); each result carries `{ format, data,
   extension, mimeType }`. `OUTPUT_FORMATS` exports the allowed list.
-- Unit tests for the model manifest, output-format encoding (WAV header,
-  multi-format, container magic bytes) and a registry existence check.
