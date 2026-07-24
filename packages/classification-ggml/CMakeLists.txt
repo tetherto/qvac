@@ -42,28 +42,25 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
   "inference-addon-cpp/JsInterface.hpp" REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
 
-find_package(ggml CONFIG REQUIRED)
+# The ggml runtime is provided by @qvac/fabric (npm dependency) instead of being
+# statically linked from the qvac-fabric vcpkg port. It ships the headers
+# (qvac-fabric::headers) and a single shared .bare module that this addon
+# dynamically links against, so the runtime is loaded once per process. All
+# platforms (desktop and mobile) use this dynamic-linking model.
+set(qvac-fabric_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake")
+find_package(qvac-fabric CONFIG REQUIRED)
+
+include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)
 
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
+# The ggml compute backends live under @qvac/fabric's own prebuilds subdir
+# (prebuilds/<host>/qvac__fabric), not a per-addon copy. BACKENDS_SUBDIR is the
+# "<host>/qvac__fabric" path the addon appends to the runtime-provided
+# backendsDir (see index.js) when calling ggml_backend_load_all_from_path().
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/qvac__fabric")
 message(STATUS "Building classification-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    # GGML_AVAILABLE_BACKENDS advertises every backend the upstream port
-    # knows about, but real CMake targets only exist for those actually
-    # built into the installed package (e.g. ggml-vulkan / ggml-opencl
-    # are absent on Android with our vcpkg feature set). Skip missing
-    # ones so add_bare_module's get_target_property() doesn't error out.
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-add_bare_module(classification-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(classification-ggml EXPORTS)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${classification-ggml}_module PRIVATE -Wl,--exclude-libs,ALL)
@@ -90,22 +87,18 @@ target_include_directories(
     ${PROJECT_SOURCE_DIR}/addon/src
 )
 
+# Compile against the ggml headers...
 target_link_libraries(
   ${classification-ggml}
   PRIVATE
-    ggml::ggml
-    ggml::ggml-base
+    qvac-fabric::headers
 )
-
-# CPU backend: with GGML_CPU_ALL_VARIANTS=ON (Android via qvac-fabric),
-# the single ggml::ggml-cpu target doesn't exist — it's replaced by
-# per-microarch variants (ggml::ggml-cpu-android_armv8.0_1, ...armv8.2_1,
-# ...armv8.2_2, ...armv8.6_1) loaded as MODULE .so files at runtime via
-# dlopen. On Apple/Linux/Windows desktop where variants are off,
-# ggml::ggml-cpu exists as a single static target.
-if(TARGET ggml::ggml-cpu)
-  target_link_libraries(${classification-ggml} PRIVATE ggml::ggml-cpu)
-endif()
+# ...and dynamically link the shared runtime (DT_NEEDED qvac__fabric@0.bare).
+target_link_libraries(
+  ${classification-ggml}_module
+  PRIVATE
+    ${qvac_fabric_target}_module
+)
 
 target_compile_definitions(
   ${classification-ggml}
@@ -114,10 +107,15 @@ target_compile_definitions(
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
 )
 
-# When ggml is built with GGML_BACKEND_DL=ON (gpu-backends on Linux/Android) the
-# backends are dlopen'd modules; tell the addon so load() uses the registry API
-# instead of the statically-linked ggml_backend_cpu_init().
-if(GGML_BACKEND_DL)
+# On Linux and Android @qvac/fabric ships the ggml compute backends as separate
+# GGML_BACKEND_DL modules (CPU micro-arch variants, Vulkan) that must be dlopen'd
+# at runtime; tell the addon so load() loads them from backendsDir before
+# querying the backend registry. On macOS/Windows/iOS the backends are static
+# inside qvac__fabric@0.bare and self-register on load, so no dlopen is needed.
+# Either way load() acquires the CPU device via the generic registry API
+# (ggml_backend_dev_by_type); it never calls ggml_backend_cpu_init() directly,
+# which @qvac/fabric does not export from its Windows DLL.
+if((ANDROID OR UNIX) AND NOT APPLE)
   target_compile_definitions(${classification-ggml} PRIVATE GGML_BACKEND_DL)
 endif()
 

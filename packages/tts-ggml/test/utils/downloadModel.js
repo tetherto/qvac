@@ -419,6 +419,10 @@ async function tryFetchGgufsFromRegistry(ggufs, targetDir) {
 
 // Whisper GGML (for the transcription-WER integration check).
 const WHISPER_MODELS = {
+  'ggml-tiny.bin': {
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin',
+    minSize: 74000000
+  },
   'ggml-small.bin': {
     url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
     minSize: 460000000

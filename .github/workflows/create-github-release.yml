@@ -46,6 +46,9 @@ jobs:
           changelog-path: ${{ inputs.workdir }}/CHANGELOG.md
           version: ${{ inputs.published_version }}
 
+      - name: Prepend Table of Contents to release notes
+        run: node .github/scripts/prepend-release-toc.mjs "${{ steps.changelog.outputs.release-notes-path }}"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # 2.6.1
         with:
