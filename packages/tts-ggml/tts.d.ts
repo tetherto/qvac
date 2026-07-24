@@ -4,6 +4,16 @@ export interface TTSConfigurationParams {
 export interface TTSJobData {
     type: string;
     input: string;
+    description?: string;
+    voiceDescription?: string;
+    voice?: string;
+    emotion?: string;
+    pitch?: string;
+    pace?: string;
+    expressivity?: string;
+    noise?: string;
+    reverb?: string;
+    quality?: string;
 }
 export interface TTSWeightData {
     filename: string;

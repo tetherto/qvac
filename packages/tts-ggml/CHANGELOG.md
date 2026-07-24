@@ -15,6 +15,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Parler-TTS engine (mini-v1 / large-v1 / indic) (QVAC-19261).** Third
+  engine family under the same `TTSGgml` surface: description-conditioned
+  TTS (Flan-T5 encoder → delay-pattern decoder → DAC codec, native
+  44.1 kHz). Detection via `engine: 'parler'`,
+  `files.parlerModel`, or a `modelDir` containing
+  `parler-<mini|large|indic>[-vN][-<quant>].gguf` (mini > large > indic;
+  q8_0 > q6_k > f16 > f32 within a variant). The indic variant covers 21
+  Indic languages with script-native digit normalization.
+- **Parler Metal GPU support (QVAC-21593).** `config.useGPU: true` /
+  `nGpuLayers` offloads the Parler engine to Metal on Apple (~2.25x vs CPU
+  on indic q8_0; decode flash-attention + fused QKV/heads + DAC phase-matmul);
+  other backends fall back to CPU and the CPU output stays byte-identical.
+  Adds CPU + Metal CI coverage across the published quant tiers.
+- **Parler voice descriptions + emotion flag.** The voice is set either by
+  a free-text `description` (alias `voiceDescription`) or by template
+  fields — `voice`, `emotion`, `pitch`, `pace`, `expressivity`, `noise`,
+  `reverb`, `quality` — rendered natively by tts-cpp's
+  `build_description()` in the models' training-caption phrasing.
+  `emotion` accepts the 12 trained styles (command, anger, narration,
+  conversation, disgust, fear, happy, neutral, proper noun, news, sad,
+  surprise; case-insensitive, invalid values error listing the set).
+  Description and template fields are mutually exclusive at the same
+  level; everything defaults to the models' recommended fallback caption,
+  so Parler works with zero description configuration. Template fields
+  are also accepted **per call** (`run({ input, emotion })`,
+  `runStream`/`runStreaming` options) — the only engine with a per-call
+  channel — merging over the constructor fields without a reload.
+- **Parler sampling/generation knobs.** `temperature`, `topK`, `topP`,
+  `maxFrames`, `minNewTokens`, `normalizeNumbers`, `seed`, `threads`,
+  `config.outputSampleRate` (addon-side resample from the native
+  44.1 kHz), all optional with the GGUF's generation defaults. Requires a
+  `tts-cpp` pin that ships the parler engine (qvac-ext-lib-whisper.cpp
+  PR #92). New `examples/parler-tts.js`, integration/unit suites, C++
+  config tests, and a `parler` model-download group (mini q8_0).
 - **Chatterbox S3Gen classifier-free-guidance rate (`cfgRate`) (QVAC-21908).**
   New optional `cfgRate` knob for the Chatterbox engine, surfacing the S3Gen
   CFG rate that was previously fixed to the model's GGUF-baked value. The S3Gen
