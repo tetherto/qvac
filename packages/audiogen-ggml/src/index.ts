@@ -254,7 +254,7 @@ export class AudioGen {
         lyrics: opts.lyrics ?? '[Instrumental]',
         seed: optionalFiniteNumber(opts.seed, 'seed', true),
         vocalLanguage: opts.vocalLanguage,
-        bpm: optionalFiniteNumber(opts.bpm, 'bpm'),
+        bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
         keyscale: opts.keyscale,
         timesignature: opts.timesignature,
         duration: optionalFiniteNumber(opts.duration, 'duration')

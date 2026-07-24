@@ -77,9 +77,19 @@ float readRequiredFloat(js::Object obj, js_env_t* env, const char* key) {
 }
 
 bool readRequiredBool(js::Object obj, js_env_t* env, const char* key) {
-  auto v = obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
-  if (!v.has_value()) throwMissing(key);
-  return *v;
+  // Distinguish a genuinely missing value (undefined/null -> "required") from a
+  // present-but-wrong-typed one (e.g. useGPU: 1 -> "must be a boolean"), so the
+  // error message matches the actual problem — like the numeric readers above.
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    throwMissing(key);
+  }
+  if (!js::is<js::Boolean>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be a boolean");
+  }
+  return js::Boolean{env, raw}.as<bool>(env);
 }
 
 }  // namespace
