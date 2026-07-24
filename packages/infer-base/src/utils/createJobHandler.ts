@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports -- Preserve the published untyped CommonJS job payload contract. */
 
-import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("../QvacResponse");
 
 interface CreateJobHandlerOptions {
@@ -8,7 +7,7 @@ interface CreateJobHandlerOptions {
 }
 
 interface JobHandler {
-  start(runOpts?: { signal?: AbortSignal }): QvacResponse;
+  start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse;
   startWith(response: QvacResponse): QvacResponse;
   output(data: any): void;
   end(stats?: any, result?: any): void;
@@ -43,7 +42,7 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      * If a previous response is still active, it is failed with a stale-job error
      * before the new one is created.
      */
-    start(runOpts?: { signal?: AbortSignal }): QvacResponse {
+    start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse {
       if (active) {
         active.failed(new Error("Stale job replaced by new run"));
         active = null;

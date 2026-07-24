@@ -1,7 +1,7 @@
-import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("./src/QvacResponse");
 import exclusiveRunQueue = require("./src/utils/exclusiveRunQueue");
 import getApiDefinition = require("./src/utils/getApiDefinition");
+export type AbortSignalLike = QvacResponse.AbortSignalLike;
 export interface JobHandler {
     /**
      * Creates a new QvacResponse and stores it as active. Fails any stale active response.
@@ -10,7 +10,7 @@ export interface JobHandler {
      * becomes the response error (passed through unchanged when it's an Error).
      */
     start(runOpts?: {
-        signal?: AbortSignal;
+        signal?: AbortSignalLike;
     }): QvacResponse;
     /** Registers a pre-built response (e.g. a custom subclass) as active. Fails any stale active response. */
     startWith(response: QvacResponse): QvacResponse;

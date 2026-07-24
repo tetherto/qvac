@@ -1,4 +1,3 @@
-import type { AbortSignal } from "bare-abort-controller";
 import EventEmitter = require("bare-events");
 /**
  * QvacResponse provides an interface for handling asynchronous responses
@@ -18,7 +17,7 @@ declare class QvacResponse<Output = any> extends EventEmitter {
          * typically forward the signal they received from
          * `model.run(input, { signal })` straight into the response.
          */
-        signal?: AbortSignal;
+        signal?: QvacResponse.AbortSignalLike;
     }, pollInterval?: number);
     /**
      * Registers a callback to be invoked on each output update.
@@ -77,5 +76,15 @@ declare class QvacResponse<Output = any> extends EventEmitter {
      * Cancels the response by invoking the cancel handler and emitting a 'cancel' event.
      */
     cancel(): Promise<void>;
+}
+declare namespace QvacResponse {
+    interface AbortSignalLike {
+        readonly aborted: boolean;
+        readonly reason: unknown;
+        addEventListener(type: "abort", listener: () => void, options?: {
+            once?: boolean;
+        }): void;
+        removeEventListener(type: "abort", listener: () => void): void;
+    }
 }
 export = QvacResponse;

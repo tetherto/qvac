@@ -61,29 +61,37 @@ try {
     if (installResult.status !== 0) {
       status = installResult.status ?? 1
     } else {
-      copyFile(
-        path.join(packageRoot, 'test', 'types', 'commonjs-api.ts'),
-        path.join(temporaryRoot, 'test', 'types', 'commonjs-api.ts')
-      )
-      copyFile(
-        path.join(packageRoot, 'tsconfig.dts.json'),
-        path.join(temporaryRoot, 'tsconfig.dts.json')
-      )
+      const fixturePaths = [
+        'test/types/commonjs-api.ts',
+        'test/types/native-abort-signal.ts',
+        'tsconfig.dts.json',
+        'tsconfig.dts.dom.json'
+      ]
+      for (const fixturePath of fixturePaths) {
+        copyFile(path.join(packageRoot, fixturePath), path.join(temporaryRoot, fixturePath))
+      }
 
-      const typecheckResult = run(
-        process.execPath,
-        [
-          path.join(packageRoot, 'node_modules', 'typescript', 'bin', 'tsc'),
-          '--project',
-          path.join(temporaryRoot, 'tsconfig.dts.json')
-        ],
-        {
-          cwd: temporaryRoot,
-          stdio: 'inherit'
+      const configPaths = ['tsconfig.dts.json', 'tsconfig.dts.dom.json']
+      status = 0
+      for (const configPath of configPaths) {
+        const typecheckResult = run(
+          process.execPath,
+          [
+            path.join(packageRoot, 'node_modules', 'typescript', 'bin', 'tsc'),
+            '--project',
+            path.join(temporaryRoot, configPath)
+          ],
+          {
+            cwd: temporaryRoot,
+            stdio: 'inherit'
+          }
+        )
+
+        if (typecheckResult.status !== 0) {
+          status = typecheckResult.status ?? 1
+          break
         }
-      )
-
-      status = typecheckResult.status ?? 1
+      }
     }
   }
 } finally {
@@ -94,4 +102,4 @@ if (status !== 0) {
   process.exit(status)
 }
 
-console.log('Packed infer-base declarations type-check for a CommonJS consumer.')
+console.log('Packed infer-base declarations type-check for Bare and native consumers.')

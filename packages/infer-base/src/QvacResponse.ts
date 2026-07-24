@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment -- Preserve the published untyped CommonJS response/result contract and runtime coercion. */
+/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-explicit-any, @typescript-eslint/no-namespace, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment -- Preserve the published untyped CommonJS response/result contract; namespace merging exposes its structural abort-signal type. */
 
-import type { AbortSignal } from "bare-abort-controller";
 import EventEmitter = require("bare-events");
 
 const statuses = Object.freeze({
@@ -29,7 +28,7 @@ class QvacResponse<Output = any> extends EventEmitter {
   /** @internal */
   declare private readonly _pollInterval: number;
   /** @internal */
-  declare private _abortSignal: AbortSignal | null;
+  declare private _abortSignal: QvacResponse.AbortSignalLike | null;
   /** @internal */
   declare private _onAbort: (() => void) | null;
   /** @internal */
@@ -52,14 +51,14 @@ class QvacResponse<Output = any> extends EventEmitter {
        * typically forward the signal they received from
        * `model.run(input, { signal })` straight into the response.
        */
-      signal?: AbortSignal;
+      signal?: QvacResponse.AbortSignalLike;
     },
     pollInterval?: number,
   );
   constructor(
     { cancelHandler, signal }: Partial<{
       cancelHandler: () => Promise<void>;
-      signal: AbortSignal;
+      signal: QvacResponse.AbortSignalLike;
     }> = {},
     pollInterval = 100,
   ) {
@@ -240,7 +239,7 @@ class QvacResponse<Output = any> extends EventEmitter {
   }
 
   /** @internal */
-  private _wireAbortSignal(signal: AbortSignal): void {
+  private _wireAbortSignal(signal: QvacResponse.AbortSignalLike): void {
     const buildError = () => {
       const reason: unknown = signal.reason;
       if (reason instanceof Error) return reason;
@@ -332,6 +331,19 @@ class QvacResponse<Output = any> extends EventEmitter {
     }
     await this._cancelHandler();
     this.emit("cancel");
+  }
+}
+
+namespace QvacResponse {
+  export interface AbortSignalLike {
+    readonly aborted: boolean;
+    readonly reason: unknown;
+    addEventListener(
+      type: "abort",
+      listener: () => void,
+      options?: { once?: boolean },
+    ): void;
+    removeEventListener(type: "abort", listener: () => void): void;
   }
 }
 

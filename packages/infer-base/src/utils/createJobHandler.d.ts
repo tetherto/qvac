@@ -1,11 +1,10 @@
-import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("../QvacResponse");
 interface CreateJobHandlerOptions {
     cancel: () => void | Promise<void>;
 }
 interface JobHandler {
     start(runOpts?: {
-        signal?: AbortSignal;
+        signal?: QvacResponse.AbortSignalLike;
     }): QvacResponse;
     startWith(response: QvacResponse): QvacResponse;
     output(data: any): void;

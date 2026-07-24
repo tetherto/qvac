@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports -- Preserve the published untyped CommonJS compatibility surface. */
 
-import type { AbortSignal } from "bare-abort-controller";
 import QvacResponse = require("./src/QvacResponse");
 import createJobHandlerImplementation = require("./src/utils/createJobHandler");
 import exclusiveRunQueue = require("./src/utils/exclusiveRunQueue");
 import getApiDefinition = require("./src/utils/getApiDefinition");
 
 declare const module: { exports: object };
+
+export type AbortSignalLike = QvacResponse.AbortSignalLike;
 
 export interface JobHandler {
   /**
@@ -15,7 +16,7 @@ export interface JobHandler {
    * signal the addon received from `model.run(input, { signal })`. The abort `reason`
    * becomes the response error (passed through unchanged when it's an Error).
    */
-  start(runOpts?: { signal?: AbortSignal }): QvacResponse;
+  start(runOpts?: { signal?: AbortSignalLike }): QvacResponse;
   /** Registers a pre-built response (e.g. a custom subclass) as active. Fails any stale active response. */
   startWith(response: QvacResponse): QvacResponse;
   /** Routes output data to the active response. No-op if idle. */
