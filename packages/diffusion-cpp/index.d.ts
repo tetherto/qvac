@@ -98,6 +98,44 @@ export interface EsrganUpscalerArgs {
 export interface EsrganUpscaleOptions {
     repeats?: number;
 }
+export interface LamA2eFiles {
+    model: string;
+}
+export interface LamA2eConfig {
+    identityIndex?: number;
+    nThreads?: NumericLike;
+    device?: 'cpu' | 'gpu';
+    backendsDir?: string;
+    verbosity?: NumericLike;
+    [key: string]: string | number | boolean | undefined;
+}
+export interface LamAudio2ExpressionArgs {
+    files: LamA2eFiles;
+    config?: LamA2eConfig;
+    logger?: QvacLogger | Console | null;
+    opts?: {
+        stats?: boolean;
+    };
+}
+export interface LamA2eRunOptions {
+    sampleRate?: number;
+    identityIndex?: number;
+}
+export interface LamA2eFrame {
+    timestampUs: number;
+    arkit52: number[];
+}
+export interface LamA2eRuntimeStats {
+    modelLoadMs: number;
+    inferenceMs: number;
+    totalInferenceMs: number;
+    totalWallMs: number;
+    totalRuns: number;
+    frameCount: number;
+    totalFrames: number;
+    sampleRate: number;
+    backendDevice?: 'cpu' | 'gpu';
+}
 export interface GenerationParams {
     prompt: string;
     negative_prompt?: string;
@@ -217,6 +255,51 @@ export declare class EsrganUpscaler {
     private _addonOutputCallback;
     upscale(imageBytes: Uint8Array, options?: EsrganUpscaleOptions): Promise<QvacResponse>;
     private _upscaleInternal;
+    cancel(): Promise<void>;
+    unload(): Promise<void>;
+    getState(): {
+        configLoaded: boolean;
+    };
+}
+/**
+ * Standalone audio-to-expression inference (ARKit-52 blendshapes) using the
+ * LAM audio2expression engine, bundled with stable-diffusion.cpp.
+ * Accepts 16kHz mono PCM Float32 samples and emits per-frame ARKit-52 weights.
+ */
+export declare class LamAudio2Expression {
+    opts: {
+        stats?: boolean;
+    };
+    logger: QvacLogger;
+    state: {
+        configLoaded: boolean;
+    };
+    private readonly _files;
+    private readonly _config;
+    private readonly _job;
+    private readonly _run;
+    private addon;
+    private _hasActiveResponse;
+    constructor({ files, config, logger, opts }: LamAudio2ExpressionArgs);
+    load(): Promise<void>;
+    private _load;
+    private _createAddon;
+    private _addonOutputCallback;
+    /**
+     * Runs audio2expression inference on a single 16kHz mono PCM Float32
+     * buffer, producing one `Output` event with a JSON string of
+     * `{ frames: [{ timestampUs, arkit52: number[52] }, ...] }`, followed by a
+     * final stats event.
+     */
+    run(pcm: Float32Array, options?: LamA2eRunOptions): Promise<QvacResponse>;
+    /**
+     * v1: rolling-window streaming is not yet implemented upstream, so this
+     * delegates to `run()` and returns the same single-batch response. Once
+     * the engine supports incremental/rolling-window processing, this method
+     * will emit multiple `Output` events (one per window) instead of one.
+     */
+    runStream(pcm: Float32Array, options?: LamA2eRunOptions): Promise<QvacResponse>;
+    private _runInternal;
     cancel(): Promise<void>;
     unload(): Promise<void>;
     getState(): {

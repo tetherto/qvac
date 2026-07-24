@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -18,9 +20,11 @@
 
 #include "handlers/SdCtxHandlers.hpp"
 #include "model-interface/EsrganUpscalerModel.hpp"
+#include "model-interface/LamAudio2ExpressionModel.hpp"
 #include "model-interface/SdModel.hpp"
 #include "utils/BackendLoader.hpp"
 #include "utils/BackendSelection.hpp"
+#include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_sd {
 
@@ -350,6 +354,140 @@ getExpectedEsrganBackendDevice(js_env_t* env, js_callback_info_t* info) try {
   const std::string expected =
       sd_backend_selection::expectedEsrganBackendDeviceForConfig(device);
   return js::String::create(env, expected);
+}
+JSCATCH
+
+// -- LAM audio2expression --------------------------------------------------
+
+/**
+ * Apply the LAM audio2expression configMap ("identityIndex", "nThreads",
+ * "device", "backendsDir", "verbosity") to a LamAudio2ExpressionConfig.
+ * Unknown keys are silently ignored (forward compatibility), mirroring
+ * applySdCtxHandlers.
+ */
+inline void applyLamA2eConfigMap(
+    LamAudio2ExpressionConfig& config,
+    const std::unordered_map<std::string, std::string>& configMap) {
+  for (const auto& [key, value] : configMap) {
+    if (key == "identityIndex") {
+      try {
+        config.identityIndex = std::stoi(value);
+      } catch (...) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "identityIndex must be an integer, got: '" + value + "'");
+      }
+    } else if (key == "nThreads") {
+      int parsed = 0;
+      std::size_t parsedChars = 0;
+      try {
+        parsed = std::stoi(value, &parsedChars);
+      } catch (...) {
+        parsedChars = 0;
+      }
+      if (parsedChars != value.size() || !(parsed == -1 || parsed > 0)) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "nThreads must be -1 (auto) or a positive integer, got: '" +
+                value + "'");
+      }
+      config.nThreads = parsed;
+    } else if (key == "device") {
+      config.device = value;
+    } else if (key == "backendsDir") {
+      config.backendsDir = value;
+    } else if (key == "verbosity") {
+      std::unordered_map<std::string, std::string> m{{"verbosity", value}};
+      logging::setVerbosityLevel(m);
+    }
+    // Unknown keys are silently ignored for forward compatibility.
+  }
+}
+
+inline js_value_t*
+createA2eInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  LamAudio2ExpressionConfig config{};
+  config.modelPath = args.getMapEntry(1, "modelPath");
+
+  auto configMap = args.getSubmap(1, "config");
+  applyLamA2eConfigMap(config, configMap);
+
+  auto model = make_unique<LamAudio2ExpressionModel>(std::move(config));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+inline js_value_t* activateA2e(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto* a2eModel =
+      dynamic_cast<LamAudio2ExpressionModel*>(&instance.addonCpp->model.get());
+  if (a2eModel == nullptr) {
+    throw StatusError(
+        general_error::InternalError,
+        "activateA2e: model is not a LamAudio2ExpressionModel");
+  }
+
+  a2eModel->load();
+
+  js_value_t* result = nullptr;
+  js_get_undefined(env, &result);
+  return result;
+}
+JSCATCH
+
+inline js_value_t* runA2eJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto [type, jsInput] = JsInterface::getInput(args);
+  if (type != "audio") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LAM audio2expression runA2eJob expects a single audio (PCM) input");
+  }
+
+  auto inputObj = args.getJsObject(1, "inputObj");
+
+  LamAudio2ExpressionModel::ProcessJob job;
+  job.pcm = js::TypedArray<float>(env, jsInput).as<std::vector<float>>(env);
+  job.sampleRate =
+      inputObj.getOptionalPropertyAs<js::Number, int32_t>(env, "sampleRate")
+          .value_or(16000);
+  job.identityIndex =
+      inputObj.getOptionalPropertyAs<js::Number, int32_t>(
+          env, "identityIndex");
+
+  // See the runJob() lifetime note above: `instance` is safe to capture by
+  // reference under the same AddonCpp teardown-ordering invariant.
+  job.outputCallback = [&instance](const std::string& framesJson) {
+    instance.addonCpp->outputQueue->queueResult(std::any(framesJson));
+  };
+
+  return instance.runJob(std::any(std::move(job)));
 }
 JSCATCH
 

@@ -28,6 +28,12 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
+# stable-diffusion-cpp is overlaid from vcpkg/ports (LAM audio2expression
+# support ahead of the registry bump) via vcpkg-configuration.json's
+# "overlay-ports": ["vcpkg/ports"] -- vcpkg discovers it automatically from
+# the manifest directory, so no VCPKG_OVERLAY_PORTS is set here (matches the
+# convention used by translation-nmtcpp's vcpkg-overlays/).
+
 project(inference-addon-sd C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -101,9 +107,11 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdParsers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LamAudio2ExpressionModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/LamAudio2Expression.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/AviWriter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp

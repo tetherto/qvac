@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
+exports.LamAudio2ExpressionInterface = exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 exports.readImageDimensions = readImageDimensions;
 /* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
@@ -224,9 +224,55 @@ class EsrganUpscalerInterface {
     }
 }
 exports.EsrganUpscalerInterface = EsrganUpscalerInterface;
+class LamAudio2ExpressionInterface {
+    _binding;
+    _handle;
+    constructor(binding, configurationParams, outputCallback) {
+        this._binding = binding;
+        if (!configurationParams.config) {
+            configurationParams.config = {};
+        }
+        if (!configurationParams.config.backendsDir) {
+            configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds');
+        }
+        configurationParams.config = Object.fromEntries(Object.entries(configurationParams.config)
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => [key, String(value)]));
+        this._handle = this._binding.createA2eInstance(this, configurationParams, outputCallback);
+    }
+    // eslint-disable-next-line @typescript-eslint/require-await -- preserve the original async wrapper semantics.
+    async activate() {
+        this._binding.activateA2e(this._handle);
+    }
+    async cancel() {
+        if (!this._handle)
+            return;
+        await this._binding.cancel(this._handle);
+    }
+    async runJob(pcm, params) {
+        const jobArgs = {
+            type: 'audio',
+            input: pcm,
+            sampleRate: params.sampleRate
+        };
+        if (params.identityIndex !== undefined) {
+            jobArgs.identityIndex = params.identityIndex;
+        }
+        return this._binding.runA2eJob(this._handle, jobArgs);
+    }
+    // eslint-disable-next-line @typescript-eslint/require-await -- preserve the original async wrapper semantics.
+    async unload() {
+        if (!this._handle)
+            return;
+        this._binding.destroyInstance(this._handle);
+        this._handle = null;
+    }
+}
+exports.LamAudio2ExpressionInterface = LamAudio2ExpressionInterface;
 const cjsExports = {
     SdInterface,
     EsrganUpscalerInterface,
+    LamAudio2ExpressionInterface,
     mapAddonEvent,
     readImageDimensions
 };

@@ -20,6 +20,10 @@ export interface EsrganConfigurationParams {
     esrganPath: string;
     config?: AddonConfig;
 }
+export interface LamA2eConfigurationParams {
+    modelPath: string;
+    config?: AddonConfig;
+}
 export interface SdJobParams {
     [key: string]: unknown;
     width?: number;
@@ -40,8 +44,15 @@ export interface NativeUpscaleJobArgs {
     input: Uint8Array;
     params: string;
 }
+export interface NativeA2eJobArgs {
+    type: 'audio';
+    input: Float32Array;
+    sampleRate: number;
+    identityIndex?: number;
+}
 export type SdOutputCallback = (addon: SdInterface, event: unknown, data: unknown, error: unknown) => void;
 export type EsrganOutputCallback = (addon: EsrganUpscalerInterface, event: unknown, data: unknown, error: unknown) => void;
+export type LamA2eOutputCallback = (addon: LamAudio2ExpressionInterface, event: unknown, data: unknown, error: unknown) => void;
 export interface SdBinding {
     createInstance(owner: SdInterface, configurationParams: SdConfigurationParams, outputCallback: SdOutputCallback): object;
     activate(handle: unknown): void;
@@ -54,6 +65,13 @@ export interface EsrganBinding {
     activateUpscaler(handle: unknown): void;
     cancel(handle: unknown): Promise<void>;
     runUpscaleJob(handle: unknown, input: NativeUpscaleJobArgs): Promise<boolean>;
+    destroyInstance(handle: unknown): void;
+}
+export interface LamA2eBinding {
+    createA2eInstance(owner: LamAudio2ExpressionInterface, configurationParams: LamA2eConfigurationParams, outputCallback: LamA2eOutputCallback): object;
+    activateA2e(handle: unknown): void;
+    cancel(handle: unknown): Promise<void>;
+    runA2eJob(handle: unknown, input: NativeA2eJobArgs): Promise<boolean>;
     destroyInstance(handle: unknown): void;
 }
 export type MappedAddonEvent = {
@@ -116,5 +134,17 @@ export declare class EsrganUpscalerInterface {
     activate(): Promise<void>;
     cancel(): Promise<void>;
     runJob(imageBytes: Uint8Array, params: Record<string, unknown>): Promise<boolean>;
+    unload(): Promise<void>;
+}
+export declare class LamAudio2ExpressionInterface {
+    private readonly _binding;
+    private _handle;
+    constructor(binding: LamA2eBinding, configurationParams: LamA2eConfigurationParams, outputCallback: LamA2eOutputCallback);
+    activate(): Promise<void>;
+    cancel(): Promise<void>;
+    runJob(pcm: Float32Array, params: {
+        sampleRate: number;
+        identityIndex?: number;
+    }): Promise<boolean>;
     unload(): Promise<void>;
 }

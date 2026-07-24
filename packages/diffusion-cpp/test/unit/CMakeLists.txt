@@ -29,12 +29,14 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/LamAudio2Expression.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/AviWriter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/VideoModelCapabilities.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LamAudio2ExpressionModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp

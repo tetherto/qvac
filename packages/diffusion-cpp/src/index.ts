@@ -10,10 +10,13 @@ import {
 } from '@qvac/infer-base'
 import {
   EsrganUpscalerInterface,
+  LamAudio2ExpressionInterface,
   SdInterface,
   mapAddonEvent,
   type EsrganBinding,
   type EsrganConfigurationParams,
+  type LamA2eBinding,
+  type LamA2eConfigurationParams,
   type SdBinding,
   type SdConfigurationParams
 } from './addon'
@@ -166,6 +169,48 @@ export interface EsrganUpscaleOptions {
   repeats?: number
 }
 
+export interface LamA2eFiles {
+  model: string
+}
+
+export interface LamA2eConfig {
+  identityIndex?: number
+  nThreads?: NumericLike
+  device?: 'cpu' | 'gpu'
+  backendsDir?: string
+  verbosity?: NumericLike
+  [key: string]: string | number | boolean | undefined
+}
+
+export interface LamAudio2ExpressionArgs {
+  files: LamA2eFiles
+  config?: LamA2eConfig
+  logger?: QvacLogger | Console | null
+  opts?: { stats?: boolean }
+}
+
+export interface LamA2eRunOptions {
+  sampleRate?: number
+  identityIndex?: number
+}
+
+export interface LamA2eFrame {
+  timestampUs: number
+  arkit52: number[]
+}
+
+export interface LamA2eRuntimeStats {
+  modelLoadMs: number
+  inferenceMs: number
+  totalInferenceMs: number
+  totalWallMs: number
+  totalRuns: number
+  frameCount: number
+  totalFrames: number
+  sampleRate: number
+  backendDevice?: 'cpu' | 'gpu'
+}
+
 export interface GenerationParams {
   prompt: string
   negative_prompt?: string
@@ -233,6 +278,7 @@ export interface EsrganRuntimeStats {
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>
 type DiffusionAddon = Addon & SdInterface
 type UpscalerAddon = EsrganUpscalerInterface
+type A2eAddon = LamAudio2ExpressionInterface
 
 const COMPANION_FILE_KEYS = [
   'clipL',
@@ -247,6 +293,7 @@ const COMPANION_FILE_KEYS = [
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 const NATIVE_UPSCALE_REPEATS_MAX = 2_147_483_647
+const LAM_A2E_SAMPLE_RATE = 16000
 
 function assertAbsolute(key: string, value: unknown): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
@@ -855,6 +902,211 @@ export class EsrganUpscaler {
   }
 }
 
+/**
+ * Standalone audio-to-expression inference (ARKit-52 blendshapes) using the
+ * LAM audio2expression engine, bundled with stable-diffusion.cpp.
+ * Accepts 16kHz mono PCM Float32 samples and emits per-frame ARKit-52 weights.
+ */
+export class LamAudio2Expression {
+  opts: { stats?: boolean }
+  logger: QvacLogger
+  state: { configLoaded: boolean }
+
+  private readonly _files: LamA2eFiles
+  private readonly _config: LamA2eConfig
+  private readonly _job: JobHandler
+  private readonly _run: RunExclusive
+  private addon: A2eAddon | null
+  private _hasActiveResponse: boolean
+
+  constructor({ files, config, logger = null, opts = {} }: LamAudio2ExpressionArgs) {
+    if (!files || typeof files !== 'object') {
+      throw new TypeError('files must be an object containing { model }')
+    }
+    assertAbsolute('model', files.model)
+
+    this._files = files
+    this._config = config || {}
+    this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface | undefined)
+    this.opts = opts
+    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
+    this._run = exclusiveRunQueue() as RunExclusive
+    this.addon = null
+    this._hasActiveResponse = false
+    this.state = { configLoaded: false }
+  }
+
+  async load(): Promise<void> {
+    return this._run(async () => {
+      if (this.state.configLoaded) return
+      await this._load()
+      this.state.configLoaded = true
+    })
+  }
+
+  private async _load(): Promise<void> {
+    this.logger.info('Starting LAM audio2expression model load')
+
+    const configurationParams: LamA2eConfigurationParams = {
+      modelPath: this._files.model,
+      config: this._config
+    }
+
+    this.logger.info('Creating LAM audio2expression addon with configuration:', configurationParams)
+
+    try {
+      this.addon = this._createAddon(configurationParams)
+      this.logger.info('Activating LAM audio2expression addon')
+      await this.addon.activate()
+    } catch (loadError) {
+      this.logger.error('Error during LAM audio2expression model load:', loadError)
+      try {
+        await this.addon?.unload?.()
+      } catch {}
+      this.addon = null
+      throw loadError
+    }
+
+    this.logger.info('LAM audio2expression model load completed successfully')
+  }
+
+  private _createAddon(configurationParams: LamA2eConfigurationParams): A2eAddon {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+    const binding = require('./binding') as LamA2eBinding
+    return new LamAudio2ExpressionInterface(
+      binding,
+      configurationParams,
+      this._addonOutputCallback.bind(this)
+    )
+  }
+
+  private _addonOutputCallback(
+    _addon: LamAudio2ExpressionInterface,
+    event: unknown,
+    data: unknown,
+    error: unknown
+  ): void {
+    const mapped = mapAddonEvent(event, data, error)
+    if (mapped === null) {
+      this.logger.debug(`Unhandled addon event: ${String(event)} (data type: ${typeof data})`)
+      return
+    }
+
+    if (mapped.type === 'Error') {
+      this.logger.error('LAM audio2expression job failed with error:', mapped.error)
+      this._job.fail(mapped.error as Error)
+      return
+    }
+
+    if (mapped.type === 'JobEnded') {
+      this._job.end(this.opts.stats ? mapped.data : null)
+      return
+    }
+
+    this._job.output(mapped.data)
+  }
+
+  /**
+   * Runs audio2expression inference on a single 16kHz mono PCM Float32
+   * buffer, producing one `Output` event with a JSON string of
+   * `{ frames: [{ timestampUs, arkit52: number[52] }, ...] }`, followed by a
+   * final stats event.
+   */
+  async run(pcm: Float32Array, options?: LamA2eRunOptions): Promise<QvacResponse> {
+    return this._run(() => this._runInternal(pcm, options))
+  }
+
+  /**
+   * v1: rolling-window streaming is not yet implemented upstream, so this
+   * delegates to `run()` and returns the same single-batch response. Once
+   * the engine supports incremental/rolling-window processing, this method
+   * will emit multiple `Output` events (one per window) instead of one.
+   */
+  async runStream(pcm: Float32Array, options?: LamA2eRunOptions): Promise<QvacResponse> {
+    return this.run(pcm, options)
+  }
+
+  private async _runInternal(pcm: Float32Array, options?: LamA2eRunOptions): Promise<QvacResponse> {
+    if (!(pcm instanceof Float32Array)) {
+      throw new TypeError('pcm must be a Float32Array of 16kHz mono samples')
+    }
+    if (pcm.length === 0) {
+      throw new Error('pcm must be a non-empty Float32Array')
+    }
+
+    const sampleRate = options?.sampleRate ?? LAM_A2E_SAMPLE_RATE
+    if (sampleRate !== LAM_A2E_SAMPLE_RATE) {
+      throw new Error(
+        `LAM audio2expression requires sampleRate === ${LAM_A2E_SAMPLE_RATE}, got: ${sampleRate}`
+      )
+    }
+
+    if (options?.identityIndex != null && !Number.isInteger(options.identityIndex)) {
+      throw new TypeError('identityIndex must be an integer')
+    }
+
+    if (!this.addon) {
+      throw new Error('Addon not initialized. Call load() first.')
+    }
+
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    const response = this._job.start()
+
+    let accepted: boolean
+    try {
+      accepted = await this.addon.runJob(pcm, { sampleRate, identityIndex: options?.identityIndex })
+    } catch (error) {
+      this._job.fail(error as Error)
+      throw error
+    }
+
+    if (!accepted) {
+      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
+    finalized.catch((error: unknown) => {
+      this.logger?.warn?.('LAM audio2expression response rejected:', loggableError(error))
+    })
+    response.await = () => finalized
+
+    this.logger.info('LAM audio2expression job started successfully')
+    return response
+  }
+
+  async cancel(): Promise<void> {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  async unload(): Promise<void> {
+    return this._run(async () => {
+      await this.cancel()
+      if (this._job.active) {
+        this._job.fail(new Error('Model was unloaded'))
+      }
+      this._hasActiveResponse = false
+      if (this.addon) {
+        await this.addon.unload()
+        this.addon = null
+      }
+      this.state.configLoaded = false
+    })
+  }
+
+  getState(): { configLoaded: boolean } {
+    return this.state
+  }
+}
+
 export function applyFluxImg2ImgDimDefaults(
   params: GenerationParams,
   prediction: string,
@@ -897,10 +1149,12 @@ const cjsExports = ImgStableDiffusion as typeof ImgStableDiffusion & {
   ImgStableDiffusion?: typeof ImgStableDiffusion
   VideoStableDiffusion?: typeof VideoStableDiffusion
   EsrganUpscaler?: typeof EsrganUpscaler
+  LamAudio2Expression?: typeof LamAudio2Expression
   applyFluxImg2ImgDimDefaults?: typeof applyFluxImg2ImgDimDefaults
 }
 cjsExports.ImgStableDiffusion = ImgStableDiffusion
 cjsExports.VideoStableDiffusion = VideoStableDiffusion
 cjsExports.EsrganUpscaler = EsrganUpscaler
+cjsExports.LamAudio2Expression = LamAudio2Expression
 cjsExports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults
 module.exports = cjsExports

@@ -2,7 +2,7 @@
 
 const test = require('brittle')
 const ImgStableDiffusion = require('../../index')
-const { EsrganUpscaler } = require('../../index')
+const { EsrganUpscaler, LamAudio2Expression } = require('../../index')
 const { readImageDimensions } = require('../../addon')
 const { setupJsLogger, releaseJsLogger } = require('./utils')
 
@@ -870,3 +870,244 @@ nativeTest(
     }
   }
 )
+
+// ---------- LamAudio2Expression construction ----------
+
+nativeTest('LamAudio2Expression | constructor accepts files.model', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: {
+      model: '/tmp/lam-audio2exp-f32.gguf'
+    },
+    config: {
+      identityIndex: 0,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  t.ok(a2e, 'constructs LamAudio2Expression')
+  t.is(a2e.getState().configLoaded, false, 'does not auto-load')
+})
+
+nativeTest('LamAudio2Expression | constructor throws when files.model is missing', async (t) => {
+  try {
+    new LamAudio2Expression({
+      // eslint-disable-line no-new
+      files: {},
+      config: { verbosity: 2 },
+      logger: console,
+      opts: { stats: true }
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /files\.model must be an absolute path string/.test(err.message),
+      'error message explains files.model is required'
+    )
+  }
+})
+
+nativeTest('LamAudio2Expression | constructor throws when files.model is relative', async (t) => {
+  try {
+    new LamAudio2Expression({
+      // eslint-disable-line no-new
+      files: {
+        model: 'lam-audio2exp-f32.gguf'
+      },
+      config: { verbosity: 2 },
+      logger: console,
+      opts: { stats: true }
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /files\.model must be an absolute path/.test(err.message),
+      'error message explains files.model must be absolute'
+    )
+  }
+})
+
+// ---------- LamAudio2Expression.run: input validation ----------
+
+nativeTest('LamAudio2Expression | run rejects non-Float32Array input', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await a2e.run('not pcm samples')
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /pcm must be a Float32Array/.test(err.message),
+      'error message explains pcm must be a Float32Array'
+    )
+  }
+})
+
+nativeTest('LamAudio2Expression | run rejects empty Float32Array input', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await a2e.run(new Float32Array(0))
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /pcm must be a non-empty Float32Array/.test(err.message),
+      'error message explains empty pcm'
+    )
+  }
+})
+
+nativeTest('LamAudio2Expression | run rejects sampleRate !== 16000', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await a2e.run(new Float32Array(16000), { sampleRate: 44100 })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /requires sampleRate === 16000, got: 44100/.test(err.message),
+      'error message explains sampleRate requirement'
+    )
+  }
+})
+
+nativeTest('LamAudio2Expression | run rejects non-integer identityIndex', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await a2e.run(new Float32Array(16000), { identityIndex: 1.5 })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /identityIndex must be an integer/.test(err.message),
+      'error message explains identityIndex'
+    )
+  }
+})
+
+nativeTest('LamAudio2Expression | run throws when addon is not loaded', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await a2e.run(new Float32Array(16000))
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(/Addon not initialized\. Call load\(\) first\./.test(err.message), 'requires load() first')
+  }
+})
+
+// ---------- LamAudio2Expression.run: mock addon forwarding ----------
+
+nativeTest(
+  'LamAudio2Expression | run forwards pcm + sampleRate + identityIndex to addon',
+  async (t) => {
+    const a2e = new LamAudio2Expression({
+      files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+      logger: console,
+      opts: { stats: true }
+    })
+
+    const sentinel = new Error('fake a2e addon stop')
+    const pcm = new Float32Array(16000)
+    let captured = null
+    a2e.addon = {
+      runJob: async (pcmArg, params) => {
+        captured = { pcm: pcmArg, params }
+        throw sentinel
+      },
+      cancel: async () => {}
+    }
+
+    try {
+      await a2e.run(pcm, { identityIndex: 3 })
+      t.fail('should have thrown')
+    } catch (err) {
+      t.is(err, sentinel, 'fake addon receives the run request')
+    }
+
+    t.ok(captured, 'captured params passed to addon')
+    t.is(captured.pcm, pcm, 'pcm buffer is forwarded unchanged')
+    t.is(captured.params.sampleRate, 16000, 'sampleRate defaults to 16000')
+    t.is(captured.params.identityIndex, 3, 'identityIndex is forwarded')
+  }
+)
+
+nativeTest('LamAudio2Expression | run omits identityIndex when not provided', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  const sentinel = new Error('fake a2e addon stop')
+  let captured = null
+  a2e.addon = {
+    runJob: async (pcmArg, params) => {
+      captured = { pcm: pcmArg, params }
+      throw sentinel
+    },
+    cancel: async () => {}
+  }
+
+  try {
+    await a2e.run(new Float32Array(16000))
+    t.fail('should have thrown')
+  } catch (err) {
+    t.is(err, sentinel, 'fake addon receives the run request')
+  }
+
+  t.ok(captured, 'captured params passed to addon')
+  t.is(captured.params.identityIndex, undefined, 'identityIndex is undefined when not provided')
+})
+
+nativeTest('LamAudio2Expression | runStream delegates to run (v1 unary passthrough)', async (t) => {
+  const a2e = new LamAudio2Expression({
+    files: { model: '/tmp/lam-audio2exp-f32.gguf' },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  const sentinel = new Error('fake a2e addon stop')
+  let captured = null
+  a2e.addon = {
+    runJob: async (pcmArg, params) => {
+      captured = { pcm: pcmArg, params }
+      throw sentinel
+    },
+    cancel: async () => {}
+  }
+
+  try {
+    await a2e.runStream(new Float32Array(16000), { sampleRate: 16000 })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.is(err, sentinel, 'runStream forwards to the same addon.runJob path as run')
+  }
+
+  t.ok(captured, 'captured params passed to addon via runStream')
+})
