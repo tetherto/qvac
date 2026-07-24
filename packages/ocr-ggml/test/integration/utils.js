@@ -652,6 +652,42 @@ function _loadMobileUrlConfig() {
   return urlConfig
 }
 
+// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
+// adb-pushes the mobile models to this world-readable location, because
+// app-scoped dirs reject adb writes on Android 11+. We copy from here into the
+// app's writable models dir instead of downloading from presigned S3. See
+// scripts/generate-prestage-block.js for the host side.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function prestagedModelPath(modelName) {
+  if (platform !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return p
+  } catch (_) {}
+  return null
+}
+
+// Copy a pre-staged model into destPath. Returns true when a valid (>= minBytes)
+// copy landed, so the caller can skip the network download.
+function copyPrestagedModel(modelName, destPath, minBytes = 1024) {
+  const src = prestagedModelPath(modelName)
+  if (!src) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(src, destPath)
+    if (fs.statSync(destPath).size >= minBytes) {
+      console.log(`[prestage] Using pre-staged model ${modelName}`)
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+  }
+  return false
+}
+
 /**
  * Ensures an EasyOCR GGUF model is available and returns its path.
  * On desktop: uses env vars (OCR_GGML_DETECTOR / OCR_GGML_RECOGNIZER) or defaults.
@@ -690,6 +726,10 @@ async function ensureModelPath(modelName) {
   const destPath = path.join(GGML_MODELS_DIR, filename)
   if (fs.existsSync(destPath)) {
     console.log(`   Model cached: ${filename}`)
+    return destPath
+  }
+
+  if (copyPrestagedModel(filename, destPath)) {
     return destPath
   }
 
@@ -755,6 +795,10 @@ async function ensureDoctrModels() {
   for (const [key, { filename, urlKey }] of Object.entries(mobileModels)) {
     const destPath = path.join(GGML_MODELS_DIR, filename)
     if (fs.existsSync(destPath)) {
+      paths[key] = destPath
+      continue
+    }
+    if (copyPrestagedModel(filename, destPath)) {
       paths[key] = destPath
       continue
     }
@@ -1347,6 +1391,8 @@ module.exports = {
   getImagePath,
   ensureModelPath,
   ensureDoctrModels,
+  copyPrestagedModel,
+  prestagedModelPath,
   GGML_MODELS_DIR,
   formatOCRPerformanceMetrics,
   safeUnload,
