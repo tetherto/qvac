@@ -2,6 +2,7 @@
 #include <js.h>
 
 #include "inference-addon-cpp/JsUtils.hpp"
+#include "test_logger.hpp"
 
 // Unified native binding for the on-device (iOS/Android) integration tests.
 //
@@ -19,9 +20,10 @@
 // normalized drift-check in scripts/validate-mobile-tests.js is tracked for the
 // phase-2 port (when several bindings aggregate). See README.md.
 //
-// Phase 1 ships the js-create-double hooks only; the logger hooks
-// (setLogger/cppLog/... + test_logger.cpp) drop into the export block below in
-// phase 2. See ../mobile/README.md.
+// Phase 1: js-create-double hooks. Phase 2: the logger hooks
+// (setLogger/cppLog/... implemented in test_logger.cpp, JS_LOGGER-gated). The
+// output-callback-lifetime UAF stress test stays desktop-Linux-x64-ASan-only —
+// no signal without ASan, which is unavailable on device. See README.md.
 
 namespace {
 
@@ -77,8 +79,17 @@ js_value_t* inferenceAddonCppMobileTestsExports(
     }                                                                          \
   }
 
+  // js-create-double-first-call
   V("createDouble", createDouble)
   V("createInt32", createInt32)
+
+  // logger (implemented in test_logger.cpp; native std::thread only — no
+  // bare-thread — so the on-device bridge test is portable)
+  V("setLogger", test_logger::setLogger)
+  V("cppLog", test_logger::cppLog)
+  V("dummyCppLogWork", test_logger::dummyCppLogWork)
+  V("dummyMultiThreadedCppLogWork", test_logger::dummyMultiThreadedCppLogWork)
+  V("releaseLogger", test_logger::releaseLogger)
 #undef V
 
   return moduleExports;
