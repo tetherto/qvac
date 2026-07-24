@@ -132,6 +132,28 @@ function asNativeData (data: unknown): NativeAudiogenData | null {
   return data
 }
 
+// The native config parser `static_cast<int>`s these numbers, and casting
+// NaN/Infinity to an integer is undefined behavior. Reject non-finite (and
+// non-integer, where required) values on the JS side with a clear error before
+// they ever reach C++.
+function requireFiniteNumber (value: number, name: string, integer = false): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`audiogen-ggml: ${name} must be a finite number, got ${value}`)
+  }
+  if (integer && !Number.isInteger(value)) {
+    throw new Error(`audiogen-ggml: ${name} must be an integer, got ${value}`)
+  }
+  return value
+}
+
+function optionalFiniteNumber (
+  value: number | undefined,
+  name: string,
+  integer = false
+): number | undefined {
+  return value === undefined ? undefined : requireFiniteNumber(value, name, integer)
+}
+
 /**
  * GGML-backed music generation via the ACE-Step engine. Owns a persistent
  * native engine: the four model stages are loaded once by `load()` and reused
@@ -175,11 +197,11 @@ export class AudioGen {
       lmModelPath: files.lmModel,
       ditModelPath,
       vaeModelPath: files.vaeModel,
-      inferenceSteps: config.inferenceSteps ?? 0,
-      shift: config.shift ?? 0,
+      inferenceSteps: requireFiniteNumber(config.inferenceSteps ?? 0, 'inferenceSteps', true),
+      shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
       useGPU: useGpu,
-      nGpuLayers: config.nGpuLayers ?? 99,
-      threads: config.threads ?? 0
+      nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
+      threads: requireFiniteNumber(config.threads ?? 0, 'threads', true)
     }
 
     this.addon = null
@@ -230,12 +252,12 @@ export class AudioGen {
         type: 'text',
         input: caption,
         lyrics: opts.lyrics ?? '[Instrumental]',
-        seed: opts.seed,
+        seed: optionalFiniteNumber(opts.seed, 'seed', true),
         vocalLanguage: opts.vocalLanguage,
-        bpm: opts.bpm,
+        bpm: optionalFiniteNumber(opts.bpm, 'bpm'),
         keyscale: opts.keyscale,
         timesignature: opts.timesignature,
-        duration: opts.duration
+        duration: optionalFiniteNumber(opts.duration, 'duration')
       })
     } catch (error) {
       this._logger.error(
