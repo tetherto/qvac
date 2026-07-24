@@ -519,6 +519,29 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // tear the slot down before it ever decodes.
   if (slots_[seqId]->streams.onAdmitted &&
       slots_[seqId]->streams.onAdmitted(seqId, admissionId)) {
+    // The request was cancelled while still queued, so it never produced
+    // anything. A multi-prompt group settles as Cancelled — the terminal
+    // cancelPendingLocked gives a queued drop, and what the README documents
+    // for cancelling a batch that contained queued prompts — instead of
+    // quietly completing the group as a success with empty outputs. A lone
+    // request keeps the graceful empty-output cancel the single-job contract
+    // pins: its caller cannot tell a refusal here from a cancel that landed
+    // during prefill, and the latter must not throw.
+    if (slots_[seqId]->group && slots_[seqId]->group->totalCount > 1) {
+      failGroupLocked(
+          slots_[seqId]->group,
+          std::make_exception_ptr(
+              qvac_errors::StatusError(
+                  ADDON_ID,
+                  qvac_lib_inference_addon_llama::errors::toString(
+                      qvac_lib_inference_addon_llama::errors::Cancelled),
+                  "ContinuousBatchScheduler: request cancelled before it "
+                  "could run (queued behind the parallel limit when its "
+                  "group was cancelled)")));
+    }
+    // Not covered by failGroupLocked when the group was already settled by
+    // an earlier refusal (its early-out skips the teardown loop), so tear
+    // this slot down explicitly; a double teardown is a no-op (slot freed).
     cancelSlotLocked(seqId);
   }
   return seqId;
