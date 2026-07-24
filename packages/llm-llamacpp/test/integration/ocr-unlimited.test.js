@@ -118,10 +118,14 @@ async function runOcr(inference, imageFilePath) {
   }
 }
 
-// Test: Unlimited-OCR parses a scanned medical (CT-scan) report document
+// Test: Unlimited-OCR parses a scanned medical (CT-scan) report document.
+// Runs on desktop (on-pr) and on mobile GPU in the *weekly* ocr group only
+// (androidWeekly/iosWeekly) — it is deliberately kept out of the on-pr mobile
+// groups so on-pr Device Farm time stays short; the weekly lane carries the
+// heavier OCR coverage.
 safeTest(
   'Unlimited-OCR can parse text from document image',
-  { timeout: TEST_CONSTANTS.timeout, skip: isMobile },
+  { timeout: TEST_CONSTANTS.timeout },
   async (t) => {
     for (const deviceConfig of DEVICE_CONFIGS) {
       const label = `[${deviceConfig.id.toUpperCase()}]`
