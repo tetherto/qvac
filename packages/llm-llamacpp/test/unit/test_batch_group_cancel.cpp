@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
@@ -143,5 +144,64 @@ TEST_F(BatchGroupCancelTest, CancelByIdCancelsOnlyTargetedGroup) {
         << " ran to completion; cancelById(groupId) did not land on its "
            "slot. output='"
         << cancelled[i] << "'";
+  }
+}
+
+/// Cancelling a batch group while some of its prompts still wait behind the
+/// parallel limit must reject the batch with `Cancelled` (README: cancelling
+/// a batch): those prompts never ran, so completing the batch as a success
+/// with empty outputs disguises the cancellation. Targeted counterpart of
+/// CancelAllThrowsForUnrunPendingPrompts — here the group's pending requests
+/// survive the cancel in the scheduler's queue, get admitted afterwards, are
+/// refused at admission (the group is marked cancelled), and that refusal
+/// must settle the group as Cancelled instead of quietly completing it.
+TEST_F(BatchGroupCancelTest, CancelWithQueuedOverflowRejectsCancelled) {
+  REQUIRE_MODEL(model_);
+  // Batch of 4 on parallel=2: two prompts hold slots, two sit in pending_.
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  constexpr JobId kGroupId = 91;
+  std::atomic<bool> groupTokenSeen = false;
+
+  std::vector<LlamaModel::Prompt> group;
+  for (int i = 0; i < 4; ++i) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "astronomy.");
+    prompt.outputCallback = [&groupTokenSeen](const std::string&) {
+      groupTokenSeen.store(true);
+    };
+    group.push_back(std::move(prompt));
+  }
+
+  auto future = std::async(std::launch::async, [&model, &group] {
+    return model->process(std::any(group), kGroupId);
+  });
+
+  // Cancel from this thread as soon as a slot streams; the 256-token essay
+  // generations hold both slots far longer, so the two overflow prompts are
+  // still queued when the cancel lands.
+  const auto tokenDeadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!groupTokenSeen.load() &&
+         std::chrono::steady_clock::now() < tokenDeadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(groupTokenSeen.load())
+      << "test setup: group never emitted a token";
+  model->cancelById(kGroupId);
+
+  ASSERT_EQ(
+      future.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  try {
+    const std::any out = future.get();
+    const auto outputs = std::any_cast<std::vector<std::string>>(out);
+    FAIL() << "batch with queued prompts completed as a success after a "
+              "targeted cancel; expected a Cancelled rejection (outputs="
+           << outputs.size() << ")";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("Cancelled"), std::string::npos)
+        << "expected a Cancelled error code, got: " << e.codeString();
   }
 }
