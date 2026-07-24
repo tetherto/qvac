@@ -441,10 +441,20 @@ public:
       outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
     }
     // Await only this snapshot: jobs admitted while the wait runs are not
-    // cancelled and must not extend it.
-    const std::vector<JobId> inFlightSnapshot = inFlightIds();
+    // cancelled and must not extend it. The whole-model cancel is
+    // indiscriminate, so it is dispatched under the same lock as the
+    // snapshot: a worker needs mtx_ to dequeue a job into inFlight_, so no
+    // job admitted after the snapshot can be collaterally swept into this
+    // cancel while it is still being dispatched.
+    std::vector<JobId> inFlightSnapshot;
+    {
+      std::lock_guard lock(mtx_);
+      inFlightSnapshot.assign(inFlight_.begin(), inFlight_.end());
+      if (cancel_ != nullptr) {
+        cancel_->cancel();
+      }
+    }
     if (cancel_ != nullptr) {
-      cancel_->cancel();
       awaitJobsGone(inFlightSnapshot);
       return;
     }
@@ -478,7 +488,10 @@ public:
   /// freed slot and run despite having been cancelled while queued. Only then
   /// are the in-flight targets cancelled — per id when the model offers
   /// cancelById, else via one whole-model cancel() (indiscriminate, but the
-  /// only cancel such a model offers) — and awaited until they leave.
+  /// only cancel such a model offers), dispatched under the same lock as the
+  /// inFlightTargets snapshot so no job admitted afterward can be
+  /// collaterally swept into it while it is still in flight — and awaited
+  /// until they leave.
   void cancelJobs(const std::vector<JobId>& ids) override {
     std::vector<JobId> dropped;
     std::vector<JobId> inFlightTargets;
@@ -490,6 +503,10 @@ public:
         } else if (inFlight_.count(id) != 0) {
           inFlightTargets.push_back(id);
         }
+      }
+      if (!inFlightTargets.empty() && cancelById_ == nullptr &&
+          cancel_ != nullptr) {
+        cancel_->cancel();
       }
     }
     for (const JobId id : dropped) {
@@ -506,7 +523,6 @@ public:
       return;
     }
     if (cancel_ != nullptr) {
-      cancel_->cancel();
       awaitJobsGone(inFlightTargets);
       return;
     }
