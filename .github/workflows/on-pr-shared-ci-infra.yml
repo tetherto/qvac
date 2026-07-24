@@ -37,6 +37,7 @@ on:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
+      - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
