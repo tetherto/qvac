@@ -1900,4 +1900,58 @@ TEST_F(MultiJobSchedulerTest, CancelAllReturnsOnlyAfterSlotsRelease) {
   model->releaseAll();
 }
 
+/// cancelJobs must drop every queued snapshot id BEFORE issuing or awaiting
+/// any in-flight cancel. cancel(id) blocks until the cancelled job's slot
+/// releases; a queued snapshot id still undropped at that moment races the
+/// freed worker — if the worker wins, a job cancelled while queued runs
+/// anyway and its terminal becomes a graceful result instead of the 'Job
+/// cancelled' error (the android/ios CI failure of
+/// CancelJobsDropsQueuedSnapshotJobs). The mutex grant decides the race, so
+/// no single run can force it; each round re-runs the interleaving with the
+/// release under test control. With the drop-first fix the queued id is gone
+/// before the worker can ever be freed, so every round is deterministic.
+TEST_F(MultiJobSchedulerTest, CancelJobsDropsQueuedBeforeAwaitingInFlight) {
+  DeferredCancelTestModel* model = buildDeferredWithQueue(1, 1);
+
+  bool queuedRan = false;
+  for (int round = 0; round < 30 && !queuedRan; ++round) {
+    const std::optional<JobId> running = scheduler_->runJob(std::string("job"));
+    ASSERT_TRUE(running.has_value());
+    ASSERT_TRUE(model->waitEntered(*running, std::chrono::seconds{2}));
+    const std::optional<JobId> queued =
+        scheduler_->runJob(std::string("queued"));
+    ASSERT_TRUE(queued.has_value());
+
+    // liveJobIds() order (queued ids first) happens to mask the race, so
+    // present the blocking in-flight id first: the contract must hold for
+    // any id order.
+    std::thread canceller([this, &running, &queued] {
+      scheduler_->cancelJobs({*running, *queued});
+    });
+
+    EXPECT_TRUE(model->waitRequested(*running, std::chrono::seconds{2}));
+    model->release(*running);
+
+    // The freed worker takes the queue's front now unless the queued id was
+    // already dropped.
+    queuedRan = model->waitEntered(*queued, std::chrono::milliseconds{100});
+    if (queuedRan) {
+      // Unwedge the blocking cancel of the now-in-flight queued id so the
+      // canceller can be joined.
+      EXPECT_TRUE(model->waitRequested(*queued, std::chrono::seconds{2}));
+      model->release(*queued);
+    }
+    canceller.join();
+
+    if (!queuedRan) {
+      EXPECT_EQ(erroredIds(outputQueue_->clear()).count(*queued), 1u)
+          << "a dropped queued job must surface a terminal error";
+    }
+  }
+
+  EXPECT_FALSE(queuedRan)
+      << "a queued snapshot id reached process(): cancelJobs awaited an "
+         "in-flight cancel before dropping the still-queued ids";
+}
+
 } // namespace qvac_lib_inference_addon_cpp
