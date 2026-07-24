@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
   "version": "0.5.1",
-  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -24,6 +24,7 @@
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
+    "example:parler": "bare examples/parler-tts.js \"Hey, how are you doing today?\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"test/**/*.js\" \"binding.js\" && lunte \"test/**/*.js\" \"binding.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
@@ -68,6 +69,7 @@
     "test/utils/runTTS.js",
     "test/utils/runChatterboxTTS.js",
     "test/utils/runSupertonicTTS.js",
+    "test/utils/runParlerTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
     "test/utils/pcmConcatenator.js",
