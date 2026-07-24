@@ -472,15 +472,14 @@ public:
     return ids;
   }
 
-  /// Per-id (the default loop) when the model supports cancelById; otherwise
-  /// drop the still-queued ids and issue one whole-model cancel() for the
-  /// in-flight remainder — indiscriminate, but the only cancel such a model
-  /// offers.
+  /// One lock pass drops every still-queued snapshot id BEFORE any in-flight
+  /// cancel is issued or awaited: awaiting a cancel releases that job's slot,
+  /// and a queued snapshot id still undropped at that moment would win the
+  /// freed slot and run despite having been cancelled while queued. Only then
+  /// are the in-flight targets cancelled — per id when the model offers
+  /// cancelById, else via one whole-model cancel() (indiscriminate, but the
+  /// only cancel such a model offers) — and awaited until they leave.
   void cancelJobs(const std::vector<JobId>& ids) override {
-    if (cancelById_ != nullptr) {
-      IJobScheduler::cancelJobs(ids);
-      return;
-    }
     std::vector<JobId> dropped;
     std::vector<JobId> inFlightTargets;
     {
@@ -497,6 +496,13 @@ public:
       outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
     }
     if (inFlightTargets.empty()) {
+      return;
+    }
+    if (cancelById_ != nullptr) {
+      for (const JobId id : inFlightTargets) {
+        cancelById_->cancelById(id);
+      }
+      awaitJobsGone(inFlightTargets);
       return;
     }
     if (cancel_ != nullptr) {
