@@ -267,7 +267,7 @@ function loadFfmpeg() {
     _ffmpeg = require('bare-ffmpeg')
   } catch (err) {
     throw new Error(
-      `Encoding to compressed formats requires the "bare-ffmpeg" optional dependency, which failed to load: ${err.message}`
+      `Encoding to compressed formats requires "bare-ffmpeg" (a package dependency); it failed to load, which usually means a broken or incomplete install: ${err.message}`
     )
   }
   return _ffmpeg
@@ -283,6 +283,23 @@ function loadFfmpeg() {
  * @returns {Buffer}
  */
 function encodeWithFfmpeg(pcm, format, { sampleRate = 48000, channels = 2 } = {}) {
+  // Fail fast on inputs the FFmpeg path can't represent: the layout picker below
+  // only knows MONO/STEREO, and a bad rate or a PCM buffer that isn't a whole
+  // number of interleaved Int16 frames would otherwise yield corrupt container
+  // metadata or trip undefined behavior inside the bindings (AudioFIFO/layout).
+  if (channels !== 1 && channels !== 2) {
+    throw new Error(`encodeWithFfmpeg: channels must be 1 or 2, got ${channels}`)
+  }
+  if (!Number.isInteger(sampleRate) || sampleRate <= 0) {
+    throw new Error(`encodeWithFfmpeg: sampleRate must be a positive integer, got ${sampleRate}`)
+  }
+  const bytesPerFrame = 2 * channels
+  if (pcm.length % bytesPerFrame !== 0) {
+    throw new Error(
+      `encodeWithFfmpeg: PCM byte length (${pcm.length}) must be a multiple of ${bytesPerFrame} ` +
+        `(2 bytes/sample x ${channels} channel(s))`
+    )
+  }
   const ffmpeg = loadFfmpeg()
   const C = ffmpeg.constants
   const spec = FFMPEG_FORMATS[format]
