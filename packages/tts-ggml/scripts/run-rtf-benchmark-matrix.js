@@ -21,7 +21,11 @@
  *     "numWarmup": 1,                                        (optional)
  *     "numRuns": 5,                                          (optional)
  *     "numThreads": 8,                                       (optional)
- *     "rtfUpperBound": 1.5                                   (optional)
+ *     "rtfUpperBound": 1.5,                                  (optional)
+ *     "quality": true,                                       (optional, CER/WER; default true)
+ *     "whisperModel": "ggml-small.bin",                       (optional)
+ *     "werUpperBound": 0.4,                                  (optional)
+ *     "cerUpperBound": 0.2                                   (optional)
  *   }
  *
  * If QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON is empty, a small default matrix
@@ -149,6 +153,18 @@ function buildEnv (entry, index) {
   if (entry.rtfUpperBound !== undefined) {
     env.QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND = String(entry.rtfUpperBound)
   }
+  if (entry.quality !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_QUALITY = normalizeBoolean(entry.quality) ? 'true' : 'false'
+  }
+  if (entry.whisperModel !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL = String(entry.whisperModel)
+  }
+  if (entry.werUpperBound !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND = String(entry.werUpperBound)
+  }
+  if (entry.cerUpperBound !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND = String(entry.cerUpperBound)
+  }
 
   // Forward GitHub Actions correlation env vars so the report can be traced
   // back to a specific workflow run / commit / actor.
@@ -183,6 +199,7 @@ function runEntry (pkgDir, entry, index, matrixLen) {
   console.log(`  denoiser:   ${env.QVAC_TTS_GGML_BENCHMARK_DENOISER}`)
   console.log(`  useGPU:     ${env.QVAC_TTS_GGML_BENCHMARK_USE_GPU}`)
   console.log(`  backend:    ${env.QVAC_TTS_GGML_BENCHMARK_BACKEND || 'default'}`)
+  console.log(`  CER/WER:    ${env.QVAC_TTS_GGML_BENCHMARK_QUALITY || 'true'}`)
   console.log(`  label:      ${env.QVAC_TTS_GGML_BENCHMARK_LABEL}`)
   console.log('='.repeat(70))
 

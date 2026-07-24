@@ -19,10 +19,11 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [Branch Strategy and Deployment](#branch-strategy-and-deployment)
   - [Branch Strategy](#branch-strategy)
   - [Staging (automatic)](#staging-automatic)
-  - [Production (manual PR)](#production-manual-pr)
+  - [Production (manual promotion)](#production-manual-promotion)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
-  - [SDK release docs (local, skill-driven)](#2-sdk-release-docs-local-skill-driven)
+  - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
+  - [SDK release docs (local, skill-driven)](#3-sdk-release-docs-local-skill-driven)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
@@ -31,7 +32,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 
 ## Overview
 
-The docs site lives in `docs/website/`. It is a fully static site (Next.js `output: 'export'`) served via CDN by the hosting provider. GitHub stores only the source code -- the hosting provider watches repo branches, runs the build (SSG), and deploys automatically. There are no GitHub Actions deploy workflows; GitHub Actions handles validation and gating only.
+The docs site lives in `docs/website/`. It is a fully static site (Next.js `output: 'export'`) served via CDN by the hosting provider. GitHub stores only the source code -- the hosting provider watches repo branches, runs the build (SSG), and deploys automatically. GitHub Actions never builds or deploys the site; it handles validation, gating, and a manual **promotion** workflow that advances the `docs-production` pointer (it moves the branch, the hosting provider does the deploy).
 
 | Component | Details |
 |-----------|---------|
@@ -287,17 +288,19 @@ All three modules are pure file mutations — they never `git commit` or `gh pr 
 main = staging              docs-production = production
 ──────────────              ────────────────────────────
 
-New commit on main          Merge PR: main -> docs-production
-      │                              │
-      ▼                              ▼
-Hosting provider builds     Hosting provider builds
-& deploys to staging        & deploys to production
+New commit on main          Manual workflow: fast-forward
+      │                     docs-production to main (ff-only)
+      ▼                              │
+Hosting provider builds              ▼
+& deploys to staging        Hosting provider builds
+                            & deploys to production
 ```
 
 - **`main`** is the staging environment. The hosting provider watches this branch; any new commit triggers a build and deploy to the staging site.
-- **`docs-production`** is the production environment. The hosting provider watches this branch; any new commit (via merged PR from `main`) triggers a build and deploy to the production site.
+- **`docs-production`** is the production environment. The hosting provider watches this branch; any new commit triggers a build and deploy to the production site.
+- `docs-production` is **not a development branch**: it is a delayed production pointer that only ever advances to a commit that already exists on `main`. It receives commits **only** through the manual promotion workflow (never a PR, squash-merge, cherry-pick, or direct push).
 
-With `main` + `docs-production`, every production deploy has a reviewable PR showing exactly what changed.
+With `main` + `docs-production`, production is always a fast-forward of a reviewed, already-on-`main` state — so the two branches never diverge historically and staging is always what production will become.
 
 ### Staging (automatic)
 
@@ -320,16 +323,19 @@ reviewed together with the changelog that produced them. Any other push to
 `main` (docs content changes, merged PRs from contributors) still triggers the
 hosting provider's build the same way.
 
-### Production (manual PR)
+### Production (manual promotion)
 
 ```
 Staging is verified and ready
     │
     ▼
-Open PR: main -> docs-production
+Manually run the "Promote docs to production" workflow (workflow_dispatch)
     │
     ▼
-Review the diff, approve, merge
+Workflow fast-forwards docs-production to origin/main (--ff-only)
+    │  (fails if docs-production has diverged from main)
+    ▼
+Push to docs-production
     │
     ▼
 Hosting provider detects new commit on docs-production
@@ -338,16 +344,33 @@ Hosting provider detects new commit on docs-production
 Hosting provider builds the static site and deploys to production
 ```
 
-The reviewer is responsible for confirming staging is healthy and that
-the docs PR Checks have passed on `main` before merging into
-`docs-production`. There is no automated CI gate on the production PR
-— promotion is fully manual on purpose.
+Production is promoted by manually running the **Promote docs to
+production** workflow (`.github/workflows/promote-docs-production.yml`),
+never by merging a PR into `docs-production`. The workflow advances
+`docs-production` to the current `main` commit using **fast-forward-only**
+semantics: if the branches have diverged it fails instead of creating a
+merge commit, so `docs-production` stays a pure pointer into `main`'s
+history.
+
+The person promoting is responsible for confirming staging is healthy and
+that the docs PR Checks have passed on `main` before running the workflow.
+Promotion is fully manual on purpose — the workflow never runs
+automatically on a merge to `main`, and the timing (e.g. waiting for the
+Head of QVAC to publish the SDK package) is a human decision.
+
+> **Why fast-forward-only?** If `docs-production` ever received squash
+> merges, cherry-picks, or direct commits, Git would create commits that
+> don't exist on `main`, making the branch historically divergent even
+> when the file contents match. Once that happens, future promotions can
+> no longer fast-forward and require manual repair. Keeping promotion
+> `--ff-only` guarantees `docs-production` is always a commit already
+> reviewed and present on `main`.
 
 ---
 
 ## CI Workflows
 
-One GitHub Actions workflow validates docs PRs; SDK release docs are generated locally by a Cursor skill (no release workflow).
+Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`. SDK release docs are generated locally by a Cursor skill (no release workflow). Neither workflow builds or deploys the site — the hosting provider does that on branch pushes.
 
 ### 1. Docs Website PR Checks
 
@@ -365,7 +388,24 @@ One GitHub Actions workflow validates docs PRs; SDK release docs are generated l
 
 The API summary `index.mdx` lives at `content/docs/reference/api/` and is committed to the repo (refreshed locally by the `qv-sdk-changelog` skill Step 8 during SDK release prep), so PR checkouts always have it on disk — no placeholder step is needed.
 
-### 2. SDK release docs (local, skill-driven)
+### 2. Promote docs to production (manual)
+
+**File:** `.github/workflows/promote-docs-production.yml`
+
+**Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
+
+**What it does:**
+- Checks out `docs-production` (full history) using `PAT_TOKEN` (the default `GITHUB_TOKEN` cannot push to the protected `docs-production` branch)
+- Fetches `origin/main` and runs `git merge --ff-only origin/main`
+- Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
+
+**Fails when:** `docs-production` has diverged from `main` (the `--ff-only` merge is rejected). This is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
+
+**Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
+
+> `docs-production` should stay branch-protected (no direct pushes, no PR merges); the promotion workflow's `PAT_TOKEN` account is the only identity allowed to push to it.
+
+### 3. SDK release docs (local, skill-driven)
 
 **Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.cursor/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
 

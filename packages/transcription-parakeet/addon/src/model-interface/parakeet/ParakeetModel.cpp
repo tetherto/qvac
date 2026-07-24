@@ -464,6 +464,8 @@ void ParakeetModel::captureBackend() {
   backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
   backend_description_ =
       captureBackendDescription(backend_id_, backend_device_);
+  encoder_backend_ = engine_->encoder_backend();
+  encoder_on_coreml_ = engine_->encoder_on_coreml() ? 1 : 0;
 
   QLOG(
       logger::Priority::INFO,
@@ -471,7 +473,7 @@ void ParakeetModel::captureBackend() {
           engine_->model_type() + " backend=" + backend_name_ +
           " (device=" + (backend_device_ == DeviceGpu ? "GPU" : "CPU") +
           ", id=" + std::to_string(backend_id_) + ", gpu='" +
-          backend_description_ + "')");
+          backend_description_ + "', encoder=" + encoder_backend_ + ")");
 }
 
 void ParakeetModel::warnOnGpuFallback() const {
@@ -1118,6 +1120,10 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("backendId",           static_cast<int64_t>(backend_id_));
   stats.emplace_back(
       "gpuUnsupported", static_cast<int64_t>(backend_gpu_unsupported_));
+  // 1 when the FastConformer encoder ran on the Apple Neural Engine (Core ML
+  // sidecar) instead of the ggml backend; 0 otherwise. Always 0 off Apple.
+  stats.emplace_back(
+      "encoderOnCoreml", static_cast<int64_t>(encoder_on_coreml_));
 
   // audioDurationMs derived from samples / sample_rate
   const double sr = sample_rate_ > 0
