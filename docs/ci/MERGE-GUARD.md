@@ -2,7 +2,19 @@
 
 `qvac-merge-guard / validate-pr` is the **single** GitHub required status check gating merges to `main`. It exists so the branch ruleset never has to track individual job names — no matter how many jobs run on a PR, GitHub only ever needs to require the one aggregated check. This doc is the reference for *adding a new job so it correctly feeds into that aggregate*, instead of accidentally creating a second, disconnected check that the ruleset doesn't require and nobody notices when it fails.
 
-Folding a new job into `qvac-merge-guard` (below) is what almost every new merge-gating job does — it's not one of several options, the ruleset only ever requires this one aggregated check regardless. Separately, and *additively* (not as an alternative), a job can also need to be its own independent required check on the ruleset — this is rare in practice (`SDK Pod Checks` is **not** an example of it: the ruleset only requires `Check Approvals` and `qvac-merge-guard / validate-pr` today, nothing SDK-pod-specific). For that additive, rare concern, see the `devops-add-required-status-check` skill in the `qvac-internal` repo.
+Folding a new job into `qvac-merge-guard` (below) is what every new merge-gating job does — the ruleset only ever requires this one aggregated check, regardless of how many jobs feed into it.
+
+## Hard rule: nothing else may produce the `qvac-merge-guard / validate-pr` check name
+
+Exactly one job in this repo may produce the check context `qvac-merge-guard / validate-pr`: the `qvac-merge-guard` job in `pr-gate-merge.yml` calling `public-pr.yml`'s `validate-pr` job. No other workflow may define a job with id `qvac-merge-guard` (or any job that itself calls a reusable workflow whose job id is `validate-pr`) — doing so would produce the identical check-context string and let that other workflow's result silently satisfy the required check instead of the real Merge Guard gate.
+
+Before merging any workflow change, verify:
+
+```bash
+grep -rl "^  qvac-merge-guard:$" .github/workflows/*.yml
+```
+
+This must return **only** `pr-gate-merge.yml`. If it returns more than one file, that's the collision — rename the job id in whichever file didn't earn the name (see the general check-name-collision guidance the org already applies when centralizing per-addon jobs).
 
 **This applies to any new job or workflow, in any domain** — a new addon's sanity check, an SDK check, a docs-validation job, a security scan, a licensing gate, anything. The three patterns below (fold-in / caller-workflow / new-boolean) are generic decision points, not specific to packages or addons. The concrete `prebuilds-caller.yml` / addon examples used throughout are one worked instance of the pattern, not the only thing it applies to — substitute your own job/family/category wherever an addon or package name appears.
 
@@ -158,5 +170,4 @@ Never give a new job its own top-level `pull_request_target` trigger with no `ne
 
 - [`docs/ci/LABELS.md`](LABELS.md) — the `verified` label this check also enforces.
 - [`docs/ci/TEAMS.md`](TEAMS.md) — who can apply `verified`.
-- `devops-add-required-status-check` skill (`qvac-internal` repo) — registering a **new, standalone** required check on the branch ruleset, when folding into `qvac-merge-guard` isn't the right fit.
 - `qv-merge-guard-wire` skill (`.cursor/skills/qv-merge-guard-wire/`) — this doc's content as an actionable Claude/Cursor skill.
