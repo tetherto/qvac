@@ -120,6 +120,23 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Generate the model pre-stage script (Android). The Device Farm host has
+      # reliable network; it downloads whisper's tiny + VAD models and
+      # `adb push`es them to /data/local/tmp so the phone never fetches from
+      # huggingface.co (QVAC-21799). Whisper is single-pool, so all models are
+      # staged (no shards). Device-side pickup lives in test/integration/helpers.js.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/${{ inputs.workdir || 'packages/transcription-whispercpp' }}
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -134,6 +151,9 @@ jobs:
           enables-perf: 'true'
           mocha-timeout-ms: '2700000'
           wdio-waitfor-timeout-ms: '600000'
+          # Android host pre-stages whisper's models to /data/local/tmp so the
+          # phone never downloads from huggingface.co (QVAC-21799). Empty on iOS.
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule

@@ -324,6 +324,45 @@ async function downloadFile(url, destPath) {
   return downloadWithHttp(url, destPath)
 }
 
+// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
+// adb-pushes the mobile models to this world-readable location, because
+// app-scoped dirs reject adb writes on Android 11+. We copy from here into the
+// app's writable models dir instead of downloading from huggingface.co. See
+// scripts/generate-prestage-block.js for the host side.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function prestagedModelPath(modelName) {
+  if (platform !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return p
+  } catch (_) {}
+  return null
+}
+
+// Copy a pre-staged model into the app's writable destPath. Returns true when a
+// valid (>= minBytes) copy landed, so the caller can skip the network download.
+function copyPrestagedModel(modelName, destPath, minBytes) {
+  const src = prestagedModelPath(modelName)
+  if (!src) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(src, destPath)
+    const size = fs.statSync(destPath).size
+    if (size >= minBytes) {
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB)`
+      )
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+  }
+  return false
+}
+
 async function ensureWhisperModel(modelPath) {
   const modelName = path.basename(modelPath)
   const diskPath = path.dirname(modelPath)
@@ -338,6 +377,10 @@ async function ensureWhisperModel(modelPath) {
       console.log(`Using cached model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
       return { success: true, path: modelPath, isReal: true }
     }
+  }
+
+  if (copyPrestagedModel(modelName, modelPath, 1000000)) {
+    return { success: true, path: modelPath, isReal: true }
   }
 
   const url = `${HF_WHISPER_BASE}/${modelName}`
@@ -378,6 +421,10 @@ async function ensureVADModel(vadModelPath) {
 
   if (!fs.existsSync(diskPath)) {
     fs.mkdirSync(diskPath, { recursive: true })
+  }
+
+  if (copyPrestagedModel(modelName, vadModelPath, 500000)) {
+    return true
   }
 
   const url = `${HF_VAD_BASE}/${modelName}`
@@ -971,6 +1018,8 @@ module.exports = {
   detectPlatform,
   ensureWhisperModel,
   ensureVADModel,
+  copyPrestagedModel,
+  prestagedModelPath,
   waitUntilIdle,
   runTranscription,
   createAudioStream,
