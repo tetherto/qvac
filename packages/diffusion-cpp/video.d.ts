@@ -2,6 +2,13 @@ import QvacLogger = require('@qvac/logging');
 import { type QvacResponse } from '@qvac/infer-base';
 import type { CacheMode, SamplerMethod, ScheduleType, SdConfig } from './index';
 export type VideoMode = 'txt2vid' | 'img2vid';
+/**
+ * File paths for a video model context (Wan 2.1 / 2.2 or LTX-2 / LTXAV).
+ *
+ * Wan 2.2 TI2V-5B uses only `model`, like Wan 2.1, but requires the matching
+ * Wan 2.2 VAE. Wan 2.2 T2V-A14B uses both `model` (low noise) and
+ * `highNoiseDiffusionModel` (high noise).
+ */
 export interface VideoDiffusionFiles {
     model: string;
     highNoiseDiffusionModel?: string;
@@ -22,9 +29,15 @@ export interface VideoStableDiffusionArgs {
     };
 }
 export interface VideoGenerationParams {
+    /** Required. Selects the generation branch. */
     mode: VideoMode;
     prompt: string;
     negative_prompt?: string;
+    /**
+     * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V and LTX-2 use a
+     * 32-pixel spatial grid; native validation derives the TI2V requirement from
+     * the loaded GGUF instead of the filename.
+     */
     width?: number;
     height?: number;
     video_frames?: number;
@@ -35,11 +48,13 @@ export interface VideoGenerationParams {
     scheduler?: ScheduleType;
     cfg_scale?: number;
     flow_shift?: number;
+    /** High-noise sample count; `-1` uses native moe_boundary-based routing. */
     high_noise_steps?: number;
     high_noise_sampler?: SamplerMethod;
     high_noise_scheduler?: ScheduleType;
     high_noise_cfg_scale?: number;
     high_noise_flow_shift?: number;
+    /** Normalized timestep boundary between high- and low-noise experts. [0, 1]. */
     moe_boundary?: number;
     strength?: number;
     vace_strength?: number;

@@ -410,10 +410,13 @@ After `load()`, `getBackendInfo()` reports the compute backend the native engine
 ```javascript
 const info = model.getBackendInfo()
 // { backendDevice: 'GPU', backendId: 3, backendName: 'Vulkan0',
-//   backendDescription: 'NVIDIA GeForce RTX 3090' }
+//   backendDescription: 'NVIDIA GeForce RTX 3090',
+//   encoderBackend: 'Vulkan0', encoderOnCoreml: false }
 ```
 
 It returns `null` before `load()` / after `unload()`. `backendId` follows the `BackendId` enum (`0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other; see `index.d.ts`).
+
+`encoderBackend` and `encoderOnCoreml` report where the FastConformer encoder ran. On Apple hardware, when a Core ML (Apple Neural Engine) encoder sidecar is present and initialises, the encoder runs on the Neural Engine while the TDT/CTC decoder stays on the ggml backend, so `encoderBackend` is `'coreml'` and `encoderOnCoreml` is `true`. Otherwise -- off Apple, or when the sidecar is absent or fails to load (ggml fallback) -- `encoderBackend` mirrors `backendName` and `encoderOnCoreml` is `false`.
 
 Once a `run()` / `runStreaming()` job settles, `response.stats` carries a `RuntimeStats` object -- pipeline timings plus the post-fallback backend truth:
 
@@ -425,6 +428,8 @@ await response.onUpdate(() => {}).await()
 // response.stats.gpuUnsupported  // 1 when a GPU was present but the engine ran
 //                                //   on CPU anyway (e.g. Mali Vulkan mis-compute,
 //                                //   or a vendor/tier declined by policy)
+// response.stats.encoderOnCoreml // 1 when the FastConformer encoder ran on the
+//                                //   Apple Neural Engine (Core ML sidecar); else 0
 // response.stats.audioDurationMs, encoderMs, decoderMs, melSpecMs, totalEncodedFrames, ...
 ```
 

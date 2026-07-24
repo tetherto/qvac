@@ -89,6 +89,8 @@ export async function* translate(
   const to = isLlm ? (params as { to: string }).to : undefined
   const context = isLlm ? (params as { context?: string }).context : undefined
 
+  translateServerParamsSchema.parse(params)
+
   // Auto-detect the source language when the caller didn't pass `from` (LLM
   // only). This used to run in each client; moving it here gives every
   // language binding one detector instead of each shipping its own (lingua in
@@ -106,7 +108,6 @@ export async function* translate(
   }
 
   const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
-  translateServerParamsSchema.parse(params)
 
   const fromLanguage = getLanguage(from)
   const toLanguage = getLanguage(to)

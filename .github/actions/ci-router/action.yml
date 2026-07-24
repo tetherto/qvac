@@ -1,17 +1,18 @@
 name: 'CI Router (label detection)'
 description: >
   Shared label -> CI-stage routing for the label-gated addon PR workflows.
-  `verified` is the trust gate and ONLY the trust gate (authorise-only); the
-  granular labels run-cpp-addon-tests / run-desktop-addon-tests /
-  run-mobile-addon-tests / prebuilds each select a stage, and only take effect
-  when `verified` is also present. Trusted events (push / workflow_dispatch /
-  workflow_call / schedule) enable every stage. This is addon-agnostic: it
-  emits all five flags and each addon wires only the stages it has. Single
-  source of truth — do NOT inline this logic per workflow.
+  `verified` is the trust gate for EXTERNAL FORK PRs (authorise-only); internal
+  same-repo PRs are authorised without it (write access is required to push a
+  branch to the base repo). The granular labels run-cpp-addon-tests /
+  run-desktop-addon-tests / run-mobile-addon-tests / prebuilds each select a
+  stage, and only take effect once the run is authorised. Trusted events
+  (push / workflow_dispatch / workflow_call / schedule) enable every stage.
+  This is addon-agnostic: it emits all five flags and each addon wires only the
+  stages it has. Single source of truth — do NOT inline this logic per workflow.
 
 outputs:
   run_verified_checks:
-    description: 'Baseline verified checks (verified label present / trusted event)'
+    description: 'Baseline authorised checks (internal ready PR / verified fork / trusted event)'
     value: ${{ steps.route.outputs.run_verified_checks }}
   run_prebuilds:
     description: 'Build prebuilds (prebuilds/desktop/mobile label, or trusted event)'
@@ -35,6 +36,9 @@ runs:
       env:
         EVENT_NAME: ${{ github.event_name }}
         PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        BASE_REPO: ${{ github.repository }}
+        IS_DRAFT: ${{ github.event.pull_request.draft }}
       run: |
         if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
            [ "$EVENT_NAME" = "workflow_call" ] || \
@@ -70,12 +74,25 @@ runs:
         DESKTOP=false
         MOBILE=false
 
-        # `verified` authorises but selects no stage on its own. Each heavy stage
-        # runs only when its granular label is present AND `verified` authorises
-        # it — so a granular label without `verified` triggers nothing (security
+        # Internal same-repo PRs are inherently trusted (pushing a branch to the
+        # base repo requires write access), so they are authorised WITHOUT the
+        # `verified` label. External fork PRs still require `verified`.
+        # Draft PRs on the internal fast lane run nothing until marked
+        # ready-for-review (the workflow re-triggers on ready_for_review).
+        IS_INTERNAL=false
+        shopt -s nocasematch
+        if [[ -n "$HEAD_REPO" && "$HEAD_REPO" == "$BASE_REPO" && "$IS_DRAFT" != "true" ]]; then
+          IS_INTERNAL=true
+        fi
+        shopt -u nocasematch
+
+        # Authorisation (verified label on forks, or an internal same-repo PR)
+        # selects no stage on its own. Each heavy stage runs only when its
+        # granular label is present AND the run is authorised — so a granular
+        # label on an unauthorised external fork triggers nothing (security
         # invariant). cpp-tests builds the addon itself (no prebuilds); desktop +
         # mobile DO need prebuilds.
-        if [ "$HAS_VERIFIED" = "true" ]; then
+        if [ "$HAS_VERIFIED" = "true" ] || [ "$IS_INTERNAL" = "true" ]; then
           VERIFIED=true
           [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
           [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }

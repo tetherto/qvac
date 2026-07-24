@@ -17,6 +17,14 @@ const COMPANION_FILE_KEYS = [
     'embeddingsConnectors'
 ];
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid']);
+const WAN22_MOE_PARAMS = [
+    'high_noise_steps',
+    'high_noise_sampler',
+    'high_noise_scheduler',
+    'high_noise_cfg_scale',
+    'high_noise_flow_shift',
+    'moe_boundary'
+];
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed';
 function assertAbsolute(key, value) {
     if (typeof value !== 'string' || value.length === 0) {
@@ -331,24 +339,11 @@ class VideoStableDiffusion {
                 'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
                 'files.clipVision.');
         }
-        const hasHighNoiseExpert = !!this._files.highNoiseDiffusionModel;
-        if (hasHighNoiseExpert) {
-            this.logger.warn('Wan 2.2 phase timing stats currently cover only single-expert generation; ' +
-                'the high- and low-noise sampling stages are not yet measured together.');
-        }
-        else {
-            const highNoiseParams = [
-                'high_noise_steps',
-                'high_noise_sampler',
-                'high_noise_scheduler',
-                'high_noise_cfg_scale',
-                'high_noise_flow_shift',
-                'moe_boundary'
-            ];
-            const used = highNoiseParams.filter((key) => params[key] != null);
+        if (!this._files.highNoiseDiffusionModel) {
+            const used = WAN22_MOE_PARAMS.filter((key) => params[key] != null);
             if (used.length > 0) {
-                this.logger.warn(`${used.join(', ')} supplied but files.highNoiseDiffusionModel ` +
-                    'is not set — these params are Wan 2.2-only and will be ignored.');
+                throw new Error(`${used.join(', ')} requires files.highNoiseDiffusionModel. ` +
+                    'These parameters are only supported by Wan 2.2 T2V-A14B MoE models.');
             }
         }
         if (params.lora != null) {

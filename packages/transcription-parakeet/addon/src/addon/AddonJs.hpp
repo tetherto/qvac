@@ -120,11 +120,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 // Returns the backend the engine resolved at load() as a JS object:
-// `{ backendDevice, backendId, backendName, backendDescription }`. The
-// description is the human-readable GPU name (e.g. "NVIDIA GeForce RTX 3090")
-// recovered from the ggml device registry; it is the nvidia-smi-independent
-// fallback the perf reporter uses on CI runners where the host probes can't
-// see the GPU. Available after activate(); reports CPU/"" before load.
+// `{ backendDevice, backendId, backendName, backendDescription,
+// encoderBackend, encoderOnCoreml }`. The description is the human-readable GPU
+// name (e.g. "NVIDIA GeForce RTX 3090") recovered from the ggml device
+// registry; it is the nvidia-smi-independent fallback the perf reporter uses on
+// CI runners where the host probes can't see the GPU. encoderBackend is
+// "coreml" when the FastConformer encoder runs on the Apple Neural Engine
+// sidecar (else it mirrors backendName). Available after activate(); reports
+// CPU/"" before load.
 inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
@@ -149,6 +152,14 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
       env,
       "backendDescription",
       js::String::create(env, parakeetModel.getBackendDescription()));
+  result.setProperty(
+      env,
+      "encoderBackend",
+      js::String::create(env, parakeetModel.getEncoderBackend()));
+  result.setProperty(
+      env,
+      "encoderOnCoreml",
+      js::Boolean::create(env, parakeetModel.getEncoderOnCoreml() != 0));
   return result;
 }
 JSCATCH
