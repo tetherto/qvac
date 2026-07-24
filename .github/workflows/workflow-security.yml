@@ -1,14 +1,24 @@
 name: Workflow security
 
-# Canonical GitHub Actions workflow-security validator (zizmor static analysis)
-# running on Tier-1 PRs per QVAC-21551. Audits THIS repo's own workflow and
-# composite-action definitions for the high-risk patterns codified in
-# .cursor/rules/devops/github-actions.mdc and
-# .cursor/rules/devops/secrets-and-credentials.mdc — template injection,
+# Canonical GitHub Actions workflow-security validator running on Tier-1 PRs per
+# QVAC-21551. Audits THIS repo's own workflow and composite-action definitions
+# for the high-risk patterns codified in .cursor/rules/devops/github-actions.mdc
+# and .cursor/rules/devops/secrets-and-credentials.mdc — template injection,
 # dangerous triggers / "pwn requests", unpinned action refs, excessive
 # permissions, cache poisoning, credential persistence, and more. It is the §B4
 # enforcement surface in docs/devops/TIER-1-SCOPE.md, the workflow-hardening
 # sibling of the §B2 security baseline (TruffleHog + CodeQL).
+#
+# TWO COMPLEMENTARY PASSES (hybrid design):
+#   1. job `workflow-security` — zizmor (https://docs.zizmor.sh) static analysis.
+#      Deterministic, offline, secret-free, and therefore fork-safe. Catches the
+#      machine-modellable high-risk patterns; the reproducible backbone of the gate.
+#   2. job `workflow-security-agent` — a Claude Code agent
+#      (anthropics/claude-code-action) that runs the repo-specific A1–A15 checklist
+#      from .cursor/skills/qv-devops-pr-review that zizmor CANNOT model: the
+#      mandatory `# v<ver>` pin comment, harden-runner presence, per-job
+#      timeout-minutes, filename conventions, state-mutating concurrency, etc. This
+#      automates what was previously the human `qv-devops-pr-review` fallback.
 #
 # Why this gate lives IN-repo (like §B3 notice-drift, unlike §B1/§B2 which are
 # thin callers to tetherto/qvac-actions reusable workflows): it audits this
@@ -17,30 +27,36 @@ name: Workflow security
 # publishes a public-reusable-workflow-security.yml, this can be reduced to a
 # thin caller like the license/security-baseline gates.
 #
-# Engine: zizmor (https://docs.zizmor.sh), pinned to a fixed version so results
-# are deterministic — a zizmor bump can add or drop findings, so version changes
-# are deliberate (freeze-and-pin, mirroring the reusable-workflow SHA pins). Run
-# OFFLINE (--offline): the deterministic PR-gate contract (TIER-1-SCOPE §B)
-# favors reproducibility and zero-secret operation over the extra online-only
-# audits (impostor-commit / ref resolution). Promoting to online mode (read-only
-# GITHUB_TOKEN) is a follow-up.
+# zizmor engine is pinned to a fixed version so results are deterministic — a
+# zizmor bump can add or drop findings, so version changes are deliberate
+# (freeze-and-pin, mirroring the reusable-workflow SHA pins). Run OFFLINE
+# (--offline): the deterministic PR-gate contract (TIER-1-SCOPE §B) favors
+# reproducibility and zero-secret operation over the extra online-only audits
+# (impostor-commit / ref resolution). Promoting to online mode is a follow-up.
 #
-# Rollout stage: WARN-ONLY (shadow mode). Findings are annotated inline on the PR
-# (zizmor --format=github), summarized in the job summary, and upserted as a
-# single PR comment, but NOTHING fails a merge. A workflow_dispatch run with
-# enforce=true flips findings (and tool errors) into hard failures for a blocking
-# trial. Promotion to a required blocking status check is a follow-up, gated on
-# shadow-mode telemetry (false-positive rate, time-to-resolve) plus TL sign-off,
-# matching the §B1/§B2/§B3 rollout sequencing.
+# Agent-pass constraints: the Claude Code agent needs ANTHROPIC_API_KEY, so —
+# unlike the zizmor pass — it CANNOT run on fork PRs (forks receive no secrets)
+# and is skipped there. It is also non-deterministic by nature. Both properties
+# are why it stays advisory/warn-only and is scoped to just the changed workflow/
+# action files (bounded cost); zizmor remains the deterministic, fork-safe floor.
 #
-# Fork-safe: zizmor needs no secrets and runs offline, so this gate runs on fork
-# PRs too (a fork can change a workflow). Only the PR-comment step is gated to
-# same-repo PRs — fork PRs get a read-only GITHUB_TOKEN, so they rely on the
-# inline annotations and job summary instead.
+# Rollout stage: WARN-ONLY (shadow mode). zizmor findings are annotated inline on
+# the PR (zizmor --format=github), summarized in the job summary, and upserted as
+# a single PR comment; the agent posts its own job summary + a separate upserted
+# PR comment. NOTHING fails a merge. A workflow_dispatch run with enforce=true
+# flips the zizmor findings (and tool errors) into hard failures for a blocking
+# trial; the agent pass never blocks. Promotion to a required blocking check is a
+# follow-up, gated on shadow-mode telemetry (false-positive rate, time-to-resolve)
+# plus TL sign-off, matching the §B1/§B2/§B3 rollout sequencing.
+#
+# Fork-safe (zizmor pass): zizmor needs no secrets and runs offline, so pass 1
+# runs on fork PRs too (a fork can change a workflow). Only the zizmor PR-comment
+# step and the entire agent pass are gated to same-repo PRs — fork PRs get a
+# read-only GITHUB_TOKEN and rely on the zizmor inline annotations + job summary.
 #
 # Promotion caveat: pull_request `paths` filtering means PRs that touch no
-# workflow/action files never start this job. That is correct in shadow mode, but
-# a REQUIRED status check that is path-filtered stays permanently "pending" on
+# workflow/action files never start this workflow. That is correct in shadow mode,
+# but a REQUIRED status check that is path-filtered stays permanently "pending" on
 # unrelated PRs and blocks them. Resolve that (a required-check shim, or drop the
 # path filter) as part of promoting this gate to blocking.
 
@@ -75,7 +91,7 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   # Deliberate deviation from the github-actions.mdc § Concurrency guidance that
-  # state-mutating workflows use cancel-in-progress: false. This job's only
+  # state-mutating workflows use cancel-in-progress: false. Each job's only
   # external mutation is an idempotent upsert of a single PR comment, so
   # newest-commit-wins is the desired behavior: superseding an in-flight run
   # avoids racing an older commit's scan to overwrite the comment with stale
@@ -329,3 +345,192 @@ jobs:
             exit 0
           fi
           echo "workflow-security: no findings across .github/."
+
+  workflow-security-agent:
+    name: workflow-security-agent
+    runs-on: ubuntu-latest
+    # Agentic pass: a bounded Claude Code run over just the changed workflow/action
+    # files. 20m covers toolchain install + inference on a handful of files.
+    timeout-minutes: 20
+    # Needs ANTHROPIC_API_KEY, so it can't run on fork PRs (forks receive no
+    # secrets) — skip them. Also skipped on the weekly schedule: the deterministic
+    # zizmor pass is the freshness backstop, while the agent is scoped to changes to
+    # keep cost bounded.
+    if: >-
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      # Upsert a single agent-findings comment on same-repo PRs.
+      pull-requests: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit only: egress is the agent toolchain (npm/bun) plus inference to
+          # api.anthropic.com. Promote to block once that egress is characterized.
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # Full history so a PR / push can be diffed against its base for the
+          # changed-file set.
+          fetch-depth: 0
+          # Read-only audit: no git writes after checkout.
+          persist-credentials: false
+
+      - name: Collect changed workflow/action files
+        id: collect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          # SHAs are not user-controlled, but pass them via env anyway — never
+          # interpolate ${{ github.event.* }} straight into a run block, the very
+          # pattern this gate exists to catch.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -uo pipefail
+          # Restrict the (expensive, non-deterministic) agent to just the changed
+          # workflow/action YAML so PR feedback is targeted and cost is bounded.
+          # workflow_dispatch audits the whole tree.
+          filter() { grep -E '^\.github/(workflows/|actions/).*\.ya?ml$' || true; }
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" | filter > changed_files.txt
+          elif [ "$EVENT_NAME" = "push" ]; then
+            # A branch's first push has an all-zero "before"; fall back to HEAD~1.
+            if git rev-parse --verify --quiet "${PUSH_BEFORE}^{commit}" >/dev/null; then
+              git diff --name-only "$PUSH_BEFORE" "$HEAD_SHA" | filter > changed_files.txt
+            else
+              git diff --name-only "HEAD~1" "$HEAD_SHA" | filter > changed_files.txt
+            fi
+          else
+            {
+              find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \)
+              find .github/actions -type f \( -name 'action.yml' -o -name 'action.yaml' \)
+            } | filter > changed_files.txt
+          fi
+          count=$(wc -l < changed_files.txt | tr -d ' ')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "Collected ${count} workflow/action file(s) to audit:"
+          cat changed_files.txt
+
+      - name: Run workflow-security agent (Claude Code)
+        id: agent
+        if: steps.collect.outputs.count != '0'
+        # Warn-only: a model / quota / tool hiccup must never block a merge in shadow
+        # mode. "Publish agent findings" and "Report agent outcome" downgrade any
+        # failure to a warning.
+        continue-on-error: true
+        uses: anthropics/claude-code-action@44423bdec74b97d67543eb16c110546762c110b2 # v1.0.181
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Pass the workflow token so the action never tries to mint a Claude
+          # GitHub App token (this repo has not installed that app).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Read-mostly audit: Claude may read the tree and Write ONLY its report
+          # file — no Bash/Edit, so it cannot mutate workflows or shell out. Bounded
+          # turns keep cost predictable.
+          claude_args: >-
+            --max-turns 40
+            --allowedTools Read,Grep,Glob,Write
+          prompt: |
+            You are the QVAC workflow-security validator running in CI in warn-only
+            shadow mode. Audit this repository's own GitHub Actions definitions for
+            the repo-specific security conventions that the zizmor static pass cannot
+            model.
+
+            Read these first — they are the source of truth:
+            - .cursor/rules/devops/github-actions.mdc
+            - .cursor/rules/devops/secrets-and-credentials.mdc
+            - .cursor/skills/qv-devops-pr-review/SKILL.md   (the A1-A15 checklist)
+
+            Audit ONLY the files whose paths are listed in `changed_files.txt` in the
+            repo root (one path per line). If that file is empty, report no findings.
+
+            Apply the A1-A15 checklist to each file, prioritising the checks zizmor
+            does NOT model: A1 (third-party `uses:` pinned to a 40-char SHA WITH a
+            trailing `# v<ver>` comment), A7 (mandatory `step-security/harden-runner`
+            as the first step of sensitive jobs), A10 (state-mutating workflows set
+            `cancel-in-progress: false`, or document a deliberate deviation), A11
+            (every job declares `timeout-minutes`), and A15 (filename matches the
+            repo's documented naming families). Also flag any A2-A6, A8, A9, A12-A14
+            issue you find.
+
+            Output: write ONE GitHub-flavoured Markdown report to the file
+            `workflow-security-agent-report.md` in the repo root, structured as:
+            - a one-line summary (total findings + highest tier High/Medium/Low);
+            - a table with columns: File | Line | Check (e.g. A7) | Tier | Why;
+            - each row cites the rule (e.g. "github-actions.mdc § Hardened runners").
+            Keep it concise. Write NOTHING to disk except that one report file, and do
+            not run shell commands. If there are no findings, still write the report
+            stating that explicitly.
+
+      - name: Publish agent findings
+        if: always() && steps.collect.outputs.count != '0'
+        # A transient API error while commenting must not block the merge.
+        continue-on-error: true
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- workflow-security-agent -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let report = '';
+            try {
+              report = fs.readFileSync('workflow-security-agent-report.md', 'utf8').trim();
+            } catch (e) {
+              report = '';
+            }
+            const body = [
+              marker,
+              '## Workflow security — agent audit (shadow mode)',
+              '',
+              report
+                ? report
+                : `:warning: The workflow-security agent did not produce a report this run — see the [run logs](${runUrl}).`,
+              '',
+              '_Agentic audit of the repo-specific GHA conventions (A1-A15 from `qv-devops-pr-review`) that the deterministic zizmor pass cannot model. **Warn-only** — advisory and non-deterministic; it does not block the merge._',
+            ].join('\n');
+            await core.summary.addRaw(body).write();
+            if (context.eventName !== 'pull_request') {
+              return;
+            }
+            // Paginate ALL comments (see the zizmor comment step): the marker can
+            // fall off page 1 on a busy PR, which would post duplicates.
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Upload agent report
+        if: always() && hashFiles('workflow-security-agent-report.md') != ''
+        # Diagnostic-only artifact; a hiccup must not block the merge.
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: workflow-security-agent-report
+          path: workflow-security-agent-report.md
+          if-no-files-found: ignore

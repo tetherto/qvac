@@ -109,32 +109,47 @@ the workflow-hardening sibling of the §B2 security baseline (which scans repo
 *source*; this scans repo *CI*).
 
 - **Gate:** [`.github/workflows/workflow-security.yml`](../../.github/workflows/workflow-security.yml).
-  Runs [`zizmor`](https://docs.zizmor.sh) static analysis over the `.github/`
-  tree (workflows + composite actions). The audited patterns map onto the
-  A1–A15 checklist in
-  [`.cursor/skills/qv-devops-pr-review`](../../.cursor/skills/qv-devops-pr-review/SKILL.md),
-  which stays the human fallback for the repo-specific conventions zizmor does
-  not model (mandatory `harden-runner`, the `# v<ver>` pin comment, per-job
-  `timeout-minutes`, filename conventions).
+  Two complementary passes:
+  - **Pass 1 — job `workflow-security` ([`zizmor`](https://docs.zizmor.sh)):**
+    deterministic, offline, secret-free static analysis over the `.github/` tree
+    (workflows + composite actions). The reproducible backbone; catches the
+    machine-modellable subset of the A1–A15 checklist.
+  - **Pass 2 — job `workflow-security-agent` (Claude Code):** an
+    [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action)
+    run that applies the full A1–A15 checklist from
+    [`.cursor/skills/qv-devops-pr-review`](../../.cursor/skills/qv-devops-pr-review/SKILL.md),
+    prioritising the repo-specific conventions zizmor **cannot** model (mandatory
+    `harden-runner`, the `# v<ver>` pin comment, per-job `timeout-minutes`,
+    filename conventions, state-mutating concurrency). This automates what was
+    previously the *human* `qv-devops-pr-review` fallback. It is scoped to just
+    the changed workflow/action files (bounded cost) and posts its own job summary
+    + a separate upserted PR comment.
 - **In-repo, not a `qvac-actions` reusable workflow:** like the §B3 NOTICE drift
   gate, it audits this repo's `.github/` tree with a repo-pinned engine and
   repo-specific rollout semantics, rather than delegating like the §B1/§B2 thin
   callers. If the org later publishes a `public-reusable-workflow-security.yml`
   this can shrink to a thin caller.
-- **Secrets:** none. zizmor runs `--offline`, so the gate needs no token and runs
-  on fork PRs too (a fork can change a workflow). Only the PR-comment step is
-  gated to same-repo PRs; fork PRs rely on the inline annotations and job
-  summary.
-- **Engine pin:** zizmor is pinned to a fixed version (freeze-and-pin, like the
-  reusable-workflow SHA pins) so results are deterministic — a zizmor bump can
-  add or drop findings, so version changes are deliberate.
-- **Coverage limitation:** `--offline` skips the online-only audits
+- **Secrets:** the zizmor pass needs none (runs `--offline`), so it runs on fork
+  PRs too (a fork can change a workflow); only its PR-comment step is gated to
+  same-repo PRs. The **agent pass needs `ANTHROPIC_API_KEY`**, so — unlike zizmor
+  — it cannot run on fork PRs (forks receive no secrets) and is skipped there; it
+  is also skipped on the weekly schedule (zizmor is the freshness backstop).
+- **Engine pin:** both engines are pinned (freeze-and-pin, like the
+  reusable-workflow SHA pins). zizmor is version-pinned so results are
+  deterministic — a bump can add or drop findings, so version changes are
+  deliberate. `anthropics/claude-code-action` is pinned to a 40-char SHA.
+- **Determinism caveat (agent pass):** the Claude Code pass is **non-deterministic**
+  by nature — the same diff can yield slightly different findings run-to-run. This
+  is why the agent stays advisory/warn-only and never gates a merge, and why
+  zizmor (deterministic, fork-safe) remains the floor. Any promotion of the agent
+  pass toward blocking would need a determinism/false-positive story first.
+- **Coverage limitation:** zizmor `--offline` skips the online-only audits
   (impostor-commit detection, action-ref resolution). Promotion to online mode
   (read-only `GITHUB_TOKEN`) is a follow-up. Separately, the `pull_request`
-  `paths` filter means the job never starts on PRs that touch no workflow/action
-  files — correct in shadow mode, but a *required* path-filtered check stays
-  permanently "pending" on unrelated PRs, so promotion to blocking must add a
-  required-check shim or drop the path filter.
+  `paths` filter means the workflow never starts on PRs that touch no
+  workflow/action files — correct in shadow mode, but a *required* path-filtered
+  check stays permanently "pending" on unrelated PRs, so promotion to blocking
+  must add a required-check shim or drop the path filter.
 - **Existing backlog / noise:** the first audit over the current `.github/` tree
   reports ~1,250 findings (the `regular` persona already suppresses ~1,450 more),
   including a few hundred `high`. This is the pre-existing debt shadow mode exists
@@ -143,10 +158,11 @@ the workflow-hardening sibling of the §B2 security baseline (which scans repo
   surfaces the repo-wide backlog; scoping PR-time feedback to the changed
   workflow/action files (and/or a `.github/zizmor.yml` ignore policy for accepted
   findings) is a triage follow-up that must precede promotion to blocking.
-- **Rollout stage:** **warn-only (shadow mode)** — annotates the PR inline, in
-  the job summary, and via a single upserted PR comment, but never blocks.
-  `workflow_dispatch` with `enforce=true` flips findings (and tool errors) into
-  hard failures for a blocking trial. Promotion to a required blocking check is a
-  follow-up, gated on shadow-mode telemetry (false-positive rate,
-  time-to-resolve) plus TL sign-off.
+- **Rollout stage:** **warn-only (shadow mode)** — the zizmor pass annotates the
+  PR inline, in the job summary, and via a single upserted PR comment; the agent
+  pass posts its own job summary + a separate upserted PR comment. Neither blocks.
+  `workflow_dispatch` with `enforce=true` flips the **zizmor** findings (and tool
+  errors) into hard failures for a blocking trial; the agent pass never blocks.
+  Promotion to a required blocking check is a follow-up, gated on shadow-mode
+  telemetry (false-positive rate, time-to-resolve) plus TL sign-off.
 - **Rolled out under QVAC-21551.**
