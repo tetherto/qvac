@@ -6663,6 +6663,21 @@
     ]
   },
   {
+    "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "LTX-2.3 distilled text/image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Lightricks/LTX-2.3",
+    "licenseId": "ltx-2-community",
+    "quantization": "Q2_K",
+    "params": "22B",
+    "tags": [
+      "generation",
+      "diffusion",
+      "video",
+      "ltx"
+    ]
+  },
+  {
     "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf",
     "engine": "@qvac/diffusion-cpp",
     "description": "LTX-2.3 distilled text/image-to-video diffusion model",
