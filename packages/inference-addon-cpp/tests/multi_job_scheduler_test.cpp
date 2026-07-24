@@ -523,6 +523,73 @@ public:
   }
 };
 
+/// Model whose whole-model cancel() blocks on a test-controlled gate before
+/// returning, independent of any job's own release, and whose process()
+/// blocks until its own id is individually released. Lets a test hold a
+/// whole-model cancel dispatch open for as long as it wants, to observe
+/// whether the scheduler can admit and dequeue a new job while that dispatch
+/// is still in flight.
+class GatedWholeModelCancelTestModel final : public model::IModel,
+                                             public model::IModelMultiprocessor,
+                                             public model::IModelCancel {
+  mutable std::mutex mtx_;
+  mutable std::condition_variable cv_;
+  std::unordered_set<JobId> entered_;
+  std::unordered_set<JobId> released_;
+  bool cancelEntered_{false};
+  bool releaseCancel_{false};
+
+public:
+  std::string getName() const override {
+    return "GatedWholeModelCancelTestModel";
+  }
+
+  RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
+
+  std::any process(const std::any& input) override { return input; }
+
+  std::any process(const std::any& input, JobId id) override {
+    std::unique_lock lock(mtx_);
+    entered_.insert(id);
+    cv_.notify_all();
+    cv_.wait(lock, [this, id] { return released_.count(id) != 0; });
+    return input;
+  }
+
+  /// Lets @p id's process() return.
+  void release(JobId id) {
+    std::lock_guard lock(mtx_);
+    released_.insert(id);
+    cv_.notify_all();
+  }
+
+  /// Whole-model cancel: blocks until the test calls releaseCancelDispatch().
+  void cancel() const override {
+    auto* self = const_cast<GatedWholeModelCancelTestModel*>(this);
+    std::unique_lock lock(self->mtx_);
+    self->cancelEntered_ = true;
+    self->cv_.notify_all();
+    self->cv_.wait(lock, [self] { return self->releaseCancel_; });
+  }
+
+  void releaseCancelDispatch() {
+    std::lock_guard lock(mtx_);
+    releaseCancel_ = true;
+    cv_.notify_all();
+  }
+
+  bool waitEntered(JobId id, std::chrono::milliseconds timeout) const {
+    std::unique_lock lock(mtx_);
+    return cv_.wait_for(
+        lock, timeout, [this, id] { return entered_.count(id) != 0; });
+  }
+
+  bool waitCancelEntered(std::chrono::milliseconds timeout) const {
+    std::unique_lock lock(mtx_);
+    return cv_.wait_for(lock, timeout, [this] { return cancelEntered_; });
+  }
+};
+
 /// Blocks until @p target jobs are concurrently active on the gated model or
 /// the timeout lapses.
 int waitForGatedActive(const RegistrationGatedTestModel& model, int target,
@@ -613,6 +680,7 @@ protected:
   std::unique_ptr<ConcurrentTestModel> model_;
   std::unique_ptr<RegistrationGatedTestModel> gatedModel_;
   std::unique_ptr<DeferredCancelTestModel> deferredModel_;
+  std::unique_ptr<GatedWholeModelCancelTestModel> gatedWholeModelCancelModel_;
   std::shared_ptr<OutputQueue> outputQueue_;
   std::unique_ptr<MultiJobScheduler> scheduler_;
 
@@ -698,6 +766,25 @@ protected:
     return deferredModel_.get();
   }
 
+  /// buildWithQueue with a GatedWholeModelCancelTestModel instead; returns it
+  /// (non-owning) so the test can hold its whole-model cancel dispatch open.
+  /// No cancelById, so cancelAll()/cancelJobs() must reach in-flight jobs via
+  /// the whole-model cancel path this model gates.
+  GatedWholeModelCancelTestModel* buildGatedWholeModelCancelWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity) {
+    gatedWholeModelCancelModel_ =
+        std::make_unique<GatedWholeModelCancelTestModel>();
+    callback_ = std::make_unique<MockOutputCallback>();
+    outputQueue_ =
+        std::make_shared<OutputQueue>(*callback_, *gatedWholeModelCancelModel_);
+    scheduler_ = std::make_unique<MultiJobScheduler>(
+        gatedWholeModelCancelModel_.get(), maxConcurrency,
+        gatedWholeModelCancelModel_.get(), /*cancelById=*/nullptr,
+        queueCapacity);
+    scheduler_->start(outputQueue_);
+    return gatedWholeModelCancelModel_.get();
+  }
+
   /// Build a scheduler whose model exposes no per-job cancellation (cancelById
   /// = nullptr), so cancel(id) for an in-flight job hits the unsupported path.
   void buildNoCancelById(
@@ -729,6 +816,7 @@ protected:
     model_.reset();
     gatedModel_.reset();
     deferredModel_.reset();
+    gatedWholeModelCancelModel_.reset();
     callback_.reset();
   }
 };
@@ -1952,6 +2040,105 @@ TEST_F(MultiJobSchedulerTest, CancelJobsDropsQueuedBeforeAwaitingInFlight) {
   EXPECT_FALSE(queuedRan)
       << "a queued snapshot id reached process(): cancelJobs awaited an "
          "in-flight cancel before dropping the still-queued ids";
+}
+
+/// cancelAll() must not let a new job get dequeued into in-flight while its
+/// whole-model cancel is still being dispatched. The model's cancel() is
+/// indiscriminate, so a job admitted mid-dispatch can be swept into the same
+/// cancellation without ever entering the in-flight snapshot awaitJobsGone()
+/// waits on, letting cancelAll() return while that bystander job still holds
+/// its slot. Holding the scheduler lock across the whole dispatch closes the
+/// window: a worker needs the same lock to dequeue a job, so with the
+/// model's cancel() gated open, a concurrent runJob() for a second job must
+/// not be admitted until the dispatch completes.
+TEST_F(MultiJobSchedulerTest, CancelAllBlocksAdmissionDuringWholeModelCancelDispatch) {
+  GatedWholeModelCancelTestModel* gatedModel =
+      buildGatedWholeModelCancelWithQueue(/*maxConcurrency=*/2, /*queueCapacity=*/0);
+
+  const std::optional<JobId> target =
+      scheduler_->runJob(std::string("target"));
+  ASSERT_TRUE(target.has_value());
+  ASSERT_TRUE(gatedModel->waitEntered(*target, std::chrono::seconds{2}));
+
+  std::thread canceller([this] { scheduler_->cancelAll(); });
+  ASSERT_TRUE(gatedModel->waitCancelEntered(std::chrono::seconds{2}));
+
+  std::atomic_bool admitted{false};
+  std::optional<JobId> bystander;
+  std::thread admitter([this, &bystander, &admitted] {
+    bystander = scheduler_->runJob(std::string("bystander"));
+    admitted.store(true);
+  });
+
+  bool admittedWhileCancelPending = false;
+  const std::chrono::steady_clock::time_point watchDeadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+  while (std::chrono::steady_clock::now() < watchDeadline) {
+    if (admitted.load()) {
+      admittedWhileCancelPending = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+
+  gatedModel->releaseCancelDispatch();
+  admitter.join();
+  ASSERT_TRUE(bystander.has_value());
+  gatedModel->release(*target);
+  gatedModel->release(*bystander);
+  canceller.join();
+
+  EXPECT_FALSE(admittedWhileCancelPending)
+      << "a new job was admitted while the whole-model cancel dispatch was "
+         "still in flight";
+}
+
+/// Same race as CancelAllBlocksAdmissionDuringWholeModelCancelDispatch, but
+/// through cancelJobs()'s whole-model fallback (taken when the model has no
+/// cancelById): a job admitted mid-dispatch must not be dequeued into
+/// in-flight before the dispatch completes.
+TEST_F(MultiJobSchedulerTest, CancelJobsBlocksAdmissionDuringWholeModelCancelDispatch) {
+  GatedWholeModelCancelTestModel* gatedModel =
+      buildGatedWholeModelCancelWithQueue(/*maxConcurrency=*/2, /*queueCapacity=*/0);
+
+  const std::optional<JobId> target =
+      scheduler_->runJob(std::string("target"));
+  ASSERT_TRUE(target.has_value());
+  ASSERT_TRUE(gatedModel->waitEntered(*target, std::chrono::seconds{2}));
+
+  std::thread canceller([this, &target] {
+    scheduler_->cancelJobs({*target});
+  });
+  ASSERT_TRUE(gatedModel->waitCancelEntered(std::chrono::seconds{2}));
+
+  std::atomic_bool admitted{false};
+  std::optional<JobId> bystander;
+  std::thread admitter([this, &bystander, &admitted] {
+    bystander = scheduler_->runJob(std::string("bystander"));
+    admitted.store(true);
+  });
+
+  bool admittedWhileCancelPending = false;
+  const std::chrono::steady_clock::time_point watchDeadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+  while (std::chrono::steady_clock::now() < watchDeadline) {
+    if (admitted.load()) {
+      admittedWhileCancelPending = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+
+  gatedModel->releaseCancelDispatch();
+  admitter.join();
+  ASSERT_TRUE(bystander.has_value());
+  gatedModel->release(*target);
+  gatedModel->release(*bystander);
+  canceller.join();
+
+  EXPECT_FALSE(admittedWhileCancelPending)
+      << "a new job was admitted while cancelJobs()'s whole-model cancel "
+         "dispatch was still in flight";
 }
 
 } // namespace qvac_lib_inference_addon_cpp
