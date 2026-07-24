@@ -95,14 +95,13 @@ jobs:
       publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
-      - name: Checkout (composite action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          sparse-checkout: .github/actions/determine-publish-streams
-          sparse-checkout-cone-mode: false
+      # Reuse the canonical branch->stream mapping (main->dev, release-*,
+      # feature-*, tmp-*) from tetherto/qvac-actions, the same action every other
+      # publish workflow in this repo uses, instead of a repo-local copy. Remote
+      # actions are fetched automatically, so this job needs no checkout.
       - name: Determine publish streams
         id: logic
-        uses: ./.github/actions/determine-publish-streams
+        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
 
   # Install deps + compile ONCE, then hand the built dist to every publish job.
   build:
