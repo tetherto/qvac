@@ -172,7 +172,7 @@ class LlamaInterface {
    * can be routed; a batch result also carries the per-item `ids` assigned
    * to each sequence.
    * @param {Array<{type: string, input?: string, content?: Uint8Array}> | Array<{id?: string, messages: Array<{type: string, input?: string, content?: Uint8Array}>}>} data - messages (text and/or media), or batch items
-   * @returns {Promise<{accepted: boolean, id: number, ids?: string[]}>} admission result with the assigned job id (single), or group id plus per-item `ids` (batch)
+   * @returns {Promise<{accepted: true, id: number, ids?: string[]} | {accepted: false, ids?: string[]}>} admission result. The scheduler-minted job id (`id`) — the group id for a batch — is present only when `accepted` is true; a batch run additionally reports the per-item `ids` on both the accepted and rejected branches.
    */
   async runJob(data) {
     return this._binding.runJob(this._handle, data)
