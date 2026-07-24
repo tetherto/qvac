@@ -176,7 +176,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"high_noise_steps",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.highNoiseSteps = requirePositiveInt(v, "high_noise_steps");
+       const int steps = requireInt(v, "high_noise_steps");
+       if (steps == 0 || steps < -1)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "high_noise_steps must be -1 or > 0, got: " +
+                 std::to_string(steps));
+       c.highNoiseSteps = steps;
      }},
 
     {"high_noise_sampler",

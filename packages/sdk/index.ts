@@ -211,7 +211,8 @@ export {
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
-  RequestRejectedByPolicyError
+  RequestRejectedByPolicyError,
+  TranslationFailedError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the

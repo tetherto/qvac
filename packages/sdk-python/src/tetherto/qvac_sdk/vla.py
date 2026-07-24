@@ -39,7 +39,7 @@ class NumpyNotInstalledError(ImportError):
     def __init__(self) -> None:
         super().__init__(
             "numpy is not installed -- install the 'vla' extra "
-            "(`pip install qvac[vla]`) to use the VLA client surface"
+            "(`pip install tetherto-qvac-sdk[vla]`) to use the VLA client surface"
         )
 
 

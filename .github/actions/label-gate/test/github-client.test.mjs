@@ -256,3 +256,110 @@ test('stripLabel: URL-encodes label name with special characters', async () => {
   ]);
   assert.equal(await client.stripLabel(1, 'needs review'), true);
 });
+
+// --- setCommitStatus / hasApprovalStatus (SHA-bound approval) ---------------
+
+// Fetch mock that records method + parsed JSON body of each call.
+function makeRecordingClient(handlers) {
+  let i = 0;
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    const handler = handlers[i++];
+    if (!handler) throw new Error(`unexpected fetch call: ${url}`);
+    if (handler.match) assert.match(url, handler.match);
+    calls.push({
+      url,
+      method: init.method,
+      body: init.body ? JSON.parse(init.body) : undefined,
+    });
+    return makeResponse(handler);
+  };
+  return {
+    client: new GitHubClient({
+      token: 't',
+      repo: 'o/r',
+      fetchImpl,
+      sleepImpl: async () => {},
+    }),
+    calls,
+  };
+}
+
+test('setCommitStatus: POSTs state/context/description to /statuses/{sha}, returns true on 201', async () => {
+  const { client, calls } = makeRecordingClient([
+    { match: /\/repos\/o\/r\/statuses\/abc123$/, status: 201, body: { id: 1 } },
+  ]);
+  const ok = await client.setCommitStatus('abc123', {
+    state: 'success',
+    context: 'qvac/fork-verified',
+    description: 'verified by alice',
+  });
+  assert.equal(ok, true);
+  assert.equal(calls[0].method, 'POST');
+  assert.deepEqual(calls[0].body, {
+    state: 'success',
+    context: 'qvac/fork-verified',
+    description: 'verified by alice',
+  });
+});
+
+test('setCommitStatus: throws on non-201', async () => {
+  const { client } = makeRecordingClient([
+    { match: /\/statuses\//, status: 403, body: { message: 'no' } },
+  ]);
+  await assert.rejects(
+    () => client.setCommitStatus('abc123', { state: 'success', context: 'c' }),
+    GitHubApiError,
+  );
+});
+
+test('setCommitStatus: requires sha, state, context', async () => {
+  const { client } = makeRecordingClient([]);
+  await assert.rejects(() => client.setCommitStatus('', { state: 's', context: 'c' }), /sha is required/);
+  await assert.rejects(() => client.setCommitStatus('x', { context: 'c' }), /state is required/);
+  await assert.rejects(() => client.setCommitStatus('x', { state: 's' }), /context is required/);
+});
+
+test('hasApprovalStatus: true when latest status for context is success (newest-first)', async () => {
+  const { client } = makeRecordingClient([
+    {
+      match: /\/commits\/deadbeef\/statuses/,
+      status: 200,
+      body: [
+        { context: 'qvac/fork-verified', state: 'success' },
+        { context: 'other', state: 'failure' },
+      ],
+    },
+  ]);
+  assert.equal(await client.hasApprovalStatus('deadbeef', 'qvac/fork-verified'), true);
+});
+
+test('hasApprovalStatus: false when the context status is not success', async () => {
+  const { client } = makeRecordingClient([
+    {
+      match: /\/commits\/deadbeef\/statuses/,
+      status: 200,
+      body: [{ context: 'qvac/fork-verified', state: 'pending' }],
+    },
+  ]);
+  assert.equal(await client.hasApprovalStatus('deadbeef', 'qvac/fork-verified'), false);
+});
+
+test('hasApprovalStatus: false when the context is absent', async () => {
+  const { client } = makeRecordingClient([
+    {
+      match: /\/commits\/deadbeef\/statuses/,
+      status: 200,
+      body: [{ context: 'ci/other', state: 'success' }],
+    },
+  ]);
+  assert.equal(await client.hasApprovalStatus('deadbeef', 'qvac/fork-verified'), false);
+});
+
+test('hasApprovalStatus: false (fail-closed) for an unknown SHA (404/422) or empty sha', async () => {
+  const { client } = makeRecordingClient([
+    { match: /\/commits\/nope\/statuses/, status: 404, body: { message: 'Not Found' } },
+  ]);
+  assert.equal(await client.hasApprovalStatus('nope', 'qvac/fork-verified'), false);
+  assert.equal(await client.hasApprovalStatus('', 'qvac/fork-verified'), false);
+});
