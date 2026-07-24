@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.1] - 2026-07-24
+
+### Fixed
+- `MultiJobScheduler` cancel entry points (`cancel(id)`, `cancelAll()`, `cancelJobs()`) now return only once every job they delivered a model-side cancel for has fully left the scheduler (queue and in-flight set, i.e. its admission slot is released). Previously they returned as soon as the cancel was forwarded to the model, so a model that applies per-id cancels on its own worker (llm-llamacpp's continuous batch scheduler records the cancel and tears the slot down between decode steps) left a window where `activeJobs()` still counted the cancelled job — a consumer admitting a follow-up job the moment its cancel resolved was spuriously refused as busy, and the JS `cancel()` promise contract ("resolves when cancellation completes") silently regressed relative to `SingleJobScheduler`, whose cancel waits for the in-flight job to back out (`ProcessingSync::waitInactive`). Cancel paths that deliver no model-side cancel (no `cancelById` / no whole-model `cancel()`) still return immediately, and scheduler teardown is unchanged (never waits for the model).
+
 ## [1.3.0] - 2026-07-06
 
 ### Added
