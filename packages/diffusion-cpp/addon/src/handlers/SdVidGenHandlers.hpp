@@ -87,9 +87,12 @@ struct SdVidGenConfig {
   float flowShift = 0.0f;
 
   // -- High-noise expert (Wan 2.2 only) -------------------------------------
-  // Mapped to sd_vid_gen_params_t::high_noise_sample_params. Ignored at
-  // runtime unless SdCtxConfig::highNoiseDiffusionModelPath is also set.
-  int highNoiseSteps = 30;
+  // Mapped to sd_vid_gen_params_t::high_noise_sample_params. processVideo()
+  // rejects an explicitly supplied high-noise setting unless
+  // SdCtxConfig::highNoiseDiffusionModelPath is also set. -1 preserves the
+  // native sentinel: derive the A14B expert split from moeBoundary instead of
+  // running a separately configured high-noise schedule.
+  int highNoiseSteps = -1;
   sample_method_t highNoiseSampleMethod = EULER_SAMPLE_METHOD;
   scheduler_t highNoiseScheduler = SIMPLE_SCHEDULER;
   float highNoiseCfgScale = 6.0f;
@@ -97,8 +100,8 @@ struct SdVidGenConfig {
 
   // Boundary between low-noise and high-noise expert trajectories, in the
   // normalized diffusion timestep. Wan 2.2 sweet spot ~0.875. Clamped to
-  // [0, 1] by the handler. Ignored when highNoiseDiffusionModelPath is
-  // empty (Wan 2.1).
+  // [0, 1] by the handler. This is not an SNR threshold. Explicit use is
+  // rejected when highNoiseDiffusionModelPath is empty (Wan 2.1 / TI2V-5B).
   float moeBoundary = 0.875f;
 
   // -- Denoising strength (img2vid) -----------------------------------------

@@ -15,9 +15,8 @@ inputs:
     description: "Type of registry to use"
     required: true
     default: "gpr"
-  workdir: 
+  workdir:
     default: "."
-    type: string
 
 runs:
   using: composite
