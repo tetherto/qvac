@@ -9,9 +9,18 @@
 const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
 
+// The full set the mobile suite pulls on-device:
+//   - ggml-tiny.bin + the Silero VAD model: functional tests (getTestPaths)
+//   - the base/small q5_1/q8_0 quants: the perf sweep (mobile-perf-sweep-{cpu,gpu}.test.js),
+//     which runs whenever the workflow sets enables-perf: 'true'.
+// Keep in sync with getTestPaths() and CPU_SWEEP/GPU_SWEEP in those tests.
 const MODELS = [
   { name: 'ggml-tiny.bin', url: `${HF_WHISPER_BASE}/ggml-tiny.bin` },
-  { name: 'ggml-silero-v5.1.2.bin', url: `${HF_VAD_BASE}/ggml-silero-v5.1.2.bin` }
+  { name: 'ggml-silero-v5.1.2.bin', url: `${HF_VAD_BASE}/ggml-silero-v5.1.2.bin` },
+  { name: 'ggml-base-q5_1.bin', url: `${HF_WHISPER_BASE}/ggml-base-q5_1.bin` },
+  { name: 'ggml-base-q8_0.bin', url: `${HF_WHISPER_BASE}/ggml-base-q8_0.bin` },
+  { name: 'ggml-small-q5_1.bin', url: `${HF_WHISPER_BASE}/ggml-small-q5_1.bin` },
+  { name: 'ggml-small-q8_0.bin', url: `${HF_WHISPER_BASE}/ggml-small-q8_0.bin` }
 ]
 
 function buildScript(models) {

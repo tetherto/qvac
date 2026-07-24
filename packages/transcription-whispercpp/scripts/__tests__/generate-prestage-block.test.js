@@ -13,9 +13,17 @@ const assert = require('node:assert/strict')
 
 const { MODELS, buildScript } = require('../generate-prestage-block')
 
-test('MODELS covers the tiny whisper model and the Silero VAD model', () => {
+test('MODELS covers the full mobile set: functional + perf-sweep quants', () => {
   const names = MODELS.map((m) => m.name)
-  assert.deepEqual(names, ['ggml-tiny.bin', 'ggml-silero-v5.1.2.bin'])
+  // tiny + VAD (functional) plus the base/small q5_1/q8_0 perf-sweep quants.
+  assert.deepEqual(names, [
+    'ggml-tiny.bin',
+    'ggml-silero-v5.1.2.bin',
+    'ggml-base-q5_1.bin',
+    'ggml-base-q8_0.bin',
+    'ggml-small-q5_1.bin',
+    'ggml-small-q8_0.bin'
+  ])
   for (const m of MODELS) {
     assert.match(m.url, /^https:\/\/huggingface\.co\//)
     assert.ok(m.url.endsWith(m.name))
@@ -38,4 +46,8 @@ test('buildScript stages the real whisper model set', () => {
   const script = buildScript(MODELS)
   assert.match(script, /stage "ggml-tiny\.bin"/)
   assert.match(script, /stage "ggml-silero-v5\.1\.2\.bin"/)
+  assert.match(script, /stage "ggml-base-q5_1\.bin"/)
+  assert.match(script, /stage "ggml-base-q8_0\.bin"/)
+  assert.match(script, /stage "ggml-small-q5_1\.bin"/)
+  assert.match(script, /stage "ggml-small-q8_0\.bin"/)
 })
