@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "f9b5078859f9920771741ddbab2f80f9f27ce870",
+    "baseline": "b9065ebbc95ffca5705188304b21ec365c03ae10",
+    "reference": "QVAC-18397-inference-addon-cpp-1.3.1",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
