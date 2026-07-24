@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -16,6 +17,9 @@ on:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
 
   workflow_call:
@@ -149,13 +153,14 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write # OIDC to pull the GR00T parity model from S3 (cpp-tests-vla)
     if: always() && !cancelled() && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks, ci-router, label-gate]
     uses: ./.github/workflows/cpp-tests-vla.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   ts-checks:
     if: needs.authorize.outputs.allowed == 'true'
@@ -243,6 +248,7 @@ jobs:
       id-token: write
     if: |
       always() &&
+      !cancelled() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
@@ -253,10 +259,10 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   prebuild-artifact-save:
-    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs: [prebuild, detect-native-changes, label-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -277,7 +283,7 @@ jobs:
 
   integration-tests:
     needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate]
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
       packages: read
@@ -286,7 +292,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   run-mobile-integration-tests:
     permissions:
@@ -294,13 +300,13 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs: [authorize, prebuild, prebuild-artifact-reuse, label-gate, ci-router]
     uses: ./.github/workflows/integration-mobile-test-vla.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   merge-guard:
     needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, integration-tests, run-mobile-integration-tests, ts-checks, ci-router, label-gate]
@@ -308,4 +314,4 @@ jobs:
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}

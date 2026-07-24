@@ -18,7 +18,6 @@ This library simplifies running inference with the Whisper transcription model w
   - [6. Run Transcription](#6-run-transcription)
   - [7. Release Resources](#7-release-resources)
 - [Quickstart example](#quickstart-example)
-- [Model registry](#model-registry)
 - [Other examples](#other-examples)
 - [Resources](#resources)
 - [License](#license)
@@ -34,9 +33,9 @@ This library simplifies running inference with the Whisper transcription model w
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (=0.12.2): C++ addon framework
-- qvac-fabric-whisper.cpp (latest): Inference engine
-- Bare Runtime (≥1.24.2): JavaScript runtime
+- qvac-lib-inference-addon-cpp: C++ addon framework (vcpkg port; see `vcpkg.json` for the pinned version)
+- whisper-cpp: inference engine (vcpkg port; see `vcpkg.json` for the pinned version)
+- Bare Runtime: JavaScript runtime (see `package.json` `engines.bare` for the supported version)
 - Linux requires Clang/LLVM 22 with libc++
 
 ## Installation
@@ -48,7 +47,7 @@ Make sure [Bare](#glossary) Runtime is installed:
 npm install -g bare bare-make
 ```
 
-Note : Make sure the Bare version is `>= 1.24.2`. Check this using :
+Note : Make sure the Bare version is `>= 1.19.0`. Check this using :
 
 ```bash
 bare -v
@@ -220,15 +219,18 @@ No `bare-make generate` flag is required; just `npm run build`. CI prebuilds for
 
 After building, you can run the test suite:
 ```bash
-# Run all tests (lint + unit + integration)
+# Run the JS test suite: unit + several integration suites (does not run lint)
 npm test
 
 # Or run tests individually
 npm run test:unit
 npm run test:integration
+
+# Lint is separate from `npm test`
+npm run lint
 ```
 
-Integration tests cover both the chunked reload flow (`test/integration/audio-ctx-chunking.test.js`) and the live streaming flow (`test/integration/live-stream-simulation.test.js`), so running them is the quickest way to verify those end-to-end scenarios after changes.
+The chunked reload flow and the live streaming flow have dedicated integration scripts — `npm run test:integration:chunking` (`test/integration/audio-ctx-chunking.test.js`) and `npm run test:integration:live-stream-simultion` (`test/integration/live-stream-simulation.test.js`) — so running those is the quickest way to verify those end-to-end scenarios after changes. (`npm run test:integration` runs `test/integration/addon.test.js`.)
 
 #### Development Workflow
 
@@ -245,7 +247,7 @@ The library provides a straightforward workflow for audio transcription:
 
 ### 1. Provide Model Files
 
-The addon loads model weights directly from local file paths. Make sure the whisper model (and optional VAD model) already exist on disk — either staged manually or fetched through the [model registry](#model-registry). More info about model registry and model builds in [resources](#resources).
+The addon loads model weights directly from local file paths. Make sure the whisper model (and optional VAD model) already exist on disk — either staged manually, downloaded from HuggingFace (see [Downloading Models](#downloading-models)), or fetched through the [QVAC model registry](https://github.com/tetherto/qvac/tree/main/packages/registry-server).
 
 You pass the paths via the `files` field of the constructor arguments:
 
@@ -268,7 +270,7 @@ Most users interact with the addon exclusively through `index.js`. From that ent
 | --- | --- | --- |
 | `contextParams` | `model` | Absolute or relative path to the `.bin` whisper model |
 | | | *(all other context keys keep their defaults because changing them forces a full reload, see below)* |
-| `whisperConfig` | *(any `whisper_full_params` key)* | Forwarded untouched. We surface convenience defaults in `index.js`, but every whisper.cpp flag is accepted—see [Advanced configuration](#advanced-configuration). |
+| `whisperConfig` | *(whitelisted `whisper_full_params` keys)* | A curated whitelist of decoder/VAD keys is accepted (see `configChecker.js`); unknown keys throw. We surface convenience defaults in `index.js`—see [Advanced configuration](#advanced-configuration). |
 | | `backendsDir` | Root directory for dynamically-loaded ggml backend `.so` files (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the package's `prebuilds/` folder; the native addon appends `<bare-target>/<module-name>` before scanning. Pass an explicit path when prebuilds live elsewhere — e.g. Android `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the APK. No-op on Apple (statically linked). |
 | `miscConfig` | `caption_enabled` | Formats segments with `<\|start\|>..<\|end\|>` markers |
 
@@ -298,7 +300,7 @@ Depending on model size this can take several seconds. Everything else in `whisp
 
 #### Advanced configuration
 
-Need more than the handful of options exposed in `index.js`? The upstream whisper.cpp documentation lists every flag available through `whisper_full_params`. Rather than duplicating that matrix here, refer to:
+Need more than the handful of options surfaced by default? `whisperConfig` accepts a curated whitelist of `whisper_full_params` keys (validated in `configChecker.js`); keys outside that list are rejected. For the meaning of each accepted flag, refer to:
 
 - The official parameter reference: [`whisper_full_params`](https://github.com/ggerganov/whisper.cpp/blob/master/examples/stream/stream.cpp#L30-L96)
 - Our longer examples for concrete shapes:
@@ -323,7 +325,7 @@ const config = {
     suppress_nst: true,
     n_threads: 0,
     vad_model_path: './models/ggml-silero-v5.1.2.bin',
-    vadParams: {
+    vad_params: {
       threshold: 0.6,
       min_speech_duration_ms: 250,
       min_silence_duration_ms: 200
@@ -388,40 +390,23 @@ Note : This import changes depending on the package installed.
 
 ### 5. Load Model
 
-Load the model weights and initialize the inference engine. Optionally provide a callback for progress updates:
+Load the model weights and initialize the inference engine:
 
 ```javascript
 try {
-  // Basic usage
   await model.load()
-
-  // Advanced usage with progress tracking
-  await model.load(
-          false,  // reserved flag, kept for forwarding compatibility
-          (progress) => console.log(`Loading: ${progress.overallProgress}% complete`)
-  )
 } catch (error) {
   console.error('Failed to load model:', error)
 }
 ```
 
-**Progress Callback Data**
-
-The progress callback receives an object with the following properties:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `action` | string | Current operation being performed |
-| `totalSize` | number | Total bytes to be loaded |
-| `totalFiles` | number | Total number of files to process |
-| `filesProcessed` | number | Number of files completed so far |
-| `currentFile` | string | Name of file currently being processed |
-| `currentFileProgress` | string | Percentage progress on current file |
-| `overallProgress` | string | Overall loading progress percentage |
+`load()` accepts two optional positional arguments (`load(closeLoader, reportProgress)`) that are kept only for forwarding compatibility — they are currently inert, so there is no load-progress reporting today. Model files must already exist on disk before calling `load()`.
 
 ### 6. Run Transcription
 
 Pass an audio stream (e.g., from `bare-fs.createReadStream`) to the `run` method. Process the transcription results asynchronously.
+
+> The snippets below assume `const fs = require('bare-fs')`.
 
 There are two ways to receive transcription results:
 
@@ -452,9 +437,9 @@ try {
 }
 ```
 
-#### Option 2: Complete Result with `iterate()`
+#### Option 2: Async iteration with `iterate()`
 
-The `iterate()` method returns all transcription segments **after the entire transcription completes**. This is useful when you need the full result before processing.
+The `iterate()` method returns an async generator that yields transcription segments **incrementally** as whisper.cpp produces them (it wakes immediately on each output/end/error event). Use it when you prefer a pull-based `for await` loop over the push-based `onUpdate()` callback.
 
 ```javascript
 try {
@@ -464,7 +449,7 @@ try {
 
   const response = await model.run(audioStream)
 
-  // Wait for complete transcription, then iterate over all segments
+  // Yields each segment incrementally as it is produced
   for await (const transcriptionChunk of response.iterate()) {
     console.log('Transcription chunk:', transcriptionChunk)
   }
@@ -477,8 +462,8 @@ try {
 ```
 
 **Key Differences:**
-- **`onUpdate()`**: Real-time streaming - segments arrive as they are generated by whisper.cpp's `new_segment_callback`
-- **`iterate()`**: Batch processing - all segments available after transcription completes
+- **`onUpdate(cb)`**: push-based — the callback fires for each segment as whisper.cpp's `new_segment_callback` emits it.
+- **`iterate()`**: pull-based — an async generator that yields each segment incrementally in a `for await` loop.
 
 #### Chunking long recordings with reload()
 
@@ -487,6 +472,27 @@ try {
 #### Live streaming a single job
 
 [`examples/example.live-transcription.js`](examples/example.live-transcription.js) feeds tiny PCM buffers into a pushable `Readable`, keeps a single `model.run(...)` open, and relies on `onUpdate()` for incremental text. `test/integration/live-stream-simulation.test.js` covers both the streaming case and a segmented loop without any `reload()` calls.
+
+#### VAD-based live streaming with `runStreaming()`
+
+`runStreaming(audioStream, opts?)` is the public VAD-segmented streaming entrypoint (part of the public API since 0.6.0). It requires a VAD model (via `files.vadModel`, `config.vadModelPath`, or `whisperConfig.vad_model_path`) and accepts the same audio input types as `run()`. Voice-activity detection splits the incoming audio into utterances and transcribes each one as it completes:
+
+```javascript
+const response = await model.runStreaming(audioStream)
+for await (const segment of response.iterate()) {
+  console.log(segment)
+}
+```
+
+Passing conversation options surfaces extra events alongside transcript segments:
+
+| Option | Description |
+|--------|-------------|
+| `emitVadEvents` / `conversationMode` | Emit `{ type: 'vad' }` state updates as speech starts and stops. |
+| `endOfTurnSilenceMs` | Emit `{ type: 'endOfTurn' }` after this much trailing silence. |
+| `vadRunIntervalMs` | How often the VAD is evaluated. |
+
+See [`examples/example.streaming-vad.js`](examples/example.streaming-vad.js) and [`examples/example.mic-conversation.js`](examples/example.mic-conversation.js).
 
 ### 7. Release Resources
 
@@ -504,8 +510,8 @@ try {
 
 ### 1. Clone the repo & Install the dependencies
 ```bash
-git clone https://github.com/tetherto/transcription-whispercpp.git
-cd transcription-whispercpp
+git clone https://github.com/tetherto/qvac.git
+cd qvac/packages/transcription-whispercpp
 npm install
 ```
 
@@ -544,6 +550,8 @@ Results are updated regularly as new model versions are released.
 -   [Model Reload](examples/example.reload.js) – Shows how to reload models with different configurations (language, temperature).
 -   [Audio ctx chunking](examples/example.audio-ctx-chunking.js) – Processes long recordings by reloading with `offset_ms`, `duration_ms`, and `audio_ctx` per chunk (mirrors the `audio-ctx-chunking` integration test).
 -   [Live transcription](examples/example.live-transcription.js) – Streams small chunks into a single job while maintaining Whisper state between updates (mirrors the `live-stream-simulation` integration test).
+-   [VAD streaming](examples/example.streaming-vad.js) – Uses `runStreaming()` for VAD-segmented live transcription.
+-   [Mic conversation](examples/example.mic-conversation.js) – Streams microphone audio through `runStreaming()` with VAD state and end-of-turn events.
 
 ## Glossary
 

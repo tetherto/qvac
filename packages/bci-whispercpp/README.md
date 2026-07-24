@@ -222,8 +222,9 @@ const response = await bci.transcribeStream(chunkIterable, {
 
 response.onUpdate(segments => {
   // emit: 'delta' — newly-discovered tail segments since the last window.
-  //                 Each segment carries native fields (text, t0, t1, ...) plus
-  //                 windowStartTimestep so you can map back to the stream timeline.
+  //                 Each segment carries native fields (text, start, end,
+  //                 toAppend, id) plus windowStartTimestep so you can map
+  //                 back to the stream timeline.
   // emit: 'full'  — single { text } entry with the full running transcript.
   for (const s of segments) process.stdout.write(s.text)
 })
@@ -264,7 +265,7 @@ const wer = computeWER('how does it keep the cost down', 'how does it keep the c
 
 ```js
 [
-  { text: ' How does it keep the cost down?', t0: 0, t1: 280, /* ... */ }
+  { text: ' How does it keep the cost down?', start: 0, end: 280, toAppend: false, id: 0 }
 ]
 ```
 
@@ -315,7 +316,7 @@ new BCIWhispercpp(args, config)
 
 ### config.whisperConfig
 
-The convenience defaults below are surfaced explicitly. **Any other `whisper_full_params` key is forwarded untouched** to whisper.cpp — see [Advanced configuration](#advanced-configuration).
+`whisperConfig` accepts a fixed whitelist of whisper decoding parameters; unknown keys are rejected (`load()` throws `INVALID_CONFIG`). The most common ones are shown below. The full accepted set is `language`, `n_threads`, `temperature`, `detect_language`, `translate`, `duration_ms`, `no_timestamps`, `single_segment`, `suppress_blank`, `suppress_nst`, `print_special`, `print_progress`, `print_realtime`, `print_timestamps`, `greedy_best_of`, and `beam_search_beam_size` (see `index.d.ts` and [Advanced configuration](#advanced-configuration)).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -327,7 +328,7 @@ The convenience defaults below are surfaced explicitly. **Any other `whisper_ful
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `day_idx` | number | `0` | Session day index for the day-specific low-rank projection at runtime. Distinct from the conversion-time `--day-idx` flag, which bakes a positional embedding into `ggml-bci-windowed.bin`. |
+| `day_idx` | number | `0` | Session day index for the day-specific low-rank projection at runtime. `>= 0` applies the projection (out-of-range values are clamped natively); `-1` enables mel-passthrough mode, where the input buffer is treated as pre-computed 512-bin mel features (frame-major) and preprocessing is skipped — intended for parity testing against the Python reference, not production. Distinct from the conversion-time `--day-idx` flag, which bakes a positional embedding into `ggml-bci-windowed.bin`. |
 
 ### config.contextParams
 
@@ -336,7 +337,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `model` | string | Optional override; usually set via `args.files.model`. |
-| `use_gpu` | boolean | Enable GPU acceleration (Metal on macOS by default). |
+| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows, OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
 | `gpu_device` | number | Select a non-default GPU device. |
 
@@ -345,6 +346,12 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `caption_enabled` | boolean | `false` | Format segments with `<\|start\|>..<\|end\|>` markers. |
+
+### config.backendsDir
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `backendsDir` | string | `<addon>/prebuilds` | **Android only.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; ignored on other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
 
 ### streamOpts (passed to `transcribeStream()`)
 
@@ -358,14 +365,14 @@ The encoder accepts up to ~3000 timesteps per forward pass; `MAX_WINDOW_TIMESTEP
 
 ### Advanced configuration
 
-`whisperConfig` is a thin pass-through to whisper.cpp's `whisper_full_params`. For the full surface (decoding strategy, beam search, VAD, suppression, callbacks, etc.) refer to the upstream reference:
+`whisperConfig` maps a curated subset of whisper.cpp's `whisper_full_params`; only the keys listed above are accepted, and any other key is rejected. To match the Python BrainWhisperer reference, the BCI decode path fixes several parameters natively — beam search with `beam_size` 4 (override with `beam_search_beam_size`), `length_penalty` 0.14 (not configurable), single-segment, and no-timestamps. For the meaning of each accepted parameter refer to the upstream reference:
 
 - [`whisper_full_params` in whisper.cpp](https://github.com/ggerganov/whisper.cpp/blob/master/include/whisper.h)
 - Concrete shapes used in production: see the [examples](examples) directory and [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp) for richer usage patterns (VAD, chunking, live streaming).
 
 ## whisper.cpp Patches
 
-The BCI patches live in the `tetherto/qvac-ext-lib-whisper.cpp` fork (v1.8.4.2) and are consumed via the `qvac-registry-vcpkg` port:
+The BCI patches live in the `tetherto/qvac-ext-lib-whisper.cpp` fork and are consumed via the `qvac-registry-vcpkg` port (see `vcpkg.json` for the pinned version):
 
 | Feature | Description |
 |---------|-------------|
@@ -398,7 +405,7 @@ All errors thrown by this package are `QvacErrorAddonBCI` instances (extending `
 | `26016` | `INVALID_STREAM_HEADER` | Stream `[T u32, C u32]` header malformed (e.g. `C == 0`) |
 | `26017` | `WINDOW_TOO_LARGE` | `windowTimesteps` exceeds `MAX_WINDOW_TIMESTEPS` (2900) |
 
-Codes are also re-exported via `require('@qvac/bci-whispercpp/lib/error').ERR_CODES` for programmatic matching.
+Every thrown `QvacErrorAddonBCI` extends `QvacErrorBase` and carries the numeric `.code` listed above, so callers can match programmatically on `err.code` (e.g. `err.code === 26008` for `MODEL_NOT_LOADED`).
 
 ## Resources
 

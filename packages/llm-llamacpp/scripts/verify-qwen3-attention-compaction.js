@@ -17,7 +17,7 @@ if (!fs.existsSync(MODEL_PATH)) {
   process.exit(2)
 }
 
-async function main () {
+async function main() {
   console.log(`[verify] loading ${path.basename(MODEL_PATH)} (pure attention)...`)
   const inference = new LlmLlamacpp({
     files: { model: [MODEL_PATH] },
@@ -39,17 +39,19 @@ async function main () {
   await inference.load()
   console.log('[verify] model loaded')
 
-  const messages = [
-    { role: 'user', content: 'What is 7 + 5? Reply with the number only.' }
-  ]
+  const messages = [{ role: 'user', content: 'What is 7 + 5? Reply with the number only.' }]
 
-  async function runOne (label, msgs) {
+  async function runOne(label, msgs) {
     console.log(`[verify] turn ${label}: remove_thinking_from_context: true ...`)
     const result = await inference.run(msgs, {
       generationParams: { remove_thinking_from_context: true }
     })
     let response = ''
-    await result.onUpdate(token => { response += token }).await()
+    await result
+      .onUpdate((token) => {
+        response += token
+      })
+      .await()
     return { response, stats: result.stats || {} }
   }
 
@@ -65,7 +67,7 @@ async function main () {
   console.log(`turn 1 stats: ${JSON.stringify(t1.stats)}`)
   console.log(`turn 2 stats: ${JSON.stringify(t2.stats)}`)
 
-  const toNum = v => typeof v === 'number' ? v : Number(v || 0)
+  const toNum = (v) => (typeof v === 'number' ? v : Number(v || 0))
   const t1Discards = toNum(t1.stats.thinkingBlockDiscards)
 
   let exitCode = 0
@@ -77,8 +79,7 @@ async function main () {
   //
   // The compaction itself must still fire as before.
   if (t1Discards < 1) {
-    console.error('[FAIL] turn 1 should drop at least one reasoning block ' +
-      `(got ${t1Discards})`)
+    console.error('[FAIL] turn 1 should drop at least one reasoning block ' + `(got ${t1Discards})`)
     exitCode = 1
   }
 
@@ -91,7 +92,7 @@ async function main () {
   process.exit(exitCode)
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[verify] fatal:', err)
   process.exit(3)
 })

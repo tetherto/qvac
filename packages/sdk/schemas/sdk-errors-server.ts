@@ -509,7 +509,9 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
     name: 'PLUGIN_NOT_FOUND',
     message: (modelType: string) =>
-      `Plugin not found for model type "${modelType}". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`
+      modelType === 'onnx-ocr'
+        ? 'Plugin not found for model type "onnx-ocr": the ONNX OCR engine was removed in @qvac/sdk 0.15.0. Use modelType "ggml-ocr" with GGUF registry models instead (EasyOCR: OCR_LATIN; DocTR: OCR_DOCTR).'
+        : `Plugin not found for model type "${modelType}". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`
   },
   [SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_NOT_FOUND]: {
     name: 'PLUGIN_HANDLER_NOT_FOUND',

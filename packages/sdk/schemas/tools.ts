@@ -18,6 +18,8 @@ export const TOOLS_MODE = {
 
 export type ToolsMode = (typeof TOOLS_MODE)[keyof typeof TOOLS_MODE]
 
+const jsonSchemaEnumValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
+
 export const toolSchema = z.object({
   type: z.literal('function'),
   name: z.string(),
@@ -29,7 +31,7 @@ export const toolSchema = z.object({
       z.object({
         type: z.enum(['string', 'number', 'integer', 'boolean', 'object', 'array']),
         description: z.string().optional(),
-        enum: z.array(z.string()).optional()
+        enum: z.array(jsonSchemaEnumValueSchema).optional()
       })
     ),
     required: z.array(z.string()).optional()

@@ -15,6 +15,13 @@ const {
   isMobile,
   recordWhisperStats
 } = require('./helpers.js')
+const {
+  readRssBytes,
+  createMemorySampler,
+  bytesToMb,
+  buildMemorySummary,
+  RECLAIM_SETTLE_MS
+} = require('./memory-usage.js')
 
 const platform = detectPlatform()
 const { modelsDir } = getTestPaths()
@@ -22,12 +29,34 @@ const NUM_TRANSCRIPTIONS = 3
 const SAMPLE_RATE = 16000
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
-function getTimeMs () {
+async function recordReclaimAfterUnload(modelLabel, epLabel, rssAfterLoadBytes, peakRssBytes) {
+  if (typeof global.gc === 'function') {
+    try {
+      global.gc()
+    } catch (_) {}
+  }
+  await new Promise((resolve) => setTimeout(resolve, RECLAIM_SETTLE_MS))
+  const summary = buildMemorySummary({
+    rssAfterLoadBytes,
+    peakRssBytes,
+    rssAfterUnloadBytes: readRssBytes()
+  })
+  recordWhisperStats(
+    modelLabel + ' ' + epLabel + ' mobile-perf teardown',
+    {},
+    {
+      reclaimedMb: summary.reclaimedMb
+    }
+  )
+  console.log('   Reclaimed after unload: ' + summary.reclaimedMb + 'MB')
+}
+
+function getTimeMs() {
   const [sec, nsec] = proc.hrtime()
   return sec * 1000 + nsec / 1e6
 }
 
-function locateSampleAudio () {
+function locateSampleAudio() {
   const candidates = ['sample.raw', 'short_en.raw']
   for (const name of candidates) {
     try {
@@ -40,7 +69,7 @@ function locateSampleAudio () {
   return null
 }
 
-async function ensureMobileModel (t, modelFile) {
+async function ensureMobileModel(t, modelFile) {
   const modelPath = path.join(modelsDir, modelFile)
   const result = await ensureWhisperModel(modelPath)
   if (result && result.success) return modelPath
@@ -48,7 +77,7 @@ async function ensureMobileModel (t, modelFile) {
   return null
 }
 
-async function runMobilePerfCase (t, opts) {
+async function runMobilePerfCase(t, opts) {
   const modelFile = opts.modelFile || 'ggml-tiny.bin'
   const useGPU = opts.useGPU
   const epLabel = useGPU ? '[GPU]' : '[CPU]'
@@ -66,6 +95,8 @@ async function runMobilePerfCase (t, opts) {
 
   const loggerBinding = setupJsLogger(binding)
   let model = null
+  let rssAfterLoadBytes = 0
+  let peakRssBytes = 0
 
   try {
     console.log('\n' + '='.repeat(60))
@@ -112,7 +143,15 @@ async function runMobilePerfCase (t, opts) {
     const loadStart = getTimeMs()
     model = new TranscriptionWhispercpp(constructorArgs, config)
     await model._load()
-    console.log('   Model loaded in ' + (getTimeMs() - loadStart).toFixed(0) + 'ms\n')
+    rssAfterLoadBytes = readRssBytes()
+    peakRssBytes = rssAfterLoadBytes
+    console.log(
+      '   Model loaded in ' +
+        (getTimeMs() - loadStart).toFixed(0) +
+        'ms (RSS ' +
+        bytesToMb(rssAfterLoadBytes, 1) +
+        'MB)\n'
+    )
 
     const timings = []
     let statsCount = 0
@@ -122,26 +161,44 @@ async function runMobilePerfCase (t, opts) {
       const runStartTime = getTimeMs()
 
       const audioStream = createAudioStream(samplePath)
+      const memSampler = createMemorySampler()
+      memSampler.start()
       const response = await model.run(audioStream)
       await response.await()
+      const runMemory = memSampler.stop()
+      if (runMemory.peakBytes > peakRssBytes) peakRssBytes = runMemory.peakBytes
 
       const runTime = getTimeMs() - runStartTime
       timings.push(runTime)
 
       const jobStats = response.stats
       const segments = Array.isArray(response.segments) ? response.segments : []
-      const runText = segments.map(s => (s && s.text) || '').join(' ').trim()
+      const runText = segments
+        .map((s) => (s && s.text) || '')
+        .join(' ')
+        .trim()
 
       console.log('   Time: ' + runTime.toFixed(0) + 'ms')
       console.log('   Segments: ' + segments.length)
-      console.log('   Text preview: "' + runText.substring(0, 80) + (runText.length > 80 ? '...' : '') + '"')
+      console.log(
+        '   Memory: avg ' +
+          bytesToMb(runMemory.avgBytes, 1) +
+          'MB, peak ' +
+          bytesToMb(runMemory.peakBytes, 1) +
+          'MB'
+      )
+      console.log(
+        '   Text preview: "' + runText.substring(0, 80) + (runText.length > 80 ? '...' : '') + '"'
+      )
 
       if (jobStats) {
         statsCount++
         lastStats = jobStats
         recordWhisperStats(modelLabel + ' ' + epLabel + ' mobile-perf run ' + run, jobStats, {
           wallMs: runTime,
-          output: runText
+          output: runText,
+          avgRssMb: bytesToMb(runMemory.avgBytes, 2),
+          peakRssMb: bytesToMb(runMemory.peakBytes, 2)
         })
         if (typeof jobStats.realTimeFactor === 'number') {
           console.log('   RTF: ' + jobStats.realTimeFactor.toFixed(4))
@@ -150,8 +207,21 @@ async function runMobilePerfCase (t, opts) {
       console.log('')
     }
 
-    t.ok(statsCount >= NUM_TRANSCRIPTIONS, modelLabel + ' ' + epLabel + ' should receive stats for every run (got ' + statsCount + ')')
-    t.ok(timings.length === NUM_TRANSCRIPTIONS, modelLabel + ' ' + epLabel + ' should complete ' + NUM_TRANSCRIPTIONS + ' transcriptions (got ' + timings.length + ')')
+    t.ok(
+      statsCount >= NUM_TRANSCRIPTIONS,
+      modelLabel + ' ' + epLabel + ' should receive stats for every run (got ' + statsCount + ')'
+    )
+    t.ok(
+      timings.length === NUM_TRANSCRIPTIONS,
+      modelLabel +
+        ' ' +
+        epLabel +
+        ' should complete ' +
+        NUM_TRANSCRIPTIONS +
+        ' transcriptions (got ' +
+        timings.length +
+        ')'
+    )
 
     // Backend identity assertions. `backendDevice` (0=CPU / 1=GPU) and
     // `backendId` (BackendId enum) are populated once per load() by
@@ -166,15 +236,25 @@ async function runMobilePerfCase (t, opts) {
     const backendId = typeof probe.backendId === 'number' ? probe.backendId : null
     const gpuMemTotalMb = typeof probe.gpuMemTotalMb === 'number' ? probe.gpuMemTotalMb : -1
     const gpuMemFreeMb = typeof probe.gpuMemFreeMb === 'number' ? probe.gpuMemFreeMb : -1
-    console.log('   Backend stats: backendDevice=' + backendDevice +
-                ' backendId=' + backendId +
-                ' gpuMemTotalMb=' + gpuMemTotalMb +
-                ' gpuMemFreeMb=' + gpuMemFreeMb)
+    console.log(
+      '   Backend stats: backendDevice=' +
+        backendDevice +
+        ' backendId=' +
+        backendId +
+        ' gpuMemTotalMb=' +
+        gpuMemTotalMb +
+        ' gpuMemFreeMb=' +
+        gpuMemFreeMb
+    )
 
-    t.ok(backendDevice !== null,
-      modelLabel + ' ' + epLabel + ' should report backendDevice in runtimeStats')
-    t.ok(backendId !== null,
-      modelLabel + ' ' + epLabel + ' should report backendId in runtimeStats')
+    t.ok(
+      backendDevice !== null,
+      modelLabel + ' ' + epLabel + ' should report backendDevice in runtimeStats'
+    )
+    t.ok(
+      backendId !== null,
+      modelLabel + ' ' + epLabel + ' should report backendId in runtimeStats'
+    )
 
     if (useGPU && platform.startsWith('android')) {
       // On Android with use_gpu=true we expect ggml to have registered
@@ -188,8 +268,14 @@ async function runMobilePerfCase (t, opts) {
       // capability that distinguishes Pixel from Samsung lives in the
       // wdio config, not in the spec body). Per-device QLOG output
       // is in the device-farm logcat capture for review.
-      t.ok(backendId === 3 || backendId === 4,
-        modelLabel + ' ' + epLabel + ' Android with use_gpu=true should select a GPU backend (Vulkan=3 or OpenCL=4); got ' + backendId)
+      t.ok(
+        backendId === 3 || backendId === 4,
+        modelLabel +
+          ' ' +
+          epLabel +
+          ' Android with use_gpu=true should select a GPU backend (Vulkan=3 or OpenCL=4); got ' +
+          backendId
+      )
     } else if (useGPU && platform.startsWith('ios')) {
       // On iOS with use_gpu=true we expect ggml to have registered the
       // Metal backend (backendId 1). Metal ships inside the statically
@@ -200,8 +286,15 @@ async function runMobilePerfCase (t, opts) {
       // device-farm guard that iOS actually offloads to Metal (and that
       // the historical MTLCompiler XPC init crash has not regressed)
       // rather than silently falling back to CPU.
-      t.is(backendId, 1,
-        modelLabel + ' ' + epLabel + ' iOS with use_gpu=true should select the Metal backend (backendId=1); got ' + backendId)
+      t.is(
+        backendId,
+        1,
+        modelLabel +
+          ' ' +
+          epLabel +
+          ' iOS with use_gpu=true should select the Metal backend (backendId=1); got ' +
+          backendId
+      )
     }
 
     console.log('Mobile perf case ' + modelLabel + ' ' + epLabel + ' completed successfully!\n')
@@ -215,6 +308,9 @@ async function runMobilePerfCase (t, opts) {
           await model.dispose()
         }
         console.log('   Instance destroyed')
+        if (peakRssBytes > 0) {
+          await recordReclaimAfterUnload(modelLabel, epLabel, rssAfterLoadBytes, peakRssBytes)
+        }
       } catch (err) {
         console.log('   Instance destroy error: ' + err.message)
       }

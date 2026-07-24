@@ -1,0 +1,242 @@
+{
+  "methods": [
+    {
+      "name": "batchCompletionStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/batchCompletionStream.request",
+      "responseSchema": "schema.json#/$defs/batchCompletionStream.response"
+    },
+    {
+      "name": "bciTranscribe",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/bciTranscribe.request",
+      "responseSchema": "schema.json#/$defs/bciTranscribe.response"
+    },
+    {
+      "name": "bciTranscribeStream",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/bciTranscribeStream.request",
+      "responseSchema": "schema.json#/$defs/bciTranscribeStream.response"
+    },
+    {
+      "name": "cancel",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/cancel.request",
+      "responseSchema": "schema.json#/$defs/cancel.response"
+    },
+    {
+      "name": "classify",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/classify.request",
+      "responseSchema": "schema.json#/$defs/classify.response"
+    },
+    {
+      "name": "completionOrchestrate",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/completionOrchestrate.request",
+      "responseSchema": "schema.json#/$defs/completionOrchestrate.response"
+    },
+    {
+      "name": "completionStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/completionStream.request",
+      "responseSchema": "schema.json#/$defs/completionStream.response"
+    },
+    {
+      "name": "deleteCache",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/deleteCache.request",
+      "responseSchema": "schema.json#/$defs/deleteCache.response"
+    },
+    {
+      "name": "diffusionStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/diffusionStream.request",
+      "responseSchema": "schema.json#/$defs/diffusionStream.response"
+    },
+    {
+      "name": "downloadAsset",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/downloadAsset.request",
+      "responseSchema": "schema.json#/$defs/downloadAsset.response",
+      "progress": {
+        "condition": "request.withProgress === true",
+        "responseSchema": "schema.json#/$defs/modelProgress.response"
+      }
+    },
+    {
+      "name": "embed",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/embed.request",
+      "responseSchema": "schema.json#/$defs/embed.response"
+    },
+    {
+      "name": "finetune",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/finetune.request",
+      "responseSchema": "schema.json#/$defs/finetune.response",
+      "progress": {
+        "condition": "request.withProgress === true && ['start', 'resume', undefined].includes(request.operation)",
+        "responseSchema": "schema.json#/$defs/finetune:progress.response"
+      }
+    },
+    {
+      "name": "getLoadedModelInfo",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/getLoadedModelInfo.request",
+      "responseSchema": "schema.json#/$defs/getLoadedModelInfo.response"
+    },
+    {
+      "name": "getModelInfo",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/getModelInfo.request",
+      "responseSchema": "schema.json#/$defs/getModelInfo.response"
+    },
+    {
+      "name": "heartbeat",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/heartbeat.request",
+      "responseSchema": "schema.json#/$defs/heartbeat.response"
+    },
+    {
+      "name": "loadModel",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/loadModel.request",
+      "responseSchema": "schema.json#/$defs/loadModel.response",
+      "progress": {
+        "condition": "request.withProgress === true",
+        "responseSchema": "schema.json#/$defs/modelProgress.response"
+      }
+    },
+    {
+      "name": "loggingStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/loggingStream.request",
+      "responseSchema": "schema.json#/$defs/loggingStream.response"
+    },
+    {
+      "name": "modelRegistryGetModel",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/modelRegistryGetModel.request",
+      "responseSchema": "schema.json#/$defs/modelRegistryGetModel.response"
+    },
+    {
+      "name": "modelRegistryList",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/modelRegistryList.request",
+      "responseSchema": "schema.json#/$defs/modelRegistryList.response"
+    },
+    {
+      "name": "modelRegistrySearch",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/modelRegistrySearch.request",
+      "responseSchema": "schema.json#/$defs/modelRegistrySearch.response"
+    },
+    {
+      "name": "ocrStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/ocrStream.request",
+      "responseSchema": "schema.json#/$defs/ocrStream.response"
+    },
+    {
+      "name": "pluginInvoke",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/pluginInvoke.request",
+      "responseSchema": "schema.json#/$defs/pluginInvoke.response"
+    },
+    {
+      "name": "pluginInvokeStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/pluginInvokeStream.request",
+      "responseSchema": "schema.json#/$defs/pluginInvokeStream.response"
+    },
+    {
+      "name": "provide",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/provide.request",
+      "responseSchema": "schema.json#/$defs/provide.response"
+    },
+    {
+      "name": "rag",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/rag.request",
+      "responseSchema": "schema.json#/$defs/rag.response",
+      "progress": {
+        "condition": "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
+        "responseSchema": "schema.json#/$defs/rag:progress.response"
+      }
+    },
+    {
+      "name": "resume",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/resume.request",
+      "responseSchema": "schema.json#/$defs/resume.response"
+    },
+    {
+      "name": "state",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/state.request",
+      "responseSchema": "schema.json#/$defs/state.response"
+    },
+    {
+      "name": "stopProvide",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/stopProvide.request",
+      "responseSchema": "schema.json#/$defs/stopProvide.response"
+    },
+    {
+      "name": "suspend",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/suspend.request",
+      "responseSchema": "schema.json#/$defs/suspend.response"
+    },
+    {
+      "name": "textToSpeech",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/textToSpeech.request",
+      "responseSchema": "schema.json#/$defs/textToSpeech.response"
+    },
+    {
+      "name": "textToSpeechStream",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/textToSpeechStream.request",
+      "responseSchema": "schema.json#/$defs/textToSpeechStream.response"
+    },
+    {
+      "name": "transcribe",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/transcribe.request",
+      "responseSchema": "schema.json#/$defs/transcribe.response"
+    },
+    {
+      "name": "transcribeStream",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/transcribeStream.request",
+      "responseSchema": "schema.json#/$defs/transcribeStream.response"
+    },
+    {
+      "name": "translate",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/translate.request",
+      "responseSchema": "schema.json#/$defs/translate.response"
+    },
+    {
+      "name": "unloadModel",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/unloadModel.request",
+      "responseSchema": "schema.json#/$defs/unloadModel.response"
+    },
+    {
+      "name": "upscaleStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/upscaleStream.request",
+      "responseSchema": "schema.json#/$defs/upscaleStream.response"
+    },
+    {
+      "name": "videoStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/videoStream.request",
+      "responseSchema": "schema.json#/$defs/videoStream.response"
+    }
+  ]
+}

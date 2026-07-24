@@ -46,6 +46,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Package'),
   },
   {
+    name: 'Python SDK',
+    url: '/python-sdk',
+    type: 'page',
+    icon: resolveIcon('Code2'),
+  },
+  {
     name: 'Configuration',
     type: 'folder',
     icon: resolveIcon('SlidersHorizontal'),
@@ -141,6 +147,12 @@ export const customTree: Node[] = [
     url: '/ai-capabilities/multimodal',
     type: 'page',
     icon: resolveIcon('GalleryHorizontal'),
+  },
+  {
+    name: 'Batch processing',
+    url: '/ai-capabilities/batch-processing',
+    type: 'page',
+    icon: resolveIcon('Boxes'),
   },
   {
     name: 'Image generation',
@@ -289,7 +301,7 @@ export const customTree: Node[] = [
       { name: 'translation-nmtcpp', url: '/addons/translation-nmtcpp', type: 'page' },
       { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
       { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
-      { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
+      { name: 'tts-ggml', url: '/addons/tts-ggml', type: 'page' },
       { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
       { name: 'diffusion-cpp', url: '/addons/diffusion-cpp', type: 'page' },
     ],

@@ -16,12 +16,7 @@ export const VERBOSITY = {
   DEBUG: 3
 } as const
 
-const verbositySchema = z.union([
-  z.literal(VERBOSITY.ERROR),
-  z.literal(VERBOSITY.WARN),
-  z.literal(VERBOSITY.INFO),
-  z.literal(VERBOSITY.DEBUG)
-])
+const verbositySchema = z.enum(VERBOSITY)
 
 // Base schema - validates types, all fields optional (for client-side validation)
 export const llmConfigBaseSchema = z.object({

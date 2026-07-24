@@ -14,8 +14,8 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const LlmLlamacpp = require('../index.js')
 
-const MODEL_PATH = process.env.QWEN_MODEL ||
-    path.resolve(__dirname, '../test/model/Qwen3-0.6B-Q8_0.gguf')
+const MODEL_PATH =
+  process.env.QWEN_MODEL || path.resolve(__dirname, '../test/model/Qwen3-0.6B-Q8_0.gguf')
 
 if (!fs.existsSync(MODEL_PATH)) {
   console.error(`[verify] Qwen3 model not cached at ${MODEL_PATH}`)
@@ -37,7 +37,7 @@ const CHAIN = [
   }
 ]
 
-function makeInference () {
+function makeInference() {
   return new LlmLlamacpp({
     files: { model: [MODEL_PATH] },
     config: {
@@ -56,7 +56,7 @@ function makeInference () {
   })
 }
 
-async function runChain (label, removeThinking) {
+async function runChain(label, removeThinking) {
   const inference = makeInference()
   await inference.load()
 
@@ -64,8 +64,11 @@ async function runChain (label, removeThinking) {
   const conversation = []
   const cacheKey = path.resolve(
     __dirname,
-    `../test/model/qwen3-multi-turn-${label.toLowerCase()}-${Date.now()}.bin`)
-  try { fs.unlinkSync(cacheKey) } catch (_) {}
+    `../test/model/qwen3-multi-turn-${label.toLowerCase()}-${Date.now()}.bin`
+  )
+  try {
+    fs.unlinkSync(cacheKey)
+  } catch (_) {}
 
   for (let i = 0; i < CHAIN.length; i++) {
     const { prompt, expected } = CHAIN[i]
@@ -78,14 +81,17 @@ async function runChain (label, removeThinking) {
       generationParams: { remove_thinking_from_context: removeThinking }
     })
     let response = ''
-    await result.onUpdate(token => { response += token }).await()
+    await result
+      .onUpdate((token) => {
+        response += token
+      })
+      .await()
     const elapsedMs = Date.now() - t0
     const stats = result.stats || {}
 
     const closedReasoning = /<\/think>/.test(response)
     const visible = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    const containsExpected =
-        closedReasoning && new RegExp(`\\b${expected}\\b`).test(visible)
+    const containsExpected = closedReasoning && new RegExp(`\\b${expected}\\b`).test(visible)
 
     conversation.push({ role: 'assistant', content: response })
 
@@ -101,35 +107,41 @@ async function runChain (label, removeThinking) {
       closedReasoning
     })
 
-    console.log(`[${label}] turn ${i + 1}: closed=${closedReasoning} ` +
-      `correct=${containsExpected} ` +
-      `discards=${stats.thinkingBlockDiscards || 0} ` +
-      `tokens=${stats.generatedTokens || '?'} (${elapsedMs}ms)`)
+    console.log(
+      `[${label}] turn ${i + 1}: closed=${closedReasoning} ` +
+        `correct=${containsExpected} ` +
+        `discards=${stats.thinkingBlockDiscards || 0} ` +
+        `tokens=${stats.generatedTokens || '?'} (${elapsedMs}ms)`
+    )
   }
 
   await inference.unload()
-  try { fs.unlinkSync(cacheKey) } catch (_) {}
+  try {
+    fs.unlinkSync(cacheKey)
+  } catch (_) {}
   return turns
 }
 
-function summarise (label, turns) {
+function summarise(label, turns) {
   console.log(`\n=== ${label} ===`)
   let allCorrect = true
   for (const t of turns) {
     const discards = Number(t.stats.thinkingBlockDiscards || 0)
     const tps = t.stats.TPS || 0
-    console.log(`  turn ${t.idx}: closed=${t.closedReasoning} ` +
-      `correct=${t.containsExpected} discards=${discards} ` +
-      `tokens=${t.stats.generatedTokens || '?'} ` +
-      `tps=${typeof tps === 'number' ? tps.toFixed(1) : tps} ` +
-      `(${t.elapsedMs}ms)`)
+    console.log(
+      `  turn ${t.idx}: closed=${t.closedReasoning} ` +
+        `correct=${t.containsExpected} discards=${discards} ` +
+        `tokens=${t.stats.generatedTokens || '?'} ` +
+        `tps=${typeof tps === 'number' ? tps.toFixed(1) : tps} ` +
+        `(${t.elapsedMs}ms)`
+    )
     console.log(`           visible: "${t.visible.slice(0, 120)}"`)
     if (!t.containsExpected) allCorrect = false
   }
   return allCorrect
 }
 
-async function main () {
+async function main() {
   console.log('[verify] running 3-turn arithmetic chain on Qwen3-0.6B (pure attention)\n')
 
   console.log('--- Phase 1: remove_thinking_from_context = true ---')
@@ -143,18 +155,24 @@ async function main () {
   console.log('\n=== Verdict ===')
   if (onAllCorrect && offAllCorrect) {
     console.log('[PASS] Pure-attention 3-turn chain works correctly with and without compaction.')
-    console.log('       This is the baseline against which the Qwen3.5 hybrid path should be judged.')
+    console.log(
+      '       This is the baseline against which the Qwen3.5 hybrid path should be judged.'
+    )
   } else if (!onAllCorrect && !offAllCorrect) {
-    console.log('[BASELINE FAIL] Pure attention also fails on this chain — small-model variance, not a hybrid-rollback issue.')
+    console.log(
+      '[BASELINE FAIL] Pure attention also fails on this chain — small-model variance, not a hybrid-rollback issue.'
+    )
   } else if (onAllCorrect) {
     console.log('[?] ON correct, OFF wrong — model variability.')
   } else {
-    console.log('[REGRESSION] Pure-attention compaction breaks the chain. Pre-existing bug, not something we introduced.')
+    console.log(
+      '[REGRESSION] Pure-attention compaction breaks the chain. Pre-existing bug, not something we introduced.'
+    )
   }
   process.exit(0)
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[verify] fatal:', err)
   process.exit(3)
 })

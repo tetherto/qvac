@@ -10,8 +10,6 @@ import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
 import { translationLlmTests } from './translation-llm-tests.js'
-import { translationSalamandraTests } from './translation-salamandra-tests.js'
-import { translationAfriquegemmaTests } from './translation-afriquegemma-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
 import { errorTests } from './error-tests.js'
@@ -41,6 +39,7 @@ import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
+import { snapStorageTests } from './snap-storage-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -240,12 +239,6 @@ export const tests = [
   // Translation: LLM (open-vocabulary via from/to)
   ...translationLlmTests,
 
-  // Translation: Salamandra (EU languages)
-  ...translationSalamandraTests,
-
-  // Translation: AfriqueGemma (African languages)
-  ...translationAfriquegemmaTests,
-
   // Sharded model tests
   ...shardedModelTests,
 
@@ -325,6 +318,9 @@ export const tests = [
 
   // Custom plugin system tests (custom-echo-plugin, error paths)
   ...pluginTests,
+
+  // Strict Snap storage-path conformance
+  ...snapStorageTests,
 
   // Additional model tests
   modelSwitchLlm,

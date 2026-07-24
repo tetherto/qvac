@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.38.1] - 2026-07-22
+
+This patch release guarantees that a content token follows the EOS-inside-reasoning recovery, so the forced `</think>` substitution can no longer be immediately followed by another end-of-generation token and produce an empty answer. It also exposes the generation stop reason as a new runtime stat.
+
+### Fixed
+
+- When a Qwen3-family model emits EOS while still inside the reasoning channel, the recovery that substitutes the `</think>` close marker now bans end-of-generation tokens on the immediately following sample. On marginal prompts the next token could previously be EOG again, defeating the recovery with an empty answer; the ban is applied unconditionally for that one sample (the generation loop only reaches it while the `n_predict` budget allows the token).
+
+### Added
+
+- `stopReason` runtime stat reports why the most recent single-prompt generation stopped (`none`, `eos`, `antiprompt`, `predictionLimit`, `sequenceLimit`, or `contextOverflow`).
+
+### Pull Requests
+
+- [#3389](https://github.com/tetherto/qvac/pull/3389) - guarantee a content token after EOS-inside-reasoning recovery
+
+## [0.38.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.37.1] - 2026-07-18
+
+This patch release hardens reasoning-cache rollback when generation is truncated before a reasoning span closes. It covers both explicit `n_predict` limits and continuous-batching per-sequence slot limits, preserving the last known-good cache state instead of attempting unsafe reasoning compaction.
+
+### Fixed
+
+- Qwen3.5 text and multimodal requests now roll back the current request when `n_predict` is reached inside an open reasoning span, avoiding recurrent compaction failures when no close marker was captured.
+- Continuous batching now propagates scheduler-imposed per-sequence slot truncation as `SequenceLimit`, allowing the driver to use the same rollback path as prediction-limit truncation.
+- Batch stop-reason precedence now preserves `Eos` > `PredictionLimit` > `Antiprompt`, so `n_predict` truncation still triggers rollback when a stop string would also match on the same token.
+- Added focused C++ regression coverage for MTMD `n_predict` rollback, scheduler `LimitReached` propagation, Qwen3.5 continuous-batching sequence-limit rollback, and sibling request survival.
+
+### Pull Requests
+
+- [#3318](https://github.com/tetherto/qvac/pull/3318) - QVAC-22472 fix: handle Qwen3.5 n_predict cutoff inside reasoning
+
+## [0.37.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
 ## [0.36.3] - 2026-07-09
 
 This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.

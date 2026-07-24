@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `getBackendInfo()` now reports which compute backend ran the FastConformer encoder: `encoderBackend` (`'coreml'` when the Apple Neural Engine Core ML sidecar drives the encoder, else mirrors `backendName`) and `encoderOnCoreml` (boolean). `RuntimeStats` gains `encoderOnCoreml` (0/1). Off Apple, or whenever the Core ML sidecar is absent, both report the ggml backend; the TDT/CTC decoder always runs on ggml.
+
+### Fixed
+
+- Long audio no longer crashes or exhausts memory during offline transcription.
+  The batch `transcribe` path ran the Parakeet encoder over the entire input in
+  one pass, whose self-attention grows with the square of the audio length, so
+  multi-hour files were killed by the OS (a ~90 min file peaked at ~100 GB). The
+  bundled `parakeet-cpp` (bumped to `2026-07-21#0`) now slides the encoder over
+  long inputs in overlapping windows with bounded memory; short inputs keep the
+  identical single-pass path. `transcribeStream` was already bounded and is
+  unchanged.
+
+## [0.10.1] - 2026-07-20
+
+### Changed
+
+- Migrated the published JavaScript wrapper to generated TypeScript sources and added declarations for the supported `./parakeet` subpath export, while preserving the existing CommonJS runtime API.
+- Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`parakeet-cpp` >= 2026-07-13#1, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16/i8mm kernels, leaving quantized models slow (tdt q4_0 mean RTF 0.2285 -> 0.0612 on ubuntu-24.04-arm; q4_0 now beats q8_0 like on every other desktop platform).
+- Bumped the `parakeet-cpp` `version>=` floors from `2026-07-13#1` to `2026-07-13#2` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), which raises the `ggml-speech` floor to `2026-07-15` (`tetherto/qvac-ext-ggml` speech `d7e27ac7`, [#42](https://github.com/tetherto/qvac-ext-ggml/pull/42) — QVAC-21623 ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM). `parakeet-cpp` source is unchanged (rebuild-only re-pin); the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical). Registry baseline unchanged.
+
+### Fixed
+
+- `BACKENDS_SUBDIR` is now defined on `parakeet_model_core` (the target that compiles `ParakeetModel.cpp`), so the engine scans `prebuilds/<bare-target>/<module>/` for dynamically-loadable ggml backends instead of the prebuilds root. Latent on all platforms; required for the desktop-Linux per-arch CPU variants.
+
+## [0.10.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
 ## [0.9.1] - 2026-07-08
 
 ### Fixed

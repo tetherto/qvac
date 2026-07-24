@@ -6,6 +6,7 @@ type TtsGgmlDebugModel = {
   _streamChunkTokens?: number
   _streamFirstChunkTokens?: number
   _cfmSteps?: number
+  _cfgRate?: number
   _threads?: number
   _nGpuLayers?: number
   _seed?: number
@@ -18,6 +19,7 @@ type TtsGgmlDebugModel = {
     language?: string
     useGPU?: boolean
     outputSampleRate?: number
+    vulkanCacheDir?: string
   }
 }
 
@@ -64,6 +66,7 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
       streamChunkTokens: 25,
       streamFirstChunkTokens: 10,
       cfmSteps: 1,
+      cfgRate: 0.7,
       threads: 8,
       nGpuLayers: 99,
       seed: 42
@@ -74,6 +77,7 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
   t.is(model._streamChunkTokens, 25)
   t.is(model._streamFirstChunkTokens, 10)
   t.is(model._cfmSteps, 1)
+  t.is(model._cfgRate, 0.7)
   t.is(model._threads, 8)
   t.is(model._nGpuLayers, 99)
   t.is(model._seed, 42)
@@ -90,8 +94,7 @@ test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets
       language: 'ja',
       s3genModelSrc: 'registry://s3/s3gen.gguf',
       mecabDictSrc: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
-      cangjieTsvSrc:
-        'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
+      cangjieTsvSrc: 'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
     },
     {
       resolveModelPath: async (src) => {
@@ -193,7 +196,8 @@ test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertoni
     modelConfig: {
       ttsEngine: 'supertonic',
       language: 'en',
-      outputSampleRate: 48000
+      outputSampleRate: 48000,
+      vulkanCacheDir: '/tmp/vulkan-cache'
     }
   })
 
@@ -201,7 +205,12 @@ test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertoni
   t.is(model._enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
   t.is(model._denoiserGgufPath, '/tmp/lavasr-denoiser.gguf')
   t.is(model._outputSampleRate, 48000)
-  t.is(model._config?.outputSampleRate, 48000)
+  t.alike(model._config, {
+    language: 'en',
+    useGPU: false,
+    outputSampleRate: 48000,
+    vulkanCacheDir: '/tmp/vulkan-cache'
+  })
 })
 
 test('ttsPlugin createModel: forwards LavaSR enhancer (chatterbox)', async (t) => {

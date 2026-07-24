@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.14.0] - 2026-07-20
+
+### Added
+
+- GR00T N1.7-3B LIBERO support as the third VLA architecture behind the `IVlaModel` interface, alongside SmolVLA and pi05. Qwen3-VL backbone with a VL-fusion and AlternateVLDiT action head driven by a Euler flow-matching loop, dispatched by GGUF `general.architecture`. Ships the GGUF converter and quantizer scripts, PyTorch-parity C++ tests, and cpp, desktop and mobile CI coverage. GPU offload is wired across all inference phases.
+
+## [0.13.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.12.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
 ## [0.11.2] - 2026-07-08
 
 ### Changed

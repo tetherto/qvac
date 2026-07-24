@@ -68,7 +68,11 @@ try {
   const result = completion({
     modelId: llmModelId,
     history: messages,
-    stream: true
+    stream: true,
+    // Bound the generation: at temp 0.7 a 1B model can ignore "to 5" and ramble
+    // past ctx_size (2048) into a context overflow. This demo only needs enough
+    // tokens to show logs streaming.
+    generationParams: { predict: 512 }
   })
   const { embedding } = await embed({
     modelId: embedModelId,

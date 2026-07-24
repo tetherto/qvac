@@ -23,6 +23,8 @@ on:
       - feature-*
       - tmp-*
   workflow_dispatch:
+  # Lets pr-gate-merge.yml call this workflow directly.
+  workflow_call:
 
 permissions:
   contents: read
@@ -323,6 +325,12 @@ jobs:
               if [ "$SDK_PKGJSON_CHANGED" = "true" ]; then
                 run "bare-sdk deps parity" node "$WS/packages/bare-sdk/scripts/check-deps-vs-sdk.mjs"
               fi
+              # Assert the committed Python-client contract (contract/schema.json,
+              # contract/manifest.json) matches a fresh export. A dedicated named
+              # check so a schema/registry change without regenerating fails with
+              # a clear "contract:check failed" instead of being buried inside the
+              # test:unit run above.
+              run "contract:check" npm run --if-present contract:check
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else

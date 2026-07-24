@@ -1,0 +1,19 @@
+{
+  "cacheEpoch": 1,
+  "models": {
+    "embeddinggemma-300M-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf"
+      ],
+      "sha256": "a0f7b4e13c397a6e1b32c2de75b1f65a14c92ec524d5f674d94a4290a1c4969b",
+      "bytes": 328577056
+    },
+    "gte-large_fp16.gguf": {
+      "urls": [
+        "https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/f9fa5479908e72c2a8b9d6ba112911cd1e51be53/gte-large_fp16.gguf"
+      ],
+      "sha256": "939f1fb3fcc70f2a250a7e7ad7c2fbdc1397d46f9a8055d053e451829c5293fb",
+      "bytes": 669603712
+    }
+  }
+}

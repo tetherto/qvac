@@ -81,14 +81,18 @@ const translateRequestIdField = z
   )
 
 export const translateRequestSchema = z.discriminatedUnion('modelType', [
-  translateParamsNmtSchema.extend({
-    type: z.literal('translate'),
-    requestId: translateRequestIdField
-  }),
-  translateParamsLlmSchema.extend({
-    type: z.literal('translate'),
-    requestId: translateRequestIdField
-  })
+  translateParamsNmtSchema
+    .extend({
+      type: z.literal('translate'),
+      requestId: translateRequestIdField
+    })
+    .meta({ title: 'TranslateNmtRequest' }),
+  translateParamsLlmSchema
+    .extend({
+      type: z.literal('translate'),
+      requestId: translateRequestIdField
+    })
+    .meta({ title: 'TranslateLlmRequest' })
 ])
 
 // Valid model types for translation (aliases and canonical)
@@ -103,12 +107,14 @@ export const translateServerParamsSchema = translateParamsSchema
   .refine(
     (data) => {
       if (!llmModelTypes.includes(data.modelType)) return true
-      // For LLM, check from/to exist
-      const llmData = data as { from?: string; to?: string }
-      return llmData.from && llmData.to
+      // For LLM, `to` is required; `from` is resolved by the worker
+      // (explicit, else auto-detected in server/bare/ops/translate.ts), so an
+      // absent `from` is valid here — it no longer has to arrive on the wire.
+      const llmData = data as { to?: string }
+      return !!llmData.to
     },
     {
-      message: "Both 'from' and 'to' languages are required for LLM translation models"
+      message: "A 'to' language is required for LLM translation models"
     }
   )
   .transform((data) => ({

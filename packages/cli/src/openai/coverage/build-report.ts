@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { categorize, summarizeUnknownLabels } from './categorize.js'
+import { QVAC_EXTENSION_ENDPOINTS } from './extensions.js'
 import { parseRouter } from './parse-router.js'
 import { parseSpec } from './parse-spec.js'
 import { CONSUMER_PRIMARY_ENDPOINTS } from './primary.js'
@@ -14,8 +15,7 @@ import type {
 } from './types.js'
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
-const CLI_ROOT = join(COVERAGE_DIR, '..', '..', '..')
-const DEFAULT_ROUTER = join(CLI_ROOT, 'src', 'serve', 'routes')
+export const DEFAULT_ROUTER = join(COVERAGE_DIR, '..', '..', 'serve', 'routes')
 
 function percent(n: number, total: number): number {
   if (total === 0) return 0
@@ -89,10 +89,14 @@ export async function buildCoverageReport(
   const implemented = new Set(implementedList)
 
   const specKeys = new Set(specEntries.map((e) => `${e.method} ${e.path}`))
+  const extensions: string[] = []
   for (const key of implemented) {
-    if (!specKeys.has(key)) {
-      throw new Error(`Router implements ${key} but it is not present in the OpenAPI spec`)
+    if (specKeys.has(key)) continue
+    if (QVAC_EXTENSION_ENDPOINTS.has(key)) {
+      extensions.push(key)
+      continue
     }
+    throw new Error(`Router implements ${key} but it is not present in the OpenAPI spec`)
   }
 
   const rows: CoverageRow[] = specEntries.map((e) => {
@@ -117,6 +121,7 @@ export async function buildCoverageReport(
     specSource,
     routerSource: routerPath,
     implementedCount: implementedList.length,
+    extensions: extensions.sort(),
     rows,
     summary: summarizeRows(rows)
   }

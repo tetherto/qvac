@@ -46,35 +46,43 @@ const handleError = (error, res) => {
 
   if (error instanceof ZodError) {
     res.statusCode = 400
-    return res.end(JSON.stringify({
-      error: formatZodError(error)
-    }))
+    return res.end(
+      JSON.stringify({
+        error: formatZodError(error)
+      })
+    )
   }
   if (error instanceof ApiError) {
     res.statusCode = error.status
-    return res.end(JSON.stringify({
-      error: error.message
-    }))
+    return res.end(
+      JSON.stringify({
+        error: error.message
+      })
+    )
   }
 
   const contextOverflow = parseContextOverflowError(error)
   if (contextOverflow.isOverflow) {
     res.statusCode = 422
-    return res.end(JSON.stringify({
-      error: 'Input exceeded model context window',
-      code: 'CONTEXT_OVERFLOW',
-      retryable: true,
-      details: {
-        ...contextOverflow.details,
-        message: error?.message || String(error)
-      }
-    }))
+    return res.end(
+      JSON.stringify({
+        error: 'Input exceeded model context window',
+        code: 'CONTEXT_OVERFLOW',
+        retryable: true,
+        details: {
+          ...contextOverflow.details,
+          message: error?.message || String(error)
+        }
+      })
+    )
   }
 
   res.statusCode = 500
-  res.end(JSON.stringify({
-    error: ERRORS.UNEXPECTED_ERROR
-  }))
+  res.end(
+    JSON.stringify({
+      error: ERRORS.UNEXPECTED_ERROR
+    })
+  )
 }
 
 /**
@@ -138,18 +146,22 @@ const handleRequest = async (req, res) => {
   try {
     if (pathname === '/' && method === HTTP_METHODS.GET) {
       logger.info(`[${requestId}] Handling health check request`)
-      return res.end(JSON.stringify({
-        message: 'EmbedLlamacpp Benchmark Server is running'
-      }))
+      return res.end(
+        JSON.stringify({
+          message: 'EmbedLlamacpp Benchmark Server is running'
+        })
+      )
     }
 
     if (pathname === '/status' && method === HTTP_METHODS.GET) {
       logger.info(`[${requestId}] Handling status request`)
       const status = modelManager.getStatus()
-      return res.end(JSON.stringify({
-        message: 'Model Status',
-        status
-      }))
+      return res.end(
+        JSON.stringify({
+          message: 'Model Status',
+          status
+        })
+      )
     }
 
     if (pathname === '/run' && method === HTTP_METHODS.POST) {
@@ -158,9 +170,11 @@ const handleRequest = async (req, res) => {
       const result = await runAddon(body)
 
       logger.info(`[${requestId}] Completed run request for ${result.outputs.length} inputs`)
-      return res.end(JSON.stringify({
-        data: result
-      }))
+      return res.end(
+        JSON.stringify({
+          data: result
+        })
+      )
     }
 
     throw new ApiError(404, ERRORS.ROUTE_NOT_FOUND)

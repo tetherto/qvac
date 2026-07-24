@@ -42,7 +42,7 @@ const SHARDED_MODEL = {
   ]
 }
 
-async function ensureShardedModel (modelDir) {
+async function ensureShardedModel(modelDir) {
   fs.mkdirSync(modelDir, { recursive: true })
 
   const loader = new HttpDL({ baseUrl: SHARDED_MODEL.baseUrl })
@@ -65,7 +65,7 @@ async function ensureShardedModel (modelDir) {
         ws.write(chunk)
       }
       ws.end()
-      await new Promise(resolve => ws.on('close', resolve))
+      await new Promise((resolve) => ws.on('close', resolve))
 
       const stat = fs.statSync(dest)
       if (stat.size !== file.size) {
@@ -77,51 +77,52 @@ async function ensureShardedModel (modelDir) {
     await loader.close().catch(() => {})
   }
 
-  return SHARDED_MODEL.files.map(file => path.join(modelDir, file.name))
+  return SHARDED_MODEL.files.map((file) => path.join(modelDir, file.name))
 }
 
-safeTest('sharded embed model can run inference end-to-end', {
-  timeout: 10 * 60 * 1000,
-  skip: isMobile
-}, async t => {
-  const modelDir = path.resolve(__dirname, '../model')
-  const modelFiles = await ensureShardedModel(modelDir)
+safeTest(
+  'sharded embed model can run inference end-to-end',
+  {
+    timeout: 10 * 60 * 1000,
+    skip: isMobile
+  },
+  async (t) => {
+    const modelDir = path.resolve(__dirname, '../model')
+    const modelFiles = await ensureShardedModel(modelDir)
 
-  const addon = new GGMLBert({
-    files: { model: modelFiles },
-    config: {
-      device: 'cpu',
-      gpu_layers: '0',
-      batch_size: '512',
-      ctx_size: '512',
-      openclCacheDir: modelDir,
-      verbosity: '2'
-    },
-    logger: console,
-    opts: { stats: true }
-  })
+    const addon = new GGMLBert({
+      files: { model: modelFiles },
+      config: {
+        device: 'cpu',
+        gpu_layers: '0',
+        batch_size: '512',
+        ctx_size: '512',
+        openclCacheDir: modelDir,
+        verbosity: '2'
+      },
+      logger: console,
+      opts: { stats: true }
+    })
 
-  try {
-    await addon.load()
-    const response = await addon.run([
-      'That is a happy person',
-      'This is a sad person'
-    ])
-    const embeddings = await response.await()
+    try {
+      await addon.load()
+      const response = await addon.run(['That is a happy person', 'This is a sad person'])
+      const embeddings = await response.await()
 
-    t.is(embeddings[0].length, 2, 'should return one embedding per input sequence')
-    t.is(
-      embeddings[0][0].length,
-      SHARDED_MODEL.embeddingDimension,
-      'should generate gte-large embeddings with expected dimension'
-    )
-    t.is(response.stats.backendDevice, 'cpu', 'should report cpu backend')
-    t.is(response.stats.context_size, 512, 'should use configured runtime context size')
-    t.ok(
-      response.stats.trained_context_size >= response.stats.context_size,
-      'trained context should be at least the runtime context'
-    )
-  } finally {
-    await addon.unload().catch(() => {})
+      t.is(embeddings[0].length, 2, 'should return one embedding per input sequence')
+      t.is(
+        embeddings[0][0].length,
+        SHARDED_MODEL.embeddingDimension,
+        'should generate gte-large embeddings with expected dimension'
+      )
+      t.is(response.stats.backendDevice, 'cpu', 'should report cpu backend')
+      t.is(response.stats.context_size, 512, 'should use configured runtime context size')
+      t.ok(
+        response.stats.trained_context_size >= response.stats.context_size,
+        'trained context should be at least the runtime context'
+      )
+    } finally {
+      await addon.unload().catch(() => {})
+    }
   }
-})
+)

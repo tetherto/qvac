@@ -103,7 +103,7 @@ const formatZodError = (error) => {
  *   A new Float32Array of length D (the hidden dimension), where each element is
  *   the average of the corresponding elements across all token embeddings.
  */
-function meanPoolEmbeddings (tokenEmbeddings) {
+function meanPoolEmbeddings(tokenEmbeddings) {
   if (!Array.isArray(tokenEmbeddings) || tokenEmbeddings.length === 0) {
     throw new Error(ERRORS.INVALID_INPUT)
   }
@@ -133,7 +133,7 @@ function meanPoolEmbeddings (tokenEmbeddings) {
  * @param {Float32Array} vector The vector to normalize. Its length must be > 0.
  * @returns {Array<number>} A similar array, scaled so that its L2 norm equals 1.
  */
-function l2Normalize (vector) {
+function l2Normalize(vector) {
   if (!(vector instanceof Float32Array) || vector.length === 0) {
     throw new Error(ERRORS.INVALID_INPUT)
   }
@@ -165,7 +165,7 @@ function l2Normalize (vector) {
  * const summaryVec = summarizeEmbeddings(tokens);
  * // summaryVec = [ ~0.447, ~0.298, ~0.843 ] (L2 norm = 1)
  */
-function summarizeEmbeddings (tokenEmbeddings) {
+function summarizeEmbeddings(tokenEmbeddings) {
   const pooled = meanPoolEmbeddings(tokenEmbeddings)
   return l2Normalize(pooled)
 }

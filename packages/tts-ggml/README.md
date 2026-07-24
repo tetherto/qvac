@@ -1,19 +1,19 @@
 # @qvac/tts-ggml
 
 Text-to-speech Bare addon backed by the [`qvac-tts.cpp`][qvac-tts-cpp]
-GGML library.  Currently ships the **Chatterbox Turbo English** model;
-additional engines will land under the same package as the upstream
-library grows.
+GGML library.  Wraps multiple engines under one package: **Chatterbox**
+(Turbo English + multilingual) and **Supertonic** (v1 English, v2, and
+v3 31-language), plus optional LavaSR neural denoise + 48 kHz
+bandwidth-extension enhancement.
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
-(Metal on macOS/iOS, Vulkan / OpenCL on Linux/Windows)
+(Metal on macOS/iOS, Vulkan on Linux/Windows, Vulkan / OpenCL on Android)
 is **opt-in** via `config: { useGPU: true }`; the default is CPU.  On
 Android `useGPU` flows through to `tts-cpp`, which picks the GPU
-backend per its own per-vendor allowlist (Supertonic on Adreno/OpenCL,
-Xclipse/Vulkan, Mali/Vulkan; Chatterbox on Adreno/Xclipse, declined to
-CPU on Mali) (see
+backend per its own per-vendor allowlist (Adreno → OpenCL,
+Xclipse/Mali → Vulkan) for both engines (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
@@ -69,6 +69,10 @@ supertonic.gguf            (~263 MB)
 
 # Supertonic multilingual (Supertone/supertonic-2; en/ko/es/pt/fr)
 supertonic2.gguf           (~263 MB)
+
+# Supertonic 3 (Supertone/supertonic-3; 31 languages) — published per quant
+# tier with the quant in the filename (auto-detected from modelDir)
+supertonic3-f16.gguf       (also -q8_0 / -q4_0 / -f32)
 ```
 
 The package converts these from upstream Resemble Chatterbox / Supertone
@@ -115,7 +119,7 @@ await response
   })
   .await()
 
-// pcm is Int16 mono @ 24 kHz
+// pcm is Int16 mono @ 24 kHz for Chatterbox (rate varies by engine — see data.sampleRate)
 await model.unload()
 ```
 
@@ -206,8 +210,10 @@ from `referenceAudio`.
 
 Opt-in neural post-processing that bandwidth-extends the synthesized audio to
 **48 kHz** with a synthesised high band, using the LavaSR Vocos enhancer
-(ConvNeXt backbone + ISTFT spec head) converted to a single GGUF and run on the
-CPU/GGML path. It is fully backward compatible — provide no enhancer GGUF and
+(ConvNeXt backbone + ISTFT spec head) converted to a single GGUF. It follows the
+engine's GPU intent: with `config.useGPU: true` (or `nGpuLayers`) the enhancer
+runs on the GPU (Vulkan on Linux/Windows, Metal on macOS/iOS) and falls back to
+CPU otherwise. It is fully backward compatible — provide no enhancer GGUF and
 nothing changes.
 
 Enhancement is enabled simply by supplying the enhancer GGUF; there is no
@@ -246,6 +252,8 @@ Notes:
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
   different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
+- With `opts.stats`, `response.stats.enhancerBackendDevice` (`-1` none / `0` CPU
+  / `1` GPU) and `enhancerBackendId` report where the enhancer actually ran.
 
 ### Denoiser
 
@@ -268,10 +276,12 @@ const model = new TTSGgml({
 ```
 
 Convert the GGUF from the public [LavaSRcpp](https://github.com/Topping1/LavaSRcpp)
-ONNX release:
+ONNX release using the `convert-lavasr-denoiser-to-gguf.py` script shipped in the
+[`qvac-ext-lib-whisper.cpp/tts-cpp`][qvac-tts-cpp] repo (this package ships only
+the enhancer converter under `scripts/`):
 
 ```bash
-python scripts/convert-lavasr-denoiser-to-gguf.py \
+python /path/to/tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py \
   --denoiser denoiser_core_legacy_fixed63.onnx \
   --out models/lavasr/lavasr-denoiser.gguf --ftype f16   # or f32
 ```
@@ -286,8 +296,8 @@ Notes:
   synthesis, or drop the denoiser for streaming.
 - The tts-cpp UL-UNAS forward is implemented in
   [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
-  (scalar CPU port, validated bit-close to the ONNX reference) and is active as of
-  the `tts-cpp` pin `2026-07-03#1` (this package's `vcpkg.json`).
+  (scalar CPU port, validated bit-close to the ONNX reference); it requires a
+  `tts-cpp` build that includes that port — see the pinned version in `vcpkg.json`.
 
 ## Backends & GPU acceleration
 
@@ -304,10 +314,9 @@ host's policy:
 | Android — Mali / others | Vulkan                                       |
 | Everything else / CPU-only build | CPU                                 |
 
-> **Chatterbox on ARM Mali** is the one exception to the table: `tts-cpp`
-> declines Mali for the Chatterbox / S3Gen graph (`allow_arm_mali=false`) and
-> runs it on CPU there (reported via `stats.gpuUnsupported`).  Supertonic runs
-> on Mali via Vulkan.
+> Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
+> `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined
+> Mali for the Chatterbox / S3Gen graph and fell back to CPU there.)
 
 ### Android: dynamic backend loading
 
@@ -339,6 +348,10 @@ unchanged.
 | `files.modelDir`          | string     | —          | Dir containing the two GGUFs |
 | `files.t3Model`           | string     | —          | Overrides `modelDir` for T3 |
 | `files.s3genModel`        | string     | —          | Overrides `modelDir` for S3Gen |
+| `files.supertonicModel`   | string     | —          | Supertonic GGUF (overrides `modelDir`) |
+| `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
+| `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
+| `engine`                  | string     | auto       | Force `'chatterbox'` or `'supertonic'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC`); auto-detected from the GGUFs present otherwise |
 | `referenceAudio`          | string     | —          | Mono wav ≥ 5 s for voice cloning |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
@@ -348,15 +361,21 @@ unchanged.
 | `threads`                 | number     | hw.concurrency capped at 4 | |
 | `streamChunkTokens`       | number     | 0          | **>0 enables native chunk streaming** |
 | `streamFirstChunkTokens`  | number     | = streamChunkTokens | Smaller first chunk for low first-audio-out |
-| `cfmSteps`                | number     | 2          | 1 = faster (halved CFM cost) |
+| `cfmSteps`                | number     | 2          | Chatterbox: 1 = faster (halved CFM cost) |
+| `speed`                   | number     | 1.0        | Speaking-rate multiplier, bounded `[0.25, 4.0]` (`< 1` slower, `> 1` faster). Both engines |
+| `voice` / `voiceName`     | string     | —          | Supertonic voice id (e.g. `'F1'`, `'M1'`) |
+| `steps` / `numInferenceSteps` | number | GGUF default | Supertonic vector-estimator CFM steps (`0` = GGUF default) |
+| `noiseNpyPath`            | string     | —          | Supertonic: optional fixed CFM noise `.npy` for reproducibility |
+| `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
+| `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for both engines on GPU-capable hosts, including Android, where `tts-cpp` selects the GPU backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali) |
-| `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |
-| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 3=Vulkan, 4=OpenCL, 99=other) etc. |
-| `opts.exclusiveRun`       | boolean    | `false`    | Serialize overlapping streaming runs |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for both engines on GPU-capable hosts, including Android, where `tts-cpp` selects the GPU backend per its per-vendor allowlist (see [Backends & GPU acceleration](#backends--gpu-acceleration)) |
+| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, enhancer 48 kHz) |
+| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
+| `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
 ### Methods
 
@@ -372,6 +391,12 @@ unchanged.
 - `model.run({ input, streamOutput: true })` → sentence-chunked
   synthesis driven by the JS-side sentence splitter (see
   `lib/textChunker.js`).  Equivalent to `runStream(input)`.
+- `model.run({ input, signal })` → pass an `AbortSignal` to cancel a
+  **non-streaming** run: when the signal aborts, `response.await()` rejects
+  with the abort reason.  An already-aborted signal rejects deterministically
+  without dispatching the engine (no native interrupt).  **Ignored when
+  `streamOutput: true`** (and on `runStream` / `runStreaming`) — the streaming
+  path does not thread the signal, so passing it there is a silent no-op.
 - `model.runStream(text, { locale?, maxChunkScalars? })` → same as
   above, but the options read more naturally for the "split this long
   string" use case.
@@ -384,8 +409,8 @@ All `run*` methods return a `QvacResponse` (from `@qvac/infer-base`):
 
 ```js
 response.onUpdate(data => {
-  data.outputArray   // Int16Array — 24 kHz mono PCM
-  data.sampleRate    // 24000
+  data.outputArray   // Int16Array — mono PCM
+  data.sampleRate    // actual rate: Chatterbox 24000, Supertonic 44100, enhancer 48000
   data.chunkIndex    // present on sentence-streaming events only
   data.sentenceChunk // present on sentence-streaming events only
 })
@@ -397,6 +422,11 @@ response.stats.realTimeFactor    // synthesis time / audio duration
 response.stats.audioDurationMs
 response.stats.totalSamples
 response.stats.tokensPerSecond
+response.stats.backendDevice     // 0=CPU, 1=GPU
+response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other
+// present when a LavaSR enhancer is active:
+response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
+response.stats.enhancerBackendId
 ```
 
 ## Examples
@@ -406,10 +436,17 @@ Runnable demos under `examples/`:
 | Script | Demonstrates |
 |---|---|
 | `chatterbox-tts.js` | Batch synth + wav dump. `bare examples/chatterbox-tts.js "Hello"` |
+| `chatterbox-mtl-tts.js` | Multilingual Chatterbox synthesis |
+| `chatterbox-mtl-sweep-tts.js` | Multilingual Chatterbox sweep across languages |
+| `chatterbox-adjust-speed.js` | Speaking-rate (`speed`) control |
 | `chatterbox-sentence-stream-tts.js` | `runStreaming()` over an async iterator of sentences, with gapless streaming playback |
 | `chatterbox-chunk-stream-tts.js` | Native per-chunk PCM streaming via `streamChunkTokens`, with gapless streaming playback |
-| `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `chatterbox-enhanced.js` | Chatterbox + LavaSR 48 kHz enhancement (batch). `bare examples/chatterbox-enhanced.js "Hello"` |
+| `supertonic-tts.js` | Supertonic batch synth. `bare examples/supertonic-tts.js "Hello"` |
+| `supertonic-mtl-tts.js` | Multilingual Supertonic synthesis |
+| `supertonic-mtl-sweep-tts.js` | Multilingual Supertonic sweep across languages |
+| `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
+| `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
@@ -504,9 +541,9 @@ RTF.
 **Slow-but-otherwise-fine RTF on Android** — set `config: { useGPU:
 true }` (the default is CPU; see
 [Backends & GPU acceleration](#backends--gpu-acceleration)) and confirm
-your device's GPU is on `tts-cpp`'s per-vendor allowlist.  Chatterbox is
-declined to CPU on ARM Mali, so on a Mali device that engine stays on
-CPU regardless; Supertonic runs on the GPU there.
+your device's GPU is on `tts-cpp`'s per-vendor allowlist.  Both Chatterbox
+and Supertonic run on the GPU on Adreno, Xclipse, and Mali (Adreno uses
+OpenCL; Xclipse and Mali use Vulkan).
 
 ## License
 

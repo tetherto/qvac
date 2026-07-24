@@ -13,7 +13,7 @@
 const test = require('brittle')
 const { OcrGgml } = require('../..')
 
-function createOcr () {
+function createOcr() {
   const ocr = new OcrGgml({
     params: {
       pathDetector: 'unused',
@@ -28,9 +28,20 @@ function createOcr () {
   return ocr
 }
 
-test('output callbacks fired synchronously inside runJob are not dropped', async t => {
+test('output callbacks fired synchronously inside runJob are not dropped', async (t) => {
   const ocr = createOcr()
-  const expectedOutput = [[[[0, 0], [10, 0], [10, 10], [0, 10]], 'hello', 0.99]]
+  const expectedOutput = [
+    [
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10]
+      ],
+      'hello',
+      0.99
+    ]
+  ]
 
   ocr.addon = {
     runJob: async () => {
@@ -44,10 +55,14 @@ test('output callbacks fired synchronously inside runJob are not dropped', async
   const result = await response.await()
 
   t.alike(result, [expectedOutput], 'output emitted before runJob await must reach the response')
-  t.alike(response.stats, { totalTime: 1 }, 'stats emitted before runJob await must reach the response')
+  t.alike(
+    response.stats,
+    { totalTime: 1 },
+    'stats emitted before runJob await must reach the response'
+  )
 })
 
-test('error callbacks fired synchronously inside runJob are not dropped', async t => {
+test('error callbacks fired synchronously inside runJob are not dropped', async (t) => {
   const ocr = createOcr()
 
   ocr.addon = {
@@ -58,18 +73,32 @@ test('error callbacks fired synchronously inside runJob are not dropped', async 
   }
 
   const response = await ocr.run({ path: 'stub' })
-  await t.exception(response.await(), /native failure/, 'error emitted before runJob await must reach the response')
+  await t.exception(
+    response.await(),
+    /native failure/,
+    'error emitted before runJob await must reach the response'
+  )
 })
 
-test('runJob rejection is routed through _job.fail and clears the active response', async t => {
+test('runJob rejection is routed through _job.fail and clears the active response', async (t) => {
   const ocr = createOcr()
   const failure = new Error('runJob rejected')
 
   ocr.addon = {
-    runJob: async () => { throw failure },
+    runJob: async () => {
+      throw failure
+    },
     cancel: () => {}
   }
 
-  await t.exception(ocr.run({ path: 'stub' }), /runJob rejected/, 'runJob rejection must propagate to the caller')
-  t.is(ocr._job.active, null, 'failed run must clear the active response so the next start() does not see a stale job')
+  await t.exception(
+    ocr.run({ path: 'stub' }),
+    /runJob rejected/,
+    'runJob rejection must propagate to the caller'
+  )
+  t.is(
+    ocr._job.active,
+    null,
+    'failed run must clear the active response so the next start() does not see a stale job'
+  )
 })

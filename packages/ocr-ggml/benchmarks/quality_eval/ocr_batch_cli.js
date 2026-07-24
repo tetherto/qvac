@@ -58,7 +58,9 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (!inputFile || !outputFile) {
-  console.error('Usage: bare ocr_batch_cli.js --input <file> --output <file> --detector <path> --recognizer <path> [--pipeline easyocr|doctr] [--lang en]')
+  console.error(
+    'Usage: bare ocr_batch_cli.js --input <file> --output <file> --detector <path> --recognizer <path> [--pipeline easyocr|doctr] [--lang en]'
+  )
   process.exit(1)
 }
 
@@ -67,23 +69,24 @@ if (!detectorPath || !recognizerPath) {
   process.exit(1)
 }
 
-async function processImage (model, imagePath) {
+async function processImage(model, imagePath) {
   const startTime = Date.now()
 
   try {
     const response = await model.run({ path: imagePath })
 
     let result = []
-    await response.onUpdate(data => {
-      result = data
-    }).await()
+    await response
+      .onUpdate((data) => {
+        result = data
+      })
+      .await()
 
     const boxes = result || []
-    const texts = boxes.map(item => item[1] || '')
-    const confidences = boxes.map(item => item[2] || 0)
-    const avgConfidence = confidences.length > 0
-      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
-      : 0
+    const texts = boxes.map((item) => item[1] || '')
+    const confidences = boxes.map((item) => item[2] || 0)
+    const avgConfidence =
+      confidences.length > 0 ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0
 
     const elapsed = Date.now() - startTime
 
@@ -104,12 +107,15 @@ async function processImage (model, imagePath) {
   }
 }
 
-async function main () {
+async function main() {
   let model = null
 
   try {
     const inputContent = fs.readFileSync(inputFile, 'utf8')
-    const imagePaths = inputContent.trim().split('\n').filter(line => line.trim())
+    const imagePaths = inputContent
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim())
 
     if (imagePaths.length === 0) {
       console.error('No image paths in input file')

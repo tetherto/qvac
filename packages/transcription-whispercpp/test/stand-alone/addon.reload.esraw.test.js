@@ -11,7 +11,7 @@ const samplesDir = path.resolve(__dirname, '../../examples/samples')
 const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
 const audioPath = path.join(samplesDir, 'LastQuestion_long_ES.raw')
 
-function chunkBuffer (buf, size) {
+function chunkBuffer(buf, size) {
   const chunks = []
   for (let i = 0; i < buf.length; i += size) chunks.push(buf.slice(i, i + size))
   return chunks
@@ -38,7 +38,9 @@ test('Addon reload: French → Spanish transcription of LastQuestion_long_ES.raw
     switch (event) {
       case 'JobStarted':
         jobStartTime = Date.now()
-        console.log(`\n🚀 [${timestamp}] Job ${jobId} started (Language: ${currentLanguage.toUpperCase()})`)
+        console.log(
+          `\n🚀 [${timestamp}] Job ${jobId} started (Language: ${currentLanguage.toUpperCase()})`
+        )
         break
 
       case 'Output': {
@@ -115,10 +117,12 @@ test('Addon reload: French → Spanish transcription of LastQuestion_long_ES.raw
   const startTime1 = Date.now()
   // eslint-disable-next-line no-unmodified-loop-condition
   while (jobEndedCount < 1 && Date.now() - startTime1 < 30000) {
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 
-  const job1Events = events.filter(e => e.jobId === events.find(e => e.event === 'JobStarted')?.jobId)
+  const job1Events = events.filter(
+    (e) => e.jobId === events.find((e) => e.event === 'JobStarted')?.jobId
+  )
   console.log(`\n📊 First job summary: ${job1Events.length} events`)
 
   // Now reload with Spanish config
@@ -154,7 +158,7 @@ test('Addon reload: French → Spanish transcription of LastQuestion_long_ES.raw
   const startTime2 = Date.now()
   // eslint-disable-next-line no-unmodified-loop-condition
   while (jobEndedCount < 2 && Date.now() - startTime2 < 30000) {
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 
   console.log(`\n${'='.repeat(55)}`)
@@ -162,10 +166,10 @@ test('Addon reload: French → Spanish transcription of LastQuestion_long_ES.raw
   console.log(`${'='.repeat(55)}`)
 
   // Analyze results
-  const outputEvents = events.filter(e => e.event === 'Output')
-  const jobEndedEvents = events.filter(e => e.event === 'JobEnded')
-  const frenchOutputs = events.filter(e => e.event === 'Output' && e.language === 'fr')
-  const spanishOutputs = events.filter(e => e.event === 'Output' && e.language === 'es')
+  const outputEvents = events.filter((e) => e.event === 'Output')
+  const jobEndedEvents = events.filter((e) => e.event === 'JobEnded')
+  const frenchOutputs = events.filter((e) => e.event === 'Output' && e.language === 'fr')
+  const spanishOutputs = events.filter((e) => e.event === 'Output' && e.language === 'es')
 
   console.log(`\n📊 Total events received: ${events.length}`)
   console.log(`   - Output events: ${outputEvents.length}`)
@@ -176,7 +180,7 @@ test('Addon reload: French → Spanish transcription of LastQuestion_long_ES.raw
   console.log(`\n📝 French Transcription (${frenchOutputs.length} segments):`)
   frenchOutputs.forEach((event, idx) => {
     if (Array.isArray(event.output)) {
-      event.output.forEach(segment => {
+      event.output.forEach((segment) => {
         if (segment && segment.text) {
           console.log(`   [${idx + 1}] "${segment.text}"`)
         }
@@ -187,7 +191,7 @@ test('Addon reload: French → Spanish transcription of LastQuestion_long_ES.raw
   console.log(`\n📝 Spanish Transcription (${spanishOutputs.length} segments):`)
   spanishOutputs.forEach((event, idx) => {
     if (Array.isArray(event.output)) {
-      event.output.forEach(segment => {
+      event.output.forEach((segment) => {
         if (segment && segment.text) {
           console.log(`   [${idx + 1}] "${segment.text}"`)
         }

@@ -555,28 +555,18 @@ const METRIC_COLUMNS = {
     { key: 'whisper_decode_time_ms', label: 'Decode (ms)' },
     { key: 'audio_duration_ms', label: 'Audio (ms)' }
   ],
-  // ONNX TTS RTF benchmark — one row per (engine, variant, backend, useGPU)
-  // configuration. Mirrors the per-engine `aggregate-onnx-tts-rtf.js`
-  // desktop aggregator's column set so the rendered Step Summary matches
-  // what engineers see in `summarize` runs.
-  'onnx-tts': [
-    { key: 'real_time_factor', label: 'Mean RTF' },
-    { key: 'rtf_p50', label: 'P50 RTF' },
-    { key: 'rtf_p95', label: 'P95 RTF' },
-    { key: 'wall_time_ms', label: 'Wall (ms)' },
-    { key: 'cold_rtf', label: 'Cold RTF' },
-    { key: 'model_load_ms', label: 'Load (ms)' },
-    { key: 'tps', label: 'Tokens/sec' },
-    { key: 'ttfa_ms', label: 'TTFA (ms)' },
-    { key: 'inter_chunk_p95_ms', label: 'Inter-chunk P95 (ms)' }
-  ],
   diffusion: [
     { key: 'model_load_ms', label: 'Load (ms)' },
     { key: 'generation_ms', label: 'Gen (ms)' },
     { key: 'ttfb_ms', label: 'TTFB (ms)' },
     { key: 'total_steps', label: 'Steps' },
     { key: 'width', label: 'Width' },
-    { key: 'height', label: 'Height' }
+    { key: 'height', label: 'Height' },
+    { key: 'conditioner_ms', label: 'Cond (ms)' },
+    { key: 'denoise_ms', label: 'Denoise (ms)' },
+    { key: 'vae_ms', label: 'VAE (ms)' },
+    { key: 'post_process_ms', label: 'Post (ms)' },
+    { key: 'steps_per_second', label: 'Steps/s' }
   ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -666,6 +656,11 @@ function createPerformanceReporter (opts) {
           total_steps: null,
           width: null,
           height: null,
+          conditioner_ms: null,
+          denoise_ms: null,
+          vae_ms: null,
+          post_process_ms: null,
+          steps_per_second: null,
           ...metrics
         },
         input: (extra && extra.input) || null,

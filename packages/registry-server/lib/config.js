@@ -14,7 +14,7 @@ const REGISTRY_CORE_KEY = ENV_KEYS.QVAC_REGISTRY_CORE_KEY || 'QVAC_REGISTRY_CORE
  * Handles all environment variables and default paths
  */
 class RegistryConfig {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     this.logger = opts.logger || console
   }
 
@@ -22,7 +22,7 @@ class RegistryConfig {
    * Get storage path for registry
    * Priority: provided value > env var > default
    */
-  getRegistryStorage (providedPath) {
+  getRegistryStorage(providedPath) {
     if (providedPath) {
       return providedPath
     }
@@ -37,7 +37,7 @@ class RegistryConfig {
   /**
    * Get storage path for model drives
    */
-  getModelDrivesStorage (providedPath) {
+  getModelDrivesStorage(providedPath) {
     if (providedPath) {
       return providedPath
     }
@@ -52,7 +52,7 @@ class RegistryConfig {
    * Get storage path for temporary files during model ingestion
    * Located at same level as model-drives storage
    */
-  getTempStorage (providedPath) {
+  getTempStorage(providedPath) {
     if (providedPath) {
       return providedPath
     }
@@ -71,12 +71,15 @@ class RegistryConfig {
    * Priority: provided value > env var > null
    * Returns Buffer(32) or null
    */
-  getPrimaryKey (providedKey) {
+  getPrimaryKey(providedKey) {
     if (providedKey) {
       try {
         return IdEnc.decode(providedKey)
       } catch (err) {
-        this.logger.warn({ err, key: providedKey }, 'Invalid primary key format, expected hex or z-base-32')
+        this.logger.warn(
+          { err, key: providedKey },
+          'Invalid primary key format, expected hex or z-base-32'
+        )
         return null
       }
     }
@@ -87,7 +90,10 @@ class RegistryConfig {
     try {
       return IdEnc.decode(envKey)
     } catch (err) {
-      this.logger.warn({ err, key: envKey }, 'Invalid QVAC_PRIMARY_KEY format, expected hex or z-base-32')
+      this.logger.warn(
+        { err, key: envKey },
+        'Invalid QVAC_PRIMARY_KEY format, expected hex or z-base-32'
+      )
       return null
     }
   }
@@ -97,12 +103,15 @@ class RegistryConfig {
    * Priority: provided value > env var > null
    * Returns Buffer(32) or null
    */
-  getWriterPrimaryKey (providedKey) {
+  getWriterPrimaryKey(providedKey) {
     if (providedKey) {
       try {
         return IdEnc.decode(providedKey)
       } catch (err) {
-        this.logger.warn({ err, key: providedKey }, 'Invalid writer primary key format, expected hex or z-base-32')
+        this.logger.warn(
+          { err, key: providedKey },
+          'Invalid writer primary key format, expected hex or z-base-32'
+        )
         return null
       }
     }
@@ -113,7 +122,10 @@ class RegistryConfig {
     try {
       return IdEnc.decode(envKey)
     } catch (err) {
-      this.logger.warn({ err, key: envKey }, 'Invalid QVAC_WRITER_PRIMARY_KEY format, expected hex or z-base-32')
+      this.logger.warn(
+        { err, key: envKey },
+        'Invalid QVAC_WRITER_PRIMARY_KEY format, expected hex or z-base-32'
+      )
       return null
     }
   }
@@ -121,7 +133,7 @@ class RegistryConfig {
   /**
    * Get Autobase bootstrap key used to join an existing writer set
    */
-  getAutobaseBootstrapKey (providedKey) {
+  getAutobaseBootstrapKey(providedKey) {
     if (providedKey) {
       return providedKey
     }
@@ -133,7 +145,7 @@ class RegistryConfig {
   /**
    * Persist Autobase key for future restarts
    */
-  setAutobaseKey (key) {
+  setAutobaseKey(key) {
     if (!key) return
     updateEnvFile(AUTOBASE_ENV_KEY, key)
   }
@@ -141,7 +153,7 @@ class RegistryConfig {
   /**
    * Set registry core key in environment
    */
-  setRegistryCoreKey (key) {
+  setRegistryCoreKey(key) {
     if (!key) return
     updateEnvFile(REGISTRY_CORE_KEY, key)
   }
@@ -149,7 +161,7 @@ class RegistryConfig {
   /**
    * Get spec path for HyperDB schemas
    */
-  getSpecPath () {
+  getSpecPath() {
     const specPath = path.join(__dirname, '..', 'spec')
     return specPath
   }
@@ -158,14 +170,14 @@ class RegistryConfig {
    * Get S3 bucket name for model artifact storage.
    * Required when models.prod.json uses bucket-less s3:/// URLs.
    */
-  getS3Bucket () {
+  getS3Bucket() {
     return getEnv(ENV_KEYS.QVAC_S3_BUCKET) || null
   }
 
   /**
    * Get all AWS credentials
    */
-  getAWSCredentials () {
+  getAWSCredentials() {
     const creds = {
       accessKeyId: getEnv(ENV_KEYS.AWS_ACCESS_KEY_ID),
       secretAccessKey: getEnv(ENV_KEYS.AWS_SECRET_ACCESS_KEY),
@@ -177,7 +189,7 @@ class RegistryConfig {
   /**
    * Get HuggingFace token
    */
-  getHuggingFaceToken () {
+  getHuggingFaceToken() {
     const token = getEnv(ENV_KEYS.HUGGINGFACE_TOKEN)
     return token
   }
@@ -185,7 +197,7 @@ class RegistryConfig {
   /**
    * Get registry core key for RPC client connections
    */
-  getRegistryCoreKey () {
+  getRegistryCoreKey() {
     const key = getEnv(ENV_KEYS.QVAC_REGISTRY_CORE_KEY)
     return key || null
   }
@@ -193,13 +205,13 @@ class RegistryConfig {
   /**
    * Parse allowlisted writer keys from environment
    */
-  getAllowedWriterKeys () {
+  getAllowedWriterKeys() {
     const rawKeys = getEnv(ENV_KEYS.QVAC_ALLOWED_WRITER_KEYS, '')
     if (!rawKeys) return new Set()
 
     const normalized = rawKeys
       .split(',')
-      .map(key => key.trim().toLowerCase())
+      .map((key) => key.trim().toLowerCase())
       .filter(Boolean)
 
     return new Set(normalized)
@@ -208,7 +220,7 @@ class RegistryConfig {
   /**
    * Append a writer key to the allowlist and persist it
    */
-  addAllowedWriterKey (key) {
+  addAllowedWriterKey(key) {
     if (!key || typeof key !== 'string') return
 
     const normalizedKey = key.trim().toLowerCase()
@@ -226,33 +238,33 @@ class RegistryConfig {
   /**
    * Get configured blind peer mirrors (comma-separated keys)
    */
-  getBlindPeerKeys () {
+  getBlindPeerKeys() {
     const rawKeys = getEnv(ENV_KEYS.QVAC_BLIND_PEER_KEYS, '')
     if (!rawKeys) return []
 
     return rawKeys
       .split(',')
-      .map(key => key.trim())
+      .map((key) => key.trim())
       .filter(Boolean)
   }
 
-  getAdditionalIndexers () {
+  getAdditionalIndexers() {
     const rawKeys = getEnv(ENV_KEYS.QVAC_ADDITIONAL_INDEXERS, '')
     if (!rawKeys) return []
 
     return rawKeys
       .split(',')
-      .map(key => key.trim())
+      .map((key) => key.trim())
       .filter(Boolean)
   }
 
-  getRemoveIndexers () {
+  getRemoveIndexers() {
     const rawKeys = getEnv(ENV_KEYS.QVAC_REMOVE_INDEXERS, '')
     if (!rawKeys) return []
 
     return rawKeys
       .split(',')
-      .map(key => key.trim())
+      .map((key) => key.trim())
       .filter(Boolean)
   }
 
@@ -261,20 +273,20 @@ class RegistryConfig {
    * CI clients use these to connect directly via Noise handshake
    * instead of topic-based discovery.
    */
-  getIndexerKeys () {
+  getIndexerKeys() {
     const rawKeys = getEnv('QVAC_INDEXER_KEYS', '')
     if (!rawKeys) return []
 
     return rawKeys
       .split(',')
-      .map(key => key.trim())
+      .map((key) => key.trim())
       .filter(Boolean)
   }
 
   /**
    * Optionally load writer keypair from env (CI use-case)
    */
-  getWriterKeyPair () {
+  getWriterKeyPair() {
     const publicKeyHex = getEnv(ENV_KEYS.QVAC_WRITER_PUBLIC_KEY)
     const secretKeyHex = getEnv(ENV_KEYS.QVAC_WRITER_SECRET_KEY)
 

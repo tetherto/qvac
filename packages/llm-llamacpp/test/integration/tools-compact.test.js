@@ -87,9 +87,9 @@ const TOOL_C = {
   }
 }
 
-const toNumber = value => typeof value === 'number' ? value : Number(value || 0)
+const toNumber = (value) => (typeof value === 'number' ? value : Number(value || 0))
 
-function normalizeStats (rawStats = {}) {
+function normalizeStats(rawStats = {}) {
   return {
     CacheTokens: toNumber(rawStats?.CacheTokens),
     promptTokens: toNumber(rawStats?.promptTokens),
@@ -97,13 +97,13 @@ function normalizeStats (rawStats = {}) {
   }
 }
 
-function cleanupRunOptionsCache (runOptions) {
+function cleanupRunOptionsCache(runOptions) {
   if (typeof runOptions?.cacheKey === 'string') {
     cleanupIntegrationCacheFiles(runOptions.cacheKey)
   }
 }
 
-async function setupModel (t, overrides = {}) {
+async function setupModel(t, overrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: QWEN3_MODEL.name,
     downloadUrl: QWEN3_MODEL.url
@@ -143,22 +143,21 @@ async function setupModel (t, overrides = {}) {
   return { model, dirPath, logs: specLogger.logs }
 }
 
-function modelDoesNotSupportTools (logs = []) {
-  return logs.some(line => line.includes('model does not support tools'))
+function modelDoesNotSupportTools(logs = []) {
+  return logs.some((line) => line.includes('model does not support tools'))
 }
 
-async function ensureToolsSupportOrSkip (t, model, logs) {
+async function ensureToolsSupportOrSkip(t, model, logs) {
   if (cachedToolsSupport === false) {
-    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
+    t.comment(
+      'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
+    )
     t.pass('tools unsupported in runtime; assertions skipped')
     return false
   }
   if (cachedToolsSupport === true) return true
 
-  const probePrompt = [
-    { role: 'user', content: 'Use tools if needed to answer briefly.' },
-    TOOL_A
-  ]
+  const probePrompt = [{ role: 'user', content: 'Use tools if needed to answer briefly.' }, TOOL_A]
 
   try {
     await runAndCollect(model, probePrompt)
@@ -168,7 +167,9 @@ async function ensureToolsSupportOrSkip (t, model, logs) {
 
   if (modelDoesNotSupportTools(logs)) {
     cachedToolsSupport = false
-    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
+    t.comment(
+      'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
+    )
     t.pass('tools unsupported in runtime; assertions skipped')
     return false
   }
@@ -177,17 +178,21 @@ async function ensureToolsSupportOrSkip (t, model, logs) {
   return true
 }
 
-async function runAndCollect (model, prompt, runOptions) {
+async function runAndCollect(model, prompt, runOptions) {
   cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
   const chunks = []
-  let chain = response.onUpdate(data => { chunks.push(data) })
+  let chain = response.onUpdate((data) => {
+    chunks.push(data)
+  })
   if (typeof response.onError === 'function') {
-    chain = chain.onError(err => { throw err })
+    chain = chain.onError((err) => {
+      throw err
+    })
   }
   await chain.await()
   const output = chunks.join('')
-  if (output.length >= (FULL_PREDICT_LIMIT - 1)) {
+  if (output.length >= FULL_PREDICT_LIMIT - 1) {
     throw new Error('Full output limit reached: consider re-run or increase limit, tests flaky')
   }
 
@@ -203,26 +208,32 @@ async function runAndCollect (model, prompt, runOptions) {
 // and leave a truncated file; the next model's session-load then blocks
 // indefinitely waiting for bytes that never arrive. Poll until size has
 // been stable for one tick to make sure the writer has finalized.
-async function waitForStableSessionFile (filePath, { maxMs = 5000 } = {}) {
+async function waitForStableSessionFile(filePath, { maxMs = 5000 } = {}) {
   const start = Date.now()
   let lastSize = -1
   while (Date.now() - start < maxMs) {
     let size = 0
-    try { size = fs.statSync(filePath).size } catch { size = 0 }
+    try {
+      size = fs.statSync(filePath).size
+    } catch {
+      size = 0
+    }
     if (size > 0 && size === lastSize) return size
     lastSize = size
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
   return lastSize
 }
 
-async function runExpectingInvalidPrompt (t, model, prompt, expectedReason, runOptions) {
+async function runExpectingInvalidPrompt(t, model, prompt, expectedReason, runOptions) {
   cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
 
   let capturedError = null
   if (typeof response.onError === 'function') {
-    response.onError(err => { capturedError = err })
+    response.onError((err) => {
+      capturedError = err
+    })
   }
   // Drain output stream so response lifecycle completes.
   response.onUpdate(() => {})
@@ -239,19 +250,18 @@ async function runExpectingInvalidPrompt (t, model, prompt, expectedReason, runO
   }
 
   const message = String(capturedError.message ? capturedError.message : capturedError)
-  t.ok(
-    message.includes(expectedReason),
-    `error includes exact reason: ${expectedReason}`
-  )
+  t.ok(message.includes(expectedReason), `error includes exact reason: ${expectedReason}`)
 }
 
-async function runExpectingNoPromptValidationError (t, model, prompt, runOptions, invalidReason) {
+async function runExpectingNoPromptValidationError(t, model, prompt, runOptions, invalidReason) {
   cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
 
   let capturedError = null
   if (typeof response.onError === 'function') {
-    response.onError(err => { capturedError = err })
+    response.onError((err) => {
+      capturedError = err
+    })
   }
   response.onUpdate(() => {})
 
@@ -273,195 +283,225 @@ async function runExpectingNoPromptValidationError (t, model, prompt, runOptions
   )
 }
 
-safeTest('[tools-compact] multi-turn session with wrong tools provided', { timeout: 600_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const sessionName = path.join(dirPath, 'tools-compact-changing.bin')
-  const opts = { cacheKey: sessionName }
+safeTest(
+  '[tools-compact] multi-turn session with wrong tools provided',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const sessionName = path.join(dirPath, 'tools-compact-changing.bin')
+    const opts = { cacheKey: sessionName }
 
-  const prompt1 = [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'Hello, what can you do?' },
-    TOOL_A
-  ]
-  const r1 = await runAndCollect(model, prompt1, opts)
-  t.ok(r1.output.length > 0, 'turn 1 produces output')
-  t.ok(r1.output.length < FULL_PREDICT_LIMIT, 'turn 1 output is within predict limit')
-  t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
-  t.ok(r1.stats.CacheTokens < TOOL_A_TOKENS, 'turn 1 has tool tokens removed')
+    const prompt1 = [SYSTEM_MESSAGE, { role: 'user', content: 'Hello, what can you do?' }, TOOL_A]
+    const r1 = await runAndCollect(model, prompt1, opts)
+    t.ok(r1.output.length > 0, 'turn 1 produces output')
+    t.ok(r1.output.length < FULL_PREDICT_LIMIT, 'turn 1 output is within predict limit')
+    t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
+    t.ok(r1.stats.CacheTokens < TOOL_A_TOKENS, 'turn 1 has tool tokens removed')
 
-  const prompt2 = [
-    { role: 'user', content: 'Check weather in Tokyo' },
-    TOOL_C
-  ]
-  const r2 = await runAndCollect(model, prompt2, opts)
-  t.ok(r2.output.length > 0, 'turn 2 produces output')
-  t.ok(r2.stats.CacheTokens > r1.stats.CacheTokens, 'turn 2 has cache tokens added')
-  t.ok(r2.stats.CacheTokens < r1.stats.CacheTokens + (TOOL_A_TOKENS / 2), 'turn 2 has tools removed')
-
-  const prompt3 = [
-    { role: 'user', content: 'Find best NHL player' },
-    TOOL_B
-  ]
-  const r3 = await runAndCollect(model, prompt3, opts)
-  t.ok(r3.output.length > 0, 'turn 3 produces output')
-  t.ok(r3.stats.CacheTokens > r2.stats.CacheTokens, 'turn 3 has cache tokens added')
-  t.ok(r3.stats.CacheTokens < r2.stats.CacheTokens + (TOOL_A_TOKENS / 2), 'turn 3 has tools removed')
-
-  const naiveAccumulation = r1.stats.CacheTokens + r2.stats.promptTokens + r2.stats.generatedTokens + r3.stats.promptTokens + r3.stats.generatedTokens
-  t.ok(
-    r3.stats.CacheTokens < naiveAccumulation,
-  `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than naive accumulation (${naiveAccumulation}) — proves old tools are trimmed`
-  )
-
-  t.ok(
-    r3.stats.CacheTokens < 2 * r1.stats.CacheTokens,
-  `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens}) — tools are replaced, not accumulated`
-  )
-})
-
-safeTest('[tools-compact] multi-turn session with same tools and cut LLM output', { timeout: 600_000 }, async t => {
-  if (cachedToolsSupport === false) {
-    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
-    t.pass('tools unsupported in runtime; assertions skipped')
-    return
-  }
-  const { model, dirPath, logs } = await setupModel(t, { n_predict: CUT_PREDICT_LIMIT })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const sessionName = path.join(dirPath, 'tools-compact-cut-output.bin')
-  const opts = { cacheKey: sessionName }
-
-  const prompt1 = [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Paris?' },
-    TOOL_A
-  ]
-  const PROMPT_1_TOKENS = { USER: 12, SYSTEM: SYSTEM_MESSAGE_TOKENS }
-  const r1 = await runAndCollect(model, prompt1, opts)
-  t.ok(r1.output.length > 0, 'turn 1 produces output')
-  t.is(r1.stats.CacheTokens, PROMPT_1_TOKENS.SYSTEM + PROMPT_1_TOKENS.USER, 'turn 1 has exact cache tokens prompt only - tools removed')
-
-  const prompt2 = [
-    { role: 'user', content: 'What about London?' },
-    TOOL_A
-  ]
-  const PROMPT_2_TOKENS = { USER: 9 }
-  const r2 = await runAndCollect(model, prompt2, opts)
-  t.ok(r2.output.length > 0, 'turn 2 produces output')
-  t.is(r2.stats.CacheTokens, r1.stats.CacheTokens + PROMPT_2_TOKENS.USER, 'turn 2 has exact prompt tokens added')
-  t.end()
-})
-
-safeTest('[tools-compact] multi-turn session with same tools works correctly', { timeout: 600_000 }, async t => {
-  if (cachedToolsSupport === false) {
-    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
-    t.pass('tools unsupported in runtime; assertions skipped')
-    return
-  }
-  const { model, dirPath, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const sessionName = path.join(dirPath, 'tools-compact-same.bin')
-  const opts = { cacheKey: sessionName }
-
-  const prompt1 = [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Paris?' },
-    TOOL_A
-  ]
-  const PROMPT_1_TOKENS = { USER: 12, TOOLS: TOOL_A_TOKENS }
-  const r1 = await runAndCollect(model, prompt1, opts)
-  t.ok(r1.output.length > 0, 'turn 1 produces output')
-  t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
-  t.ok(r1.stats.CacheTokens > PROMPT_1_TOKENS.TOOLS, 'turn 1 cache has tools tokens included')
-
-  const toolResponse = [
-    { role: 'assistant', content: r1.output },
-    { role: 'tool', content: 'sunny in Paris' },
-    TOOL_A
-  ]
-  const rTool = await runAndCollect(model, toolResponse, opts)
-  t.ok(rTool.output.length > 0, 'turn rTool produces output')
-  t.ok(rTool.stats.CacheTokens > 0, 'turn rTool has cache tokens')
-  t.ok(rTool.stats.CacheTokens < r1.stats.CacheTokens, 'turn rTool has cache tokens removed')
-
-  const prompt2 = [
-    { role: 'assistant', content: rTool.output },
-    { role: 'user', content: 'What about London?' },
-    TOOL_A
-  ]
-  const PROMPT_2_TOKENS = { USER: 9, TOOLS: TOOL_A_TOKENS }
-  const r2 = await runAndCollect(model, prompt2, opts)
-  t.ok(r2.output.length > 0, 'turn 2 produces output')
-  t.ok(r2.stats.CacheTokens > 0, 'turn 2 has cache tokens')
-  t.ok(r2.stats.CacheTokens > rTool.stats.CacheTokens, 'turn 2 has cache tokens more than prev')
-  t.ok(r2.stats.CacheTokens > PROMPT_2_TOKENS.TOOLS, 'turn 2 has cache tokens with tools')
-
-  const toolResponse2 = [
-    { role: 'assistant', content: r2.output },
-    { role: 'tool', content: 'rainy in London' },
-    TOOL_A
-  ]
-  const rTool2 = await runAndCollect(model, toolResponse2, opts)
-  t.ok(rTool2.output.length > 0, 'turn rTool2 produces output')
-  t.ok(rTool2.stats.CacheTokens > 0, 'turn rTool2 has cache tokens')
-  // Two model-output shapes are both correct here, and the compactor must
-  // preserve cache accordingly (see ToolsCompactController::onGenerationComplete):
-  //   1. Chain terminated  → assistant answers in natural language, no
-  //      `<tool_call>` marker → compactor trims the tool region →
-  //      CacheTokens should drop below TOOL_A_TOKENS.
-  //   2. Chain continued   → assistant emits another `<tool_call>` (model
-  //      decides another tool call is needed) → compactor MUST NOT trim
-  //      (the next hop needs the tool schemas in cache) → CacheTokens
-  //      cannot shrink below the previous turn.
-  // Which branch fires is model/sampler dependent; each branch is asserted
-  // independently so a future compactor bug in either direction is caught.
-  const rTool2ChainContinued = rTool2.output.includes('<tool_call>')
-  if (rTool2ChainContinued) {
+    const prompt2 = [{ role: 'user', content: 'Check weather in Tokyo' }, TOOL_C]
+    const r2 = await runAndCollect(model, prompt2, opts)
+    t.ok(r2.output.length > 0, 'turn 2 produces output')
+    t.ok(r2.stats.CacheTokens > r1.stats.CacheTokens, 'turn 2 has cache tokens added')
     t.ok(
-      rTool2.stats.CacheTokens >= r2.stats.CacheTokens,
-      `chain continued at turn rTool2; tools must remain in cache — CacheTokens must not shrink (rTool2=${rTool2.stats.CacheTokens} vs r2=${r2.stats.CacheTokens})`
+      r2.stats.CacheTokens < r1.stats.CacheTokens + TOOL_A_TOKENS / 2,
+      'turn 2 has tools removed'
     )
-  } else {
+
+    const prompt3 = [{ role: 'user', content: 'Find best NHL player' }, TOOL_B]
+    const r3 = await runAndCollect(model, prompt3, opts)
+    t.ok(r3.output.length > 0, 'turn 3 produces output')
+    t.ok(r3.stats.CacheTokens > r2.stats.CacheTokens, 'turn 3 has cache tokens added')
     t.ok(
-      rTool2.stats.CacheTokens < TOOL_A_TOKENS,
-      `turn rTool2 has all tools removed (CacheTokens=${rTool2.stats.CacheTokens} < ${TOOL_A_TOKENS})`
+      r3.stats.CacheTokens < r2.stats.CacheTokens + TOOL_A_TOKENS / 2,
+      'turn 3 has tools removed'
+    )
+
+    const naiveAccumulation =
+      r1.stats.CacheTokens +
+      r2.stats.promptTokens +
+      r2.stats.generatedTokens +
+      r3.stats.promptTokens +
+      r3.stats.generatedTokens
+    t.ok(
+      r3.stats.CacheTokens < naiveAccumulation,
+      `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than naive accumulation (${naiveAccumulation}) — proves old tools are trimmed`
+    )
+
+    t.ok(
+      r3.stats.CacheTokens < 2 * r1.stats.CacheTokens,
+      `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens}) — tools are replaced, not accumulated`
     )
   }
-  t.ok(
-    r2.stats.CacheTokens < 2 * r1.stats.CacheTokens,
-    `CacheTokens after turn 2 (${r2.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens})`
-  )
-})
+)
 
-safeTest('[tools-compact] single-shot with tools works without session', { timeout: 600_000 }, async t => {
-  if (cachedToolsSupport === false) {
-    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
-    t.pass('tools unsupported in runtime; assertions skipped')
-    return
+safeTest(
+  '[tools-compact] multi-turn session with same tools and cut LLM output',
+  { timeout: 600_000 },
+  async (t) => {
+    if (cachedToolsSupport === false) {
+      t.comment(
+        'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
+      )
+      t.pass('tools unsupported in runtime; assertions skipped')
+      return
+    }
+    const { model, dirPath, logs } = await setupModel(t, { n_predict: CUT_PREDICT_LIMIT })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const sessionName = path.join(dirPath, 'tools-compact-cut-output.bin')
+    const opts = { cacheKey: sessionName }
+
+    const prompt1 = [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'What is the weather in Paris?' },
+      TOOL_A
+    ]
+    const PROMPT_1_TOKENS = { USER: 12, SYSTEM: SYSTEM_MESSAGE_TOKENS }
+    const r1 = await runAndCollect(model, prompt1, opts)
+    t.ok(r1.output.length > 0, 'turn 1 produces output')
+    t.is(
+      r1.stats.CacheTokens,
+      PROMPT_1_TOKENS.SYSTEM + PROMPT_1_TOKENS.USER,
+      'turn 1 has exact cache tokens prompt only - tools removed'
+    )
+
+    const prompt2 = [{ role: 'user', content: 'What about London?' }, TOOL_A]
+    const PROMPT_2_TOKENS = { USER: 9 }
+    const r2 = await runAndCollect(model, prompt2, opts)
+    t.ok(r2.output.length > 0, 'turn 2 produces output')
+    t.is(
+      r2.stats.CacheTokens,
+      r1.stats.CacheTokens + PROMPT_2_TOKENS.USER,
+      'turn 2 has exact prompt tokens added'
+    )
+    t.end()
   }
-  const { model, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+)
 
-  const prompt = [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Tokyo?' },
-    TOOL_A
-  ]
-  const r = await runAndCollect(model, prompt)
-  t.ok(r.output.length > 0, 'produces output')
-  t.is(r.stats.CacheTokens, 0, 'no cache tokens without session')
-  t.ok(r.stats.promptTokens > 0, 'prompt tokens tracked')
-  t.ok(r.stats.generatedTokens > 0, 'generated tokens tracked')
-})
+safeTest(
+  '[tools-compact] multi-turn session with same tools works correctly',
+  { timeout: 600_000 },
+  async (t) => {
+    if (cachedToolsSupport === false) {
+      t.comment(
+        'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
+      )
+      t.pass('tools unsupported in runtime; assertions skipped')
+      return
+    }
+    const { model, dirPath, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const sessionName = path.join(dirPath, 'tools-compact-same.bin')
+    const opts = { cacheKey: sessionName }
 
-safeTest('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, async t => {
+    const prompt1 = [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'What is the weather in Paris?' },
+      TOOL_A
+    ]
+    const PROMPT_1_TOKENS = { USER: 12, TOOLS: TOOL_A_TOKENS }
+    const r1 = await runAndCollect(model, prompt1, opts)
+    t.ok(r1.output.length > 0, 'turn 1 produces output')
+    t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
+    t.ok(r1.stats.CacheTokens > PROMPT_1_TOKENS.TOOLS, 'turn 1 cache has tools tokens included')
+
+    const toolResponse = [
+      { role: 'assistant', content: r1.output },
+      { role: 'tool', content: 'sunny in Paris' },
+      TOOL_A
+    ]
+    const rTool = await runAndCollect(model, toolResponse, opts)
+    t.ok(rTool.output.length > 0, 'turn rTool produces output')
+    t.ok(rTool.stats.CacheTokens > 0, 'turn rTool has cache tokens')
+    t.ok(rTool.stats.CacheTokens < r1.stats.CacheTokens, 'turn rTool has cache tokens removed')
+
+    const prompt2 = [
+      { role: 'assistant', content: rTool.output },
+      { role: 'user', content: 'What about London?' },
+      TOOL_A
+    ]
+    const PROMPT_2_TOKENS = { USER: 9, TOOLS: TOOL_A_TOKENS }
+    const r2 = await runAndCollect(model, prompt2, opts)
+    t.ok(r2.output.length > 0, 'turn 2 produces output')
+    t.ok(r2.stats.CacheTokens > 0, 'turn 2 has cache tokens')
+    t.ok(r2.stats.CacheTokens > rTool.stats.CacheTokens, 'turn 2 has cache tokens more than prev')
+    t.ok(r2.stats.CacheTokens > PROMPT_2_TOKENS.TOOLS, 'turn 2 has cache tokens with tools')
+
+    const toolResponse2 = [
+      { role: 'assistant', content: r2.output },
+      { role: 'tool', content: 'rainy in London' },
+      TOOL_A
+    ]
+    const rTool2 = await runAndCollect(model, toolResponse2, opts)
+    t.ok(rTool2.output.length > 0, 'turn rTool2 produces output')
+    t.ok(rTool2.stats.CacheTokens > 0, 'turn rTool2 has cache tokens')
+    // Two model-output shapes are both correct here, and the compactor must
+    // preserve cache accordingly (see ToolsCompactController::onGenerationComplete):
+    //   1. Chain terminated  → assistant answers in natural language, no
+    //      `<tool_call>` marker → compactor trims the tool region →
+    //      CacheTokens should drop below TOOL_A_TOKENS.
+    //   2. Chain continued   → assistant emits another `<tool_call>` (model
+    //      decides another tool call is needed) → compactor MUST NOT trim
+    //      (the next hop needs the tool schemas in cache) → CacheTokens
+    //      cannot shrink below the previous turn.
+    // Which branch fires is model/sampler dependent; each branch is asserted
+    // independently so a future compactor bug in either direction is caught.
+    const rTool2ChainContinued = rTool2.output.includes('<tool_call>')
+    if (rTool2ChainContinued) {
+      t.ok(
+        rTool2.stats.CacheTokens >= r2.stats.CacheTokens,
+        `chain continued at turn rTool2; tools must remain in cache — CacheTokens must not shrink (rTool2=${rTool2.stats.CacheTokens} vs r2=${r2.stats.CacheTokens})`
+      )
+    } else {
+      t.ok(
+        rTool2.stats.CacheTokens < TOOL_A_TOKENS,
+        `turn rTool2 has all tools removed (CacheTokens=${rTool2.stats.CacheTokens} < ${TOOL_A_TOKENS})`
+      )
+    }
+    t.ok(
+      r2.stats.CacheTokens < 2 * r1.stats.CacheTokens,
+      `CacheTokens after turn 2 (${r2.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens})`
+    )
+  }
+)
+
+safeTest(
+  '[tools-compact] single-shot with tools works without session',
+  { timeout: 600_000 },
+  async (t) => {
+    if (cachedToolsSupport === false) {
+      t.comment(
+        'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
+      )
+      t.pass('tools unsupported in runtime; assertions skipped')
+      return
+    }
+    const { model, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+
+    const prompt = [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'What is the weather in Tokyo?' },
+      TOOL_A
+    ]
+    const r = await runAndCollect(model, prompt)
+    t.ok(r.output.length > 0, 'produces output')
+    t.is(r.stats.CacheTokens, 0, 'no cache tokens without session')
+    t.ok(r.stats.promptTokens > 0, 'prompt tokens tracked')
+    t.ok(r.stats.generatedTokens > 0, 'generated tokens tracked')
+  }
+)
+
+safeTest('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, async (t) => {
   if (cachedToolsSupport === false) {
-    t.comment('Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment')
+    t.comment(
+      'Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment'
+    )
     t.pass('tools unsupported in runtime; assertions skipped')
     return
   }
   const { model: probeModel, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, probeModel, logs)) return
+  if (!(await ensureToolsSupportOrSkip(t, probeModel, logs))) return
   const { model, dirPath } = await setupModel(t)
 
   const noCacheOpts = { cacheKey: path.join(dirPath, 'tools-compact-invalid-user-tail.bin') }
@@ -469,22 +509,22 @@ safeTest('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, 
   await runExpectingInvalidPrompt(
     t,
     model,
-    [
-      { role: 'user', content: 'Hello without tools' }
-    ],
+    [{ role: 'user', content: 'Hello without tools' }],
     'tools_compact requires non-empty tools for this prompt shape',
     noCacheOpts
   )
 })
 
-safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, async (t) => {
   if (cachedToolsSupport === false) {
-    t.comment('Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment')
+    t.comment(
+      'Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment'
+    )
     t.pass('tools unsupported in runtime; assertions skipped')
     return
   }
   const { model: probeModel, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, probeModel, logs)) return
+  if (!(await ensureToolsSupportOrSkip(t, probeModel, logs))) return
   const { model, dirPath } = await setupModel(t)
 
   const invalidReason = 'tools_compact requires non-empty tools for this prompt shape'
@@ -496,7 +536,10 @@ safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 
     [
       SYSTEM_MESSAGE,
       { role: 'user', content: 'Need weather update' },
-      { role: 'assistant', content: '<tool_call>{"name":"getWeather","arguments":{"city":"Tokyo"}}</tool_call>' }
+      {
+        role: 'assistant',
+        content: '<tool_call>{"name":"getWeather","arguments":{"city":"Tokyo"}}</tool_call>'
+      }
     ],
     invalidReason
   )
@@ -523,11 +566,7 @@ safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 
   await runExpectingNoPromptValidationError(
     t,
     model,
-    [
-      SYSTEM_MESSAGE,
-      { role: 'user', content: 'Start session with available tools.' },
-      TOOL_A
-    ],
+    [SYSTEM_MESSAGE, { role: 'user', content: 'Start session with available tools.' }, TOOL_A],
     { ...opts, prefill: true },
     invalidReason
   )
@@ -536,7 +575,10 @@ safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 
     t,
     model,
     [
-      { role: 'assistant', content: '<tool_call>{"name":"getWeather","arguments":{"city":"London"}}</tool_call>' }
+      {
+        role: 'assistant',
+        content: '<tool_call>{"name":"getWeather","arguments":{"city":"London"}}</tool_call>'
+      }
     ],
     { ...opts, prefill: true },
     invalidReason
@@ -554,70 +596,69 @@ safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 
   )
 })
 
-safeTest('[tools-compact] prefill with tools persists cache and loads on fresh model', { timeout: 600_000 }, async t => {
-  if (cachedToolsSupport === false) {
-    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
-    t.pass('tools unsupported in runtime; assertions skipped')
-    return
+safeTest(
+  '[tools-compact] prefill with tools persists cache and loads on fresh model',
+  { timeout: 600_000 },
+  async (t) => {
+    if (cachedToolsSupport === false) {
+      t.comment(
+        'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
+      )
+      t.pass('tools unsupported in runtime; assertions skipped')
+      return
+    }
+    const { model: probeModel, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, probeModel, logs))) return
+
+    const { model: warmModel, dirPath } = await setupModel(t)
+    const sessionName = path.join(dirPath, 'tools-compact-prefill-save.bin')
+
+    // Prefill the warmed [system, user, TOOL_A] prefix with persistence.
+    // tools_compact intentionally skips its post-generation trim on prefill,
+    // so the persisted cache must include the tool block.
+    const primeRun = await runAndCollect(
+      warmModel,
+      [SYSTEM_MESSAGE, { role: 'user', content: 'Start session with available tools.' }, TOOL_A],
+      { cacheKey: sessionName, saveCacheToDisk: true, prefill: true }
+    )
+
+    t.is(primeRun.stats.generatedTokens, 0, 'prefill emits no tokens')
+    t.ok(
+      primeRun.stats.CacheTokens > TOOL_A_TOKENS,
+      `prefill keeps the tool block in cache (CacheTokens=${primeRun.stats.CacheTokens} > TOOL_A_TOKENS=${TOOL_A_TOKENS})`
+    )
+    t.ok(fs.existsSync(sessionName), 'prefill + saveCacheToDisk wrote cache file to disk')
+    t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
+
+    // Tear down the warm model so the only path to a non-zero CacheTokens on
+    // the follow-up turn is loading the persisted cache file from disk.
+    await warmModel.unload()
+
+    const { model: freshModel } = await setupModel(t)
+    const turn = await runAndCollect(
+      freshModel,
+      [{ role: 'user', content: 'What is the weather in Tokyo?' }, TOOL_A],
+      { cacheKey: sessionName, saveCacheToDisk: true }
+    )
+
+    t.ok(turn.output.length > 0, 'follow-up turn produces output from prefilled state')
+    t.ok(
+      turn.stats.CacheTokens > 0,
+      `follow-up loads prefilled cache from disk (CacheTokens=${turn.stats.CacheTokens} > 0)`
+    )
+    t.ok(
+      turn.stats.CacheTokens > primeRun.stats.CacheTokens,
+      `follow-up CacheTokens (${turn.stats.CacheTokens}) grew past prefilled prefix (${primeRun.stats.CacheTokens})`
+    )
   }
-  const { model: probeModel, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, probeModel, logs)) return
-
-  const { model: warmModel, dirPath } = await setupModel(t)
-  const sessionName = path.join(dirPath, 'tools-compact-prefill-save.bin')
-
-  // Prefill the warmed [system, user, TOOL_A] prefix with persistence.
-  // tools_compact intentionally skips its post-generation trim on prefill,
-  // so the persisted cache must include the tool block.
-  const primeRun = await runAndCollect(
-    warmModel,
-    [
-      SYSTEM_MESSAGE,
-      { role: 'user', content: 'Start session with available tools.' },
-      TOOL_A
-    ],
-    { cacheKey: sessionName, saveCacheToDisk: true, prefill: true }
-  )
-
-  t.is(primeRun.stats.generatedTokens, 0, 'prefill emits no tokens')
-  t.ok(
-    primeRun.stats.CacheTokens > TOOL_A_TOKENS,
-    `prefill keeps the tool block in cache (CacheTokens=${primeRun.stats.CacheTokens} > TOOL_A_TOKENS=${TOOL_A_TOKENS})`
-  )
-  t.ok(fs.existsSync(sessionName), 'prefill + saveCacheToDisk wrote cache file to disk')
-  t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
-
-  // Tear down the warm model so the only path to a non-zero CacheTokens on
-  // the follow-up turn is loading the persisted cache file from disk.
-  await warmModel.unload()
-
-  const { model: freshModel } = await setupModel(t)
-  const turn = await runAndCollect(
-    freshModel,
-    [
-      { role: 'user', content: 'What is the weather in Tokyo?' },
-      TOOL_A
-    ],
-    { cacheKey: sessionName, saveCacheToDisk: true }
-  )
-
-  t.ok(turn.output.length > 0, 'follow-up turn produces output from prefilled state')
-  t.ok(
-    turn.stats.CacheTokens > 0,
-    `follow-up loads prefilled cache from disk (CacheTokens=${turn.stats.CacheTokens} > 0)`
-  )
-  t.ok(
-    turn.stats.CacheTokens > primeRun.stats.CacheTokens,
-    `follow-up CacheTokens (${turn.stats.CacheTokens}) grew past prefilled prefix (${primeRun.stats.CacheTokens})`
-  )
-})
+)
 
 // ===========================================================================
 // BEHAVIORAL TESTS
 // Verify functional tool-call behavior, longer sessions, and resilience.
 // ===========================================================================
 
-function parseToolCalls (output, t) {
+function parseToolCalls(output, t) {
   const re = /<tool_call>([\s\S]*?)<\/tool_call>/g
   const calls = []
   let m
@@ -626,158 +667,223 @@ function parseToolCalls (output, t) {
     try {
       calls.push(JSON.parse(raw))
     } catch (err) {
-      if (t) t.fail(`tool_call block contains malformed JSON: ${err.message}\n  raw: ${raw.slice(0, 200)}`)
+      if (t)
+        t.fail(
+          `tool_call block contains malformed JSON: ${err.message}\n  raw: ${raw.slice(0, 200)}`
+        )
     }
   }
   return calls
 }
 
-safeTest('[tools-compact] output contains tool_call block when tools are provided', { timeout: 600_000 }, async t => {
-  const { model, logs } = await setupModel(t, { n_predict: '256' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+safeTest(
+  '[tools-compact] output contains tool_call block when tools are provided',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, logs } = await setupModel(t, { n_predict: '256' })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
 
-  const prompt = [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Berlin right now?' },
-    TOOL_A
-  ]
-  const r = await runAndCollect(model, prompt)
-  t.ok(r.output.length > 0, 'produces output')
-  t.ok(
-    r.output.includes('<tool_call>') || r.output.includes('tool_call'),
-    'output should contain a tool_call block when a clear tool-triggering prompt is given'
-  )
-
-  const calls = parseToolCalls(r.output, t)
-  if (calls.length > 0) {
-    const declared = [TOOL_A.name]
-    t.ok(typeof calls[0].name === 'string' && calls[0].name.length > 0, 'tool_call has a non-empty name')
-    t.ok(declared.includes(calls[0].name), `tool_call name "${calls[0].name}" is a declared tool`)
-    if (calls[0].name === TOOL_A.name) {
-      t.ok(calls[0].arguments && 'city' in calls[0].arguments, 'tool_call has required argument key "city"')
-    }
-  }
-})
-
-safeTest('[tools-compact] tool_call references current tool after swap', { timeout: 600_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t, { n_predict: '256' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const opts = { cacheKey: path.join(dirPath, 'tc-swap-verify.bin') }
-
-  const r1 = await runAndCollect(model, [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Berlin right now?' },
-    TOOL_A
-  ], opts)
-  t.ok(r1.output.length > 0, 'turn 1 produces output')
-
-  const r2 = await runAndCollect(model, [
-    { role: 'user', content: 'Search for wireless headphones under $50' },
-    TOOL_B
-  ], opts)
-  t.ok(r2.output.length > 0, 'turn 2 produces output after tool swap')
-
-  const calls2 = parseToolCalls(r2.output, t)
-  if (calls2.length > 0) {
-    t.ok(calls2[0].name !== 'getWeather', 'turn 2 should not call old tool (getWeather) after swap')
-    if (calls2[0].name === TOOL_B.name) {
-      t.ok(calls2[0].arguments && 'query' in calls2[0].arguments, 'tool_call has required argument key "query"')
-    }
-  } else if (r2.output.includes('<tool_call>') || r2.output.includes('tool_call')) {
+    const prompt = [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'What is the weather in Berlin right now?' },
+      TOOL_A
+    ]
+    const r = await runAndCollect(model, prompt)
+    t.ok(r.output.length > 0, 'produces output')
     t.ok(
-      !r2.output.includes('"getWeather"') && !r2.output.includes("'getWeather'"),
-      'turn 2 should not reference old tool (getWeather) after swap'
+      r.output.includes('<tool_call>') || r.output.includes('tool_call'),
+      'output should contain a tool_call block when a clear tool-triggering prompt is given'
     )
+
+    const calls = parseToolCalls(r.output, t)
+    if (calls.length > 0) {
+      const declared = [TOOL_A.name]
+      t.ok(
+        typeof calls[0].name === 'string' && calls[0].name.length > 0,
+        'tool_call has a non-empty name'
+      )
+      t.ok(declared.includes(calls[0].name), `tool_call name "${calls[0].name}" is a declared tool`)
+      if (calls[0].name === TOOL_A.name) {
+        t.ok(
+          calls[0].arguments && 'city' in calls[0].arguments,
+          'tool_call has required argument key "city"'
+        )
+      }
+    }
   }
-})
+)
+
+safeTest(
+  '[tools-compact] tool_call references current tool after swap',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t, { n_predict: '256' })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const opts = { cacheKey: path.join(dirPath, 'tc-swap-verify.bin') }
+
+    const r1 = await runAndCollect(
+      model,
+      [
+        SYSTEM_MESSAGE,
+        { role: 'user', content: 'What is the weather in Berlin right now?' },
+        TOOL_A
+      ],
+      opts
+    )
+    t.ok(r1.output.length > 0, 'turn 1 produces output')
+
+    const r2 = await runAndCollect(
+      model,
+      [{ role: 'user', content: 'Search for wireless headphones under $50' }, TOOL_B],
+      opts
+    )
+    t.ok(r2.output.length > 0, 'turn 2 produces output after tool swap')
+
+    const calls2 = parseToolCalls(r2.output, t)
+    if (calls2.length > 0) {
+      t.ok(
+        calls2[0].name !== 'getWeather',
+        'turn 2 should not call old tool (getWeather) after swap'
+      )
+      if (calls2[0].name === TOOL_B.name) {
+        t.ok(
+          calls2[0].arguments && 'query' in calls2[0].arguments,
+          'tool_call has required argument key "query"'
+        )
+      }
+    } else if (r2.output.includes('<tool_call>') || r2.output.includes('tool_call')) {
+      t.ok(
+        !r2.output.includes('"getWeather"') && !r2.output.includes("'getWeather'"),
+        'turn 2 should not reference old tool (getWeather) after swap'
+      )
+    }
+  }
+)
 
 // ---------------------------------------------------------------------------
 // WHY: KV cache optimization must not destroy earlier conversation context.
 // Establishes a fact in turn 1, swaps tools, then asks about turn 1's content.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] conversation history preserved after tool swap', { timeout: 600_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t, { n_predict: '128' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const opts = { cacheKey: path.join(dirPath, 'tc-history.bin') }
+safeTest(
+  '[tools-compact] conversation history preserved after tool swap',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t, { n_predict: '128' })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const opts = { cacheKey: path.join(dirPath, 'tc-history.bin') }
 
-  await runAndCollect(model, [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'Remember this: my favorite number is 42. Confirm you understood.' },
-    TOOL_A
-  ], opts)
+    await runAndCollect(
+      model,
+      [
+        SYSTEM_MESSAGE,
+        {
+          role: 'user',
+          content: 'Remember this: my favorite number is 42. Confirm you understood.'
+        },
+        TOOL_A
+      ],
+      opts
+    )
 
-  await runAndCollect(model, [
-    { role: 'user', content: 'Search for notebooks' },
-    TOOL_B
-  ], opts)
+    await runAndCollect(model, [{ role: 'user', content: 'Search for notebooks' }, TOOL_B], opts)
 
-  const r3 = await runAndCollect(model, [
-    { role: 'user', content: 'What was my favorite number that I told you earlier?' },
-    TOOL_B
-  ], opts)
-  t.ok(r3.output.length > 0, 'turn 3 produces output')
-  t.ok(r3.stats.CacheTokens > 0, 'conversation history still in cache')
-})
+    const r3 = await runAndCollect(
+      model,
+      [{ role: 'user', content: 'What was my favorite number that I told you earlier?' }, TOOL_B],
+      opts
+    )
+    t.ok(r3.output.length > 0, 'turn 3 produces output')
+    t.ok(r3.stats.CacheTokens > 0, 'conversation history still in cache')
+  }
+)
 
 // ---------------------------------------------------------------------------
 // WHY: 5 turns exercises the trim loop over more iterations — where token
 // arithmetic bugs accumulate on mobile.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] extended 5-turn session with mixed tool changes', { timeout: 900_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const opts = { cacheKey: path.join(dirPath, 'tc-extended.bin') }
+safeTest(
+  '[tools-compact] extended 5-turn session with mixed tool changes',
+  { timeout: 900_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const opts = { cacheKey: path.join(dirPath, 'tc-extended.bin') }
 
-  const turns = [
-    { content: 'What is the weather in Paris?', tool: TOOL_A },
-    { content: 'Search for winter jackets', tool: TOOL_B },
-    { content: 'Send a summary to the team', tool: TOOL_C },
-    { content: 'Check weather in Berlin', tool: TOOL_A },
-    { content: 'Search for umbrellas', tool: TOOL_B }
-  ]
-
-  let finalCache = 0
-  for (let i = 0; i < turns.length; i++) {
-    const turn = turns[i]
-    const prompt = [
-      ...(i === 0 ? [SYSTEM_MESSAGE] : []),
-      { role: 'user', content: turn.content },
-      turn.tool
+    const turns = [
+      { content: 'What is the weather in Paris?', tool: TOOL_A },
+      { content: 'Search for winter jackets', tool: TOOL_B },
+      { content: 'Send a summary to the team', tool: TOOL_C },
+      { content: 'Check weather in Berlin', tool: TOOL_A },
+      { content: 'Search for umbrellas', tool: TOOL_B }
     ]
-    const r = await runAndCollect(model, prompt, opts)
-    t.ok(r.output.length > 0, `turn ${i + 1} produces output`)
-    t.ok(r.stats.CacheTokens > 0, `turn ${i + 1} has cache tokens`)
-    finalCache = r.stats.CacheTokens
-  }
 
-  t.ok(finalCache < 2000, `final cache (${finalCache}) stays reasonable — tools trimmed each turn`)
-})
+    let finalCache = 0
+    for (let i = 0; i < turns.length; i++) {
+      const turn = turns[i]
+      const prompt = [
+        ...(i === 0 ? [SYSTEM_MESSAGE] : []),
+        { role: 'user', content: turn.content },
+        turn.tool
+      ]
+      const r = await runAndCollect(model, prompt, opts)
+      t.ok(r.output.length > 0, `turn ${i + 1} produces output`)
+      t.ok(r.stats.CacheTokens > 0, `turn ${i + 1} has cache tokens`)
+      finalCache = r.stats.CacheTokens
+    }
+
+    t.ok(
+      finalCache < 2000,
+      `final cache (${finalCache}) stays reasonable — tools trimmed each turn`
+    )
+  }
+)
 
 // ---------------------------------------------------------------------------
 // WHY: Real agent systems pass 5+ tools with complex schemas. The double
 // tokenization and boundary calculation must handle substantial payloads.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] many tools with complex schemas', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] many tools with complex schemas', { timeout: 600_000 }, async (t) => {
   const { model, logs } = await setupModel(t, { n_predict: '256' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+  if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
 
   const TOOL_D = {
     type: 'function',
     name: 'translateText',
     description: 'Translate text from one language to another',
-    parameters: { type: 'object', properties: { text: { type: 'string' }, targetLang: { type: 'string' } }, required: ['text', 'targetLang'] }
+    parameters: {
+      type: 'object',
+      properties: { text: { type: 'string' }, targetLang: { type: 'string' } },
+      required: ['text', 'targetLang']
+    }
   }
   const TOOL_E = {
     type: 'function',
     name: 'createEvent',
     description: 'Create a calendar event with title date time and attendees',
-    parameters: { type: 'object', properties: { title: { type: 'string' }, date: { type: 'string' }, time: { type: 'string' }, attendees: { type: 'array', items: { type: 'string' } } }, required: ['title', 'date', 'time'] }
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        date: { type: 'string' },
+        time: { type: 'string' },
+        attendees: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['title', 'date', 'time']
+    }
   }
 
   const r = await runAndCollect(model, [
     SYSTEM_MESSAGE,
-    { role: 'user', content: 'Check weather, search for umbrellas, send email, translate to Japanese, create reminder.' },
-    TOOL_A, TOOL_B, TOOL_C, TOOL_D, TOOL_E
+    {
+      role: 'user',
+      content:
+        'Check weather, search for umbrellas, send email, translate to Japanese, create reminder.'
+    },
+    TOOL_A,
+    TOOL_B,
+    TOOL_C,
+    TOOL_D,
+    TOOL_E
   ])
   t.ok(r.output.length > 0, 'produces output with 5 tools')
   t.ok(r.stats.promptTokens > 0, 'prompt tokens tracked')
@@ -787,193 +893,296 @@ safeTest('[tools-compact] many tools with complex schemas', { timeout: 600_000 }
 // ---------------------------------------------------------------------------
 // WHY: Apps that recover from errors need session to survive a full lifecycle.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] session save, destroy, reload with different tools', { timeout: 600_000 }, async t => {
-  const { model: model1, dirPath, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model1, logs)) return
-  const sessionName = path.join(dirPath, 'tc-lifecycle.bin')
+safeTest(
+  '[tools-compact] session save, destroy, reload with different tools',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model: model1, dirPath, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, model1, logs))) return
+    const sessionName = path.join(dirPath, 'tc-lifecycle.bin')
 
-  const r1 = await runAndCollect(model1, [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Sydney?' },
-    TOOL_A
-  ], { cacheKey: sessionName, saveCacheToDisk: true })
-  t.ok(r1.output.length > 0, 'turn 1 produces output')
-  t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
+    const r1 = await runAndCollect(
+      model1,
+      [SYSTEM_MESSAGE, { role: 'user', content: 'What is the weather in Sydney?' }, TOOL_A],
+      { cacheKey: sessionName, saveCacheToDisk: true }
+    )
+    t.ok(r1.output.length > 0, 'turn 1 produces output')
+    t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
 
-  const persistedSize = await waitForStableSessionFile(sessionName)
-  t.ok(persistedSize > 0, `session file flushed to disk (${persistedSize} bytes)`)
+    const persistedSize = await waitForStableSessionFile(sessionName)
+    t.ok(persistedSize > 0, `session file flushed to disk (${persistedSize} bytes)`)
 
-  await model1.unload()
+    await model1.unload()
 
-  const { model: model2 } = await setupModel(t)
-  const r2 = await runAndCollect(model2, [
-    { role: 'user', content: 'Search for sunscreen products' },
-    TOOL_B
-  ], { cacheKey: sessionName })
-  t.ok(r2.output.length > 0, 'turn 2 after reload produces output')
-  t.ok(r2.stats.CacheTokens > 0, 'turn 2 after reload has cache tokens')
+    const { model: model2 } = await setupModel(t)
+    const r2 = await runAndCollect(
+      model2,
+      [{ role: 'user', content: 'Search for sunscreen products' }, TOOL_B],
+      { cacheKey: sessionName }
+    )
+    t.ok(r2.output.length > 0, 'turn 2 after reload produces output')
+    t.ok(r2.stats.CacheTokens > 0, 'turn 2 after reload has cache tokens')
 
-  try { fs.unlinkSync(sessionName) } catch (_) {}
-})
+    try {
+      fs.unlinkSync(sessionName)
+    } catch (_) {}
+  }
+)
 
 // ---------------------------------------------------------------------------
 // WHY: Cancelling mid-operation must not corrupt KV cache or tool state.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] cancel mid-generation then reuse with tools', { timeout: 600_000 }, async t => {
-  const { model, logs } = await setupModel(t, { n_predict: '512' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+safeTest(
+  '[tools-compact] cancel mid-generation then reuse with tools',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, logs } = await setupModel(t, { n_predict: '512' })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
 
-  const response = await model.run([
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'Write a long essay about computing history.' },
-    TOOL_A
-  ])
+    const response = await model.run([
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Write a long essay about computing history.' },
+      TOOL_A
+    ])
 
-  let cancelled = false
-  let tokenCount = 0
-  try {
-    await new Promise((resolve, reject) => {
-      let chain = response.onUpdate(() => {
-        tokenCount++
-        if (tokenCount >= 5 && !cancelled) {
-          cancelled = true
-          model.cancel()
-        }
-      })
-      if (typeof response.onError === 'function') {
-        chain = chain.onError(err => {
-          if (/cancel|abort|stopp/i.test(err.message || '')) resolve()
-          else reject(err)
+    let cancelled = false
+    let tokenCount = 0
+    try {
+      await new Promise((resolve, reject) => {
+        let chain = response.onUpdate(() => {
+          tokenCount++
+          if (tokenCount >= 5 && !cancelled) {
+            cancelled = true
+            model.cancel()
+          }
         })
-      }
-      chain.await().then(resolve).catch(err => {
-        if (/cancel|abort|stopp/i.test(err.message || '')) resolve()
-        else reject(err)
+        if (typeof response.onError === 'function') {
+          chain = chain.onError((err) => {
+            if (/cancel|abort|stopp/i.test(err.message || '')) resolve()
+            else reject(err)
+          })
+        }
+        chain
+          .await()
+          .then(resolve)
+          .catch((err) => {
+            if (/cancel|abort|stopp/i.test(err.message || '')) resolve()
+            else reject(err)
+          })
       })
-    })
-  } catch (err) {
-    if (!/cancel|abort|stopp/i.test(err.message || '')) throw err
+    } catch (err) {
+      if (!/cancel|abort|stopp/i.test(err.message || '')) throw err
+    }
+
+    t.ok(cancelled, 'generation was cancelled mid-stream')
+
+    const r2 = await runAndCollect(model, [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'What is the weather in Rome?' },
+      TOOL_A
+    ])
+    t.ok(r2.output.length > 0, 'model produces output after cancel — not corrupted')
   }
-
-  t.ok(cancelled, 'generation was cancelled mid-stream')
-
-  const r2 = await runAndCollect(model, [
-    SYSTEM_MESSAGE,
-    { role: 'user', content: 'What is the weather in Rome?' },
-    TOOL_A
-  ])
-  t.ok(r2.output.length > 0, 'model produces output after cancel — not corrupted')
-})
+)
 
 // ---------------------------------------------------------------------------
 // WHY: With ctx_size=512 and a large tool schema, the boundary calculation
 // is stress-tested at the edges.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] large tool payload near context limit', { timeout: 600_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t, { ctx_size: '512', n_predict: CUT_PREDICT_LIMIT })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const opts = { cacheKey: path.join(dirPath, 'tc-large-payload.bin') }
+safeTest(
+  '[tools-compact] large tool payload near context limit',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t, {
+      ctx_size: '512',
+      n_predict: CUT_PREDICT_LIMIT
+    })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const opts = { cacheKey: path.join(dirPath, 'tc-large-payload.bin') }
 
-  const bigTool = {
-    type: 'function',
-    name: 'analyzeData',
-    description: 'Perform comprehensive data analysis including statistical modeling regression analysis correlation matrices time series decomposition anomaly detection feature importance ranking dimensionality reduction clustering classification',
-    parameters: { type: 'object', properties: { dataset: { type: 'string' }, analysisType: { type: 'string' }, targetColumn: { type: 'string' } }, required: ['dataset', 'analysisType'] }
+    const bigTool = {
+      type: 'function',
+      name: 'analyzeData',
+      description:
+        'Perform comprehensive data analysis including statistical modeling regression analysis correlation matrices time series decomposition anomaly detection feature importance ranking dimensionality reduction clustering classification',
+      parameters: {
+        type: 'object',
+        properties: {
+          dataset: { type: 'string' },
+          analysisType: { type: 'string' },
+          targetColumn: { type: 'string' }
+        },
+        required: ['dataset', 'analysisType']
+      }
+    }
+
+    const r1 = await runAndCollect(
+      model,
+      [SYSTEM_MESSAGE, { role: 'user', content: 'Analyze this.' }, bigTool],
+      opts
+    )
+    t.ok(r1.output.length > 0, 'turn 1 produces output despite large tool payload')
+
+    const r2 = await runAndCollect(
+      model,
+      [{ role: 'user', content: 'More details.' }, bigTool],
+      opts
+    )
+    t.ok(r2.output.length > 0, 'turn 2 produces output — context not exhausted')
+    t.ok(r2.stats.CacheTokens < 512, `cache (${r2.stats.CacheTokens}) within context window`)
   }
-
-  const r1 = await runAndCollect(model, [SYSTEM_MESSAGE, { role: 'user', content: 'Analyze this.' }, bigTool], opts)
-  t.ok(r1.output.length > 0, 'turn 1 produces output despite large tool payload')
-
-  const r2 = await runAndCollect(model, [{ role: 'user', content: 'More details.' }, bigTool], opts)
-  t.ok(r2.output.length > 0, 'turn 2 produces output — context not exhausted')
-  t.ok(r2.stats.CacheTokens < 512, `cache (${r2.stats.CacheTokens}) within context window`)
-})
+)
 
 // ---------------------------------------------------------------------------
 // WHY: Real agent frameworks mutate tool schemas at runtime. Same tool name
 // but different token count — boundary calculation must handle this.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] same tool name with evolved schema between turns', { timeout: 600_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t, { n_predict: '128' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const opts = { cacheKey: path.join(dirPath, 'tc-evolved.bin') }
+safeTest(
+  '[tools-compact] same tool name with evolved schema between turns',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t, { n_predict: '128' })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const opts = { cacheKey: path.join(dirPath, 'tc-evolved.bin') }
 
-  const weatherV1 = { type: 'function', name: 'getWeather', description: 'Get weather for a city', parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] } }
-  const weatherV2 = { type: 'function', name: 'getWeather', description: 'Get detailed weather forecast including hourly data alerts and historical comparisons', parameters: { type: 'object', properties: { city: { type: 'string' }, date: { type: 'string' }, units: { type: 'string' }, includeHourly: { type: 'boolean' } }, required: ['city'] } }
+    const weatherV1 = {
+      type: 'function',
+      name: 'getWeather',
+      description: 'Get weather for a city',
+      parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+    }
+    const weatherV2 = {
+      type: 'function',
+      name: 'getWeather',
+      description:
+        'Get detailed weather forecast including hourly data alerts and historical comparisons',
+      parameters: {
+        type: 'object',
+        properties: {
+          city: { type: 'string' },
+          date: { type: 'string' },
+          units: { type: 'string' },
+          includeHourly: { type: 'boolean' }
+        },
+        required: ['city']
+      }
+    }
 
-  const r1 = await runAndCollect(model, [SYSTEM_MESSAGE, { role: 'user', content: 'Weather in Paris?' }, weatherV1], opts)
-  t.ok(r1.output.length > 0, 'turn 1 (v1 schema) produces output')
-  t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
+    const r1 = await runAndCollect(
+      model,
+      [SYSTEM_MESSAGE, { role: 'user', content: 'Weather in Paris?' }, weatherV1],
+      opts
+    )
+    t.ok(r1.output.length > 0, 'turn 1 (v1 schema) produces output')
+    t.ok(r1.stats.CacheTokens > 0, 'turn 1 has cache tokens')
 
-  const r2 = await runAndCollect(model, [{ role: 'user', content: 'Detailed forecast for tomorrow.' }, weatherV2], opts)
-  t.ok(r2.output.length > 0, 'turn 2 (v2 schema) produces output')
-  t.ok(r2.stats.CacheTokens < 3 * r1.stats.CacheTokens, `cache bounded after schema evolution (${r2.stats.CacheTokens} < ${3 * r1.stats.CacheTokens})`)
-})
+    const r2 = await runAndCollect(
+      model,
+      [{ role: 'user', content: 'Detailed forecast for tomorrow.' }, weatherV2],
+      opts
+    )
+    t.ok(r2.output.length > 0, 'turn 2 (v2 schema) produces output')
+    t.ok(
+      r2.stats.CacheTokens < 3 * r1.stats.CacheTokens,
+      `cache bounded after schema evolution (${r2.stats.CacheTokens} < ${3 * r1.stats.CacheTokens})`
+    )
+  }
+)
 
 // ---------------------------------------------------------------------------
 // WHY: Concurrent model.run() must reject cleanly and not brick the model.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] concurrent model.run() rejects cleanly and model survives', { timeout: 600_000 }, async t => {
-  const { model, logs } = await setupModel(t, { n_predict: '256' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+safeTest(
+  '[tools-compact] concurrent model.run() rejects cleanly and model survives',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, logs } = await setupModel(t, { n_predict: '256' })
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
 
-  const run1 = model.run([SYSTEM_MESSAGE, { role: 'user', content: 'Write about AI history.' }, TOOL_A])
-  let rejected = false
-  try {
-    await model.run([SYSTEM_MESSAGE, { role: 'user', content: 'Weather?' }, TOOL_A])
-  } catch (err) {
-    rejected = true
-    t.ok(/job.*already|busy|cannot/i.test(err.message), `rejection mentions busy: "${err.message}"`)
+    const run1 = model.run([
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Write about AI history.' },
+      TOOL_A
+    ])
+    let rejected = false
+    try {
+      await model.run([SYSTEM_MESSAGE, { role: 'user', content: 'Weather?' }, TOOL_A])
+    } catch (err) {
+      rejected = true
+      t.ok(
+        /job.*already|busy|cannot/i.test(err.message),
+        `rejection mentions busy: "${err.message}"`
+      )
+    }
+    t.ok(rejected, 'second concurrent run() rejected')
+
+    const response1 = await run1
+    const chunks = []
+    response1.onUpdate((data) => {
+      chunks.push(data)
+    })
+    await response1.await()
+    t.ok(chunks.join('').length > 0, 'first run completes')
+
+    const r3 = await runAndCollect(model, [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Say hello.' },
+      TOOL_A
+    ])
+    t.ok(r3.output.length > 0, 'model usable after concurrent rejection')
   }
-  t.ok(rejected, 'second concurrent run() rejected')
-
-  const response1 = await run1
-  const chunks = []
-  response1.onUpdate(data => { chunks.push(data) })
-  await response1.await()
-  t.ok(chunks.join('').length > 0, 'first run completes')
-
-  const r3 = await runAndCollect(model, [SYSTEM_MESSAGE, { role: 'user', content: 'Say hello.' }, TOOL_A])
-  t.ok(r3.output.length > 0, 'model usable after concurrent rejection')
-})
+)
 
 // ---------------------------------------------------------------------------
 // WHY: Corrupted session file must not crash the process.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] corrupted session file does not crash model', { timeout: 600_000 }, async t => {
-  const { model, dirPath, logs } = await setupModel(t)
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
-  const corruptedSession = path.join(dirPath, 'tc-corrupted.bin')
-  fs.writeFileSync(corruptedSession, Buffer.from('CORRUPTED GARBAGE DATA 1234567890'))
+safeTest(
+  '[tools-compact] corrupted session file does not crash model',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath, logs } = await setupModel(t)
+    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
+    const corruptedSession = path.join(dirPath, 'tc-corrupted.bin')
+    fs.writeFileSync(corruptedSession, Buffer.from('CORRUPTED GARBAGE DATA 1234567890'))
 
-  let output = ''
-  let threw = false
-  try {
-    const response = await model.run(
-      [SYSTEM_MESSAGE, { role: 'user', content: 'Weather in Tokyo?' }, TOOL_A],
-      { cacheKey: corruptedSession }
-    )
-    const chunks = []
-    let capturedErr = null
-    if (typeof response.onError === 'function') response.onError(err => { capturedErr = err })
-    response.onUpdate(data => { chunks.push(data) })
-    try { await response.await() } catch (_) {}
-    output = chunks.join('')
-    if (capturedErr) threw = true
-  } catch (err) {
-    threw = true
+    let output = ''
+    let threw = false
+    try {
+      const response = await model.run(
+        [SYSTEM_MESSAGE, { role: 'user', content: 'Weather in Tokyo?' }, TOOL_A],
+        { cacheKey: corruptedSession }
+      )
+      const chunks = []
+      let capturedErr = null
+      if (typeof response.onError === 'function')
+        response.onError((err) => {
+          capturedErr = err
+        })
+      response.onUpdate((data) => {
+        chunks.push(data)
+      })
+      try {
+        await response.await()
+      } catch (_) {}
+      output = chunks.join('')
+      if (capturedErr) threw = true
+    } catch (err) {
+      threw = true
+    }
+
+    t.ok(output.length > 0 || threw, 'model produces output or throws cleanly — no crash')
+    try {
+      fs.unlinkSync(corruptedSession)
+    } catch (_) {}
   }
-
-  t.ok(output.length > 0 || threw, 'model produces output or throws cleanly — no crash')
-  try { fs.unlinkSync(corruptedSession) } catch (_) {}
-})
+)
 
 // ---------------------------------------------------------------------------
 // WHY: SDK dynamic-tools test uses enum params. No addon test exercises this.
 // ---------------------------------------------------------------------------
-safeTest('[tools-compact] tool with enum-typed parameters', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] tool with enum-typed parameters', { timeout: 600_000 }, async (t) => {
   const { model, logs } = await setupModel(t, { n_predict: '256' })
-  if (!await ensureToolsSupportOrSkip(t, model, logs)) return
+  if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
 
   const convertTool = {
     type: 'function',

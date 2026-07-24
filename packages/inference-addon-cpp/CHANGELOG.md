@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.3.0] - 2026-07-06
+
+### Added
+- Swappable job admission: a new `IJobScheduler` strategy interface on `AddonCpp` (`src/inference-addon-cpp/job/IJobScheduler.hpp`). The single-job default is unchanged; a caller wanting cross-request continuous batching builds a `MultiJobScheduler` (fixed worker pool + bounded waiting-room queue, FIFO admission, back-pressure via `runJob` returning `std::nullopt` at capacity, exclusive-job support for e.g. finetune/inference mutual exclusion) and passes it into the `AddonCpp` constructor. `runJob`/`runExclusiveJob` mint each admitted job's `JobId` internally (monotonic, never reused for the scheduler's lifetime) and return it — callers never supply ids, so no two jobs can ever share one and a late terminal event can never be attributed to a newer job. At the JS boundary the admission result is never falsy on success: Boolean `false` = rejected, Boolean `true` = accepted on the untagged single-job path (the pre-1.3.0 shape, so existing `if (!accepted)` consumers are unaffected), Number >= 1 = accepted with a tagged id.
+- Per-job cancellation: `AddonCpp::cancelJob(JobId id = kNoJobId)` targets one job; `cancelAllJobs()` cancels everything live at call time. The JS `cancel()` binding accepts an optional job id (`cancel(id)` → per-job; no id → snapshot-based cancel-all: `liveJobIds()` is captured on the JS thread and exactly that set is cancelled via `cancelJobs(ids)`; on the tagged multi-job path ids are never reused, so jobs admitted after the request survive the deferred cancellation, while the untagged single-job path can only snapshot the slot sentinel — the slot, not the job — so a cancel deferred past its job's end can still land on the slot's next occupant unless the model pins cancels to the run they were aimed at). Native job ids are back on queued/output events — carried once in 1.1.3 and reverted in 1.1.4 for being layered awkwardly on top of the single-job runner. This time id routing lives inside the scheduler itself, which guarantees exactly one terminal event per admitted job (including cancelled and queue-dropped jobs), so the same approach that was unsound in 1.1.3 is sound now.
+- Per-job observed stats: models implementing the new `IModelJobStats` interface report end-to-end TTFT/TPS/token counts for each tagged job on its `jobEnded` event, instead of only the whole-model aggregate.
+- `AddonCpp::activeJobs()` / JS `activeJobs` expose the scheduler's live admitted-job count (in-flight + queued) as the authoritative concurrency figure, replacing ad hoc in-flight counters in consumers.
+- `js::Number::asChecked<uint64_t>()` and `JsArgsParser::getCheckedIntegralOptional`: validating parses for untrusted boundary numbers (finite, non-negative, integral, `<= 2^53 - 1`, else `InvalidArgument`); the per-job `cancel(id)` binding parses its job id through them. The plain `as<uint64_t>()` / `getIntegralOptional` keep their pre-1.3.0 truncating-cast behavior (now documented), so existing downstream parses are unaffected.
+- `llm-llamacpp` wires a `MultiJobScheduler` sized from `parallel` so independent `run()` calls decode together via true cross-request continuous batching; a 1-slot pool behaves exactly as before.
+
+### Breaking
+- `OutputQueue::clear()` now returns `std::vector<std::pair<JobId, std::any>>` instead of `std::vector<std::any>` — every drained entry carries its originating job id.
+- `JobRunner` is renamed `SingleJobScheduler` and moved from the root-level `JobRunner.hpp` to `job/SingleJobScheduler.hpp`. Its constructor no longer takes an `outputQueue` parameter; the queue is now supplied via `start(std::shared_ptr<OutputQueue>)`. The `JobRunner.hpp` backward-compatibility forwarding header (with its `using JobRunner = SingleJobScheduler` alias) has been removed — includers of `JobRunner.hpp` or the `JobRunner` name must switch to `job/SingleJobScheduler.hpp` / `SingleJobScheduler`.
+
+## [1.2.4] - 2026-07-13
+
+### Fixed
+- `JsLogger` singleton ownership is now hardened for processes with multiple ephemeral JS envs (worklets / bare-thread workers). QVAC-21544 (1.2.3) fixed crashes on sequential teardown/reload, but left a documented gap: a second **concurrently live** env calling `setLogger` could silently hijack the singleton — leaking the first env's callback ref and leaving `logger_async_` on the wrong loop; `releaseLogger` from a non-owner env could tear down another env's logger (including a cross-thread `uv_close`); and C++ producer threads could race `uv_async_send` against handle close during teardown. This release serializes install, release, and teardown under `admin_mutex_`, rejects concurrent install from a different live env (`InvalidArgument`: "Logger already installed by another env; call releaseLogger first"), makes non-owner `releaseLogger` a no-op, scopes `onEnvTeardown` to the owning env, clears undrained log entries on release/teardown, holds `admin_mutex_` around the armed check and `uv_async_send` in `log()`, and gates enqueue on a live owner so C++ logs emitted after `releaseLogger`/teardown are dropped instead of bleeding into the next owner's callback.
+
+### Added
+- JS integration test suite `tests/integration_js/logger/reject.test.js` covering concurrent-env `setLogger` rejection, sequential cross-env handoff, non-owner `releaseLogger` no-op, and teardown-without-release reload.
+- Regression test in `tests/integration_js/logger/test.js` for orphaned log entries between `releaseLogger()` and the next `setLogger()`.
+- Regression test for same-env callback replacement via `setLogger` without an intervening `releaseLogger`.
+
 ## [1.2.3] - 2026-07-02
 
 ### Fixed

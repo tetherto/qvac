@@ -205,11 +205,11 @@ For each package release, follow the existing release skills instead of inventin
 
 1. Apply that package's version bump together with its package changes on the release branch or release-prep branch.
 2. Use `qv-sdk-changelog --package=<package>` for changelog generation, `CHANGELOG_LLM.md`, announcement-post generation, and NOTICE guidance. Follow that skill's package/tag/base rules exactly, including `--base-commit` / `--base-version` if tag metadata is missing.
-3. Use `qv-sdk-pr-create` to create the fork -> `release-<package>-<version>` release PR with the standard SDK pod title/body conventions.
+3. Use `qv-sdk-pr-create` to create the org-branch -> `release-<package>-<version>` release PR with the standard SDK pod title/body conventions (personal-fork heads only as fallback; see that skill's branch/remote preference).
 4. Let `qv-sdk-pr-create` chain to `qv-sdk-backmerge`, or run `qv-sdk-backmerge` immediately after the release PR is created, so the version bump, changelog folder, aggregate `CHANGELOG.md`, NOTICE, and any release-only package metadata are brought back to `main`.
 5. Confirm npm published the package before releasing the next upper layer.
 
-Every QVAC PR must come from the fork and carry `tier1` and `verified`.
+Prefer org-branch ready PRs on `tetherto/qvac`. Those do **not** need `verified` for baseline CI. Heavy tiers still use opt-in labels. Personal-fork PRs are external: merge/release must apply `verified` per commit. Do not require `tier1` + `verified` on every PR.
 
 ## Completion Report
 

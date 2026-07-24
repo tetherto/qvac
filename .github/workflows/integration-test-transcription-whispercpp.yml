@@ -102,22 +102,23 @@ jobs:
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
-          - os: macos-14-xlarge
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"coreml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"coreml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"}]
           - os: windows-2025
             platform: win32
             arch: x64
             runner: qvac-win25-x64-gpu
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"directml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"}]
 
     steps:
       - name: Setup Node.js
@@ -199,7 +200,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
           npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
           $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C "${{ runner.temp }}\tmp"
+          # Extract from inside the temp dir with a RELATIVE archive name. The
+          # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
+          # reads the "C:" in an absolute -f/-C argument as a remote host and
+          # aborts, so the extract silently no-ops and the addon is never staged.
+          Push-Location "${{ runner.temp }}\tmp"
+          tar -xzf $tgz.Name
+          Pop-Location
           Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
@@ -228,12 +235,6 @@ jobs:
           sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
           # Add whisper.cpp dependencies for integration tests
           sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
-
-      - name: macOS - install whisper dependencies
-        if: matrix.platform == 'darwin'
-        shell: bash
-        run: |
-          brew install --quiet openblas lapack fftw
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025

@@ -20,7 +20,7 @@ const https = require('bare-https')
  *     consume to completion.
  */
 class HttpDL {
-  constructor (opts) {
+  constructor(opts) {
     if (!opts || !opts.baseUrl) {
       throw new Error('HttpDL requires a baseUrl option')
     }
@@ -35,7 +35,7 @@ class HttpDL {
    * @param {string} filename
    * @returns {Promise<NodeJS.ReadableStream>}
    */
-  async getStream (filename) {
+  async getStream(filename) {
     const response = await this._request('GET', this.baseUrl + filename)
     this._activeStreams.add(response)
     const cleanup = () => this._activeStreams.delete(response)
@@ -48,14 +48,14 @@ class HttpDL {
   /**
    * Destroy any tracked streams that have not finished on their own.
    */
-  async close () {
+  async close() {
     for (const stream of this._activeStreams) {
       stream.destroy()
     }
     this._activeStreams.clear()
   }
 
-  _request (method, url, maxRedirects = 10) {
+  _request(method, url, maxRedirects = 10) {
     return new Promise((resolve, reject) => {
       if (maxRedirects === 0) return reject(new Error(`Too many redirects for ${url}`))
 

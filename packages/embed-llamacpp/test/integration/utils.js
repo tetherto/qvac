@@ -4,22 +4,38 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
-const GGMLBert = require('../../index.js')
+const crypto = require('bare-crypto')
+
+// Lazily loaded: requiring index.js pulls in the native binding, which isn't
+// needed for the model download/integrity helpers and lets those run in unit
+// tests without a compiled addon.
+function getGGMLBert() {
+  return require('../../index.js')
+}
 
 const TRANSIENT_ERROR_CODES = new Set([
   // DNS / name resolution
-  'EAI_NODATA', 'EAI_AGAIN', 'EAI_FAIL', 'ENOTFOUND',
+  'EAI_NODATA',
+  'EAI_AGAIN',
+  'EAI_FAIL',
+  'ENOTFOUND',
   // connectivity — these dominate mobile Device Farm flakiness: a transient
   // network drop surfaces as ENETUNREACH/EHOSTUNREACH and MUST be retried.
-  'ENETUNREACH', 'EHOSTUNREACH', 'ECONNREFUSED',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ECONNREFUSED',
   // mid-transfer / timeout
-  'ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNABORTED',
+  'ESIZE',
   // post-transfer: request "resolved" but the .part is missing/short or could
   // not be finalized (truncated/interrupted) — retry instead of hard-failing.
   'EINCOMPLETE'
 ])
 
-function isTransientError (err) {
+function isTransientError(err) {
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
   if (err.statusCode) {
     const s = err.statusCode
@@ -28,31 +44,54 @@ function isTransientError (err) {
   return false
 }
 
-function urlHost (url) {
-  try { return new URL(url).host } catch (_) { return url }
+function urlHost(url) {
+  try {
+    return new URL(url).host
+  } catch (_) {
+    return url
+  }
 }
 
-async function downloadFileOnce (url, dest, opts = {}) {
+async function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let resolved = false
-    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
-    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
 
     const file = fs.createWriteStream(dest)
-    file.on('error', (err) => { file.destroy(); fs.unlink(dest, () => safeReject(err)) })
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
 
     const reqTimer = setTimeout(() => {
-      req.destroy(Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), { code: 'ETIMEDOUT' }))
+      req.destroy(
+        Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), {
+          code: 'ETIMEDOUT'
+        })
+      )
     }, timeoutMs)
 
-    const req = https.request(url, response => {
+    const req = https.request(url, (response) => {
       clearTimeout(reqTimer)
 
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
         if (_redirectCount >= maxRedirects) {
-          fs.unlink(dest, () => safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`)))
+          fs.unlink(dest, () =>
+            safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`))
+          )
           return
         }
         fs.unlink(dest, (unlinkErr) => {
@@ -79,10 +118,12 @@ async function downloadFileOnce (url, dest, opts = {}) {
       const resetIdle = () => {
         if (idleTimer) clearTimeout(idleTimer)
         idleTimer = setTimeout(() => {
-          response.destroy(Object.assign(
-            new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
-            { code: 'ETIMEDOUT' }
-          ))
+          response.destroy(
+            Object.assign(
+              new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
+              { code: 'ETIMEDOUT' }
+            )
+          )
         }, idleTimeoutMs)
       }
       resetIdle()
@@ -94,15 +135,22 @@ async function downloadFileOnce (url, dest, opts = {}) {
       })
 
       response.pipe(file)
-      file.on('close', () => { if (idleTimer) clearTimeout(idleTimer); safeResolve() })
+      file.on('close', () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        safeResolve()
+      })
     })
 
-    req.on('error', err => { clearTimeout(reqTimer); file.destroy(); fs.unlink(dest, () => safeReject(err)) })
+    req.on('error', (err) => {
+      clearTimeout(reqTimer)
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
     req.end()
   })
 }
 
-async function downloadFileWithRetries (urls, dest, opts = {}) {
+async function downloadFileWithRetries(urls, dest, opts = {}) {
   const { retries = 3, minBytes = 1, ...downloadOpts } = opts
   const urlList = Array.isArray(urls) ? urls : [urls]
   const partPath = dest + '.part'
@@ -117,10 +165,16 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
       // transfer was truncated/interrupted — surface it as EINCOMPLETE so the
       // loop RETRIES instead of hard-failing on a fatal ENOENT from statSync.
       let size = -1
-      try { size = fs.statSync(partPath).size } catch (_) { size = -1 }
+      try {
+        size = fs.statSync(partPath).size
+      } catch (_) {
+        size = -1
+      }
       if (size < minBytes) {
         throw Object.assign(
-          new Error(`Incomplete download from ${host} (${size < 0 ? 'missing .part' : size + ' bytes'})`),
+          new Error(
+            `Incomplete download from ${host} (${size < 0 ? 'missing .part' : size + ' bytes'})`
+          ),
           { code: 'EINCOMPLETE' }
         )
       }
@@ -135,34 +189,199 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
       }
       return
     } catch (err) {
-      try { fs.unlinkSync(partPath) } catch (_) {}
+      try {
+        fs.unlinkSync(partPath)
+      } catch (_) {}
 
       const attemptsLeft = retries - attempt
       if (!isTransientError(err) || attemptsLeft === 0) {
-        console.error(`[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`)
+        console.error(
+          `[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`
+        )
         throw err
       }
 
       const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
-      console.log(`[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`)
-      await new Promise(resolve => setTimeout(resolve, delay))
+      console.log(
+        `[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`
+      )
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
 }
 
 const downloadFile = downloadFileWithRetries
 
+const DEFAULT_MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
+let _manifestCache
+
+// Loads and caches the model manifest (single source of truth for model URLs +
+// sha256/bytes integrity). The default manifest is mandatory so packaging or
+// parsing errors cannot silently disable integrity checks.
+//
+// The default path is loaded via a literal require() rather than fs.readFileSync.
+// Mobile builds pack this file into a single bundle via bare-pack, which follows
+// static require()/import calls. A dynamic fs.readFileSync call is invisible to
+// that traversal and drops the manifest from the bundle, so model lookup fails
+// on-device even though the file was present at build time.
+function validateManifest(manifest, source) {
+  if (!manifest || typeof manifest !== 'object' || !manifest.models) {
+    throw new Error(`Required model manifest is invalid (${source}): missing models object`)
+  }
+  return manifest
+}
+
+function loadManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
+  if (manifestPath === DEFAULT_MANIFEST_PATH) {
+    if (_manifestCache !== undefined) return _manifestCache
+    try {
+      _manifestCache = validateManifest(
+        require('./models.manifest.json'),
+        'test/integration/models.manifest.json'
+      )
+    } catch (err) {
+      throw new Error(`Failed to load required model manifest: ${err.message}`)
+    }
+    return _manifestCache
+  }
+  try {
+    return validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath)
+  } catch (err) {
+    throw new Error(`Failed to load required model manifest "${manifestPath}": ${err.message}`)
+  }
+}
+
+function resolveModelEntry(modelName, { manifest } = {}) {
+  const m = manifest !== undefined ? manifest : loadManifest()
+  validateManifest(m, manifest !== undefined ? 'explicit manifest override' : 'default manifest')
+  const entry = m.models[modelName]
+  if (!entry) {
+    throw new Error(`Model "${modelName}" is missing from required models.manifest.json`)
+  }
+  if (!Array.isArray(entry.urls) || entry.urls.length === 0) {
+    throw new Error(`Model "${modelName}" has no source URL in models.manifest.json`)
+  }
+  if (typeof entry.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(entry.sha256)) {
+    throw new Error(`Model "${modelName}" has no valid SHA-256 pin in models.manifest.json`)
+  }
+  if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+    throw new Error(`Model "${modelName}" has no valid byte-size pin in models.manifest.json`)
+  }
+  return entry
+}
+
+// Streaming sha256 via the package's direct bare-crypto dependency.
+async function sha256File(filePath) {
+  return await new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256')
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+// Verifies a model file against a manifest entry. Byte-length is checked first
+// (cheap) so a size mismatch fails fast before hashing a multi-GB file.
+// { ok: true } when it passes (or when no integrity value is pinned yet).
+async function verifyModelFile(filePath, entry, hashFile = sha256File) {
+  let stats
+  try {
+    stats = fs.statSync(filePath)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+  if (stats.size === 0) return { ok: false, reason: 'zero-byte file' }
+
+  if (entry && Number.isInteger(entry.bytes) && stats.size !== entry.bytes) {
+    return { ok: false, reason: `size ${stats.size} != expected ${entry.bytes}` }
+  }
+
+  const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
+  if (hasSha) {
+    let got
+    try {
+      got = await hashFile(filePath)
+    } catch (err) {
+      return { ok: false, reason: `sha256 failed: ${err.message}` }
+    }
+    if (typeof got !== 'string' || !/^[0-9a-f]{64}$/i.test(got)) {
+      return { ok: false, reason: 'sha256 failed: no valid digest returned' }
+    }
+    if (got !== entry.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
+    }
+    return { ok: true }
+  }
+
+  return { ok: true, skipped: true }
+}
+
+const _verificationCache = new Map()
+
+function verificationKey(filePath, entry) {
+  const stats = fs.statSync(filePath)
+  const mtimeMs =
+    typeof stats.mtimeMs === 'number'
+      ? stats.mtimeMs
+      : stats.mtime && typeof stats.mtime.getTime === 'function'
+        ? stats.mtime.getTime()
+        : 0
+  return [
+    filePath,
+    stats.dev,
+    stats.ino,
+    stats.size,
+    mtimeMs,
+    entry.sha256.toLowerCase(),
+    entry.bytes
+  ].join(':')
+}
+
+async function verifyModelFileOnce(filePath, entry, hashFile = sha256File) {
+  let key
+  try {
+    key = verificationKey(filePath, entry)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+
+  let verification = _verificationCache.get(key)
+  if (!verification) {
+    verification = verifyModelFile(filePath, entry, hashFile)
+    _verificationCache.set(key, verification)
+  }
+  const result = await verification
+  if (!result.ok) _verificationCache.delete(key)
+  return result
+}
+
+function resetVerificationCache() {
+  _verificationCache.clear()
+}
+
+// Counts real download attempts so warm-vs-cold behaviour is unit-testable.
+let _downloadCount = 0
+function getDownloadCount() {
+  return _downloadCount
+}
+function resetDownloadCount() {
+  _downloadCount = 0
+}
+
 /**
  * Model configurations for testing
  */
 const MODEL_CONFIGS = {
   'embeddinggemma-300M-Q8_0.gguf': {
-    downloadUrl: 'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf',
+    downloadUrl:
+      'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf',
     embeddingDimension: 768,
     maxContextSize: 2048
   },
   'gte-large_fp16.gguf': {
-    downloadUrl: 'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
+    downloadUrl:
+      'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
     embeddingDimension: 1024,
     maxContextSize: 512
   }
@@ -172,7 +391,7 @@ const MODEL_CONFIGS = {
  * Gets all available model configurations
  * @returns {Array<{modelName: string, config: Object}>}
  */
-function getModelConfigs () {
+function getModelConfigs() {
   return Object.entries(MODEL_CONFIGS).map(([modelName, config]) => ({
     modelName,
     config
@@ -184,7 +403,7 @@ function getModelConfigs () {
  * @param {string} modelName - The model name
  * @returns {Object|null} The model configuration or null if not found
  */
-function getModelConfig (modelName) {
+function getModelConfig(modelName) {
   return MODEL_CONFIGS[modelName] || null
 }
 
@@ -199,7 +418,7 @@ function getModelConfig (modelName) {
 // cannot be used for host pre-staging.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
-function prestagedModelDir (modelName) {
+function prestagedModelDir(modelName) {
   if (os.platform() !== 'android') return null
   try {
     const p = path.join(PRESTAGED_MODEL_DIR, modelName)
@@ -208,28 +427,56 @@ function prestagedModelDir (modelName) {
   return null
 }
 
+async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
+  fs.copyFileSync(path.join(stagedDir, modelName), modelPath)
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(`[prestage] copied model ${modelName} failed integrity: ${res.reason}`)
+  }
+}
+
 /**
  * Ensures the model file exists, downloading it if necessary
- * @param {string} modelName - The model name to ensure
+ * @param {Object} opts
+ * @param {string} opts.modelName - The model name to ensure
  * @returns {Promise<[string, string]>} Returns [modelName, modelDir]
  */
-async function ensureModel (modelName) {
+// The standalone default modelDir assignment is patched by the mobile test
+// packager to point at a writable app directory. Keep this shape stable.
+async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, download } = {}) {
   const modelDir = path.resolve(__dirname, '../model')
+  const dir = modelDirOverride || modelDir
   const modelConfig = getModelConfig(modelName)
+
+  // Model URL + sha256/bytes come exclusively from models.manifest.json (by
+  // modelName). The manifest is also the cache key for
+  // .github/actions/cache-models. `modelDir`, `manifest`, and `download`
+  // overrides exist for unit testing, but still require a fully pinned entry.
+  const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
 
   if (!modelConfig) {
     throw new Error(`Unknown model: ${modelName}`)
   }
 
-  const modelPath = path.join(modelDir, modelName)
+  const modelPath = path.join(dir, modelName)
+  const doDownload = download || downloadFileWithRetries
+  const urls = entry.urls
 
   if (fs.existsSync(modelPath)) {
-    const stat = fs.statSync(modelPath)
-    if (stat.size > 0) {
-      return [modelName, modelDir]
+    const res = await verifyModelFileOnce(modelPath, entry)
+    if (res.ok) {
+      console.log(`[download] ${modelName}: cached copy verified, skipping download`)
+      return [modelName, dir]
     }
-    console.log(`[download] Removing zero-byte cached file: ${modelName}`)
-    fs.unlinkSync(modelPath)
+    console.log(
+      `[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`
+    )
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
   }
 
   // Pre-staged path (Android): copy the host-staged model from the read-only
@@ -238,45 +485,51 @@ async function ensureModel (modelName) {
   // load() writes sibling files next to the model (e.g. openclCacheDir).
   const staged = prestagedModelDir(modelName)
   if (staged) {
-    fs.mkdirSync(modelDir, { recursive: true })
+    fs.mkdirSync(dir, { recursive: true })
     console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
-    fs.copyFileSync(path.join(staged, modelName), modelPath)
-    const stat = fs.statSync(modelPath)
-    if (stat.size === 0) {
-      fs.unlinkSync(modelPath)
-      throw new Error(`[prestage] copied model ${modelName} is empty`)
-    }
-    return [modelName, modelDir]
+    await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    return [modelName, dir]
   }
 
-  fs.mkdirSync(modelDir, { recursive: true })
+  fs.mkdirSync(dir, { recursive: true })
   console.log(`[download] Downloading test model: ${modelName}...`)
+  _downloadCount++
 
-  await downloadFileWithRetries(modelConfig.downloadUrl, modelPath)
+  await doDownload(urls, modelPath)
+
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(
+      `[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`
+    )
+  }
 
   const stat = fs.statSync(modelPath)
   console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(1)}MB`)
 
-  return [modelName, modelDir]
+  return [modelName, dir]
 }
 
 /**
  * Simple test logger that outputs to console
  */
 class TestLogger {
-  error (...msgs) {
+  error(...msgs) {
     console.error(msgs)
   }
 
-  warn (...msgs) {
+  warn(...msgs) {
     console.warn(msgs)
   }
 
-  debug (...msgs) {
+  debug(...msgs) {
     console.log(msgs)
   }
 
-  info (...msgs) {
+  info(...msgs) {
     console.log(msgs)
   }
 }
@@ -290,8 +543,14 @@ class TestLogger {
  * @param {string} batchSize - Batch size (default: '1024')
  * @returns {Promise<{inference: GGMLBert}>}
  */
-async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
-  const [, modelDir] = await ensureModel(modelName)
+async function createEmbeddingsTestInstance(
+  t,
+  modelName,
+  device = 'gpu',
+  gpuLayers = null,
+  batchSize = '1024'
+) {
+  const [, modelDir] = await ensureModel({ modelName })
   const modelPath = path.join(modelDir, modelName)
 
   t.ok(fs.existsSync(modelPath), 'Model file should exist')
@@ -305,7 +564,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
     console.log('Platform detected: darwin-x64, forcing device to CPU')
   }
 
-  const actualGpuLayers = gpuLayers !== null ? gpuLayers : (device === 'cpu' ? '0' : '999')
+  const actualGpuLayers = gpuLayers !== null ? gpuLayers : device === 'cpu' ? '0' : '999'
 
   const config = {
     gpu_layers: actualGpuLayers,
@@ -323,6 +582,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
 
   config.openclCacheDir = modelDir
 
+  const GGMLBert = getGGMLBert()
   const inference = new GGMLBert({
     files: { model: [modelPath] },
     config,
@@ -342,7 +602,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
  * @param {Error|Object} error - The error object
  * @returns {string} The error message
  */
-function extractErrorMessage (error) {
+function extractErrorMessage(error) {
   if (!error) {
     return ''
   }
@@ -350,7 +610,9 @@ function extractErrorMessage (error) {
   // Error may be wrapped in EventEmitterError with the actual error in cause
   // error.cause can be a string or an Error object
   if (error?.cause) {
-    return typeof error.cause === 'string' ? error.cause : error.cause.message || String(error.cause)
+    return typeof error.cause === 'string'
+      ? error.cause
+      : error.cause.message || String(error.cause)
   }
 
   return error?.message || error?.toString() || String(error)
@@ -361,7 +623,7 @@ function extractErrorMessage (error) {
  * @param {Object} response - The inference response object
  * @returns {Promise<Array>} The generated embeddings
  */
-async function waitForCompletion (response) {
+async function waitForCompletion(response) {
   return await response._finishPromise
 }
 
@@ -370,7 +632,7 @@ async function waitForCompletion (response) {
  * @param {Object} response - The inference response object
  * @param {Function} errorHandler - The error handler function
  */
-function setupErrorHandlers (response, errorHandler) {
+function setupErrorHandlers(response, errorHandler) {
   response.on('error', errorHandler)
   response.on('failed', errorHandler)
 }
@@ -379,7 +641,7 @@ function setupErrorHandlers (response, errorHandler) {
  * Removes error handlers from a response object
  * @param {Object} response - The inference response object
  */
-function removeErrorHandlers (response) {
+function removeErrorHandlers(response) {
   response.removeAllListeners('error')
   response.removeAllListeners('failed')
 }
@@ -389,13 +651,13 @@ function removeErrorHandlers (response) {
  * @param {Object} inference - The inference instance
  * @returns {Promise<void>}
  */
-async function cleanupResources (inference) {
+async function cleanupResources(inference) {
   await inference.unload()
 }
 
 const test = require('brittle')
 
-function safeTest (name, opts, fn) {
+function safeTest(name, opts, fn) {
   test(name, opts, async (t) => {
     try {
       await fn(t)
@@ -409,6 +671,15 @@ function safeTest (name, opts, fn) {
 module.exports = {
   downloadFile,
   ensureModel,
+  loadManifest,
+  resolveModelEntry,
+  verifyModelFile,
+  verifyModelFileOnce,
+  sha256File,
+  resetVerificationCache,
+  copyPrestagedModel,
+  getDownloadCount,
+  resetDownloadCount,
   getModelConfigs,
   getModelConfig,
   MODEL_CONFIGS,

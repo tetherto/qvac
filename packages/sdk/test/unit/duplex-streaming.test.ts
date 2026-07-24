@@ -15,6 +15,7 @@ import {
 import type { BciTranscribeStreamSession } from '@/schemas/bci'
 import { createErrorResponse } from '@/schemas/error'
 import { textToSpeechStreamRequestSchema } from '@/schemas/text-to-speech'
+import { contractValidate } from './utils/contract-validator'
 
 // =============================================================================
 // defineDuplexHandler — type-safe definition without unsafe casts
@@ -237,6 +238,56 @@ test('transcribeStreamResponseSchema: validates error response', (t) => {
     error: 'model failed'
   })
   t.ok(result.success, 'error response is valid')
+})
+
+test('contract transcribeStream.request: validates duplex request shape', (t) => {
+  const minimal = { type: 'transcribeStream', modelId: 'test-model' }
+  t.is(transcribeStreamRequestSchema.safeParse(minimal).success, true)
+  const contract = contractValidate('transcribeStream.request', minimal)
+  t.ok(contract.valid, `contract accepts minimal duplex request: ${contract.errors}`)
+
+  const missingModelId = { type: 'transcribeStream' }
+  t.is(transcribeStreamRequestSchema.safeParse(missingModelId).success, false)
+  t.is(contractValidate('transcribeStream.request', missingModelId).valid, false)
+
+  // Zod strips unknown keys instead of rejecting; the contract mirrors that
+  // by accepting them (audio travels on the duplex stream, not the request).
+  const withExtra = {
+    type: 'transcribeStream',
+    modelId: 'test-model',
+    audioChunk: { type: 'filePath', value: '/tmp/audio.wav' }
+  }
+  t.is(transcribeStreamRequestSchema.safeParse(withExtra).success, true)
+  t.is(contractValidate('transcribeStream.request', withExtra).valid, true)
+})
+
+test('contract transcribeStream.response: validates text, done, and error stream variants', (t) => {
+  const variants: Array<[string, Record<string, unknown>]> = [
+    ['text segment', { type: 'transcribeStream', text: 'hello world' }],
+    ['done marker', { type: 'transcribeStream', done: true }],
+    ['in-stream error', { type: 'transcribeStream', error: 'model failed' }]
+  ]
+
+  for (const [label, payload] of variants) {
+    t.is(transcribeStreamResponseSchema.safeParse(payload).success, true, `zod accepts ${label}`)
+    const contract = contractValidate('transcribeStream.response', payload)
+    t.ok(contract.valid, `contract accepts ${label}: ${contract.errors}`)
+  }
+
+  const numericText = { type: 'transcribeStream', text: 42 }
+  t.is(transcribeStreamResponseSchema.safeParse(numericText).success, false)
+  t.is(contractValidate('transcribeStream.response', numericText).valid, false)
+})
+
+test('contract error.response: validates the wire error envelope', (t) => {
+  const envelope = JSON.parse(
+    JSON.stringify(createErrorResponse(new Error('model crashed')))
+  ) as Record<string, unknown>
+
+  const contract = contractValidate('error.response', envelope)
+  t.ok(contract.valid, `contract accepts createErrorResponse output: ${contract.errors}`)
+
+  t.is(contractValidate('error.response', { type: 'error' }).valid, false, 'message is required')
 })
 
 // =============================================================================

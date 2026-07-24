@@ -7,7 +7,7 @@ const path = require('bare-path')
 /**
  * Example demonstrating how to use FFmpegDecoder for audio processing and write output to a file
  */
-async function main () {
+async function main() {
   console.log('FFmpegDecoder Example')
   console.log('====================')
 
@@ -42,9 +42,17 @@ async function main () {
       // Handle the response
       response.on('output', (data) => {
         // Write the decoded chunk (S16LE) to output file
-        outputFileStream.write(Buffer.from(data.outputArray.buffer, data.outputArray.byteOffset, data.outputArray.byteLength))
+        outputFileStream.write(
+          Buffer.from(
+            data.outputArray.buffer,
+            data.outputArray.byteOffset,
+            data.outputArray.byteLength
+          )
+        )
         writtenBytes += data.outputArray.byteLength
-        console.log(`Received decoded audio chunk: ${data.outputArray.length} bytes, total written: ${writtenBytes} bytes`)
+        console.log(
+          `Received decoded audio chunk: ${data.outputArray.length} bytes, total written: ${writtenBytes} bytes`
+        )
       })
 
       response.on('end', () => {
@@ -65,7 +73,9 @@ async function main () {
       })
     } else {
       console.log('⚠ Sample audio file not found, skipping file processing example')
-      console.log('   To test with a real file, place a LastQuestion_long_EN.mp3 in the examples directory')
+      console.log(
+        '   To test with a real file, place a LastQuestion_long_EN.mp3 in the examples directory'
+      )
     }
   } catch (error) {
     console.error('Example failed:', error)

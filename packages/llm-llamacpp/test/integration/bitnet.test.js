@@ -14,9 +14,7 @@ const BITNET_MODEL = {
   url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
 }
 
-const PROMPT = [
-  { role: 'user', content: 'What is 2 + 2?' }
-]
+const PROMPT = [{ role: 'user', content: 'What is 2 + 2?' }]
 
 // QVAC-17830: 1 warmup + 1 counted iteration on PR runs, configurable
 // via QVAC_PERF_RUNS / QVAC_PERF_WARMUP_RUNS for the dedicated
@@ -31,7 +29,7 @@ const PROMPT = [
 // at module-init time, so referencing `process.env` here would throw
 // `ReferenceError: process is not defined`. Fall back to
 // `process.env` only via a `typeof` guard for Node code paths.
-function _envInt (key, fallback) {
+function _envInt(key, fallback) {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
   if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
@@ -42,14 +40,18 @@ const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
 const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 const PERF_LABEL = '[bitnet] [GPU]'
 
-async function runBitnetInference (addon, prompt) {
+async function runBitnetInference(addon, prompt) {
   const startTime = Date.now()
   const response = await addon.run(prompt)
   const chunks = []
   let error = null
   response
-    .onUpdate(data => { chunks.push(data) })
-    .onError(err => { error = err })
+    .onUpdate((data) => {
+      chunks.push(data)
+    })
+    .onError((err) => {
+      error = err
+    })
 
   // Bare runtime on arm64 may not drain promise microtasks from native addon
   // (uv_async) callbacks until another macrotask fires. A periodic setInterval
@@ -70,59 +72,65 @@ async function runBitnetInference (addon, prompt) {
   }
 }
 
-safeTest('bitnet model can run simple inference', { timeout: 900_000, skip: !isAndroid }, async t => {
-  const [modelName, dirPath] = await ensureModel({
-    modelName: BITNET_MODEL.name,
-    downloadUrl: BITNET_MODEL.url
-  })
+safeTest(
+  'bitnet model can run simple inference',
+  { timeout: 900_000, skip: !isAndroid },
+  async (t) => {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: BITNET_MODEL.name,
+      downloadUrl: BITNET_MODEL.url
+    })
 
-  const modelPath = path.join(dirPath, modelName)
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
+    const modelPath = path.join(dirPath, modelName)
+    const specLogger = attachSpecLogger({ forwardToConsole: true })
 
-  const config = {
-    gpu_layers: '999',
-    ctx_size: '1024',
-    device: 'gpu',
-    n_predict: '32',
-    verbosity: '2'
-  }
-
-  const addon = new LlmLlamacpp({
-    files: { model: [modelPath] },
-    config,
-    logger: console,
-    opts: { stats: true }
-  })
-
-  try {
-    await addon.load()
-
-    for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
-      const { output, startTime, endTime } = await runBitnetInference(addon, PROMPT)
-      t.comment(
-        `${PERF_LABEL} warmup ${w}/${PERF_WARMUP_RUNS} ` +
-        `(${endTime - startTime}ms, ${output.length} chars) - perf NOT recorded`
-      )
+    const config = {
+      gpu_layers: '999',
+      ctx_size: '1024',
+      device: 'gpu',
+      n_predict: '32',
+      verbosity: '2'
     }
 
-    let lastOutput = ''
-    for (let run = 1; run <= PERF_RUNS; run++) {
-      const { output, startTime, endTime, stats } = await runBitnetInference(addon, PROMPT)
-      lastOutput = output
-      const totalTime = endTime - startTime
-      t.comment(`${PERF_LABEL} run ${run}/${PERF_RUNS} BitNet output: "${output}"`)
-      t.comment(recordPerformance(PERF_LABEL, totalTime, {
-        _output: output,
-        stats,
-        deviceId: 'gpu',
-        scenario: 'bitnet',
-        model: BITNET_MODEL.name.replace(/\.gguf$/i, '')
-      }))
-    }
+    const addon = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config,
+      logger: console,
+      opts: { stats: true }
+    })
 
-    t.ok(lastOutput.length > 0, 'bitnet model should generate output')
-  } finally {
-    await addon.unload().catch(() => { })
-    specLogger.release()
+    try {
+      await addon.load()
+
+      for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
+        const { output, startTime, endTime } = await runBitnetInference(addon, PROMPT)
+        t.comment(
+          `${PERF_LABEL} warmup ${w}/${PERF_WARMUP_RUNS} ` +
+            `(${endTime - startTime}ms, ${output.length} chars) - perf NOT recorded`
+        )
+      }
+
+      let lastOutput = ''
+      for (let run = 1; run <= PERF_RUNS; run++) {
+        const { output, startTime, endTime, stats } = await runBitnetInference(addon, PROMPT)
+        lastOutput = output
+        const totalTime = endTime - startTime
+        t.comment(`${PERF_LABEL} run ${run}/${PERF_RUNS} BitNet output: "${output}"`)
+        t.comment(
+          recordPerformance(PERF_LABEL, totalTime, {
+            _output: output,
+            stats,
+            deviceId: 'gpu',
+            scenario: 'bitnet',
+            model: BITNET_MODEL.name.replace(/\.gguf$/i, '')
+          })
+        )
+      }
+
+      t.ok(lastOutput.length > 0, 'bitnet model should generate output')
+    } finally {
+      await addon.unload().catch(() => {})
+      specLogger.release()
+    }
   }
-})
+)

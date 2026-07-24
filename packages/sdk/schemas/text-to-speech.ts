@@ -112,6 +112,7 @@ export const ttsChatterboxRuntimeConfigSchema = z.object({
   streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
   streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
   cfmSteps: ttsNonNegativeIntegerSchema.optional(),
+  cfgRate: z.number().nonnegative().optional(),
   threads: ttsPositiveIntegerSchema.optional(),
   nGpuLayers: ttsIntegerSchema.optional(),
   seed: ttsIntegerSchema.optional()
@@ -124,7 +125,8 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
   useGPU: z.boolean().optional(),
-  outputSampleRate: ttsOutputSampleRateSchema.optional()
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  vulkanCacheDir: z.string().min(1).optional()
 })
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
@@ -162,7 +164,10 @@ type TtsTokenizerAssetRefinementInput = {
   cangjieTsvSrc?: ModelSrcInput | undefined
 }
 
-function refineChatterboxTokenizerAssets(data: TtsTokenizerAssetRefinementInput, ctx: z.RefinementCtx) {
+function refineChatterboxTokenizerAssets(
+  data: TtsTokenizerAssetRefinementInput,
+  ctx: z.RefinementCtx
+) {
   if (data.ttsEngine !== 'chatterbox') return
 
   if (data.language === 'ja' && data.mecabDictSrc === undefined) {
@@ -220,10 +225,12 @@ const legacyTtsOnnxFieldsShape = LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS.reduce<
 // `loadConfigSchema`. Permits deprecated ONNX field names so
 // `resolveConfig` can raise LegacyTtsModelDeprecatedError instead of a
 // generic Zod error; other unknown keys are still rejected by `.strict()`.
-export const ttsConfigSchema = z.discriminatedUnion('ttsEngine', [
-  ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
-  ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
-]).superRefine(refineChatterboxTokenizerAssets)
+export const ttsConfigSchema = z
+  .discriminatedUnion('ttsEngine', [
+    ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
+    ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
+  ])
+  .superRefine(refineChatterboxTokenizerAssets)
 
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),
@@ -241,7 +248,9 @@ export const ttsRequestSchema = ttsClientParamsSchema.extend({
 
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
-  totalSamples: z.number().optional()
+  totalSamples: z.number().optional(),
+  enhancerBackendDevice: z.number().optional(),
+  enhancerBackendId: z.number().optional()
 })
 
 export const ttsResponseSchema = z.object({

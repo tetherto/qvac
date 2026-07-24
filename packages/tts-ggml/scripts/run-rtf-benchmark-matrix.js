@@ -10,6 +10,9 @@
  *   {
  *     "engine": "chatterbox" | "chatterbox-mtl" | "supertonic" | "supertonic-mtl",
  *     "variant": "q4" | "q8" | "f16" | "mixed",              (optional, default q4)
+ *     "enhancer": "none" | "lavasr",                         (optional, default none)
+ *     "enhancerVariant": "f16" | "f32" | "q8_0",            (optional, default f16; enhancer quant tier)
+ *     "denoiser": "none" | "lavasr",                         (optional, default none)
  *     "useGPU": true | false,
  *     "backendHint": "cpu" | "metal" | "vulkan" | "opencl",  (optional)
  *     "deviceLabel": "...",                                  (optional)
@@ -18,7 +21,11 @@
  *     "numWarmup": 1,                                        (optional)
  *     "numRuns": 5,                                          (optional)
  *     "numThreads": 8,                                       (optional)
- *     "rtfUpperBound": 1.5                                   (optional)
+ *     "rtfUpperBound": 1.5,                                  (optional)
+ *     "quality": true,                                       (optional, CER/WER; default true)
+ *     "whisperModel": "ggml-small.bin",                       (optional)
+ *     "werUpperBound": 0.4,                                  (optional)
+ *     "cerUpperBound": 0.2                                   (optional)
  *   }
  *
  * If QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON is empty, a small default matrix
@@ -83,10 +90,30 @@ function normalizeBoolean (value) {
   return value === true || value === 'true' || value === '1'
 }
 
+// Distinct tokens (`lavasr` for the enhancer, `denoise` for the denoiser) keep
+// the two LavaSR axes unambiguous in default labels; they mirror enhancerTag /
+// denoiserTag in test/utils/downloadModel.js (kept local because that module is
+// Bare-only and cannot be required from this Node script). The enhancer quant
+// tier follows the `lavasr` token (empty for the fp16 default) and is lowercased
+// to match the benchmark's normalized enhancerVariantTag, so a mixed-case matrix
+// row still gets the same per-tier label/artifact the benchmark writes.
+const ENHANCER_LABEL_TOKEN = 'lavasr'
+const DENOISER_LABEL_TOKEN = 'denoise'
+const DEFAULT_ENHANCER_VARIANT = 'f16'
+
 function buildLabel (entry, index) {
   if (entry.label) return String(entry.label)
   const gpuTag = normalizeBoolean(entry.useGPU) ? 'gpu' : 'cpu'
-  return `${index + 1}-${entry.engine || 'tts'}-${gpuTag}`
+  const enhancer = String(entry.enhancer || 'none').toLowerCase()
+  const enhancerTag = enhancer !== 'none' ? `-${ENHANCER_LABEL_TOKEN}` : ''
+  const enhancerVariant = String(entry.enhancerVariant || DEFAULT_ENHANCER_VARIANT).toLowerCase()
+  const enhancerVariantTag =
+    enhancer !== 'none' && enhancerVariant !== DEFAULT_ENHANCER_VARIANT
+      ? `-${enhancerVariant}`
+      : ''
+  const denoiser = String(entry.denoiser || 'none').toLowerCase()
+  const denoiserTag = denoiser !== 'none' ? `-${DENOISER_LABEL_TOKEN}` : ''
+  return `${index + 1}-${entry.engine || 'tts'}${enhancerTag}${enhancerVariantTag}${denoiserTag}-${gpuTag}`
 }
 
 function buildEnv (entry, index) {
@@ -95,6 +122,9 @@ function buildEnv (entry, index) {
     ...process.env,
     QVAC_TTS_GGML_BENCHMARK_ENGINE: String(entry.engine || 'chatterbox'),
     QVAC_TTS_GGML_BENCHMARK_VARIANT: String(entry.variant || process.env.QVAC_TTS_GGML_BENCHMARK_VARIANT || 'q4'),
+    QVAC_TTS_GGML_BENCHMARK_ENHANCER: String(entry.enhancer || process.env.QVAC_TTS_GGML_BENCHMARK_ENHANCER || 'none'),
+    QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT: String(entry.enhancerVariant || process.env.QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT || 'f16'),
+    QVAC_TTS_GGML_BENCHMARK_DENOISER: String(entry.denoiser || process.env.QVAC_TTS_GGML_BENCHMARK_DENOISER || 'none'),
     QVAC_TTS_GGML_BENCHMARK_USE_GPU: normalizeBoolean(entry.useGPU) ? 'true' : 'false',
     QVAC_TTS_GGML_BENCHMARK_LABEL: label,
     QVAC_TTS_GGML_BENCHMARK_BACKEND:
@@ -122,6 +152,18 @@ function buildEnv (entry, index) {
   }
   if (entry.rtfUpperBound !== undefined) {
     env.QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND = String(entry.rtfUpperBound)
+  }
+  if (entry.quality !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_QUALITY = normalizeBoolean(entry.quality) ? 'true' : 'false'
+  }
+  if (entry.whisperModel !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL = String(entry.whisperModel)
+  }
+  if (entry.werUpperBound !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND = String(entry.werUpperBound)
+  }
+  if (entry.cerUpperBound !== undefined) {
+    env.QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND = String(entry.cerUpperBound)
   }
 
   // Forward GitHub Actions correlation env vars so the report can be traced
@@ -152,8 +194,12 @@ function runEntry (pkgDir, entry, index, matrixLen) {
   console.log(`Running benchmark entry ${index + 1}/${matrixLen}`)
   console.log(`  engine:     ${env.QVAC_TTS_GGML_BENCHMARK_ENGINE}`)
   console.log(`  variant:    ${env.QVAC_TTS_GGML_BENCHMARK_VARIANT}`)
+  console.log(`  enhancer:   ${env.QVAC_TTS_GGML_BENCHMARK_ENHANCER}`)
+  console.log(`  enhancerVariant: ${env.QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT}`)
+  console.log(`  denoiser:   ${env.QVAC_TTS_GGML_BENCHMARK_DENOISER}`)
   console.log(`  useGPU:     ${env.QVAC_TTS_GGML_BENCHMARK_USE_GPU}`)
   console.log(`  backend:    ${env.QVAC_TTS_GGML_BENCHMARK_BACKEND || 'default'}`)
+  console.log(`  CER/WER:    ${env.QVAC_TTS_GGML_BENCHMARK_QUALITY || 'true'}`)
   console.log(`  label:      ${env.QVAC_TTS_GGML_BENCHMARK_LABEL}`)
   console.log('='.repeat(70))
 
@@ -226,4 +272,13 @@ function main () {
   }
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  parseMatrixConfig,
+  normalizeBoolean,
+  buildLabel,
+  buildEnv
+}

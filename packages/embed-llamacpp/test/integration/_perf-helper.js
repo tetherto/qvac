@@ -31,7 +31,7 @@ const isMobile = platform === 'ios' || platform === 'android'
 // [PERF_REPORT_START]...[PERF_REPORT_END] markers (with logcat chunking when
 // the payload exceeds 800 chars) so scripts/perf-report/extract-from-log.js
 // can reconstruct the artifact from Device Farm logs.
-function createPerformanceReporter (opts) {
+function createPerformanceReporter(opts) {
   const _results = []
   const _startedAt = new Date().toISOString()
   const _addon = (opts && opts.addon) || 'llamacpp-embed'
@@ -47,27 +47,30 @@ function createPerformanceReporter (opts) {
   }
 
   return {
-    record (testName, metrics, extra) {
+    record(testName, metrics, extra) {
       _results.push({
         test: testName,
         scenario: (extra && extra.scenario) || 'benchmark-perf',
         model: (extra && extra.model) || null,
         execution_provider: (extra && extra.execution_provider) || null,
         status: (extra && extra.status) || null,
-        metrics: Object.assign({
-          backend: null,
-          platform: null,
-          pp_tps: null,
-          pp_tps_std: null,
-          latency_ms: null,
-          latency_ms_std: null,
-          cosine_similarity: null,
-          input_tokens: null,
-          sample_count: null
-        }, metrics)
+        metrics: Object.assign(
+          {
+            backend: null,
+            platform: null,
+            pp_tps: null,
+            pp_tps_std: null,
+            latency_ms: null,
+            latency_ms_std: null,
+            cosine_similarity: null,
+            input_tokens: null,
+            sample_count: null
+          },
+          metrics
+        )
       })
     },
-    toJSON () {
+    toJSON() {
       return {
         schema_version: '1.0',
         addon: _addon,
@@ -77,7 +80,7 @@ function createPerformanceReporter (opts) {
         results: _results
       }
     },
-    writeReport () {
+    writeReport() {
       const json = JSON.stringify(this.toJSON())
       let written = false
       const dirs = []
@@ -90,7 +93,9 @@ function createPerformanceReporter (opts) {
       dirs.push('/tmp')
       for (let di = 0; di < dirs.length; di++) {
         try {
-          try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+          try {
+            fs.mkdirSync(dirs[di], { recursive: true })
+          } catch (_) {}
           const p = path.join(dirs[di], 'perf-report.json')
           fs.writeFileSync(p, json)
           console.log('[PERF_REPORT_PATH]' + p)
@@ -101,7 +106,7 @@ function createPerformanceReporter (opts) {
       }
       if (!written) console.log('[perf-reporter] all write locations failed')
     },
-    writeToConsole (consoleOpts) {
+    writeToConsole(consoleOpts) {
       try {
         const data = this.toJSON()
         // `delta: true` emits ONLY the latest row instead of the full
@@ -127,14 +132,25 @@ function createPerformanceReporter (opts) {
           const id = Date.now().toString(36)
           const n = Math.ceil(json.length / CHUNK)
           for (let i = 0; i < n; i++) {
-            console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            console.log(
+              '[PERF_CHUNK:' +
+                id +
+                ':' +
+                i +
+                ':' +
+                n +
+                ']' +
+                json.substring(i * CHUNK, (i + 1) * CHUNK)
+            )
           }
         }
       } catch (err) {
         console.log('[perf-reporter] mobile console write failed: ' + err.message)
       }
     },
-    get length () { return _results.length }
+    get length() {
+      return _results.length
+    }
   }
 }
 
@@ -143,21 +159,24 @@ const _perfReporter = createPerformanceReporter({ addon: 'llamacpp-embed', addon
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _exitHookInstalled = false
 
-function _installExitHook () {
+function _installExitHook() {
   if (_exitHookInstalled) return
   _exitHookInstalled = true
   process.on('exit', () => {
     if (_perfReporter.length > 0) {
-      try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+      try {
+        _perfReporter.writeReport(_reportPath)
+      } catch (_) {}
     }
   })
 }
 
-function resolveBackend (device) {
+function resolveBackend(device) {
   if (!device || device === 'cpu') return 'cpu'
   if (platform === 'darwin' || platform === 'ios') return 'metal'
   if (platform === 'android') {
-    const override = (process.env && process.env.QVAC_GPU_BACKEND) ||
+    const override =
+      (process.env && process.env.QVAC_GPU_BACKEND) ||
       (typeof os.getEnv === 'function' ? os.getEnv('QVAC_GPU_BACKEND') : '')
     return String(override || 'vulkan').toLowerCase()
   }
@@ -165,7 +184,7 @@ function resolveBackend (device) {
   return 'gpu'
 }
 
-function _num (v) {
+function _num(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
@@ -189,7 +208,7 @@ function _num (v) {
  * @param {string} [extra.status]    'ok' | 'partial-failure' | 'crashed'.
  * @param {string} [extra.model]     short model id for this row.
  */
-function recordPerformance (label, extra) {
+function recordPerformance(label, extra) {
   const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
   const effectiveDevice = (extra && extra.deviceId) || labelDevice
   const backend = resolveBackend(effectiveDevice)
@@ -202,22 +221,26 @@ function recordPerformance (label, extra) {
   const inputTokens = extra ? _num(extra.inputTokens) : null
   const sampleCount = extra ? _num(extra.sampleCount) : null
 
-  _perfReporter.record(label, {
-    backend,
-    platform: platformLabel,
-    pp_tps: ppTps !== null ? Number(ppTps.toFixed(3)) : null,
-    pp_tps_std: ppTpsStd !== null ? Number(ppTpsStd.toFixed(3)) : null,
-    latency_ms: latencyMs !== null ? Number(latencyMs.toFixed(3)) : null,
-    latency_ms_std: latencyMsStd !== null ? Number(latencyMsStd.toFixed(3)) : null,
-    cosine_similarity: cosine !== null ? Number(cosine.toFixed(6)) : null,
-    input_tokens: inputTokens !== null ? Math.round(inputTokens) : null,
-    sample_count: sampleCount !== null ? Math.round(sampleCount) : null
-  }, {
-    scenario: 'benchmark-perf',
-    model: (extra && extra.model) || null,
-    execution_provider: effectiveDevice,
-    status: (extra && extra.status) || null
-  })
+  _perfReporter.record(
+    label,
+    {
+      backend,
+      platform: platformLabel,
+      pp_tps: ppTps !== null ? Number(ppTps.toFixed(3)) : null,
+      pp_tps_std: ppTpsStd !== null ? Number(ppTpsStd.toFixed(3)) : null,
+      latency_ms: latencyMs !== null ? Number(latencyMs.toFixed(3)) : null,
+      latency_ms_std: latencyMsStd !== null ? Number(latencyMsStd.toFixed(3)) : null,
+      cosine_similarity: cosine !== null ? Number(cosine.toFixed(6)) : null,
+      input_tokens: inputTokens !== null ? Math.round(inputTokens) : null,
+      sample_count: sampleCount !== null ? Math.round(sampleCount) : null
+    },
+    {
+      scenario: 'benchmark-perf',
+      model: (extra && extra.model) || null,
+      execution_provider: effectiveDevice,
+      status: (extra && extra.status) || null
+    }
+  )
 
   _installExitHook()
 
@@ -227,9 +250,12 @@ function recordPerformance (label, extra) {
     _perfReporter.writeToConsole({ delta: true })
   }
 
-  const fmtMeanStd = (m, s) => m === null
-    ? 'n/a'
-    : (s !== null && sampleCount !== null && sampleCount > 1 ? `${m.toFixed(2)} ± ${s.toFixed(2)}` : m.toFixed(2))
+  const fmtMeanStd = (m, s) =>
+    m === null
+      ? 'n/a'
+      : s !== null && sampleCount !== null && sampleCount > 1
+        ? `${m.toFixed(2)} ± ${s.toFixed(2)}`
+        : m.toFixed(2)
   return [
     `${label} Performance Metrics (backend=${backend}, platform=${platformLabel}, reps=${sampleCount !== null ? sampleCount : 'n/a'}):`,
     `    - ppTPS (prefill tokens/sec): ${fmtMeanStd(ppTps, ppTpsStd)}`,

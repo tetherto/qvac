@@ -60,9 +60,10 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: macos-15-xlarge
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64

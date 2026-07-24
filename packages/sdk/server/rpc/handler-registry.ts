@@ -1,5 +1,6 @@
 import { type Request } from '@/schemas'
 import { handleBatchCompletionStream } from '@/server/rpc/handlers/batch-completion-stream'
+import { handleCompletionOrchestrate } from '@/server/rpc/handlers/completion-orchestrate'
 import { handleCompletionStream } from '@/server/rpc/handlers/completion-stream'
 import { handleDownloadAsset } from '@/server/rpc/handlers/download-asset'
 import { handleLoadModel } from '@/server/rpc/handlers/load-model'
@@ -43,6 +44,7 @@ import { handleSuspend } from '@/server/rpc/handlers/suspend'
 import { handleResume } from '@/server/rpc/handlers/resume'
 import { handleState } from '@/server/rpc/handlers/state'
 import type { HandlerEntry } from './handler-utils'
+import type { methodShapes, MethodName } from './method-shapes'
 
 function ragSupportsProgress(request: Request): boolean {
   if (request.type !== 'rag') return false
@@ -156,6 +158,11 @@ export const registry: Record<string, HandlerEntry> = {
     isDelegated: isModelDelegated
   },
 
+  // Deliberately no delegated handler: tool callbacks execute code on the
+  // client machine, so only the user's own local worker may orchestrate
+  // (see completionOrchestrateResponseSchema's contract note).
+  completionOrchestrate: { type: 'duplex', handler: handleCompletionOrchestrate },
+
   batchCompletionStream: {
     type: 'stream',
     handler: handleBatchCompletionStream
@@ -179,4 +186,6 @@ export const registry: Record<string, HandlerEntry> = {
     handler: handleFinetune,
     supportsProgress: finetuneSupportsProgress
   }
+} satisfies {
+  [K in MethodName]: HandlerEntry & { type: (typeof methodShapes)[K] }
 }

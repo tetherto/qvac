@@ -18,13 +18,13 @@ const { createTempStorage, waitFor } = require('../helpers/test-utils')
 const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 
 const noopLogger = {
-  info () {},
-  debug () {},
-  error () {},
-  warn () {}
+  info() {},
+  debug() {},
+  error() {},
+  warn() {}
 }
 
-function createTestPayload (size) {
+function createTestPayload(size) {
   const buf = Buffer.alloc(size)
   for (let i = 0; i < size; i++) {
     buf[i] = i % 256
@@ -32,30 +32,25 @@ function createTestPayload (size) {
   return buf
 }
 
-async function createService (t, { storage, bootstrap, swarmBootstrap } = {}) {
-  const basePath = storage || await createTempStorage(t)
+async function createService(t, { storage, bootstrap, swarmBootstrap } = {}) {
+  const basePath = storage || (await createTempStorage(t))
   const store = new Corestore(basePath)
   await store.ready()
 
   const swarm = new Hyperswarm({ bootstrap: swarmBootstrap || [] })
   const config = new RegistryConfig({ logger: noopLogger })
 
-  const service = new RegistryService(
-    store.namespace(AUTOBASE_NAMESPACE),
-    swarm,
-    config,
-    {
-      logger: noopLogger,
-      ackInterval: 5,
-      autobaseBootstrap: bootstrap || null,
-      skipStorageCheck: true
-    }
-  )
+  const service = new RegistryService(store.namespace(AUTOBASE_NAMESPACE), swarm, config, {
+    logger: noopLogger,
+    ackInterval: 5,
+    autobaseBootstrap: bootstrap || null,
+    skipStorageCheck: true
+  })
 
   return { service, store, swarm, config, storage: basePath }
 }
 
-async function cleanupService ({ service, store, swarm }) {
+async function cleanupService({ service, store, swarm }) {
   if (service && service.opened) {
     await service.close()
   }
@@ -67,13 +62,14 @@ async function cleanupService ({ service, store, swarm }) {
   }
 }
 
-async function ensureIndexer (service) {
+async function ensureIndexer(service) {
   if (service.base.isIndexer) return
   await service._appendOperation(DISPATCH_ADD_INDEXER, { key: service.base.local.key })
+  // lunte-disable-next-line require-await
   await waitFor(async () => service.base.isIndexer === true, 15000)
 }
 
-async function flushAutobases (...bases) {
+async function flushAutobases(...bases) {
   for (let i = 0; i < 3; i++) {
     for (const base of bases) {
       await base.update()
@@ -83,11 +79,11 @@ async function flushAutobases (...bases) {
         await base.ack()
       }
     }
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 200))
   }
 }
 
-async function setupRegistryWithModel (t, bootstrap) {
+async function setupRegistryWithModel(t, bootstrap) {
   const ctx = await createService(t, { swarmBootstrap: bootstrap })
   await ctx.service.ready()
   await ensureIndexer(ctx.service)
@@ -113,9 +109,9 @@ async function setupRegistryWithModel (t, bootstrap) {
   return { ctx, model, testPayload }
 }
 
-async function createTestClient (t, serviceCtx, bootstrap, storage) {
+async function createTestClient(t, serviceCtx, bootstrap, storage) {
   const registryCoreKey = serviceCtx.service.registryCoreKey
-  const clientStorage = storage || await createTempStorage(t)
+  const clientStorage = storage || (await createTempStorage(t))
   const corestore = new Corestore(clientStorage)
   await corestore.ready()
 
@@ -150,20 +146,23 @@ async function createTestClient (t, serviceCtx, bootstrap, storage) {
     _checkBlobProgress: proto._checkBlobProgress,
     _getBlobsCore: proto._getBlobsCore.bind({ corestore, logger: noopLogger }),
 
-    async ready () {},
+    // lunte-disable-next-line require-await
+    async ready() {},
 
-    async getModel (modelPath, source) {
+    async getModel(modelPath, source) {
       const result = await db.getModel(modelPath, source)
       return result ?? null
     },
 
-    async downloadModel (modelPath, source, options = {}) {
+    async downloadModel(modelPath, source, options = {}) {
       proto._validateString(modelPath, 'path')
       proto._validateString(source, 'source')
 
       const model = await this.getModel(modelPath, source)
       if (!model) throw new Error('Model not found')
-      if (!model.blobBinding || !model.blobBinding.coreKey) throw new Error('Model missing blob binding')
+      if (!model.blobBinding || !model.blobBinding.coreKey) {
+        throw new Error('Model missing blob binding')
+      }
 
       const { core, blobs } = await this._getBlobsCore(model.blobBinding.coreKey)
 
@@ -176,7 +175,11 @@ async function createTestClient (t, serviceCtx, bootstrap, storage) {
       if (options.outputFile) {
         await proto._streamBlobToFile.call(
           { logger: noopLogger, _checkBlobProgress: proto._checkBlobProgress },
-          blobs, core, model.blobBinding, options.outputFile, options
+          blobs,
+          core,
+          model.blobBinding,
+          options.outputFile,
+          options
         )
         await blobs.close()
         await core.close()
@@ -198,7 +201,7 @@ async function createTestClient (t, serviceCtx, bootstrap, storage) {
   return { client, swarm, corestore, storage: clientStorage }
 }
 
-async function cleanupTestClient (ctx) {
+async function cleanupTestClient(ctx) {
   if (ctx.client && ctx.client.db) {
     await ctx.client.db.close().catch(() => {})
   }
@@ -223,7 +226,9 @@ test('downloadModel with outputFile writes complete file', async (t) => {
     await clientCtx.client.downloadModel(model.path, model.source, {
       outputFile,
       timeout: 30000,
-      onProgress: () => { progressCalls++ }
+      onProgress: () => {
+        progressCalls++
+      }
     })
 
     t.ok(fs.existsSync(outputFile), 'output file created')

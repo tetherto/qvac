@@ -1,5 +1,5 @@
 # QVAC SDK Tests
-# Runs desktop and/or mobile (Android/iOS) e2e tests for the SDK package
+# Runs desktop, Electron, Snap, and/or mobile e2e tests for the SDK package
 #
 # Triggered via:
 #   - workflow_dispatch: manual runs with full customizability
@@ -17,6 +17,7 @@ on:
           - all
           - desktop
           - electron
+          - snap
           - mobile
           - electron + desktop
           - desktop + mobile
@@ -54,13 +55,29 @@ on:
         type: number
         default: 90
       device-farm-start-timeout:
-        description: "Device Farm scheduling timeout before producer starts (minutes)"
+        description: "Minutes to wait for a device before failing. Kept short so a busy Device Farm fails fast instead of burning CI minutes."
         type: number
-        default: 90
+        default: 15
+      android-device-pool:
+        description: "Android device pool name to run on (empty = random AWS-available pool from SDK_ANDROID_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
+      ios-device-pool:
+        description: "iOS device pool name to run on (empty = random AWS-available pool from SDK_IOS_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      electron-platforms:
+        description: "JSON array of runner labels for electron tests"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
+      snap-platforms:
+        description: "JSON array of Linux runner labels for strict Snap tests"
+        type: string
+        default: '["ubuntu-22.04"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -95,10 +112,19 @@ on:
         default: 90
       device-farm-start-timeout:
         type: number
-        default: 90
+        default: 15
+      android-device-pool:
+        type: string
+        default: ""
+      ios-device-pool:
+        type: string
+        default: ""
       desktop-platforms:
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      electron-platforms:
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
       test-version:
         type: string
       cache-models:
@@ -157,7 +183,26 @@ jobs:
       consumer: electron
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
+      platforms: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  snap-tests:
+    needs: resolve
+    # Snap CI is manual-only. It is intentionally excluded from workflow_call
+    # consumers such as on-pr-test-sdk.yml.
+    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'snap')
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: snap
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ inputs.snap-platforms || '["ubuntu-22.04"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -184,9 +229,10 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
-      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+      device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.android-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
 
@@ -208,8 +254,9 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.ios-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit

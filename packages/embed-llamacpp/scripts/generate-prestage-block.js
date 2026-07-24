@@ -4,36 +4,39 @@
 // is reliable) that pre-stages ALL embed test models onto the device at
 // /data/local/tmp/prestaged-models, so the phone never downloads from
 // huggingface.co (QVAC-21799). Embed runs single-pool (all tests on one
-// device), so there is no per-shard selection — every model in MODEL_CONFIGS is
-// staged. The device-side pickup lives in test/integration/utils.js.
+// device), so there is no per-shard selection — every model in
+// test/integration/models.manifest.json is staged. The device-side pickup lives
+// in test/integration/utils.js.
 //
-// The model list is parsed from test/integration/utils.js (MODEL_CONFIGS) so it
-// stays a single source of truth. Run `node scripts/generate-prestage-block.js`
-// and paste the output under `extra-pre-test-commands:` (indented), or wire it
-// via a workflow step (see integration-mobile-test-embed-llamacpp.yml).
+// Run `node scripts/generate-prestage-block.js` and paste the output under
+// `extra-pre-test-commands:` (indented), or wire it via a workflow step (see
+// integration-mobile-test-embed-llamacpp.yml).
 const fs = require('fs')
 const path = require('path')
 
-const utilsPath = path.resolve(__dirname, '../test/integration/utils.js')
+const manifestPath = path.resolve(__dirname, '../test/integration/models.manifest.json')
 
-// Parse MODEL_CONFIGS entries: "'<name>.gguf': { downloadUrl: '<url>' ... }".
-function extractModelConfigs (src) {
-  const re = /'([^']+\.gguf)':\s*\{\s*downloadUrl:\s*'(https?:\/\/[^']+)'/g
-  const out = []
-  const seen = new Set()
-  let m
-  while ((m = re.exec(src)) !== null) {
-    const [, name, url] = m
-    if (!seen.has(name)) {
-      seen.add(name)
-      out.push({ name, url })
-    }
+function modelsFromManifest(manifest) {
+  if (!manifest || !manifest.models) {
+    throw new Error('[prestage] integration model manifest has no models')
   }
-  return out
+  const models = []
+  for (const [name, entry] of Object.entries(manifest.models)) {
+    const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
+    if (
+      typeof url !== 'string' ||
+      !url.startsWith('https://') ||
+      /\/resolve\/(?:main|master)\//.test(url)
+    ) {
+      throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
+    }
+    models.push({ name, url })
+  }
+  return models
 }
 
 // Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
-function buildScript (models) {
+function buildScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
@@ -53,14 +56,16 @@ adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
 }
 
-function main () {
-  const src = fs.readFileSync(utilsPath, 'utf8')
-  const models = extractModelConfigs(src)
+function main() {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  const models = modelsFromManifest(manifest)
   if (models.length === 0) {
-    console.error('[prestage] no models found in MODEL_CONFIGS')
+    console.error('[prestage] no models found in models.manifest.json')
     process.exit(1)
   }
-  console.error(`[prestage] staging ${models.length} model(s): ${models.map((m) => m.name).join(', ')}`)
+  console.error(
+    `[prestage] staging ${models.length} model(s): ${models.map((m) => m.name).join(', ')}`
+  )
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
   const body = buildScript(models)
@@ -72,4 +77,4 @@ function main () {
 
 if (require.main === module) main()
 
-module.exports = { extractModelConfigs, buildScript }
+module.exports = { modelsFromManifest, buildScript }

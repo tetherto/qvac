@@ -17,9 +17,11 @@ const baseModelFields = {
   deprecationReason: z.string().max(512).optional()
 }
 
-const addModelRequestSchema = z.object({
-  ...baseModelFields,
-  skipExisting: z.boolean().optional()
-}).strict()
+const addModelRequestSchema = z
+  .object({
+    ...baseModelFields,
+    skipExisting: z.boolean().optional()
+  })
+  .strict()
 
 module.exports = { baseModelFields, addModelRequestSchema }

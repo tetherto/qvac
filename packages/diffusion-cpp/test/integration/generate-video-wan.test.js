@@ -12,7 +12,8 @@
 // Optional env vars:
 //   WAN_MODELS_DIR  - reuse an existing models directory (e.g. the one
 //                     populated by ./scripts/download-model-wan.sh).
-//                     Files present here are used as-is; missing files
+//                     Exact manifest-declared files are integrity-verified;
+//                     missing files
 //                     fall back to the standard ensureModel download.
 //   WAN_DEVICE      - 'gpu' (default) or 'cpu'
 //
@@ -26,7 +27,7 @@ const proc = require('bare-process')
 const test = require('brittle')
 const binding = require('../../binding')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
-const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
+const { detectPlatform, setupJsLogger, ensureModelPath, verifyLocalModelPath } = require('./utils')
 const { recordPerformance } = require('./_perf-helper')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
@@ -39,7 +40,16 @@ const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const skip = isMobile || isDarwin || noGpu
 
 // Log skip status for CI visibility
-console.log('[Wan Video Tests] Platform:', os.platform(), 'Arch:', os.arch(), 'NO_GPU:', noGpu, '→ Skip:', skip)
+console.log(
+  '[Wan Video Tests] Platform:',
+  os.platform(),
+  'Arch:',
+  os.arch(),
+  'NO_GPU:',
+  noGpu,
+  '→ Skip:',
+  skip
+)
 
 const platform = detectPlatform()
 
@@ -80,10 +90,20 @@ const WAN_I2V_FILES = [
   }
 ]
 
+async function resolveWanModelPath(entry, overrideDir, logPrefix) {
+  const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
+  if (overridePath && fs.existsSync(overridePath)) {
+    await verifyLocalModelPath({ modelName: entry.name, filePath: overridePath })
+    console.log(`[${logPrefix}] Using verified override: ${overridePath}`)
+    return overridePath
+  }
+  return await ensureModelPath({ modelName: entry.name })
+}
+
 // Detects an MJPG AVI buffer with a basic RIFF/AVI/idx1 sniff. We only
 // validate structural markers — strict bit-for-bit AVI parsing lives in
 // the C++ test_avi_writer.cpp suite.
-function sniffAvi (buf) {
+function sniffAvi(buf) {
   if (!(buf instanceof Uint8Array) || buf.length < 64) return null
 
   const ascii = (i, n) => {
@@ -104,8 +124,10 @@ function sniffAvi (buf) {
   let hasIdx1 = false
   for (let i = 12; i < buf.length - 4; i++) {
     if (
-      buf[i] === 0x69 && buf[i + 1] === 0x64 &&
-      buf[i + 2] === 0x78 && buf[i + 3] === 0x31 // 'idx1'
+      buf[i] === 0x69 &&
+      buf[i + 1] === 0x64 &&
+      buf[i + 2] === 0x78 &&
+      buf[i + 3] === 0x31 // 'idx1'
     ) {
       hasIdx1 = true
       break
@@ -116,8 +138,10 @@ function sniffAvi (buf) {
   let frameMarkers = 0
   for (let i = 12; i < buf.length - 4; i++) {
     if (
-      buf[i] === 0x30 && buf[i + 1] === 0x30 &&
-      buf[i + 2] === 0x64 && buf[i + 3] === 0x63 // '00dc'
+      buf[i] === 0x30 &&
+      buf[i + 1] === 0x30 &&
+      buf[i + 2] === 0x64 &&
+      buf[i + 3] === 0x63 // '00dc'
     ) {
       frameMarkers++
     }
@@ -156,7 +180,8 @@ const I2V_SMOKE_SEED = 42
 const I2V_SMOKE_PROMPT = 'a scientist walking through a sunlit laboratory'
 const I2V_INIT_IMAGE_PATH = path.resolve(__dirname, '../../assets/von-neumann-colorized.jpg')
 
-test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
+test(
+  'Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
   { timeout: 600000, skip },
   async (t) => {
     setupJsLogger(binding)
@@ -175,16 +200,7 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
     const overrideDir = proc.env && proc.env.WAN_MODELS_DIR
     const resolvedFiles = {}
     for (const entry of WAN_FILES) {
-      const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
-      let modelPath
-      if (overridePath && fs.existsSync(overridePath)) {
-        console.log(`[wan] Using override: ${overridePath}`)
-        modelPath = overridePath
-      } else {
-        modelPath = await ensureModelPath({
-          modelName: entry.name
-        })
-      }
+      const modelPath = await resolveWanModelPath(entry, overrideDir, 'wan')
       resolvedFiles[entry.key] = modelPath
       t.ok(fs.existsSync(modelPath), `Wan file present: ${entry.name}`)
     }
@@ -246,7 +262,9 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
                 progressTicks.push(tick)
               }
-            } catch (_) { /* not JSON */ }
+            } catch (_) {
+              /* not JSON */
+            }
           }
         })
         .await()
@@ -254,16 +272,14 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
       const genMs = Date.now() - tGen
       console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
 
-      t.comment(recordPerformance(
-        '[Wan 2.1 txt2vid] [GPU]',
-        response.stats,
-        {
+      t.comment(
+        recordPerformance('[Wan 2.1 txt2vid] [GPU]', response.stats, {
           scenario: 'txt2vid',
           model: 'wan2.1_t2v_1.3B_fp16',
           execution_provider: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
           ttfbMs
-        }
-      ))
+        })
+      )
 
       // ── Progress assertions ─────────────────────────────────────────────
       // Wan generation is multi-phase (text encode, denoise loop, VAE
@@ -272,18 +288,32 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
       // (it can include encoder ticks where step=0, etc.), so we only
       // assert the stream is non-empty and that every numeric tick has
       // finite step + finite total.
-      t.ok(progressTicks.length > 0,
-        `Received progress ticks (got ${progressTicks.length})`)
-      t.ok(progressTicks.every((p) =>
-        Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
-      ), 'every progress tick carries finite step + total >= 1')
+      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      t.ok(
+        progressTicks.every(
+          (p) => Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
+        ),
+        'every progress tick carries finite step + total >= 1'
+      )
+      // The pinned stable-diffusion.cpp fork emits progress only from sampler
+      // and tiling code. On the supported single-expert Wan path, the first
+      // sequence is therefore the sampler, not text encoding.
+      if (progressTicks.length > 0) {
+        t.is(progressTicks[0].step, 0, 'first progress tick starts the sampler sequence')
+        t.is(
+          progressTicks[0].total,
+          SMOKE_STEPS,
+          `first progress sequence reports the configured ${SMOKE_STEPS} sampler step(s)`
+        )
+      }
       const phaseTotals = new Set(progressTicks.map((p) => p.total))
-      t.ok(phaseTotals.size >= 1,
-        `progress ticks span ${phaseTotals.size} distinct phase total(s)`)
-      console.log('First/last progress tick:',
+      t.ok(phaseTotals.size >= 1, `progress ticks span ${phaseTotals.size} distinct phase total(s)`)
+      console.log(
+        'First/last progress tick:',
         JSON.stringify(progressTicks[0]),
         '→',
-        JSON.stringify(progressTicks[progressTicks.length - 1]))
+        JSON.stringify(progressTicks[progressTicks.length - 1])
+      )
 
       // ── AVI buffer assertions ──────────────────────────────────────────
       t.ok(avi instanceof Uint8Array, 'received an AVI Uint8Array on the output stream')
@@ -298,13 +328,14 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
         // movi-list chunk header, once as the corresponding idx1 entry.
         // Allow either pattern; require at least N markers though.
         t.ok(
-          sniff.frameMarkers >= SMOKE_FRAMES &&
-          sniff.frameMarkers <= SMOKE_FRAMES * 2,
+          sniff.frameMarkers >= SMOKE_FRAMES && sniff.frameMarkers <= SMOKE_FRAMES * 2,
           `AVI carries 5..10 '00dc' markers for ${SMOKE_FRAMES} frames ` +
-          `(got ${sniff.frameMarkers})`
+            `(got ${sniff.frameMarkers})`
         )
-        t.ok(sniff.riffSizeMatchesBuffer,
-          'RIFF size header matches the actual buffer length (no trailing data)')
+        t.ok(
+          sniff.riffSizeMatchesBuffer,
+          'RIFF size header matches the actual buffer length (no trailing data)'
+        )
       }
 
       // Save artifact next to models dir for manual inspection.
@@ -317,6 +348,58 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
       } catch (err) {
         console.log(`Could not save AVI artifact: ${err.message}`)
       }
+
+      // ── Runtime stats (new phase-breakdown fields) ────────────────────────
+      const stats = response.stats
+      t.ok(stats, 'stats object is populated')
+      t.ok(
+        typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
+        `conditionerMs is a positive number (got ${stats.conditionerMs})`
+      )
+      t.ok(
+        typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
+        `vaeMs is a positive number (got ${stats.vaeMs})`
+      )
+      t.ok(
+        typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
+        `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
+      )
+
+      // denoiseMs and stepsPerSecond need at least one denoise interval, i.e. a
+      // step==0 start tick plus a per-step tick. A 1-step run may emit a single
+      // denoise tick (computePhaseStats then reports 0 for both by design), so
+      // only assert these when the sampler runs more than one step.
+      if (SMOKE_STEPS > 1) {
+        t.ok(
+          typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
+          `denoiseMs is a positive number (got ${stats.denoiseMs})`
+        )
+        t.ok(
+          typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
+          `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
+        )
+      } else {
+        t.ok(
+          typeof stats.denoiseMs === 'number' && stats.denoiseMs >= 0,
+          `denoiseMs is a non-negative number (got ${stats.denoiseMs})`
+        )
+        t.ok(
+          typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond >= 0,
+          `stepsPerSecond is a non-negative number (got ${stats.stepsPerSecond})`
+        )
+      }
+
+      // The four phases are exhaustive: conditioner + denoise + vae + postProcess
+      // spans t0..t1, which is exactly generationMs (for video, postProcess also
+      // covers per-frame PNG + AVI mux). Only int-rounding and sub-ms jitter
+      // clamps separate them, so hold a tight bound.
+      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
+      const tolerance = Math.max(2, stats.generationMs * 0.01)
+      const diff = Math.abs(totalPhaseMs - stats.generationMs)
+      t.ok(
+        diff <= tolerance,
+        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
+      )
 
       console.log('\n' + '='.repeat(60))
       console.log('TEST SUMMARY')
@@ -331,13 +414,16 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
     } finally {
       console.log('\n=== Cleanup ===')
       await model.unload()
-      try { binding.releaseLogger() } catch (_) {}
+      try {
+        binding.releaseLogger()
+      } catch (_) {}
       console.log('Done.')
     }
   }
 )
 
-test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
+test(
+  'Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
   { timeout: 900000, skip },
   async (t) => {
     setupJsLogger(binding)
@@ -364,16 +450,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
     const overrideDir = proc.env && proc.env.WAN_MODELS_DIR
     const resolvedFiles = {}
     for (const entry of WAN_I2V_FILES) {
-      const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
-      let modelPath
-      if (overridePath && fs.existsSync(overridePath)) {
-        console.log(`[wan-i2v] Using override: ${overridePath}`)
-        modelPath = overridePath
-      } else {
-        modelPath = await ensureModelPath({
-          modelName: entry.name
-        })
-      }
+      const modelPath = await resolveWanModelPath(entry, overrideDir, 'wan-i2v')
       resolvedFiles[entry.key] = modelPath
       t.ok(fs.existsSync(modelPath), `Wan I2V file present: ${entry.name}`)
     }
@@ -408,7 +485,10 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
       await model.load()
       const loadMs = Date.now() - tLoad
       console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
-      t.ok(loadMs < 480000, `Wan I2V model loaded within 480s (took ${(loadMs / 1000).toFixed(1)}s)`)
+      t.ok(
+        loadMs < 480000,
+        `Wan I2V model loaded within 480s (took ${(loadMs / 1000).toFixed(1)}s)`
+      )
       t.is(model.getState().configLoaded, true, 'state.configLoaded flips to true after load()')
 
       console.log('\n=== Generating I2V video ===')
@@ -437,7 +517,9 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
                 progressTicks.push(tick)
               }
-            } catch (_) { /* not JSON */ }
+            } catch (_) {
+              /* not JSON */
+            }
           }
         })
         .await()
@@ -445,23 +527,23 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
       const genMs = Date.now() - tGen
       console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
 
-      t.comment(recordPerformance(
-        '[Wan 2.1 img2vid] [GPU]',
-        response.stats,
-        {
+      t.comment(
+        recordPerformance('[Wan 2.1 img2vid] [GPU]', response.stats, {
           scenario: 'img2vid',
           model: 'wan2.1-i2v-14b-480p-Q4_K_M',
           execution_provider: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
           ttfbMs
-        }
-      ))
+        })
+      )
 
       // ── Progress assertions ─────────────────────────────────────────────
-      t.ok(progressTicks.length > 0,
-        `Received progress ticks (got ${progressTicks.length})`)
-      t.ok(progressTicks.every((p) =>
-        Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
-      ), 'every progress tick carries finite step + total >= 1')
+      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      t.ok(
+        progressTicks.every(
+          (p) => Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
+        ),
+        'every progress tick carries finite step + total >= 1'
+      )
 
       // ── AVI buffer assertions ──────────────────────────────────────────
       t.ok(avi instanceof Uint8Array, 'received an AVI Uint8Array on the output stream')
@@ -473,13 +555,14 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
         t.ok(sniff.hdrlList, 'hdrl LIST chunk follows the AVI marker at offset 12')
         t.ok(sniff.hasIdx1, 'AVI contains an idx1 (frame index) chunk')
         t.ok(
-          sniff.frameMarkers >= I2V_SMOKE_FRAMES &&
-          sniff.frameMarkers <= I2V_SMOKE_FRAMES * 2,
+          sniff.frameMarkers >= I2V_SMOKE_FRAMES && sniff.frameMarkers <= I2V_SMOKE_FRAMES * 2,
           `AVI carries ${I2V_SMOKE_FRAMES}..${I2V_SMOKE_FRAMES * 2} '00dc' markers ` +
-          `(got ${sniff.frameMarkers})`
+            `(got ${sniff.frameMarkers})`
         )
-        t.ok(sniff.riffSizeMatchesBuffer,
-          'RIFF size header matches the actual buffer length (no trailing data)')
+        t.ok(
+          sniff.riffSizeMatchesBuffer,
+          'RIFF size header matches the actual buffer length (no trailing data)'
+        )
       }
 
       // Save artifact for manual inspection.
@@ -505,7 +588,9 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
     } finally {
       console.log('\n=== Cleanup ===')
       await model.unload()
-      try { binding.releaseLogger() } catch (_) {}
+      try {
+        binding.releaseLogger()
+      } catch (_) {}
       console.log('Done.')
     }
   }
@@ -516,21 +601,45 @@ test('Wan validation - sniffAvi self-test', async (t) => {
   // accept the structural markers we expect from the C++ AviWriter.
   const buf = new Uint8Array(64)
   // 'RIFF'
-  buf[0] = 0x52; buf[1] = 0x49; buf[2] = 0x46; buf[3] = 0x46
+  buf[0] = 0x52
+  buf[1] = 0x49
+  buf[2] = 0x46
+  buf[3] = 0x46
   // size = 56 (file size - 8)
-  buf[4] = 56; buf[5] = 0; buf[6] = 0; buf[7] = 0
+  buf[4] = 56
+  buf[5] = 0
+  buf[6] = 0
+  buf[7] = 0
   // 'AVI '
-  buf[8] = 0x41; buf[9] = 0x56; buf[10] = 0x49; buf[11] = 0x20
+  buf[8] = 0x41
+  buf[9] = 0x56
+  buf[10] = 0x49
+  buf[11] = 0x20
   // 'LIST'
-  buf[12] = 0x4C; buf[13] = 0x49; buf[14] = 0x53; buf[15] = 0x54
+  buf[12] = 0x4c
+  buf[13] = 0x49
+  buf[14] = 0x53
+  buf[15] = 0x54
   // size 4
-  buf[16] = 4; buf[17] = 0; buf[18] = 0; buf[19] = 0
+  buf[16] = 4
+  buf[17] = 0
+  buf[18] = 0
+  buf[19] = 0
   // 'hdrl'
-  buf[20] = 0x68; buf[21] = 0x64; buf[22] = 0x72; buf[23] = 0x6C
+  buf[20] = 0x68
+  buf[21] = 0x64
+  buf[22] = 0x72
+  buf[23] = 0x6c
   // sprinkle one '00dc' marker
-  buf[24] = 0x30; buf[25] = 0x30; buf[26] = 0x64; buf[27] = 0x63
+  buf[24] = 0x30
+  buf[25] = 0x30
+  buf[26] = 0x64
+  buf[27] = 0x63
   // 'idx1' near the end
-  buf[40] = 0x69; buf[41] = 0x64; buf[42] = 0x78; buf[43] = 0x31
+  buf[40] = 0x69
+  buf[41] = 0x64
+  buf[42] = 0x78
+  buf[43] = 0x31
 
   const sniff = sniffAvi(buf)
   t.is(sniff.error, null, 'sniffer accepts a minimal RIFF/AVI/hdrl buffer')
@@ -549,14 +658,24 @@ test('Wan validation - sniffAvi rejects non-AVI buffers', async (t) => {
 
   // Right length but no RIFF magic — should report a parse error.
   const allZero = sniffAvi(new Uint8Array(64))
-  t.ok(allZero && /bad RIFF magic/.test(allZero.error),
-    'all-zero 64-byte buffer reports a parse error, not null')
+  t.ok(
+    allZero && /bad RIFF magic/.test(allZero.error),
+    'all-zero 64-byte buffer reports a parse error, not null'
+  )
 
   // RIFF + wrong inner magic (e.g. WAVE) — should be flagged distinctly.
   const wrong = new Uint8Array(64)
-  wrong[0] = 0x52; wrong[1] = 0x49; wrong[2] = 0x46; wrong[3] = 0x46 // RIFF
-  wrong[8] = 0x57; wrong[9] = 0x41; wrong[10] = 0x56; wrong[11] = 0x45 // WAVE
+  wrong[0] = 0x52
+  wrong[1] = 0x49
+  wrong[2] = 0x46
+  wrong[3] = 0x46 // RIFF
+  wrong[8] = 0x57
+  wrong[9] = 0x41
+  wrong[10] = 0x56
+  wrong[11] = 0x45 // WAVE
   const wrongSniff = sniffAvi(wrong)
-  t.ok(wrongSniff && /bad AVI marker/.test(wrongSniff.error),
-    'rejects RIFF buffer with non-AVI inner magic')
+  t.ok(
+    wrongSniff && /bad AVI marker/.test(wrongSniff.error),
+    'rejects RIFF buffer with non-AVI inner magic'
+  )
 })
