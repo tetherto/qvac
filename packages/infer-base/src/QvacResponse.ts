@@ -175,8 +175,8 @@ class QvacResponse<Output = any> extends EventEmitter {
   /**
    * Returns the most recent output.
    */
-  getLatest(): Output {
-    return this.output.length ? this.output.at(-1)! : (null as Output);
+  getLatest(): Output | null {
+    return this.output.length ? this.output.at(-1)! : null;
   }
 
   /**

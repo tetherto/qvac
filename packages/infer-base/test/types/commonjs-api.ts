@@ -23,4 +23,20 @@ response.onUpdate(function onUpdate(output) {
   void text
 })
 
-void [response, responseConstructor, handler, namespaceHandler, queuedResult, apiDefinition]
+const latest = response.getLatest()
+// @ts-expect-error getLatest can return null before the first output
+const uncheckedLatest: string = latest
+if (latest !== null) {
+  const checkedLatest: string = latest
+  void checkedLatest
+}
+
+void [
+  response,
+  responseConstructor,
+  handler,
+  namespaceHandler,
+  queuedResult,
+  apiDefinition,
+  uncheckedLatest
+]

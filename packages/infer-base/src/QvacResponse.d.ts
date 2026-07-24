@@ -61,7 +61,7 @@ declare class QvacResponse<Output = any> extends EventEmitter {
     /**
      * Returns the most recent output.
      */
-    getLatest(): Output;
+    getLatest(): Output | null;
     /**
      * Async generator that yields each output update until the response stops running.
      *
