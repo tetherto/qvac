@@ -73,6 +73,22 @@ class MockedBinding {
     }
   }
 
+  // Mirror the shape ParakeetModel::getBackendInfo() returns (see
+  // addon/src/addon/AddonJs.hpp): ggml CPU defaults with the Core ML encoder
+  // sidecar inactive, so encoderBackend mirrors backendName and
+  // encoderOnCoreml is false.
+  getBackendInfo(handle) {
+    if (handle !== this._handle) throw new Error('Invalid handle')
+    return {
+      backendDevice: 'CPU',
+      backendId: 0,
+      backendName: 'CPU',
+      backendDescription: '',
+      encoderBackend: 'CPU',
+      encoderOnCoreml: false
+    }
+  }
+
   pause(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Paused the processing')
@@ -242,7 +258,8 @@ class MockedBinding {
           totalEncodedFrames: 0,
           audioDurationMs,
           backendDevice: 0,
-          backendId: 0
+          backendId: 0,
+          encoderOnCoreml: 0
         },
         null
       )
