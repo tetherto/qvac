@@ -62,6 +62,25 @@ export interface LlamaConfig {
   repeat_penalty?: NumericLike
   presence_penalty?: NumericLike
   frequency_penalty?: NumericLike
+  /**
+   * DRY ("Don't Repeat Yourself") sampler multiplier. DRY penalizes repeated
+   * token *sequences* with a penalty that grows the longer the repetition runs,
+   * catching runaway loops that `repeat_penalty` (which only nudges individual
+   * tokens) misses. `0` (default) disables it.
+   *
+   * Note: for OCR vision-language models whose architecture is `deepseek2-ocr`
+   * (e.g. Unlimited-OCR), sane DRY defaults are enabled automatically at load —
+   * these models otherwise degenerate into endless repeated layout boxes under
+   * greedy decoding. Setting any `dry_*` key here disables that auto-default and
+   * uses your values instead.
+   */
+  dry_multiplier?: NumericLike
+  /** DRY base: the penalty grows as `base^(sequence_length - allowed_length)`. Default `1.75`. */
+  dry_base?: NumericLike
+  /** DRY: longest repeated sequence allowed before the penalty kicks in. Default `2`. */
+  dry_allowed_length?: NumericLike
+  /** DRY look-back window in tokens: `-1` = whole context, `0` = disabled. */
+  dry_penalty_last_n?: NumericLike
   tools?: boolean | string
   verbosity?: NumericLike
   n_discarded?: NumericLike

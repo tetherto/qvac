@@ -1300,6 +1300,38 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
+  // Unlimited-OCR / DeepSeek-OCR (arch "deepseek2-ocr") has no clean stopping
+  // point once it has finished transcribing a page: under greedy decoding it
+  // degenerates into an unbounded run of repeated `<|det|>image ...` bounding
+  // boxes and never emits EOS, filling the context window. The upstream HF
+  // model prevents this with `no_repeat_ngram_size`; llama.cpp's closest
+  // equivalent is the DRY sampler. Seed sane DRY defaults for this architecture
+  // so callers get clean output out of the box — unless they configured DRY
+  // themselves, in which case their values are left untouched.
+  if (metadata_.tryGetString("general.architecture") == "deepseek2-ocr") {
+    const bool userConfiguredDry =
+        configFilemap.count("dry-multiplier") ||
+        configFilemap.count("dry_multiplier") ||
+        configFilemap.count("dry-base") || configFilemap.count("dry_base") ||
+        configFilemap.count("dry-allowed-length") ||
+        configFilemap.count("dry_allowed_length") ||
+        configFilemap.count("dry-penalty-last-n") ||
+        configFilemap.count("dry_penalty_last_n") ||
+        configFilemap.count("dry-sequence-breaker") ||
+        configFilemap.count("dry_sequence_breaker");
+    if (!userConfiguredDry) {
+      configFilemap.emplace("dry-multiplier", "2.0");
+      configFilemap.emplace("dry-base", "1.75");
+      configFilemap.emplace("dry-allowed-length", "2");
+      configFilemap.emplace("dry-penalty-last-n", "-1");
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] deepseek2-ocr detected; enabling DRY sampler defaults "
+          "(dry-multiplier=2.0, dry-allowed-length=2) to prevent OCR output "
+          "from degenerating. Set any dry-* config key to override.\n");
+    }
+  }
+
   // reasoning-budget controls the size of the model's <think> reasoning
   // channel: -1 (default) leaves it unrestricted, 0 disables thinking
   // entirely, any positive N caps the reasoning channel at N tokens (the

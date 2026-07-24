@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.38.2] - 2026-07-24
+
+Exposes the DRY sampler through the config surface and auto-enables sane DRY defaults for `deepseek2-ocr` OCR models, which otherwise degenerate into endless repeated layout boxes under greedy decoding.
+
+### Added
+
+- `dry_multiplier`, `dry_base`, `dry_allowed_length`, `dry_penalty_last_n` config keys (documented in `index.d.ts` + the config table). The DRY sampler penalizes repeated token *sequences* — catching runaway loops that `repeat_penalty` (single-token) misses. `dry_multiplier=0` (default) keeps it off for all other models.
+
+### Changed
+
+- When a model with architecture `deepseek2-ocr` (e.g. Unlimited-OCR) is loaded and the caller has not set any `dry_*` key, the addon seeds `dry_multiplier=2.0`, `dry_base=1.75`, `dry_allowed_length=2`, `dry_penalty_last_n=-1`. This prevents the model from spilling unbounded `<|det|>image` boxes after finishing a page (the upstream model uses `no_repeat_ngram_size` for the same purpose). Any explicit `dry_*` config disables the auto-default.
+
 ## [0.38.1] - 2026-07-22
 
 This patch release guarantees that a content token follows the EOS-inside-reasoning recovery, so the forced `</think>` substitution can no longer be immediately followed by another end-of-generation token and produce an empty answer. It also exposes the generation stop reason as a new runtime stat.

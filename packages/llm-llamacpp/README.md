@@ -172,6 +172,10 @@ const config = {
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
+| dry_multiplier    | float                                       | 0 (off; auto for OCR)        | DRY sampler multiplier — penalizes repeated token *sequences* (catches runaway loops `repeat_penalty` misses). `0` disables. Auto-enabled for `deepseek2-ocr` OCR models (see DRY below) |
+| dry_base          | float                                       | 1.75                         | DRY penalty base — penalty grows as `base^(len - allowed_length)` |
+| dry_allowed_length| integer                                     | 2                            | Longest repeated sequence allowed before DRY penalizes |
+| dry_penalty_last_n| integer                                     | -1                           | DRY look-back window in tokens (`-1` = whole context, `0` = disabled) |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | tools_compact      | `"true"` or `"false"`                       | `"false"`                    | Compact tool tokens from KV cache between turns ([details](./docs/tools-compact.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
@@ -192,6 +196,16 @@ The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unse
 - **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU** and **OpenCL (Adreno)** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below). Finetuning manages its own KV types and is left untouched.
 - **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts / cache management (sliding context, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
 - **Mixed K≠V is a warning, not an error:** if K and V differ and at least one is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty — for no quality benefit, and is unsupported on Adreno OpenCL) but proceeds. Prefer a symmetric type. (This may be relaxed once qvac-fabric handles asymmetric quantized K/V efficiently.)
+
+
+#### DRY sampler & the `deepseek2-ocr` OCR auto-default
+
+`repeat_penalty` acts on individual tokens, so it can't break *structured* loops where a template repeats with changing content. The **DRY** sampler (`dry_multiplier > 0`) penalizes repeated token *sequences*, with a penalty that grows the longer the run — which does break them.
+
+OCR vision-language models whose architecture is **`deepseek2-ocr`** (e.g. Unlimited-OCR) have no clean stopping point once a page is transcribed: under greedy decoding they degenerate into an unbounded run of repeated `<|det|>image …` layout boxes and never emit EOS, filling the context. The upstream model guards this with `no_repeat_ngram_size`; the addon's closest equivalent is DRY.
+
+- **Auto-default:** when a `deepseek2-ocr` model is loaded and you have **not** set any `dry_*` key, the addon enables `dry_multiplier=2.0`, `dry_base=1.75`, `dry_allowed_length=2`, `dry_penalty_last_n=-1`. The choice is logged at verbosity ≥ 2 as `deepseek2-ocr detected; enabling DRY sampler defaults …`.
+- **Override:** setting **any** `dry_*` key disables the auto-default and uses your values instead (use `dry_multiplier=0` to turn DRY off entirely). All other architectures are unaffected — DRY stays off (`0`) by default everywhere else.
 
 
 #### IGPU/GPU  selection logic:
