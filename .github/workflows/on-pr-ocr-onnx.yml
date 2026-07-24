@@ -16,9 +16,6 @@ on:
     paths:
       - "packages/ocr-onnx/**"
       - ".github/workflows/*ocr-onnx*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
   workflow_dispatch:
   workflow_call:
 

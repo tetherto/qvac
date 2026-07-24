@@ -1,0 +1,185 @@
+name: On PR Trigger (Shared CI Infra)
+
+# Validates changes to CI infrastructure that is SHARED across many addons —
+# the cache-models composite action, the vcpkg triplet/toolchain overlays, and
+# the qvac-fabric vcpkg port (consumed by llm/embed/nmtcpp/etc). The port's
+# owning package (packages/fabric) still validates it via on-pr-fabric.yml; the
+# fan-out to every *consumer* is what this workflow replaces.
+#
+# History: these paths used to be listed in every addon's on-pr-*.yml trigger
+# filter, so editing one of them fanned out a full prebuild+integration run to
+# 11-15 addons at once (see the "why did parakeet run on a diffusion PR" thread
+# / QVAC shared-infra ticket). That fan-out is removed; this single workflow is
+# the replacement safety net.
+#
+# It is deliberately CHEAP and, importantly, introduces NO cache-poisoning
+# surface: it performs read-only checks only and never writes to any model
+# cache and never publishes a prebuild.
+#   1. cache-models action unit tests — proves the shared warm/verify/marker
+#      logic is still correct when the action code changes (no network, no
+#      model downloads).
+#   2. model availability matrix — for each HF-backed manifest, confirms every
+#      pinned model is still reachable and its upstream content address still
+#      equals the committed sha256/bytes, from response headers alone (no body
+#      transfer). This is what lets us drop the fan-out without silently
+#      shipping a change that breaks model resolution for an addon.
+#   3. qvac-fabric lockstep — confirms the qvac-fabric version is identical
+#      across the consuming vcpkg manifests (a jq check, no build), so a port
+#      change cannot desync consumers without being caught here.
+#
+# Not covered here on purpose (tracked as follow-ups): a full integration
+# "canary" run and a vcpkg build canary. Both are expensive and would
+# reintroduce the cost we just removed; gate them behind an explicit label if
+# the team decides they are worth it.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/SHA) to validate. Defaults to the current ref."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Gate PR-head code execution the same way every addon workflow does: the
+  # gating composites are checked out from the DEFAULT branch (never PR-head),
+  # so an untrusted fork PR cannot alter the authorisation logic. Skipped on
+  # workflow_dispatch so the workflow can be exercised on a feature branch
+  # before it is merged (pull_request_target always runs the base-branch copy).
+  label-gate:
+    name: Authorise (label-gate)
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  authorize:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  action-unit-tests:
+    name: cache-models action unit tests
+    needs: [authorize, label-gate]
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'workflow_dispatch' ||
+      (needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Run cache-models action unit tests
+        run: node --test .github/actions/cache-models/test/*.test.mjs
+
+  model-availability:
+    name: Model availability (${{ matrix.package }})
+    needs: [authorize, label-gate]
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'workflow_dispatch' ||
+      (needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # HF-backed manifests. Parakeet's set is S3-staged (no HF LFS source to
+        # fingerprint from headers), so its availability is covered by its own
+        # integration/stage flow rather than here.
+        package: [diffusion-cpp, llm-llamacpp, embed-llamacpp]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Verify pinned models are reachable and unchanged
+        env:
+          # Sent as Bearer ONLY to huggingface.co by the checker (gated repos);
+          # the redirect is never followed, so it can never reach a signed CDN.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          node .github/actions/cache-models/check-manifest-availability.mjs \
+            --package ${{ matrix.package }} \
+            --root "$GITHUB_WORKSPACE"
+
+  fabric-lockstep:
+    name: qvac-fabric version lockstep
+    needs: [authorize, label-gate]
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'workflow_dispatch' ||
+      (needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
+      - name: Verify qvac-fabric versions are lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
