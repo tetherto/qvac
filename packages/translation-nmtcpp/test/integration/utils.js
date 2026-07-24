@@ -503,6 +503,45 @@ function loadConfigFromAssets(filename) {
 // Model Availability Helpers
 // ============================================================================
 
+// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
+// adb-pushes the mobile models to this world-readable location, because
+// app-scoped dirs reject adb writes on Android 11+. We copy from here into the
+// app's writable models dir instead of downloading over the (flaky) network.
+// See scripts/generate-prestage-block.js for the host side.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function prestagedModelPath(modelName) {
+  if (platform !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return p
+  } catch (_) {}
+  return null
+}
+
+// Copy a pre-staged model into the app's writable destPath. Returns true when a
+// valid (>= minBytes) copy landed, so the caller can skip the network download.
+function copyPrestagedModel(modelName, destPath, minBytes) {
+  const src = prestagedModelPath(modelName)
+  if (!src) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(src, destPath)
+    const size = fs.statSync(destPath).size
+    if (size >= minBytes) {
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB)`
+      )
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+  }
+  return false
+}
+
 /**
  * Ensures IndicTrans model is available
  * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
@@ -533,14 +572,8 @@ async function ensureIndicTransModel() {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned URL
-  const configFilename = 'indictrans-model-urls.json'
-  const urlConfig = loadConfigFromAssets(configFilename)
-
-  if (!urlConfig || !urlConfig.modelUrl) {
-    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
-  }
-
+  // Mobile: resolve the writable cache path first, then prefer a cached or
+  // pre-staged model before touching the (flaky) presigned-S3 network.
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'translation-models', 'indictrans')
   fs.mkdirSync(modelsDir, { recursive: true })
@@ -559,6 +592,20 @@ async function ensureIndicTransModel() {
       return destPath
     }
     console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
+  }
+
+  // Android reliability rollout (QVAC-21799): the pre_test phase adb-pushes the
+  // model to /data/local/tmp; copy it into the cache and skip the S3 download.
+  if (copyPrestagedModel(modelFilename, destPath, 100 * 1024 * 1024)) {
+    return destPath
+  }
+
+  // Mobile: Download from presigned URL
+  const configFilename = 'indictrans-model-urls.json'
+  const urlConfig = loadConfigFromAssets(configFilename)
+
+  if (!urlConfig || !urlConfig.modelUrl) {
+    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
   }
 
   await downloadFile(urlConfig.modelUrl, destPath)
@@ -1175,6 +1222,8 @@ module.exports = {
   // Model helpers
   ensureIndicTransModel,
   ensureBergamotModel,
+  copyPrestagedModel,
+  prestagedModelPath,
 
   // Utilities
   createLogger,
