@@ -172,6 +172,13 @@ deleted without warning:
   are disabled in a repo, the workflow runs in **report-only mode** — it logs the
   candidate list but deletes nothing.
 
+> **This repo runs a tighter window than the portable defaults.** The `tetherto/qvac`
+> caller overrides the reusable defaults to keep the latest **2 minor** release lines
+> per package (not 3), and to treat branches as stale sooner (`adhoc_inactivity_days:
+> 14`, `feature`/`tmp` `_inactivity_days: 30`). The reusable workflow keeps the looser
+> defaults documented above for other consuming repos. All overrides remain gated by
+> the ~7-day grace ledger, so owners still get a warning window before deletion.
+
 Implementation lives in:
 
 - [`.github/workflows/branch-cleanup.yml`](../.github/workflows/branch-cleanup.yml) —
