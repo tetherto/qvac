@@ -344,6 +344,11 @@ private:
     return specSampleAndAccept(-1);
   }
   llama_token specSampleAndAccept(int logitIdx) override {
+    // Honor a pending post-reasoning-recovery EOG ban (armed by
+    // specRecoverReasoning). Without it, a Qwen3 reasoning model on the mtmd
+    // text-turn spec path that emitted EOS inside <think> could sample EOS again
+    // right after the forced close -> empty answer.
+    applyPendingEogBan(logitIdx);
     const llama_token tok =
         common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
     common_sampler_accept(smpl_.get(), tok, true);
@@ -364,8 +369,12 @@ private:
   GenerateResponseResult specFinish(
       const std::function<void(const std::string&)>& outputCallback,
       bool ok) override {
-    if (generationStopReason_ == GenerationStopReason::None && ok) {
-      generationStopReason_ = GenerationStopReason::PredictionLimit;
+    if (generationStopReason_ == GenerationStopReason::None) {
+      // ok=false is only reached from the context-ceiling bail-outs, so report
+      // ContextOverflow there rather than leaving the reason unset (matches the
+      // non-speculative paths, which set it explicitly).
+      generationStopReason_ = ok ? GenerationStopReason::PredictionLimit
+                                 : GenerationStopReason::ContextOverflow;
     }
     const bool rollbackOk =
         onGenerationFinished(outputCallback, generationStopReason_);
@@ -382,6 +391,11 @@ private:
   // Reasoning-block KV-cache compaction helpers. Single-block policy:
   // at most one `<think>...</think>` block is tracked per inference.
   // `setOpenThinkSpan` is a no-op once a span has been captured.
+  // Consume a pending reasoning-recovery EOG ban: if armed, mask every
+  // end-of-generation token (`eogTokens_`) in the logits at `logitIdx` for this
+  // one sample, then disarm. Mirrors TextLlmContext::applyPendingEogBan.
+  void applyPendingEogBan(int logitIdx);
+
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
@@ -435,6 +449,13 @@ private:
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
   std::vector<llama_token> forcedTokens_;
+  // EOG token ids (precomputed in initializeCommonState for Qwen3 reasoning
+  // family models) + a one-shot ban flag, mirroring TextLlmContext. Used only by
+  // the speculative reasoning-EOS recovery path (specRecoverReasoning arms the
+  // flag; specSampleAndAccept consumes it) to prevent an immediate EOS ->
+  // empty-answer right after the reasoning block is force-closed.
+  std::vector<llama_token> eogTokens_;
+  bool banEogAfterReasoningRecovery_ = false;
 
   mtmd::bitmaps bitmaps_;
   /// Chunks staged by `preparePrefill` for the batch path; media barriers
@@ -473,12 +494,12 @@ private:
   bool reasoningEnabled_ = false;
 
   // True only for architectures in the Qwen3 reasoning family. Gates
-  // the EOS-inside-reasoning recovery (close-marker substitution),
-  // which is the historical Qwen3-specific workaround. Detection /
-  // span tracking / KV compaction stay family-agnostic via
-  // `reasoningEnabled_`. In practice no multimodal model is in the
-  // Qwen3 family today, so this gate keeps the recovery dormant on
-  // the multimodal path until a Qwen3-family vision model ships.
+  // the EOS-inside-reasoning recovery (close-marker substitution) and
+  // the EOG-ban precompute, the historical Qwen3-specific workaround.
+  // Detection / span tracking / KV compaction stay family-agnostic via
+  // `reasoningEnabled_`. This path is live on the multimodal side: a
+  // Qwen3-family model with an mmproj (e.g. Qwen3.5-*-MTP, exercised by
+  // mtp-mtmd.test.js) loads through MtmdLlmContext and can hit it.
   bool isQwen3ReasoningFamily_ = false;
 
   // True when this context's model is recurrent or hybrid

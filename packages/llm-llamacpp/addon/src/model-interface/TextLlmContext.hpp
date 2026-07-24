@@ -343,6 +343,13 @@ private:
     return sampleToken(-1, sampled);
   }
   llama_token specSampleAndAccept(int logitIdx) override {
+    // Honor a pending post-reasoning-recovery EOG ban on the speculative path.
+    // This sampler bypasses sampleToken() — the normal path's ban consumer — so
+    // without this a Qwen3 reasoning model that emitted EOS *inside* <think>
+    // could immediately sample EOS again here -> empty answer (the ban exists to
+    // prevent exactly that on the non-spec path). The flag is armed by
+    // handleReasoningEOS()/specRecoverReasoning() and is consumed once here.
+    applyPendingEogBan(logitIdx);
     const llama_token tok =
         common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
     common_sampler_accept(smpl_.get(), tok, true);
@@ -370,14 +377,37 @@ private:
   GenerateResponseResult specFinish(
       const std::function<void(const std::string&)>& outputCallback,
       bool ok) override {
-    onGenerationFinished(outputCallback);
-    return {.ok = ok};
+    // A natural (ok) end of the speculative loop is a prediction-limit stop.
+    // This MUST be set before onGenerationFinished: that call feeds
+    // generationStopReason_ into shouldRollbackKnownReasoningCutoff(), which
+    // drops an unbalanced <think> span from the (recurrent/hybrid) KV cache only
+    // when the reason is PredictionLimit/SequenceLimit. Leaving it None here (the
+    // non-spec reset at generateResponse sits after the spec branch, so it never
+    // runs for MTP) would skip that rollback and corrupt later turns. Mirrors
+    // MtmdLlmContext::specFinish. Also propagate rollbackOk (nodiscard).
+    if (generationStopReason_ == GenerationStopReason::None) {
+      // ok=false is only reached from the context-ceiling bail-outs, so report
+      // ContextOverflow there rather than leaving the reason unset (matches the
+      // non-speculative paths, which set it explicitly).
+      generationStopReason_ = ok ? GenerationStopReason::PredictionLimit
+                                 : GenerationStopReason::ContextOverflow;
+    }
+    const bool rollbackOk =
+        onGenerationFinished(outputCallback, generationStopReason_);
+    return {.ok = ok, .rollbackOk = rollbackOk};
   }
   GenerateResponseResult specCancel(
       const std::function<void(const std::string&)>& outputCallback) override {
     return {
         .ok = true, .cancelled = true, .rollbackOk = onCancel(outputCallback)};
   }
+
+  // Consume a pending post-reasoning-recovery EOG ban: if
+  // `banEogAfterReasoningRecovery_` is armed, mask every end-of-generation token
+  // (`eogTokens_`) in the logits at `logitIdx` for exactly this one sample, then
+  // disarm. Shared by the normal (`sampleToken`) and speculative
+  // (`specSampleAndAccept`) sampling paths so both honor the ban.
+  void applyPendingEogBan(int logitIdx);
 
   // Sample token from the logits at logitIdx. Extracted from
   // onLogitsReady so the speculative path, which obtains its tokens from

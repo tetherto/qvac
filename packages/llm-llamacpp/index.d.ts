@@ -345,6 +345,9 @@ export interface RuntimeStats {
    * the number of tokens the MTP draft head proposed, `draftAccepted` is how
    * many the target verified and accepted. Both 0 when speculative decoding is
    * inactive (no `spec-type=draft-mtp`, or a model without an MTP head).
+   * Per-inference for single-prompt requests only; always 0 for
+   * batch / continuous-batching requests (the speculative loop runs only on the
+   * single-prompt path, so drafts are not tracked per slot).
    */
   draftAccepted: number
   draftTotal: number
