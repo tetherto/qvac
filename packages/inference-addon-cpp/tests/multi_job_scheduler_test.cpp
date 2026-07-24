@@ -443,6 +443,86 @@ public:
   }
 };
 
+/// Model whose per-job cancel is deferred, the llm-llamacpp continuous batch
+/// scheduler shape: cancelById() only records the request; the job's slot
+/// tears down later, when the test opens its release gate. Reproduces the
+/// window between "cancel issued" and "slot actually freed" deterministically
+/// — no timing assumptions, the gate is provably still closed. Whole-model
+/// cancel() releases every gate at once so the scheduler destructor can
+/// always drain in-flight jobs.
+class DeferredCancelTestModel final : public model::IModel,
+                                      public model::IModelMultiprocessor,
+                                      public model::IModelCancel,
+                                      public model::IModelCancelById,
+                                      public model::IModelJobLifecycle {
+  mutable std::mutex mtx_;
+  mutable std::condition_variable cv_;
+  std::unordered_set<JobId> entered_;
+  std::unordered_set<JobId> requested_;
+  std::unordered_set<JobId> released_;
+  bool releaseAll_{false};
+
+public:
+  std::string getName() const override { return "DeferredCancelTestModel"; }
+
+  RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
+
+  std::any process(const std::any& input) override { return input; }
+
+  /// Satisfies the ctor's cancelById-requires-lifecycle contract.
+  void jobStarting(JobId /*id*/) override {}
+
+  std::any process(const std::any& input, JobId id) override {
+    std::unique_lock lock(mtx_);
+    entered_.insert(id);
+    cv_.notify_all();
+    cv_.wait(
+        lock, [this, id] { return releaseAll_ || released_.count(id) != 0; });
+    return input;
+  }
+
+  /// Records the request only — the slot is torn down at release(), later,
+  /// mirroring a cancel applied by the model's own worker between steps.
+  void cancelById(JobId id) const override {
+    auto* self = const_cast<DeferredCancelTestModel*>(this);
+    std::lock_guard lock(self->mtx_);
+    self->requested_.insert(id);
+    self->cv_.notify_all();
+  }
+
+  void cancel() const override {
+    auto* self = const_cast<DeferredCancelTestModel*>(this);
+    std::lock_guard lock(self->mtx_);
+    self->releaseAll_ = true;
+    self->cv_.notify_all();
+  }
+
+  /// Apply the deferred teardown for @p id: lets its process() return.
+  void release(JobId id) {
+    std::lock_guard lock(mtx_);
+    released_.insert(id);
+    cv_.notify_all();
+  }
+
+  void releaseAll() {
+    std::lock_guard lock(mtx_);
+    releaseAll_ = true;
+    cv_.notify_all();
+  }
+
+  bool waitEntered(JobId id, std::chrono::milliseconds timeout) const {
+    std::unique_lock lock(mtx_);
+    return cv_.wait_for(
+        lock, timeout, [this, id] { return entered_.count(id) != 0; });
+  }
+
+  bool waitRequested(JobId id, std::chrono::milliseconds timeout) const {
+    std::unique_lock lock(mtx_);
+    return cv_.wait_for(
+        lock, timeout, [this, id] { return requested_.count(id) != 0; });
+  }
+};
+
 /// Blocks until @p target jobs are concurrently active on the gated model or
 /// the timeout lapses.
 int waitForGatedActive(const RegistrationGatedTestModel& model, int target,
@@ -532,6 +612,7 @@ protected:
   std::unique_ptr<MockOutputCallback> callback_;
   std::unique_ptr<ConcurrentTestModel> model_;
   std::unique_ptr<RegistrationGatedTestModel> gatedModel_;
+  std::unique_ptr<DeferredCancelTestModel> deferredModel_;
   std::shared_ptr<OutputQueue> outputQueue_;
   std::unique_ptr<MultiJobScheduler> scheduler_;
 
@@ -595,6 +676,28 @@ protected:
     return gatedModel_.get();
   }
 
+  /// buildWithQueue with a DeferredCancelTestModel instead; returns it
+  /// (non-owning) so the test can observe requests and open release gates.
+  /// @p wholeModelCancel false wires cancel = nullptr, so cancelAll must
+  /// reach in-flight jobs via the (deferred) per-id fallback.
+  DeferredCancelTestModel* buildDeferredWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity,
+      bool wholeModelCancel = true) {
+    deferredModel_ = std::make_unique<DeferredCancelTestModel>();
+    callback_ = std::make_unique<MockOutputCallback>();
+    outputQueue_ = std::make_shared<OutputQueue>(*callback_, *deferredModel_);
+    scheduler_ = std::make_unique<MultiJobScheduler>(
+        deferredModel_.get(),
+        maxConcurrency,
+        wholeModelCancel
+            ? static_cast<model::IModelCancel*>(deferredModel_.get())
+            : nullptr,
+        deferredModel_.get(),
+        queueCapacity);
+    scheduler_->start(outputQueue_);
+    return deferredModel_.get();
+  }
+
   /// Build a scheduler whose model exposes no per-job cancellation (cancelById
   /// = nullptr), so cancel(id) for an in-flight job hits the unsupported path.
   void buildNoCancelById(
@@ -625,6 +728,7 @@ protected:
     outputQueue_.reset();
     model_.reset();
     gatedModel_.reset();
+    deferredModel_.reset();
     callback_.reset();
   }
 };
@@ -1695,6 +1799,105 @@ TEST_F(MultiJobSchedulerTest, PublicationThrowReleasesSlotOnce) {
 
   EXPECT_TRUE(scheduler_->runJob(std::string("follow-up")).has_value())
       << "admission wedged after a publication throw";
+}
+
+/// A model may apply a per-id cancel later than the cancelById() call (the
+/// llm-llamacpp continuous batch scheduler records it and tears the slot down
+/// on its own worker). cancel(id) must not return in that window: the caller
+/// treats its return as "the job is gone" (SingleJobScheduler waits via
+/// ProcessingSync::waitInactive), and an early return leaves activeJobs()
+/// still counting the cancelled job — a follow-up admission the consumer
+/// issues the moment its cancel resolves is then spuriously refused as busy.
+TEST_F(MultiJobSchedulerTest, CancelReturnsOnlyAfterSlotRelease) {
+  DeferredCancelTestModel* model = buildDeferredWithQueue(1, 0);
+
+  const std::optional<JobId> id = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(id.has_value());
+  ASSERT_TRUE(model->waitEntered(*id, std::chrono::seconds{2}));
+
+  std::atomic_bool cancelReturned{false};
+  std::size_t activeAtReturn = 99;
+  std::thread canceller([&] {
+    scheduler_->cancel(*id);
+    activeAtReturn = scheduler_->activeJobs();
+    cancelReturned.store(true);
+  });
+
+  EXPECT_TRUE(model->waitRequested(*id, std::chrono::seconds{2}));
+  // The release gate is provably still closed, so the job still holds its
+  // slot: a trustworthy cancel must still be blocked. Watch long enough that
+  // an early return cannot slip past the check.
+  bool returnedWhileSlotHeld = false;
+  const std::chrono::steady_clock::time_point watchDeadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+  while (std::chrono::steady_clock::now() < watchDeadline) {
+    if (cancelReturned.load()) {
+      returnedWhileSlotHeld = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+
+  // Apply the deferred teardown; only now may cancel(id) return.
+  model->release(*id);
+  canceller.join();
+
+  EXPECT_FALSE(returnedWhileSlotHeld)
+      << "cancel(id) returned while the cancelled job still held its slot";
+  EXPECT_EQ(activeAtReturn, 0u)
+      << "activeJobs() still counted the cancelled job when cancel returned";
+  EXPECT_TRUE(scheduler_->runJob(std::string("follow-up")).has_value())
+      << "admission right after a returned cancel refused as busy";
+
+  model->releaseAll();
+}
+
+/// Same guarantee for cancelAll() on a model with no whole-model cancel: the
+/// per-id fallback is just as deferred, so cancelAll must not return while
+/// any of the snapshotted in-flight jobs still holds its slot.
+TEST_F(MultiJobSchedulerTest, CancelAllReturnsOnlyAfterSlotsRelease) {
+  DeferredCancelTestModel* model =
+      buildDeferredWithQueue(2, 0, /*wholeModelCancel=*/false);
+
+  const std::optional<JobId> first = scheduler_->runJob(std::string("a"));
+  const std::optional<JobId> second = scheduler_->runJob(std::string("b"));
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(model->waitEntered(*first, std::chrono::seconds{2}));
+  ASSERT_TRUE(model->waitEntered(*second, std::chrono::seconds{2}));
+
+  std::atomic_bool cancelReturned{false};
+  std::size_t activeAtReturn = 99;
+  std::thread canceller([&] {
+    scheduler_->cancelAll();
+    activeAtReturn = scheduler_->activeJobs();
+    cancelReturned.store(true);
+  });
+
+  EXPECT_TRUE(model->waitRequested(*first, std::chrono::seconds{2}));
+  EXPECT_TRUE(model->waitRequested(*second, std::chrono::seconds{2}));
+  // Release one of the two: cancelAll must keep blocking on the other.
+  model->release(*first);
+  bool returnedWhileSlotHeld = false;
+  const std::chrono::steady_clock::time_point watchDeadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+  while (std::chrono::steady_clock::now() < watchDeadline) {
+    if (cancelReturned.load()) {
+      returnedWhileSlotHeld = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+
+  model->release(*second);
+  canceller.join();
+
+  EXPECT_FALSE(returnedWhileSlotHeld)
+      << "cancelAll() returned while a cancelled job still held its slot";
+  EXPECT_EQ(activeAtReturn, 0u)
+      << "activeJobs() still counted cancelled jobs when cancelAll returned";
+
+  model->releaseAll();
 }
 
 } // namespace qvac_lib_inference_addon_cpp
