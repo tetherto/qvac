@@ -31,6 +31,23 @@ desktop integration test as an on-device test.
   `integration.auto.cjs`. `scripts/validate-mobile-tests.js` — checks it is in
   sync (CI runs this, advisory).
 
+## Keeping in sync with the desktop suite ⚠️
+
+`binding.cpp` and `test/integration/*.test.js` are **manual ports** of the
+standalone desktop sub-packages under `../tests/integration_js/*` (phase 1:
+`js-create-double-first-call/`). The llamacpp mobile addons avoid this by sharing
+one `test/integration/` between desktop and mobile; inference-addon-cpp can't,
+because its desktop suite is separate one-addon-per-package bindings, so the port
+is a copy.
+
+**There is no automated check tying these copies to their desktop originals**
+(`validate-mobile-tests.js` only verifies `integration.auto.cjs` ↔
+`test/integration/`). So when a desktop binding or test changes, update the copy
+here too — otherwise the on-device test silently drifts from what desktop
+asserts. A normalized drift-check (the files aren't byte-identical — require
+paths differ and `binding.cpp` is aggregated/renamed) is tracked for the phase-2
+port, when several bindings aggregate and the risk grows.
+
 ## Test scope (phased)
 
 - **Phase 1 (current):** `js-create-double` only — pure js::Number /

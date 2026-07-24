@@ -5,6 +5,10 @@ const addon = require('../../index.js')
 // js::Number / js_create_int32 marshalling helpers are exercised on-device
 // (iOS/Android) as well as on desktop. Pure in-process C++/JS marshalling — no
 // threads, no I/O, no timing — so it is safe to run through the mobile harness.
+//
+// MANUAL PORT — KEEP IN SYNC with the source above (only the require path
+// differs: `require('.')` there → `require('../../index.js')` here). No
+// automated drift-check yet; tracked for the phase-2 port. See ../../README.md.
 
 test('first js::Number double returns the requested value', function (t) {
   t.is(addon.createDouble(2), 2, 'first js::Number double returns 2')

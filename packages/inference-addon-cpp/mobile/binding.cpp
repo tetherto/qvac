@@ -11,6 +11,14 @@
 // native hooks into this single Bare module. Export names are kept identical to
 // the originals so the ported JS tests read the same.
 //
+// MANUAL PORT — KEEP IN SYNC. The hooks below are hand-copied from
+// tests/integration_js/*/binding.cpp (phase 1: js-create-double-first-call).
+// There is no automated check tying them to the desktop originals yet, so if a
+// desktop binding's signature/behaviour changes, update the copy here too or
+// the on-device test silently stops matching what desktop asserts. An automated
+// normalized drift-check in scripts/validate-mobile-tests.js is tracked for the
+// phase-2 port (when several bindings aggregate). See README.md.
+//
 // Phase 1 ships the js-create-double hooks only; the logger hooks
 // (setLogger/cppLog/... + test_logger.cpp) drop into the export block below in
 // phase 2. See ../mobile/README.md.
