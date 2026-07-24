@@ -123,7 +123,12 @@ the workflow-hardening sibling of the §B2 security baseline (which scans repo
     filename conventions, state-mutating concurrency). This automates what was
     previously the *human* `qv-devops-pr-review` fallback. It is scoped to just
     the changed workflow/action files (bounded cost) and posts its own job summary
-    + a separate upserted PR comment.
+    + a separate upserted PR comment. **Ships disabled** — Claude Code is not in CI
+    yet, so the job is gated behind the `WORKFLOW_SECURITY_AGENT_ENABLED` repo
+    variable (unset → skipped everywhere). Enable it by adding the
+    `ANTHROPIC_API_KEY` secret and setting that variable to `'true'`; a
+    `workflow_dispatch` with `run_agent=true` is a manual trial hook in the
+    meantime. Until enabled, only pass 1 (zizmor) runs.
 - **In-repo, not a `qvac-actions` reusable workflow:** like the §B3 NOTICE drift
   gate, it audits this repo's `.github/` tree with a repo-pinned engine and
   repo-specific rollout semantics, rather than delegating like the §B1/§B2 thin
