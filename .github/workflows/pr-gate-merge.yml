@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
   workflow_dispatch:
@@ -17,7 +18,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -36,6 +37,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/label-gate
           sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Run label-gate
         id: gate
         uses: ./.github/actions/label-gate
@@ -52,6 +54,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -70,6 +74,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         id: filter
         with:
@@ -158,6 +163,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Run Sanity checks
         uses: ./.github/actions/sanity-checks
         with:
@@ -179,7 +185,7 @@ jobs:
     with:
       changed-packages: ${{ needs.changes.outputs.packages || '[]' }}
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
@@ -191,7 +197,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
-  merge-guard:
+  qvac-merge-guard:
     needs: [authorize, label-gate, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
     if: |
       always() && !cancelled() &&

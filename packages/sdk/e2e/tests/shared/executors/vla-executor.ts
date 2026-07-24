@@ -16,12 +16,24 @@ interface HparamsShape {
   visionImageSize: number
   numCameras?: number
   stateInputMode?: 'continuous' | 'discrete'
+  imageInputMode?: 'pixels' | 'patches'
+  imagePatchElems?: number
 }
 
-// pi05 tests bind to the `vla-pi05` resource; SmolVLA tests to `vla`. The
-// resource is derived from the testId so a single executor drives both.
+// GR00T (LIBERO) patch-input layout. GR00T reports `tokenizerMaxLength: 0`, so
+// the prompt length is fixed by the model rather than read from hparams: 2
+// cameras × 64 merged image tokens (256 patches, 2×2 merge) = 128 image tokens
+// plus text = 148. The Qwen3-VL image placeholder id is 151655.
+const GROOT_IMAGE_TOKEN_ID = 151655
+const GROOT_MERGED_TOKENS_PER_IMAGE = 64
+const GROOT_PROMPT_LENGTH = 148
+
+// pi05 tests bind to the `vla-pi05` resource, GR00T to `vla-groot`, SmolVLA to
+// `vla`. The resource is derived from the testId so a single executor drives all.
 function depForTest(testId: string): string {
-  return testId.startsWith('vla-pi05-') ? 'vla-pi05' : 'vla'
+  if (testId.startsWith('vla-pi05-')) return 'vla-pi05'
+  if (testId.startsWith('vla-groot-')) return 'vla-groot'
+  return 'vla'
 }
 
 export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
@@ -53,6 +65,36 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
   private buildSyntheticInputs(hp: HparamsShape) {
     const size = hp.visionImageSize
     const numCameras = hp.numCameras ?? 2
+
+    // GR00T (patch-input): each camera is a pre-patchified buffer of
+    // `imagePatchElems` floats, continuous state, required noise, and a prompt
+    // with one run of merged image tokens per camera.
+    if (hp.imageInputMode === 'patches') {
+      const patchElems = hp.imagePatchElems ?? 0
+      const images = Array.from({ length: numCameras }, () =>
+        new Float32Array(patchElems).fill(0.02)
+      )
+      const tokens = new Int32Array(GROOT_PROMPT_LENGTH)
+      let w = 0
+      for (let cam = 0; cam < numCameras; cam++) {
+        for (let k = 0; k < GROOT_MERGED_TOKENS_PER_IMAGE && w < tokens.length; k++) {
+          tokens[w++] = GROOT_IMAGE_TOKEN_ID
+        }
+        if (w < tokens.length) tokens[w++] = 1000 + cam
+      }
+      for (; w < tokens.length; w++) tokens[w] = 1000 + w
+      const mask = new Uint8Array(GROOT_PROMPT_LENGTH).fill(1)
+      return {
+        images,
+        imgWidth: size,
+        imgHeight: size,
+        state: vlaPadState([0, 0, 0, 0, 0, 0], hp.maxStateDim),
+        tokens,
+        mask,
+        noise: new Float32Array(hp.chunkSize * hp.maxActionDim)
+      }
+    }
+
     const dummyPixels = new Uint8Array(size * size * 3).fill(128)
     const images = Array.from({ length: numCameras }, () =>
       vlaPreprocessImage(dummyPixels, size, size, { size })

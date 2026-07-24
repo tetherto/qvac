@@ -54,6 +54,10 @@
  *   QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS  number of warmup iterations (default: 1)
  *   QVAC_TTS_GGML_BENCHMARK_RUNS         number of measured iterations (default: 5 desktop, 3 mobile)
  *   QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND  assertion cap for mean RTF (optional)
+ *   QVAC_TTS_GGML_BENCHMARK_QUALITY      enable Whisper round-trip CER/WER (default: true)
+ *   QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL Whisper GGML filename (default: ggml-small.bin)
+ *   QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND assertion cap for mean WER (optional)
+ *   QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND assertion cap for mean CER (optional)
  */
 
 const test = require('brittle')
@@ -74,9 +78,11 @@ const {
   normalizeDenoiser,
   normalizeEnhancerVariant,
   enhancerTag,
-  denoiserTag
+  denoiserTag,
+  ensureWhisperModel
 } = require('../utils/downloadModel')
 const { resolveEnhancer, resolveDenoiser } = require('../utils/lavasrResolve')
+const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const { buildBenchmarkArtifactFileName } = require('../utils/artifactName')
 const {
   readRssBytes,
@@ -97,9 +103,10 @@ const VALID_ENGINES = [
 // so the variant is a label, not a model selector. The list stays permissive so
 // future re-quantised registry drops can be tagged without a code change here.
 const VALID_VARIANTS = ['q4', 'q8', 'f16', 'mixed']
+const VALID_WHISPER_MODELS = ['ggml-tiny.bin', 'ggml-small.bin', 'ggml-medium.bin']
 // Schema version for the rich on-disk `rtf-benchmark-*.json` artifact
 // consumed by `scripts/perf-report/aggregate-tts-ggml-rtf.js`.
-const RTF_REPORT_SCHEMA_VERSION = 2
+const RTF_REPORT_SCHEMA_VERSION = 3
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 
 const platform = os.platform()
@@ -159,6 +166,7 @@ function buildCanonicalReport(settings, summary, backend) {
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
   const memory = summary.memory || {}
+  const quality = summary.quality || {}
 
   return {
     schema_version: '1.0',
@@ -181,6 +189,7 @@ function buildCanonicalReport(settings, summary, backend) {
         enhancer,
         enhancerVariant,
         denoiser,
+        qualityModel: quality.model || null,
         metrics: {
           real_time_factor: typeof rtf.mean === 'number' ? rtf.mean : null,
           rtf_p50: typeof rtf.p50 === 'number' ? rtf.p50 : null,
@@ -193,7 +202,11 @@ function buildCanonicalReport(settings, summary, backend) {
           sample_count: typeof rtf.count === 'number' ? rtf.count : null,
           avg_rss_mb: typeof memory.avgRssMb === 'number' ? memory.avgRssMb : null,
           peak_rss_mb: typeof memory.peakRssMb === 'number' ? memory.peakRssMb : null,
-          reclaimed_mb: typeof memory.reclaimedMb === 'number' ? memory.reclaimedMb : null
+          reclaimed_mb: typeof memory.reclaimedMb === 'number' ? memory.reclaimedMb : null,
+          word_error_rate:
+            quality.wer && typeof quality.wer.mean === 'number' ? quality.wer.mean : null,
+          character_error_rate:
+            quality.cer && typeof quality.cer.mean === 'number' ? quality.cer.mean : null
         }
       }
     ]
@@ -256,6 +269,12 @@ function getSettings() {
   const numThreadsParsed = Number.parseInt(numThreadsRaw, 10)
   const numThreads =
     Number.isFinite(numThreadsParsed) && numThreadsParsed > 0 ? numThreadsParsed : undefined
+  const whisperModel = getEnv('QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL') || 'ggml-small.bin'
+  if (!VALID_WHISPER_MODELS.includes(whisperModel)) {
+    throw new Error(
+      `Invalid Whisper quality model: ${whisperModel}. Valid: ${VALID_WHISPER_MODELS.join(', ')}`
+    )
+  }
 
   return {
     engine,
@@ -280,6 +299,10 @@ function getSettings() {
     numRuns: getEnvInteger('QVAC_TTS_GGML_BENCHMARK_RUNS', isMobile ? 3 : 5),
     numThreads,
     requestedUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND') || '',
+    qualityEnabled: getEnvBoolean('QVAC_TTS_GGML_BENCHMARK_QUALITY', true),
+    whisperModel,
+    requestedWerUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND') || '',
+    requestedCerUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND') || '',
     correlation: {
       githubRunId: getEnv('GITHUB_RUN_ID') || '',
       githubRunAttempt: getEnv('GITHUB_RUN_ATTEMPT') || '',
@@ -422,6 +445,23 @@ function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
+function writeQualityInput(iteration, wavBuffer) {
+  const dir = path.join(getBaseDir(), 'benchmarks', 'quality-inputs')
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const filePath = path.join(dir, `rtf-quality-${Date.now()}-${iteration}.wav`)
+  fs.writeFileSync(filePath, wavBuffer)
+  return filePath
+}
+
+function cleanupQualityInputs(inputs) {
+  for (const input of inputs) {
+    if (!input.wavPath) continue
+    try {
+      if (fs.existsSync(input.wavPath)) fs.unlinkSync(input.wavPath)
+    } catch (_) {}
+  }
+}
+
 async function loadModelForEngine(settings) {
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
@@ -553,10 +593,18 @@ function getUpperBound(settings) {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+function parseOptionalBound(value) {
+  if (!value) return null
+  const parsed = Number.parseFloat(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
 test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => {
   const settings = getSettings()
   const backend = resolveBackend(platform, settings.useGPU, settings.backendHint)
   const upperBound = getUpperBound(settings)
+  const werUpperBound = parseOptionalBound(settings.requestedWerUpperBound)
+  const cerUpperBound = parseOptionalBound(settings.requestedCerUpperBound)
   const corpus = getCorpus(settings.engine)
 
   console.log('\n' + '='.repeat(70))
@@ -578,6 +626,9 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
   console.log(`  Warmup runs:    ${settings.numWarmup}`)
   console.log(`  Measured runs:  ${settings.numRuns}`)
   console.log(`  Corpus:         ${corpus.length} sentence(s)`)
+  console.log(
+    `  CER/WER:        ${settings.qualityEnabled ? `enabled (${settings.whisperModel})` : 'disabled'}`
+  )
   if (settings.correlation.githubRunId) {
     console.log(
       `  GitHub run:     ${settings.correlation.githubWorkflow || ''} #${settings.correlation.githubRunId}`
@@ -613,10 +664,12 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
 
   const runs = []
   const warmupRuns = []
+  const qualityInputs = []
   let coldRtf = null
   let coldWallMs = null
   let peakRssBytes = rssAfterLoad
   let observedBackendId = null
+  let whisperModel = null
 
   try {
     // --- Warmup ---
@@ -697,6 +750,19 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         rssSampleCount: runMemory.count
       }
       runs.push(run)
+      if (settings.qualityEnabled && result.data && result.data.wavBuffer) {
+        try {
+          qualityInputs.push({
+            runIndex: runs.length - 1,
+            reference: text,
+            wavPath: writeQualityInput(i + 1, result.data.wavBuffer)
+          })
+        } catch (qualityWriteError) {
+          console.log(
+            `  Warning: could not persist quality input for run ${i + 1}: ${qualityWriteError.message}`
+          )
+        }
+      }
 
       console.log(
         `  Run ${i + 1}/${settings.numRuns}: ` +
@@ -732,6 +798,71 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
       rssAfterLoadBytes: rssAfterLoad,
       rssAfterUnloadBytes: rssAfterUnload
     })
+
+    let qualitySummary = null
+    let qualityUnavailableReason = null
+    if (settings.qualityEnabled) {
+      try {
+        if (qualityInputs.length !== runs.length) {
+          throw new Error(
+            `quality input unavailable for one or more runs (${qualityInputs.length}/${runs.length})`
+          )
+        }
+
+        const whisperModelDir = path.join(getBaseDir(), 'models', 'whisper')
+        const whisperModelPath = path.join(whisperModelDir, settings.whisperModel)
+        console.log(`\nLoading Whisper quality model: ${settings.whisperModel}...`)
+        const whisperDownload = await ensureWhisperModel(whisperModelPath)
+        if (!whisperDownload || !whisperDownload.success) {
+          throw new Error(`Whisper model unavailable: ${whisperModelPath}`)
+        }
+        whisperModel = await loadWhisper({
+          modelName: settings.whisperModel,
+          diskPath: whisperModelDir,
+          language: isMultilingualEngine(settings.engine) ? 'es' : 'en'
+        })
+
+        const wordErrorRates = []
+        const characterErrorRates = []
+        for (let i = 0; i < qualityInputs.length; i++) {
+          const input = qualityInputs[i]
+          console.log(`\n[quality ${i + 1}/${qualityInputs.length}]`)
+          const wavBuffer = fs.readFileSync(input.wavPath)
+          const quality = await runWhisper(whisperModel, input.reference, wavBuffer)
+          wordErrorRates.push(quality.wer)
+          characterErrorRates.push(quality.cer)
+          runs[input.runIndex].quality = {
+            transcription: quality.text,
+            wer: quality.wer,
+            cer: quality.cer
+          }
+          console.log(
+            `  WER=${(quality.wer * 100).toFixed(2)}%  CER=${(quality.cer * 100).toFixed(2)}%`
+          )
+        }
+
+        qualitySummary = {
+          evaluator: 'whisper',
+          model: settings.whisperModel,
+          language: isMultilingualEngine(settings.engine) ? 'es' : 'en',
+          wer: computeStats(wordErrorRates),
+          cer: computeStats(characterErrorRates)
+        }
+      } catch (qualityError) {
+        qualityUnavailableReason = qualityError.message
+        qualitySummary = null
+        for (const run of runs) delete run.quality
+        t.comment(`CER/WER unavailable: ${qualityUnavailableReason}`)
+        console.log(`\nWarning: CER/WER unavailable: ${qualityUnavailableReason}`)
+      } finally {
+        if (whisperModel) {
+          try {
+            await whisperModel.unload()
+          } catch (_) {}
+          whisperModel = null
+        }
+      }
+    }
 
     console.log('\n' + '='.repeat(70))
     console.log('RTF BENCHMARK RESULTS')
@@ -778,6 +909,17 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
     console.log(`    After unload: ${memorySummary.rssAfterUnloadMb.toFixed(2)}`)
     console.log(`    Reclaimed:    ${memorySummary.reclaimedMb.toFixed(2)}`)
     console.log(`    Model size:   ${(modelSizeBytes / 1024 / 1024).toFixed(1)}`)
+    if (qualitySummary) {
+      console.log('')
+      console.log('  Round-trip speech quality:')
+      console.log(`    Mean WER:     ${(qualitySummary.wer.mean * 100).toFixed(2)}%`)
+      console.log(`    Mean CER:     ${(qualitySummary.cer.mean * 100).toFixed(2)}%`)
+      console.log(`    WER P95:      ${(qualitySummary.wer.p95 * 100).toFixed(2)}%`)
+      console.log(`    CER P95:      ${(qualitySummary.cer.p95 * 100).toFixed(2)}%`)
+    } else if (qualityUnavailableReason) {
+      console.log('')
+      console.log(`  Round-trip speech quality: unavailable (${qualityUnavailableReason})`)
+    }
     console.log('='.repeat(70) + '\n')
 
     const [platformName, archName] = platformArch.split('-')
@@ -817,7 +959,9 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         enhancerVariant: settings.enhancerVariant,
         denoiser: settings.denoiser,
         modelLoadMs: loadMs,
-        numThreads: settings.numThreads !== undefined ? settings.numThreads : null
+        numThreads: settings.numThreads !== undefined ? settings.numThreads : null,
+        qualityEnabled: settings.qualityEnabled,
+        whisperModel: settings.qualityEnabled ? settings.whisperModel : null
       },
       requested: {
         engine: settings.engine,
@@ -829,7 +973,8 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         backendHint: settings.backendHint,
         deviceLabel: settings.deviceLabel,
         runnerLabel: settings.runnerLabel,
-        numThreads: settings.numThreads !== undefined ? settings.numThreads : null
+        numThreads: settings.numThreads !== undefined ? settings.numThreads : null,
+        qualityEnabled: settings.qualityEnabled
       },
       correlation: settings.correlation,
       summary: {
@@ -844,6 +989,8 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         rssAfterLoadBytes: rssAfterLoad,
         rssAfterUnloadBytes: rssAfterUnload,
         memory: memorySummary,
+        quality: qualitySummary,
+        qualityUnavailableReason,
         modelSizeBytes,
         backendId: observedBackendId,
         activeBackend,
@@ -903,6 +1050,20 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
       )
     }
 
+    if (qualitySummary && werUpperBound !== null) {
+      t.ok(
+        qualitySummary.wer.mean <= werUpperBound,
+        `Mean WER ${(qualitySummary.wer.mean * 100).toFixed(2)}% should be <= ${(werUpperBound * 100).toFixed(2)}%`
+      )
+    }
+
+    if (qualitySummary && cerUpperBound !== null) {
+      t.ok(
+        qualitySummary.cer.mean <= cerUpperBound,
+        `Mean CER ${(qualitySummary.cer.mean * 100).toFixed(2)}% should be <= ${(cerUpperBound * 100).toFixed(2)}%`
+      )
+    }
+
     t.ok(memorySummary.peakRssMb > 0, 'Peak memory (RSS) should be positive')
     t.ok(memorySummary.avgRssMb > 0, 'Average memory (RSS) should be positive')
     t.ok(
@@ -913,9 +1074,15 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
 
     console.log('RTF benchmark completed successfully.\n')
   } finally {
+    cleanupQualityInputs(qualityInputs)
     if (model) {
       try {
         await model.unload()
+      } catch (_) {}
+    }
+    if (whisperModel) {
+      try {
+        await whisperModel.unload()
       } catch (_) {}
     }
   }

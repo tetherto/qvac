@@ -26,6 +26,15 @@ enum class GenerationStopReason : uint8_t {
   ContextOverflow,
 };
 
+// addon.js maps the numeric `stopReason` runtime stat back to a label by
+// indexing its STOP_REASONS array with these values — keep them frozen.
+static_assert(static_cast<uint8_t>(GenerationStopReason::None) == 0);
+static_assert(static_cast<uint8_t>(GenerationStopReason::Eos) == 1);
+static_assert(static_cast<uint8_t>(GenerationStopReason::Antiprompt) == 2);
+static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
+static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
+static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
@@ -186,7 +195,7 @@ public:
     (void)mediaIndex;
     (void)pos;
     throw qvac_errors::StatusError(
-        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InternalError),
         "SequenceDriver::evalMediaSegment: driver stages no media segments");

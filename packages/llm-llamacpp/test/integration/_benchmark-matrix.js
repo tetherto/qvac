@@ -23,7 +23,19 @@ const CACHE_TYPES = [
   { k: 'pq4_0', v: 'pq4_0' }
 ]
 
-// Full cross-product, size outer / quant middle / cache inner.
+// Additive batch/ubatch sweep, kept SEPARATE from the cross-product above rather
+// than crossed into it. batch-size/ubatch-size only affect prefill throughput
+// and their effect is invariant across quantization and KV-cache type, so
+// sweeping batch once at a fixed baseline (quant BATCH_SWEEP_QUANT, symmetric
+// f16 KV) adds a handful of shards instead of multiplying the whole matrix.
+// Each batch cell carries a `batch` field; the cross-product cells above do not,
+// so their shard names, keys and labels are unchanged. batch === ubatch (set on
+// device by the runner). See benchmarks/performance for the desktop twin.
+const BATCH_SWEEP_QUANT = 'Q4_0'
+const BATCH_SWEEP_CACHE = { k: 'f16', v: 'f16' }
+const BATCH_SWEEP_SIZES = [512, 1024]
+
+// Cross-product (size x quant x cache) plus the additive batch cells.
 function matrix() {
   const out = []
   for (const size of SIZES) {
@@ -33,13 +45,18 @@ function matrix() {
       }
     }
   }
+  for (const size of SIZES) {
+    for (const batch of BATCH_SWEEP_SIZES) {
+      out.push({ size, quant: BATCH_SWEEP_QUANT, cache: BATCH_SWEEP_CACHE, batch })
+    }
+  }
   return out
 }
 
 // Filename slug: lowercase, drop dots, underscores -> dashes.
 // '0.8B' -> '08b', 'Q4_K_M' -> 'q4-k-m', 'q8_0' -> 'q8-0'.
 function slug(value) {
-  return value.toLowerCase().replace(/\./g, '').replace(/_/g, '-')
+  return String(value).toLowerCase().replace(/\./g, '').replace(/_/g, '-')
 }
 
 // Single slash-free token identifying a KV-cache type (filesystem and artifact
@@ -55,8 +72,14 @@ function cacheLabel(cache) {
   return cache.k === cache.v ? cache.k : `${cache.k}/${cache.v}`
 }
 
+// Trailing '-bs<N>' token for batch-sweep cells; empty for cross-product cells,
+// so their filenames, keys and function names are unchanged.
+function batchSuffix(cell) {
+  return cell.batch !== undefined ? `-bs${cell.batch}` : ''
+}
+
 function shardFileName(cell) {
-  return `benchmark-perf-${slug(cell.size)}-${slug(cell.quant)}-${slug(cacheId(cell.cache))}.test.js`
+  return `benchmark-perf-${slug(cell.size)}-${slug(cell.quant)}-${slug(cacheId(cell.cache))}${batchSuffix(cell)}.test.js`
 }
 
 // HuggingFace model id for a cell, e.g. {size:'0.8B',quant:'Q4_0'} -> 'qwen3.5-0.8b-Q4_0'.
@@ -70,10 +93,13 @@ function modelFileName(size, quant) {
   return `Qwen3.5-${size}-${quant}.gguf`
 }
 
-// Stable per-shard key matching the renderer's "[<modelId>] ... [kv=<cache>]"
-// row label, so coverage can be reconciled against the matrix.
+// Stable per-shard key matching the renderer's "[<modelId>] ... [kv=<cache>]
+// [bs=<N>]" row label, so coverage can be reconciled against the matrix. The
+// '|bs<N>' suffix is present only for batch-sweep cells, so cross-product cells
+// keep their existing keys.
 function mobileShardKey(cell) {
-  return `${modelId(cell.size, cell.quant)}|${cacheLabel(cell.cache)}`
+  const base = `${modelId(cell.size, cell.quant)}|${cacheLabel(cell.cache)}`
+  return cell.batch !== undefined ? `${base}|bs${cell.batch}` : base
 }
 
 // Mirrors toFunctionName in scripts/generate-mobile-integration-tests.js:
@@ -85,28 +111,38 @@ function runFunctionName(cell) {
   return `run${suffix}`
 }
 
-// The exact lines + trailing newline each generated shard file holds.
+// The exact lines + trailing newline each generated shard file holds. Batch
+// cells pass their batch size as the 5th argument; cross-product cells omit it
+// so their generated files are byte-identical to before.
 function shardContents(cell) {
+  const batchArg = cell.batch !== undefined ? `, ${cell.batch}` : ''
   return [
     "'use strict'",
     "const { benchmarkModel } = require('./_benchmark-perf.js')",
-    `benchmarkModel('${cell.size}', '${cell.quant}', '${cell.cache.k}', '${cell.cache.v}')`,
+    `benchmarkModel('${cell.size}', '${cell.quant}', '${cell.cache.k}', '${cell.cache.v}'${batchArg})`,
     ''
   ].join('\n')
 }
 
-// One workflow matrix entry per KV-cache type, each carrying its 10 groups in
-// size -> quant order, matching the mobile-benchmark job's test_groups.
+// Workflow test_groups, one matrix entry per Device Farm batch. Seven entries
+// (one per KV-cache type) carry the cross-product's 10 groups each; a final
+// 'batchsweep' entry carries the additive batch cells (size x batch) so they run
+// as their own bounded Device Farm job instead of enlarging a KV batch.
 function workflowBatches() {
-  return CACHE_TYPES.map((cache) => ({
+  const groupOf = (cell) => {
+    const grep = runFunctionName(cell)
+    return { name: grep.slice(3).replace(/Test$/, ''), grep }
+  }
+  const cacheBatches = CACHE_TYPES.map((cache) => ({
     cache: cacheId(cache),
-    groups: SIZES.flatMap((size) =>
-      QUANTS.map((quant) => {
-        const grep = runFunctionName({ size, quant, cache })
-        return { name: grep.slice(3).replace(/Test$/, ''), grep }
-      })
-    )
+    groups: SIZES.flatMap((size) => QUANTS.map((quant) => groupOf({ size, quant, cache })))
   }))
+  const batchGroups = SIZES.flatMap((size) =>
+    BATCH_SWEEP_SIZES.map((batch) =>
+      groupOf({ size, quant: BATCH_SWEEP_QUANT, cache: BATCH_SWEEP_CACHE, batch })
+    )
+  )
+  return [...cacheBatches, { cache: 'batchsweep', groups: batchGroups }]
 }
 
 module.exports = {

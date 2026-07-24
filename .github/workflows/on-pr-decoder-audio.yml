@@ -2,7 +2,7 @@ name: On PR Trigger (Decoder-audio)
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/decoder-audio/**"
@@ -19,7 +19,7 @@ on:
         required: false
         type: string
       run_verify:
-        description: "Treat this run like a 'verified' run (integration tests)."
+        description: "Run all CI stages (integration tests)."
         required: false
         type: boolean
         default: true
@@ -135,7 +135,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           INPUT_WORKDIR: ${{ inputs.workdir }}
@@ -158,7 +157,7 @@ jobs:
           else
             workdir="packages/decoder-audio"
             repo="$HEAD_REPO"
-            ref="$HEAD_REF"
+            ref="$HEAD_SHA"
             run_verify="true"
             base_sha="$BASE_SHA"
             head_sha="$HEAD_SHA"

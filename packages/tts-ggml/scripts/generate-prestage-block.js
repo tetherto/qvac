@@ -54,8 +54,14 @@ function lavasrEntries(manifest, axes) {
   return available.filter((entry) => kinds.some((kind) => entry.targetName.includes(kind)))
 }
 
+function qualityEntries(manifest, enabled) {
+  return enabled === true && Array.isArray(manifest.quality) ? manifest.quality : []
+}
+
 function selectEntries(manifest, options) {
-  return engineEntries(manifest, options.variant).concat(lavasrEntries(manifest, options))
+  return engineEntries(manifest, options.variant)
+    .concat(lavasrEntries(manifest, options))
+    .concat(qualityEntries(manifest, options.quality))
 }
 
 function buildTsv(entries) {
@@ -103,7 +109,8 @@ function readOptionsFromEnv(env) {
   return {
     variant: resolveVariant(env.TTS_GGML_MOBILE_BENCHMARK_VARIANT),
     enhancer: env.TTS_GGML_MOBILE_BENCHMARK_ENHANCER || 'none',
-    denoiser: env.TTS_GGML_MOBILE_BENCHMARK_DENOISER || 'none'
+    denoiser: env.TTS_GGML_MOBILE_BENCHMARK_DENOISER || 'none',
+    quality: env.TTS_GGML_MOBILE_BENCHMARK_QUALITY !== 'false'
   }
 }
 
@@ -123,6 +130,7 @@ module.exports = {
   engineEntries,
   requestedLavasrKinds,
   lavasrEntries,
+  qualityEntries,
   selectEntries,
   buildTsv,
   buildPrestageScript,

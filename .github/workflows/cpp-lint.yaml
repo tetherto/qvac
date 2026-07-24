@@ -51,26 +51,22 @@ jobs:
           INPUT_PR_HEAD_SHA: ${{ inputs.pr_head_sha }}
           EVENT_BEFORE: ${{ github.event.before }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_REPO: ${{ github.repository }}
-          GH_REF: ${{ github.ref }}
           GH_SHA: ${{ github.sha }}
         run: |
           BASE_SHA="${INPUT_SHA:-${EVENT_BEFORE:-HEAD~1}}"
-          HEAD_SHA="${INPUT_PR_HEAD_SHA:-$GH_SHA}"
+          HEAD_SHA="${INPUT_PR_HEAD_SHA:-${PR_HEAD_SHA:-$GH_SHA}}"
           HEAD_REPO="${PR_HEAD_REPO:-$GH_REPO}"
-          HEAD_REF="${PR_HEAD_REF:-$GH_REF}"
           {
             echo "BASE_SHA=$BASE_SHA"
             echo "HEAD_SHA=$HEAD_SHA"
             echo "HEAD_REPO=$HEAD_REPO"
-            echo "HEAD_REF=$HEAD_REF"
           } >> "$GITHUB_ENV"
           echo "Resolved:"
           echo "  BASE_SHA=$BASE_SHA"
           echo "  HEAD_SHA=$HEAD_SHA"
           echo "  HEAD_REPO=$HEAD_REPO"
-          echo "  HEAD_REF=$HEAD_REF"
 
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -83,8 +79,9 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           repository: ${{ env.HEAD_REPO }}
-          ref: ${{ env.HEAD_REF }}
+          ref: ${{ env.HEAD_SHA }}
           token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
 
       - name: Setup AWS + Windows CLI
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
