@@ -140,10 +140,12 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // headroom and removes the clipping. Single-shot output, so a 2-pass over the
   // full track is trivial.
   //
-  // Only normalise when the track actually clips (peak > 1.0) or is loud enough
-  // to be worth scaling up. A silent/near-silent result (peak below a small
-  // threshold) is left untouched: seeding the peak at ~0 and dividing would turn
-  // low-level noise into a ~-0.9 dBFS blast. kMinNormPeak ~= -60 dBFS.
+  // Always normalise non-silent output to a fixed -0.9 dBFS peak
+  // (gain = 0.9 / peak whenever peak > kMinNormPeak): this removes clipping and
+  // gives every track consistent headroom vs. the raw engine output. A
+  // silent/near-silent result (peak below the threshold) is left untouched:
+  // seeding the peak at ~0 and dividing would turn low-level noise into a
+  // ~-0.9 dBFS blast. kMinNormPeak ~= -60 dBFS.
   constexpr float kMinNormPeak = 1e-3F;
   float peak = 0.0F;
   for (float s : result.pcm) peak = std::fmax(peak, std::fabs(s));

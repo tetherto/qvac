@@ -24,7 +24,8 @@ hands you the audio:
 4. **VAE** — decodes the latent into the actual waveform (stereo 48 kHz).
 
 You get the audio as **interleaved Int16 PCM** through an output callback
-(streamed in chunks), followed by a final stats event. The addon never
+(a single PCM payload once generation completes; progress ticks stream during
+the run), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
 opens them. GPU (Metal / Vulkan) is used when you ask for it, with a CPU
 fallback.

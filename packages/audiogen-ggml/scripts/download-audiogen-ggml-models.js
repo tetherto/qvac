@@ -73,7 +73,7 @@ function pathsFor(variant) {
 }
 
 function humanBytes(n) {
-  if (!n) return '?'
+  if (n === null || n === undefined) return '?'
   const u = ['B', 'KB', 'MB', 'GB']
   let i = 0
   let v = n
