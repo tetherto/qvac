@@ -21,15 +21,13 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 
-// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
-// adb-pushes the shard's GGUF to this world-readable location (app-scoped dirs
-// reject adb writes on Android 11+). See scripts/generate-prestage-block.js.
+// The Device Farm pre_test phase adb-pushes the shard's GGUF here (app-scoped
+// dirs reject adb writes on Android 11+). Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
-// Copy a pre-staged model into destPath instead of downloading it. Returns true
-// when a non-empty copy landed; the caller re-verifies it against urls.json
-// (size + sha256) before trusting it, so a truncated push falls back to the
-// network download. No-op off Android.
+// Returns true when a non-empty copy landed; the caller re-verifies it against
+// urls.json (size + sha256) before trusting it, so a truncated push falls back
+// to the network download. No-op off Android.
 function copyPrestagedModel(modelFilename, destPath) {
   let os
   try {

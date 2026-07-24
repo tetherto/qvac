@@ -153,13 +153,11 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Generate the model pre-stage script (Android). Runs after the presigned
-      # URLs were written (ocr-ggml-model-urls.json), so we bake them into a host
-      # script that downloads the 4 GGUF OCR models and `adb push`es them to
-      # /data/local/tmp; the phone then copies them instead of fetching from the
-      # (time-limited, flaky) presigned S3 during the test phase (QVAC-21799).
-      # ocr-ggml is sharded but the model set is small, so all 4 are staged onto
-      # every shard's device.
+      # Runs after the presigned URLs were written (ocr-ggml-model-urls.json), so
+      # we bake them into a host script that downloads the 4 GGUF OCR models and
+      # adb-pushes them to /data/local/tmp; the phone copies them instead of
+      # fetching from the time-limited presigned S3. ocr-ggml is sharded but the
+      # model set is small, so all 4 are staged onto every shard's device.
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
@@ -187,8 +185,7 @@ jobs:
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
           enables-perf: 'true'
           mocha-timeout-ms: '1800000'
-          # Android host pre-stages the 4 GGUF OCR models to /data/local/tmp so the
-          # phone never downloads them from presigned S3 (QVAC-21799). Empty on iOS.
+          # Android host pre-stages the 4 GGUF OCR models; empty on iOS.
           extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs

@@ -503,11 +503,9 @@ function loadConfigFromAssets(filename) {
 // Model Availability Helpers
 // ============================================================================
 
-// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
-// adb-pushes the mobile models to this world-readable location, because
-// app-scoped dirs reject adb writes on Android 11+. We copy from here into the
-// app's writable models dir instead of downloading over the (flaky) network.
-// See scripts/generate-prestage-block.js for the host side.
+// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
+// adb writes on Android 11+); we copy from here instead of downloading over the
+// flaky network. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
 function prestagedModelPath(modelName) {
@@ -594,8 +592,8 @@ async function ensureIndicTransModel() {
     console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
   }
 
-  // Android reliability rollout (QVAC-21799): the pre_test phase adb-pushes the
-  // model to /data/local/tmp; copy it into the cache and skip the S3 download.
+  // The pre_test phase adb-pushes the model to /data/local/tmp; copy it into the
+  // cache and skip the S3 download.
   if (copyPrestagedModel(modelFilename, destPath, 100 * 1024 * 1024)) {
     return destPath
   }

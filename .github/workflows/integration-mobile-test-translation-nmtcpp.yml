@@ -127,13 +127,11 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Generate the model pre-stage script (Android). Runs after provisioning
-      # (which wrote indictrans-model-urls.json) so we can bake the presigned URL
-      # into a host script that downloads the ~127MB IndicTrans model and
-      # `adb push`es it to /data/local/tmp — the phone then copies it instead of
-      # fetching from the flaky presigned-S3 source during the test (QVAC-21799).
-      # Bergamot (public Firefox CDN) is intentionally not pre-staged; see the
-      # generator script header.
+      # Runs after provisioning (which wrote indictrans-model-urls.json) so we bake
+      # the presigned URL into a host script that downloads the ~127MB IndicTrans
+      # model and adb-pushes it to /data/local/tmp; the phone copies it instead of
+      # fetching from the flaky presigned-S3 source. Bergamot (public Firefox CDN)
+      # is intentionally not staged; see the generator script header.
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
@@ -158,8 +156,7 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}
           enables-perf: 'true'
-          # Android host pre-stages the IndicTrans model to /data/local/tmp so the
-          # phone never downloads it from presigned S3 (QVAC-21799). Empty on iOS.
+          # Android host pre-stages the IndicTrans model; empty on iOS.
           extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test run

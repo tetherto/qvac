@@ -652,11 +652,9 @@ function _loadMobileUrlConfig() {
   return urlConfig
 }
 
-// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
-// adb-pushes the mobile models to this world-readable location, because
-// app-scoped dirs reject adb writes on Android 11+. We copy from here into the
-// app's writable models dir instead of downloading from presigned S3. See
-// scripts/generate-prestage-block.js for the host side.
+// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
+// adb writes on Android 11+); we copy from here instead of downloading from
+// presigned S3. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
 function prestagedModelPath(modelName) {
@@ -668,8 +666,8 @@ function prestagedModelPath(modelName) {
   return null
 }
 
-// Copy a pre-staged model into destPath. Returns true when a valid (>= minBytes)
-// copy landed, so the caller can skip the network download.
+// Returns true when a valid (>= minBytes) copy landed, so the caller can skip
+// the network download.
 function copyPrestagedModel(modelName, destPath, minBytes = 1024) {
   const src = prestagedModelPath(modelName)
   if (!src) return false

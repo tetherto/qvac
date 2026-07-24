@@ -171,9 +171,8 @@ async function _ensureMobileModel() {
     } catch (_) {}
   }
 
-  // Android reliability rollout (QVAC-21799): the pre_test phase adb-pushed this
-  // shard's GGUF to /data/local/tmp; copy + verify it instead of the 1.9GB S3
-  // download that flakes on Device Farm's mobile network.
+  // The pre_test phase adb-pushed this shard's GGUF to /data/local/tmp; copy +
+  // verify it instead of the 1.9GB S3 download that flakes on mobile networks.
   if (_copyPrestagedModel(modelFilename, destPath)) {
     const staged = await _verifyCachedModel(destPath, urlConfig)
     if (staged.ok) {

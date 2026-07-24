@@ -1,32 +1,19 @@
 'use strict'
-// Emit the YAML value for the whisper mobile workflow's `extra-pre-test-commands`
-// input: a host script (run in the Device Farm pre_test phase, where the network
-// is reliable) that pre-stages the whisper mobile models onto the device at
-// /data/local/tmp/prestaged-models, so the phone never downloads from
-// huggingface.co (QVAC-21799). transcription-whispercpp runs single-pool (all
-// tests on one device), so there is no per-shard selection — every model the
-// mobile suite loads is staged. The device-side pickup lives in
-// test/integration/helpers.js (prestagedModelPath / copyPrestagedModel).
-//
-// The model names + base URLs mirror the HF_WHISPER_BASE / HF_VAD_BASE constants
-// and getTestPaths() in test/integration/helpers.js. Keep this list in sync if
-// the mobile suite starts loading additional whisper/VAD models.
-//
-// Run `node scripts/generate-prestage-block.js` and paste the output under
-// `extra-pre-test-commands:` (indented), or wire it via a workflow step (see
-// integration-mobile-test-transcription-whispercpp.yml).
+// Emits the whisper mobile workflow's `extra-pre-test-commands` value: a host
+// script (run in the Device Farm pre_test phase) that downloads the mobile
+// models on the host's reliable network and adb-pushes them to
+// /data/local/tmp/prestaged-models, so the phone doesn't fetch them itself.
+// Single-pool, so all models are staged. Device-side pickup lives in
+// test/integration/helpers.js. Keep this list in sync with getTestPaths() there.
 
 const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
 
-// The mobile suite loads exactly these two models (see getTestPaths() in
-// test/integration/helpers.js): the tiny whisper model and the Silero VAD model.
 const MODELS = [
   { name: 'ggml-tiny.bin', url: `${HF_WHISPER_BASE}/ggml-tiny.bin` },
   { name: 'ggml-silero-v5.1.2.bin', url: `${HF_VAD_BASE}/ggml-silero-v5.1.2.bin` }
 ]
 
-// Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
 function buildScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
@@ -51,8 +38,8 @@ function main() {
   console.error(
     `[prestage] staging ${MODELS.length} model(s): ${MODELS.map((m) => m.name).join(', ')}`
   )
-  // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
-  // start of a YAML literal block whose body lines are indented by 2 spaces.
+  // generate-testspec.sh treats a lone "|" line as a YAML literal block whose
+  // body lines are indented by 2 spaces.
   const body = buildScript(MODELS)
     .split('\n')
     .map((l) => '  ' + l)

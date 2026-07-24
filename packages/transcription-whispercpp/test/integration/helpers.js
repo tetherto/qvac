@@ -324,11 +324,9 @@ async function downloadFile(url, destPath) {
   return downloadWithHttp(url, destPath)
 }
 
-// Android reliability rollout (QVAC-21799): the Device Farm pre_test phase
-// adb-pushes the mobile models to this world-readable location, because
-// app-scoped dirs reject adb writes on Android 11+. We copy from here into the
-// app's writable models dir instead of downloading from huggingface.co. See
-// scripts/generate-prestage-block.js for the host side.
+// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
+// adb writes on Android 11+); we copy from here instead of downloading from
+// huggingface.co. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
 function prestagedModelPath(modelName) {

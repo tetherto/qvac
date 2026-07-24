@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * Unit tests for the whisper model pre-stage block generator (QVAC-21799).
+ * Unit tests for the whisper model pre-stage block generator.
  * Pure build logic — no adb, no network.
  *
  * Run locally:

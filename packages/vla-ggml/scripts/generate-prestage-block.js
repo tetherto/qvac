@@ -1,44 +1,32 @@
 'use strict'
-// Emit the YAML value for the vla-ggml mobile workflow's
-// `extra-pre-test-commands` input: a host script (run in the Device Farm
-// pre_test phase, where the network is reliable) that pre-stages the running
-// shard's GGUF onto the device at /data/local/tmp/prestaged-models, so the phone
-// never downloads the multi-GB VLA model from presigned S3 during the test phase
-// (QVAC-21799) — the documented source of the Device Farm mobile-network
-// truncation/timeout flakiness on these large models.
+// Emits the vla-ggml mobile workflow's `extra-pre-test-commands` value: a host
+// script (run in the Device Farm pre_test phase) that downloads the running
+// shard's GGUF on the host's reliable network and adb-pushes it to
+// /data/local/tmp/prestaged-models, so the phone doesn't fetch the multi-GB VLA
+// model from presigned S3. vla-ggml is sharded by model, and the models are too
+// large to stage all on every device, so we stage ONLY the running shard's
+// model: the host block reads the shard's grep from tests/wdio.config.devicefarm.js
+// and picks the matching model(s) from a baked manifest (the parakeet pattern).
+// pi05 is deferred on mobile (_skipMobilePi05) so it stages nothing.
 //
-// vla-ggml runs SHARDED by model (test/mobile/test-groups.json):
-//   smolvla -> runAddonTest -> smolvla-libero-vision-q8.gguf (~1.9GB)
-//   groot   -> runGrootTest -> groot-q5_vf16.gguf (~2.7GB)
-//   pi05    -> runPi05Test  -> deferred on mobile (_skipMobilePi05), no model
-// The models are large, so we stage ONLY the running shard's model. Mirroring the
-// transcription-parakeet generator, the emitted host block reads that shard's
-// grep from tests/wdio.config.devicefarm.js (generated per-group by the composite)
-// and stages just the matching model(s) from a baked manifest. pi05 shards match
-// nothing and stage nothing.
-//
-// The presigned URLs are produced on the runner by
-// scripts/generate-smolvla-presigned-url.sh / generate-groot-presigned-url.sh and
-// written into test/mobile/testAssets/{smolvla,groot}-urls.json BEFORE this script
-// runs, so we read them back and bake them into the manifest. Device-side pickup
-// lives in test/integration/_vla-model-download.cjs (copyPrestagedModel), called
-// from _ensureMobileModel in addon.test.js / groot.test.js.
+// generate-smolvla-presigned-url.sh / generate-groot-presigned-url.sh write the
+// presigned URLs to {smolvla,groot}-urls.json before this runs. Device-side
+// pickup lives in test/integration/_vla-model-download.cjs.
 
 const fs = require('fs')
 const path = require('path')
 
 const DEFAULT_ASSETS_DIR = path.resolve(__dirname, '../test/mobile/testAssets')
 
-// Per-shard model set. `test` is the test-groups.json function name (which the
-// composite bakes into each shard's wdio grep); pi05 is intentionally absent.
+// `test` is the test-groups.json function name the composite bakes into each
+// shard's wdio grep. pi05 is intentionally absent (deferred on mobile).
 const MODEL_SHARDS = [
   { test: 'runAddonTest', name: 'smolvla-libero-vision-q8.gguf', urlsFile: 'smolvla-urls.json' },
   { test: 'runGrootTest', name: 'groot-q5_vf16.gguf', urlsFile: 'groot-urls.json' }
 ]
 
 // Build the { <testFn>: [{ name, url }] } manifest from the bundled *-urls.json.
-// Only shards with a usable https presigned URL are included; a missing config
-// (e.g. GR00T presign hiccup) simply drops that shard from the manifest.
+// Only shards with a usable https presigned URL are included.
 function buildManifest(assetsDir = DEFAULT_ASSETS_DIR) {
   const manifest = {}
   for (const { test, name, urlsFile } of MODEL_SHARDS) {
@@ -58,9 +46,8 @@ function buildManifest(assetsDir = DEFAULT_ASSETS_DIR) {
   return manifest
 }
 
-// Host script (POSIX sh; adb + curl + node available in the pre_test phase). It
-// reads the shard grep, resolves the matching model(s) from the baked manifest,
-// and adb-pushes only those. Byte-for-byte the transcription-parakeet approach.
+// Reads the shard grep, resolves the matching model(s) from the baked manifest,
+// and adb-pushes only those.
 function buildScript(manifestB64) {
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models

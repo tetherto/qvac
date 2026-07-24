@@ -1,22 +1,13 @@
 'use strict'
-// Emit the YAML value for the ocr-ggml mobile workflow's
-// `extra-pre-test-commands` input: a host script (run in the Device Farm
-// pre_test phase, where the network is reliable) that pre-stages the OCR GGUF
-// models onto the device at /data/local/tmp/prestaged-models, so the phone never
-// downloads them from presigned S3 during the test phase (QVAC-21799).
-//
-// ocr-ggml runs SHARDED (perf / regularA / regularB), but there are only four
-// small GGUF models total and the composite injects this same block into every
-// shard's testspec, so we simply stage all four on each device rather than
-// maintaining a per-shard test->model map. The device-side pickup lives in
-// test/integration/utils.js (copyPrestagedModel in ensureModelPath /
-// ensureDoctrModels).
-//
-// The presigned URLs are produced on the runner by
-// scripts/generate-ocr-ggml-presigned-urls.sh (writes
-// test/mobile/testAssets/ocr-ggml-model-urls.json) BEFORE this script runs, so
-// we read them back and bake them into the emitted host script. Keys mirror
-// ensureModelPath / ensureDoctrModels in test/integration/utils.js.
+// Emits the ocr-ggml mobile workflow's `extra-pre-test-commands` value: a host
+// script (run in the Device Farm pre_test phase) that downloads the OCR GGUF
+// models on the host's reliable network and adb-pushes them to
+// /data/local/tmp/prestaged-models, so the phone doesn't fetch them from
+// presigned S3. ocr-ggml is sharded, but there are only four small models and
+// the composite injects the same block into every shard, so we stage all four
+// on each device rather than maintaining a per-shard map. The presigned URLs are
+// written to ocr-ggml-model-urls.json by generate-ocr-ggml-presigned-urls.sh
+// before this runs. Device-side pickup lives in test/integration/utils.js.
 
 const fs = require('fs')
 const path = require('path')
@@ -31,9 +22,8 @@ const MODEL_KEYS = [
   { name: 'crnn_mobilenet_v3_small.gguf', key: 'crnn_mobilenet_v3_small_url' }
 ]
 
-// Read the presigned URLs bundled by generate-ocr-ggml-presigned-urls.sh.
-// Returns only the entries with a usable https URL; [] when the config is absent
-// (e.g. provisioning did not run) so the caller can emit an empty block.
+// Returns only entries with a usable https URL; [] when the config is absent so
+// the caller emits an empty block.
 function readModels(assetsDir = DEFAULT_ASSETS_DIR) {
   const configPath = path.join(assetsDir, 'ocr-ggml-model-urls.json')
   if (!fs.existsSync(configPath)) return []
@@ -53,7 +43,6 @@ function readModels(assetsDir = DEFAULT_ASSETS_DIR) {
   return models
 }
 
-// Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
 function buildScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
@@ -83,8 +72,8 @@ function main() {
   console.error(
     `[prestage] staging ${models.length} model(s): ${models.map((m) => m.name).join(', ')}`
   )
-  // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
-  // start of a YAML literal block whose body lines are indented by 2 spaces.
+  // generate-testspec.sh treats a lone "|" line as a YAML literal block whose
+  // body lines are indented by 2 spaces.
   const body = buildScript(models)
     .split('\n')
     .map((l) => '  ' + l)

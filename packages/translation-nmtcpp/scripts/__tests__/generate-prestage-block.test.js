@@ -1,8 +1,8 @@
 'use strict'
 
 /**
- * Unit tests for the translation-nmtcpp model pre-stage block generator
- * (QVAC-21799). Pure parse/build logic — no adb, no network.
+ * Unit tests for the translation-nmtcpp model pre-stage block generator.
+ * Pure parse/build logic — no adb, no network.
  *
  * Run locally:
  *   node --test packages/translation-nmtcpp/scripts/__tests__/generate-prestage-block.test.js

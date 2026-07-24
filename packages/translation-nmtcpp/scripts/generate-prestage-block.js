@@ -1,26 +1,17 @@
 'use strict'
-// Emit the YAML value for the translation-nmtcpp mobile workflow's
-// `extra-pre-test-commands` input: a host script (run in the Device Farm
-// pre_test phase, where the network is reliable) that pre-stages the IndicTrans
-// model onto the device at /data/local/tmp/prestaged-models, so the phone never
-// downloads the ~127MB model from the (flaky, presigned-S3) source during the
-// test phase — the documented root cause of the Samsung Galaxy S25 Ultra
-// CONNECTION_LOST → SIGABRT failures (QVAC-21799).
+// Emits the translation-nmtcpp mobile workflow's `extra-pre-test-commands`
+// value: a host script (run in the Device Farm pre_test phase) that downloads
+// the ~127MB IndicTrans model on the host's reliable network and adb-pushes it
+// to /data/local/tmp/prestaged-models, so the phone doesn't fetch it from the
+// flaky presigned-S3 source (the source of the Samsung Galaxy S25 Ultra
+// CONNECTION_LOST → SIGABRT failures). provision-mobile-models.sh writes the
+// presigned URL to indictrans-model-urls.json before this runs; we bake it in.
+// Device-side pickup lives in test/integration/utils.js.
 //
-// translation-nmtcpp runs single-pool (all tests on one device), so there is no
-// per-shard selection. The presigned URL is produced on the runner by
-// scripts/provision-mobile-models.sh (writes test/mobile/testAssets/
-// indictrans-model-urls.json) BEFORE this script runs, so we read it back and
-// bake it into the emitted host script.
-//
-// Bergamot is intentionally NOT pre-staged here: its Firefox-CDN fetcher
-// downloads a *set* of files (model + vocab + lex) and skips re-download when
-// only .intgemm + .spm are present, so a partial stage from bergamot-urls.json
-// (model + vocab only) would leave lex missing and break the test. Bergamot also
-// uses a public CDN, not the flaky S3 path. Left as a follow-up.
-//
-// The device-side pickup lives in test/integration/utils.js
-// (prestagedModelPath / copyPrestagedModel in ensureIndicTransModel).
+// Bergamot is intentionally NOT staged: its Firefox-CDN fetcher pulls a set of
+// files (model + vocab + lex) and skips re-download when only .intgemm/.spm
+// exist, so a partial stage would break it; it also uses a public CDN, not the
+// flaky S3 path.
 
 const fs = require('fs')
 const path = require('path')
@@ -28,9 +19,8 @@ const path = require('path')
 const INDICTRANS_MODEL_NAME = 'ggml-indictrans2-en-indic-dist-200M-q4_0.bin'
 const DEFAULT_ASSETS_DIR = path.resolve(__dirname, '../test/mobile/testAssets')
 
-// Read the presigned IndicTrans URL that provision-mobile-models.sh bundled.
-// Returns null when the config is absent (e.g. provisioning did not run) so the
-// caller can emit an empty block and let the phone fall back to downloading.
+// Returns [] when the config is absent so the caller emits an empty block and
+// the phone falls back to downloading.
 function readIndicTransModels(assetsDir = DEFAULT_ASSETS_DIR) {
   const configPath = path.join(assetsDir, 'indictrans-model-urls.json')
   if (!fs.existsSync(configPath)) return []
@@ -46,7 +36,6 @@ function readIndicTransModels(assetsDir = DEFAULT_ASSETS_DIR) {
   return [{ name: INDICTRANS_MODEL_NAME, url: config.modelUrl }]
 }
 
-// Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
 function buildScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
@@ -70,16 +59,14 @@ echo "[prestage] done"`
 function main() {
   const models = readIndicTransModels()
   if (models.length === 0) {
-    // No config → emit nothing. The workflow input stays empty and the phone
-    // downloads as before (graceful degradation, never blocks the run).
     console.error('[prestage] no indictrans-model-urls.json found — skipping pre-stage')
     return
   }
   console.error(
     `[prestage] staging ${models.length} model(s): ${models.map((m) => m.name).join(', ')}`
   )
-  // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
-  // start of a YAML literal block whose body lines are indented by 2 spaces.
+  // generate-testspec.sh treats a lone "|" line as a YAML literal block whose
+  // body lines are indented by 2 spaces.
   const body = buildScript(models)
     .split('\n')
     .map((l) => '  ' + l)
