@@ -120,3 +120,31 @@ test('buildScript embeds the resolved manifest', () => {
   assert.match(script, /missing benchmark mapping/)
   assert.match(script, /adb push/)
 })
+
+test('buildScript defaults to the Android backend', () => {
+  const encoded = Buffer.from('{"runExampleTest":[]}').toString('base64')
+  assert.equal(buildScript(encoded), buildScript(encoded, 'android'))
+})
+
+test('buildScript(ios) emits a pymobiledevice3 push backend', () => {
+  const encoded = Buffer.from('{"runExampleTest":[]}').toString('base64')
+  const script = buildScript(encoded, 'ios')
+
+  // Shared shard-resolution prelude is present on both backends.
+  assert.match(script, new RegExp(encoded))
+  assert.match(script, /missing benchmark mapping/)
+  // iOS-specific: pushes into the app data container, not adb / a device path.
+  assert.match(script, /pymobiledevice3 apps push "\$BID" .* "Documents\/\$NAME"/)
+  assert.match(script, /BID=io\.tether\.test\.qvac/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /\/data\/local\/tmp\/prestaged-models/)
+  // The sudo-chown workaround and output-based failure detection are required
+  // for reliability on the Device Farm iOS host.
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /FATAL: push of \$NAME failed/)
+})
+
+test('buildScript rejects an unknown platform', () => {
+  const encoded = Buffer.from('{}').toString('base64')
+  assert.throws(() => buildScript(encoded, 'windows'), /unknown platform "windows"/)
+})

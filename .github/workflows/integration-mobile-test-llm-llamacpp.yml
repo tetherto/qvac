@@ -166,6 +166,11 @@ on:
         type: string
         required: false
         default: ""
+      test_groups:
+        description: "JSON array of {name,grep} overrides. When set, replaces the auto-detected test-groups.json shards. Use to pin a single shard for a manual prestage validation run, e.g. [{\"name\":\"slidingContext\",\"grep\":\"runSlidingContextTest\"}]."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   build-and-test:
@@ -318,10 +323,27 @@ jobs:
         if: matrix.platform == 'Android'
         working-directory: addon/packages/llm-llamacpp
         run: |
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # iOS counterpart of the Android pre-stage step. The macOS Device Farm host
+      # downloads exactly this shard's models and pushes them into the app's data
+      # container via `pymobiledevice3 apps push <bundle> <file> Documents/<name>`
+      # so the phone never fetches from huggingface.co. Skipped for the probe run
+      # (ios_probe), which injects its own diagnostic block instead.
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: matrix.platform == 'iOS' && !inputs.ios_probe
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/ios-prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/ios-prestage-block.txt"
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -420,12 +442,12 @@ jobs:
           # so the run schedules exactly one spec and the test phase is a no-op.
           test-groups: ${{ inputs.ios_probe && '[{"name":"iosprobe","grep":"__ios_probe_nomatch__"}]' || inputs.test_groups }}
           extra-device-env: ${{ inputs.device_env }}
-          # Android: host pre-stages this shard's models to /data/local/tmp
-          # (adb-writable + app-readable) so the phone never downloads from HF.
-          # iOS diagnostic probe (ios_probe): the pymobiledevice3 push/pull block is
-          # injected into BOTH pre_test and post_test to learn app-install timing
-          # and whether host->device AFC/house_arrest works on Device Farm iOS.
-          extra-pre-test-commands: ${{ (matrix.platform == 'iOS' && inputs.ios_probe) && steps.ios_probe.outputs.pre || steps.prestage.outputs.block }}
+          # Pre-stage this shard's models on the host so the phone never fetches
+          # from HF. Selection order:
+          #   iOS + ios_probe → diagnostic push/pull probe block
+          #   iOS (real run)  → pymobiledevice3 push into the app data container
+          #   Android         → adb push into /data/local/tmp
+          extra-pre-test-commands: ${{ (matrix.platform == 'iOS' && inputs.ios_probe) && steps.ios_probe.outputs.pre || (matrix.platform == 'iOS' && steps.ios_prestage.outputs.block) || steps.prestage.outputs.block }}
           extra-post-test-commands: ${{ (matrix.platform == 'iOS' && inputs.ios_probe) && steps.ios_probe.outputs.post || '' }}
 
       - name: Schedule Device Farm test runs
