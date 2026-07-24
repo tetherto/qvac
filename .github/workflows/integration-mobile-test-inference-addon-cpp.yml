@@ -281,33 +281,32 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Stage exactly what the device-farm job's upload-to-devicefarm step needs:
-      # the built app, the (trusted) test-framework e2e runner with its generated
-      # tests/app.test.js, and the addon's read-only test/mobile data (used only
-      # for the monitor legend). Nothing here is executed by the device-farm job.
-      - name: Stage Device Farm handoff bundle
+      # Stage ONLY non-executable DATA for the device-farm job — never the
+      # ./test-framework workspace itself. This build job runs fork code, so
+      # anything it leaves in ./test-framework (e.g. e2e/package.json) could be
+      # tampered; the device-farm job therefore re-fetches a CLEAN framework and
+      # overlays only these artifacts, none of which it executes:
+      #   - app binary        → uploaded to Device Farm, runs on-device only
+      #   - e2e/app.test.js    → the generated WDIO driver; packed and run on the
+      #                          Device Farm host, never in the device-farm job
+      #   - addon test/mobile  → read-only, for the monitor legend
+      - name: Stage Device Farm handoff data
         shell: bash
         env:
           APP_PATH: ${{ steps.build.outputs.app-path }}
           APP_NAME: ${{ steps.build.outputs.app-name }}
         run: |
-          mkdir -p df-app
-          cp "$APP_PATH" "df-app/$APP_NAME"
-          echo "Staged app: df-app/$APP_NAME"
-          ls -la df-app
-          ls -la test-framework/e2e
-          ls -la "addon/${ADDON_WORKDIR}/test/mobile"
+          mkdir -p df-handoff/app df-handoff/e2e-tests df-handoff/addon-test-mobile
+          cp "$APP_PATH" "df-handoff/app/$APP_NAME"
+          cp test-framework/e2e/tests/app.test.js df-handoff/e2e-tests/app.test.js
+          cp -R "addon/${ADDON_WORKDIR}/test/mobile/." df-handoff/addon-test-mobile/
+          ls -R df-handoff
 
-      - name: Upload Device Farm handoff bundle
+      - name: Upload Device Farm handoff data
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: mobile-bundle-${{ matrix.platform }}
-          # Paths are workspace-relative; the artifact preserves this structure
-          # and the device-farm job restores it verbatim into its workspace.
-          path: |
-            df-app
-            test-framework/e2e
-            addon/${{ env.ADDON_WORKDIR }}/test/mobile
+          path: df-handoff
           if-no-files-found: error
           retention-days: 1
 
@@ -347,19 +346,50 @@ jobs:
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
+      # Fetch a CLEAN copy of the trusted test framework directly from its repo —
+      # NOT from the build artifact. The build job ran fork code and could have
+      # tampered with the framework's e2e/package.json; installing that here
+      # (where AWS creds are configured) would let an injected script run against
+      # the assumed role. This job runs ONLY this trusted code, so having the PAT
+      # here is safe; persist-credentials:false keeps it off disk regardless.
+      # NOTE: `ref: main` matches the setup composite's default in the build job;
+      # ideally both are pinned to the same SHA so the generated app.test.js
+      # can't mismatch the framework version.
+      - name: Checkout trusted mobile test framework
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: tetherto/qvac-test-addon-mobile
+          ref: main
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          path: test-framework
+
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
 
-      # Restores df-app/, test-framework/e2e/, and addon/<workdir>/test/mobile/
-      # into the workspace — the only inputs upload-to-devicefarm reads. No fork
-      # code is executed; these are consumed as data / a prebuilt binary.
-      - name: Download Device Farm handoff bundle
+      # Data-only handoff from the (fork-code) build job. NONE of it is executed
+      # here: the app binary is uploaded to Device Farm, app.test.js is packed +
+      # run on the Device Farm host, and addon test/mobile is read-only.
+      - name: Download Device Farm handoff data
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: mobile-bundle-${{ matrix.platform }}
-          path: .
+          path: df-handoff
+
+      # Overlay the data onto the CLEAN framework. upload-to-devicefarm then runs
+      # `npm install` against the trusted e2e/package.json — an injected script in
+      # a fork-tampered package.json can no longer reach the AWS creds.
+      - name: Assemble Device Farm inputs
+        shell: bash
+        run: |
+          cp df-handoff/e2e-tests/app.test.js test-framework/e2e/tests/app.test.js
+          mkdir -p "addon/${ADDON_WORKDIR}/test/mobile"
+          cp -R df-handoff/addon-test-mobile/. "addon/${ADDON_WORKDIR}/test/mobile/"
+          mkdir -p df-app
+          cp "df-handoff/app/${{ matrix.app_name }}" "df-app/${{ matrix.app_name }}"
+          ls -la test-framework/e2e/tests df-app "addon/${ADDON_WORKDIR}/test/mobile"
 
       - name: Upload to Device Farm
         id: upload
