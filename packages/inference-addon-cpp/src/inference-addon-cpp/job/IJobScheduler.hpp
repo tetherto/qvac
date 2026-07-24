@@ -44,10 +44,16 @@ struct IJobScheduler {
   /// is otherwise idle; while it runs, every runJob admission is rejected.
   virtual std::optional<JobId> runExclusiveJob(std::any input) = 0;
 
-  /// Cancel one job by id. Single-job implementations ignore @p id.
+  /// Cancel one job by id. Single-job implementations ignore @p id. May block
+  /// until the cancelled job has fully left the scheduler (implementation-
+  /// defined); never call this from a thread the scheduler itself is using to
+  /// run @p id's job — that job cannot leave while its own thread is blocked
+  /// here waiting on its departure.
   virtual void cancel(JobId id) = 0;
 
-  /// Cancel every in-flight and queued job.
+  /// Cancel every in-flight and queued job. Never call this from a thread the
+  /// scheduler itself is using to run one of the jobs it would cancel, for
+  /// the same self-wait reason as cancel(id).
   virtual void cancelAll() = 0;
 
   /// Ids of every live (queued + in-flight) job. Pairs with cancelJobs(): a
@@ -60,6 +66,8 @@ struct IJobScheduler {
   [[nodiscard]] virtual std::vector<JobId> liveJobIds() const = 0;
 
   /// Cancel exactly the jobs in @p ids; finished or unknown ids are no-ops.
+  /// Same worker-thread restriction as cancel(id): never call this from a
+  /// thread the scheduler itself is using to run one of @p ids.
   virtual void cancelJobs(const std::vector<JobId>& ids) {
     for (const JobId id : ids) {
       cancel(id);
