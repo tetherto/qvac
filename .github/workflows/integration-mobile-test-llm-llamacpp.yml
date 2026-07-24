@@ -355,20 +355,35 @@ jobs:
             python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || echo "[ios-probe] pip install failed"
             which pymobiledevice3 || echo "[ios-probe] pmd3 not on PATH"
             pymobiledevice3 version 2>&1 || python3 -m pymobiledevice3 version 2>&1 || echo "[ios-probe] cannot run pmd3"
+            BID=io.tether.test.qvac
             echo "[ios-probe] --- usbmux device list ---"
             pymobiledevice3 usbmux list 2>&1 || echo "[ios-probe] usbmux list failed"
-            echo "[ios-probe] --- apps --help (records real CLI syntax) ---"
-            pymobiledevice3 apps --help 2>&1 || true
-            echo "[ios-probe] --- installed apps (raw) ---"
-            pymobiledevice3 apps list --no-color 2>&1 || pymobiledevice3 apps list 2>&1 || echo "[ios-probe] apps list failed"
-            echo "[ios-probe] --- app match check ---"
-            pymobiledevice3 apps list 2>&1 | tr ',' '\n' | grep -i "io.tether.test.qvac" && echo "[ios-probe] APP_INSTALLED=yes" || echo "[ios-probe] APP_INSTALLED=no"
+            echo "[ios-probe] --- apps push/pull --help (exact CLI syntax) ---"
+            pymobiledevice3 apps push --help 2>&1 || true
+            pymobiledevice3 apps pull --help 2>&1 || true
+            echo "[ios-probe] --- app query (compact install check) ---"
+            pymobiledevice3 apps query "$BID" 2>&1 | grep -q "CFBundleIdentifier" && echo "[ios-probe] APP_INSTALLED=yes" || echo "[ios-probe] APP_INSTALLED=no"
             echo "ios-probe-payload" > /tmp/ios-probe.txt
-            echo "[ios-probe] --- push into Documents ---"
-            pymobiledevice3 apps push --documents io.tether.test.qvac /tmp/ios-probe.txt ios-probe.txt 2>&1 && echo "[ios-probe] PUSH_OK" || echo "[ios-probe] PUSH_FAIL"
-            echo "[ios-probe] --- pull back from Documents ---"
-            pymobiledevice3 apps pull --documents io.tether.test.qvac ios-probe.txt /tmp/ios-probe-back.txt 2>&1 && echo "[ios-probe] PULL_OK" || echo "[ios-probe] PULL_FAIL"
-            cat /tmp/ios-probe-back.txt 2>&1 || true
+            # Robust verifier: pmd3 can exit 0 while logging an AFC ERROR (run #3),
+            # so we do NOT trust the exit code. We push, then pull the file back and
+            # compare contents; only a byte-exact round-trip counts as success.
+            probe_roundtrip() {
+              LABEL="$1"; shift; PUSH_REMOTE="$1"; PULL_REMOTE="$2"; shift 2
+              rm -f /tmp/ios-probe-back.txt
+              echo "[ios-probe] --- $LABEL push ($*) ---"
+              PUSH_OUT=$(pymobiledevice3 apps push "$@" "$BID" /tmp/ios-probe.txt "$PUSH_REMOTE" 2>&1); echo "$PUSH_OUT"
+              echo "[ios-probe] --- $LABEL pull ---"
+              pymobiledevice3 apps pull "$@" "$BID" "$PULL_REMOTE" /tmp/ios-probe-back.txt 2>&1 || true
+              if grep -q "ios-probe-payload" /tmp/ios-probe-back.txt 2>/dev/null; then
+                echo "[ios-probe] ${LABEL}_ROUNDTRIP=OK"
+              else
+                echo "[ios-probe] ${LABEL}_ROUNDTRIP=FAIL"
+              fi
+            }
+            # A) Documents-only vend (VendDocuments) — failed with PERM_DENIED in run #3.
+            probe_roundtrip A ios-probe.txt ios-probe.txt --documents
+            # B) Full data container (VendContainer) — allowed because get-task-allow=true.
+            probe_roundtrip B Documents/ios-probe.txt Documents/ios-probe.txt
             echo "[ios-probe] === end (RESULT_MARKER) ==="
             } 2>&1 | tee -a "$DEVICEFARM_LOG_DIR/logcat_full.txt"
           PROBE
