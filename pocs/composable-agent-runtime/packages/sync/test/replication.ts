@@ -183,6 +183,7 @@ test('sync: approval admits a phone writer and desktop updates preserve its orig
 test('sync: malformed pairing invites fail deterministically without logging secret data', async (t) => {
   const { dir, testnet } = await testContext(t)
   const malformedInvite = Buffer.from('not-a-valid-pairing-invite')
+  const storagePath = path.join(dir, 'malformed')
   const logged: unknown[][] = []
   const originalConsoleError = console.error
   console.error = (...values: unknown[]) => {
@@ -190,7 +191,7 @@ test('sync: malformed pairing invites fail deterministically without logging sec
   }
 
   const candidate = new SyncCore({
-    storagePath: path.join(dir, 'malformed'),
+    storagePath,
     bootstrap: testnet.bootstrap,
     pairingInvite: malformedInvite,
     logging: { level: 'error' }
@@ -210,6 +211,11 @@ test('sync: malformed pairing invites fail deterministically without logging sec
   t.absent(output.includes(malformedInvite.toString('hex')), 'logs omit invite bytes')
   t.absent(output.includes('meshSeed'), 'logs omit mesh seed data')
   t.absent(output.includes('encryptionKey'), 'logs omit encryption data')
+
+  const recovered = new SyncCore({ storagePath, bootstrap: testnet.bootstrap })
+  await recovered.ready()
+  await recovered.close()
+  t.ok(true, 'failed startup releases local and Corestore locks for an immediate reopen')
 })
 
 test('sync: expired pairing invites fail before creating approval requests', async (t) => {

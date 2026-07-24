@@ -22,6 +22,7 @@
     "test:crash": "vitest run test/crash-isolation.test.ts",
     "test:subsets": "bun test test/subsets.test.ts",
     "test:pack": "bun run scripts/verify-clean-packages.ts",
+    "lint:supervisor": "bun run --cwd packages/supervisor lint",
     "typecheck": "bun run scripts/typecheck.ts",
     "verify": "bun run scripts/verify.ts"
   },

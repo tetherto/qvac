@@ -41,6 +41,38 @@ export default harness
   return { source, types }
 }
 
+export function generateRemoteBundleHarness(bundleSpecifier: string) {
+  const source = `\
+import { Asset } from 'expo-asset'
+import bundle from ${JSON.stringify(bundleSpecifier)}
+
+export default {
+  async resolve(id, args = []) {
+    const asset = Asset.fromModule(bundle)
+    await asset.downloadAsync()
+    const uri = asset.localUri ?? asset.uri
+    return {
+      uri,
+      filename: '/' + id.toLowerCase() + '.bundle',
+      args
+    }
+  }
+}
+`
+  const types = `\
+declare const harness: {
+  resolve(
+    id: string,
+    args?: string[]
+  ): Promise<import('../src/android-runtime-bridge').RemoteBundle>
+}
+
+export default harness
+`
+
+  return { source, types }
+}
+
 export const workletHosts = [
   'ios-arm64',
   'ios-arm64-simulator',

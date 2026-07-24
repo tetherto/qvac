@@ -15,7 +15,7 @@ const packageNames = [
 const subsets = new Map<string, readonly string[]>([
   ['supervisor', ['@qvac/supervisor']],
   ['agents', ['@qvac/agents']],
-  ['sync', ['@qvac/runtime-contracts', '@qvac/sync']],
+  ['sync', ['@qvac/runtime-contracts', '@qvac/supervisor', '@qvac/sync']],
   [
     'harness',
     [

@@ -1,4 +1,10 @@
-const scripts = ['typecheck', 'test', 'test:subsets', 'test:pack']
+const scripts = [
+  'typecheck',
+  'lint:supervisor',
+  'test',
+  'test:subsets',
+  'test:pack'
+]
 
 for (const script of scripts) {
   const child = Bun.spawn(['bun', 'run', script], {

@@ -19,8 +19,13 @@ export interface MeshSession {
 
 export async function openLocalStore(storagePath: string) {
   const storage = new CorestoreStorage(storagePath)
-  const database = HyperDB.rocks(storage.rocks.columnFamily('sync/local'), LocalDatabase)
-  return new LocalStore(storage, database)
+  try {
+    const database = HyperDB.rocks(storage.rocks.columnFamily('sync/local'), LocalDatabase)
+    return new LocalStore(storage, database)
+  } catch (error) {
+    await Promise.allSettled([storage.close()])
+    throw error
+  }
 }
 
 export class LocalStore {

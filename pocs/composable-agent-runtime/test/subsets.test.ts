@@ -17,7 +17,7 @@ const ALLOWED = new Map<string, readonly string[]>([
   ['@qvac/runtime-contracts', []],
   ['@qvac/supervisor', []],
   ['@qvac/agents', []],
-  ['@qvac/sync', ['@qvac/runtime-contracts']],
+  ['@qvac/sync', ['@qvac/runtime-contracts', '@qvac/supervisor']],
   [
     '@qvac/harness',
     ['@qvac/agents', '@qvac/runtime-contracts', '@qvac/supervisor', '@qvac/sync']
@@ -83,7 +83,10 @@ describe('package subsets', function () {
     expect(internalDependencies(manifests.get('@qvac/agents'))).toEqual([])
     expect(internalDependencies(manifests.get('@qvac/supervisor'))).toEqual([])
     expect(internalDependencies(manifests.get('@qvac/runtime-contracts'))).toEqual([])
-    expect(internalDependencies(manifests.get('@qvac/sync'))).toEqual(['@qvac/runtime-contracts'])
+    expect(internalDependencies(manifests.get('@qvac/sync'))).toEqual([
+      '@qvac/runtime-contracts',
+      '@qvac/supervisor'
+    ])
     for (const manifest of manifests.values()) {
       expect(manifest.dependencies?.['@qvac/ai-sdk-provider']).toBeUndefined()
     }

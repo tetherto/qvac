@@ -12,8 +12,90 @@ Composable Agent Runtime QIP. It is evidence, not a production package source.
 - `@qvac/sdk` or `@qvac/core` owns inference inside an isolated Bare runtime.
 - `@qvac/supervisor` contains lifecycle mechanics without product policy.
 
+The Supervisor package is extracted from the Workbench `core-v2` implementation
+at commit `53ec6927f5707b5078d0ca41707559d9134b7e04`. It includes bounded restart,
+backoff, terminal `gave-up` escalation, suspend reconciliation, reload, nested
+trees, and stow sidecar/relay adapters. Assistant translates its named events
+into the facade's stable lifecycle event envelope.
+
 The task application owns human profile fields, task schemas, ordering, and
 completion policy. QVAC packages do not infer those domain semantics.
+
+## Build hierarchy
+
+The package closure and emitted runtime artifacts are related but not
+identical. Solid arrows in the first group are manifest dependencies. The
+second group shows the desktop artifacts selected and stowed by Assistant.
+
+```mermaid
+flowchart TB
+  subgraph packages["Install-time package closure"]
+    app["Application"] --> assistant["@qvac/assistant"]
+    assistant --> sync["@qvac/sync"]
+    assistant --> harness["@qvac/harness"]
+    assistant --> supervisor["@qvac/supervisor"]
+    assistant --> contracts["@qvac/runtime-contracts"]
+    sync --> supervisor
+    sync --> contracts
+    harness --> agents["@qvac/agents"]
+    harness --> sdk["@qvac/sdk"]
+    harness --> supervisor
+    harness --> contracts
+    contracts --> logging["@qvac/logging"]
+    contracts --> errors["@qvac/error"]
+  end
+
+  subgraph artifacts["Desktop artifact assembly"]
+    host["Application host<br/>Assistant facade + root Supervisor"]
+    syncBundle["Sync Bare bundle<br/>sidecar entry + P2P stack"]
+    harnessBundle["Harness Bare bundle<br/>child entry + SDK supervision"]
+    qwenBundle["Production SDK Bare bundle<br/>Qwen entry + SDK + selected LLM plugin"]
+    deterministicBundle["Test SDK Bare bundle<br/>deterministic adapter"]
+    standaloneHost["Direct SDK application"]
+    standaloneSdk["SDK-owned worker build<br/>independent plugin selection"]
+
+    host --> syncBundle
+    host --> harnessBundle
+    harnessBundle -->|"default"| qwenBundle
+    harnessBundle -.->|"tests only"| deterministicBundle
+    standaloneHost --> standaloneSdk
+  end
+
+  assistant -.->|"host code"| host
+  sync -.->|"bundle source"| syncBundle
+  harness -.->|"bundle source"| harnessBundle
+  sdk -.->|"selected LLM surface"| qwenBundle
+  sdk -.->|"standalone surface"| standaloneSdk
+```
+
+The current desktop PoC builds the three Bare bundles lazily on first startup
+with `bare-stow`. Harness receives the selected SDK entry and starts that child
+only when inference is first requested. Production composition selects the
+Qwen entry, which composes `@qvac/sdk` and registers the LLM plugin. Tests
+select the deterministic entry, which implements the same runtime port without
+importing `@qvac/sdk`. A direct SDK consumer follows a separate SDK-owned build
+and lifecycle path.
+
+Sync and Harness are siblings in Assistant's package and artifact hierarchy.
+Neither package depends on the other. The current PoC's Sync-backed Harness
+state adapter lives in Assistant.
+
+## Sync lifecycle tree
+
+`@qvac/sync` is itself a lifecycle boundary. `SyncCore` owns a nested
+`Supervisor` with three inspectable children:
+
+```text
+local-metadata-store ───────┐
+                            ├─> replicated-mesh-network
+identity-corestore ─────────┘
+```
+
+The network child owns the real Hyperswarm, Mesh, and PairingCoordinator. Its
+dependencies keep local metadata and cryptographic identity alive until network
+shutdown completes. Supervisor then closes storage in reverse-safe order.
+Product-specific pairing and replication policy remains in Sync, while
+`@qvac/supervisor` supplies only lifecycle ordering and inspection mechanics.
 
 ## Integrate Assistant
 
@@ -70,11 +152,33 @@ node --experimental-strip-types apps/task-cli/index.ts seed --storage /tmp/qvac-
 bun run --cwd apps/task-cli smoke:qwen -- --storage /tmp/qvac-task-qwen --trace
 ```
 
+The task runner disables the model reasoning channel for this workflow so the
+persisted result contains only the requested answer.
+
 Run package, graph, clean-consumer, and type verification with:
 
 ```sh
 bun run verify
 ```
+
+## Run the physical-Android gate
+
+Attach an Android 10 or newer device, then build the Worklets, native addon
+set, app, and launch target with:
+
+```sh
+cd apps/task-mobile
+bun run android
+```
+
+The Pixel 9 Pro gate passed concurrent Sync, Harness, and SDK runtimes, Harness
+and SDK handshake plus suspend/resume, real Sync writer admission, a
+phone-created task completed by desktop Qwen, durable force-stop recovery, and
+background retention. The follow-up gate moved SDK into a private
+`:qvac_sdk` Service process. Native abort killed only that process, Android
+reported `APP CRASH(NATIVE)`, the host PID and Harness survived, and a new SDK
+process completed a fresh handshake. This proves Android crash containment for
+the lightweight SDK probe, not yet for a real model-loaded SDK worker.
 
 ## Run the physical-iOS gate
 
@@ -105,6 +209,12 @@ The iOS host uses the versioned application protocol directly over
 is not compatible with Worklets. The measured gate confirms three concurrent
 Worklets and host-owned lifecycle control, but native SDK abort terminates the
 whole app because Worklets share its process.
+
+The follow-up process-isolation gate found an iOS 26 Enhanced Security helper
+extension as a real process-boundary candidate. The automated abort,
+interruption, and restart probe compiles, but the configured Personal Team
+cannot provision the Enhanced Security capability. Physical crash-containment
+and multi-gigabyte Metal viability remain unverified.
 
 ## Evidence policy
 

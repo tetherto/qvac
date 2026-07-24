@@ -1,5 +1,8 @@
 import harnessHarness from '../generated/harness.js'
 import sdkHarness from '../generated/sdk.js'
+import crashHarness from '../generated/crash.js'
+import { Platform } from 'react-native'
+import { androidSdkHarness } from './android-sdk-harness'
 import {
   BUILD_VERSION,
   COMPONENTS,
@@ -18,7 +21,7 @@ import {
 
 const RESPONSE_TIMEOUT_MS = 5_000
 
-type WorkletHarness = typeof harnessHarness
+type WorkletHarness = typeof harnessHarness | typeof androidSdkHarness
 type StartedHarness = Awaited<ReturnType<WorkletHarness['start']>>
 
 export interface RuntimeSnapshot {
@@ -60,7 +63,10 @@ interface Runner {
 export function createRunnerBroker(onChange: () => void): RunnerBroker {
   const runners: Record<ComponentName, Runner> = {
     Harness: createRunner('Harness', harnessHarness),
-    SDK: createRunner('SDK', sdkHarness)
+    SDK: createRunner(
+      'SDK',
+      Platform.OS === 'android' ? androidSdkHarness : sdkHarness
+    )
   }
 
   function snapshots() {
@@ -100,7 +106,7 @@ export function createRunnerBroker(onChange: () => void): RunnerBroker {
     }
     update(runner, {
       state: 'ready',
-      metadata: event.source,
+      metadata: runtimeMetadata(runner, event.source),
       lastTraceId: event.traceId,
       error: null
     })
@@ -152,8 +158,14 @@ export function createRunnerBroker(onChange: () => void): RunnerBroker {
   function hardCrashSdk() {
     const runner = activeRunner(runners.SDK)
     const message = createCommand('hard-crash')
-    runner.started?.ipc.write(new TextEncoder().encode(encodeMessage(message)))
     update(runner, { lastTraceId: message.traceId })
+    if (Platform.OS === 'android') {
+      void androidSdkHarness
+        .crash('SDK-crash')
+        .catch((error) => markDied(runner, toError(error)))
+    } else {
+      void crashHarness.start('SDK-crash')
+    }
   }
 
   function update(
@@ -203,7 +215,7 @@ export function createRunnerBroker(onChange: () => void): RunnerBroker {
     }
 
     update(runner, {
-      metadata: message.source,
+      metadata: runtimeMetadata(runner, message.source),
       lastTraceId: message.traceId
     })
     if (message.requestId === null) return
@@ -306,4 +318,20 @@ function clearPending(runner: Runner, error: Error) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function toError(error: unknown) {
+  return error instanceof Error ? error : new Error(String(error))
+}
+
+function runtimeMetadata(runner: Runner, metadata: TraceMetadata) {
+  const worklet = runner.started?.worklet
+  if (
+    worklet !== undefined &&
+    'pid' in worklet &&
+    typeof worklet.pid === 'number'
+  ) {
+    return { ...metadata, processId: worklet.pid }
+  }
+  return metadata
 }

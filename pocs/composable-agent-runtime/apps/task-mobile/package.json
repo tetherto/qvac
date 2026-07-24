@@ -6,9 +6,10 @@
   "main": "index.ts",
   "scripts": {
     "build:worklets": "bun run scripts/build-worklets.ts",
+    "build:android-addons": "bun run scripts/link-android-addons.ts",
     "build:ios-addons": "bun run scripts/link-ios-addons.ts",
     "ios": "bunx expo run:ios --device",
-    "android": "bunx expo run:android --device",
+    "android": "bun run scripts/run-android.ts",
     "start": "bun run scripts/start.ts",
     "test": "bun test src",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -23,6 +24,7 @@
     "events": "^3.3.0",
     "expo": "^54.0.33",
     "expo-asset": "~12.0.13",
+    "expo-build-properties": "~1.0.10",
     "expo-file-system": "^19.0.21",
     "react": "19.1.0",
     "react-native": "0.81.5",

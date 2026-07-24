@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   Alert,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -45,11 +46,14 @@ export function LifecycleDiagnostics({
         <View style={styles.diagnostics}>
           <View style={styles.warning}>
             <Text style={styles.warningTitle}>
-              Hard crash can terminate this app
+              {Platform.OS === 'android'
+                ? 'SDK crash runs in a separate process'
+                : 'Hard crash can terminate this app'}
             </Text>
             <Text style={styles.warningText}>
-              The SDK crash control calls the native bare-abort addon. It is not
-              a graceful Worklet stop and may terminate the whole host process.
+              {Platform.OS === 'android'
+                ? 'The SDK crash control calls native bare-abort in :qvac_sdk. The host should survive and report the SDK as died.'
+                : 'The SDK crash control calls the native bare-abort addon. It is not a graceful Worklet stop and may terminate the whole host process.'}
             </Text>
           </View>
           <SecondaryButton
@@ -107,11 +111,6 @@ async function runAutomaticProbe(broker: RunnerBroker) {
     await Promise.all(components.map((component) => broker.suspend(component)))
     await Promise.all(components.map((component) => broker.resume(component)))
     logProbeSnapshots('suspend-resume', broker.snapshots())
-    if (process.env.EXPO_PUBLIC_QVAC_AUTO_CRASH_SDK === '1') {
-      console.log('[isolation-probe] requesting SDK native abort')
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      broker.hardCrashSdk()
-    }
   } catch (error) {
     console.error(
       `[isolation-probe] failed ${error instanceof Error ? error.stack ?? error.message : String(error)}`
@@ -266,7 +265,9 @@ function run(action: () => Promise<void>) {
 function confirmHardCrash(broker: RunnerBroker) {
   Alert.alert(
     'Crash the SDK runtime?',
-    'This invokes native abort() inside the SDK Bare Worklet. The entire app may terminate.',
+    Platform.OS === 'android'
+      ? 'This invokes native abort() inside the separate :qvac_sdk process. The host app should remain alive.'
+      : 'This invokes native abort() inside the SDK Bare Worklet. The entire app may terminate.',
     [
       { text: 'Cancel', style: 'cancel' },
       {

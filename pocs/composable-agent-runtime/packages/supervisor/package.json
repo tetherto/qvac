@@ -2,24 +2,83 @@
   "name": "@qvac/supervisor",
   "version": "0.0.0-poc",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
+  "description": "Minimal Elixir-light supervisor: the app declares what runs, restart policy, and which deaths reboot what",
+  "main": "index.js",
   "exports": {
-    ".": "./src/index.ts"
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./stow": {
+      "types": "./stow.d.ts",
+      "default": "./stow.js"
+    },
+    "./entry": {
+      "types": "./entry.d.ts",
+      "default": "./entry.js"
+    },
+    "./runner/sidecar": {
+      "types": "./runner/sidecar.d.ts",
+      "default": "./runner/sidecar.js"
+    },
+    "./runner/relay": {
+      "types": "./runner/relay.d.ts",
+      "default": "./runner/relay.js"
+    },
+    "./host/spawner": {
+      "types": "./host/spawner.d.ts",
+      "default": "./host/spawner.js"
+    }
   },
   "files": [
-    "src"
+    "package.json",
+    "index.js",
+    "index.d.ts",
+    "stow.js",
+    "stow.d.ts",
+    "entry.js",
+    "entry.d.ts",
+    "runner/sidecar.js",
+    "runner/sidecar.d.ts",
+    "runner/relay.js",
+    "runner/relay.d.ts",
+    "host/spawner.js",
+    "host/spawner.d.ts"
   ],
   "scripts": {
-    "test": "bun test/run.ts",
-    "test:node": "node --experimental-strip-types test/all.ts",
-    "test:bun": "bun test/all.ts",
-    "test:bare": "bare test/all.ts",
-    "typecheck": "tsc --noEmit"
+    "test": "npm run test:node && npm run test:bare",
+    "test:node": "brittle-node test/index.js",
+    "test:bare": "brittle-bare test/index.js",
+    "format": "prettier . --write",
+    "lint": "prettier . --check && lunte"
+  },
+  "dependencies": {
+    "b4a": "^1.8.1",
+    "bare-sidecar": "^0.5.2",
+    "bare-stream": "^2.13.3",
+    "bare-stow": "^0.1.4",
+    "ready-guard": "^1.0.0",
+    "ready-resource": "^1.2.0",
+    "safety-catch": "^1.0.2"
   },
   "devDependencies": {
-    "@types/brittle": "^3.5.0",
-    "@types/bun": "^1.3.14",
+    "bare-fs": "^4.7.2",
+    "bare-os": "^3.9.1",
     "brittle": "^4.0.2",
-    "typescript": "^5.9.3"
+    "lunte": "^1.8.3",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
+  },
+  "imports": {
+    "fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "os": {
+      "bare": "bare-os",
+      "default": "os"
+    }
   }
 }

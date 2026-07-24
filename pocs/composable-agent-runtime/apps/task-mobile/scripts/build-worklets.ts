@@ -8,6 +8,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  generateRemoteBundleHarness,
   generateWorkletHarness,
   workletHosts
 } from './react-native-worklet-target'
@@ -16,8 +17,8 @@ type BareURL = import('bare-url')
 
 const appRoot = new URL('../', import.meta.url) as unknown as BareURL
 const generated = fileURLToPath(new URL('../generated/', import.meta.url).href)
-const worklets = ['sync', 'harness', 'sdk'] as const
-const linkedWorklets = new Set<(typeof worklets)[number]>(['sync', 'sdk'])
+const worklets = ['sync', 'harness', 'sdk', 'crash'] as const
+const linkedWorklets = new Set<(typeof worklets)[number]>(['sync', 'crash'])
 
 await rm(generated, { recursive: true, force: true })
 await mkdir(generated, { recursive: true })
@@ -81,6 +82,20 @@ await start(BareKit.IPC${startArguments})
   )
   await writeFile(harnessPath, harness.source)
   await writeFile(typesPath, harness.types)
+
+  if (worklet === 'sdk' || worklet === 'crash') {
+    const remote = generateRemoteBundleHarness(`./${worklet}.bundle`)
+    const remotePath = fileURLToPath(
+      new URL(`../generated/${worklet}.remote.js`, import.meta.url).href
+    )
+    const remoteTypesPath = fileURLToPath(
+      new URL(`../generated/${worklet}.remote.d.ts`, import.meta.url).href
+    )
+    await writeFile(remotePath, remote.source)
+    await writeFile(remoteTypesPath, remote.types)
+    console.log(`generated ${remotePath}`)
+    console.log(`generated ${remoteTypesPath}`)
+  }
 
   console.log(`generated ${harnessPath}`)
   console.log(`generated ${typesPath}`)

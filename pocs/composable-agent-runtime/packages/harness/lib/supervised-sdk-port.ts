@@ -1,5 +1,5 @@
 import { RuntimeComponentExitedError } from '@qvac/runtime-contracts'
-import { Supervisor } from '@qvac/supervisor'
+import Supervisor from '@qvac/supervisor'
 import type { SdkRuntimePort } from './sdk-runtime-port.ts'
 
 export function createSupervisedSdkPort(createSdk: () => Promise<SdkRuntimePort>): SdkRuntimePort {

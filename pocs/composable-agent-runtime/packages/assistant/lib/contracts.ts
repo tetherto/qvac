@@ -101,6 +101,28 @@ export interface AssistantRun extends AsyncIterable<HarnessEvent> {
   readonly traceId: string
 }
 
+export type AssistantLifecycleEventType =
+  | 'child-ready'
+  | 'child-died'
+  | 'child-restarting'
+  | 'child-stopped'
+  | 'child-reloaded'
+  | 'gave-up'
+  | 'suspend-coalesced'
+  | 'stall'
+
+export interface AssistantLifecycleEvent {
+  readonly type: AssistantLifecycleEventType
+  readonly timestamp: number
+  readonly name?: string
+  readonly lives?: number
+  readonly delay?: number
+  readonly error?: {
+    readonly name: string
+    readonly message: string
+  }
+}
+
 export interface AssistantInspection {
   readonly sdkStarts: number
   readonly children: ReadonlyArray<{

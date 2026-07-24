@@ -115,7 +115,12 @@ export class Mesh extends ReadyResource {
       encrypted: true,
       encryptionKey: this.encryptionKey
     })
-    await this.autobee.ready()
+    try {
+      await this.autobee.ready()
+    } catch (error) {
+      await Promise.allSettled([this.autobee.close()])
+      throw error
+    }
     this.discoveryKey = this.autobee.discoveryKey
   }
 

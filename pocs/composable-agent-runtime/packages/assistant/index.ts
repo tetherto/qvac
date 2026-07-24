@@ -10,7 +10,7 @@ import {
   type RuntimeLogger,
   type RuntimeHandshake
 } from '@qvac/runtime-contracts'
-import { Supervisor, type SupervisorEvent } from '@qvac/supervisor'
+import Supervisor from '@qvac/supervisor'
 import {
   expectedHarnessHandshake,
   expectedSyncHandshake,
@@ -21,6 +21,7 @@ import type {
   AssistantComponents,
   AssistantHarnessComponent,
   AssistantInspection,
+  AssistantLifecycleEvent,
   AssistantRun,
   AssistantRunInput,
   AssistantStateEndpoint,
@@ -34,6 +35,8 @@ export type {
   AssistantHarnessComponent,
   AssistantInference,
   AssistantInspection,
+  AssistantLifecycleEvent,
+  AssistantLifecycleEventType,
   AssistantRun,
   AssistantRunInput,
   AssistantStateEndpoint,
@@ -50,7 +53,7 @@ export interface AssistantFacade {
   resume(): Promise<void>
   close(): Promise<void>
   inspect(): AssistantInspection
-  onLifecycle(listener: (event: SupervisorEvent) => void): () => void
+  onLifecycle(listener: (event: AssistantLifecycleEvent) => void): () => void
 }
 
 export const DEFAULT_ASSISTANT_STORAGE_PATH = '.assistant'
@@ -63,16 +66,13 @@ export function createAssistant(
 ): AssistantFacade {
   const supervisor = new Supervisor()
   const logger = createRuntimeLogger('assistant', options.logging)
+  const lifecycle = createLifecycleEvents(supervisor, logger)
   let sdkStarts = 0
   const components =
     options.components ??
     defaultComponents(options, () => {
       sdkStarts++
     })
-
-  supervisor.onEvent((event) => {
-    logger.info('lifecycle', event)
-  })
 
   supervisor.add<AssistantSyncComponent>('sync', {
     restart: 'always',
@@ -165,11 +165,11 @@ export function createAssistant(
           state: child.state,
           deps: child.deps,
           lives: child.lives,
-          ...(child.details === undefined ? {} : { details: child.details })
+          ...(isRecord(child.info) ? { details: child.info } : {})
         }))
       }
     },
-    onLifecycle: (listener) => supervisor.onEvent(listener)
+    onLifecycle: (listener) => lifecycle.on(listener)
   }
 }
 
@@ -235,6 +235,75 @@ function defaultComponents(
     startHarness: ({ state }) =>
       startHarnessComponent(state, inference, onSdkStart, options.logging)
   }
+}
+
+function createLifecycleEvents(supervisor: Supervisor, logger: RuntimeLogger) {
+  const listeners = new Set<(event: AssistantLifecycleEvent) => void>()
+
+  function publish(event: AssistantLifecycleEvent) {
+    logger.info('lifecycle', event)
+    for (const listener of listeners) listener(event)
+  }
+
+  supervisor.on('child-ready', ({ name, lives }) => {
+    publish({ type: 'child-ready', timestamp: Date.now(), name, lives })
+  })
+  supervisor.on('child-died', ({ name, error }) => {
+    publish({
+      type: 'child-died',
+      timestamp: Date.now(),
+      name,
+      error: errorEnvelope(error)
+    })
+  })
+  supervisor.on('child-restarting', ({ name, delay }) => {
+    publish({
+      type: 'child-restarting',
+      timestamp: Date.now(),
+      name,
+      delay
+    })
+  })
+  supervisor.on('child-stopped', ({ name }) => {
+    publish({ type: 'child-stopped', timestamp: Date.now(), name })
+  })
+  supervisor.on('child-reloaded', ({ name }) => {
+    publish({ type: 'child-reloaded', timestamp: Date.now(), name })
+  })
+  supervisor.on('gave-up', ({ name, error }) => {
+    publish({
+      type: 'gave-up',
+      timestamp: Date.now(),
+      name,
+      error: errorEnvelope(error)
+    })
+  })
+  supervisor.on('suspend-coalesced', () => {
+    publish({ type: 'suspend-coalesced', timestamp: Date.now() })
+  })
+  supervisor.on('stall', ({ name }) => {
+    publish({ type: 'stall', timestamp: Date.now(), name })
+  })
+
+  return {
+    on(listener: (event: AssistantLifecycleEvent) => void) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+}
+
+function errorEnvelope(error: Error) {
+  return {
+    name: error.name || 'Error',
+    message: error.message || 'Unknown supervisor error'
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function createRunId() {

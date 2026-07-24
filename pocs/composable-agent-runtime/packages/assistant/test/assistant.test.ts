@@ -166,6 +166,11 @@ describe('assistant composition', () => {
   it('closes Harness before Sync', async () => {
     const starts: string[] = []
     const stops: string[] = []
+    const lifecycle: Array<{
+      type: string
+      name?: string
+      timestamp: number
+    }> = []
     const assistant = createAssistant({
       components: {
         startSync: async () =>
@@ -174,12 +179,23 @@ describe('assistant composition', () => {
           component('harness', starts, stops) as AssistantHarnessComponent
       }
     })
+    const stopListening = assistant.onLifecycle((event) => {
+      lifecycle.push(event)
+    })
 
     await assistant.ready()
     await assistant.close()
+    stopListening()
 
     expect(starts).toEqual(['sync', 'harness'])
     expect(stops).toEqual(['harness', 'sync'])
+    expect(lifecycle.map(({ type, name }) => `${type}:${name}`)).toEqual([
+      'child-ready:sync',
+      'child-ready:harness',
+      'child-stopped:harness',
+      'child-stopped:sync'
+    ])
+    expect(lifecycle.every(({ timestamp }) => timestamp > 0)).toBe(true)
   })
 
   it('removes its temporary bundles after the last child closes', async () => {

@@ -58,7 +58,7 @@ export async function createSdkDirectAdapter(): Promise<SdkRuntimePort> {
         stream: true,
         generationParams: {
           predict: 128,
-          reasoning_budget: 32
+          reasoning_budget: 0
         }
       })
       return {

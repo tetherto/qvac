@@ -9,23 +9,59 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		25FEABD26526BFEA5BFCE66D /* libPods-ComposableRuntimeFeasibility.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE8EABE694725CFCC23C29D6 /* libPods-ComposableRuntimeFeasibility.a */; };
+		2BDA1AE3B1AD2CA70B14640F /* IsolationProbeExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 20B7DEEB673A11FB05C4E6DD /* IsolationProbeExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+		4C34F97C0A207EE06B083F1A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2DF8335AA1342F9E27750D9 /* Foundation.framework */; };
+		A12F5523E0EFB36E0784E55B /* IsolationProbeShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B65C6B3746EEF5F60608289 /* IsolationProbeShared.swift */; };
+		A38519D06F1E0A34F0869392 /* IsolationProbeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A566ABB151C9F5195FB73F /* IsolationProbeHost.swift */; };
 		B263A309BADA5309E427AE3F /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52CE42499BE207F8D06FE4A8 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		E3496A03E3C93F24E2973EBC /* IsolationProbeShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B65C6B3746EEF5F60608289 /* IsolationProbeShared.swift */; };
+		E3EA57BA7A06E7C923FB3CD3 /* IsolationProbeExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB163FAAE188C9A7ED61EBD7 /* IsolationProbeExtension.swift */; };
 		EDBC6288394C5C60DBC1E925 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7A0962D358F72E409FFC753 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		FF22AF299A7E020B850AEB7F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 97901BB35295D9D0D5BFC236;
+			remoteInfo = IsolationProbeExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C337E991D028A2318009A91D /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2BDA1AE3B1AD2CA70B14640F /* IsolationProbeExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		07A566ABB151C9F5195FB73F /* IsolationProbeHost.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IsolationProbeHost.swift; path = ComposableRuntimeFeasibility/IsolationProbeHost.swift; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* ComposableRuntimeFeasibility.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ComposableRuntimeFeasibility.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = ComposableRuntimeFeasibility/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = ComposableRuntimeFeasibility/Info.plist; sourceTree = "<group>"; };
+		20B7DEEB673A11FB05C4E6DD /* IsolationProbeExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = IsolationProbeExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		52CE42499BE207F8D06FE4A8 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-ComposableRuntimeFeasibility/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		6B65C6B3746EEF5F60608289 /* IsolationProbeShared.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IsolationProbeShared.swift; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = ComposableRuntimeFeasibility/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		BE8EABE694725CFCC23C29D6 /* libPods-ComposableRuntimeFeasibility.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-ComposableRuntimeFeasibility.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C62456C59ECE54278EDB4176 /* IsolationProbeExtension.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = IsolationProbeExtension.entitlements; sourceTree = "<group>"; };
+		D2DF8335AA1342F9E27750D9 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		D67716AE5EB0E2222C62E76A /* Pods-ComposableRuntimeFeasibility.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ComposableRuntimeFeasibility.release.xcconfig"; path = "Target Support Files/Pods-ComposableRuntimeFeasibility/Pods-ComposableRuntimeFeasibility.release.xcconfig"; sourceTree = "<group>"; };
 		D7A0962D358F72E409FFC753 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = ComposableRuntimeFeasibility/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DB163FAAE188C9A7ED61EBD7 /* IsolationProbeExtension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IsolationProbeExtension.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = ComposableRuntimeFeasibility/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* ComposableRuntimeFeasibility-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "ComposableRuntimeFeasibility-Bridging-Header.h"; path = "ComposableRuntimeFeasibility/ComposableRuntimeFeasibility-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -33,6 +69,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		09351FC02897A3C022AADB05 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C34F97C0A207EE06B083F1A /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -62,6 +106,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				D7A0962D358F72E409FFC753 /* PrivacyInfo.xcprivacy */,
+				07A566ABB151C9F5195FB73F /* IsolationProbeHost.swift */,
 			);
 			name = ComposableRuntimeFeasibility;
 			sourceTree = "<group>";
@@ -81,8 +126,27 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				BE8EABE694725CFCC23C29D6 /* libPods-ComposableRuntimeFeasibility.a */,
+				540FCA2DAF991DA845935263 /* iOS */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		3A1E2D955C4DDE4A09E40B6C /* IsolationProbeExtension */ = {
+			isa = PBXGroup;
+			children = (
+				DB163FAAE188C9A7ED61EBD7 /* IsolationProbeExtension.swift */,
+				C62456C59ECE54278EDB4176 /* IsolationProbeExtension.entitlements */,
+			);
+			name = IsolationProbeExtension;
+			path = IsolationProbeExtension;
+			sourceTree = "<group>";
+		};
+		540FCA2DAF991DA845935263 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				D2DF8335AA1342F9E27750D9 /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 		7B3348A167BF8820632FD7CD /* ExpoModulesProviders */ = {
@@ -109,6 +173,8 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				1833EF73E7F9C0C638DF5D58 /* Pods */,
 				7B3348A167BF8820632FD7CD /* ExpoModulesProviders */,
+				E75C1D6BE1413C98EDC60440 /* IsolationProbeShared */,
+				3A1E2D955C4DDE4A09E40B6C /* IsolationProbeExtension */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -119,6 +185,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* ComposableRuntimeFeasibility.app */,
+				20B7DEEB673A11FB05C4E6DD /* IsolationProbeExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -130,6 +197,14 @@
 			);
 			name = Supporting;
 			path = ComposableRuntimeFeasibility/Supporting;
+			sourceTree = "<group>";
+		};
+		E75C1D6BE1413C98EDC60440 /* IsolationProbeShared */ = {
+			isa = PBXGroup;
+			children = (
+				6B65C6B3746EEF5F60608289 /* IsolationProbeShared.swift */,
+			);
+			name = IsolationProbeShared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -147,15 +222,34 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				6B8C6310001FE43747C17AC8 /* [CP] Embed Pods Frameworks */,
+				C337E991D028A2318009A91D /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				356CB447BCE08C453147FAC7 /* PBXTargetDependency */,
 			);
 			name = ComposableRuntimeFeasibility;
 			productName = ComposableRuntimeFeasibility;
 			productReference = 13B07F961A680F5B00A75B9A /* ComposableRuntimeFeasibility.app */;
 			productType = "com.apple.product-type.application";
+		};
+		97901BB35295D9D0D5BFC236 /* IsolationProbeExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C470E582ABF885077D2B0D6 /* Build configuration list for PBXNativeTarget "IsolationProbeExtension" */;
+			buildPhases = (
+				01B69FB8E6C10F9BAC148BA5 /* Sources */,
+				09351FC02897A3C022AADB05 /* Frameworks */,
+				D4139AAE0A33FC2DA1C8A19A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = IsolationProbeExtension;
+			productName = IsolationProbeExtension;
+			productReference = 20B7DEEB673A11FB05C4E6DD /* IsolationProbeExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -166,7 +260,13 @@
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
+						DevelopmentTeam = N4778P74XX;
 						LastSwiftMigration = 1250;
+						ProvisioningStyle = Automatic;
+					};
+					97901BB35295D9D0D5BFC236 = {
+						DevelopmentTeam = N4778P74XX;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -184,6 +284,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* ComposableRuntimeFeasibility */,
+				97901BB35295D9D0D5BFC236 /* IsolationProbeExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -197,6 +298,13 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				EDBC6288394C5C60DBC1E925 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4139AAE0A33FC2DA1C8A19A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -359,16 +467,36 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		01B69FB8E6C10F9BAC148BA5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A12F5523E0EFB36E0784E55B /* IsolationProbeShared.swift in Sources */,
+				E3EA57BA7A06E7C923FB3CD3 /* IsolationProbeExtension.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		13B07F871A680F5B00A75B9A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				B263A309BADA5309E427AE3F /* ExpoModulesProvider.swift in Sources */,
+				E3496A03E3C93F24E2973EBC /* IsolationProbeShared.swift in Sources */,
+				A38519D06F1E0A34F0869392 /* IsolationProbeHost.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		356CB447BCE08C453147FAC7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = IsolationProbeExtension;
+			target = 97901BB35295D9D0D5BFC236 /* IsolationProbeExtension */;
+			targetProxy = FF22AF299A7E020B850AEB7F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -378,8 +506,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = ComposableRuntimeFeasibility/ComposableRuntimeFeasibility.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N4778P74XX;
 				ENABLE_BITCODE = NO;
+				EX_ENABLE_EXTENSION_POINT_GENERATION = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
@@ -414,7 +546,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = ComposableRuntimeFeasibility/ComposableRuntimeFeasibility.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N4778P74XX;
+				EX_ENABLE_EXTENSION_POINT_GENERATION = YES;
 				INFOPLIST_FILE = ComposableRuntimeFeasibility/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -434,6 +570,30 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		5167B5206C2B23941F847984 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = IsolationProbeExtension/IsolationProbeExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N4778P74XX;
+				ENABLE_ENHANCED_SECURITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.qvac.poc.composable-runtime.isolation-probe";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -555,6 +715,29 @@
 			};
 			name = Release;
 		};
+		9FB9483EA9F201D6C6B4F311 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = IsolationProbeExtension/IsolationProbeExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N4778P74XX;
+				ENABLE_ENHANCED_SECURITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.qvac.poc.composable-runtime.isolation-probe";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -563,6 +746,15 @@
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
 				13B07F951A680F5B00A75B9A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2C470E582ABF885077D2B0D6 /* Build configuration list for PBXNativeTarget "IsolationProbeExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5167B5206C2B23941F847984 /* Release */,
+				9FB9483EA9F201D6C6B4F311 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

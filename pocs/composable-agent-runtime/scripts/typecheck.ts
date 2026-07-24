@@ -1,6 +1,5 @@
 const workspaces = [
   'packages/runtime-contracts',
-  'packages/supervisor',
   'packages/agents',
   'packages/sync',
   'packages/harness',
