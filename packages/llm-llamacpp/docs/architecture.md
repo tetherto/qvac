@@ -492,17 +492,19 @@ sequenceDiagram
     participant Model as LlamaModel
     participant Llama as llama.cpp
     
-    JS->>IF: run(messages)
+    JS->>IF: run(messages) / run(batchItems)
     IF->>Bind: runJob(handle, inputsArray)
-    Bind->>Addon: runJob(inputs) [lock mutex]
-    Addon->>Addon: Set job input
-    Addon->>Addon: cv.notify_one()
-    Bind-->>IF: accepted (boolean)
-    IF-->>JS: QvacResponse
+    Bind->>Addon: runJob(inputs) [parse inputs, assign per-item ids]
+    Addon->>Model: processPromptBatch(requests)
+    Model->>Model: scheduler mints job id, push into pending queue [lock-free], wake worker
+    Model-->>Addon: admission { accepted, id, ids? }
+    Addon-->>Bind: { accepted, id, ids? }
+    Bind-->>IF: { accepted, id, ids? }
+    IF-->>JS: QvacResponse (routed by job id)
     
-    Note over Addon: Processing Thread
-    Addon->>Addon: Take job
-    Addon->>Addon: uv_async_send (JobStarted)
+    Note over Model: Worker thread (continuous batching)
+    Model->>Model: admit pending into free slots
+    Model->>Addon: uv_async_send (JobStarted)
     
     loop For each token
         Addon->>Model: process(std::any)
