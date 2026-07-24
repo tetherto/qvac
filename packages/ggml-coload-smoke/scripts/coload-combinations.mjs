@@ -41,9 +41,13 @@ function parseArgs (argv) {
   }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--mode') opts.mode = argv[++i]
-    else if (argv[i] === '--changed') { opts.changed = argv[++i]; opts.mode = 'changed' }
-    else if (argv[i] === '--changed-files') { opts.changedFiles = argv[++i]; opts.mode = 'changed' }
-    else if (argv[i] === '--mobile') opts.mobile = true
+    else if (argv[i] === '--changed') {
+      opts.changed = argv[++i]
+      opts.mode = 'changed'
+    } else if (argv[i] === '--changed-files') {
+      opts.changedFiles = argv[++i]
+      opts.mode = 'changed'
+    } else if (argv[i] === '--mobile') opts.mobile = true
     else if (argv[i] === '--only') opts.only = argv[++i]
   }
   return opts
