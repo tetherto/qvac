@@ -50,6 +50,34 @@ env:
   PREBUILD_PREFIX: infer-cpp-
 
 jobs:
+  # Fast, deterministic drift check: fails if the committed
+  # test/mobile/integration.auto.cjs is out of sync with test/integration/.
+  # Kept as its OWN job (not a step in build) and NOT continue-on-error, so drift
+  # shows as a clear red job rather than a silent green no-op. It gates the
+  # prebuild/build/device-farm chain, so drift stops the run early — before any
+  # macOS or Device Farm minutes are spent. Runs untrusted fork code but holds NO
+  # secrets, so that's safe.
+  validate-mobile:
+    name: Validate mobile tests in sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - name: Validate mobile tests are up-to-date
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        run: npm run test:mobile:validate
+
   # ---------------------------------------------------------------------------
   # Build the mobile test addon's native prebuilds. The header-only library +
   # cmake-bare build has no vcpkg / private-registry dependency, so this is a
@@ -70,6 +98,7 @@ jobs:
   # ---------------------------------------------------------------------------
   prebuild-android:
     name: Prebuild (Android arm64)
+    needs: validate-mobile
     runs-on: qvac-ubuntu2204-x64
     timeout-minutes: 30
     permissions:
@@ -119,6 +148,7 @@ jobs:
 
   prebuild-ios:
     name: Prebuild (iOS arm64)
+    needs: validate-mobile
     runs-on: macos-14
     timeout-minutes: 30
     permissions:
@@ -228,10 +258,6 @@ jobs:
           persist-credentials: false
           path: addon
           fetch-depth: 0
-
-      - name: Validate mobile tests are up-to-date
-        working-directory: addon/${{ env.ADDON_WORKDIR }}
-        run: npm run test:mobile:validate
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup
