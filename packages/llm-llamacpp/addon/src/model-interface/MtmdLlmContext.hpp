@@ -339,6 +339,10 @@ private:
     return ctxCeiling();
   }
   void specApplyContextDiscard() override { applyContextDiscard(); }
+  // `specRecoverReasoning` commits only the substituted close marker (one
+  // position) — unlike TextLlmContext, it queues no recovery newlines — so the
+  // base class's conservative 3 would refuse recoveries that actually fit.
+  [[nodiscard]] llama_pos specRecoveryPositions() const override { return 1; }
   llama_token specSampleFirstToken(bool& sampled) override {
     sampled = true;
     return specSampleAndAccept(-1);

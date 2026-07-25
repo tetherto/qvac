@@ -611,22 +611,39 @@ protected:
     return ret;
   }
 
+  // Positions an inline reasoning-recovery commits directly, outside the
+  // headroom-clamped verify batch. Per-context because the two recoveries
+  // differ: TextLlmContext::handleReasoningEOS commits the close marker plus 2
+  // newlines (3), while MtmdLlmContext::specRecoverReasoning commits only the
+  // close marker (1). Reserving a single worst-case 3 for both would make Mtmd
+  // refuse a recovery that fits, so each context reports what it actually
+  // needs.
+  [[nodiscard]] virtual llama_pos specRecoveryPositions() const { return 3; }
+
   // Make room for an inline reasoning-recovery before it decodes. Recovery
-  // bypasses the headroom-clamped verify batch and decodes up to 3 tokens
-  // directly (TextLlmContext::handleReasoningEOS commits the close marker plus 2
-  // newlines; MtmdLlmContext commits the close marker), while specSetPos() can
+  // decodes `specRecoveryPositions()` tokens directly, while specSetPos() can
   // legitimately leave the cursor at specCtxCeiling() (worst case
-  // j == draft.size() == headroom). Without this, an EOS-inside-<think> within a
-  // few tokens of the ceiling would throw FailedToDecode — the same failure class
-  // the per-round draft clamp removes for the verify batch. Slides first and
-  // reports whether recovery can safely proceed.
+  // j == draft.size() == headroom). Without this, an EOS-inside-<think> within
+  // a few tokens of the ceiling would throw FailedToDecode — the same failure
+  // class the per-round draft clamp removes for the verify batch. Slides first
+  // and reports whether recovery can safely proceed.
+  //
+  // KNOWN LIMIT: the fallback discard bottoms out in
+  // ContextShifter::trySlideGeneration, which only slides once nPast + 1
+  // exceeds the ceiling. So when the cursor sits 1-2 positions below the
+  // ceiling and a context needing 3 (Text) cannot fit, the discard no-ops and
+  // generation stops gracefully with ContextOverflow even though a slide budget
+  // may exist. Making the slider honour a multi-position request means
+  // threading a `needed` count through shared non-speculative slide code, so it
+  // is deliberately left out of this MTP change — the current behavior is a
+  // safe stop, not a hard failure.
   [[nodiscard]] bool specEnsureRecoveryHeadroom() {
-    constexpr llama_pos kRecoveryPositions = 3;
-    if (specPos() + kRecoveryPositions <= specCtxCeiling()) {
+    const llama_pos needed = specRecoveryPositions();
+    if (specPos() + needed <= specCtxCeiling()) {
       return true;
     }
     specApplyContextDiscard();
-    return specPos() + kRecoveryPositions <= specCtxCeiling();
+    return specPos() + needed <= specCtxCeiling();
   }
 
   // MTP speculative-decoding generation loop: draft from the MTP head, verify

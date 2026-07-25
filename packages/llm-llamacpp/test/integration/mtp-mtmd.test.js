@@ -57,7 +57,7 @@ async function collectResponse(response) {
   return chunks.join('').trim()
 }
 
-async function loadMtmdMtp(t) {
+async function loadMtmdMtp(t, overrides = {}) {
   const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name })
   const [projName, projDir] = await ensureModel({ modelName: MMPROJ.name })
   const specLogger = attachSpecLogger({ forwardToConsole: true })
@@ -75,7 +75,8 @@ async function loadMtmdMtp(t) {
       seed: '42',
       'reasoning-budget': '0',
       'spec-type': 'draft-mtp',
-      verbosity: '2'
+      verbosity: '2',
+      ...overrides
     },
     logger: console,
     opts: { stats: true }
@@ -126,5 +127,55 @@ safeTest(
     // fall back to normal decoding: no drafting at all.
     t.is(stats.draftTotal, 0, 'image turn does not draft (fell back to normal decode)')
     t.is(stats.draftAccepted, 0, 'image turn accepted no drafts')
+  }
+)
+
+safeTest(
+  'mtmd context: text prefill longer than the batch still drafts',
+  { timeout: 600_000 },
+  async (t) => {
+    // Covers the mtmd text-chunk prefill loop in evalMessageWithTools, which
+    // feeds the hoisted `specTextBatch` in sub-batches of
+    // `specTextBatch.capacity() - 1`. Every other MTP test uses a prompt that
+    // fits one sub-batch, so the loop runs a single iteration and the stepping
+    // arithmetic is never exercised. `batch-size` is shrunk (rather than the
+    // prompt inflated) so several iterations happen with a small, fast prompt
+    // that stays well inside ctx_size on memory-constrained mobile GPUs.
+    const addon = await loadMtmdMtp(t, {
+      ctx_size: '2048',
+      'batch-size': '256',
+      n_predict: '32'
+    })
+    // ~600 tokens of filler — spans several 256-token sub-batches.
+    const filler = Array.from(
+      { length: 45 },
+      (_, i) => `Note ${i + 1}: reference material about European geography and history.`
+    ).join(' ')
+    const messages = [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      {
+        role: 'user',
+        content: `${filler}\n\nGiven all of the above, what is the capital of France? Answer in one complete sentence.`
+      }
+    ]
+    const response = await addon.run(messages)
+    const output = await collectResponse(response)
+    const stats = response.stats
+    t.ok(output.length > 0, `long text prefill produced output (${output.length} chars)`)
+    console.log(
+      `  long mtmd prefill: promptTokens=${stats.promptTokens}, ` +
+        `draftAccepted=${stats.draftAccepted}, draftTotal=${stats.draftTotal}`
+    )
+    t.ok(
+      stats.promptTokens > 256,
+      `prompt spanned multiple sub-batches (promptTokens=${stats.promptTokens} > batch-size 256)`
+    )
+    t.ok(/paris/i.test(output), 'long text prefill output names the capital (Paris)')
+    // A mis-stepped sub-batch loop would drop or duplicate prompt tokens (garbled
+    // answer) or fail to seed the draft context across iterations (no drafting).
+    t.ok(
+      stats.draftAccepted > 0,
+      `MTP still drafts after a multi-sub-batch text prefill (draftAccepted=${stats.draftAccepted})`
+    )
   }
 )
