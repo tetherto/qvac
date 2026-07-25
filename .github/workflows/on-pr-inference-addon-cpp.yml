@@ -12,17 +12,10 @@ name: On PR Trigger (inference-addon-cpp)
 
 on:
   pull_request_target:
-    # NOTE: `reopened` is intentionally omitted. The shared label-gate only
-    # re-checks the sender's trust on `synchronize`, not `reopened`. If a
-    # `synchronize` strip of `verified` fails (observed: HTTP 403 from an
-    # under-permissioned label-write token), the label survives and a
-    # close→reopen replays the already-updated (untrusted) head into this
-    # secret-bearing workflow. Omit `reopened` until the shared gate re-checks
-    # the sender on reopen AND label removal uses a token with working
-    # label-write permission. Re-apply the label or push to re-trigger.
     types:
       - opened
       - synchronize
+      - reopened
       - labeled
     branches:
       - main
