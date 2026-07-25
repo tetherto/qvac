@@ -81,16 +81,23 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "engineType");
   if (explicitType == "chatterbox") return EngineType::Chatterbox;
   if (explicitType == "supertonic") return EngineType::Supertonic;
+  if (explicitType == "parler")
+    return EngineType::Parler;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox' or 'supertonic' (got '" +
+        "engineType must be 'chatterbox', 'supertonic' or 'parler' (got '" +
             explicitType + "')");
   }
 
   const std::string supertonicPath =
       readOptionalString(configurationParams, env, "supertonicModelPath");
   if (!supertonicPath.empty()) return EngineType::Supertonic;
+
+  const std::string parlerPath =
+      readOptionalString(configurationParams, env, "parlerModelPath");
+  if (!parlerPath.empty())
+    return EngineType::Parler;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -139,6 +146,52 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // qvac-ext-lib-whisper.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  return cfg;
+}
+
+parler::ParlerDescriptionFields
+JSAdapter::readParlerDescriptionFields(js::Object obj, js_env_t* env) {
+  parler::ParlerDescriptionFields desc;
+  desc.description = readOptionalString(obj, env, "description");
+  // voiceDescription is the documented alias; description wins when both set.
+  if (desc.description.empty()) {
+    desc.description = readOptionalString(obj, env, "voiceDescription");
+  }
+  desc.voice = readOptionalString(obj, env, "voice");
+  desc.emotion = readOptionalString(obj, env, "emotion");
+  desc.pitch = readOptionalString(obj, env, "pitch");
+  desc.pace = readOptionalString(obj, env, "pace");
+  desc.expressivity = readOptionalString(obj, env, "expressivity");
+  desc.noise = readOptionalString(obj, env, "noise");
+  desc.reverb = readOptionalString(obj, env, "reverb");
+  desc.quality = readOptionalString(obj, env, "quality");
+  return desc;
+}
+
+parler::ParlerConfig
+JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
+  parler::ParlerConfig cfg;
+  cfg.modelGgufPath =
+      readOptionalString(configurationParams, env, "parlerModelPath");
+  cfg.desc = readParlerDescriptionFields(configurationParams, env);
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.temperature = readOptionalFloat(configurationParams, env, "temperature");
+  cfg.topK = readOptionalInt(configurationParams, env, "topK");
+  cfg.topP = readOptionalFloat(configurationParams, env, "topP");
+  cfg.maxFrames = readOptionalInt(configurationParams, env, "maxFrames");
+  cfg.minNewTokens = readOptionalInt(configurationParams, env, "minNewTokens");
+  cfg.outputSampleRate =
+      readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.normalizeNumbers =
+      readOptionalBool(configurationParams, env, "normalizeNumbers");
+  cfg.streamChunkTokens =
+      readOptionalInt(configurationParams, env, "streamChunkTokens");
+  cfg.streamFirstChunkTokens =
+      readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
 

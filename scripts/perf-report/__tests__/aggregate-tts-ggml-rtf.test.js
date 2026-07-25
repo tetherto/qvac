@@ -24,6 +24,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const {
+  parseCanonicalTestLabel,
   normalizeDesktopRecord,
   normalizeManualRecord,
   expandCanonicalReport,
@@ -88,6 +89,125 @@ function mobileCanonicalReport () {
     }]
   }
 }
+
+test('canonical label fixtures classify variable mobile label shapes by meaning', () => {
+  const fixtures = [
+    {
+      label: '[GPU] chatterbox gpu-smoke',
+      expected: {
+        useGPU: true,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: null,
+        backendHint: null,
+        language: null,
+        runType: 'smoke'
+      }
+    },
+    {
+      label: '[CPU] chatterbox es',
+      expected: {
+        useGPU: false,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: null,
+        backendHint: null,
+        language: 'es',
+        runType: 'benchmark'
+      }
+    },
+    {
+      label: '[CPU] chatterbox q4 cpu',
+      expected: {
+        useGPU: false,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: 'q4',
+        backendHint: 'cpu',
+        language: null,
+        runType: 'benchmark'
+      }
+    },
+    {
+      label: '[CPU] streaming chatterbox q4 cpu',
+      expected: {
+        useGPU: false,
+        streaming: true,
+        engine: 'chatterbox',
+        variant: 'q4',
+        backendHint: 'cpu',
+        language: null,
+        runType: 'benchmark'
+      }
+    },
+    {
+      label: '[GPU] chatterbox q4 metal',
+      expected: {
+        useGPU: true,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: 'q4',
+        backendHint: 'metal',
+        language: null,
+        runType: 'benchmark'
+      }
+    }
+  ]
+
+  for (const fixture of fixtures) {
+    const parsed = parseCanonicalTestLabel(fixture.label)
+    assert.ok(parsed, `expected ${fixture.label} to parse`)
+    assert.deepEqual(
+      {
+        useGPU: parsed.useGPU,
+        streaming: parsed.streaming,
+        engine: parsed.engine,
+        variant: parsed.variant,
+        backendHint: parsed.backendHint,
+        language: parsed.language,
+        runType: parsed.runType
+      },
+      fixture.expected
+    )
+  }
+})
+
+test('mobile smoke rows infer backend from platform and remain visibly marked', () => {
+  const ios = mobileCanonicalReport()
+  ios.results = [
+    { test: '[GPU] chatterbox gpu-smoke', metrics: { real_time_factor: 0.79 } },
+    { test: '[CPU] chatterbox cpu-smoke', metrics: { real_time_factor: 4.15 } }
+  ]
+  const iosRecords = expandCanonicalReport(ios, '/x/ios/performance-report.json').records
+  assert.equal(iosRecords.length, 2)
+  assert.equal(iosRecords[0].backend, 'metal')
+  assert.equal(iosRecords[0].variant, 'q4')
+  assert.equal(iosRecords[0].runType, 'smoke')
+  assert.match(iosRecords[0].label, /smoke/)
+  assert.equal(iosRecords[1].backend, 'cpu')
+
+  const android = mobileCanonicalReport()
+  android.device.platform = 'android'
+  android.results[0].test = '[GPU] chatterbox gpu-smoke'
+  const [androidRecord] = expandCanonicalReport(android, '/x/android/performance-report.json').records
+  assert.equal(androidRecord.backend, 'vulkan')
+
+  const markdown = renderMarkdown(iosRecords.concat(androidRecord), [])
+  assert.ok(markdown.includes('| Language | Run Type |'))
+  assert.ok(markdown.includes('GPU backends covered: metal, vulkan'))
+  assert.ok(markdown.includes('GPU backends still missing: opencl'))
+})
+
+test('mobile multilingual rows keep language separate from variant and backend', () => {
+  const report = mobileCanonicalReport()
+  report.results[0].test = '[CPU] chatterbox mtl es'
+  const [record] = expandCanonicalReport(report, '/x/ios/performance-report.json').records
+
+  assert.equal(record.variant, 'mtl')
+  assert.equal(record.language, 'es')
+  assert.equal(record.backend, 'cpu')
+  assert.ok(renderMarkdown([record], []).includes('| mtl | es | benchmark |'))
+})
 
 test('desktop record surfaces avg/peak/reclaimed memory from summary.memory', () => {
   const record = normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')

@@ -4,11 +4,12 @@ description: >
   `verified` is the trust gate for EXTERNAL FORK PRs (authorise-only); internal
   same-repo PRs are authorised without it (write access is required to push a
   branch to the base repo). The granular labels run-cpp-addon-tests /
-  run-desktop-addon-tests / run-mobile-addon-tests / prebuilds each select a
-  stage, and only take effect once the run is authorised. Trusted events
-  (push / workflow_dispatch / workflow_call / schedule) enable every stage.
-  This is addon-agnostic: it emits all five flags and each addon wires only the
-  stages it has. Single source of truth — do NOT inline this logic per workflow.
+  run-desktop-addon-tests / run-mobile-addon-tests / run-coload-tests /
+  prebuilds each select a stage, and only take effect once the run is
+  authorised. Trusted events (push / workflow_dispatch / workflow_call /
+  schedule) enable every stage. This is addon-agnostic: it emits all six flags
+  and each addon wires only the stages it has. Single source of truth — do NOT
+  inline this logic per workflow.
 
 outputs:
   run_verified_checks:
@@ -26,6 +27,9 @@ outputs:
   run_mobile:
     description: 'Run mobile integration tests (run-mobile-addon-tests label)'
     value: ${{ steps.route.outputs.run_mobile }}
+  run_coload:
+    description: 'Run the multi-addon co-load smoke (run-coload-tests label). Desktop co-load runs on this flag alone; the on-device (Device Farm) co-load additionally requires run_mobile.'
+    value: ${{ steps.route.outputs.run_coload }}
 
 runs:
   using: composite
@@ -45,7 +49,7 @@ runs:
            [ "$EVENT_NAME" = "push" ] || \
            [ "$EVENT_NAME" = "schedule" ]; then
           echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
-          for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile; do
+          for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile run_coload; do
             echo "$out=true" >> "$GITHUB_OUTPUT"
           done
           exit 0
@@ -56,6 +60,7 @@ runs:
         HAS_CPP=false
         HAS_DESKTOP=false
         HAS_MOBILE=false
+        HAS_COLOAD=false
         if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
           for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
             case "$label" in
@@ -64,6 +69,7 @@ runs:
               run-cpp-addon-tests)      HAS_CPP=true ;;
               run-desktop-addon-tests)  HAS_DESKTOP=true ;;
               run-mobile-addon-tests)   HAS_MOBILE=true ;;
+              run-coload-tests)         HAS_COLOAD=true ;;
             esac
           done
         fi
@@ -73,6 +79,7 @@ runs:
         CPP_TESTS=false
         DESKTOP=false
         MOBILE=false
+        COLOAD=false
 
         # Internal same-repo PRs are inherently trusted (pushing a branch to the
         # base repo requires write access), so they are authorised WITHOUT the
@@ -97,11 +104,18 @@ runs:
           [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
           [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
           [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
+          # Co-load overlays THIS PR's freshly-built addon onto the baseline, so
+          # it needs the prebuild too. The reusable co-load workflow keys its
+          # Device Farm leg off run_mobile, so run-coload-tests alone is the
+          # cheap desktop co-load; add run-mobile-addon-tests for the on-device
+          # co-load.
+          [ "$HAS_COLOAD" = "true" ]   && { COLOAD=true; PREBUILDS=true; }
           [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
         fi
-        echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
+        echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE coload=$COLOAD"
         echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
         echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
         echo "run_cpp_tests=$CPP_TESTS" >> "$GITHUB_OUTPUT"
         echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
         echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
+        echo "run_coload=$COLOAD" >> "$GITHUB_OUTPUT"

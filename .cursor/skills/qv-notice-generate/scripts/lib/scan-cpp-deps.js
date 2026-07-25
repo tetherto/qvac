@@ -141,23 +141,48 @@ function classifyDeps (pkgDir) {
 // ---------------------------------------------------------------------------
 // Extract REPO and URL from portfile.cmake content
 // ---------------------------------------------------------------------------
+function normalizeGitHubRepo (value) {
+  if (!value) return null
+
+  let repo = value.trim().replace(/^['"]|['"]$/g, '')
+  const prefixes = [
+    'https://github.com/',
+    'http://github.com/',
+    'ssh://git@github.com/',
+    'git@github.com:'
+  ]
+  const prefix = prefixes.find(prefix => repo.startsWith(prefix))
+
+  if (prefix) repo = repo.slice(prefix.length)
+
+  repo = repo.split(/[?#]/, 1)[0].replace(/\/+$/, '')
+  const parts = repo.split('/')
+  if (parts.length < 2) return null
+
+  const owner = parts[0]
+  const name = parts[1].replace(/\.git$/, '')
+  if (!owner || !name) return null
+
+  return `${owner}/${name}`
+}
+
 function extractPortfileInfo (content) {
   // vcpkg_from_github(... REPO org/name ...)
-  const ghMatch = content.match(/vcpkg_from_github\s*\([^)]*REPO\s+([^\s)]+)/)
+  const ghMatch = content.match(
+    /vcpkg_from_github\s*\([^)]*\bREPO\s+(?:"([^"]+)"|'([^']+)'|([^\s)]+))/
+  )
   if (ghMatch) {
-    return { type: 'github', repo: ghMatch[1] }
+    const repo = normalizeGitHubRepo(ghMatch[1] || ghMatch[2] || ghMatch[3])
+    if (repo) return { type: 'github', repo }
   }
 
-  // vcpkg_from_git(... URL git@github.com:org/repo.git ...)
-  const gitSshMatch = content.match(/vcpkg_from_git\s*\([^)]*URL\s+git@github\.com:([^.\s)]+)/)
-  if (gitSshMatch) {
-    return { type: 'github', repo: gitSshMatch[1] }
-  }
-
-  // vcpkg_from_git(... URL https://github.com/org/repo ...)
-  const gitHttpsMatch = content.match(/vcpkg_from_git\s*\([^)]*URL\s+https:\/\/github\.com\/([^\s.)]+)/)
-  if (gitHttpsMatch) {
-    return { type: 'github', repo: gitHttpsMatch[1] }
+  // vcpkg_from_git(... URL <GitHub HTTPS/SSH URL> ...)
+  const gitMatch = content.match(
+    /vcpkg_from_git\s*\([^)]*\bURL\s+(?:"([^"]+)"|'([^']+)'|([^\s)]+))/
+  )
+  if (gitMatch) {
+    const repo = normalizeGitHubRepo(gitMatch[1] || gitMatch[2] || gitMatch[3])
+    if (repo) return { type: 'github', repo }
   }
 
   return null
