@@ -247,10 +247,6 @@
     {
       "name": "Qwen3.5-0.8B-MTP-Q8_0.gguf",
       "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf"
-    },
-    {
-      "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     }
   ],
   "runMultiGpuTest": [

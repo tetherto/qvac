@@ -25,6 +25,7 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 // Qwen3.5-0.8B with the MTP/nextn head bundled in the single model GGUF — the
@@ -42,10 +43,23 @@ const MODEL = {
 // single-file self-MTP loader does not use. So spec-type=draft-mtp must stay
 // INERT here (draftTotal === 0) while generation still succeeds
 // non-speculatively — the graceful-fallback contract for a model with no head.
-// `url` (pinned, matches models.manifest.json) so it is staged on mobile too.
+//
+// DESKTOP ONLY (see the `skip: isMobile` on the test below). Deliberately no
+// `url` here: scripts/generate-model-manifest.js discovers mobile staging
+// models by regex-scanning these files for `{ name, url }` pairs, so omitting
+// the url keeps this 3.3 GB model out of the Device Farm payload for
+// runMtpTest. Desktop is unaffected — ensureModel() resolves the download URL
+// (and sha256/bytes) exclusively from test/integration/models.manifest.json,
+// where this model is already pinned.
+//
+// Why excluded from mobile: mmap of the 3.3 GB mapping intermittently fails
+// with ENOMEM on smaller iOS devices (observed on Apple iPhone 16:
+// `llama_model_load: error loading model: mmap failed: Cannot allocate
+// memory`), which reddens whichever suite happens to load it. The head-less
+// fallback contract is architecture-level, not device-specific, so desktop
+// coverage is sufficient. Re-enable on mobile once a smaller quant is staged.
 const GEMMA_MODEL = {
-  name: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
-  url: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf'
+  name: 'google_gemma-4-E2B-it-Q4_K_M.gguf'
 }
 
 const PROMPT = [
@@ -151,7 +165,10 @@ safeTest('Qwen3.5-0.8B without spec-type', { timeout: 600_000 }, async (t) => {
 
 safeTest(
   'Gemma-4 E2B with spec-type=draft-mtp stays inert (no bundled MTP head)',
-  { timeout: 600_000 },
+  // Desktop only: the 3.3 GB Gemma-4 mapping intermittently fails to mmap on
+  // memory-constrained mobile devices (see GEMMA_MODEL above). The contract
+  // under test is architecture-level, so desktop coverage suffices.
+  { skip: isMobile, timeout: 600_000 },
   async (t) => {
     // Gemma-4 has no bundled nextn head, so the draft context can't be built and
     // draft-mtp must degrade to plain decoding: coherent output, zero drafts, no
