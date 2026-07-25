@@ -86,6 +86,7 @@ jobs:
       run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
       run_desktop: ${{ steps.route.outputs.run_desktop }}
       run_mobile: ${{ steps.route.outputs.run_mobile }}
+      run_coload: ${{ steps.route.outputs.run_coload }}
     steps:
       - name: Checkout ci-router composite (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -363,11 +364,51 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
+  coload-smoke:
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    needs:
+      - context
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - label-gate
+    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    uses: ./.github/workflows/coload-smoke.yml
+    secrets: inherit
+    with:
+      addon: tts-ggml
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  coload-smoke-mobile:
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    needs:
+      - context
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - label-gate
+    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    uses: ./.github/workflows/coload-smoke-mobile.yml
+    secrets: inherit
+    with:
+      addon: tts-ggml
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
   merge-guard:
-    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests, coload-smoke, coload-smoke-mobile]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') && (needs.coload-smoke.result == 'success' || needs.coload-smoke.result == 'skipped') && (needs.coload-smoke-mobile.result == 'success' || needs.coload-smoke-mobile.result == 'skipped') }}

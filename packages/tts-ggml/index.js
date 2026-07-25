@@ -13,6 +13,7 @@ const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
 const ENGINE_CHATTERBOX = "chatterbox";
 const ENGINE_SUPERTONIC = "supertonic";
+const ENGINE_PARLER = "parler";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -27,6 +28,27 @@ const SUPERTONIC_V3_QUANT_ORDER = [
     "f32",
     "q8_0",
     "q4_0",
+];
+// Parler GGUFs ship per quant tier with the quant in the filename
+// (`parler-mini-v1-q8_0.gguf`); a bare `parler.gguf` deliberately does not
+// match, keeping ambiguous files out of the modelDir auto-detect path.
+const PARLER_RE = /^parler-(mini|large|indic)(-v\d+)?(-[a-z0-9_]+)?\.gguf$/i;
+const PARLER_VARIANT_ORDER = ["mini", "large", "indic"];
+const PARLER_QUANT_ORDER = ["q8_0", "q6_k", "f16", "f32"];
+const PARLER_DESCRIPTION_KEYS = ["description", "voiceDescription"];
+const PARLER_TEMPLATE_KEYS = [
+    "voice",
+    "emotion",
+    "pitch",
+    "pace",
+    "expressivity",
+    "noise",
+    "reverb",
+    "quality",
+];
+const PARLER_FIELD_KEYS = [
+    ...PARLER_DESCRIPTION_KEYS,
+    ...PARLER_TEMPLATE_KEYS,
 ];
 function normalizeError(error) {
     return typeof error === "string"
@@ -79,6 +101,73 @@ function findSupertonicV3InDir(modelDir) {
     matches.sort((left, right) => rank(left) - rank(right));
     return path.join(modelDir, matches[0]);
 }
+/**
+ * Find a Parler GGUF in `modelDir`, ranked by variant (mini before large
+ * before indic) and, within a variant, by quant tier (q8_0 > q6_k > f16 > f32;
+ * a bare `parler-<variant>.gguf` wins as forward-compat).
+ */
+function findParlerInDir(modelDir) {
+    if (!modelDir)
+        return undefined;
+    let entries;
+    try {
+        entries = fs.readdirSync(modelDir);
+    }
+    catch {
+        return undefined;
+    }
+    const matches = entries.filter((name) => PARLER_RE.test(name));
+    if (matches.length === 0)
+        return undefined;
+    function rank(name) {
+        const match = name.match(PARLER_RE);
+        if (!match)
+            return Number.MAX_SAFE_INTEGER;
+        const variant = PARLER_VARIANT_ORDER.indexOf(match[1].toLowerCase());
+        let quantRank = 0;
+        if (match[3]) {
+            const index = PARLER_QUANT_ORDER.indexOf(match[3].slice(1).toLowerCase());
+            quantRank =
+                index === -1 ? PARLER_QUANT_ORDER.length + 2 : index + 1;
+        }
+        return variant * 100 + quantRank;
+    }
+    matches.sort((left, right) => rank(left) - rank(right));
+    return path.join(modelDir, matches[0]);
+}
+/**
+ * Collect the Parler description/template properties present on `source`
+ * (a run input, streaming options, or constructor options). Returns undefined
+ * when none are set.
+ */
+function pickParlerDescFields(source) {
+    if (source == null || typeof source !== "object")
+        return undefined;
+    const out = {};
+    let any = false;
+    for (const key of PARLER_FIELD_KEYS) {
+        const value = source[key];
+        if (value != null && value !== "") {
+            out[key] = String(value);
+            any = true;
+        }
+    }
+    return any ? out : undefined;
+}
+/**
+ * Same-level conflict check: a free-text description cannot be merged with
+ * template fields, so setting both together is an error.
+ */
+function assertParlerDescFieldsConsistent(fields, where) {
+    if (!fields)
+        return;
+    const hasDescription = PARLER_DESCRIPTION_KEYS.some((key) => fields[key] != null);
+    const templateKeys = PARLER_TEMPLATE_KEYS.filter((key) => fields[key] != null);
+    if (hasDescription && templateKeys.length > 0) {
+        throw new Error(`tts-ggml: ${where}: 'description' is mutually exclusive with the ` +
+            `voice-template options (got ${templateKeys.join(", ")})`);
+    }
+}
 function normalizeGgmlFiles(files) {
     if (files == null || typeof files !== "object")
         return {};
@@ -87,6 +176,7 @@ function normalizeGgmlFiles(files) {
         t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
         s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
         supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
+        parlerModel: firstNonEmpty(files.parlerModel, files.parlerModelPath, files.parler),
         voicesDir: firstNonEmpty(files.voicesDir),
         lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
         lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -95,17 +185,21 @@ function normalizeGgmlFiles(files) {
     };
 }
 function detectEngineType(engine, files) {
-    if (engine === ENGINE_CHATTERBOX || engine === ENGINE_SUPERTONIC) {
+    if (engine === ENGINE_CHATTERBOX ||
+        engine === ENGINE_SUPERTONIC ||
+        engine === ENGINE_PARLER) {
         return engine;
     }
     if (engine != null && engine !== "") {
-        throw new Error("tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " +
-            `(got '${String(engine)}')`);
+        throw new Error("tts-ggml: 'engine' option must be 'chatterbox', 'supertonic' or " +
+            `'parler' (got '${String(engine)}')`);
     }
     if (files.t3Model || files.s3genModel)
         return ENGINE_CHATTERBOX;
     if (files.supertonicModel)
         return ENGINE_SUPERTONIC;
+    if (files.parlerModel)
+        return ENGINE_PARLER;
     if (files.modelDir) {
         const hasChatterbox = fileExistsSafe(path.join(files.modelDir, CHATTERBOX_T3_TURBO)) ||
             fileExistsSafe(path.join(files.modelDir, CHATTERBOX_T3_MTL));
@@ -116,6 +210,8 @@ function detectEngineType(engine, files) {
             return ENGINE_CHATTERBOX;
         if (hasSupertonic)
             return ENGINE_SUPERTONIC;
+        if (findParlerInDir(files.modelDir))
+            return ENGINE_PARLER;
     }
     return ENGINE_CHATTERBOX;
 }
@@ -265,6 +361,7 @@ class TTSGgml {
     };
     static ENGINE_CHATTERBOX = ENGINE_CHATTERBOX;
     static ENGINE_SUPERTONIC = ENGINE_SUPERTONIC;
+    static ENGINE_PARLER = ENGINE_PARLER;
     opts;
     exclusiveRun;
     logger;
@@ -304,6 +401,21 @@ class TTSGgml {
     _backendsDir;
     _openclCacheDir;
     _vulkanCacheDir;
+    _parlerModelPath;
+    _description;
+    _emotion;
+    _pitch;
+    _pace;
+    _expressivity;
+    _noise;
+    _reverb;
+    _quality;
+    _temperature;
+    _topK;
+    _topP;
+    _maxFrames;
+    _minNewTokens;
+    _normalizeNumbers;
     constructor(options = {}) {
         this.opts = options.opts || {};
         this.exclusiveRun = !!options.exclusiveRun;
@@ -353,6 +465,10 @@ class TTSGgml {
                 : undefined);
             return;
         }
+        if (this._engineType === ENGINE_PARLER) {
+            this._parlerModelPath = firstNonEmpty(files.parlerModel, files.modelDir ? findParlerInDir(files.modelDir) : undefined);
+            return;
+        }
         if (files.modelDir) {
             const resolved = resolveChatterboxModelDirPaths(files.modelDir);
             this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
@@ -379,6 +495,22 @@ class TTSGgml {
         this._steps = firstNonEmpty(options.steps, options.numInferenceSteps);
         this._speed = options.speed;
         this._noiseNpyPath = options.noiseNpyPath;
+        // Parler voice-description surface (all optional; the all-defaults render
+        // is the models' recommended fallback caption).
+        this._description = firstNonEmpty(options.description, options.voiceDescription);
+        this._emotion = options.emotion;
+        this._pitch = options.pitch;
+        this._pace = options.pace;
+        this._expressivity = options.expressivity;
+        this._noise = options.noise;
+        this._reverb = options.reverb;
+        this._quality = options.quality;
+        this._temperature = options.temperature;
+        this._topK = options.topK;
+        this._topP = options.topP;
+        this._maxFrames = options.maxFrames;
+        this._minNewTokens = options.minNewTokens;
+        this._normalizeNumbers = options.normalizeNumbers;
     }
     _assertEngineStreamingSupport() {
         if (this._engineType === ENGINE_SUPERTONIC &&
@@ -391,6 +523,9 @@ class TTSGgml {
                 "use sentence-level streaming via the engine-agnostic " +
                 "runStream() / runStreaming() / run({ streamOutput: true }) APIs.");
         }
+        // Parler option consistency runs between the supertonic and denoiser
+        // streaming guards, matching the pre-migration single-method throw order.
+        this._assertParlerOptionConsistency();
         if (this._denoiserGgufPath &&
             (this._streamChunkTokens != null ||
                 this._streamFirstChunkTokens != null)) {
@@ -400,6 +535,77 @@ class TTSGgml {
                 "denoiser for streaming. Streaming denoise is a planned " +
                 "follow-up (needs a stateful streaming denoiser).");
         }
+    }
+    _assertParlerOptionConsistency() {
+        if (this._engineType === ENGINE_PARLER) {
+            if (this._enhancerGgufPath || this._denoiserGgufPath) {
+                throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+                    "the parler engine (native 44.1 kHz output needs no bandwidth " +
+                    "extension). Drop lavasrEnhancer / lavasrDenoiser.");
+            }
+            assertParlerDescFieldsConsistent(pickParlerDescFields({
+                description: this._description,
+                voice: this._voice,
+                emotion: this._emotion,
+                pitch: this._pitch,
+                pace: this._pace,
+                expressivity: this._expressivity,
+                noise: this._noise,
+                reverb: this._reverb,
+                quality: this._quality,
+            }), "constructor");
+            return;
+        }
+        const parlerOnly = [];
+        if (this._description != null) {
+            parlerOnly.push("description/voiceDescription");
+        }
+        const parlerOnlyFields = {
+            emotion: this._emotion,
+            pitch: this._pitch,
+            pace: this._pace,
+            expressivity: this._expressivity,
+            noise: this._noise,
+            reverb: this._reverb,
+            quality: this._quality,
+            temperature: this._temperature,
+            topK: this._topK,
+            topP: this._topP,
+            maxFrames: this._maxFrames,
+            minNewTokens: this._minNewTokens,
+            normalizeNumbers: this._normalizeNumbers,
+        };
+        for (const [key, value] of Object.entries(parlerOnlyFields)) {
+            if (value != null)
+                parlerOnly.push(key);
+        }
+        if (parlerOnly.length > 0) {
+            throw new Error(`tts-ggml: ${parlerOnly.join(", ")} are parler-only options ` +
+                `(engine is ${this._engineType})`);
+        }
+    }
+    /**
+     * Extract + validate the per-call parler description/template fields from a
+     * run input or streaming options. Returns undefined when none are present.
+     * Parler-only; a per-call template cannot be merged with a constructor-level
+     * free-text description.
+     */
+    _resolveParlerJobFields(source, where) {
+        const fields = pickParlerDescFields(source);
+        if (!fields)
+            return undefined;
+        if (this._engineType !== ENGINE_PARLER) {
+            throw new Error(`tts-ggml: ${where}: per-call description/voice-template options ` +
+                `are parler-only (engine is ${this._engineType})`);
+        }
+        assertParlerDescFieldsConsistent(fields, where);
+        const hasDescription = PARLER_DESCRIPTION_KEYS.some((key) => fields[key] != null);
+        if (!hasDescription && this._description != null) {
+            throw new Error(`tts-ggml: ${where}: per-call template options cannot be combined ` +
+                "with a constructor-level description; pass a per-call " +
+                "description instead");
+        }
+        return fields;
     }
     getEngineType() {
         return this._engineType;
@@ -437,10 +643,11 @@ class TTSGgml {
                     adds: "run with streamOutput: non-empty string `input` is required",
                 });
             }
+            const parlerFields = this._resolveParlerJobFields(input, "run");
             const runStream = () => this._runStreamOrchestrator(input.input, {
                 locale: input.locale,
                 maxChunkScalars: input.maxChunkScalars,
-            });
+            }, parlerFields);
             return this.exclusiveRun
                 ? this._enqueueExclusiveTtsResponse(runStream)
                 : runStream();
@@ -458,6 +665,7 @@ class TTSGgml {
             streamOutput: true,
             locale: normalized.locale,
             maxChunkScalars: normalized.maxChunkScalars,
+            ...(pickParlerDescFields(normalized) ?? {}),
         });
     }
     /**
@@ -468,6 +676,7 @@ class TTSGgml {
      * small streamed fragments are coalesced.
      */
     async runStreaming(textStream, options = {}) {
+        const parlerFields = this._resolveParlerJobFields(options, "runStreaming");
         const streamOptions = this._resolveRunStreamingOptions(textStream, options);
         let normalized = this._normalizeTextStream(textStream);
         if (streamOptions.accumulateSentences) {
@@ -479,7 +688,7 @@ class TTSGgml {
                 language: this._config.language,
             });
         }
-        const runStream = () => this._runTextStreamOrchestrator(normalized);
+        const runStream = () => this._runTextStreamOrchestrator(normalized, parlerFields);
         return this.exclusiveRun
             ? this._enqueueExclusiveTtsResponse(runStream)
             : runStream();
@@ -556,7 +765,7 @@ class TTSGgml {
             adds: "runStreaming: expected string, array of strings, Iterable, or AsyncIterable",
         });
     }
-    _runTextStreamOrchestrator(source) {
+    _runTextStreamOrchestrator(source, parlerFields) {
         const response = this._job.start();
         this._sentenceStreamCtx = {
             textStreamMode: true,
@@ -565,6 +774,7 @@ class TTSGgml {
             chunkIdx: 0,
             acc: { totalTime: 0, audioDurationMs: 0, totalSamples: 0 },
             chunkResolver: null,
+            parlerFields,
         };
         void this._sentenceStreamTextIterableDrive().catch((error) => {
             this._rejectActiveChunk(error);
@@ -593,6 +803,7 @@ class TTSGgml {
                 await this._requireAddon().runJob({
                     type: "text",
                     input: text,
+                    ...(context.parlerFields ?? {}),
                 });
                 await done;
             }
@@ -621,7 +832,7 @@ class TTSGgml {
             }
             : computeSentenceStreamStats(chunks, accumulator));
     }
-    _runStreamOrchestrator(text, options) {
+    _runStreamOrchestrator(text, options, parlerFields) {
         const chunks = (0, textChunker_1.splitTtsText)(String(text), {
             language: this._config.language,
             locale: options.locale,
@@ -639,6 +850,7 @@ class TTSGgml {
             chunkIdx: 0,
             acc: { totalTime: 0, audioDurationMs: 0, totalSamples: 0 },
             chunkResolver: null,
+            parlerFields,
         };
         void this._sentenceStreamDriveBody().catch((error) => {
             this._rejectActiveChunk(error);
@@ -659,6 +871,7 @@ class TTSGgml {
             await this._requireAddon().runJob({
                 type: "text",
                 input: context.chunks[index],
+                ...(context.parlerFields ?? {}),
             });
             await done;
         }
@@ -682,6 +895,9 @@ class TTSGgml {
         }
     }
     _buildTtsParams() {
+        if (this._engineType === ENGINE_PARLER) {
+            return this._buildParlerParams();
+        }
         return this._engineType === ENGINE_SUPERTONIC
             ? this._buildSupertonicParams()
             : this._buildChatterboxParams();
@@ -748,6 +964,92 @@ class TTSGgml {
         }
         return parameters;
     }
+    _buildParlerParams() {
+        // Re-checked here (not only in the constructor) so reload({...}) cannot
+        // smuggle in a description/template conflict.
+        if (this._description != null) {
+            const templateSet = [
+                this._voice,
+                this._emotion,
+                this._pitch,
+                this._pace,
+                this._expressivity,
+                this._noise,
+                this._reverb,
+                this._quality,
+            ].some((value) => value != null && value !== "");
+            if (templateSet) {
+                throw new Error("tts-ggml: 'description' is mutually exclusive with the " +
+                    "voice-template options");
+            }
+        }
+        const parameters = {
+            engineType: ENGINE_PARLER,
+            parlerModelPath: this._parlerModelPath || "",
+        };
+        if (this._description != null) {
+            parameters.description = String(this._description);
+        }
+        if (this._voice)
+            parameters.voice = String(this._voice);
+        if (this._emotion != null) {
+            parameters.emotion = String(this._emotion);
+        }
+        if (this._pitch != null)
+            parameters.pitch = String(this._pitch);
+        if (this._pace != null)
+            parameters.pace = String(this._pace);
+        if (this._expressivity != null) {
+            parameters.expressivity = String(this._expressivity);
+        }
+        if (this._noise != null)
+            parameters.noise = String(this._noise);
+        if (this._reverb != null)
+            parameters.reverb = String(this._reverb);
+        if (this._quality != null) {
+            parameters.quality = String(this._quality);
+        }
+        if (this._seed != null)
+            parameters.seed = this._seed | 0;
+        if (this._threads != null)
+            parameters.threads = this._threads | 0;
+        if (this._temperature != null) {
+            parameters.temperature = Number(this._temperature);
+        }
+        if (this._topK != null)
+            parameters.topK = this._topK | 0;
+        if (this._topP != null)
+            parameters.topP = Number(this._topP);
+        if (this._maxFrames != null) {
+            parameters.maxFrames = this._maxFrames | 0;
+        }
+        if (this._minNewTokens != null) {
+            parameters.minNewTokens = this._minNewTokens | 0;
+        }
+        if (this._streamChunkTokens != null) {
+            parameters.streamChunkTokens = this._streamChunkTokens | 0;
+        }
+        if (this._streamFirstChunkTokens != null) {
+            parameters.streamFirstChunkTokens =
+                this._streamFirstChunkTokens | 0;
+        }
+        if (this._outputSampleRate != null) {
+            parameters.outputSampleRate = this._outputSampleRate | 0;
+        }
+        if (this._normalizeNumbers != null) {
+            parameters.normalizeNumbers = !!this._normalizeNumbers;
+        }
+        if (this._nGpuLayers != null) {
+            parameters.nGpuLayers = this._nGpuLayers | 0;
+        }
+        if (this._config.useGPU != null) {
+            parameters.useGPU = !!this._config.useGPU;
+        }
+        if (this._backendsDir) {
+            parameters.backendsDir = this._backendsDir;
+        }
+        return parameters;
+    }
     _assignCommonNativeParams(parameters) {
         if (this._seed != null)
             parameters.seed = this._seed | 0;
@@ -794,6 +1096,7 @@ class TTSGgml {
         this.state.destroyed = true;
     }
     async _runInternal(input) {
+        const parlerFields = this._resolveParlerJobFields(input, "run");
         const response = this._job.start({
             signal: input?.signal,
         });
@@ -803,6 +1106,7 @@ class TTSGgml {
             await this._requireAddon().runJob({
                 type: input.type || "text",
                 input: input.input,
+                ...(parlerFields ?? {}),
             });
         }
         catch (error) {
@@ -930,6 +1234,61 @@ class TTSGgml {
         }
         if (runtimeConfig.outputSampleRate !== undefined) {
             this._outputSampleRate = runtimeConfig.outputSampleRate;
+        }
+        // Parler description/template + sampling knobs are reloadable; they rebuild
+        // the engine's default description / sampler. _buildParlerParams re-validates
+        // so a wrong-engine reload still throws.
+        if (this._engineType === ENGINE_PARLER) {
+            const parlerConfig = newConfig;
+            if (parlerConfig.description !== undefined ||
+                parlerConfig.voiceDescription !== undefined) {
+                this._description = firstNonEmpty(parlerConfig.description, parlerConfig.voiceDescription);
+            }
+            if (parlerConfig.voice !== undefined) {
+                this._voice = parlerConfig.voice;
+            }
+            if (parlerConfig.emotion !== undefined) {
+                this._emotion = parlerConfig.emotion;
+            }
+            if (parlerConfig.pitch !== undefined) {
+                this._pitch = parlerConfig.pitch;
+            }
+            if (parlerConfig.pace !== undefined) {
+                this._pace = parlerConfig.pace;
+            }
+            if (parlerConfig.expressivity !== undefined) {
+                this._expressivity = parlerConfig.expressivity;
+            }
+            if (parlerConfig.noise !== undefined) {
+                this._noise = parlerConfig.noise;
+            }
+            if (parlerConfig.reverb !== undefined) {
+                this._reverb = parlerConfig.reverb;
+            }
+            if (parlerConfig.quality !== undefined) {
+                this._quality = parlerConfig.quality;
+            }
+            if (parlerConfig.temperature !== undefined) {
+                this._temperature = parlerConfig.temperature;
+            }
+            if (parlerConfig.topK !== undefined) {
+                this._topK = parlerConfig.topK;
+            }
+            if (parlerConfig.topP !== undefined) {
+                this._topP = parlerConfig.topP;
+            }
+            if (parlerConfig.maxFrames !== undefined) {
+                this._maxFrames = parlerConfig.maxFrames;
+            }
+            if (parlerConfig.minNewTokens !== undefined) {
+                this._minNewTokens = parlerConfig.minNewTokens;
+            }
+            if (parlerConfig.normalizeNumbers !== undefined) {
+                this._normalizeNumbers = parlerConfig.normalizeNumbers;
+            }
+            if (parlerConfig.seed !== undefined) {
+                this._seed = parlerConfig.seed;
+            }
         }
         const parameters = this._buildTtsParams();
         await this.cancel();

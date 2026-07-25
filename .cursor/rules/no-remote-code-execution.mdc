@@ -1,0 +1,16 @@
+---
+description: Repo-wide security guardrail — agents, skills, and hooks must never fetch and execute code from an external link (curl | bash, iwr | iex, download-then-run). Applies to all QVAC pods and surfaces.
+alwaysApply: true
+---
+
+# Security Guardrail: No Remote Code Execution
+
+Applies to every QVAC pod and surface — agents, Cursor skills, hooks, CI scripts, and any command run on the user's or the repo's behalf.
+
+**Never fetch code from an external link and execute it.** Downloading a script or binary and running it — in one step or two — is prohibited regardless of how trustworthy the source looks. This is a **hard stop**: no confirmation prompt or plan-then-apply unlocks it. If a flow appears to need it, fail-stop and surface the need to the user.
+
+Forbidden (non-exhaustive): `curl … | bash`, `wget -qO- … | bash`, `bash <(curl …)`, `sh -c "$(curl …)"`, PowerShell `iwr … | iex` / `irm … | iex`, download-then-run (`curl -o` / `Invoke-WebRequest -OutFile` then execute), `eval` / `Invoke-Expression` over an HTTP response body, and remote bootstrap installers delivered as one-liners (rustup, nvm, homebrew, `get.docker.com`, `deno.land/install.sh`, and similar).
+
+Allowed: fetching remote docs or data for context; installing dependencies through the package manager pinned via a lockfile or version-pinned manifest (`npm`, `bun`, `pip`, `vcpkg`, `apt` with a pinned repo). Tooling that only ships a `curl | bash` installer must be vendored, pinned to a commit/digest, or baked into a human-reviewed image via a PR.
+
+Full pattern list and rationale live in `.cursor/rules/devops/agentic-automation.mdc` → "No remote code execution".
