@@ -20,7 +20,7 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   'tts-ggml': 'speech',
   'onnx-tts': 'speech',
   ocr: 'ocr',
-  'onnx-ocr': 'ocr',
+  'ggml-ocr': 'ocr',
   diffusion: 'image',
   'sdcpp-generation': 'image'
 }

@@ -106,7 +106,7 @@ graph TB
         NMT["@qvac/translation-nmtcpp"]
         TTS["@qvac/tts-ggml"]
         EMBED["@qvac/embed-llamacpp"]
-        OCR["@qvac/ocr-onnx"]
+        OCR["@qvac/ocr-ggml"]
     end
     
     subgraph "Native Compute"
@@ -149,7 +149,7 @@ graph TB
 | Addons | @qvac/translation-nmtcpp | Neural machine translation |
 | Addons | @qvac/tts-ggml | Text-to-speech using GGML |
 | Addons | @qvac/embed-llamacpp | Text embeddings using llama.cpp |
-| Addons | @qvac/ocr-onnx | OCR using ONNX |
+| Addons | @qvac/ocr-ggml | OCR using GGML |
 | Backend | CPU/GPU Inference Backends | Native ML computation |
 
 **Data Flow:** Application → Bare → addon-cpp → Specific Addon → CPU/GPU Backend
@@ -164,7 +164,7 @@ Production addons built on this library:
 - **@qvac/translation-nmtcpp** - Neural machine translation
 - **@qvac/tts-ggml** - Text-to-speech using GGML
 - **@qvac/embed-llamacpp** - Text embeddings using llama.cpp
-- **@qvac/ocr-onnx** - OCR using ONNX and OpenCV
+- **@qvac/ocr-ggml** - OCR using GGML and OpenCV
 
 ---
 

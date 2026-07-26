@@ -29,7 +29,6 @@ const ENGINE_MAP = {
   '@qvac/tts-onnx': 'tts-onnx',
   '@qvac/transcription-whispercpp': 'transcription-whispercpp',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
-  '@qvac/ocr-onnx': 'ocr-onnx',
   '@qvac/diffusion-cpp': 'diffusion-cpp'
 }
 
@@ -88,9 +87,6 @@ const PYTHON_DEP_PATHS = {
   'transcription-whispercpp': [
     'benchmarks/ci/requirements-conversion.txt',
     'benchmarks/client/pyproject.toml'
-  ],
-  'ocr-onnx': [
-    'benchmarks/quality_eval/requirements.txt'
   ],
   'onnx-vad': [
     'benchmarks/client/pyproject.toml'

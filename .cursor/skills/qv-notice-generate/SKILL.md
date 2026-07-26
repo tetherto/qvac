@@ -140,7 +140,6 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `tts-onnx` | `@qvac/tts-onnx` |
 | `transcription-whispercpp` | `@qvac/transcription-whispercpp` |
-| `ocr-onnx` | `@qvac/ocr-onnx` |
 | `diffusion-cpp` | `@qvac/diffusion-cpp` |
 
 ## Sorting guarantee

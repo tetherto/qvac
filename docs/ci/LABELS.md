@@ -44,7 +44,6 @@ The label-gated addon PR workflows use a shared **[`ci-router`](../../.github/ac
 - `on-pr-transcription-whispercpp.yml`
 - `on-pr-classification-ggml.yml`
 - `on-pr-bci-whispercpp.yml`
-- `on-pr-ocr-onnx.yml`
 - `on-pr-onnx.yml`
 - `on-pr-decoder-audio.yml`
 - `on-pr-fabric.yml`
