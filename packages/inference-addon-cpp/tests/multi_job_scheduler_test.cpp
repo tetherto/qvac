@@ -258,6 +258,18 @@ public:
   void disarm() { throwOnCancel_.store(false); }
 };
 
+/// ConcurrentTestModel whose per-id cancelById() throws: exercises the
+/// teardown (and cancel-path) behaviour against a per-id cancellation that
+/// fails.
+class ThrowingCancelByIdTestModel final : public ConcurrentTestModel {
+public:
+  using ConcurrentTestModel::ConcurrentTestModel;
+
+  void cancelById(JobId /*id*/) const override {
+    throw std::runtime_error("per-id cancel failed");
+  }
+};
+
 /// ConcurrentTestModel whose process() calls back into its own scheduler's
 /// cancel(id) — the worker-originated cancel the IJobScheduler contract
 /// forbids — and records the outcome, so a test can assert the scheduler
@@ -2428,6 +2440,51 @@ TEST_F(MultiJobSchedulerTest, DroppedTerminalsSurviveAThrowingPublication) {
 
   scheduler_->cancelAll();
   waitForIdle(*scheduler_, std::chrono::seconds{5});
+}
+
+namespace {
+
+/// Death-test bodies: build a scheduler around @p model with one job in
+/// flight, then destroy it. IModelCancel documents that a throw rejects the
+/// cancellation, so a throwing implementation must not escape the implicitly
+/// noexcept destructor — that is std::terminate. A clean child exit proves
+/// teardown swallowed the failure and still joined its workers (the
+/// uncancelled job just runs to its natural 100ms end).
+template <typename Model>
+[[noreturn]] void destroySchedulerWithInFlightJob(const bool wholeModel) {
+  Model model{std::chrono::milliseconds{100}};
+  MockOutputCallback callback;
+  const std::shared_ptr<OutputQueue> queue =
+      std::make_shared<OutputQueue>(callback, model);
+  {
+    MultiJobScheduler scheduler(
+        &model, 1, wholeModel ? &model : nullptr,
+        wholeModel ? nullptr : &model, 0);
+    scheduler.start(queue);
+    if (!scheduler.runJob(std::string("job")).has_value()) {
+      std::exit(2);
+    }
+    if (waitForActive(model, 1, std::chrono::seconds{2}) != 1) {
+      std::exit(3);
+    }
+  }
+  std::exit(0);
+}
+
+} // namespace
+
+TEST(MultiJobSchedulerDeathTest, TeardownSurvivesThrowingWholeModelCancel) {
+  EXPECT_EXIT(
+      destroySchedulerWithInFlightJob<ThrowingWholeModelCancelTestModel>(
+          /*wholeModel=*/true),
+      ::testing::ExitedWithCode(0), "");
+}
+
+TEST(MultiJobSchedulerDeathTest, TeardownSurvivesThrowingPerIdCancel) {
+  EXPECT_EXIT(
+      destroySchedulerWithInFlightJob<ThrowingCancelByIdTestModel>(
+          /*wholeModel=*/false),
+      ::testing::ExitedWithCode(0), "");
 }
 
 } // namespace qvac_lib_inference_addon_cpp
