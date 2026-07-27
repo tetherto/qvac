@@ -4,6 +4,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <exception>
 #include <list>
 #include <map>
 #include <memory>
@@ -516,6 +517,7 @@ public:
     std::vector<JobId> dropped;
     std::vector<JobId> inFlightTargets;
     std::vector<JobId> sweptInFlight;
+    std::exception_ptr cancelFailure;
     {
       std::lock_guard lock(mtx_);
       for (const JobId id : ids) {
@@ -528,11 +530,25 @@ public:
       if (!inFlightTargets.empty() && cancelById_ == nullptr &&
           cancel_ != nullptr) {
         sweptInFlight.assign(inFlight_.begin(), inFlight_.end());
-        cancel_->cancel();
+        try {
+          cancel_->cancel();
+        } catch (...) {
+          // The queued targets are already unlinked — irreversibly, no
+          // worker can ever run them — so their terminal errors must go
+          // out even though the cancel itself failed. Park the failure,
+          // publish below, rethrow after.
+          cancelFailure = std::current_exception();
+        }
       }
     }
     for (const JobId id : dropped) {
       outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+    }
+    if (cancelFailure != nullptr) {
+      // Rethrow before any await: the model-side cancel was not delivered,
+      // so waiting on the swept snapshot could wait on jobs nothing will
+      // ever end.
+      std::rethrow_exception(cancelFailure);
     }
     if (inFlightTargets.empty()) {
       return;
