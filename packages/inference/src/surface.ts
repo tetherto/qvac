@@ -157,7 +157,8 @@ export {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
-  ModelNotLoadedError
+  ModelNotLoadedError,
+  TranslationFailedError
 } from './errors/index.ts'
 export type { InferenceCancelledPartial } from './errors/index.ts'
 
