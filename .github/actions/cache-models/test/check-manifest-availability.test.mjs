@@ -87,11 +87,14 @@ test('checkEntry: inaccessible on a 404', async () => {
   assert.match(r.reason, /HTTP 404/)
 })
 
-test('checkEntry: inaccessible when the redirect carries no canonical metadata', async () => {
+test('checkEntry: skipped when the redirect carries no canonical metadata', async () => {
+  // A 3xx means the object resolved (reachable) but exposes no linked content
+  // address (e.g. a redirected non-LFS sidecar or an xet-backed object). It is
+  // reachable-but-unfingerprintable, so it is skipped rather than failed.
   const fetch = fakeFetch({ [HF_URL]: { statusCode: 302, headers: {} } })
   const r = await checkEntry('m', pinnedEntry(), { fetch })
-  assert.equal(r.status, 'inaccessible')
-  assert.match(r.reason, /missing X-Linked/)
+  assert.equal(r.status, 'skipped')
+  assert.match(r.reason, /without linked content address/)
 })
 
 test('checkEntry: skipped when there is no HF LFS source', async () => {

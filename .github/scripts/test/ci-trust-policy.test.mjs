@@ -916,46 +916,15 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
   assert.deepEqual(offenders, [])
 })
 
-// Shared-CI-infra validation is a privileged pull_request_target entrypoint. It
-// must never check out or run PR-head code inline (that is CodeQL's
-// untrusted-checkout / cache-poisoning class); instead it gates on the shared
-// SHA-bound composites and delegates all execution to a workflow_call reusable
-// with the approved head SHA. These regressions lock that split in place.
-test('shared-ci-infra: privileged entrypoint only gates and delegates, never runs PR-head code inline', () => {
+// Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
+// privileged context), so it deliberately carries no label-gate/authorize and
+// needs no SHA-bound fork coverage. Lock in that it is NOT a pull_request_target
+// workflow, so a future edit can't quietly reintroduce a secret-bearing
+// untrusted-checkout surface.
+test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {
   const entry = read('.github/workflows/on-pr-shared-ci-infra.yml')
-  // Trust gate derives from the shared SHA-bound composites, not a hardcoded check.
-  assert.match(entry, /uses:\s*\.\/\.github\/actions\/label-gate/)
-  assert.match(entry, /uses:\s*\.\/\.github\/actions\/authorize-pr/)
-  // Re-runs when an internal draft becomes ready (matches the gate's draft rule).
-  assert.match(entry, /ready_for_review/)
-  // No PR-head checkout or code execution in the privileged entrypoint.
-  assert.doesNotMatch(entry, /node --test/)
-  assert.doesNotMatch(entry, /check-manifest-availability\.mjs/)
-  assert.doesNotMatch(
-    entry,
-    /uses:\s*\.\/\.github\/actions\/verify-qvac-fabric-lockstep/,
-  )
-  // Execution is delegated to the reusable workflow.
-  assert.match(
-    entry,
-    /uses:\s*\.\/\.github\/workflows\/reusable-shared-ci-infra-checks\.yml/,
-  )
-  // The delegated checks job gates on BOTH shared gate outputs and hands down
-  // the immutable approved head SHA (never a mutable branch ref).
-  const checks = jobBlock(entry, 'checks')
-  assert.match(checks, /needs\.label-gate\.outputs\.authorised == 'true'/)
-  assert.match(checks, /needs\.authorize\.outputs\.allowed == 'true'/)
-  assert.match(
-    checks,
-    /ref:\s*\$\{\{ inputs\.ref \|\| github\.event\.pull_request\.head\.sha \|\| github\.ref \}\}/,
-  )
-})
-
-test('shared-ci-infra: reusable checks workflow is workflow_call and pins its checkouts', () => {
-  const reusable = read('.github/workflows/reusable-shared-ci-infra-checks.yml')
-  assert.match(reusable, /on:\s*\n\s*workflow_call:/)
-  assert.match(reusable, /ref:\s*\$\{\{ inputs\.ref \|\| github\.ref \}\}/)
-  assert.match(reusable, /persist-credentials: false/)
-  // No mutable branch ref anywhere in the reusable.
-  assert.doesNotMatch(reusable, /head\.ref/)
+  assert.match(entry, /^on:\n\s*pull_request:/m)
+  assert.doesNotMatch(entry, /pull_request_target/)
+  assert.doesNotMatch(entry, /secrets:\s*inherit/)
+  assert.doesNotMatch(entry, /HF_TOKEN/)
 })

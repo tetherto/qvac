@@ -1,82 +1,66 @@
 name: On PR Trigger (Shared CI Infra)
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, labeled, ready_for_review]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - ".github/workflows/*shared-ci-infra*.yml"
+      - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
       - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Git ref (branch/SHA) to validate. Defaults to the current ref."
-        required: false
-        type: string
 
 permissions:
   contents: read
-  pull-requests: read
-  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    if: github.event_name != 'workflow_dispatch'
+  action-unit-tests:
+    name: cache-models action unit tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
+    timeout-minutes: 10
     steps:
-      - name: Checkout (label-gate action only)
+      - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
+          node-version: lts/*
+      - name: Run cache-models action unit tests
+        run: node --test .github/actions/cache-models/test/*.test.mjs
 
-  authorize:
-    if: github.event_name != 'workflow_dispatch'
+  model-availability:
+    name: Model availability (${{ matrix.package }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [diffusion-cpp, llm-llamacpp, embed-llamacpp]
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Authorize
-        id: auth
-        uses: ./.github/actions/authorize-pr
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          github-token: ${{ github.token }}
+          node-version: lts/*
+      - name: Verify pinned models are reachable and unchanged
+        run: |
+          node .github/actions/cache-models/check-manifest-availability.mjs \
+            --package ${{ matrix.package }} \
+            --root "$GITHUB_WORKSPACE"
 
-  checks:
-    name: Shared CI infra checks
-    needs: [authorize, label-gate]
-    if: >-
-      always() && !cancelled() &&
-      (github.event_name == 'workflow_dispatch' ||
-      (needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'))
-    permissions:
-      contents: read
-    uses: ./.github/workflows/reusable-shared-ci-infra-checks.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
+  fabric-lockstep:
+    name: qvac-fabric version lockstep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Verify qvac-fabric versions are lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep

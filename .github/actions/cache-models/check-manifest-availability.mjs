@@ -144,9 +144,15 @@ export async function checkEntry(name, entry, { fetch = fetchHeaders } = {}) {
 
   const observed = linkedIntegrity(headers)
   if (!observed.sha256 || !observed.bytes) {
+    // The source resolved (a 3xx means HF located the object), but this
+    // redirect carries no linked content address — e.g. a non-LFS sidecar
+    // served via redirect (sharded `.tensors.txt` index files) or an
+    // xet-backed object. It's reachable but not fingerprintable from headers,
+    // so treat it like other unfingerprintable sources: skip, leaving content
+    // verification to the canary integration leg.
     return {
-      status: 'inaccessible',
-      reason: `missing X-Linked-ETag/Size metadata for ${redactUrl(hfUrl)}`
+      status: 'skipped',
+      reason: `redirect without linked content address for ${redactUrl(hfUrl)} (covered by canary)`
     }
   }
   if (observed.sha256 !== entry.sha256) {
