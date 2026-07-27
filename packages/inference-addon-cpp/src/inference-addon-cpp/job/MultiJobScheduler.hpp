@@ -186,6 +186,29 @@ class MultiJobScheduler final : public IJobScheduler {
     return dropped;
   }
 
+  /// Publish the "Job cancelled" terminal for every id in @p ids, tolerating
+  /// per-id publication failures: each id is already irreversibly unlinked
+  /// from the queue, so every remaining terminal must still be attempted
+  /// when one publication throws (queueException enqueues the event, then
+  /// the consumer callback's notify() may throw). Returns the first failure
+  /// instead of throwing so the caller decides — the cancel entry points
+  /// rethrow it, the destructor must swallow it (a destructor throw is
+  /// std::terminate).
+  [[nodiscard]] std::exception_ptr publishCancelledTerminals(
+      const std::vector<JobId>& ids, const char* reason) const noexcept {
+    std::exception_ptr firstFailure;
+    for (const JobId id : ids) {
+      try {
+        outputQueue_->queueException(std::runtime_error(reason), id);
+      } catch (...) {
+        if (firstFailure == nullptr) {
+          firstFailure = std::current_exception();
+        }
+      }
+    }
+    return firstFailure;
+  }
+
   /// Snapshot of the in-flight ids, for the per-id cancel fallback when the
   /// model has no whole-model cancel(). jobStarting is announced under mtx_,
   /// so every id snapshotted here is already known to the model.
@@ -386,11 +409,10 @@ public:
       return; // never started, nothing was admitted
     }
     // Workers are gone; fail whatever never started so no accepted job ends
-    // without a terminal event.
-    for (const JobId id : dropQueued()) {
-      outputQueue_->queueException(
-          std::runtime_error("Job cancelled: scheduler destroyed"), id);
-    }
+    // without a terminal event. Publication failures are swallowed: every
+    // terminal is still attempted, and a destructor throw would terminate.
+    static_cast<void>(publishCancelledTerminals(
+        dropQueued(), "Job cancelled: scheduler destroyed"));
   }
 
   std::optional<JobId> runJob(std::any input) override {
@@ -453,8 +475,11 @@ public:
   }
 
   void cancelAll() override {
-    for (const JobId id : dropQueued()) {
-      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+    if (const std::exception_ptr failure =
+            publishCancelledTerminals(dropQueued(), "Job cancelled")) {
+      // Every dropped terminal was attempted; reject before cancelling
+      // in-flight work the caller now cannot assume was reached.
+      std::rethrow_exception(failure);
     }
     // Await only this snapshot: jobs admitted while the wait runs are not
     // cancelled and must not extend it. Per-id cancellation is preferred
@@ -541,14 +566,19 @@ public:
         }
       }
     }
-    for (const JobId id : dropped) {
-      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
-    }
+    const std::exception_ptr publishFailure =
+        publishCancelledTerminals(dropped, "Job cancelled");
     if (cancelFailure != nullptr) {
       // Rethrow before any await: the model-side cancel was not delivered,
       // so waiting on the swept snapshot could wait on jobs nothing will
       // ever end.
       std::rethrow_exception(cancelFailure);
+    }
+    if (publishFailure != nullptr) {
+      // Every dropped terminal was attempted (publishCancelledTerminals
+      // continues past failures); reject before dispatching or awaiting
+      // anything further.
+      std::rethrow_exception(publishFailure);
     }
     if (inFlightTargets.empty()) {
       return;
