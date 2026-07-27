@@ -413,6 +413,7 @@ In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language mo
 | Model | Params | Quantization | Description |
 |-------|--------|-------------|-------------|
 | LightON OCR-2 1B | 0.6B (LLM) + ~550M (vision) | Q4_K_M | OCR-specialized, full-page transcription, 11 languages |
+| Unlimited-OCR | 3B (DeepseekV2 MoE) + SAM+CLIP vision | Q4_K_M | OCR-specialized, full-page document parsing with layout boxes + HTML tables |
 | SmolVLM2-500M | 500M | Q8_0 | General vision-language, can follow targeted extraction prompts |
 
 ### LightON OCR-2
@@ -461,6 +462,64 @@ const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
 const messages = [
   { role: 'user', type: 'media', content: imageBytes },
   { role: 'user', content: 'Extract all text from this image and format it as markdown.' }
+]
+
+const response = await model.run(messages)
+const output = []
+
+response.onUpdate(token => {
+  output.push(token)
+})
+
+await response.await()
+
+console.log(output.join(''))
+
+await model.unload()
+```
+
+### Unlimited-OCR
+
+[Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR) is a 3B OCR-specialized vision-language model (Apache 2.0), an advancement of DeepSeek-OCR. It parses full-page documents into text with layout regions (`<|det|>` boxes) and reconstructs tables as HTML — useful for invoices, forms, and scanned reports.
+
+**Characteristics:**
+- DeepEncoder vision tower (SAM ViT-B + CLIP-L) + DeepseekV2 MoE decoder
+- Emits `<|det|>type [x0,y0,x1,y1]<|/det|>` layout regions and `<table>…</table>` structure
+- Requires both the LLM model and the **F16** mmproj (keep the vision projector at F16 — quantizing it hurts OCR accuracy)
+- Requires `qvac-fabric >= 9840` (ships the `deepseek2-ocr` engine + `deepseekocr` clip projector)
+- **Prompt matters:** use `document parsing.` (layout + tables), `Multi page parsing.` (long docs), or `Free OCR. ` (plain text). A generic "extract the text" prompt yields near-empty output.
+
+**Usage Example:**
+
+```js
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const fs = require('bare-fs')
+const path = require('bare-path')
+
+const dirPath = path.resolve('./models')
+
+const model = new LlmLlamacpp({
+  files: {
+    model: [path.join(dirPath, 'unlimited-ocr-Q4_K_M.gguf')],
+    projectionModel: path.join(dirPath, 'mmproj-unlimited-ocr-F16.gguf')
+  },
+  config: {
+    device: 'cpu',
+    gpu_layers: '0',
+    ctx_size: '8192',
+    temp: '0',
+    predict: '2048'
+  },
+  logger: console
+})
+
+await model.load()
+
+const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
+
+const messages = [
+  { role: 'user', type: 'media', content: imageBytes },
+  { role: 'user', content: 'document parsing.' }
 ]
 
 const response = await model.run(messages)
