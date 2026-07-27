@@ -47,17 +47,17 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperswarm-secret-stream
   @malept/cross-spawn-promise@2.0.0
     https://github.com/malept/cross-spawn-promise
-  @qvac/bci-whispercpp@0.4.1
+  @qvac/bci-whispercpp@0.5.1
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.10.2
+  @qvac/classification-ggml@0.13.0
     https://github.com/tetherto/qvac
   @qvac/decoder-audio@0.5.0
     https://github.com/tetherto/qvac
   @qvac/diagnostics@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/diffusion-cpp@0.13.3
+  @qvac/diffusion-cpp@0.15.0
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.26.2
+  @qvac/embed-llamacpp@0.28.0
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
   @qvac/infer-base@0.4.2
@@ -66,11 +66,11 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.36.3
+  @qvac/llm-llamacpp@0.38.2
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/ocr-ggml@0.10.2
+  @qvac/ocr-ggml@0.12.1
     https://github.com/tetherto/qvac
   @qvac/rag@0.6.4
     https://github.com/tetherto/qvac
@@ -78,17 +78,17 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
-  @qvac/sdk@0.15.0
+  @qvac/sdk@0.16.0
     https://github.com/tetherto/qvac
-  @qvac/transcription-parakeet@0.9.1
+  @qvac/transcription-parakeet@0.10.1
     https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.11.1
+  @qvac/transcription-whispercpp@0.12.1
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@7.2.2
+  @qvac/translation-nmtcpp@8.1.0
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml@0.4.2
+  @qvac/tts-ggml@0.5.1
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.11.2
+  @qvac/vla-ggml@0.14.0
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -98,7 +98,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-abort
   bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
-  bare-addon-resolve@1.10.0
+  bare-addon-resolve@1.10.1
     https://github.com/holepunchto/bare-addon-resolve
   bare-ansi-escapes@2.2.3
     https://github.com/holepunchto/bare-ansi-escapes
@@ -118,9 +118,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-env
   bare-events@2.9.1
     https://github.com/holepunchto/bare-events
-  bare-fetch@3.0.1
+  bare-fetch@3.2.0
     https://github.com/holepunchto/bare-fetch
-  bare-ffmpeg@1.3.0
+  bare-ffmpeg@1.5.0
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
@@ -136,17 +136,17 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-https
   bare-inspect@3.1.4
     https://github.com/holepunchto/bare-inspect
-  bare-lief@0.2.5
+  bare-lief@0.2.6
     https://github.com/holepunchto/bare-lief
   bare-link@3.3.0
     https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
-  bare-module-lexer@1.6.2
+  bare-module-lexer@1.6.3
     https://github.com/holepunchto/bare-module-lexer
-  bare-module-resolve@1.12.2
+  bare-module-resolve@1.12.4
     https://github.com/holepunchto/bare-module-resolve
-  bare-module-traverse@2.4.0
+  bare-module-traverse@2.4.4
     https://github.com/holepunchto/bare-module-traverse
   bare-net@2.3.2
     https://github.com/holepunchto/bare-net
@@ -156,7 +156,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-pack
   bare-path@3.1.1
     https://github.com/holepunchto/bare-path
-  bare-pipe@4.2.2
+  bare-performance@2.1.1
+    https://github.com/holepunchto/bare-performance
+  bare-pipe@4.2.3
     https://github.com/holepunchto/bare-pipe
   bare-posix@1.0.1
     https://github.com/holepunchto/bare-posix
@@ -182,7 +184,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-structured-clone
   bare-subprocess@6.1.0
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.5.2
+  bare-tcp@2.5.3
     https://github.com/holepunchto/bare-tcp
   bare-tls@3.1.7
     https://github.com/holepunchto/bare-tls
@@ -190,11 +192,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-tty
   bare-type@1.1.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.4.5
+  bare-url@2.4.6
     https://github.com/holepunchto/bare-url
   bare-zlib@1.4.1
     https://github.com/holepunchto/bare-zlib
-  baseline-browser-mapping@2.10.43
+  baseline-browser-mapping@2.11.4
     https://github.com/web-platform-dx/baseline-browser-mapping
   blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
@@ -234,7 +236,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-stats@2.4.0
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@3.1.2
+  hypercore-storage@3.2.0
     https://github.com/holepunchto/hypercore-storage
   hyperdb@6.7.0
     https://github.com/holepunchto/hyperdb
@@ -331,9 +333,9 @@ JavaScript Dependencies
     https://github.com/isaacs/minipass-flush
   path-scurry@2.0.2
     https://github.com/isaacs/path-scurry
-  sax@1.6.0
+  sax@1.6.1
     https://github.com/isaacs/sax-js
-  tar@7.5.20
+  tar@7.5.22
     https://github.com/isaacs/node-tar
   yallist@5.0.0
     https://github.com/isaacs/yallist
@@ -373,9 +375,9 @@ JavaScript Dependencies
     https://github.com/facebook/react-native
   @react-native/debugger-frontend@0.86.0
     https://github.com/facebook/react-native
-  fast-uri@3.1.3
+  fast-uri@3.1.4
     https://github.com/fastify/fast-uri
-  fast-uri@4.1.0
+  fast-uri@4.1.1
     https://github.com/fastify/fast-uri
   global-agent@3.0.0
     https://github.com/gajus/global-agent
@@ -407,7 +409,7 @@ JavaScript Dependencies
 
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
 
-  caniuse-lite@1.0.30001805
+  caniuse-lite@1.0.30001806
     https://github.com/browserslist/caniuse-lite
 
 --- cc0-1.0 (Creative Commons Zero 1.0) ---
@@ -437,7 +439,7 @@ JavaScript Dependencies
     https://github.com/isaacs/chownr
   cliui@8.0.1
     https://github.com/yargs/cliui
-  electron-to-chromium@1.5.389
+  electron-to-chromium@1.5.396
     https://github.com/Kilian/electron-to-chromium
   fastq@1.20.1
     https://github.com/mcollina/fastq
@@ -738,13 +740,13 @@ JavaScript Dependencies
     https://github.com/electron/universal
   @esbuild/darwin-arm64@0.28.1
     https://github.com/evanw/esbuild
-  @expo/cli@54.0.25
+  @expo/cli@54.0.26
     https://github.com/expo/expo
   @expo/code-signing-certificates@0.0.6
     https://github.com/expo/code-signing-certificates
-  @expo/config@12.0.13
+  @expo/config@12.0.14
     https://github.com/expo/expo
-  @expo/config-plugins@54.0.4
+  @expo/config-plugins@54.0.5
     https://github.com/expo/expo
   @expo/config-types@54.0.10
     https://github.com/expo/expo
@@ -752,31 +754,31 @@ JavaScript Dependencies
     https://github.com/expo/devcert
   @expo/devtools@0.1.8
     https://github.com/expo/expo
-  @expo/env@2.0.11
+  @expo/env@2.0.12
     https://github.com/expo/expo
   @expo/fingerprint@0.15.5
     https://github.com/expo/expo
-  @expo/image-utils@0.8.14
+  @expo/image-utils@0.8.15
     https://github.com/expo/expo
   @expo/json-file@10.0.16
     https://github.com/expo/expo
-  @expo/json-file@11.0.0
+  @expo/json-file@11.0.1
     https://github.com/expo/expo
   @expo/metro@54.2.0
     https://github.com/expo/expo-metro
-  @expo/metro-config@54.0.16
+  @expo/metro-config@54.0.17
     https://github.com/expo/expo
-  @expo/osascript@2.7.0
+  @expo/osascript@2.7.1
     https://github.com/expo/expo
-  @expo/package-manager@1.13.0
+  @expo/package-manager@1.13.1
     https://github.com/expo/expo
   @expo/plist@0.4.9
     https://github.com/expo/expo
-  @expo/prebuild-config@54.0.8
+  @expo/prebuild-config@54.0.9
     https://github.com/expo/expo
-  @expo/require-utils@55.0.5
+  @expo/require-utils@55.0.6
     https://github.com/expo/expo
-  @expo/schema-utils@0.1.8
+  @expo/schema-utils@0.1.9
     https://github.com/expo/expo
   @expo/sdk-runtime-versions@1.0.0
   @expo/spawn-async@1.8.0
@@ -790,7 +792,7 @@ JavaScript Dependencies
     https://github.com/fastify/accept-negotiator
   @fastify/ajv-compiler@4.0.5
     https://github.com/fastify/ajv-compiler
-  @fastify/autoload@6.4.0
+  @fastify/autoload@6.5.0
     https://github.com/fastify/fastify-autoload
   @fastify/busboy@3.2.0
     https://github.com/fastify/busboy
@@ -814,7 +816,7 @@ JavaScript Dependencies
     https://github.com/fastify/send
   @fastify/static@9.3.0
     https://github.com/fastify/fastify-static
-  @fastify/swagger@9.8.0
+  @fastify/swagger@9.8.1
     https://github.com/fastify/fastify-swagger
   @fastify/swagger-ui@5.2.6
     https://github.com/fastify/fastify-swagger-ui
@@ -870,8 +872,8 @@ JavaScript Dependencies
     https://github.com/facebook/react-native
   @react-native/virtualized-lists@0.86.0
     https://github.com/facebook/react-native
-  @sinclair/typebox@0.27.10
-    https://github.com/sinclairzx81/typebox-legacy
+  @sinclair/typebox@0.27.12
+    https://github.com/sinclairzx81/sinclair-typebox
   @sindresorhus/is@4.6.0
     https://github.com/sindresorhus/is
   @szmarczak/http-timer@4.0.6
@@ -962,7 +964,7 @@ JavaScript Dependencies
     https://github.com/davidmarkclements/atomic-sleep
   author-regex@1.0.0
     https://github.com/jonschlinkert/author-regex
-  avvio@9.2.0
+  avvio@9.3.0
     https://github.com/fastify/avvio
   babel-plugin-polyfill-corejs2@0.4.17
     https://github.com/babel/babel-polyfills
@@ -980,7 +982,7 @@ JavaScript Dependencies
     https://github.com/facebook/hermes
   babel-plugin-transform-flow-enums@0.0.2
     https://github.com/facebook/flow
-  babel-preset-expo@54.0.11
+  babel-preset-expo@54.0.12
     https://github.com/expo/expo
   balanced-match@1.0.2
     https://github.com/juliangruber/balanced-match
@@ -1012,11 +1014,11 @@ JavaScript Dependencies
     https://github.com/juliangruber/brace-expansion
   brace-expansion@2.1.2
     https://github.com/juliangruber/brace-expansion
-  brace-expansion@5.0.7
+  brace-expansion@5.0.8
     https://github.com/juliangruber/brace-expansion
   braces@3.0.3
     https://github.com/micromatch/braces
-  browserslist@4.28.6
+  browserslist@4.28.7
     https://github.com/browserslist/browserslist
   buffer@5.7.1
     https://github.com/feross/buffer
@@ -1104,7 +1106,7 @@ JavaScript Dependencies
     https://github.com/jshttp/cookie
   core-js-compat@3.49.0
     https://github.com/zloirock/core-js
-  corestore@7.11.0
+  corestore@7.11.1
     https://github.com/holepunchto/corestore
   cross-dirname@0.1.0
     https://github.com/JumpLink/cross-dirname
@@ -1194,7 +1196,7 @@ JavaScript Dependencies
     https://github.com/mysticatea/event-target-shim
   eventemitter3@5.0.4
     https://github.com/primus/eventemitter3
-  expo@54.0.35
+  expo@54.0.36
     https://github.com/expo/expo
   expo-asset@12.0.13
     https://github.com/expo/expo
@@ -1246,7 +1248,7 @@ JavaScript Dependencies
     https://github.com/jonschlinkert/fill-range
   finalhandler@1.1.2
     https://github.com/pillarjs/finalhandler
-  find-my-way@9.6.0
+  find-my-way@9.7.0
     https://github.com/delvedor/find-my-way
   find-up@2.1.0
     https://github.com/sindresorhus/find-up
@@ -1262,7 +1264,7 @@ JavaScript Dependencies
     https://github.com/jshttp/fresh
   fs-extra@10.1.0
     https://github.com/jprichardson/node-fs-extra
-  fs-extra@11.3.6
+  fs-extra@11.4.0
     https://github.com/jprichardson/node-fs-extra
   fs-extra@8.1.0
     https://github.com/jprichardson/node-fs-extra
@@ -1332,7 +1334,7 @@ JavaScript Dependencies
     https://github.com/node-modules/humanize-ms
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.33.5
+  hypercore@11.35.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
@@ -1352,7 +1354,7 @@ JavaScript Dependencies
     https://github.com/sindresorhus/indent-string
   invariant@2.2.4
     https://github.com/zertosh/invariant
-  ip-address@10.2.0
+  ip-address@10.3.1
     https://github.com/beaugunderson/ip-address
   ipaddr.js@2.4.0
     https://github.com/whitequark/ipaddr.js
@@ -1662,7 +1664,7 @@ JavaScript Dependencies
     https://github.com/postcss/postcss
   postject@1.0.0-alpha.6
     https://github.com/nodejs/postject
-  prettier@3.9.5
+  prettier@3.9.6
     https://github.com/prettier/prettier
   pretty-bytes@5.6.0
     https://github.com/sindresorhus/pretty-bytes
@@ -1702,8 +1704,8 @@ JavaScript Dependencies
     https://github.com/mafintosh/random-array-iterator
   range-parser@1.2.1
     https://github.com/jshttp/range-parser
-  react@19.2.7
-    https://github.com/facebook/react
+  react@19.2.8
+    https://github.com/react/react
   react-devtools-core@6.1.5
     https://github.com/facebook/react
   react-is@18.3.1
@@ -1922,7 +1924,7 @@ JavaScript Dependencies
     https://github.com/privatenumber/tsx
   ua-parser-js@0.7.41
     https://github.com/faisalman/ua-parser-js
-  undici@6.27.0
+  undici@6.28.0
     https://github.com/nodejs/undici
   undici-types@7.18.2
     https://github.com/nodejs/undici
@@ -1970,13 +1972,13 @@ JavaScript Dependencies
     https://github.com/chalk/wrap-ansi
   wrap-ansi@8.1.0
     https://github.com/chalk/wrap-ansi
-  ws@6.2.4
+  ws@6.2.6
     https://github.com/websockets/ws
-  ws@7.5.11
+  ws@7.5.13
     https://github.com/websockets/ws
-  ws@8.21.0
+  ws@8.21.1
     https://github.com/websockets/ws
-  xache@1.2.1
+  xache@1.3.0
     https://github.com/mafintosh/xache
   xml2js@0.6.0
     https://github.com/Leonidas-from-XIV/node-xml2js
@@ -1997,9 +1999,9 @@ JavaScript Dependencies
 
 --- mpl-2.0 (Mozilla Public License 2.0) ---
 
-  lightningcss@1.32.0
+  lightningcss@1.33.0
     https://github.com/parcel-bundler/lightningcss
-  lightningcss-darwin-arm64@1.32.0
+  lightningcss-darwin-arm64@1.33.0
     https://github.com/parcel-bundler/lightningcss
 
 --- python-2.0 (Python Software Foundation License) ---
