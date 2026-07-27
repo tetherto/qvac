@@ -227,6 +227,25 @@ public:
   }
 };
 
+/// ConcurrentTestModel whose whole-model cancel() throws until disarm(): lets
+/// a test hit the cancelJobs whole-model fallback with a failing model cancel
+/// and then hand teardown a working one.
+class ThrowingWholeModelCancelTestModel final : public ConcurrentTestModel {
+  std::atomic_bool throwOnCancel_{true};
+
+public:
+  using ConcurrentTestModel::ConcurrentTestModel;
+
+  void cancel() const override {
+    if (throwOnCancel_.load()) {
+      throw std::runtime_error("whole-model cancel failed");
+    }
+    ConcurrentTestModel::cancel();
+  }
+
+  void disarm() { throwOnCancel_.store(false); }
+};
+
 /// ConcurrentTestModel whose process() calls back into its own scheduler's
 /// cancel(id) — the worker-originated cancel the IJobScheduler contract
 /// forbids — and records the outcome, so a test can assert the scheduler
@@ -745,6 +764,25 @@ protected:
     model_ = std::move(probe);
     wire(maxConcurrency, queueCapacity);
     raw->bindScheduler(*scheduler_);
+    return raw;
+  }
+
+  /// buildWithQueue with a ThrowingWholeModelCancelTestModel instead (wired
+  /// whole-model-only: cancelById = nullptr); returns it (non-owning) so the
+  /// test can disarm the throw for teardown.
+  ThrowingWholeModelCancelTestModel* buildThrowingWholeModelCancelWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity,
+      std::chrono::milliseconds processTime) {
+    auto throwing =
+        std::make_unique<ThrowingWholeModelCancelTestModel>(processTime);
+    ThrowingWholeModelCancelTestModel* raw = throwing.get();
+    model_ = std::move(throwing);
+    callback_ = std::make_unique<MockOutputCallback>();
+    outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+    scheduler_ = std::make_unique<MultiJobScheduler>(
+        model_.get(), maxConcurrency, model_.get(), /*cancelById=*/nullptr,
+        queueCapacity);
+    scheduler_->start(outputQueue_);
     return raw;
   }
 
@@ -2253,6 +2291,47 @@ TEST_F(MultiJobSchedulerTest, CancelJobsWholeModelFallbackAwaitsNonTargetInFligh
   EXPECT_FALSE(returnedWithBystanderInFlight)
       << "cancelJobs returned while a job its whole-model cancel had swept "
          "was still in flight";
+}
+
+// A failing whole-model cancel must not eat the dropped queued jobs'
+// terminal events: dropQueuedJob() has already made them unrunnable inside
+// the same lock pass that dispatches cancel(), so a throw that skips the
+// queueException() loop would leave their consumers waiting forever. The
+// call still rejects (rethrows) — after the terminals are on the queue.
+TEST_F(MultiJobSchedulerTest,
+       CancelJobsPublishesDroppedTerminalsWhenWholeModelCancelThrows) {
+  ThrowingWholeModelCancelTestModel* throwing =
+      buildThrowingWholeModelCancelWithQueue(
+          /*maxConcurrency=*/1, /*queueCapacity=*/1, std::chrono::seconds{10});
+
+  const std::optional<JobId> inFlight =
+      scheduler_->runJob(std::string("in-flight"));
+  ASSERT_TRUE(inFlight.has_value());
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  const std::optional<JobId> queued = scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queued.has_value());
+
+  EXPECT_THROW(
+      scheduler_->cancelJobs({*queued, *inFlight}), std::runtime_error);
+
+  const auto queuedHasError = [&queued](const Outputs& outputs) {
+    for (const std::pair<JobId, std::any>& entry : outputs) {
+      if (entry.first == *queued &&
+          entry.second.type() == typeid(Output::Error)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const Outputs drained =
+      drainUntil(*outputQueue_, queuedHasError, std::chrono::seconds{2});
+  EXPECT_TRUE(queuedHasError(drained))
+      << "the dropped queued job lost its terminal event to the throwing "
+         "whole-model cancel";
+
+  throwing->disarm();
+  scheduler_->cancelAll();
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
 }
 
 } // namespace qvac_lib_inference_addon_cpp
