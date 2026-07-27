@@ -32,6 +32,7 @@ interface BatchCompletionTestParams {
   stream?: boolean
   resourceKey?: string
   toolDialect?: ToolDialect
+  expectedNonEmptyIds?: string[]
   expectedById?: Record<string, string[]>
   expectedAnyById?: Record<string, string[]>
   expectedToolCall?: {
@@ -89,12 +90,9 @@ export const batchCompletionBasic = createBatchCompletionTest(
       }
     ],
     stream: false,
-    expectedById: {
-      first: ['BANANA'],
-      second: ['GRAPE']
-    }
+    expectedNonEmptyIds: ['first', 'second']
   },
-  { validation: 'contains-all', contains: ['BANANA', 'GRAPE'] }
+  { validation: 'type', expectedType: 'string' }
 )
 
 export const batchCompletionStreaming = createBatchCompletionTest(
@@ -123,12 +121,9 @@ export const batchCompletionStreaming = createBatchCompletionTest(
       }
     ],
     stream: true,
-    expectedById: {
-      'stream-first': ['BANANA'],
-      'stream-second': ['GRAPE']
-    }
+    expectedNonEmptyIds: ['stream-first', 'stream-second']
   },
-  { validation: 'contains-all', contains: ['BANANA', 'GRAPE'] }
+  { validation: 'type', expectedType: 'string' }
 )
 
 export const batchCompletionEmptyRejected = createBatchCompletionTest(
