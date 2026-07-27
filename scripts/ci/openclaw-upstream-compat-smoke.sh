@@ -26,13 +26,6 @@ printf '%s\n' \
   'foreground-scripts=true' \
   > .npmrc
 
-npm install --no-fund --no-audit \
-  "$OPENCLAW_PACKAGE_SPEC" \
-  "$QVAC_OPENCLAW_PLUGIN_SPEC" \
-  "$QVAC_CLI_SPEC" \
-  "$QVAC_SDK_SPEC" \
-  2>&1 | tee "$ARTIFACT_DIR/npm-install.log"
-
 cat > "$ARTIFACT_DIR/package-specs.json" <<JSON
 {
   "openclaw": "$OPENCLAW_PACKAGE_SPEC",
@@ -42,13 +35,29 @@ cat > "$ARTIFACT_DIR/package-specs.json" <<JSON
 }
 JSON
 
+npm view "$OPENCLAW_PACKAGE_SPEC" version dist-tags --json \
+  > "$ARTIFACT_DIR/openclaw-package-metadata.json"
+npm view "$QVAC_OPENCLAW_PLUGIN_SPEC" version peerDependencies peerDependenciesMeta --json \
+  > "$ARTIFACT_DIR/qvac-openclaw-plugin-package-metadata.json"
+
+# OpenClaw tags numeric-suffix builds as latest, which npm treats as prereleases.
+# The user-facing plugin install below still runs with strict peer resolution.
+npm install --no-fund --no-audit \
+  --legacy-peer-deps \
+  "$OPENCLAW_PACKAGE_SPEC" \
+  "$QVAC_OPENCLAW_PLUGIN_SPEC" \
+  "$QVAC_CLI_SPEC" \
+  "$QVAC_SDK_SPEC" \
+  2>&1 | tee "$ARTIFACT_DIR/npm-install.log"
+
 npm ls --json \
   openclaw \
   @qvac/openclaw-plugin \
   @qvac/ai-sdk-provider \
   @qvac/cli \
   @qvac/sdk \
-  > "$ARTIFACT_DIR/npm-ls.json" || true
+  > "$ARTIFACT_DIR/npm-ls.json" \
+  2> "$ARTIFACT_DIR/npm-ls.stderr" || true
 
 node - > "$ARTIFACT_DIR/package-versions.json" <<'NODE'
 const { existsSync, readFileSync } = require('node:fs')

@@ -24,6 +24,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const {
+  parseCanonicalTestLabel,
   normalizeDesktopRecord,
   normalizeManualRecord,
   expandCanonicalReport,
@@ -44,6 +45,11 @@ function desktopReport (withMemory) {
     summary: {
       rtf: { mean: 0.21, p50: 0.2, p95: 0.23, stddev: 0.015 },
       wallMs: { mean: 540 },
+      quality: {
+        model: 'ggml-small.bin',
+        wer: { mean: 0.125 },
+        cer: { mean: 0.0625 }
+      },
       peakRssBytes: 1400 * MB
     }
   }
@@ -68,11 +74,14 @@ function mobileCanonicalReport () {
     results: [{
       test: '[GPU] chatterbox q4 metal',
       execution_provider: 'gpu',
+      qualityModel: 'ggml-tiny.bin',
       metrics: {
         real_time_factor: 0.3,
         rtf_p50: 0.29,
         rtf_p95: 0.35,
         wall_time_ms: 900,
+        word_error_rate: 0.2,
+        character_error_rate: 0.1,
         avg_rss_mb: 780,
         peak_rss_mb: 860,
         reclaimed_mb: 400
@@ -80,6 +89,125 @@ function mobileCanonicalReport () {
     }]
   }
 }
+
+test('canonical label fixtures classify variable mobile label shapes by meaning', () => {
+  const fixtures = [
+    {
+      label: '[GPU] chatterbox gpu-smoke',
+      expected: {
+        useGPU: true,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: null,
+        backendHint: null,
+        language: null,
+        runType: 'smoke'
+      }
+    },
+    {
+      label: '[CPU] chatterbox es',
+      expected: {
+        useGPU: false,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: null,
+        backendHint: null,
+        language: 'es',
+        runType: 'benchmark'
+      }
+    },
+    {
+      label: '[CPU] chatterbox q4 cpu',
+      expected: {
+        useGPU: false,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: 'q4',
+        backendHint: 'cpu',
+        language: null,
+        runType: 'benchmark'
+      }
+    },
+    {
+      label: '[CPU] streaming chatterbox q4 cpu',
+      expected: {
+        useGPU: false,
+        streaming: true,
+        engine: 'chatterbox',
+        variant: 'q4',
+        backendHint: 'cpu',
+        language: null,
+        runType: 'benchmark'
+      }
+    },
+    {
+      label: '[GPU] chatterbox q4 metal',
+      expected: {
+        useGPU: true,
+        streaming: false,
+        engine: 'chatterbox',
+        variant: 'q4',
+        backendHint: 'metal',
+        language: null,
+        runType: 'benchmark'
+      }
+    }
+  ]
+
+  for (const fixture of fixtures) {
+    const parsed = parseCanonicalTestLabel(fixture.label)
+    assert.ok(parsed, `expected ${fixture.label} to parse`)
+    assert.deepEqual(
+      {
+        useGPU: parsed.useGPU,
+        streaming: parsed.streaming,
+        engine: parsed.engine,
+        variant: parsed.variant,
+        backendHint: parsed.backendHint,
+        language: parsed.language,
+        runType: parsed.runType
+      },
+      fixture.expected
+    )
+  }
+})
+
+test('mobile smoke rows infer backend from platform and remain visibly marked', () => {
+  const ios = mobileCanonicalReport()
+  ios.results = [
+    { test: '[GPU] chatterbox gpu-smoke', metrics: { real_time_factor: 0.79 } },
+    { test: '[CPU] chatterbox cpu-smoke', metrics: { real_time_factor: 4.15 } }
+  ]
+  const iosRecords = expandCanonicalReport(ios, '/x/ios/performance-report.json').records
+  assert.equal(iosRecords.length, 2)
+  assert.equal(iosRecords[0].backend, 'metal')
+  assert.equal(iosRecords[0].variant, 'q4')
+  assert.equal(iosRecords[0].runType, 'smoke')
+  assert.match(iosRecords[0].label, /smoke/)
+  assert.equal(iosRecords[1].backend, 'cpu')
+
+  const android = mobileCanonicalReport()
+  android.device.platform = 'android'
+  android.results[0].test = '[GPU] chatterbox gpu-smoke'
+  const [androidRecord] = expandCanonicalReport(android, '/x/android/performance-report.json').records
+  assert.equal(androidRecord.backend, 'vulkan')
+
+  const markdown = renderMarkdown(iosRecords.concat(androidRecord), [])
+  assert.ok(markdown.includes('| Language | Run Type |'))
+  assert.ok(markdown.includes('GPU backends covered: metal, vulkan'))
+  assert.ok(markdown.includes('GPU backends still missing: opencl'))
+})
+
+test('mobile multilingual rows keep language separate from variant and backend', () => {
+  const report = mobileCanonicalReport()
+  report.results[0].test = '[CPU] chatterbox mtl es'
+  const [record] = expandCanonicalReport(report, '/x/ios/performance-report.json').records
+
+  assert.equal(record.variant, 'mtl')
+  assert.equal(record.language, 'es')
+  assert.equal(record.backend, 'cpu')
+  assert.ok(renderMarkdown([record], []).includes('| mtl | es | benchmark |'))
+})
 
 test('desktop record surfaces avg/peak/reclaimed memory from summary.memory', () => {
   const record = normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')
@@ -106,6 +234,9 @@ test('mobile canonical report carries avg/peak/reclaimed memory through metrics'
   assert.equal(row.avgRssMb, 780)
   assert.equal(row.peakRssMb, 860)
   assert.equal(row.reclaimedMb, 400)
+  assert.equal(row.meanWer, 0.2)
+  assert.equal(row.meanCer, 0.1)
+  assert.equal(row.qualityModel, 'ggml-tiny.bin')
 })
 
 test('manual record reads the LavaSR axes from a model block, mirroring the desktop reader', () => {
@@ -150,6 +281,30 @@ test('markdown table includes the memory columns and rounded values', () => {
   assert.ok(markdown.includes('| 906 |'), 'peak RSS should be rounded to 906 in the table')
   assert.ok(markdown.includes('| 812 |'), 'avg RSS should be rounded to 812 in the table')
   assert.ok(markdown.includes('| 512 |'), 'reclaimed should be rounded to 512 in the table')
+})
+
+test('desktop record and markdown surface optional CER and WER', () => {
+  const record = normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')
+  assert.equal(record.meanWer, 0.125)
+  assert.equal(record.meanCer, 0.0625)
+  assert.equal(record.qualityModel, 'ggml-small.bin')
+
+  const markdown = renderMarkdown([record], [])
+  assert.ok(markdown.includes('Mean WER'))
+  assert.ok(markdown.includes('Mean CER'))
+  assert.ok(markdown.includes('Quality Model'))
+  assert.ok(markdown.includes('ggml-small.bin'))
+  assert.ok(markdown.includes('| 12.50% | 6.25% |'))
+})
+
+test('desktop record leaves CER and WER empty for legacy artifacts', () => {
+  const report = desktopReport(true)
+  delete report.summary.quality
+  const record = normalizeDesktopRecord(report, 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')
+  assert.equal(record.meanWer, null)
+  assert.equal(record.meanCer, null)
+  assert.equal(record.qualityModel, null)
+  assert.ok(renderMarkdown([record], []).includes('| n/a | n/a |'))
 })
 
 test('desktop record defaults enhancer to none and surfaces model.enhancer when set', () => {
@@ -337,4 +492,19 @@ test('dedupeRecords keeps rows that differ only by enhancer quant tier as separa
   assert.equal(deduped.length, 2, 'f16 and q8_0 survive; the duplicate q8_0 collapses')
   const tiers = deduped.map((r) => r.enhancerVariant).sort()
   assert.deepEqual(tiers, ['f16', 'q8_0'])
+})
+
+test('dedupeRecords keeps rows evaluated by different Whisper models separate', () => {
+  const small = normalizeDesktopRecord(
+    desktopReport(true),
+    'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json'
+  )
+  const tinyReport = desktopReport(true)
+  tinyReport.summary.quality.model = 'ggml-tiny.bin'
+  const tiny = normalizeDesktopRecord(
+    tinyReport,
+    'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json'
+  )
+
+  assert.equal(dedupeRecords([small, tiny]).length, 2)
 })

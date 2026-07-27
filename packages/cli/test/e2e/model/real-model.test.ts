@@ -74,6 +74,42 @@ describe('chat completions (blocking)', () => {
     assert.equal(typeof body.usage.completion_tokens, 'number')
   })
 
+  it('multi-turn conversation stays coherent with kv-cache reuse', async () => {
+    // Turn 1 primes the auto-cache under the conversation prefix.
+    const first = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'Reply with exactly the word: apple' }],
+      reasoning_budget: false,
+      max_tokens: 64
+    })
+    assert.equal(first.statusCode, 200)
+    const firstBody = first.json() as any
+    assert.equal(firstBody.choices[0].finish_reason, 'stop')
+    const firstMessage = firstBody.choices[0].message
+    assert.ok(firstMessage.content.length > 0)
+
+    // Turn 2 replays the prior assistant turn verbatim so the auto-cache key
+    // matches. A corrupted or mis-loaded cache would surface as an empty or
+    // garbled reply here.
+    const second = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [
+        { role: 'user', content: 'Reply with exactly the word: apple' },
+        { role: 'assistant', content: firstMessage.content },
+        { role: 'user', content: 'Now reply with exactly the word: banana' }
+      ],
+      reasoning_budget: false,
+      max_tokens: 128
+    })
+    assert.equal(second.statusCode, 200)
+    const secondBody = second.json() as any
+    assert.equal(secondBody.object, 'chat.completion')
+    const secondMessage = secondBody.choices[0].message
+    assert.equal(secondMessage.role, 'assistant')
+    assert.ok(secondMessage.content.length > 0, 'second turn returned empty content')
+    assert.equal(secondBody.choices[0].finish_reason, 'stop')
+  })
+
   it('respects max_completion_tokens', async () => {
     const res = await post('/v1/chat/completions', {
       model: E2E.llm,
@@ -645,6 +681,7 @@ describe('responses API', () => {
           model: E2E.llm,
           input: 'Remember the code word is XYZZY.',
           store: true,
+          reasoning_budget: false,
           max_output_tokens: 512,
           temperature: 0,
           seed: 1
@@ -671,6 +708,7 @@ describe('responses API', () => {
           model: E2E.llm,
           input: 'Remember the code word is XYZZY.',
           store: true,
+          reasoning_budget: false,
           max_output_tokens: 512,
           temperature: 0,
           seed: 1
@@ -684,6 +722,7 @@ describe('responses API', () => {
           previous_response_id: rid1,
           input: 'Got it.',
           store: true,
+          reasoning_budget: false,
           max_output_tokens: 256,
           temperature: 0,
           seed: 1
@@ -695,6 +734,7 @@ describe('responses API', () => {
         model: E2E.llm,
         previous_response_id: rid2,
         input: 'What is the code word? Reply with one word only.',
+        reasoning_budget: false,
         max_output_tokens: 512,
         temperature: 0,
         seed: 1

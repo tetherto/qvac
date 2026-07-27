@@ -14,13 +14,13 @@ const { AUTOBASE_NAMESPACE } = require('../../shared/constants')
 const { createTempStorage } = require('../helpers/test-utils')
 
 const noopLogger = {
-  info () {},
-  debug () {},
-  error () {},
-  warn () {}
+  info() {},
+  debug() {},
+  error() {},
+  warn() {}
 }
 
-async function createServiceWithMetrics (t, opts = {}) {
+async function createServiceWithMetrics(t, opts = {}) {
   const basePath = await createTempStorage(t)
   const store = new Corestore(basePath)
   await store.ready()
@@ -28,16 +28,11 @@ async function createServiceWithMetrics (t, opts = {}) {
   const swarm = new Hyperswarm({ bootstrap: [] })
   const config = new RegistryConfig({ logger: noopLogger })
 
-  const service = new RegistryService(
-    store.namespace(AUTOBASE_NAMESPACE),
-    swarm,
-    config,
-    {
-      logger: noopLogger,
-      ackInterval: 5,
-      skipStorageCheck: true
-    }
-  )
+  const service = new RegistryService(store.namespace(AUTOBASE_NAMESPACE), swarm, config, {
+    logger: noopLogger,
+    ackInterval: 5,
+    skipStorageCheck: true
+  })
 
   await service.ready()
 
@@ -60,7 +55,7 @@ async function createServiceWithMetrics (t, opts = {}) {
   return { service, store, swarm, metricsServer, qvacMetrics, port: actualPort, registry }
 }
 
-async function cleanup (ctx) {
+async function cleanup(ctx) {
   if (ctx.metricsServer) await ctx.metricsServer.close().catch(() => {})
   if (ctx.service && ctx.service.opened) await ctx.service.close().catch(() => {})
   if (ctx.swarm) await ctx.swarm.destroy().catch(() => {})
@@ -68,11 +63,13 @@ async function cleanup (ctx) {
   promClient.register.clear()
 }
 
-function httpGet (port, path) {
+function httpGet(port, path) {
   return new Promise((resolve, reject) => {
     const req = http.get(`http://127.0.0.1:${port}${path}`, (res) => {
       let body = ''
-      res.on('data', (chunk) => { body += chunk })
+      res.on('data', (chunk) => {
+        body += chunk
+      })
       res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }))
     })
     req.on('error', reject)
@@ -85,7 +82,11 @@ test('MetricsServer serves Prometheus text at /metrics', async (t) => {
   try {
     const res = await httpGet(ctx.port, '/metrics')
     t.is(res.status, 200, 'returns 200')
-    t.ok(res.headers['content-type'].includes('text/plain') || res.headers['content-type'].includes('openmetrics'), 'correct content type')
+    t.ok(
+      res.headers['content-type'].includes('text/plain') ||
+        res.headers['content-type'].includes('openmetrics'),
+      'correct content type'
+    )
     t.ok(res.body.length > 0, 'body is non-empty')
   } finally {
     await cleanup(ctx)
@@ -112,40 +113,54 @@ test('/metrics includes QVAC custom gauges', async (t) => {
 
     t.ok(body.includes('qvac_registry_model_count'), 'has model_count')
     t.ok(body.includes('qvac_registry_total_blob_bytes'), 'has total_blob_bytes')
-    t.ok(body.includes('qvac_registry_totals_refreshed_age_seconds'), 'has totals_refreshed_age_seconds')
+    t.ok(
+      body.includes('qvac_registry_totals_refreshed_age_seconds'),
+      'has totals_refreshed_age_seconds'
+    )
     t.ok(body.includes('qvac_registry_blob_core_count'), 'has blob_core_count')
     t.ok(body.includes('qvac_registry_blob_core_seeders'), 'has blob_core_seeders')
     t.ok(body.includes('qvac_registry_blob_core_length'), 'has blob_core_length')
-    t.ok(body.includes('qvac_registry_blob_core_contiguous_length'), 'has blob_core_contiguous_length')
+    t.ok(
+      body.includes('qvac_registry_blob_core_contiguous_length'),
+      'has blob_core_contiguous_length'
+    )
     t.ok(body.includes('qvac_registry_view_core_length'), 'has view_core_length')
-    t.ok(body.includes('qvac_registry_view_core_contiguous_length'), 'has view_core_contiguous_length')
+    t.ok(
+      body.includes('qvac_registry_view_core_contiguous_length'),
+      'has view_core_contiguous_length'
+    )
     t.ok(body.includes('qvac_registry_view_core_seeders'), 'has view_core_seeders')
     t.ok(body.includes('qvac_registry_is_indexer'), 'has is_indexer')
     t.ok(body.includes('qvac_registry_rpc_requests_total'), 'has rpc_requests_total')
     t.ok(body.includes('qvac_registry_rpc_errors_total'), 'has rpc_errors_total')
 
-    const totalBytesLine = body.split('\n')
-      .find(line => line.startsWith('qvac_registry_total_blob_bytes '))
+    const totalBytesLine = body
+      .split('\n')
+      .find((line) => line.startsWith('qvac_registry_total_blob_bytes '))
     t.ok(totalBytesLine, 'exports total_blob_bytes as a single series')
     t.ok(totalBytesLine.endsWith(' 0'), 'total_blob_bytes is 0 on an empty registry')
 
-    const modelCountLine = body.split('\n')
-      .find(line => line.startsWith('qvac_registry_model_count '))
+    const modelCountLine = body
+      .split('\n')
+      .find((line) => line.startsWith('qvac_registry_model_count '))
     t.ok(modelCountLine, 'exports model_count as a single series')
     t.ok(modelCountLine.endsWith(' 0'), 'model_count is 0 on an empty registry')
 
-    const viewSeedersLine = body.split('\n')
-      .find(line => line.startsWith('qvac_registry_view_core_seeders '))
+    const viewSeedersLine = body
+      .split('\n')
+      .find((line) => line.startsWith('qvac_registry_view_core_seeders '))
     t.ok(viewSeedersLine, 'exports view_core_seeders as a single series')
     t.ok(viewSeedersLine.endsWith(' 0'), 'view_core_seeders is 0 with no connected peers')
 
-    const rpcPingRequests = body.split('\n')
-      .find(line => line.startsWith('qvac_registry_rpc_requests_total{method="ping"}'))
+    const rpcPingRequests = body
+      .split('\n')
+      .find((line) => line.startsWith('qvac_registry_rpc_requests_total{method="ping"}'))
     t.ok(rpcPingRequests, 'rpc_requests_total{method="ping"} series is pre-initialised')
     t.ok(rpcPingRequests.endsWith(' 0'), 'rpc_requests_total{method="ping"} starts at 0')
 
-    const rpcPingErrors = body.split('\n')
-      .find(line => line.startsWith('qvac_registry_rpc_errors_total{method="add-model"}'))
+    const rpcPingErrors = body
+      .split('\n')
+      .find((line) => line.startsWith('qvac_registry_rpc_errors_total{method="add-model"}'))
     t.ok(rpcPingErrors, 'rpc_errors_total{method="add-model"} series is pre-initialised')
     t.ok(rpcPingErrors.endsWith(' 0'), 'rpc_errors_total{method="add-model"} starts at 0')
   } finally {
@@ -165,11 +180,15 @@ test('RPC metrics counters increment', async (t) => {
     const res = await httpGet(ctx.port, '/metrics')
     const body = res.body
 
-    const pingLine = body.split('\n').find(l => l.includes('qvac_registry_rpc_requests_total') && l.includes('ping'))
+    const pingLine = body
+      .split('\n')
+      .find((l) => l.includes('qvac_registry_rpc_requests_total') && l.includes('ping'))
     t.ok(pingLine, 'has ping request counter line')
     t.ok(pingLine.includes('2'), 'ping counter is 2')
 
-    const errorLine = body.split('\n').find(l => l.includes('qvac_registry_rpc_errors_total') && l.includes('add-model'))
+    const errorLine = body
+      .split('\n')
+      .find((l) => l.includes('qvac_registry_rpc_errors_total') && l.includes('add-model'))
     t.ok(errorLine, 'has add-model error counter line')
     t.ok(errorLine.includes('1'), 'error counter is 1')
   } finally {
@@ -201,12 +220,11 @@ test('MetricsServer binds to custom host', async (t) => {
   const swarm = new Hyperswarm({ bootstrap: [] })
   const config = new RegistryConfig({ logger: noopLogger })
 
-  const service = new RegistryService(
-    store.namespace(AUTOBASE_NAMESPACE),
-    swarm,
-    config,
-    { logger: noopLogger, ackInterval: 5, skipStorageCheck: true }
-  )
+  const service = new RegistryService(store.namespace(AUTOBASE_NAMESPACE), swarm, config, {
+    logger: noopLogger,
+    ackInterval: 5,
+    skipStorageCheck: true
+  })
   await service.ready()
 
   promClient.register.clear()
