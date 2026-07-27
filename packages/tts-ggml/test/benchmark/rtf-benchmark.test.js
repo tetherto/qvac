@@ -67,6 +67,7 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
+const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
@@ -79,7 +80,9 @@ const {
   normalizeEnhancerVariant,
   enhancerTag,
   denoiserTag,
-  ensureWhisperModel
+  ensureWhisperModel,
+  ensureParlerModel,
+  parlerQuantFromVariant
 } = require('../utils/downloadModel')
 const { resolveEnhancer, resolveDenoiser } = require('../utils/lavasrResolve')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
@@ -97,12 +100,16 @@ const VALID_ENGINES = [
   'chatterbox-mtl',
   'supertonic',
   'supertonic-mtl',
-  'supertonic3'
+  'supertonic3',
+  'parler-mini',
+  'parler-large',
+  'parler-indic'
 ]
 // GGUF quant is baked into the file (registry serves q4_0 weights + f16 s3gen),
 // so the variant is a label, not a model selector. The list stays permissive so
 // future re-quantised registry drops can be tagged without a code change here.
-const VALID_VARIANTS = ['q4', 'q8', 'f16', 'mixed']
+// q6_k is Parler's mini/large low-bit tier.
+const VALID_VARIANTS = ['q4', 'q8', 'f16', 'mixed', 'q6_k']
 const VALID_WHISPER_MODELS = ['ggml-tiny.bin', 'ggml-small.bin', 'ggml-medium.bin']
 // Schema version for the rich on-disk `rtf-benchmark-*.json` artifact
 // consumed by `scripts/perf-report/aggregate-tts-ggml-rtf.js`.
@@ -433,11 +440,29 @@ const CORPUS_ES = [
   'Los avances en tecnologia continuan mejorando la calidad de vida de las personas en todo el mundo.'
 ]
 
+// Hindi corpus for the indic Parler model (representative script/token mix for
+// its RTF; the other Parler variants use the English corpus).
+const CORPUS_HI = [
+  'नमस्ते, आप कैसे हैं?',
+  'आज मौसम बहुत अच्छा है।',
+  'कृत्रिम बुद्धिमत्ता दुनिया को बदल रही है।',
+  'पहाड़ों के बीच बसे एक छोटे से गाँव में एक युवा आविष्कारक रहता था।',
+  'तकनीक में प्रगति लोगों के जीवन की गुणवत्ता में सुधार कर रही है।'
+]
+
 function isMultilingualEngine(engine) {
   return engine === 'chatterbox-mtl' || engine === 'supertonic-mtl'
 }
 
+function parlerVariantFromEngine(engine) {
+  if (engine === 'parler-mini') return 'mini'
+  if (engine === 'parler-large') return 'large'
+  if (engine === 'parler-indic') return 'indic'
+  return null
+}
+
 function getCorpus(engine) {
+  if (engine === 'parler-indic') return CORPUS_HI
   return isMultilingualEngine(engine) ? CORPUS_ES : CORPUS_EN
 }
 
@@ -562,6 +587,25 @@ async function loadModelForEngine(settings) {
     return { model, modelFiles: [supertonicPath, ...lavasrFiles] }
   }
 
+  const parlerVariant = parlerVariantFromEngine(settings.engine)
+  if (parlerVariant) {
+    const quant = parlerQuantFromVariant(settings.variant)
+    const download = await ensureParlerModel({
+      targetDir: modelsDir,
+      variant: parlerVariant,
+      quant
+    })
+    if (!download || !download.success)
+      throw new Error(`Parler ${parlerVariant} GGUF (${quant}) unavailable (registry fetch failed)`)
+    const model = await loadParlerTTS({
+      parlerModelPath: download.path,
+      seed: 42,
+      useGPU: settings.useGPU,
+      ...threadOpts
+    })
+    return { model, modelFiles: [download.path] }
+  }
+
   const download = await ensureSupertonicModel({ targetDir: modelsDir })
   if (!download || !download.success)
     throw new Error('Supertonic GGUF unavailable (registry fetch failed)')
@@ -579,10 +623,12 @@ async function loadModelForEngine(settings) {
 }
 
 // All Supertonic tiers (v1 / v2-mtl / v3) run through the Supertonic runner;
-// everything else is Chatterbox.
+// Parler tiers through the Parler runner; everything else is Chatterbox.
 const SUPERTONIC_ENGINES = ['supertonic', 'supertonic-mtl', 'supertonic3']
+const PARLER_ENGINES = ['parler-mini', 'parler-large', 'parler-indic']
 
 async function runSynthesis(engine, model, text) {
+  if (PARLER_ENGINES.includes(engine)) return runParlerTTS(model, { text }, {})
   const runner = SUPERTONIC_ENGINES.includes(engine) ? runSupertonicTTS : runChatterboxTTS
   return runner(model, { text }, {})
 }

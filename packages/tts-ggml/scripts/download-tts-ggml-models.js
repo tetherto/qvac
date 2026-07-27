@@ -12,6 +12,8 @@ const REGISTRY_DATE_Q4_0 = '2026-05-18'
 // the block-quant q8_0 / q4_0 tiers under the 2026-06-15 build.
 const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10'
 const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15'
+// Parler family (mini / large / indic) publish date.
+const REGISTRY_DATE_PARLER = '2026-07-20'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
 const GROUPS = {
@@ -66,6 +68,24 @@ const GROUPS = {
     {
       name: 'supertonic3-q4_0.gguf',
       registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_SUPERTONIC3_QUANT}/supertonic3-q4_0.gguf`
+    }
+  ],
+  // Parler pre-stages the tiers the desktop quant-loop + gpu-smoke always
+  // exercise: mini-q8_0, indic-q8_0, indic-f16. large-q8_0 (RAM-gated) and
+  // mini-f16 are fetched on-demand by the tests. Registered tiers per PR #3372:
+  // mini/large/indic x {q8_0, f16, f32}. tts-cpp reads the quant from metadata.
+  parler: [
+    {
+      name: 'parler-mini-v1-q8_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/parler-tts/${REGISTRY_DATE_PARLER}/parler-mini-v1-q8_0.gguf`
+    },
+    {
+      name: 'parler-indic-q8_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/parler-tts/${REGISTRY_DATE_PARLER}/parler-indic-q8_0.gguf`
+    },
+    {
+      name: 'parler-indic-f16.gguf',
+      registryPath: `qvac_models_compiled/ggml/parler-tts/${REGISTRY_DATE_PARLER}/parler-indic-f16.gguf`
     }
   ]
 }
