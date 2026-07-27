@@ -18,7 +18,7 @@
 #
 # Pulls from tetherto/qvac-ext-stable-diffusion.cpp, REF-pinned to an exact
 # commit for reproducibility. Every REF below 6250dac was a 2026-07-03 branch
-# tip; the current one is not (see the 7ea0187 note).
+# tip; the current one is not (see the bf8adcc note).
 #
 # This package-local overlay (packages/diffusion-cpp/vcpkg/ports/) tracks the
 # port ahead of its next qvac-registry-vcpkg publish so diffusion-cpp can pick
@@ -27,18 +27,24 @@
 # drop the "vcpkg/ports" entry from vcpkg-configuration.json) once the
 # registry's stable-diffusion-cpp#6 (or later) is published.
 #
-# 7ea0187 adds the LAM audio2expression (ARKit-52 blendshape) engine:
-# lam-a2e.h / lam-a2e.cpp / lam_audio2expression.cpp add a standalone
+# bf8adcc is the tip of PR #24 (branch feat/QVAC-22248-lam-a2e, forked from
+# 6250dac). Its engine delta lands in 7ea0187, which adds the LAM
+# audio2expression (ARKit-52 blendshape) sources: lam-a2e.h / lam-a2e.cpp /
+# lam_audio2expression.cpp provide a standalone
 # lam_a2e_create/lam_a2e_process_pcm_f32/lam_a2e_free C API, CPU-only for now
 # (use_gpu is accepted but not yet implemented upstream). No SD_LIB_SOURCES
 # changes were needed beyond the new files themselves -- the library
 # glob-includes every src/*.cpp automatically.
 #
-# TODO(QVAC-22248): re-pin before merge. Unlike every REF above it, 7ea0187 is
-# NOT on 2026-07-03 -- it is the engine commit of the still-open PR #24
-# (branch feat/QVAC-22248-lam-a2e, forked from 6250dac). GitHub serves an
-# archive for it today, but a squash-merge plus branch delete would orphan the
-# commit and break this download. Once PR #24 lands, re-point REF at the
+# The two commits after 7ea0187 do not touch anything this port builds: one
+# adds a CI job, the other deletes the Python GGUF tooling that now lives in
+# packages/diffusion-cpp/scripts/. Pinning the branch tip rather than the
+# engine commit keeps REF meaningful as the PR evolves.
+#
+# TODO(QVAC-22248): re-pin before merge. Unlike every REF above it, bf8adcc is
+# NOT on 2026-07-03 -- it is a commit on a still-open PR branch. GitHub serves
+# an archive for it today, but a squash-merge plus branch delete would orphan
+# the commit and break this download. Once PR #24 lands, re-point REF at the
 # resulting 2026-07-03 tip and refresh SHA512.
 #
 # 6250dac is the tip of 2026-07-03 after merging PR #21: it fixes the Wan VAE
@@ -75,8 +81,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 7ea01875c76c4bfcf275a75038365abfb23eaa64
-    SHA512 d59303fbaa5845e7bd6c3c52013befe5c941041845f78dfec8e4f0a225be32e5283676a6578a279e3cc35eb9305b7f37bbc3cc2caa8195f0efc0eabe431363b7
+    REF bf8adccf6493098fd99de563281c0f89174065ec
+    SHA512 f2a751c4be58e179dcb7e5619768b90fef317bcfe0e4b416bcfe8320e8f42cc3af6852a48cbdcdad4bb8e3eba1720237db5e81f00c7b99f48f2909d6aa84bc21
 )
 
 set(SD_FLASH_ATTN OFF)
