@@ -1,32 +1,5 @@
 name: On PR Trigger (Shared CI Infra)
 
-# Validates changes to CI infrastructure that is SHARED across many addons —
-# the cache-models composite action, the vcpkg triplet/toolchain overlays, and
-# the qvac-fabric vcpkg port (consumed by llm/embed/nmtcpp/etc). The port's
-# owning package (packages/fabric) still validates it via on-pr-fabric.yml; the
-# fan-out to every *consumer* is what this workflow replaces.
-#
-# History: these paths used to be listed in every addon's on-pr-*.yml trigger
-# filter, so editing one of them fanned out a full prebuild+integration run to
-# 11-15 addons at once (see the "why did parakeet run on a diffusion PR" thread
-# / QVAC shared-infra ticket). That fan-out is removed; this single workflow is
-# the replacement safety net.
-#
-# SECURITY MODEL — this is a privileged pull_request_target entrypoint, so it
-# does exactly two trusted things and NOTHING else:
-#   1. Gate: run label-gate + authorize-pr (checked out from the DEFAULT branch,
-#      never PR-head). These bind trust to the approved head SHA.
-#   2. Delegate: hand the approved SHA to the reusable
-#      reusable-shared-ci-infra-checks.yml, which is where every PR-head
-#      checkout + code execution happens. Keeping untrusted checkout out of the
-#      pull_request_target job is what clears CodeQL's untrusted-checkout /
-#      cache-poisoning alerts (the same split the addon pipelines use).
-#
-# The delegated checks are cheap and read-only: no model cache is written and no
-# prebuild is published. A full integration canary and a vcpkg build canary are
-# deliberately out of scope (they would reintroduce the fan-out cost); gate them
-# behind an explicit label if the team decides they are worth it.
-
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
@@ -54,10 +27,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Gating composites are checked out from the DEFAULT branch (never PR-head),
-  # so an untrusted fork PR cannot alter the authorisation logic. Skipped on
-  # workflow_dispatch so the workflow can be exercised on a feature branch
-  # before it is merged (pull_request_target always runs the base-branch copy).
   label-gate:
     name: Authorise (label-gate)
     if: github.event_name != 'workflow_dispatch'
@@ -97,9 +66,6 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  # All PR-head checkout + execution happens inside the reusable workflow, never
-  # in this privileged entrypoint. The approved, immutable head SHA is handed
-  # down explicitly (label-gate/authorize-pr bind trust to that exact commit).
   checks:
     name: Shared CI infra checks
     needs: [authorize, label-gate]
