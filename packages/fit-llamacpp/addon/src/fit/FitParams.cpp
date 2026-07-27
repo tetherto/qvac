@@ -5,7 +5,62 @@
 
 #include <llama.h>
 
+#ifdef _WIN32
+#include <excpt.h>  // __try/__except, GetExceptionCode, EXCEPTION_EXECUTE_HANDLER
+#endif
+
 namespace fit_llamacpp {
+
+namespace {
+
+#ifdef _WIN32
+// On some Windows GPU configurations `llama_params_fit` hits an integer
+// divide-by-zero (SEH 0xC0000094) deep in the fit math — an upstream llama.cpp
+// bug where a device/layer count comes back 0 on Windows but not elsewhere. It
+// is a *hardware* trap, so the library's own C++ try/catch (which turns error
+// paths into FAILURE/ERROR) cannot catch it and the process dies. Run the call
+// in a leaf frame with no unwindable C++ objects so we can SEH-catch the trap
+// and report the documented ERROR outcome ("unknown → proceed advisory-only")
+// instead of crashing the worklet. Normal SUCCESS/FAILURE/ERROR results still
+// come back through llama_params_fit's own return value; only a fatal trap
+// takes the __except path.
+int fitSehFilter(unsigned long code) {
+  std::fprintf(
+      stderr,
+      "fit-llamacpp: llama_params_fit raised a fatal native exception 0x%08lx; "
+      "reporting ERROR (projection unavailable on this platform)\n",
+      code);
+  std::fflush(stderr);
+  return EXCEPTION_EXECUTE_HANDLER;
+}
+
+bool callLlamaParamsFitGuarded(
+    const char* pathModel,
+    llama_model_params* mparams,
+    llama_context_params* cparams,
+    float* tensorSplit,
+    llama_model_tensor_buft_override* buftOverrides,
+    size_t* margins,
+    uint32_t nCtxMin,
+    llama_params_fit_status* outStatus) {
+  __try {
+    *outStatus = llama_params_fit(
+        pathModel,
+        mparams,
+        cparams,
+        tensorSplit,
+        buftOverrides,
+        margins,
+        nCtxMin,
+        GGML_LOG_LEVEL_INFO);
+    return true;
+  } __except (fitSehFilter(GetExceptionCode())) {
+    return false;
+  }
+}
+#endif
+
+}  // namespace
 
 FitResult runFit(const FitRequest& req) {
   if (req.modelPath.empty()) {
@@ -13,15 +68,8 @@ FitResult runFit(const FitRequest& req) {
   }
 
   FitResult out;
-  // DIAGNOSTIC (temporary): fflush'd markers to locate the win32 crash. On
-  // Windows CI stderr is block-buffered (piped), so llama_params_fit's own logs
-  // are lost on a hard crash; these explicit flushes survive.
-  std::fprintf(stderr, "[fit-diag] runFit: entered\n");
-  std::fflush(stderr);
   const size_t maxDevices = llama_max_devices();
   out.maxDevices = maxDevices;
-  std::fprintf(stderr, "[fit-diag] runFit: maxDevices=%zu\n", maxDevices);
-  std::fflush(stderr);
 
   // `llama_params_fit` segfaults on a path it cannot open: gguf_init_from_file
   // logs the failure but the fit path then dereferences the null model. Guard
@@ -32,6 +80,7 @@ FitResult runFit(const FitRequest& req) {
   } else {
     out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
     out.fits = false;
+    out.tensorSplit.assign(maxDevices, 0.0F);
     return out;
   }
 
@@ -62,18 +111,26 @@ FitResult runFit(const FitRequest& req) {
       maxDevices,
       static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
 
-  std::fprintf(
-      stderr,
-      "[fit-diag] runFit: calling llama_params_fit (nCtx=%u nCtxMin=%u "
-      "ngl=%d marginMiB=%u bufts=%zu)\n",
-      cparams.n_ctx,
-      req.nCtxMin,
-      mparams.n_gpu_layers,
-      req.marginMiB,
-      buftOverrides.size());
-  std::fflush(stderr);
+  llama_params_fit_status status = LLAMA_PARAMS_FIT_STATUS_ERROR;
 
-  const llama_params_fit_status status = llama_params_fit(
+#ifdef _WIN32
+  if (!callLlamaParamsFitGuarded(
+          req.modelPath.c_str(),
+          &mparams,
+          &cparams,
+          tensorSplit.data(),
+          buftOverrides.data(),
+          margins.data(),
+          req.nCtxMin,
+          &status)) {
+    // A fatal native trap was contained: report ERROR (projection unavailable).
+    out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
+    out.fits = false;
+    out.tensorSplit.assign(tensorSplit.begin(), tensorSplit.end());
+    return out;
+  }
+#else
+  status = llama_params_fit(
       req.modelPath.c_str(),
       &mparams,
       &cparams,
@@ -82,11 +139,7 @@ FitResult runFit(const FitRequest& req) {
       margins.data(),
       req.nCtxMin,
       GGML_LOG_LEVEL_INFO);
-
-  std::fprintf(
-      stderr, "[fit-diag] runFit: llama_params_fit returned status=%d\n",
-      static_cast<int>(status));
-  std::fflush(stderr);
+#endif
 
   out.status = static_cast<int>(status);
   out.fits = (status == LLAMA_PARAMS_FIT_STATUS_SUCCESS);

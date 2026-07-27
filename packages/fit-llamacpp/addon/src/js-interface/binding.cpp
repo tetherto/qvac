@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <cstdio>
 #include <string>
 
 #include <bare.h>
@@ -10,94 +9,6 @@
 #include <inference-addon-cpp/JsUtils.hpp>
 
 #include "fit/FitParams.hpp"
-
-#ifdef _WIN32
-#include <windows.h>
-
-#include <csignal>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <exception>
-
-namespace {
-
-// DIAGNOSTIC ONLY (temporary): llama_params_fit terminates the process on the
-// Windows-Vulkan path with exit code 1 and no output. This captures *whatever*
-// the mechanism is: a vectored handler prints every SEH exception code + the
-// faulting instruction's module (before the SEH chain), and terminate/abort
-// hooks catch a C++ std::terminate or abort() that a plain SEH handler misses.
-void printModuleOf(const char* label, void* addr) {
-  HMODULE mod = nullptr;
-  char path[MAX_PATH] = {0};
-  if (GetModuleHandleExA(
-          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-          reinterpret_cast<LPCSTR>(addr),
-          &mod) != 0 &&
-      GetModuleFileNameA(mod, path, MAX_PATH) != 0) {
-    std::fprintf(
-        stderr,
-        "[fit-llamacpp]   %s %p  %s+0x%llx\n",
-        label,
-        addr,
-        path,
-        static_cast<unsigned long long>(
-            reinterpret_cast<uintptr_t>(addr) -
-            reinterpret_cast<uintptr_t>(mod)));
-  } else {
-    std::fprintf(
-        stderr, "[fit-llamacpp]   %s %p  <unknown module>\n", label, addr);
-  }
-}
-
-LONG CALLBACK fitCrashHandler(EXCEPTION_POINTERS* info) {
-  const DWORD code = info->ExceptionRecord->ExceptionCode;
-  // 0xE06D7363 == a C++ throw (MSVC); it's noise unless it's the last thing.
-  std::fprintf(
-      stderr,
-      "[fit-llamacpp] SEH exception 0x%08lx (flags=0x%lx)\n",
-      static_cast<unsigned long>(code),
-      static_cast<unsigned long>(info->ExceptionRecord->ExceptionFlags));
-  printModuleOf("at", info->ExceptionRecord->ExceptionAddress);
-  void* frames[24] = {nullptr};  // NOLINT
-  const USHORT n = CaptureStackBackTrace(0, 24, frames, nullptr);  // NOLINT
-  for (USHORT i = 0; i < n; ++i) {
-    char lbl[8] = {0};
-    std::snprintf(lbl, sizeof(lbl), "#%02u", i);
-    printModuleOf(lbl, frames[i]);
-  }
-  std::fflush(stderr);
-  return EXCEPTION_CONTINUE_SEARCH;
-}
-
-[[noreturn]] void fitTerminateHandler() {
-  std::fprintf(stderr, "[fit-llamacpp] std::terminate() called\n");
-  std::fflush(stderr);
-  std::abort();
-}
-
-void fitAbortHandler(int /*sig*/) {
-  std::fprintf(stderr, "[fit-llamacpp] SIGABRT / abort()\n");
-  std::fflush(stderr);
-}
-
-void installCrashHandler() {
-  static bool installed = false;
-  if (!installed) {
-    AddVectoredExceptionHandler(1, fitCrashHandler);
-    std::set_terminate(fitTerminateHandler);
-    std::signal(SIGABRT, fitAbortHandler);
-    installed = true;
-  }
-}
-
-}  // namespace
-#else
-namespace {
-inline void installCrashHandler() {}
-}  // namespace
-#endif
 
 namespace fit_llamacpp::bindings {
 
@@ -174,12 +85,6 @@ JSCATCH
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {
-  // DIAGNOSTIC (temporary): unbuffer stderr so native llama/ggml logs survive a
-  // hard crash (Windows CI pipes stderr => block-buffered => lost on crash).
-  std::setvbuf(stderr, nullptr, _IONBF, 0);
-  std::fprintf(stderr, "[fit-diag] module loaded, diagnostics active\n");
-  installCrashHandler();  // DIAGNOSTIC (temporary): capture Windows crash stack
-
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
   {                                                                            \
