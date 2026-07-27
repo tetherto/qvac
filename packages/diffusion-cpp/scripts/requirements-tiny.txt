@@ -1,0 +1,13 @@
+# Requirements for scripts/make-tiny-lam-a2e-gguf.py only.
+#
+# The tiny model is built from numpy noise rather than a checkpoint, so unlike
+# requirements.txt this deliberately omits torch. That is the point: CI can
+# provision the structural test tier in seconds instead of pulling a ~200MB
+# torch wheel it would never call into.
+#
+# requirements.txt is a strict superset, so a venv provisioned by
+# scripts/setup-venv.sh already satisfies this file.
+
+gguf
+numpy<2; sys_platform == "darwin" and platform_machine == "x86_64"
+numpy; sys_platform != "darwin" or platform_machine != "x86_64"

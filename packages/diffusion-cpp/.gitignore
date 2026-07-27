@@ -33,3 +33,18 @@ test/model/
 test/results/
 test/integration/all.js
 test/unit/all.js
+
+# Raw PCM emitted by scripts/wav-to-pcm.js. Always regenerable from the
+# source .wav, and large enough that committing it is never the right call.
+*.pcm
+
+# Scratch dir the LAM-A2E docs use for decoded audio and coefficient dumps.
+# Committed reference data belongs under test/, not here.
+fixtures/
+
+# Python dev tooling (scripts/setup-venv.sh creates ./venv).
+# venv/ is the local dev venv for the LAM-A2E checkpoint -> .gguf converter
+# (~1.4 GiB of torch binaries); never commit it.
+venv/
+__pycache__/
+.pytest_cache/

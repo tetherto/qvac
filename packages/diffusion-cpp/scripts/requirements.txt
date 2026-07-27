@@ -1,0 +1,44 @@
+# Runtime requirements for the LAM Audio2Expression GGUF converters under
+# scripts/convert-lam-a2e-to-gguf.py and scripts/remap-lam-a2e-gguf.py.
+#
+# Real deps:
+#
+#   gguf   -- reads/writes the .gguf files (GGUFReader + GGUFWriter)
+#   numpy  -- tensor handling, the positional-conv weight-norm fold, and
+#             the f16 downcast for matmul weights
+#   torch  -- loads the upstream LAM_Audio2Expression .tar checkpoint.
+#             The converter never calls .cuda() / forward() / autograd; it
+#             uses torch purely as a deserializer (torch.load with
+#             map_location="cpu") and immediately converts each tensor to
+#             numpy. CPU-only torch is therefore sufficient and saves
+#             ~1.8 GiB on the wheel plus a transitive CUDA runtime install
+#             vs. the default GPU wheel.
+#
+# NOT covered here: scripts/dump-lam-a2e-*.py. Those import the upstream
+# LAM_Audio2Expression project (`from models import build_model`) and call
+# .cuda(), so they run inside that project's own GPU environment on a
+# reference box — not in this venv. See README-lam-a2e.md.
+#
+# Unpinned by default because this is a developer-time conversion tool, not
+# a runtime dep of the addon. Pin here if a specific upstream release breaks
+# the converter and we need to lock it.
+#
+# --extra-index-url below adds the official PyTorch CPU wheel index in
+# addition to PyPI. On Linux / Windows that index serves torch wheels with
+# the `+cpu` local-version suffix (e.g. torch==2.11.0+cpu), which pip
+# prefers over the default CUDA-enabled wheel on PyPI. On macOS PyTorch
+# ships a single wheel per Python version (no +cpu vs +cuda split), so the
+# directive is a harmless no-op there.
+#
+# Exception: on darwin-x64 (Intel Macs) the latest available torch wheel is
+# torch==2.2.2 -- PyTorch stopped shipping macOS x86_64 wheels after 2.2.x.
+# That wheel is built against the NumPy 1.x C ABI and crashes at
+# `import torch` when paired with NumPy 2.x ("Failed to initialize NumPy:
+# _ARRAY_API not found"). We pin numpy<2 only on that platform; every other
+# platform stays free to resolve the latest numpy.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+gguf
+numpy<2; sys_platform == "darwin" and platform_machine == "x86_64"
+numpy; sys_platform != "darwin" or platform_machine != "x86_64"
+torch

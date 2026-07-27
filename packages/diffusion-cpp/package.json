@@ -37,6 +37,10 @@
     "format:cpp:check": "git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff \"$(git merge-base HEAD origin/main)\" -- .",
     "format:cpp": "git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx \"$(git merge-base HEAD origin/main)\" -- .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "setup:venv": "bash scripts/setup-venv.sh",
+    "convert:lam-a2e": "bash scripts/convert-lam-a2e.sh",
+    "convert:wav-to-pcm": "bare scripts/wav-to-pcm.js",
+    "check:lam-a2e-parity": "bare scripts/check-lam-a2e-parity.js",
     "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
@@ -86,6 +90,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
+    "@qvac/decoder-audio": "^0.5.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-fs": "^4.5.1",

@@ -16,8 +16,9 @@
 # ggml_backend_init_by_type() which works with both statically linked and
 # dynamically loaded backends.
 #
-# Pulls from the tetherto/qvac-ext-stable-diffusion.cpp GitHub branch
-# 2026-07-03 (REF pinned to the branch tip for reproducibility).
+# Pulls from tetherto/qvac-ext-stable-diffusion.cpp, REF-pinned to an exact
+# commit for reproducibility. Every REF below 6250dac was a 2026-07-03 branch
+# tip; the current one is not (see the 7ea0187 note).
 #
 # This package-local overlay (packages/diffusion-cpp/vcpkg/ports/) tracks the
 # port ahead of its next qvac-registry-vcpkg publish so diffusion-cpp can pick
@@ -26,12 +27,19 @@
 # drop the "vcpkg/ports" entry from vcpkg-configuration.json) once the
 # registry's stable-diffusion-cpp#6 (or later) is published.
 #
-# 7ea0187 is the tip of 2026-07-03 after merging the LAM audio2expression
-# (ARKit-52 blendshape) engine: lam-a2e.h / lam-a2e.cpp / lam_audio2expression
-# .cpp add a standalone lam_a2e_create/lam_a2e_process_pcm_f32/lam_a2e_free
-# C API, CPU-only for now (use_gpu is accepted but not yet implemented
-# upstream). No SD_LIB_SOURCES changes were needed beyond the new files
-# themselves -- the library glob-includes every src/*.cpp automatically.
+# 7ea0187 adds the LAM audio2expression (ARKit-52 blendshape) engine:
+# lam-a2e.h / lam-a2e.cpp / lam_audio2expression.cpp add a standalone
+# lam_a2e_create/lam_a2e_process_pcm_f32/lam_a2e_free C API, CPU-only for now
+# (use_gpu is accepted but not yet implemented upstream). No SD_LIB_SOURCES
+# changes were needed beyond the new files themselves -- the library
+# glob-includes every src/*.cpp automatically.
+#
+# TODO(QVAC-22248): re-pin before merge. Unlike every REF above it, 7ea0187 is
+# NOT on 2026-07-03 -- it is the engine commit of the still-open PR #24
+# (branch feat/QVAC-22248-lam-a2e, forked from 6250dac). GitHub serves an
+# archive for it today, but a squash-merge plus branch delete would orphan the
+# commit and break this download. Once PR #24 lands, re-point REF at the
+# resulting 2026-07-03 tip and refresh SHA512.
 #
 # 6250dac is the tip of 2026-07-03 after merging PR #21: it fixes the Wan VAE
 # temporal upsample to match the reference first-chunk "Rep" semantics (run
