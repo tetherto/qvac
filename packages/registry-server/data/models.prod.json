@@ -3252,8 +3252,8 @@
   {
     "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/text_encoders/umt5_xxl_fp16.safetensors",
     "engine": "@qvac/diffusion-cpp",
-    "description": "UMT5-XXL text encoder for Wan 2.1",
-    "notes": "Repackaged from https://huggingface.co/google/umt5-xxl",
+    "description": "UMT5-XXL text encoder for Wan 2.1 and Wan 2.2",
+    "notes": "Repackaged from https://huggingface.co/google/umt5-xxl. Byte-identical to the copy in Wan_2.2_ComfyUI_Repackaged, so both Wan generations share this entry.",
     "licenseId": "Apache-2.0",
     "quantization": "fp16",
     "tags": ["text-encoder", "wan"]
@@ -3284,6 +3284,23 @@
     "description": "OpenCLIP ViT-H/14 vision encoder for Wan 2.1 image-to-video",
     "licenseId": "Apache-2.0",
     "tags": ["vision-encoder", "clip-vision", "wan"]
+  },
+  {
+    "source": "https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF/resolve/9873ba175b4b204a81f4a43c9644e6c385ee4459/Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.2 TI2V-5B Turbo text-to-video diffusion model",
+    "notes": "Community-distilled Turbo quantization of https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B.",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q5_K_S",
+    "params": "5B",
+    "tags": ["generation", "diffusion", "video", "720p", "wan"]
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/fb1388adc906ab39ffc26ee40e96b22886b56bc4/split_files/vae/wan2.2_vae.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.2 Variational Autoencoder",
+    "licenseId": "Apache-2.0",
+    "tags": ["vae", "wan"]
   },
   {
     "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf",
