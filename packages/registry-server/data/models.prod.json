@@ -2982,6 +2982,39 @@
     "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
   },
   {
+    "source": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "OCR-specialized vision-language model for document parsing",
+    "quantization": "q4_0",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "DeepSeek-OCR-derived VLM (DeepEncoder SAM+CLIP + DeepseekV2 MoE decoder). Full-page parsing with layout <|det|> boxes and HTML tables. Q4_0 — recommended for mobile (typically faster than Q4_K_M on Adreno/Mali GPUs). Prompt: 'document parsing.'. Pair with mmproj-unlimited-ocr-F16.gguf. Requires qvac-fabric >= 9840.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
+    "source": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (DeepEncoder) for Unlimited-OCR",
+    "quantization": "f16",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "F16 — highest-fidelity vision encoder. A Q8_0 variant is available at ~44% smaller (461MB vs 825MB) with equivalent OCR accuracy on document parsing; do not go below Q8_0 for the encoder.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/unlimited-ocr/2026-07-25/mmproj-unlimited-ocr-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (DeepEncoder) for Unlimited-OCR — Q8_0",
+    "quantization": "q8_0",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "Q8_0 vision encoder — 461MB vs the 825MB F16, validated to match F16 OCR accuracy on document parsing (all keywords recovered, table/paragraph text identical). Weights Q8_0; biases and layer-norms kept F32. Pair with unlimited-ocr-Q4_0.gguf. Requires qvac-fabric >= 9840.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
     "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",

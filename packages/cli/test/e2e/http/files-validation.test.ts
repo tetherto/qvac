@@ -28,6 +28,7 @@ describe('serve: files content endpoint', () => {
 
     const res = await server().inject({ method: 'GET', url: `/v1/files/${id}/content` })
     assert.equal(res.statusCode, 200)
+    assert.equal(res.headers['content-type'], 'image/png')
     assert.ok(res.rawPayload.equals(png), 'downloaded bytes should match the upload')
   })
 
