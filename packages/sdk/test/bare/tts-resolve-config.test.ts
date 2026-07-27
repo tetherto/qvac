@@ -127,7 +127,7 @@ test('ttsPlugin createModel: wires the full Parler constructor surface', async (
       voice: 'Rohit',
       emotion: 'happy',
       useGPU: true,
-      outputSampleRate: 16000,
+      outputSampleRate: 44100,
       streamChunkTokens: 43,
       streamFirstChunkTokens: 20,
       threads: 2,
@@ -158,8 +158,8 @@ test('ttsPlugin createModel: wires the full Parler constructor surface', async (
   t.is(model._threads, 2)
   t.is(model._nGpuLayers, 99)
   t.is(model._seed, 7)
-  t.is(model._outputSampleRate, 16000)
-  t.alike(model._config, { useGPU: true, outputSampleRate: 16000 })
+  t.is(model._outputSampleRate, 44100)
+  t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
 })
 
 test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets', async (t) => {

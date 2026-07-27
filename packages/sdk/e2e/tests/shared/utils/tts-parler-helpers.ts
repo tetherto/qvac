@@ -1,24 +1,25 @@
-import { textToSpeech } from '@qvac/sdk'
+import { textToSpeech, type TtsClientParamsInput, type TtsParlerEmotion } from '@qvac/sdk'
 
-type ParlerParams = {
-  text: string
-  description?: string
-  voiceDescription?: string
-  voice?: string
-  emotion?: string
-  pitch?: string
-  pace?: string
-  expressivity?: string
-  noise?: string
-  reverb?: string
-  quality?: string
-}
+type ParlerParams = Pick<
+  TtsClientParamsInput,
+  | 'text'
+  | 'description'
+  | 'voiceDescription'
+  | 'voice'
+  | 'emotion'
+  | 'pitch'
+  | 'pace'
+  | 'expressivity'
+  | 'noise'
+  | 'reverb'
+  | 'quality'
+>
 
 type ParlerEmotionComparisonParams = {
   text: string
   voice?: string
-  firstEmotion: string
-  secondEmotion: string
+  firstEmotion: TtsParlerEmotion
+  secondEmotion: TtsParlerEmotion
 }
 
 type TtsTestResult = {
@@ -52,11 +53,11 @@ function buildParlerRequest(modelId: string, params: ParlerParams) {
 }
 
 async function synthesize(modelId: string, params: ParlerParams) {
-  const result = textToSpeech(buildParlerRequest(modelId, params) as never)
+  const result = textToSpeech(buildParlerRequest(modelId, params))
   return await result.buffer
 }
 
-function buffersDiffer(first: Float32Array, second: Float32Array) {
+function buffersDiffer(first: number[], second: number[]) {
   if (first.length !== second.length) return true
 
   for (let index = 0; index < first.length; index++) {
@@ -71,18 +72,19 @@ export function makeParlerTtsHandler<
   TResult extends TtsTestResult
 >(dependencies: HandlerDependencies<TExpectation, TResult>) {
   return async (params: ParlerParams, expectation: TExpectation): Promise<TResult> => {
-    const modelId = await dependencies.ensureLoaded(dependencies.dependency)
-
     try {
-      const buffer = await synthesize(modelId, params)
-      const sampleCount = buffer?.length ?? 0
-
       if (expectation.validation === 'throws-error') {
+        await synthesize('schema-validation-only', params)
         return {
           passed: false,
           output: 'Expected Parler validation error but synthesis succeeded'
         } as TResult
       }
+
+      const modelId = await dependencies.ensureLoaded(dependencies.dependency)
+      const buffer = await synthesize(modelId, params)
+      const sampleCount = buffer.length
+
       if (sampleCount === 0) {
         return { passed: false, output: 'Parler produced no audio samples' } as TResult
       }
@@ -114,18 +116,30 @@ export function makeParlerEmotionComparisonHandler<
         voice: params.voice,
         emotion: params.firstEmotion
       })
+      const control = await synthesize(modelId, {
+        text: params.text,
+        voice: params.voice,
+        emotion: params.firstEmotion
+      })
       const second = await synthesize(modelId, {
         text: params.text,
         voice: params.voice,
         emotion: params.secondEmotion
       })
-      const firstSamples = first?.length ?? 0
-      const secondSamples = second?.length ?? 0
+      const firstSamples = first.length
+      const controlSamples = control.length
+      const secondSamples = second.length
 
-      if (!first || !second || firstSamples === 0 || secondSamples === 0) {
+      if (firstSamples === 0 || controlSamples === 0 || secondSamples === 0) {
         return {
           passed: false,
-          output: `Parler conditioning produced empty audio (first=${firstSamples}, second=${secondSamples})`
+          output: `Parler conditioning produced empty audio (first=${firstSamples}, control=${controlSamples}, second=${secondSamples})`
+        } as TResult
+      }
+      if (buffersDiffer(first, control)) {
+        return {
+          passed: false,
+          output: 'Parler deterministic control runs produced different PCM output'
         } as TResult
       }
       if (!buffersDiffer(first, second)) {
@@ -136,7 +150,7 @@ export function makeParlerEmotionComparisonHandler<
       }
 
       return dependencies.validate(
-        `emotion-conditioning-verified ${firstSamples}+${secondSamples} samples`,
+        `emotion-conditioning-verified ${firstSamples}+${controlSamples}+${secondSamples} samples`,
         expectation
       )
     } catch (error) {

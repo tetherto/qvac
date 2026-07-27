@@ -136,8 +136,8 @@ export const ttsSupertonicEnhanced: TestDefinition = {
 }
 
 // Parler exposes description-conditioned speech rather than a fixed speaker
-// ID. With deterministic generation settings on the shared resource, changing
-// only the emotion should produce different non-empty PCM output.
+// ID. The executor first proves identical prompts and emotions are deterministic,
+// then verifies changing only the emotion produces different non-empty PCM.
 export const ttsParlerEmotionConditioning: TestDefinition = {
   testId: 'tts-parler-emotion-conditioning',
   params: {
@@ -150,7 +150,7 @@ export const ttsParlerEmotionConditioning: TestDefinition = {
     validation: 'contains-all',
     contains: ['emotion-conditioning-verified', 'samples']
   },
-  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 120000 }
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 180000 }
 }
 
 // Omitting all description fields exercises the addon's default Parler
@@ -179,7 +179,7 @@ export const ttsParlerInvalidEmotion: TestDefinition = {
     validation: 'throws-error',
     errorContains: 'emotion'
   },
-  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 5000 }
+  metadata: { category: 'tts', dependency: 'none', estimatedDurationMs: 1000 }
 }
 
 export const ttsTests = [

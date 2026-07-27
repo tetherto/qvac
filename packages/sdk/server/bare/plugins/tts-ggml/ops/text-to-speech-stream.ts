@@ -12,6 +12,10 @@ import {
   type TtsOpYield,
   collectTtsStats
 } from '@/server/bare/utils/tts-stats'
+import {
+  assertParlerJobOptionsSupported,
+  getParlerJobOptions
+} from '@/server/bare/plugins/tts-ggml/ops/parler-options'
 
 type RunStreamingModel = {
   runStreaming: (
@@ -80,7 +84,10 @@ async function* buffersToUtf8Fragments(
   }
 }
 
-function buildRunStreamingOptions(request: TextToSpeechStreamRequest) {
+function buildRunStreamingOptions(
+  request: TextToSpeechStreamRequest,
+  parlerJobOptions: ReturnType<typeof getParlerJobOptions>
+) {
   const o: Record<string, unknown> = {}
   if (request.accumulateSentences !== undefined) {
     o['accumulateSentences'] = request.accumulateSentences
@@ -94,37 +101,7 @@ function buildRunStreamingOptions(request: TextToSpeechStreamRequest) {
   if (request.flushAfterMs !== undefined) {
     o['flushAfterMs'] = request.flushAfterMs
   }
-  if (request.description !== undefined) {
-    o['description'] = request.description
-  }
-  if (request.voiceDescription !== undefined) {
-    o['voiceDescription'] = request.voiceDescription
-  }
-  if (request.voice !== undefined) {
-    o['voice'] = request.voice
-  }
-  if (request.emotion !== undefined) {
-    o['emotion'] = request.emotion
-  }
-  if (request.pitch !== undefined) {
-    o['pitch'] = request.pitch
-  }
-  if (request.pace !== undefined) {
-    o['pace'] = request.pace
-  }
-  if (request.expressivity !== undefined) {
-    o['expressivity'] = request.expressivity
-  }
-  if (request.noise !== undefined) {
-    o['noise'] = request.noise
-  }
-  if (request.reverb !== undefined) {
-    o['reverb'] = request.reverb
-  }
-  if (request.quality !== undefined) {
-    o['quality'] = request.quality
-  }
-  return o
+  return { ...o, ...parlerJobOptions }
 }
 
 export async function* textToSpeechStream(
@@ -134,6 +111,8 @@ export async function* textToSpeechStream(
   const request = textToSpeechStreamRequestSchema.parse(params)
 
   const model = getModel(request.modelId)
+  const parlerJobOptions = getParlerJobOptions(request)
+  assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
   const modelStart = nowMs()
 
   if (!hasRunStreaming(model)) {
@@ -143,7 +122,7 @@ export async function* textToSpeechStream(
   }
 
   const textSource = buffersToUtf8Fragments(inputStream)
-  const streamOpts = buildRunStreamingOptions(request)
+  const streamOpts = buildRunStreamingOptions(request, parlerJobOptions)
   const response = await model.runStreaming(
     textSource,
     Object.keys(streamOpts).length > 0 ? streamOpts : undefined

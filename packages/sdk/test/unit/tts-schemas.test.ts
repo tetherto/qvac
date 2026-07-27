@@ -2,6 +2,7 @@ import test from 'brittle'
 import {
   ttsRequestSchema,
   ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
   textToSpeechStreamResponseSchema,
   ttsConfigSchema,
   ttsChatterboxRuntimeConfigSchema,
@@ -201,7 +202,7 @@ test('ttsConfigSchema: accepts the full Parler load-time config surface', (t) =>
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'parler',
     voice: 'Rohit',
-    emotion: 'HAPPY',
+    emotion: 'happy',
     pitch: 'high',
     pace: 'slow',
     expressivity: 'expressive',
@@ -209,7 +210,7 @@ test('ttsConfigSchema: accepts the full Parler load-time config surface', (t) =>
     reverb: 'close',
     quality: 'very high',
     useGPU: true,
-    outputSampleRate: 16000,
+    outputSampleRate: 44100,
     streamChunkTokens: 43,
     streamFirstChunkTokens: 20,
     threads: 2,
@@ -225,8 +226,8 @@ test('ttsConfigSchema: accepts the full Parler load-time config surface', (t) =>
 
   t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.emotion, 'happy', 'case-insensitive emotion is normalized')
-    t.is(r.data.outputSampleRate, 16000)
+    t.is(r.data.emotion, 'happy')
+    t.is(r.data.outputSampleRate, 44100)
     t.is(r.data.maxFrames, 860)
   }
 })
@@ -256,13 +257,15 @@ test('ttsConfigSchema: rejects conflicting Parler description and template field
 test('ttsParlerRuntimeConfigSchema: validates Parler option ranges', (t) => {
   const invalidConfigs = [
     { emotion: 'angry' },
+    { emotion: 'HAPPY' },
     { temperature: -0.1 },
     { topK: -1 },
     { topP: 0 },
     { topP: 1.1 },
     { maxFrames: 9 },
     { minNewTokens: -2 },
-    { outputSampleRate: 7999 }
+    { outputSampleRate: 7999 },
+    { outputSampleRate: 16000, streamChunkTokens: 43 }
   ]
 
   for (const invalidConfig of invalidConfigs) {
@@ -460,7 +463,7 @@ test('ttsRequestSchema: accepts per-call Parler voice conditioning', (t) => {
     text: 'Hello.',
     stream: false,
     voice: 'Laura',
-    emotion: 'NEWS'
+    emotion: 'news'
   })
 
   t.is(r.success, true)
@@ -468,6 +471,34 @@ test('ttsRequestSchema: accepts per-call Parler voice conditioning', (t) => {
     t.is(r.data.voice, 'Laura')
     t.is(r.data.emotion, 'news')
   }
+})
+
+test('ttsRequestSchema: rejects conflicting per-call Parler descriptions', (t) => {
+  const conflicts = [
+    { description: 'A calm voice.', emotion: 'happy' },
+    { description: 'A calm voice.', voiceDescription: 'A second description.' }
+  ]
+
+  for (const conflict of conflicts) {
+    const r = ttsRequestSchema.safeParse({
+      type: 'textToSpeech',
+      modelId: 'parler',
+      text: 'Hello.',
+      ...conflict
+    })
+    t.is(r.success, false, JSON.stringify(conflict))
+  }
+})
+
+test('textToSpeechStreamRequestSchema: rejects conflicting Parler descriptions', (t) => {
+  const r = textToSpeechStreamRequestSchema.safeParse({
+    type: 'textToSpeechStream',
+    modelId: 'parler',
+    description: 'A calm voice.',
+    pace: 'fast'
+  })
+
+  t.is(r.success, false)
 })
 
 test('ttsResponseSchema: accepts optional chunk metadata', (t) => {

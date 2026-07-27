@@ -108,10 +108,7 @@ export const TTS_LANGUAGES = [
 
 const ttsChatterboxLanguageSchema = z.enum(TTS_CHATTERBOX_LANGUAGES)
 const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES)
-const ttsParlerEmotionSchema = z
-  .string()
-  .transform((emotion) => emotion.toLowerCase())
-  .pipe(z.enum(TTS_PARLER_EMOTIONS))
+const ttsParlerEmotionSchema = z.enum(TTS_PARLER_EMOTIONS)
 const ttsIntegerSchema = z.number().int()
 const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
 const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
@@ -145,6 +142,69 @@ const ttsParlerTemplateFieldNames = [
   'reverb',
   'quality'
 ] as const
+
+type TtsParlerDescriptionRefinementInput = {
+  description?: string | undefined
+  voiceDescription?: string | undefined
+  voice?: string | undefined
+  emotion?: string | undefined
+  pitch?: string | undefined
+  pace?: string | undefined
+  expressivity?: string | undefined
+  noise?: string | undefined
+  reverb?: string | undefined
+  quality?: string | undefined
+}
+
+function refineParlerDescriptionFields(
+  config: TtsParlerDescriptionRefinementInput,
+  ctx: z.RefinementCtx
+) {
+  if (config.description !== undefined && config.voiceDescription !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['voiceDescription'],
+      message: 'description and voiceDescription are mutually exclusive.'
+    })
+  }
+
+  if (config.description === undefined && config.voiceDescription === undefined) return
+
+  const conflictingField = ttsParlerTemplateFieldNames.find((field) => config[field] !== undefined)
+  if (conflictingField) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [conflictingField],
+      message:
+        'description and voiceDescription are mutually exclusive with Parler voice-template fields.'
+    })
+  }
+}
+
+type TtsParlerRuntimeRefinementInput = TtsParlerDescriptionRefinementInput & {
+  outputSampleRate?: number | undefined
+  streamChunkTokens?: number | undefined
+  streamFirstChunkTokens?: number | undefined
+}
+
+function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx: z.RefinementCtx) {
+  refineParlerDescriptionFields(config, ctx)
+
+  const nativeStreamingEnabled =
+    (config.streamChunkTokens ?? 0) > 0 || (config.streamFirstChunkTokens ?? 0) > 0
+  if (
+    nativeStreamingEnabled &&
+    config.outputSampleRate !== undefined &&
+    config.outputSampleRate !== 44100
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['outputSampleRate'],
+      message:
+        'Parler native streaming emits at 44100 Hz; omit outputSampleRate, use 44100, or disable native streaming.'
+    })
+  }
+}
 
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal('chatterbox'),
@@ -190,21 +250,7 @@ export const ttsParlerRuntimeConfigSchema = z
     minNewTokens: ttsIntegerSchema.min(-1).optional(),
     normalizeNumbers: z.boolean().optional()
   })
-  .superRefine((config, ctx) => {
-    if (config.description === undefined && config.voiceDescription === undefined) return
-
-    const conflictingField = ttsParlerTemplateFieldNames.find(
-      (field) => config[field] !== undefined
-    )
-    if (conflictingField) {
-      ctx.addIssue({
-        code: 'custom',
-        path: [conflictingField],
-        message:
-          'description and voiceDescription are mutually exclusive with Parler voice-template fields.'
-      })
-    }
-  })
+  .superRefine(refineParlerRuntimeConfig)
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
@@ -317,7 +363,7 @@ export const ttsConfigSchema = z
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
-export const ttsClientParamsSchema = z.object({
+const ttsClientParamsShape = {
   modelId: z.string(),
   inputType: z.string().default('text'),
   text: z.string().trim().min(1, 'text must not be empty or whitespace-only'),
@@ -326,11 +372,18 @@ export const ttsClientParamsSchema = z.object({
   sentenceStreamLocale: z.string().optional(),
   sentenceStreamMaxChunkScalars: z.number().positive().optional(),
   ...ttsParlerDescriptionFieldsShape
-})
+}
 
-export const ttsRequestSchema = ttsClientParamsSchema.extend({
-  type: z.literal('textToSpeech')
-})
+export const ttsClientParamsSchema = z
+  .object(ttsClientParamsShape)
+  .superRefine(refineParlerDescriptionFields)
+
+export const ttsRequestSchema = z
+  .object({
+    ...ttsClientParamsShape,
+    type: z.literal('textToSpeech')
+  })
+  .superRefine(refineParlerDescriptionFields)
 
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
@@ -351,7 +404,7 @@ export const ttsResponseSchema = z.object({
 // Internal: kept un-exported to present a single request-schema surface to
 // consumers. The inferred `TextToSpeechStreamClientParams` type below uses
 // this shape via `typeof`, no runtime export needed.
-const textToSpeechStreamRequestBaseSchema = z.object({
+const textToSpeechStreamRequestBaseShape = {
   modelId: z.string(),
   inputType: z.string().default('text'),
   accumulateSentences: z.boolean().optional(),
@@ -359,11 +412,14 @@ const textToSpeechStreamRequestBaseSchema = z.object({
   maxBufferScalars: z.number().positive().optional(),
   flushAfterMs: z.number().positive().optional(),
   ...ttsParlerDescriptionFieldsShape
-})
+}
 
-export const textToSpeechStreamRequestSchema = textToSpeechStreamRequestBaseSchema.extend({
-  type: z.literal('textToSpeechStream')
-})
+export const textToSpeechStreamRequestSchema = z
+  .object({
+    ...textToSpeechStreamRequestBaseShape,
+    type: z.literal('textToSpeechStream')
+  })
+  .superRefine(refineParlerDescriptionFields)
 
 export const textToSpeechStreamResponseSchema = z.object({
   type: z.literal('textToSpeechStream'),
@@ -406,7 +462,9 @@ export type TtsSentenceChunkUpdate = {
 export type TextToSpeechStreamRequest = z.infer<typeof textToSpeechStreamRequestSchema>
 export type TextToSpeechStreamResponse = z.infer<typeof textToSpeechStreamResponseSchema>
 
-export type TextToSpeechStreamClientParams = z.infer<typeof textToSpeechStreamRequestBaseSchema>
+export type TextToSpeechStreamClientParams = z.output<
+  z.ZodObject<typeof textToSpeechStreamRequestBaseShape>
+>
 
 export interface TextToSpeechStreamResult {
   bufferStream: AsyncGenerator<number>

@@ -9,20 +9,11 @@ import {
   type TtsOpYield,
   collectTtsStats
 } from '@/server/bare/utils/tts-stats'
-
-type ParlerJobOptions = Pick<
-  TtsRequest,
-  | 'description'
-  | 'voiceDescription'
-  | 'voice'
-  | 'emotion'
-  | 'pitch'
-  | 'pace'
-  | 'expressivity'
-  | 'noise'
-  | 'reverb'
-  | 'quality'
->
+import {
+  assertParlerJobOptionsSupported,
+  getParlerJobOptions,
+  type ParlerJobOptions
+} from '@/server/bare/plugins/tts-ggml/ops/parler-options'
 
 type RunStreamModel = {
   runStream: (
@@ -48,23 +39,6 @@ function hasRunStream(model: unknown): model is RunStreamModel {
   )
 }
 
-function getParlerJobOptions(request: TtsRequest): ParlerJobOptions {
-  return {
-    ...(request.description !== undefined ? { description: request.description } : {}),
-    ...(request.voiceDescription !== undefined
-      ? { voiceDescription: request.voiceDescription }
-      : {}),
-    ...(request.voice !== undefined ? { voice: request.voice } : {}),
-    ...(request.emotion !== undefined ? { emotion: request.emotion } : {}),
-    ...(request.pitch !== undefined ? { pitch: request.pitch } : {}),
-    ...(request.pace !== undefined ? { pace: request.pace } : {}),
-    ...(request.expressivity !== undefined ? { expressivity: request.expressivity } : {}),
-    ...(request.noise !== undefined ? { noise: request.noise } : {}),
-    ...(request.reverb !== undefined ? { reverb: request.reverb } : {}),
-    ...(request.quality !== undefined ? { quality: request.quality } : {})
-  }
-}
-
 export async function* textToSpeech(
   params: TtsRequest
 ): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
@@ -81,6 +55,7 @@ export async function* textToSpeech(
   const parlerJobOptions = getParlerJobOptions(request)
 
   const model = getModel(modelId)
+  assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
   const modelStart = nowMs()
 
   if (sentenceStream) {
