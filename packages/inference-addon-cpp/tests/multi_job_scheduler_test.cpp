@@ -186,6 +186,18 @@ public:
     return peakActive_;
   }
 
+  /// Whether the whole-model cancel() surface was invoked.
+  bool wholeModelCancelRequested() const {
+    std::lock_guard lock(mtx_);
+    return cancelAllRequested_;
+  }
+
+  /// Whether @p id was cancelled through the per-id cancelById() surface.
+  bool wasCancelledById(JobId id) const {
+    std::lock_guard lock(mtx_);
+    return cancelledIds_.count(id) != 0;
+  }
+
   int active() const {
     std::lock_guard lock(mtx_);
     return active_;
@@ -2331,6 +2343,37 @@ TEST_F(MultiJobSchedulerTest,
 
   throwing->disarm();
   scheduler_->cancelAll();
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+}
+
+// On a model exposing both cancel surfaces, cancelAll() must reach the
+// in-flight jobs per id, not through the whole-model cancel: the scheduler
+// owns the exact in-flight id set, so per-id delivery is precise and
+// point-in-time by construction, while a whole-model cancel that the model
+// applies late (deferred, on its own worker) can sweep jobs admitted after
+// the call returned — work nobody cancelled (see IModelCancel). The
+// indiscriminate surface is a fallback for models offering nothing finer,
+// not the preferred path.
+TEST_F(MultiJobSchedulerTest, CancelAllPrefersPerIdCancelWhenAvailable) {
+  constexpr unsigned kConcurrency = 2;
+  build(kConcurrency, std::chrono::milliseconds{10000});
+
+  const std::optional<JobId> first = scheduler_->runJob(std::string("first"));
+  const std::optional<JobId> second =
+      scheduler_->runJob(std::string("second"));
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(second.has_value());
+  ASSERT_EQ(
+      waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
+      static_cast<int>(kConcurrency));
+
+  scheduler_->cancelAll();
+
+  EXPECT_TRUE(model_->wasCancelledById(*first));
+  EXPECT_TRUE(model_->wasCancelledById(*second));
+  EXPECT_FALSE(model_->wholeModelCancelRequested())
+      << "cancelAll used the indiscriminate whole-model cancel on a model "
+         "that offers per-id cancellation";
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 }
 
