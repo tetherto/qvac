@@ -11,7 +11,7 @@ const VERSION = require('../package.json').version
 
 // --- Helpers ---
 
-function createClient (parentFlags) {
+function createClient(parentFlags) {
   const opts = {}
   if (parentFlags.key) opts.registryCoreKey = parentFlags.key
   if (parentFlags.storage) opts.storage = parentFlags.storage
@@ -23,13 +23,13 @@ function createClient (parentFlags) {
   return new QVACRegistryClient(opts)
 }
 
-function getRootFlags (cmd) {
+function getRootFlags(cmd) {
   let current = cmd.command || cmd
   while (current.parent) current = current.parent
   return current.flags || {}
 }
 
-function formatSize (bytes) {
+function formatSize(bytes) {
   if (!bytes) return 'N/A'
   if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
   if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
@@ -37,14 +37,14 @@ function formatSize (bytes) {
   return bytes + ' B'
 }
 
-function printModelCompact (model) {
+function printModelCompact(model) {
   const parts = [model.path, model.source]
   if (model.quantization) parts.push(model.quantization)
   if (model.params) parts.push(model.params)
   console.log(parts.join('\t'))
 }
 
-function printModelFull (model, opts = {}) {
+function printModelFull(model, opts = {}) {
   const blob = model.blobBinding || {}
   const coreKey = blob.coreKey ? IdEnc.normalize(blob.coreKey) : 'N/A'
 
@@ -55,7 +55,9 @@ function printModelFull (model, opts = {}) {
   if (model.quantization) console.log(`    quantization: ${model.quantization}`)
   if (model.params) console.log(`    params:       ${model.params}`)
   console.log(`    size:         ${formatSize(blob.byteLength || model.sizeBytes)}`)
-  if (model.licenseId || model.license) console.log(`    license:      ${model.licenseId || model.license}`)
+  if (model.licenseId || model.license) {
+    console.log(`    license:      ${model.licenseId || model.license}`)
+  }
   if (blob.sha256 || model.sha256) console.log(`    sha256:       ${blob.sha256 || model.sha256}`)
   if (opts.verbose && model.description) console.log(`    description:  ${model.description}`)
   if (opts.verbose) console.log(`    blob core:    ${coreKey}`)
@@ -63,7 +65,7 @@ function printModelFull (model, opts = {}) {
   console.log()
 }
 
-async function withClient (cmd, fn) {
+async function withClient(cmd, fn) {
   const rootFlags = getRootFlags(cmd)
   const client = createClient(rootFlags)
   try {
@@ -75,7 +77,8 @@ async function withClient (cmd, fn) {
 
 // --- Commands ---
 
-const listCmd = command('list',
+const listCmd = command(
+  'list',
   summary('List models from the registry'),
   description('List all models or filter by name, engine, or quantization.'),
   flag('--name|-n [name]', 'Filter by model name (partial match)'),
@@ -103,10 +106,13 @@ const listCmd = command('list',
       }
 
       if (flags.json) {
-        const out = models.map(m => ({
+        const out = models.map((m) => ({
           ...m,
           blobBinding: m.blobBinding
-            ? { ...m.blobBinding, coreKey: m.blobBinding.coreKey ? IdEnc.normalize(m.blobBinding.coreKey) : undefined }
+            ? {
+                ...m.blobBinding,
+                coreKey: m.blobBinding.coreKey ? IdEnc.normalize(m.blobBinding.coreKey) : undefined
+              }
             : undefined
         }))
         console.log(JSON.stringify(out, null, 2))
@@ -129,7 +135,8 @@ const listCmd = command('list',
   }
 )
 
-const getCmd = command('get',
+const getCmd = command(
+  'get',
   summary('Get a specific model by path and source'),
   arg('<path>', 'Model path (e.g. hf/org/repo/file.gguf)'),
   arg('<source>', 'Model source (e.g. hf, s3)'),
@@ -149,7 +156,12 @@ const getCmd = command('get',
         const out = {
           ...model,
           blobBinding: model.blobBinding
-            ? { ...model.blobBinding, coreKey: model.blobBinding.coreKey ? IdEnc.normalize(model.blobBinding.coreKey) : undefined }
+            ? {
+                ...model.blobBinding,
+                coreKey: model.blobBinding.coreKey
+                  ? IdEnc.normalize(model.blobBinding.coreKey)
+                  : undefined
+              }
             : undefined
         }
         console.log(JSON.stringify(out, null, 2))
@@ -161,7 +173,8 @@ const getCmd = command('get',
   }
 )
 
-const downloadCmd = command('download',
+const downloadCmd = command(
+  'download',
   summary('Download a model from the registry'),
   arg('<path>', 'Model path'),
   arg('<source>', 'Model source (e.g. hf, s3)'),
@@ -192,9 +205,12 @@ const downloadCmd = command('download',
   }
 )
 
-const profileCmd = command('profile',
+const profileCmd = command(
+  'profile',
   summary('Profile download performance for a model'),
-  description('Downloads a model to a temp directory while collecting UDX network stats, connection info, and hypercore metrics. Similar to hyperdrive-profiler but for registry blobs.'),
+  description(
+    'Downloads a model to a temp directory while collecting UDX network stats, connection info, and hypercore metrics. Similar to hyperdrive-profiler but for registry blobs.'
+  ),
   arg('<path>', 'Model path'),
   arg('[source]', 'Model source filter (e.g. hf, s3)'),
   flag('--interval|-i [seconds]', 'Stats print interval in seconds (default: 5)'),
@@ -232,7 +248,8 @@ const profileCmd = command('profile',
 
 // --- Root command ---
 
-const cmd = command('qvac-registry',
+const cmd = command(
+  'qvac-registry',
   header(`qvac-registry v${VERSION}`),
   summary('QVAC Model Registry CLI'),
   footer('Set QVAC_REGISTRY_CORE_KEY env var or use --key to specify the registry core key.'),

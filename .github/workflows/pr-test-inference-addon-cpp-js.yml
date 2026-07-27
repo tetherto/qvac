@@ -5,7 +5,7 @@ permissions:
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     paths:
       - "packages/inference-addon-cpp/**"
       - ".github/workflows/pr-test-inference-addon-cpp-js.yml"
@@ -19,37 +19,70 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
+      # SHA-bound fork approval. Reads the `qvac/fork-verified` commit status that
+      # the sibling pull_request_target label-gate records on the EXACT SHA a
+      # merge/release member approved. Gating self-hosted fork runs on this status
+      # (not a stale label) is what stops a draft->ready / close->reopen flip — or
+      # any later push — from running a new, unapproved SHA. Read-only: no secrets,
+      # `statuses: read` only. See .cursor/rules/devops/github-actions.mdc
+      # "CI trust policy for fork PRs".
+      - name: Resolve SHA-bound fork approval
+        id: approved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          STATUS_CONTEXT: qvac/fork-verified
+        run: |
+          approved=false
+          if [ -n "$HEAD_SHA" ]; then
+            state=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" \
+              --jq "map(select(.context == \"${STATUS_CONTEXT}\"))[0].state // \"\"" \
+              2>/dev/null || echo "")
+            if [ "$state" = "success" ]; then approved=true; fi
+          fi
+          echo "approved=$approved" >> "$GITHUB_OUTPUT"
       - name: Authorize JS tests
         id: auth
         env:
           EVENT: ${{ github.event_name }}
-          ACTION: ${{ github.event.action }}
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
-          HAS_VERIFIED_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verified') }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          HAS_RUN_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-desktop-addon-tests') }}
+          HAS_APPROVED_SHA: ${{ steps.approved.outputs.approved }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Fork sync: deny pending re-review. label-gate (in sibling pull_request_target
-          # workflows) will strip 'verified' shortly anyway; this just makes the JS
-          # matrix skip immediately rather than racing the strip.
-          if [ "$IS_FORK" = "true" ] && [ "$ACTION" = "synchronize" ]; then
-            echo "::notice::Fork PR synchronize: JS tests skipped pending re-application of 'verified'."
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "::notice::Draft PR: JS tests skipped until ready-for-review."
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "$HAS_VERIFIED_LABEL" = "true" ]; then
+          # Internal same-repo PRs are trusted without 'verified', but desktop
+          # tests remain opt-in behind their dedicated capacity-control label.
+          if [ "$IS_FORK" = "false" ]; then
+            echo "allowed=$HAS_RUN_LABEL" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # External fork: require the tier run-label AND a SHA-bound approval on
+          # the CURRENT head. A stale 'verified' label cannot authorise a new SHA
+          # via a draft->ready / close->reopen flip, and a fork synchronize has no
+          # approved status until re-review — both fail closed here.
+          if [ "$HAS_RUN_LABEL" = "true" ] && [ "$HAS_APPROVED_SHA" = "true" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "::notice::JS tests require the 'verified' label. A trusted reviewer must apply it after reviewing the diff."
+          echo "::notice::JS tests require 'run-desktop-addon-tests'; external forks also require a SHA-bound 'verified' approval on the current commit."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
   run-js-tests:

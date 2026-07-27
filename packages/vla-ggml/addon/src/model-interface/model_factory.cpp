@@ -8,6 +8,7 @@
 #include <gguf.h>
 
 #include "model-interface/gguf_helpers.hpp"
+#include "model-interface/groot.hpp"
 #include "model-interface/pi05.hpp"
 #include "model-interface/smolvla_adapter.hpp"
 
@@ -83,10 +84,13 @@ std::unique_ptr<IVlaModel> createVlaModelFromGguf(
   if (arch == "pi05") {
     return std::make_unique<Pi05Model>(ggufPath, forceCpu, backendsDir);
   }
+  if (arch == "groot") {
+    return std::make_unique<GrootModel>(ggufPath, forceCpu, backendsDir);
+  }
 
   throw std::runtime_error(
       "createVlaModelFromGguf: unsupported general.architecture='" + arch +
-      "' (expected 'smolvla' or 'pi05')");
+      "' (expected 'smolvla', 'pi05', or 'groot')");
 }
 
 } // namespace qvac_lib_infer_vla_ggml

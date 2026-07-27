@@ -68,6 +68,17 @@ on:
         required: false
         type: string
         default: ""
+      overlay-prebuild-addon:
+        description: >-
+          Optional addon short name (e.g. "tts-ggml"). When set, this run's
+          `prebuilds` artifact is downloaded and its android-arm64 build is
+          overlaid onto the installed @qvac/<addon> package before the consumer
+          APK is bundled, so the co-load exercises THIS PR's freshly-built addon
+          instead of the published npm baseline. Empty = published baseline
+          (unchanged; SDK e2e never sets this).
+        required: false
+        type: string
+        default: ""
     secrets:
       # MQTT_* and NPM_TOKEN are typically provided via the release environment
       # (see jobs with `environment: release`). They are declared required: false
@@ -314,6 +325,52 @@ jobs:
         if: inputs.working-directory != inputs.project-directory
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
+
+      # ggml co-load smoke (run from PR code): overlay THIS PR's freshly-built
+      # android-arm64 prebuild onto the installed @qvac/<addon> package so the
+      # bundled consumer co-loads the PR's addon, not the npm baseline. No-op for
+      # normal SDK e2e runs (overlay-prebuild-addon empty).
+      - name: Download this PR's freshly-built prebuilds (co-load overlay)
+        if: ${{ inputs.overlay-prebuild-addon != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ runner.temp }}/pr-prebuilds
+
+      - name: Overlay PR android-arm64 prebuild (co-load smoke)
+        if: ${{ inputs.overlay-prebuild-addon != '' }}
+        shell: bash
+        env:
+          ADDON: ${{ inputs.overlay-prebuild-addon }}
+          SRC: ${{ runner.temp }}/pr-prebuilds
+          PROJECT_DIR: ${{ inputs.project-directory }}
+          CONSUMER_DIR: ${{ inputs.working-directory }}
+        run: |
+          set -euo pipefail
+          if [ ! -d "$SRC/android-arm64" ]; then
+            echo "::error::PR prebuilds artifact has no android-arm64/ for $ADDON"
+            ls -R "$SRC" || true
+            exit 1
+          fi
+          # The addon can be hoisted into either the consumer or the project
+          # node_modules; overlay every install so the bundler cannot pick up a
+          # stale baseline copy.
+          mapfile -t PKG_DIRS < <(find "$CONSUMER_DIR" "$PROJECT_DIR" -type d -path "*/node_modules/@qvac/$ADDON" 2>/dev/null || true)
+          if [ "${#PKG_DIRS[@]}" -eq 0 ]; then
+            echo "::error::no installed @qvac/$ADDON found under $CONSUMER_DIR or $PROJECT_DIR to overlay"
+            exit 1
+          fi
+          for pkg in "${PKG_DIRS[@]}"; do
+            dest="$pkg/prebuilds/android-arm64"
+            mkdir -p "$dest"
+            cp -r "$SRC/android-arm64/." "$dest/"
+            # Published @qvac packages use the qvac_ prefix; a freshly-built
+            # prebuild may still carry the tetherto_ build prefix.
+            find "$pkg/prebuilds" -depth -name 'tetherto_*' | while read -r f; do
+              mv "$f" "$(dirname "$f")/$(basename "$f" | sed 's/^tetherto_/qvac_/')"
+            done
+            echo "Overlaid PR android-arm64 prebuild for $ADDON into $dest"
+          done
 
       # ggml co-load smoke: restrict the mobile bundle to a subset of plugins so
       # the consumer co-loads exactly those addons. No-op for normal SDK e2e

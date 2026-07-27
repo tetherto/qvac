@@ -186,6 +186,10 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
+    return generationStopReason_;
+  }
+
   [[nodiscard]] bool supportsSliding() const override { return false; }
 
   [[nodiscard]] std::optional<llama_perf_context_data>

@@ -686,6 +686,22 @@ function getTestPaths(modelsDir = null) {
 }
 
 /**
+ * Absolute path to the package prebuilds directory.
+ *
+ * On linux-arm64 and Android the native addon ships ggml with GGML_BACKEND_DL,
+ * so it loads its CPU/GPU backends from configurationParams.backendsDir before
+ * whisper_init; without it, model activation aborts on a NULL CPU device. The
+ * high-level TranscriptionWhispercpp class passes this same directory, so tests
+ * that construct WhisperInterface directly must pass it too. Mirrors
+ * PREBUILDS_DIR in index.ts.
+ *
+ * @returns {string} Absolute path to the package prebuilds directory
+ */
+function getBackendsDir() {
+  return path.resolve(__dirname, '../../prebuilds')
+}
+
+/**
  * Run transcription using TranscriptionWhispercpp
  * @param {Object} params - Transcription parameters
  * @param {string|Buffer|Uint8Array|Array|Readable} [params.audioInput] - Audio input (optional - if omitted, only tests config validation)
@@ -963,6 +979,7 @@ module.exports = {
   makePcmNoise,
   setupJsLogger,
   getTestPaths,
+  getBackendsDir,
   getAssetPath,
   wordErrorRate,
   validateAccuracy,

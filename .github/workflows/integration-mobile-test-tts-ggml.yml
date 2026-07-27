@@ -67,7 +67,7 @@ jobs:
   # merge today.  Tighten once the Device Farm provisioning + signing
   # + runner pool is stable.
   build-and-test:
-    name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}) and Run E2E Tests
+    name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -84,8 +84,12 @@ jobs:
       # q4) and supertonic3 (CPU + GPU q4). `use_gpu:true` selects Vulkan on
       # Android / Metal on iOS via the benchmark's resolveBackend(). New rows are
       # q4-only to keep the Device Farm run count bounded; chatterbox keeps its
-      # q4+q8 CPU coverage. The default (non-benchmark) matrix is unchanged.
-      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
+      # q4+q8 CPU coverage. The LavaSR rows (enhancer CPU+GPU, denoiser CPU on
+      # supertonic + chatterbox) use the fp16 enhancer + denoiser: iOS fetches
+      # them from the registry on-device, Android pre-stages them (see the
+      # manifest / prestage steps below). The default (non-benchmark) matrix is
+      # unchanged.
+      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
 
     steps:
       - name: Checkout composite action source
@@ -155,8 +159,22 @@ jobs:
           ENGINE: ${{ matrix.engine || 'chatterbox' }}
           USE_GPU: ${{ matrix.use_gpu && '1' || '0' }}
           GPU_TAG: ${{ matrix.use_gpu && 'gpu' || 'cpu' }}
+          # Enhancer / denoiser axes (none|lavasr) plus the enhancer quant tier
+          # (f16 default | f32 | q8_0); the mobile LavaSR rows use the fp16 enhancer
+          # + denoiser. iOS resolves those from the registry on-device (like the
+          # engine GGUFs); Android has no on-device network, so the fp16 enhancer +
+          # denoiser are pre-signed into the model manifest and adb-pushed by the
+          # prestage step below. Default to none/f16 for the existing engine-only rows.
+          ENHANCER: ${{ matrix.enhancer || 'none' }}
+          ENHANCER_VARIANT: ${{ matrix.enhancer_variant || 'f16' }}
+          DENOISER: ${{ matrix.denoiser || 'none' }}
+          QUALITY_MODEL: ggml-tiny.bin
         run: |
           echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
+          # Tag the label with the LavaSR axes so enhancer/denoiser rows don't
+          # collide with the plain engine row (matches the desktop label tokens).
+          ENH_TAG=""; [ "$ENHANCER" = "lavasr" ] && ENH_TAG="-lavasr"
+          DEN_TAG=""; [ "$DENOISER" = "lavasr" ] && DEN_TAG="-denoise"
           cat > test/mobile/inject-env.cjs <<NODE
           const os = require('bare-os')
           const originalGetEnv = os.getEnv
@@ -164,10 +182,15 @@ jobs:
             if (key === 'QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') return '1'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
-            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-$ENGINE-$VARIANT-$GPU_TAG'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-$ENGINE-$VARIANT-$GPU_TAG$ENH_TAG$DEN_TAG'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_VARIANT') return '$VARIANT'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_ENGINE') return '$ENGINE'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_USE_GPU') return '$USE_GPU'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_ENHANCER') return '$ENHANCER'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT') return '$ENHANCER_VARIANT'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_DENOISER') return '$DENOISER'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_QUALITY') return 'true'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL') return '$QUALITY_MODEL'
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined
           }
           NODE
@@ -183,6 +206,9 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         env:
           TTS_GGML_MOBILE_BENCHMARK_VARIANT: ${{ matrix.variant }}
+          TTS_GGML_MOBILE_BENCHMARK_ENHANCER: ${{ matrix.enhancer || 'none' }}
+          TTS_GGML_MOBILE_BENCHMARK_DENOISER: ${{ matrix.denoiser || 'none' }}
+          TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'true'
         run: |
           node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -292,8 +318,8 @@ jobs:
           filter: ''
           merge: 'true'
           unzip-customer-artifacts: 'true'
-          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }}, ${{ matrix.engine || ''chatterbox'' }} ${{ matrix.variant }} ${{ matrix.use_gpu && ''gpu'' || ''cpu'' }})'
-          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ matrix.engine || 'chatterbox' }}-${{ matrix.variant }}-${{ matrix.use_gpu && 'gpu' || 'cpu' }}-${{ github.run_number }}
+          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }}, ${{ matrix.engine || ''chatterbox'' }} ${{ matrix.variant }} ${{ matrix.use_gpu && ''gpu'' || ''cpu'' }}${{ matrix.enhancer == ''lavasr'' && '' enh'' || '''' }}${{ matrix.denoiser == ''lavasr'' && '' den'' || '''' }})'
+          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ matrix.engine || 'chatterbox' }}-${{ matrix.variant }}-${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && '-enh' || '' }}${{ matrix.denoiser == 'lavasr' && '-den' || '' }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

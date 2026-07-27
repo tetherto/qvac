@@ -6,11 +6,7 @@
     "quantization": "",
     "params": "",
     "licenseId": "MIT",
-    "tags": [
-      "transcription",
-      "tiny-silero",
-      "whisper"
-    ],
+    "tags": ["transcription", "tiny-silero", "whisper"],
     "notes": ""
   },
   {
@@ -20,11 +16,7 @@
     "quantization": "",
     "params": "",
     "licenseId": "MIT",
-    "tags": [
-      "transcription",
-      "tiny-silero",
-      "whisper"
-    ],
+    "tags": ["transcription", "tiny-silero", "whisper"],
     "notes": ""
   },
   {
@@ -34,11 +26,7 @@
     "quantization": "q4_0",
     "params": "300M",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "embedding",
-      "embed",
-      "embeddinggemma"
-    ],
+    "tags": ["embedding", "embed", "embeddinggemma"],
     "notes": ""
   },
   {
@@ -48,12 +36,7 @@
     "quantization": "fp32",
     "params": "20M",
     "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-paola",
-      "it_it"
-    ],
+    "tags": ["tts", "onnx-medium", "piper-paola", "it_it"],
     "notes": "",
     "deprecated": true,
     "replacedBy": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
@@ -66,12 +49,7 @@
     "quantization": "fp32",
     "params": "20M",
     "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-paola",
-      "it_it"
-    ],
+    "tags": ["tts", "onnx-medium", "piper-paola", "it_it"],
     "notes": "",
     "deprecated": true,
     "replacedBy": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
@@ -84,12 +62,7 @@
     "quantization": "fp16",
     "params": "335M",
     "licenseId": "MIT",
-    "tags": [
-      "embedding",
-      "bert",
-      "gte-large",
-      "shard"
-    ],
+    "tags": ["embedding", "bert", "gte-large", "shard"],
     "notes": "shard 1/5"
   },
   {
@@ -99,12 +72,7 @@
     "quantization": "fp16",
     "params": "335M",
     "licenseId": "MIT",
-    "tags": [
-      "embedding",
-      "bert",
-      "gte-large",
-      "shard"
-    ],
+    "tags": ["embedding", "bert", "gte-large", "shard"],
     "notes": "shard 2/5"
   },
   {
@@ -114,12 +82,7 @@
     "quantization": "fp16",
     "params": "335M",
     "licenseId": "MIT",
-    "tags": [
-      "embedding",
-      "bert",
-      "gte-large",
-      "shard"
-    ],
+    "tags": ["embedding", "bert", "gte-large", "shard"],
     "notes": "shard 3/5"
   },
   {
@@ -129,12 +92,7 @@
     "quantization": "fp16",
     "params": "335M",
     "licenseId": "MIT",
-    "tags": [
-      "embedding",
-      "bert",
-      "gte-large",
-      "shard"
-    ],
+    "tags": ["embedding", "bert", "gte-large", "shard"],
     "notes": "shard 4/5"
   },
   {
@@ -144,12 +102,7 @@
     "quantization": "fp16",
     "params": "335M",
     "licenseId": "MIT",
-    "tags": [
-      "embedding",
-      "bert",
-      "gte-large",
-      "shard"
-    ],
+    "tags": ["embedding", "bert", "gte-large", "shard"],
     "notes": "shard 5/5"
   },
   {
@@ -159,12 +112,7 @@
     "quantization": "fp16",
     "params": "335M",
     "licenseId": "MIT",
-    "tags": [
-      "embedding",
-      "bert",
-      "gte-large",
-      "shard"
-    ],
+    "tags": ["embedding", "bert", "gte-large", "shard"],
     "notes": "tensors config"
   },
   {
@@ -174,12 +122,7 @@
     "quantization": "fp32",
     "params": "20M",
     "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-sharvard",
-      "es_es"
-    ],
+    "tags": ["tts", "onnx-medium", "piper-sharvard", "es_es"],
     "notes": ""
   },
   {
@@ -189,12 +132,7 @@
     "quantization": "fp32",
     "params": "20M",
     "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-sharvard",
-      "es_es"
-    ],
+    "tags": ["tts", "onnx-medium", "piper-sharvard", "es_es"],
     "notes": ""
   }
 ]

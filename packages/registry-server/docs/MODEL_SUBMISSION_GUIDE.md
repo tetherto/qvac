@@ -3,6 +3,7 @@
 ## Adding a New Model
 
 1. Add entry to `data/models.prod.json`:
+
    ```json
    {
      "source": "https://huggingface.co/<org>/<repo>/resolve/<commit>/<file>",
@@ -48,6 +49,7 @@ s3:///qvac_models_compiled/<type>/<model-name>/<YYYY-MM-DD>/<filename>
 ```
 
 Example:
+
 ```
 s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0.gguf
 ```
@@ -72,6 +74,7 @@ How sync works:
 ## Deprecating a Model
 
 Add deprecation fields to existing entry:
+
 ```json
 {
   "source": "...",
@@ -86,6 +89,7 @@ The `replacedBy` field must reference a model that exists in the same JSON file.
 ## Undeprecating a Model
 
 To reverse a deprecation (e.g., deprecated by mistake), set `deprecated: false`:
+
 ```json
 {
   "source": "...",
@@ -105,20 +109,20 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 
 ## Field Reference
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `source` | Yes | URL to model file (`https://huggingface.co/...` or `s3:///key`) |
-| `engine` | Yes | Engine identifier (e.g., `@qvac/llm-llamacpp`) |
-| `licenseId` | Yes | License identifier matching an entry in `data/licenses.json` |
-| `quantization` | No | Quantization format (e.g., `q4_0`, `q8_0`) |
-| `params` | No | Model parameter count (e.g., `1B`, `4B`) |
-| `description` | No | Human-readable description |
-| `notes` | No | Additional notes |
-| `tags` | No | Array of tag strings |
-| `link` | No | URL to the model's HuggingFace page or project. Required for S3-hosted models to provide traceability back to the original source. |
-| `deprecated` | No | Boolean flag for deprecation |
-| `replacedBy` | No | Source URL of replacement model |
-| `deprecationReason` | No | Reason for deprecation |
+| Field               | Required | Description                                                                                                                        |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `source`            | Yes      | URL to model file (`https://huggingface.co/...` or `s3:///key`)                                                                    |
+| `engine`            | Yes      | Engine identifier (e.g., `@qvac/llm-llamacpp`)                                                                                     |
+| `licenseId`         | Yes      | License identifier matching an entry in `data/licenses.json`                                                                       |
+| `quantization`      | No       | Quantization format (e.g., `q4_0`, `q8_0`)                                                                                         |
+| `params`            | No       | Model parameter count (e.g., `1B`, `4B`)                                                                                           |
+| `description`       | No       | Human-readable description                                                                                                         |
+| `notes`             | No       | Additional notes                                                                                                                   |
+| `tags`              | No       | Array of tag strings                                                                                                               |
+| `link`              | No       | URL to the model's HuggingFace page or project. Required for S3-hosted models to provide traceability back to the original source. |
+| `deprecated`        | No       | Boolean flag for deprecation                                                                                                       |
+| `replacedBy`        | No       | Source URL of replacement model                                                                                                    |
+| `deprecationReason` | No       | Reason for deprecation                                                                                                             |
 
 Note: `deprecatedAt` timestamp is auto-generated when syncing to the database.
 
@@ -132,4 +136,3 @@ Each license used in `models.prod.json` must have:
 Existing licenses: `Apache-2.0`, `MIT`, `llama3.2`, `gemma`, `health-ai-developer-foundations`, `MPL-2.0`, `CC-BY-4.0`, `openrail`, `openrail++`, `BSD-3-Clause`.
 
 When adding a model with a new license, include the license file in the same PR.
-

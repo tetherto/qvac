@@ -3,25 +3,71 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "qvac"
-version = "0.1.0"
+name = "tetherto-qvac-sdk"
+# Version tracks @qvac/sdk (not an independent number) so a given python-sdk
+# release makes plain which SDK it speaks: it's read from the generated
+# _generated/sdk_version.py, which is stamped from packages/sdk/package.json.
+dynamic = ["version"]
 description = "Generated Python client for the QVAC SDK worker RPC"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 dependencies = ["pydantic>=2.6,<3"]
 
+[tool.hatch.version]
+path = "src/tetherto/qvac_sdk/_generated/sdk_version.py"
+pattern = 'SDK_VERSION = "(?P<version>[^"]+)"'
+
 [project.optional-dependencies]
 gen = ["datamodel-code-generator==0.68.0", "black==26.5.1", "ruff==0.15.21"]
-dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "ruff==0.15.21", "mypy==2.3.0"]
+dev = [
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+  "ruff==0.15.21",
+  "mypy==2.3.0",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pandas-stubs>=2.2",
+]
+# VLA tensor marshaling (tetherto.qvac_sdk.vla): numpy-backed base64 codecs +
+# image preprocessing.
+vla = ["numpy>=1.26"]
+# tetherto.qvac_sdk.notebook: the synchronous SyncClient facade with numpy/pandas
+# inputs and outputs (IPython, when present, upgrades live streaming
+# display from stdout to in-cell updates).
+notebook = ["numpy>=1.26", "pandas>=2.2"]
+# scripts/build_wheel.py: the self-contained per-platform wheel build.
+release = ["build>=1.2"]
+# The wire transport -- REQUIRED for the default experience, not truly optional.
+# It's an extra only because neither dep is on PyPI yet (both v0.0.1, git-only)
+# and PyPI rejects direct git references in a package's required dependencies.
+# Fold this into `dependencies` above once both are published. Pinned to their
+# current HEAD commits for reproducibility while unreleased.
+bare-rpc = [
+  "bare-rpc-python @ git+https://github.com/holepunchto/bare-rpc-python.git@5219c528866678553cb9716f80a199c9accfe8c1",
+  "compact-encoding-python @ git+https://github.com/holepunchto/compact-encoding-python.git@e7e1f080eb413c6ea06f8c6400a9716857c67266",
+]
+
+[tool.hatch.metadata]
+# QVAC-21806 PoC: bare-rpc-python/compact-encoding-python aren't on PyPI yet.
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/qvac"]
+# PEP 420 namespace package: ship the whole `tetherto/` tree (no
+# tetherto/__init__.py) so `tetherto.qvac_sdk` installs under the shared root.
+packages = ["src/tetherto"]
+# The staged runtime+worker bundle is gitignored (build_wheel.py creates it
+# transiently); artifacts overrides hatchling's VCS-ignore exclusion so the
+# self-contained wheel actually carries it. Harmless when absent (thin wheel).
+artifacts = ["src/tetherto/qvac_sdk/_bundle/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
 asyncio_mode = "auto"
+markers = [
+  "heavy: real-worker tests using large or specialized models (parakeet, BCI, VLA). Excluded from the fast CI leg (pytest -m 'not heavy'); run in the broader cross-platform e2e that restores the shared model cache.",
+]
 
 [tool.ruff]
 target-version = "py310"
@@ -33,19 +79,35 @@ select = ["E", "F", "I", "UP"]
 # so it's pure noise on top of an already-formatted codebase.
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+# Pin tetherto as first-party so import-section grouping is identical whether
+# the generator writes in place (src/tetherto/qvac_sdk/_generated) or into a
+# temp dir (what `generate.py --check` and CI do). Left implicit, ruff's
+# first-party heuristic classifies the `tetherto.qvac_sdk._generated_base`
+# import differently between those two locations, so the committed output and a
+# fresh build disagree by a single blank line and `--check` flakes.
+known-first-party = ["tetherto"]
+
 [tool.mypy]
 python_version = "3.10"
 plugins = ["pydantic.mypy"]
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = "qvac._generated.models._internal"
+module = "tetherto.qvac_sdk._generated.models._internal"
 # JSON Schema can only express a default as a bare value (e.g.
 # `"default": "diffusion"`); datamodel-code-generator carries that
 # straight through as a plain str literal even when the field's type is
 # an enum, so mypy sees `field: SomeEnum | None = "diffusion"` as a
-# genuine mismatch. It's not one at runtime: qvac._generated_base sets
+# genuine mismatch. It's not one at runtime: the generated base module sets
 # validate_default=True, so pydantic coerces the literal into the right
 # enum member on construction (verified: `Model().field == SomeEnum.x`
 # is True). Scoped to this one generated module, not project-wide.
 disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = ["bare_rpc", "compact_encoding"]
+# The bare-rpc extra is optional and git-only (no PyPI release, no py.typed
+# marker), so it's absent from the default install CI type-checks against.
+# bare_rpc_transport.py already guards the import at runtime.
+ignore_missing_imports = true
