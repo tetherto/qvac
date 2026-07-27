@@ -6989,27 +6989,27 @@
                         "streamChunkTokens": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "threads": {
                           "type": "integer",
                           "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "nGpuLayers": {
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "seed": {
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "temperature": {
                           "type": "number",
@@ -7018,7 +7018,7 @@
                         "topK": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "topP": {
                           "type": "number",
@@ -7034,14 +7034,14 @@
                             {
                               "type": "integer",
                               "minimum": 10,
-                              "maximum": 9007199254740991
+                              "maximum": 2147483647
                             }
                           ]
                         },
                         "minNewTokens": {
                           "type": "integer",
                           "minimum": -1,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "normalizeNumbers": {
                           "type": "boolean"

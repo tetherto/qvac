@@ -112,6 +112,9 @@ const ttsParlerEmotionSchema = z.enum(TTS_PARLER_EMOTIONS)
 const ttsIntegerSchema = z.number().int()
 const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
 const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
+const ttsInt32Schema = ttsIntegerSchema.min(-2147483648).max(2147483647)
+const ttsNonNegativeInt32Schema = ttsInt32Schema.nonnegative()
+const ttsPositiveInt32Schema = ttsInt32Schema.positive()
 
 // Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
 // accepted range; omit to keep the engine's native rate (or 48 kHz when the
@@ -184,14 +187,12 @@ function refineParlerDescriptionFields(
 type TtsParlerRuntimeRefinementInput = TtsParlerDescriptionRefinementInput & {
   outputSampleRate?: number | undefined
   streamChunkTokens?: number | undefined
-  streamFirstChunkTokens?: number | undefined
 }
 
 function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx: z.RefinementCtx) {
   refineParlerDescriptionFields(config, ctx)
 
-  const nativeStreamingEnabled =
-    (config.streamChunkTokens ?? 0) > 0 || (config.streamFirstChunkTokens ?? 0) > 0
+  const nativeStreamingEnabled = (config.streamChunkTokens ?? 0) > 0
   if (
     nativeStreamingEnabled &&
     config.outputSampleRate !== undefined &&
@@ -238,16 +239,16 @@ export const ttsParlerRuntimeConfigSchema = z
     ...ttsParlerDescriptionFieldsShape,
     useGPU: z.boolean().optional(),
     outputSampleRate: ttsOutputSampleRateSchema.optional(),
-    streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
-    streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
-    threads: ttsPositiveIntegerSchema.optional(),
-    nGpuLayers: ttsIntegerSchema.optional(),
-    seed: ttsIntegerSchema.optional(),
+    streamChunkTokens: ttsNonNegativeInt32Schema.optional(),
+    streamFirstChunkTokens: ttsNonNegativeInt32Schema.optional(),
+    threads: ttsPositiveInt32Schema.optional(),
+    nGpuLayers: ttsInt32Schema.optional(),
+    seed: ttsInt32Schema.optional(),
     temperature: z.number().nonnegative().optional(),
-    topK: ttsNonNegativeIntegerSchema.optional(),
+    topK: ttsNonNegativeInt32Schema.optional(),
     topP: z.number().positive().max(1).optional(),
-    maxFrames: z.union([z.literal(0), ttsIntegerSchema.min(10)]).optional(),
-    minNewTokens: ttsIntegerSchema.min(-1).optional(),
+    maxFrames: z.union([z.literal(0), ttsInt32Schema.min(10)]).optional(),
+    minNewTokens: ttsInt32Schema.min(-1).optional(),
     normalizeNumbers: z.boolean().optional()
   })
   .superRefine(refineParlerRuntimeConfig)

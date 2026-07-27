@@ -5307,7 +5307,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
 
 
 class MaxFrames(RootModel[int]):
-    root: Annotated[int, Field(ge=10, le=9007199254740991)]
+    root: Annotated[int, Field(ge=10, le=2147483647)]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
@@ -5335,24 +5335,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
     ] = None
     stream_chunk_tokens: Annotated[
-        int | None, Field(alias="streamChunkTokens", ge=0, le=9007199254740991)
+        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
     ] = None
     stream_first_chunk_tokens: Annotated[
-        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=9007199254740991)
+        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
     ] = None
-    threads: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=-9007199254740991, le=9007199254740991)
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
     ] = None
-    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
     temperature: Annotated[float | None, Field(ge=0.0)] = None
-    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=9007199254740991)] = None
+    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
     top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
     max_frames: Annotated[Literal[0] | MaxFrames | None, Field(alias="maxFrames")] = (
         None
     )
     min_new_tokens: Annotated[
-        int | None, Field(alias="minNewTokens", ge=-1, le=9007199254740991)
+        int | None, Field(alias="minNewTokens", ge=-1, le=2147483647)
     ] = None
     normalize_numbers: Annotated[bool | None, Field(alias="normalizeNumbers")] = None
 

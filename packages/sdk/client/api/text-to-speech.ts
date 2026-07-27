@@ -1,5 +1,6 @@
 import {
   textToSpeechStreamResponseSchema,
+  textToSpeechStreamRequestSchema,
   ttsClientParamsSchema,
   type TtsClientParams,
   type TtsClientParamsInput,
@@ -424,7 +425,10 @@ export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
   options?: RPCOptions
 ): Promise<TextToSpeechStreamSession> {
-  const request = buildTextToSpeechStreamRequest(params)
+  const request = parseClientInput(
+    textToSpeechStreamRequestSchema,
+    buildTextToSpeechStreamRequest(params)
+  )
 
   const { requestStream, responseStream } = await duplex(request, options)
 

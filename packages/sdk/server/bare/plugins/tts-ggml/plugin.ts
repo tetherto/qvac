@@ -154,7 +154,6 @@ function createChatterboxModel(
   }
 
   const logger = createStreamLogger(modelId, ModelType.ttsGgml)
-  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_CHATTERBOX,
@@ -186,6 +185,7 @@ function createChatterboxModel(
     exclusiveRun: true
   })
 
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
   return { model }
 }
 
@@ -201,7 +201,6 @@ function createSupertonicModel(
   }
 
   const logger = createStreamLogger(modelId, ModelType.ttsGgml)
-  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
@@ -224,6 +223,7 @@ function createSupertonicModel(
     exclusiveRun: true
   })
 
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
   return { model }
 }
 
@@ -238,7 +238,6 @@ function createParlerModel(
   }
 
   const logger = createStreamLogger(modelId, ModelType.ttsGgml)
-  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_PARLER,
@@ -279,6 +278,7 @@ function createParlerModel(
     exclusiveRun: true
   })
 
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
   return { model }
 }
 

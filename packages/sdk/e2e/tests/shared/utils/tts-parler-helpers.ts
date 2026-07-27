@@ -1,19 +1,30 @@
-import { textToSpeech, type TtsClientParamsInput, type TtsParlerEmotion } from '@qvac/sdk'
+import {
+  textToSpeech,
+  textToSpeechStream,
+  type TtsClientParamsInput,
+  type TtsParlerEmotion
+} from '@qvac/sdk'
 
-type ParlerParams = Pick<
-  TtsClientParamsInput,
-  | 'text'
-  | 'description'
-  | 'voiceDescription'
-  | 'voice'
-  | 'emotion'
-  | 'pitch'
-  | 'pace'
-  | 'expressivity'
-  | 'noise'
-  | 'reverb'
-  | 'quality'
+type ParlerVoiceParams = Partial<
+  Pick<
+    TtsClientParamsInput,
+    | 'description'
+    | 'voiceDescription'
+    | 'voice'
+    | 'emotion'
+    | 'pitch'
+    | 'pace'
+    | 'expressivity'
+    | 'noise'
+    | 'reverb'
+    | 'quality'
+  >
 >
+
+type ParlerParams = ParlerVoiceParams & {
+  text: string
+  operation?: 'batch' | 'stream' | 'sentence-stream' | 'duplex'
+}
 
 type ParlerEmotionComparisonParams = {
   text: string
@@ -33,28 +44,114 @@ type HandlerDependencies<TExpectation, TResult extends TtsTestResult> = {
   validate: (output: string, expectation: TExpectation) => TResult
 }
 
-function buildParlerRequest(modelId: string, params: ParlerParams) {
+const MIN_AUDIO_SAMPLES = 4096
+const MIN_PEAK_AMPLITUDE = 1e-4
+
+function buildParlerVoiceOptions(params: ParlerVoiceParams) {
+  return {
+    ...(params.description !== undefined && { description: params.description }),
+    ...(params.voiceDescription !== undefined && { voiceDescription: params.voiceDescription }),
+    ...(params.voice !== undefined && { voice: params.voice }),
+    ...(params.emotion !== undefined && { emotion: params.emotion }),
+    ...(params.pitch !== undefined && { pitch: params.pitch }),
+    ...(params.pace !== undefined && { pace: params.pace }),
+    ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
+    ...(params.noise !== undefined && { noise: params.noise }),
+    ...(params.reverb !== undefined && { reverb: params.reverb }),
+    ...(params.quality !== undefined && { quality: params.quality })
+  }
+}
+
+function buildParlerRequest(modelId: string, params: ParlerVoiceParams & { text: string }) {
   return {
     modelId,
     text: params.text,
     inputType: 'text' as const,
     stream: false as const,
-    description: params.description,
-    voiceDescription: params.voiceDescription,
-    voice: params.voice,
-    emotion: params.emotion,
-    pitch: params.pitch,
-    pace: params.pace,
-    expressivity: params.expressivity,
-    noise: params.noise,
-    reverb: params.reverb,
-    quality: params.quality
+    ...buildParlerVoiceOptions(params)
   }
 }
 
 async function synthesize(modelId: string, params: ParlerParams) {
   const result = textToSpeech(buildParlerRequest(modelId, params))
   return await result.buffer
+}
+
+async function synthesizeStream(modelId: string, params: ParlerParams) {
+  const result = textToSpeech({
+    ...buildParlerRequest(modelId, params),
+    stream: true
+  })
+  const buffer: number[] = []
+  for await (const sample of result.bufferStream) {
+    buffer.push(sample)
+  }
+  if (!(await result.done)) {
+    throw new Error('Parler stream ended without a done frame')
+  }
+  return buffer
+}
+
+async function synthesizeSentenceStream(modelId: string, params: ParlerParams) {
+  const result = textToSpeech({
+    ...buildParlerRequest(modelId, params),
+    stream: true,
+    sentenceStream: true
+  })
+  if (!result.chunkUpdates) {
+    throw new Error('Parler sentence stream did not expose chunk updates')
+  }
+
+  const buffer: number[] = []
+  let chunks = 0
+  for await (const chunk of result.chunkUpdates) {
+    buffer.push(...chunk.buffer)
+    chunks++
+  }
+  if (!(await result.done) || chunks === 0) {
+    throw new Error(`Parler sentence stream ended without completed chunks (${chunks})`)
+  }
+  return buffer
+}
+
+async function synthesizeDuplex(modelId: string, params: ParlerParams) {
+  const session = await textToSpeechStream({
+    modelId,
+    inputType: 'text',
+    ...buildParlerVoiceOptions(params)
+  })
+  session.write(params.text)
+  session.end()
+
+  const buffer: number[] = []
+  for await (const response of session) {
+    buffer.push(...response.buffer)
+    if (response.done) break
+  }
+  return buffer
+}
+
+async function synthesizeForOperation(modelId: string, params: ParlerParams) {
+  if (params.operation === 'stream') return synthesizeStream(modelId, params)
+  if (params.operation === 'sentence-stream') return synthesizeSentenceStream(modelId, params)
+  if (params.operation === 'duplex') return synthesizeDuplex(modelId, params)
+  return synthesize(modelId, params)
+}
+
+function audioValidationError(buffer: number[]) {
+  if (buffer.length < MIN_AUDIO_SAMPLES) {
+    return `produced only ${buffer.length} samples (minimum ${MIN_AUDIO_SAMPLES})`
+  }
+
+  let peak = 0
+  for (const sample of buffer) {
+    peak = Math.max(peak, Math.abs(sample))
+  }
+  if (peak < MIN_PEAK_AMPLITUDE) {
+    return `produced silent audio (peak=${peak})`
+  }
+
+  return undefined
 }
 
 function buffersDiffer(first: number[], second: number[]) {
@@ -82,14 +179,18 @@ export function makeParlerTtsHandler<
       }
 
       const modelId = await dependencies.ensureLoaded(dependencies.dependency)
-      const buffer = await synthesize(modelId, params)
+      const buffer = await synthesizeForOperation(modelId, params)
       const sampleCount = buffer.length
+      const validationError = audioValidationError(buffer)
 
-      if (sampleCount === 0) {
-        return { passed: false, output: 'Parler produced no audio samples' } as TResult
+      if (validationError) {
+        return { passed: false, output: `Parler ${validationError}` } as TResult
       }
 
-      return dependencies.validate(`parler-generated ${sampleCount} samples`, expectation)
+      return dependencies.validate(
+        `parler-generated operation=${params.operation ?? 'batch'} ${sampleCount} samples`,
+        expectation
+      )
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (expectation.validation === 'throws-error') {
@@ -113,27 +214,30 @@ export function makeParlerEmotionComparisonHandler<
     try {
       const first = await synthesize(modelId, {
         text: params.text,
-        voice: params.voice,
+        ...(params.voice !== undefined && { voice: params.voice }),
         emotion: params.firstEmotion
       })
       const control = await synthesize(modelId, {
         text: params.text,
-        voice: params.voice,
+        ...(params.voice !== undefined && { voice: params.voice }),
         emotion: params.firstEmotion
       })
       const second = await synthesize(modelId, {
         text: params.text,
-        voice: params.voice,
+        ...(params.voice !== undefined && { voice: params.voice }),
         emotion: params.secondEmotion
       })
       const firstSamples = first.length
       const controlSamples = control.length
       const secondSamples = second.length
+      const firstError = audioValidationError(first)
+      const controlError = audioValidationError(control)
+      const secondError = audioValidationError(second)
 
-      if (firstSamples === 0 || controlSamples === 0 || secondSamples === 0) {
+      if (firstError || controlError || secondError) {
         return {
           passed: false,
-          output: `Parler conditioning produced empty audio (first=${firstSamples}, control=${controlSamples}, second=${secondSamples})`
+          output: `Parler conditioning audio invalid (first=${firstError ?? 'ok'}, control=${controlError ?? 'ok'}, second=${secondError ?? 'ok'})`
         } as TResult
       }
       if (buffersDiffer(first, control)) {

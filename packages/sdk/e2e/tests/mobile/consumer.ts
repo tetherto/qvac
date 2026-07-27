@@ -276,7 +276,9 @@ resources.define('tts-parler', {
     useGPU: true,
     seed: 42,
     topK: 1,
-    maxFrames: 430
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
   }
 })
 

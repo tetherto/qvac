@@ -265,7 +265,15 @@ test('ttsParlerRuntimeConfigSchema: validates Parler option ranges', (t) => {
     { maxFrames: 9 },
     { minNewTokens: -2 },
     { outputSampleRate: 7999 },
-    { outputSampleRate: 16000, streamChunkTokens: 43 }
+    { outputSampleRate: 16000, streamChunkTokens: 43 },
+    { streamChunkTokens: 2147483648 },
+    { streamFirstChunkTokens: 2147483648 },
+    { threads: 2147483648 },
+    { nGpuLayers: -2147483649 },
+    { seed: 2147483648 },
+    { topK: 2147483648 },
+    { maxFrames: 2147483648 },
+    { minNewTokens: 2147483648 }
   ]
 
   for (const invalidConfig of invalidConfigs) {
@@ -275,6 +283,16 @@ test('ttsParlerRuntimeConfigSchema: validates Parler option ranges', (t) => {
     })
     t.is(r.success, false, JSON.stringify(invalidConfig))
   }
+})
+
+test('ttsParlerRuntimeConfigSchema: allows resampling with only first-chunk tuning', (t) => {
+  const r = ttsParlerRuntimeConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    outputSampleRate: 16000,
+    streamFirstChunkTokens: 20
+  })
+
+  t.is(r.success, true)
 })
 
 test('TTS_PARLER_EMOTIONS: exposes all 12 trained styles', (t) => {

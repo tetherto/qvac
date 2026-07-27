@@ -168,6 +168,48 @@ export const ttsParlerDefaultDescription: TestDefinition = {
   metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 60000 }
 }
 
+export const ttsParlerStreaming: TestDefinition = {
+  testId: 'tts-parler-streaming',
+  params: {
+    text: 'Parler can generate streaming speech.',
+    operation: 'stream',
+    emotion: 'news'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 90000 }
+}
+
+export const ttsParlerSentenceStreaming: TestDefinition = {
+  testId: 'tts-parler-sentence-streaming',
+  params: {
+    text: 'This is the first sentence. This is the second sentence.',
+    operation: 'sentence-stream',
+    emotion: 'narration'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=sentence-stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 120000 }
+}
+
+export const ttsParlerDuplexStreaming: TestDefinition = {
+  testId: 'tts-parler-duplex-streaming',
+  params: {
+    text: 'Parler also supports duplex text streaming.',
+    operation: 'duplex',
+    emotion: 'conversation'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=duplex', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 90000 }
+}
+
 export const ttsParlerInvalidEmotion: TestDefinition = {
   testId: 'tts-parler-invalid-emotion',
   params: {
@@ -197,5 +239,8 @@ export const ttsTests = [
   ttsSupertonicEnhanced,
   ttsParlerEmotionConditioning,
   ttsParlerDefaultDescription,
+  ttsParlerStreaming,
+  ttsParlerSentenceStreaming,
+  ttsParlerDuplexStreaming,
   ttsParlerInvalidEmotion
 ]
