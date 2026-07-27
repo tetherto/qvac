@@ -9,12 +9,12 @@ const path = require('#path')
 const DEFAULT_REGISTRY_CORE_KEY = 'uf1fm44uzockp6azhcdiqt1esjgm65fwtimsh946e8kwysdes9ko'
 
 class RegistryConfig {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     this.logger = new Logger(opts.logger)
     this.logger.debug('RegistryConfig initialized', { opts })
   }
 
-  getRegistryStorage (providedPath) {
+  getRegistryStorage(providedPath) {
     if (providedPath) {
       this.logger.debug('getRegistryStorage called with providedPath', { providedPath })
       return providedPath
@@ -26,14 +26,17 @@ class RegistryConfig {
     return result
   }
 
-  _createTempStoragePath () {
+  _createTempStoragePath() {
     const tmpBase = os.tmpdir()
-    const storageDir = path.join(tmpBase, `qvac-registry-client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
+    const storageDir = path.join(
+      tmpBase,
+      `qvac-registry-client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    )
     this.logger.debug('Created temp storage path', { storageDir })
     return storageDir
   }
 
-  getRegistryCoreKey (providedKey) {
+  getRegistryCoreKey(providedKey) {
     if (providedKey) {
       this.logger.debug('getRegistryCoreKey called with providedKey', { providedKey })
       return providedKey

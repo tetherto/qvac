@@ -6,7 +6,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') })
 const { QVACRegistryClient } = require('../index')
 const os = require('os')
 
-async function downloadModelExample () {
+async function downloadModelExample() {
   const t0 = Date.now()
 
   const tmpStorage = path.join(os.tmpdir(), `qvac-registry-download-${Date.now()}`)

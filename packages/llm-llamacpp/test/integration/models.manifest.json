@@ -142,6 +142,20 @@
       "sha256": "fefd91bc5551877762cd0d0cbe583080f8e636d5aa65a9a5f42b369654df778b",
       "bytes": 819313056
     },
+    "unlimited-ocr-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_K_M.gguf"
+      ],
+      "sha256": "d6c1cdecdf801edef14a7f381f33e271a17d2ff631287dd8886005fdecf12bf1",
+      "bytes": 1950321568
+    },
+    "mmproj-unlimited-ocr-F16.gguf": {
+      "urls": [
+        "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf"
+      ],
+      "sha256": "75e2a133676a82189b10fb1c55b5b32aedc6ede796dd6d8d7c1f901d20ebc7df",
+      "bytes": 825245568
+    },
     "PaddleOCR-VL-1.5.gguf": {
       "urls": [
         "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5.gguf"

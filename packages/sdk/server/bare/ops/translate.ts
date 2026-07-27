@@ -9,14 +9,15 @@ import {
 } from '@/schemas'
 import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
 import type { GenerationParams, RunOptions } from '@qvac/llm-llamacpp'
-import { getLangName } from '@qvac/langdetect-text'
+import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/server/bare/types/addon-responses'
 import {
   ModelIsDelegatedError,
   ModelNotFoundError,
-  ModelTypeMismatchError
+  ModelTypeMismatchError,
+  TranslationFailedError
 } from '@/utils/errors-server'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
@@ -84,11 +85,29 @@ export async function* translate(
   }
 
   const isLlm = canonicalModelType === ModelType.llamacppCompletion
-  const from = isLlm ? (params as { from?: string }).from : undefined
+  let from = isLlm ? (params as { from?: string }).from : undefined
   const to = isLlm ? (params as { to: string }).to : undefined
   const context = isLlm ? (params as { context?: string }).context : undefined
-  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
+
   translateServerParamsSchema.parse(params)
+
+  // Auto-detect the source language when the caller didn't pass `from` (LLM
+  // only). This used to run in each client; moving it here gives every
+  // language binding one detector instead of each shipping its own (lingua in
+  // Python vs langdetect-text in JS drifted on the same input). Store the
+  // detected code — not the language name — so the explicit-`from` and
+  // detected paths feed getLanguage() identically.
+  if (isLlm && !from) {
+    const detected = detectOne(text as string)
+    if (detected.code === 'und' || detected.language === 'Undetermined') {
+      throw new TranslationFailedError(
+        "Could not detect the source language. Please specify the 'from' parameter explicitly."
+      )
+    }
+    from = detected.code
+  }
+
+  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
 
   const fromLanguage = getLanguage(from)
   const toLanguage = getLanguage(to)

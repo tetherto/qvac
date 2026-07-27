@@ -2,7 +2,7 @@
 
 const { QVAC_MAIN_REGISTRY } = require('@qvac/registry-schema')
 
-module.exports = function generateQVACRegistrySchema (schema) {
+module.exports = function generateQVACRegistrySchema(schema) {
   schema.register({
     name: 'model-blob-binding',
     namespace: QVAC_MAIN_REGISTRY,
@@ -61,8 +61,6 @@ module.exports = function generateQVACRegistrySchema (schema) {
   schema.register({
     name: 'writer',
     namespace: QVAC_MAIN_REGISTRY,
-    fields: [
-      { name: 'key', type: 'fixed32', required: true }
-    ]
+    fields: [{ name: 'key', type: 'fixed32', required: true }]
   })
 }

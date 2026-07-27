@@ -1,6 +1,7 @@
-# GGML TTS RTF + Streaming Benchmarks
+# GGML TTS RTF + Streaming + Quality Benchmarks
 
-This document covers the **cross-platform RTF and streaming latency** benchmark
+This document covers the **cross-platform RTF, streaming latency, and optional
+round-trip speech quality** benchmark
 system for the GGML (tts-cpp) TTS backend — the one wired into the
 `Benchmark Performance (TTS GGML)` GitHub Actions workflow, with ingestion paths for
 self-hosted `qvac-*` runners, the mobile AWS Device Farm leg, and off-CI manual
@@ -11,11 +12,11 @@ TTS backends so the consolidated findings tables line up column-for-column.
 
 Two benchmark tracks:
 
-| Track | Entry point (npm) | What it measures | Artifact prefix |
-|-------|-------------------|------------------|-----------------|
-| Real-Time Factor (RTF) | `test:benchmark:rtf` | End-to-end RTF, P50/P95, cold RTF, load time, peak RSS, model size, tokens/s. | `rtf-benchmark-*.json` |
-| Streaming latency | `test:benchmark:streaming` | Time-to-First-Audio (TTFA) + inter-chunk gap + chunk count, for `run({ streamOutput: true })`. | `streaming-benchmark-*.json` |
-| Matrix (per-CI-job) | `test:benchmark:rtf:matrix` | Iterates multiple `(engine, useGPU, backend, threads)` combos in a single CI job, emitting one artifact each. | same as RTF |
+| Track                                     | Entry point (npm)           | What it measures                                                                                              | Artifact prefix              |
+| ----------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Real-Time Factor (RTF) + optional quality | `test:benchmark:rtf`        | End-to-end RTF, P50/P95, cold RTF, load time, peak RSS, model size, tokens/s, and opt-in Whisper CER/WER.     | `rtf-benchmark-*.json`       |
+| Streaming latency                         | `test:benchmark:streaming`  | Time-to-First-Audio (TTFA) + inter-chunk gap + chunk count, for `run({ streamOutput: true })`.                | `streaming-benchmark-*.json` |
+| Matrix (per-CI-job)                       | `test:benchmark:rtf:matrix` | Iterates multiple `(engine, useGPU, backend, threads)` combos in a single CI job, emitting one artifact each. | same as RTF                  |
 
 All three write JSON under `benchmarks/results/` (CI-only; committed manually
 only in `benchmarks/manual-results/`). Every measured run also prints canonical
@@ -53,7 +54,12 @@ logs when the filesystem isn't accessible.
 # Pull the GGUFs first (registry-client devDependency required)
 npm --prefix packages/tts-ggml run download-models:registry
 
-# Single combo — CPU, Chatterbox English, 1 warmup + 5 measured runs
+# Single combo — CPU, Chatterbox English, 1 warmup + 5 measured runs.
+# Whisper round-trip quality is enabled by default.
+npm --prefix packages/tts-ggml run test:benchmark:rtf
+
+# Performance-only run without Whisper transcription.
+QVAC_TTS_GGML_BENCHMARK_QUALITY=false \
 npm --prefix packages/tts-ggml run test:benchmark:rtf
 
 # Single combo — Vulkan GPU
@@ -110,47 +116,57 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 
 ### Controlling a single run (both RTF and streaming benchmarks accept these)
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_ENGINE` | `chatterbox` | One of `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl` / `supertonic3`. |
-| `QVAC_TTS_GGML_BENCHMARK_VARIANT` | `q4` | Label only — one of `q4` / `q8` / `f16` / `mixed`. The GGUF on the registry determines the real quant. |
-| `QVAC_TTS_GGML_BENCHMARK_ENHANCER` | `none` | One of `none` / `lavasr`. `lavasr` layers the LavaSR 48 kHz bandwidth-extension enhancer on top of the engine output. A published tier (`f16`/`f32`) hard-fails if its GGUF can't be fetched (like the engine GGUF); an unpublished tier soft-skips (green). Adds `-lavasr` to the artifact name + a trailing token to the canonical label, and populates the `Enhancer` findings column. |
-| `QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT` | `f16` | Enhancer quant tier: one of `f16` / `f32` / `q8_0`. Only meaningful when `ENHANCER=lavasr`; picks which enhancer GGUF is fetched. `f16` is byte-stable (no extra token); any other tier appends `-<tier>` to the artifact name and renders as `lavasr/<tier>` in the `Enhancer` column. The published `f16`/`f32` tiers hard-fail if their GGUF can't be fetched (like the engine GGUF); a not-yet-published tier (`q8_0`) soft-skips (green) until its GGUF lands on S3. |
-| `QVAC_TTS_GGML_BENCHMARK_DENOISER` | `none` | One of `none` / `lavasr`. `lavasr` runs the LavaSR speech denoiser before the enhancer. Orthogonal to the enhancer, so any of none/denoise/enhance/full can run. The denoiser is published, so it hard-fails if its GGUF can't be fetched (like the engine GGUF). Adds `-denoise` to the artifact name + a trailing token to the canonical label, and populates the `Denoiser` findings column. |
-| `QVAC_TTS_GGML_BENCHMARK_USE_GPU` | `0` | `1` / `true` to request GPU. Backend auto-derives from platform (Vulkan / Metal). The enhancer and denoiser share this switch (run on the same GPU backend as the engine). |
-| `QVAC_TTS_GGML_BENCHMARK_BACKEND` | (derived) | `cpu` / `metal` / `vulkan` / `cuda` / `opencl`. Used in reports and to differentiate rows. |
-| `QVAC_TTS_GGML_BENCHMARK_DEVICE` | — | Device label rendered in the `Device` column. |
-| `QVAC_TTS_GGML_BENCHMARK_RUNNER` | — | CI / runner label rendered in reports. |
-| `QVAC_TTS_GGML_BENCHMARK_LABEL` | — | Free-form tag. Appears in the artifact filename and in the `Label` column. |
-| `QVAC_TTS_GGML_BENCHMARK_NUM_THREADS` | — | Override `std::thread::hardware_concurrency()` (forwarded to the engine as `threads`). |
+| Env var                                    | Default      | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QVAC_TTS_GGML_BENCHMARK_ENGINE`           | `chatterbox` | One of `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl` / `supertonic3`.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `QVAC_TTS_GGML_BENCHMARK_VARIANT`          | `q4`         | Label only — one of `q4` / `q8` / `f16` / `mixed`. The GGUF on the registry determines the real quant.                                                                                                                                                                                                                                                                                                                                                                    |
+| `QVAC_TTS_GGML_BENCHMARK_ENHANCER`         | `none`       | One of `none` / `lavasr`. `lavasr` layers the LavaSR 48 kHz bandwidth-extension enhancer on top of the engine output. A published tier (`f16`/`f32`) hard-fails if its GGUF can't be fetched (like the engine GGUF); an unpublished tier soft-skips (green). Adds `-lavasr` to the artifact name + a trailing token to the canonical label, and populates the `Enhancer` findings column.                                                                                 |
+| `QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT` | `f16`        | Enhancer quant tier: one of `f16` / `f32` / `q8_0`. Only meaningful when `ENHANCER=lavasr`; picks which enhancer GGUF is fetched. `f16` is byte-stable (no extra token); any other tier appends `-<tier>` to the artifact name and renders as `lavasr/<tier>` in the `Enhancer` column. The published `f16`/`f32` tiers hard-fail if their GGUF can't be fetched (like the engine GGUF); a not-yet-published tier (`q8_0`) soft-skips (green) until its GGUF lands on S3. |
+| `QVAC_TTS_GGML_BENCHMARK_DENOISER`         | `none`       | One of `none` / `lavasr`. `lavasr` runs the LavaSR speech denoiser before the enhancer. Orthogonal to the enhancer, so any of none/denoise/enhance/full can run. The denoiser is published, so it hard-fails if its GGUF can't be fetched (like the engine GGUF). Adds `-denoise` to the artifact name + a trailing token to the canonical label, and populates the `Denoiser` findings column.                                                                           |
+| `QVAC_TTS_GGML_BENCHMARK_USE_GPU`          | `0`          | `1` / `true` to request GPU. Backend auto-derives from platform (Vulkan / Metal). The enhancer and denoiser share this switch (run on the same GPU backend as the engine).                                                                                                                                                                                                                                                                                                |
+| `QVAC_TTS_GGML_BENCHMARK_BACKEND`          | (derived)    | `cpu` / `metal` / `vulkan` / `cuda` / `opencl`. Used in reports and to differentiate rows.                                                                                                                                                                                                                                                                                                                                                                                |
+| `QVAC_TTS_GGML_BENCHMARK_DEVICE`           | —            | Device label rendered in the `Device` column.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `QVAC_TTS_GGML_BENCHMARK_RUNNER`           | —            | CI / runner label rendered in reports.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `QVAC_TTS_GGML_BENCHMARK_LABEL`            | —            | Free-form tag. Appears in the artifact filename and in the `Label` column.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `QVAC_TTS_GGML_BENCHMARK_NUM_THREADS`      | —            | Override `std::thread::hardware_concurrency()` (forwarded to the engine as `threads`).                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### RTF benchmark only
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS` | `1` | Warmup iterations before measurement (1st becomes `summary.coldRtf`). |
-| `QVAC_TTS_GGML_BENCHMARK_RUNS` | `5` desktop / `3` mobile | Measured iterations. |
-| `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND` | — | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard. No bound = numbers-only. |
+| Env var                                   | Default                  | Purpose                                                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS`     | `1`                      | Warmup iterations before measurement (1st becomes `summary.coldRtf`).                                                                                                                                                                                         |
+| `QVAC_TTS_GGML_BENCHMARK_RUNS`            | `5` desktop / `3` mobile | Measured iterations.                                                                                                                                                                                                                                          |
+| `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND` | —                        | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard. No bound = numbers-only.                                                                                                                                             |
+| `QVAC_TTS_GGML_BENCHMARK_QUALITY`         | `true`                   | Enable Whisper round-trip transcription and report mean/P50/P95 CER and WER. Set to `false` for a performance-only run. Quality evaluation runs after timed TTS synthesis and TTS memory collection.                                                          |
+| `QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL`   | `ggml-small.bin`         | Whisper GGML model filename under `models/whisper/`: `ggml-tiny.bin`, `ggml-small.bin`, or `ggml-medium.bin`. The selected model is downloaded on demand when missing. Mobile benchmark runs use the smaller `ggml-tiny.bin`, which is pre-staged on Android. |
+| `QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND` | —                        | Optional mean WER assertion as a ratio (`0.4` = 40%). Only applied when quality evaluation is enabled.                                                                                                                                                        |
+| `QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND` | —                        | Optional mean CER assertion as a ratio (`0.2` = 20%). Only applied when quality evaluation is enabled.                                                                                                                                                        |
 
 ### Streaming benchmark only
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `QVAC_TTS_GGML_STREAMING_WARMUP_RUNS` | `1` | Warmup iterations. |
-| `QVAC_TTS_GGML_STREAMING_RUNS` | `3` desktop / `2` mobile | Measured iterations. |
+| Env var                               | Default                  | Purpose              |
+| ------------------------------------- | ------------------------ | -------------------- |
+| `QVAC_TTS_GGML_STREAMING_WARMUP_RUNS` | `1`                      | Warmup iterations.   |
+| `QVAC_TTS_GGML_STREAMING_RUNS`        | `3` desktop / `2` mobile | Measured iterations. |
 
 ### Matrix runner only
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON` | (4-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries. |
-| `QVAC_TTS_GGML_BENCHMARK_ENTRY_TIMEOUT_MS` | `600000` | Per-entry watchdog — a hung engine is SIGTERM'd so the matrix continues. |
+| Env var                                    | Default                | Purpose                                                                  |
+| ------------------------------------------ | ---------------------- | ------------------------------------------------------------------------ |
+| `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON`      | (4-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries.              |
+| `QVAC_TTS_GGML_BENCHMARK_ENTRY_TIMEOUT_MS` | `600000`               | Per-entry watchdog — a hung engine is SIGTERM'd so the matrix continues. |
+
+Matrix entries may set `quality`, `whisperModel`, `werUpperBound`, and
+`cerUpperBound` to override the corresponding quality settings per row.
 
 ### Mobile (Device Farm)
 
-| Env var | Default | Purpose |
-|---------|---------|---------|
+| Env var                                 | Default | Purpose                                                                                                                                                                                                                          |
+| --------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE` | (unset) | Gates the `test/integration/{rtf,streaming}-benchmark.test.js` shims. The mobile workflow only sets it when dispatched with `run_rtf_benchmarks: true`; otherwise the shims soft-skip and the matrix entry goes green-with-skip. |
+
+Mobile quality reports identify their Whisper evaluator model so results produced
+with `ggml-tiny.bin` are not conflated with desktop `ggml-small.bin` rows.
 
 ### GitHub Actions correlation (forwarded automatically)
 
@@ -228,10 +244,10 @@ The enhancer weights are block-quantizable independently of the engine, so
 axis (the C++ loader dequantizes the tier at load, so the forward math matches
 fp32 and only the GGUF shrinks):
 
-| Tier | Built by | On registry today |
-|------|----------|-------------------|
-| `f16` (default) / `f32` | `scripts/convert-lavasr-enhancer-to-gguf.py --ftype <f16\|f32>` | yes |
-| `q8_0` | `scripts/requantize-gguf.py <f16.gguf> <out.gguf> q8_0` | not yet (soft-skip) |
+| Tier                    | Built by                                                        | On registry today   |
+| ----------------------- | --------------------------------------------------------------- | ------------------- |
+| `f16` (default) / `f32` | `scripts/convert-lavasr-enhancer-to-gguf.py --ftype <f16\|f32>` | yes                 |
+| `q8_0`                  | `scripts/requantize-gguf.py <f16.gguf> <out.gguf> q8_0`         | not yet (soft-skip) |
 
 `f16` is byte-stable: it keeps the historical `lavasr-enhancer.gguf` name, adds no
 artifact/label token, and renders as `lavasr` in the `Enhancer` column. `f32` and
@@ -326,19 +342,19 @@ The desktop matrix reuses the integration-test runner matrix. CPU benchmark
 entries run across the desktop matrix; Vulkan entries run only on GPU-capable
 `qvac-*-gpu` runners where the Vulkan ICD and baseline hardware are stable.
 
-| Platform / Arch | Backend | CI source |
-|---|---|---|
-| linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` |
-| linux / arm64 | cpu | `ubuntu-24.04-arm` |
-| darwin / arm64 | cpu | `macos-14-xlarge` |
-| darwin / x64 | cpu | `macos-15-large` |
-| win32 / x64 | cpu | `qvac-win25-x64` |
-| win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` |
-| Android | cpu + vulkan | `run_mobile=true` — AWS Device Farm. Benchmark matrix sweeps `chatterbox` (CPU q4/q8 + GPU q4), `supertonic` (CPU + GPU q4), `supertonic3` (CPU + GPU q4). `use_gpu:true` → Vulkan. |
-| iOS | cpu + metal | `run_mobile=true` — AWS Device Farm. Same engine sweep as Android (q4). `use_gpu:true` → Metal. |
-| darwin / arm64 | metal | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/` |
-| linux / x64 | cuda | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/` |
-| android | opencl | **Manual** — Adreno-only; drop JSON under `manual-results/` |
+| Platform / Arch | Backend      | CI source                                                                                                                                                                           |
+| --------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| linux / x64     | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu`                                                                                                                                |
+| linux / arm64   | cpu          | `ubuntu-24.04-arm`                                                                                                                                                                  |
+| darwin / arm64  | cpu          | `macos-14-xlarge`                                                                                                                                                                   |
+| darwin / x64    | cpu          | `macos-15-large`                                                                                                                                                                    |
+| win32 / x64     | cpu          | `qvac-win25-x64`                                                                                                                                                                    |
+| win32 / x64     | cpu + vulkan | `qvac-win25-x64-gpu`                                                                                                                                                                |
+| Android         | cpu + vulkan | `run_mobile=true` — AWS Device Farm. Benchmark matrix sweeps `chatterbox` (CPU q4/q8 + GPU q4), `supertonic` (CPU + GPU q4), `supertonic3` (CPU + GPU q4). `use_gpu:true` → Vulkan. |
+| iOS             | cpu + metal  | `run_mobile=true` — AWS Device Farm. Same engine sweep as Android (q4). `use_gpu:true` → Metal.                                                                                     |
+| darwin / arm64  | metal        | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/`                                                                                           |
+| linux / x64     | cuda         | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/`                                                                                          |
+| android         | opencl       | **Manual** — Adreno-only; drop JSON under `manual-results/`                                                                                                                         |
 
 ## How to read the findings table
 

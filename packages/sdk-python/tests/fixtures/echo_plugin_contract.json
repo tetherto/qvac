@@ -1,0 +1,60 @@
+{
+  "modelType": "echo",
+  "displayName": "Echo Plugin (e2e)",
+  "handlers": [
+    {
+      "name": "echo",
+      "streaming": false,
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "echoStream",
+      "streaming": true,
+      "requestSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "chunk": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chunk"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

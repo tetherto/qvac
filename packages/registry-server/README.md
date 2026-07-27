@@ -120,10 +120,10 @@ Models are configured in `data/models.test.json`:
 
 **Note**: To download from AWS S3 you need env vars configured or `~/.aws/credentials` set.
 
-QVAC_S3_BUCKET=...                    # S3 bucket name (required for S3 sources)
-AWS_ACCESS_KEY_ID=...                 # AWS S3 access key
-AWS_SECRET_ACCESS_KEY=...             # AWS S3 secret
-AWS_REGION=eu-central-1               # AWS region (defaults to eu-central-1)
+QVAC_S3_BUCKET=... # S3 bucket name (required for S3 sources)
+AWS_ACCESS_KEY_ID=... # AWS S3 access key
+AWS_SECRET_ACCESS_KEY=... # AWS S3 secret
+AWS_REGION=eu-central-1 # AWS region (defaults to eu-central-1)
 
 S3 source URLs in `models.prod.json` use the format `s3:///key` (no bucket). The bucket is resolved at runtime from `QVAC_S3_BUCKET`.
 
@@ -153,6 +153,7 @@ Total models found: 1
 ```
 
 See `client/examples/` for more examples:
+
 - `example.js` - List and query models
 - `download-model.js` - Download a single model
 - `download-all-models.js` - Download all models
@@ -221,6 +222,7 @@ LOG_LEVEL=debug node scripts/bin.js run
 ```
 
 This will output debug-level logs including:
+
 - Registry initialization steps
 - Corestore operations
 - Hyperswarm connection events
@@ -228,6 +230,7 @@ This will output debug-level logs including:
 - Model upload/download progress
 
 Available log levels (in order of verbosity):
+
 - `debug`: Most verbose, includes all debug information
 - `info`: Default level, shows informational messages
 - `warn`: Only warnings and errors
@@ -316,16 +319,16 @@ itself is Apache-2.0 but the models it hosts are not.
 
 ### Licenses in use
 
-| ID | License | URL |
-|----|---------|-----|
-| `Apache-2.0` | Apache License 2.0 | https://opensource.org/licenses/Apache-2.0 |
-| `MIT` | MIT License | https://opensource.org/licenses/MIT |
-| `MPL-2.0` | Mozilla Public License 2.0 | https://opensource.org/licenses/MPL-2.0 |
-| `CC-BY-4.0` | Creative Commons Attribution 4.0 | https://creativecommons.org/licenses/by/4.0/ |
-| `llama3.2` | Llama 3.2 Community License | https://llama.meta.com/llama3_2/license/ |
-| `gemma` | Gemma Terms of Use | https://ai.google.dev/gemma/terms |
+| ID                                | License                                 | URL                                                                 |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
+| `Apache-2.0`                      | Apache License 2.0                      | https://opensource.org/licenses/Apache-2.0                          |
+| `MIT`                             | MIT License                             | https://opensource.org/licenses/MIT                                 |
+| `MPL-2.0`                         | Mozilla Public License 2.0              | https://opensource.org/licenses/MPL-2.0                             |
+| `CC-BY-4.0`                       | Creative Commons Attribution 4.0        | https://creativecommons.org/licenses/by/4.0/                        |
+| `llama3.2`                        | Llama 3.2 Community License             | https://llama.meta.com/llama3_2/license/                            |
+| `gemma`                           | Gemma Terms of Use                      | https://ai.google.dev/gemma/terms                                   |
 | `health-ai-developer-foundations` | Health AI Developer Foundations License | https://developers.google.com/health-ai-developer-foundations/terms |
-| `openrail` | BigScience Open RAIL-M License | https://huggingface.co/spaces/bigscience/license |
+| `openrail`                        | BigScience Open RAIL-M License          | https://huggingface.co/spaces/bigscience/license                    |
 
 Full license texts are in [`data/licenses/<id>/LICENSE.txt`](./data/licenses/).
 Every model entry in the registry includes a `license` field with the applicable identifier.

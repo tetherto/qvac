@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.38.2] - 2026-07-23
+
+Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.
+
+### Added
+
+- Unlimited-OCR ([baidu/Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR)) OCR VLM support: registry entry, README + NOTICE, a mobile integration test (`runOcrUnlimitedTest`) that parses a scanned CT-scan report, and a perf test (`runUnlimitedOcrPerfTest`) that records encode/prefill/decode timings, both registered in the android/ios weekly groups. GGUFs (`Q4_K_M` + `F16` mmproj) are pulled from the pinned community conversion [`vimalnakrani/unlimited-ocr-gguf`](https://huggingface.co/vimalnakrani/unlimited-ocr-gguf), the same public-repo pattern used by LightON OCR-2. Prompt-sensitive — use `document parsing.`. Requires `qvac-fabric >= 9840` (`deepseek2-ocr` engine + `deepseekocr` clip projector).
+
+### Pull Requests
+
+- [#3419](https://github.com/tetherto/qvac/pull/3419) - add Unlimited-OCR vision-language OCR model
+
+## [0.38.1] - 2026-07-22
+
+This patch release guarantees that a content token follows the EOS-inside-reasoning recovery, so the forced `</think>` substitution can no longer be immediately followed by another end-of-generation token and produce an empty answer. It also exposes the generation stop reason as a new runtime stat.
+
+### Fixed
+
+- When a Qwen3-family model emits EOS while still inside the reasoning channel, the recovery that substitutes the `</think>` close marker now bans end-of-generation tokens on the immediately following sample. On marginal prompts the next token could previously be EOG again, defeating the recovery with an empty answer; the ban is applied unconditionally for that one sample (the generation loop only reaches it while the `n_predict` budget allows the token).
+
+### Added
+
+- `stopReason` runtime stat reports why the most recent single-prompt generation stopped (`none`, `eos`, `antiprompt`, `predictionLimit`, `sequenceLimit`, or `contextOverflow`).
+
+### Pull Requests
+
+- [#3389](https://github.com/tetherto/qvac/pull/3389) - guarantee a content token after EOS-inside-reasoning recovery
+
 ## [0.38.0] - 2026-07-20
 
 ### Changed
