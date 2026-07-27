@@ -1,0 +1,36 @@
+name: CPP Tests (AudioGen GGML)
+
+# Stub lane. The audiogen-ggml addon has no addon-level C++ unit tests yet
+# (CMakeLists.txt BUILD_TESTING is OFF, reserved for a future addon suite).
+# The ACE-Step engine's deterministic C++ unit tests (test_acestep_units:
+# philox, FSQ, scheduler, VAE progress) live in and run from
+# qvac-ext-lib-whisper.cpp's engines/audiogen CI, so there is nothing to build
+# or run here today. This job exists so on-pr-audiogen-ggml.yml's
+# cpp-tests-coverage gate resolves green; replace the body with a real
+# build/coverage flow (mirror cpp-test-coverage-tts-ggml.yml) once the addon
+# grows its own C++ tests.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpp-tests:
+    name: audiogen-ggml C++ tests (stub)
+    runs-on: ubuntu-latest
+    steps:
+      - name: No addon-level C++ tests yet
+        shell: bash
+        run: |
+          echo "audiogen-ggml has no addon-level C++ unit tests yet." >> "$GITHUB_STEP_SUMMARY"
+          echo "The ACE-Step engine unit tests run in qvac-ext-lib-whisper.cpp's audiogen CI." >> "$GITHUB_STEP_SUMMARY"
+          echo "Nothing to build/run here — passing."

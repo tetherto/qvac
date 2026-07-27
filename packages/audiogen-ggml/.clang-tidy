@@ -1,0 +1,42 @@
+# Keep the active C++ lint surface small while re-enabling clang-tidy in CI.
+# Additional high-value checks can be reintroduced gradually once existing noise
+# has been cleaned up.
+
+
+Checks: >
+  -*,
+  readability-identifier-naming
+
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: '.*'
+
+ExcludeHeaderFilterRegex: 'build/_bare|build/_vcpkg'
+
+FormatStyle: file
+
+CheckOptions:
+  # Identifier naming. These options are valid in clang-tidy-22.
+  # readability-identifier-length remains disabled so single-letter names stay
+  # allowed in trivial lambdas and other small local scopes.
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack           # myFunction
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase           # MyClass
+  - key: readability-identifier-naming.VariableCase
+    value: camelBack           # myVariable
+  - key: readability-identifier-naming.ParameterCase
+    value: camelBack           # myParam
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case          # my_namespace
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE          # MY_GLOBAL_CONSTANT
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase           # EnumValue
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: '_'                 # myMember_
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: 'g_'                # g_myGlobal
+  - key: readability-identifier-naming.GlobalConstantPrefix
+    value: ''                  # MY_GLOBAL_CONSTANT
