@@ -49,7 +49,9 @@ namespace qvac_lib_inference_addon_cpp {
 /// only implement cancelById (teardown cancels the same way); that
 /// id -> internal-slot mapping is the model's concern. cancelJobs(liveJobIds())
 /// is the snapshot form the JS binding uses for cancel-all, so jobs admitted
-/// after the cancel was requested survive it.
+/// after the cancel was requested survive it — on a per-id model; the
+/// whole-model fallback is indiscriminate, so there a job that became
+/// in-flight by dispatch time is swept (and awaited) with the targets.
 ///
 /// Every cancel entry point returns only once each job it delivered a
 /// model-side cancel for has fully left the scheduler (its slot released), so
@@ -502,12 +504,18 @@ public:
   /// are the in-flight targets cancelled — per id when the model offers
   /// cancelById, else via one whole-model cancel() (indiscriminate, but the
   /// only cancel such a model offers), dispatched under the same lock as the
-  /// inFlightTargets snapshot so no job admitted afterward can be
-  /// collaterally swept into it while it is still in flight — and awaited
-  /// until they leave.
+  /// in-flight snapshot so no job admitted afterward can be collaterally
+  /// swept into it while it is still in flight — and awaited until they
+  /// leave. The whole-model path awaits every job that cancel actually
+  /// swept (the full in-flight snapshot), not just the requested targets: a
+  /// non-target job it cancelled still holds a slot, and returning before
+  /// that job leaves would let activeJobs() spuriously refuse an immediate
+  /// follow-up admission — the guarantee every cancel entry point gives is
+  /// scoped to the jobs it delivered a cancel for, target or not.
   void cancelJobs(const std::vector<JobId>& ids) override {
     std::vector<JobId> dropped;
     std::vector<JobId> inFlightTargets;
+    std::vector<JobId> sweptInFlight;
     {
       std::lock_guard lock(mtx_);
       for (const JobId id : ids) {
@@ -519,6 +527,7 @@ public:
       }
       if (!inFlightTargets.empty() && cancelById_ == nullptr &&
           cancel_ != nullptr) {
+        sweptInFlight.assign(inFlight_.begin(), inFlight_.end());
         cancel_->cancel();
       }
     }
@@ -536,7 +545,7 @@ public:
       return;
     }
     if (cancel_ != nullptr) {
-      awaitJobsGone(inFlightTargets);
+      awaitJobsGone(sweptInFlight);
       return;
     }
     QLOG(logger::Priority::WARNING, "Model does not support cancellation");

@@ -41,6 +41,14 @@ struct IModelAsyncLoad {
       std::unique_ptr<std::basic_streambuf<char>>&& streambuf) = 0;
 };
 
+/// Whole-model cancellation: stop every job in flight at the time of the
+/// call. Point-in-time semantics: a model that applies the cancel later (on
+/// its own worker, between decode steps) must pin the affected set when
+/// cancel() is invoked and must not sweep jobs it is handed afterward — the
+/// scheduler dispatches cancel() under its admission lock and awaits exactly
+/// the jobs that were in flight at dispatch, so a late application that kills
+/// a job admitted after cancel() returned would end a job nobody cancelled
+/// and nobody awaited.
 struct IModelCancel {
   virtual ~IModelCancel() = default;
   IModelCancel() = default;

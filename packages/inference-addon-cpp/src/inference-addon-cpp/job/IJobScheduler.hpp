@@ -65,9 +65,15 @@ struct IJobScheduler {
   /// (see SingleJobScheduler::liveJobIds).
   [[nodiscard]] virtual std::vector<JobId> liveJobIds() const = 0;
 
-  /// Cancel exactly the jobs in @p ids; finished or unknown ids are no-ops.
-  /// Same worker-thread restriction as cancel(id): never call this from a
-  /// thread the scheduler itself is using to run one of @p ids.
+  /// Cancel the jobs in @p ids; finished or unknown ids are no-ops. Against
+  /// a model with no per-job cancel an implementation may only have an
+  /// indiscriminate whole-model cancel to forward to: the call may then
+  /// cancel in-flight jobs beyond @p ids, and it returns only once every job
+  /// it actually cancelled — target or not — has left the scheduler. Same
+  /// worker-thread restriction as cancel(id), scoped to that actual breadth:
+  /// never call this from a thread the scheduler itself is using to run any
+  /// job this call may cancel (on the whole-model fallback, any in-flight
+  /// job).
   virtual void cancelJobs(const std::vector<JobId>& ids) {
     for (const JobId id : ids) {
       cancel(id);

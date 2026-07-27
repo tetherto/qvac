@@ -2203,4 +2203,56 @@ TEST_F(MultiJobSchedulerTest, CancelJobsBlocksAdmissionDuringWholeModelCancelDis
          "dispatch was still in flight";
 }
 
+// The whole-model fallback cancels indiscriminately, so cancelJobs must not
+// return while a non-target job it swept still occupies a slot: A and B are
+// both in flight, cancelJobs({A}) dispatches the whole-model cancel (which
+// cancels both), and A releases first. The call has to stay blocked until B
+// has also left — otherwise "cancel returned" would not mean "every job this
+// call cancelled is gone": activeJobs() would still count B and an immediate
+// follow-up admission could be spuriously refused as busy.
+TEST_F(MultiJobSchedulerTest, CancelJobsWholeModelFallbackAwaitsNonTargetInFlight) {
+  GatedWholeModelCancelTestModel* gatedModel =
+      buildGatedWholeModelCancelWithQueue(
+          /*maxConcurrency=*/2, /*queueCapacity=*/0);
+
+  const std::optional<JobId> target =
+      scheduler_->runJob(std::string("target"));
+  const std::optional<JobId> bystander =
+      scheduler_->runJob(std::string("bystander"));
+  ASSERT_TRUE(target.has_value());
+  ASSERT_TRUE(bystander.has_value());
+  ASSERT_TRUE(gatedModel->waitEntered(*target, std::chrono::seconds{2}));
+  ASSERT_TRUE(gatedModel->waitEntered(*bystander, std::chrono::seconds{2}));
+
+  std::atomic_bool cancelReturned{false};
+  std::thread canceller([this, &target, &cancelReturned] {
+    scheduler_->cancelJobs({*target});
+    cancelReturned.store(true);
+  });
+  ASSERT_TRUE(gatedModel->waitCancelEntered(std::chrono::seconds{2}));
+  gatedModel->releaseCancelDispatch();
+
+  // The target leaves first; the bystander, swept by the same whole-model
+  // cancel, is still in flight.
+  gatedModel->release(*target);
+
+  bool returnedWithBystanderInFlight = false;
+  const std::chrono::steady_clock::time_point watchDeadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+  while (std::chrono::steady_clock::now() < watchDeadline) {
+    if (cancelReturned.load()) {
+      returnedWithBystanderInFlight = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+
+  gatedModel->release(*bystander);
+  canceller.join();
+
+  EXPECT_FALSE(returnedWithBystanderInFlight)
+      << "cancelJobs returned while a job its whole-model cancel had swept "
+         "was still in flight";
+}
+
 } // namespace qvac_lib_inference_addon_cpp
