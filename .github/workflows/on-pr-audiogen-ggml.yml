@@ -81,7 +81,9 @@ jobs:
   fork-approval:
     name: Fork approval gate
     runs-on: ubuntu-latest
-    environment: ${{ github.event.pull_request.head.repo.fork && 'fork-ci' || '' }}
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
     steps:
       - name: Approved
         run: echo "fork PR authorised to run privileged jobs"
@@ -126,7 +128,7 @@ jobs:
           github-token: ${{ github.token }}
 
   context:
-    needs: authorize
+    needs: [authorize, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest

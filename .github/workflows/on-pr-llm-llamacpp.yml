@@ -68,7 +68,9 @@ jobs:
   fork-approval:
     name: Fork approval gate
     runs-on: ubuntu-latest
-    environment: ${{ github.event.pull_request.head.repo.fork && 'fork-ci' || '' }}
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
     steps:
       - name: Approved
         run: echo "fork PR authorised to run privileged jobs"
@@ -114,7 +116,7 @@ jobs:
 
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize]
+    needs: [fork-approval, authorize]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -400,7 +402,7 @@ jobs:
   #     `[A-Za-z0-9-]` allowlist + 64-char cap below before use.
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [authorize, run-integration-tests, run-mobile-integration-tests]
+    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10

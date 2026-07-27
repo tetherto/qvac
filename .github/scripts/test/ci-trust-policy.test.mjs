@@ -917,16 +917,17 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
 })
 
 // --- fork-ci environment gating (QVAC-22799) --------------------------------
-// Every pull_request_target workflow that gates any job on
-// label-gate.outputs.authorised (the verified-label surface) must ALSO carry the
-// fork-ci environment gate: a `fork-approval` job bound to the fork-ci environment
-// (fork-only conditional), and every authorised-gated job must depend on it. This
-// runs the environment approval alongside the SHA-bound label-gate. Derived (not a
-// hardcoded list) so a newly-added privileged pull_request_target workflow is
-// automatically required to carry the gate.
+// Every pull_request_target workflow that gates any job on the fork-trust
+// surface — label-gate.outputs.authorised OR authorize.outputs.allowed — must
+// ALSO carry the fork-ci environment gate: a `fork-approval` job bound to the
+// fork-ci environment (PR-from-fork conditional), and every trust-gated job must
+// depend on it. This runs the environment approval alongside the SHA-bound
+// label-gate / authorize-pr. Derived (not a hardcoded list) so a newly-added
+// privileged pull_request_target workflow is automatically required to carry the
+// gate — including a job gated on authorize alone (no label-gate reference).
 
 const FORK_CI_ENV_RE =
-  /environment:\s*\$\{\{\s*github\.event\.pull_request\.head\.repo\.fork\s*&&\s*'fork-ci'\s*\|\|\s*''\s*\}\}/
+  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
 const FORK_CI_GATE_JOBS = new Set([
   'label-gate',
   'authorize',
@@ -968,7 +969,8 @@ function forkCiTargets() {
       const head = onIdx === -1 ? '' : src.slice(onIdx, onIdx + 1200)
       return (
         /pull_request_target:/.test(head) &&
-        src.includes('label-gate.outputs.authorised')
+        (src.includes('label-gate.outputs.authorised') ||
+          src.includes('authorize.outputs.allowed'))
       )
     })
 }
@@ -991,11 +993,15 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
       if (FORK_CI_GATE_JOBS.has(job.name)) continue
-      if (!job.text.includes('label-gate.outputs.authorised')) continue
+      if (
+        !job.text.includes('label-gate.outputs.authorised') &&
+        !job.text.includes('authorize.outputs.allowed')
+      )
+        continue
       assert.match(
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,
-        `${path}: job '${job.name}' gates on the verified label but does not depend on fork-approval (fail-open)`,
+        `${path}: job '${job.name}' gates on the fork-trust surface (label-gate or authorize) but does not depend on fork-approval (fail-open)`,
       )
     }
   }
