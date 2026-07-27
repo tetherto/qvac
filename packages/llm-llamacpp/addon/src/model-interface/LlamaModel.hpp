@@ -119,6 +119,15 @@ public:
   void setWeightsForFile(
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
+  /// Whole-model cancel. On the continuous-batching path this only records
+  /// the request (ContinuousBatchScheduler::requestCancelAll); the batch
+  /// worker applies it later, draining the active slots and pending queue
+  /// present AT APPLY TIME — not pinned to the set that existed when this
+  /// call returned. That falls short of IModelCancel's point-in-time
+  /// obligation, which is why every scheduler cancel entry point reaches
+  /// this model per id (IModelCancelById) and never through here. A direct
+  /// caller of this surface must not admit new work concurrently, or the
+  /// late drain can sweep jobs nobody cancelled.
   void cancel() const final;
 
   struct Prompt {
