@@ -41,7 +41,7 @@
 # packages/diffusion-cpp/scripts/. Pinning the branch tip rather than the
 # engine commit keeps REF meaningful as the PR evolves.
 #
-# TODO(QVAC-22248): re-pin before merge. Unlike every REF above it, bf8adcc is
+# TODO(QVAC-22249): re-pin before merge. Unlike every REF above it, bf8adcc is
 # NOT on 2026-07-03 -- it is a commit on a still-open PR branch. GitHub serves
 # an archive for it today, but a squash-merge plus branch delete would orphan
 # the commit and break this download. Once PR #24 lands, re-point REF at the
