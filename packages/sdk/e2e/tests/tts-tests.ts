@@ -135,6 +135,53 @@ export const ttsSupertonicEnhanced: TestDefinition = {
   }
 }
 
+// Parler exposes description-conditioned speech rather than a fixed speaker
+// ID. With deterministic generation settings on the shared resource, changing
+// only the emotion should produce different non-empty PCM output.
+export const ttsParlerEmotionConditioning: TestDefinition = {
+  testId: 'tts-parler-emotion-conditioning',
+  params: {
+    text: 'Today is a wonderful day.',
+    voice: 'Laura',
+    firstEmotion: 'happy',
+    secondEmotion: 'sad'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['emotion-conditioning-verified', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 120000 }
+}
+
+// Omitting all description fields exercises the addon's default Parler
+// caption, which is a valid edge case of the public API.
+export const ttsParlerDefaultDescription: TestDefinition = {
+  testId: 'tts-parler-default-description',
+  params: {
+    text: 'Hello from Parler.',
+    stream: false
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 60000 }
+}
+
+export const ttsParlerInvalidEmotion: TestDefinition = {
+  testId: 'tts-parler-invalid-emotion',
+  params: {
+    text: 'This request must fail validation.',
+    emotion: 'angry',
+    stream: false
+  },
+  expectation: {
+    validation: 'throws-error',
+    errorContains: 'emotion'
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 5000 }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -147,5 +194,8 @@ export const ttsTests = [
   ttsSupertonicMultilingualText,
   ttsSupertonicSentenceStream,
   ttsSupertonicOutputSampleRate,
-  ttsSupertonicEnhanced
+  ttsSupertonicEnhanced,
+  ttsParlerEmotionConditioning,
+  ttsParlerDefaultDescription,
+  ttsParlerInvalidEmotion
 ]
