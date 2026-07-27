@@ -23,6 +23,11 @@ endif()
 # GGML_BACKEND_DL is ON only on Android (set in the ggml portfile), mirroring
 # qvac-fabric. On Linux/macOS/Windows GPU backends are statically linked.
 
+# Use the IC-LoRA engine PR until its immutable source revision is published to
+# qvac-registry-vcpkg. This package-local overlay leaves other QVAC packages on
+# their registry versions.
+list(PREPEND VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/overlay-ports")
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 

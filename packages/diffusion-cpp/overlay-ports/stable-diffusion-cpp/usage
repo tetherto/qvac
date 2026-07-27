@@ -1,0 +1,10 @@
+The package stable-diffusion-cpp provides CMake integration:
+
+  find_package(stable-diffusion-cpp CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE stable-diffusion::stable-diffusion)
+
+The following header is available:
+  #include <stable-diffusion.h>
+
+For image I/O, depend directly on the stb vcpkg package rather than relying on
+headers bundled by the stable-diffusion.cpp source tree.
