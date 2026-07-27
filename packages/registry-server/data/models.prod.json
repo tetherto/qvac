@@ -1081,7 +1081,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "latin"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
@@ -1092,7 +1095,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "detector", "craft"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
@@ -2222,7 +2228,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "arabic"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
@@ -2233,7 +2241,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "bengali"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
@@ -2244,7 +2254,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "cyrillic"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
@@ -2255,7 +2267,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "devanagari"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
@@ -2266,7 +2280,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "japanese"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
@@ -2277,7 +2293,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "kannada"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
@@ -2288,7 +2306,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "korean"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
@@ -2299,7 +2319,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "latin"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
@@ -2310,7 +2333,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "tamil"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
@@ -2321,7 +2346,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "telugu"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
@@ -2332,7 +2359,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "thai"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
@@ -2343,7 +2372,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "zh_sim"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
@@ -2354,7 +2385,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "zh_tra"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_resnet50.onnx",
@@ -2365,7 +2398,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "detector", "db_resnet50"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF docTR detector (db_mobilenet_v3_large.gguf) with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx",
@@ -2376,7 +2412,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "detector", "db_mobilenet_v3_large"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx",
@@ -2387,7 +2426,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "recognizer", "parseq"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; PARSeq is not supported by ggml-ocr - use the GGUF docTR recognizer (crnn_mobilenet_v3_small.gguf)"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx",
@@ -2398,7 +2440,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "recognizer", "crnn_mobilenet_v3_small"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
@@ -2980,6 +3025,39 @@
     "tags": ["generation", "multimodal", "ocr", "lighton-ocr-2"],
     "notes": "F16 recommended — half the size of F32, negligible quality difference",
     "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "OCR-specialized vision-language model for document parsing",
+    "quantization": "q4_0",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "DeepSeek-OCR-derived VLM (DeepEncoder SAM+CLIP + DeepseekV2 MoE decoder). Full-page parsing with layout <|det|> boxes and HTML tables. Q4_0 — recommended for mobile (typically faster than Q4_K_M on Adreno/Mali GPUs). Prompt: 'document parsing.'. Pair with mmproj-unlimited-ocr-F16.gguf. Requires qvac-fabric >= 9840.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
+    "source": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (DeepEncoder) for Unlimited-OCR",
+    "quantization": "f16",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "F16 — highest-fidelity vision encoder. A Q8_0 variant is available at ~44% smaller (461MB vs 825MB) with equivalent OCR accuracy on document parsing; do not go below Q8_0 for the encoder.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/unlimited-ocr/2026-07-25/mmproj-unlimited-ocr-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (DeepEncoder) for Unlimited-OCR — Q8_0",
+    "quantization": "q8_0",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "Q8_0 vision encoder — 461MB vs the 825MB F16, validated to match F16 OCR accuracy on document parsing (all keywords recovered, table/paragraph text identical). Weights Q8_0; biases and layer-norms kept F32. Pair with unlimited-ocr-Q4_0.gguf. Requires qvac-fabric >= 9840.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
   },
   {
     "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
