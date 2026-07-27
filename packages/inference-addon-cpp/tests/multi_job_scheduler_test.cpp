@@ -227,6 +227,33 @@ public:
   }
 };
 
+/// ConcurrentTestModel whose process() calls back into its own scheduler's
+/// cancel(id) — the worker-originated cancel the IJobScheduler contract
+/// forbids — and records the outcome, so a test can assert the scheduler
+/// fails fast (std::logic_error) instead of deadlocking on its own worker.
+/// Needs the scheduler back-reference no production model holds, bound
+/// explicitly after the scheduler is built.
+class WorkerCancelProbeTestModel final : public ConcurrentTestModel {
+  IJobScheduler* scheduler_ = nullptr;
+  std::atomic_bool cancelThrewLogicError_{false};
+
+public:
+  using ConcurrentTestModel::ConcurrentTestModel;
+
+  void bindScheduler(IJobScheduler& scheduler) { scheduler_ = &scheduler; }
+
+  std::any process(const std::any& input, JobId id) override {
+    try {
+      scheduler_->cancel(id);
+    } catch (const std::logic_error&) {
+      cancelThrewLogicError_ = true;
+    }
+    return ConcurrentTestModel::process(input, id);
+  }
+
+  bool cancelThrewLogicError() const { return cancelThrewLogicError_; }
+};
+
 /// ConcurrentTestModel that additionally implements IModelJobStats, so the
 /// jobEnded tests can assert the output queue appends per-job observed stats
 /// to a tagged job's terminal snapshot. Kept out of the base model: only the
@@ -704,6 +731,20 @@ protected:
     StartTrackingTestModel* raw = tracking.get();
     model_ = std::move(tracking);
     wire(maxConcurrency, queueCapacity);
+    return raw;
+  }
+
+  /// buildWithQueue with a WorkerCancelProbeTestModel instead; returns it
+  /// (non-owning) so the test can query the outcome of its worker-originated
+  /// cancel. Binding happens after wire(), before any job is admitted.
+  WorkerCancelProbeTestModel* buildWorkerCancelProbeWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity,
+      std::chrono::milliseconds processTime) {
+    auto probe = std::make_unique<WorkerCancelProbeTestModel>(processTime);
+    WorkerCancelProbeTestModel* raw = probe.get();
+    model_ = std::move(probe);
+    wire(maxConcurrency, queueCapacity);
+    raw->bindScheduler(*scheduler_);
     return raw;
   }
 
@@ -1453,6 +1494,27 @@ TEST_F(MultiJobSchedulerTest, CancelByIdLandsOnRegistrationGatedModel) {
 // it belonged to fails with exactly one terminal error, its slot / id /
 // exclusivity are released, process(input, id) is never entered for it, and
 // the worker survives to run later jobs.
+// A worker-originated cancel — the model calling back into its own scheduler
+// for the very job it is running — fails fast with std::logic_error instead
+// of deadlocking (the wait for the job's departure would need this same
+// worker to release the job's slot). The guard fires after the model-side
+// cancel was already issued, so the job still unwinds and the scheduler
+// drains; without it this test would time out with the worker wedged.
+// cancelAll()/cancelJobs() share the same await, so one entry point covers
+// the guard for all three.
+TEST_F(MultiJobSchedulerTest, WorkerOriginatedCancelFailsFastNotDeadlocks) {
+  WorkerCancelProbeTestModel* probe = buildWorkerCancelProbeWithQueue(
+      /*maxConcurrency=*/1, /*queueCapacity=*/0, std::chrono::seconds{10});
+
+  const std::optional<JobId> id = scheduler_->runJob(std::string{"input"});
+  ASSERT_TRUE(id.has_value());
+
+  // Well before the 10s process ceiling: the job ends via its own cancel.
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  EXPECT_EQ(scheduler_->activeJobs(), 0U);
+  EXPECT_TRUE(probe->cancelThrewLogicError());
+}
+
 TEST(MultiJobSchedulerLifecycleTest, ThrowingJobStartingFailsOnlyThatJob) {
   ThrowingLifecycleTestModel model;
   MockOutputCallback callback;

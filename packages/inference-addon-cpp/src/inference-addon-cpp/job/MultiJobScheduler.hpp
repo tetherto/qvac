@@ -120,6 +120,13 @@ class MultiJobScheduler final : public IJobScheduler {
   std::vector<std::thread> workers_;
   std::atomic_bool running_{false};
   unsigned readyCount_{0};
+  /// Which scheduler (if any) owns the current thread as a worker. Tags every
+  /// worker in workerLoop() so the cancel paths can fail fast instead of
+  /// deadlocking when called from a worker of this same scheduler (the wait
+  /// in awaitJobsGone needs that worker to release its own job's slot).
+  /// thread_local, so a worker of another scheduler instance is not
+  /// mistaken for one of ours.
+  inline static thread_local const MultiJobScheduler* tlWorkerOwner_ = nullptr;
 
   void runResult(std::any&& output, JobId id) {
     outputQueue_->queueResult(std::move(output), id);
@@ -191,6 +198,11 @@ class MultiJobScheduler final : public IJobScheduler {
   /// can only flip false -> true. Must not run on a scheduler worker: the
   /// wait needs that worker to release the job's slot.
   void awaitJobsGone(const std::vector<JobId>& ids) const {
+    if (tlWorkerOwner_ == this) {
+      throw std::logic_error(
+          "IJobScheduler cancel entry point called from a scheduler worker "
+          "thread; it would deadlock waiting on its own job's departure");
+    }
     std::unique_lock lock(mtx_);
     jobsGoneCv_.wait(lock, [this, &ids] {
       for (const JobId id : ids) {
@@ -205,6 +217,7 @@ class MultiJobScheduler final : public IJobScheduler {
   /// Worker body. Per-job input/id are copied onto the stack while the lock is
   /// held, then process() runs unlocked so cancel() and peer workers progress.
   void workerLoop() {
+    tlWorkerOwner_ = this;
     {
       std::lock_guard lock(mtx_);
       ++readyCount_;
