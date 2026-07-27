@@ -94,6 +94,36 @@ function buildRunStreamingOptions(request: TextToSpeechStreamRequest) {
   if (request.flushAfterMs !== undefined) {
     o['flushAfterMs'] = request.flushAfterMs
   }
+  if (request.description !== undefined) {
+    o['description'] = request.description
+  }
+  if (request.voiceDescription !== undefined) {
+    o['voiceDescription'] = request.voiceDescription
+  }
+  if (request.voice !== undefined) {
+    o['voice'] = request.voice
+  }
+  if (request.emotion !== undefined) {
+    o['emotion'] = request.emotion
+  }
+  if (request.pitch !== undefined) {
+    o['pitch'] = request.pitch
+  }
+  if (request.pace !== undefined) {
+    o['pace'] = request.pace
+  }
+  if (request.expressivity !== undefined) {
+    o['expressivity'] = request.expressivity
+  }
+  if (request.noise !== undefined) {
+    o['noise'] = request.noise
+  }
+  if (request.reverb !== undefined) {
+    o['reverb'] = request.reverb
+  }
+  if (request.quality !== undefined) {
+    o['quality'] = request.quality
+  }
   return o
 }
 

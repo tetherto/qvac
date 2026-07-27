@@ -10,10 +10,24 @@ import {
   collectTtsStats
 } from '@/server/bare/utils/tts-stats'
 
+type ParlerJobOptions = Pick<
+  TtsRequest,
+  | 'description'
+  | 'voiceDescription'
+  | 'voice'
+  | 'emotion'
+  | 'pitch'
+  | 'pace'
+  | 'expressivity'
+  | 'noise'
+  | 'reverb'
+  | 'quality'
+>
+
 type RunStreamModel = {
   runStream: (
     text: string,
-    options?: { locale?: string; maxChunkScalars?: number }
+    options?: ParlerJobOptions & { locale?: string; maxChunkScalars?: number }
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
     stats?: {
@@ -34,9 +48,27 @@ function hasRunStream(model: unknown): model is RunStreamModel {
   )
 }
 
+function getParlerJobOptions(request: TtsRequest): ParlerJobOptions {
+  return {
+    ...(request.description !== undefined ? { description: request.description } : {}),
+    ...(request.voiceDescription !== undefined
+      ? { voiceDescription: request.voiceDescription }
+      : {}),
+    ...(request.voice !== undefined ? { voice: request.voice } : {}),
+    ...(request.emotion !== undefined ? { emotion: request.emotion } : {}),
+    ...(request.pitch !== undefined ? { pitch: request.pitch } : {}),
+    ...(request.pace !== undefined ? { pace: request.pace } : {}),
+    ...(request.expressivity !== undefined ? { expressivity: request.expressivity } : {}),
+    ...(request.noise !== undefined ? { noise: request.noise } : {}),
+    ...(request.reverb !== undefined ? { reverb: request.reverb } : {}),
+    ...(request.quality !== undefined ? { quality: request.quality } : {})
+  }
+}
+
 export async function* textToSpeech(
   params: TtsRequest
 ): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
+  const request = ttsRequestSchema.parse(params)
   const {
     modelId,
     inputType,
@@ -45,7 +77,8 @@ export async function* textToSpeech(
     sentenceStream,
     sentenceStreamLocale,
     sentenceStreamMaxChunkScalars
-  } = ttsRequestSchema.parse(params)
+  } = request
+  const parlerJobOptions = getParlerJobOptions(request)
 
   const model = getModel(modelId)
   const modelStart = nowMs()
@@ -56,12 +89,15 @@ export async function* textToSpeech(
     }
 
     const streamOpts =
-      sentenceStreamLocale !== undefined || sentenceStreamMaxChunkScalars !== undefined
+      sentenceStreamLocale !== undefined ||
+      sentenceStreamMaxChunkScalars !== undefined ||
+      Object.keys(parlerJobOptions).length > 0
         ? {
             ...(sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
             ...(sentenceStreamMaxChunkScalars !== undefined
               ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
-              : {})
+              : {}),
+            ...parlerJobOptions
           }
         : undefined
 
@@ -101,7 +137,8 @@ export async function* textToSpeech(
   const response = (await model.run({
     input: text,
     inputType,
-    ...(stream ? { streamOutput: true } : {})
+    ...(stream ? { streamOutput: true } : {}),
+    ...parlerJobOptions
   })) as unknown as TtsResponse
 
   if (!stream) {

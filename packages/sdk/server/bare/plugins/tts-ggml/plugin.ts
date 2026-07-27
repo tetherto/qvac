@@ -17,9 +17,11 @@ import {
   type ResolveContext,
   type ResolveResult,
   type TtsChatterboxLoadConfig,
+  type TtsParlerLoadConfig,
   type TtsSupertonicLoadConfig,
   type TtsRuntimeConfig,
   type TtsChatterboxRuntimeConfig,
+  type TtsParlerRuntimeConfig,
   type TtsSupertonicRuntimeConfig
 } from '@/schemas'
 import { createStreamLogger, registerAddonLogger } from '@/logging'
@@ -118,6 +120,10 @@ async function resolveSupertonicConfig(
   )
 
   return { config: runtime, artifacts: lavasrArtifacts }
+}
+
+function resolveParlerConfig(config: TtsParlerLoadConfig): ResolveResult<TtsRuntimeConfig> {
+  return { config, artifacts: {} }
 }
 
 // Build the optional LavaSR `files` entries from resolved artifacts. Supplying
@@ -221,6 +227,61 @@ function createSupertonicModel(
   return { model }
 }
 
+function createParlerModel(
+  modelId: string,
+  config: TtsParlerRuntimeConfig,
+  params: CreateModelParams
+): PluginModelResult {
+  const parlerModel = params.modelPath
+  if (!parlerModel) {
+    throw new TtsArtifactsRequiredError()
+  }
+
+  const logger = createStreamLogger(modelId, ModelType.ttsGgml)
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
+
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_PARLER,
+    files: { parlerModel },
+    ...(config.description !== undefined ? { description: config.description } : {}),
+    ...(config.voiceDescription !== undefined ? { voiceDescription: config.voiceDescription } : {}),
+    ...(config.voice !== undefined ? { voice: config.voice } : {}),
+    ...(config.emotion !== undefined ? { emotion: config.emotion } : {}),
+    ...(config.pitch !== undefined ? { pitch: config.pitch } : {}),
+    ...(config.pace !== undefined ? { pace: config.pace } : {}),
+    ...(config.expressivity !== undefined ? { expressivity: config.expressivity } : {}),
+    ...(config.noise !== undefined ? { noise: config.noise } : {}),
+    ...(config.reverb !== undefined ? { reverb: config.reverb } : {}),
+    ...(config.quality !== undefined ? { quality: config.quality } : {}),
+    ...(config.streamChunkTokens !== undefined
+      ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    ...(config.streamFirstChunkTokens !== undefined
+      ? { streamFirstChunkTokens: config.streamFirstChunkTokens }
+      : {}),
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
+    ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+    ...(config.topK !== undefined ? { topK: config.topK } : {}),
+    ...(config.topP !== undefined ? { topP: config.topP } : {}),
+    ...(config.maxFrames !== undefined ? { maxFrames: config.maxFrames } : {}),
+    ...(config.minNewTokens !== undefined ? { minNewTokens: config.minNewTokens } : {}),
+    ...(config.normalizeNumbers !== undefined ? { normalizeNumbers: config.normalizeNumbers } : {}),
+    config: {
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {})
+    },
+    logger,
+    opts: { stats: true },
+    exclusiveRun: true
+  })
+
+  return { model }
+}
+
 export const ttsPlugin = definePlugin({
   modelType: ModelType.ttsGgml,
   displayName: 'TTS (GGML)',
@@ -231,6 +292,9 @@ export const ttsPlugin = definePlugin({
     const { ttsEngine } = cfg as { ttsEngine?: string }
 
     // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
+    if (ttsEngine === 'parler') {
+      return resolveParlerConfig(cfg as TtsParlerLoadConfig)
+    }
     if (ttsEngine === 'supertonic') {
       return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx)
     }
@@ -241,6 +305,9 @@ export const ttsPlugin = definePlugin({
     const config = (params.modelConfig ?? {}) as TtsRuntimeConfig
     const artifacts = params.artifacts ?? {}
 
+    if (config.ttsEngine === 'parler') {
+      return createParlerModel(params.modelId, config, params)
+    }
     if (config.ttsEngine === 'supertonic') {
       return createSupertonicModel(params.modelId, config, params, artifacts)
     }
