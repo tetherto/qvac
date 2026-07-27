@@ -4,38 +4,69 @@ const path = require('path')
 const os = require('os')
 const { spawnSync } = require('child_process')
 
-const binary = os.platform() === 'win32' ? 'addon-test.exe' : './addon-test'
-const cwd = path.resolve(__dirname, '..', 'build', 'test', 'unit')
-
 // addon-test links AddressSanitizer but dynamically loads the non-ASan,
 // -static-libstdc++ @qvac/fabric prebuild. Objects that cross that module
 // boundary trip alloc-dealloc-mismatch, and fabric's long-lived runtime globals
 // plus its dlopen'd ggml backends look like leaks at exit -- both fire after
 // every test has already passed. Relax exactly those two checks, matching
-// .github/workflows/cpp-tests-classification.yml. An ASAN_OPTIONS already in
-// the environment wins, so CI and ad-hoc overrides stay authoritative.
-// See test/unit/CMakeLists.txt for the full rationale.
+// .github/workflows/cpp-tests-classification.yml. See test/unit/CMakeLists.txt
+// for the full rationale.
 const DEFAULT_ASAN_OPTIONS = 'alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1'
 
-const result = spawnSync(binary, ['--gtest_output=xml:cpp-test-results.xml'], {
-  cwd,
-  stdio: 'inherit',
-  shell: false,
-  env: {
-    ...process.env,
-    ASAN_OPTIONS: process.env.ASAN_OPTIONS || DEFAULT_ASAN_OPTIONS
+/**
+ * Build the child-process env for addon-test. When ASAN_OPTIONS is unset, apply
+ * DEFAULT_ASAN_OPTIONS for local runs. When it is already set (CI workflow env
+ * or ad-hoc shell export), that value is used as-is — we do not merge with or
+ * patch the default string. Setting only ASAN_OPTIONS=abort_on_error=0 drops
+ * alloc_dealloc_mismatch=0 and detect_leaks=0 unless you include them yourself.
+ */
+function buildRunnerEnv(processEnv) {
+  return {
+    ...processEnv,
+    ASAN_OPTIONS: processEnv.ASAN_OPTIONS || DEFAULT_ASAN_OPTIONS
   }
-})
-
-if (result.error) {
-  throw result.error
 }
 
-// abort_on_error=1 makes a genuine sanitizer finding raise SIGABRT, which
-// leaves status null -- report those as a failure instead of exiting 0.
-if (result.signal) {
-  console.error(`addon-test terminated by signal ${result.signal}`)
-  process.exit(1)
+/**
+ * Map spawnSync() output to the runner's process exit code. ASan with
+ * abort_on_error=1 terminates via SIGABRT (status null); that must not be
+ * treated as success.
+ */
+function resolveExitCode(result) {
+  if (result.signal) {
+    return 1
+  }
+  return result.status ?? 1
 }
 
-process.exit(result.status ?? 1)
+function main() {
+  const binary = os.platform() === 'win32' ? 'addon-test.exe' : './addon-test'
+  const cwd = path.resolve(__dirname, '..', 'build', 'test', 'unit')
+
+  const result = spawnSync(binary, ['--gtest_output=xml:cpp-test-results.xml'], {
+    cwd,
+    stdio: 'inherit',
+    shell: false,
+    env: buildRunnerEnv(process.env)
+  })
+
+  if (result.error) {
+    throw result.error
+  }
+
+  if (result.signal) {
+    console.error(`addon-test terminated by signal ${result.signal}`)
+  }
+
+  process.exit(resolveExitCode(result))
+}
+
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  DEFAULT_ASAN_OPTIONS,
+  buildRunnerEnv,
+  resolveExitCode
+}
