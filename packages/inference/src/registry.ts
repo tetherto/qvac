@@ -18,6 +18,7 @@ import { handleGetLoadedModelInfo } from './handlers/get-loaded-model-info.ts'
 import { handleHeartbeat } from './handlers/heartbeat.ts'
 import { handleHeartbeatDelegated } from './p2p/heartbeat-delegated.ts'
 import { handleFinetune } from './handlers/finetune.ts'
+import { handleCompletionOrchestrate } from './handlers/completion-orchestrate.ts'
 import { handleCancelDelegated } from './p2p/cancel-delegated.ts'
 import { handlePluginInvoke, handlePluginInvokeStream } from './handlers/plugin-invoke.ts'
 import {
@@ -143,6 +144,12 @@ export const registry: Record<string, HandlerEntry> = {
     delegatedHandler: handleCompletionStreamDelegated,
     isDelegated: isModelDelegated
   },
+
+  // Deliberately no delegated handler: tool callbacks execute code on the
+  // client machine, so only the user's own local worker may orchestrate
+  // (see completionOrchestrateResponseSchema's contract note).
+  completionOrchestrate: { type: 'duplex', handler: handleCompletionOrchestrate },
+
   batchCompletionStream: {
     type: 'stream',
     pluginOp: true,
