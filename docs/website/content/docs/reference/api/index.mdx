@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.15.x (latest)
+title: API Summary — v0.16.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -790,6 +790,15 @@ function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, numbe
 
 **Example**:
 ```ts
+// Load an OCR model first. Registry GGUF models resolve their pipeline
+// and detector automatically:
+//   EasyOCR (default): OCR_LATIN  (CRAFT detector auto-derived)
+//   DocTR:             OCR_DOCTR  (DBNet detector auto-derived)
+const modelId = await loadModel({
+  modelSrc: OCR_LATIN.src,
+  modelType: MODEL_TYPES.ggmlOcr,
+});
+
 // Non-streaming mode (default) - get all blocks at once
 const { blocks } = ocr({ modelId, image: "/path/to/image.png" });
 for (const block of await blocks) {
@@ -1621,7 +1630,7 @@ await cancel(requestId);
 
 ### `vla`
 
-Run VLA inference on a loaded model (SmolVLA or π₀.₅) and return the
+Run VLA inference on a loaded model (SmolVLA, π₀.₅, or GR00T) and return the
 produced action chunk plus per-stage timings.
 
 **Signature**:

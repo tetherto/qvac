@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.38.2] - 2026-07-23
+
+Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.
+
+### Added
+
+- Unlimited-OCR ([baidu/Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR)) OCR VLM support: registry entry, README + NOTICE, a mobile integration test (`runOcrUnlimitedTest`) that parses a scanned CT-scan report, and a perf test (`runUnlimitedOcrPerfTest`) that records encode/prefill/decode timings, both registered in the android/ios weekly groups. GGUFs (`Q4_K_M` + `F16` mmproj) are pulled from the pinned community conversion [`vimalnakrani/unlimited-ocr-gguf`](https://huggingface.co/vimalnakrani/unlimited-ocr-gguf), the same public-repo pattern used by LightON OCR-2. Prompt-sensitive — use `document parsing.`. Requires `qvac-fabric >= 9840` (`deepseek2-ocr` engine + `deepseekocr` clip projector).
+
+### Pull Requests
+
+- [#3419](https://github.com/tetherto/qvac/pull/3419) - add Unlimited-OCR vision-language OCR model
+
 ## [0.38.1] - 2026-07-22
 
 This patch release guarantees that a content token follows the EOS-inside-reasoning recovery, so the forced `</think>` substitution can no longer be immediately followed by another end-of-generation token and produce an empty answer. It also exposes the generation stop reason as a new runtime stat.

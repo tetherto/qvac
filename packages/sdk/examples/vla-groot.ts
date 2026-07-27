@@ -8,8 +8,9 @@
  * `vlaHparams()`:
  *   - `imageInputMode: 'patches'` — each `images` entry is a pre-patchified
  *     buffer of `hparams.imagePatchElems` floats, NOT a `3·w·h` pixel plane.
- *     A real consumer runs the model's own vision patch-embed over each camera
- *     frame; here we feed synthetic patch buffers of the right length.
+ *     A real consumer patchifies each camera frame the way `Gr00tPolicy` does
+ *     (the model's learned patch-embed runs inside the addon); here we feed
+ *     synthetic patch buffers of the right length.
  *   - `stateInputMode: 'continuous'` — the robot state is projected by an
  *     in-model linear layer; pad it to `hparams.maxStateDim` with `vlaPadState`.
  *   - `noise` is REQUIRED. GR00T is a flow-matching model that does not sample
@@ -81,8 +82,9 @@ try {
   const numCameras = hparams.numCameras ?? 2
 
   // Patch-input model: each camera is a pre-patchified buffer of exactly
-  // `imagePatchElems` floats. A real consumer fills these from the model's
-  // vision patch-embed over the camera frame; we use small synthetic values.
+  // `imagePatchElems` floats. A real consumer patchifies each camera frame the
+  // way `Gr00tPolicy` does (the model's learned patch-embed runs inside the
+  // addon); we use small synthetic values.
   const images = Array.from({ length: numCameras }, () => new Float32Array(patchElems).fill(0.02))
 
   // Continuous-state model: pad the robot state to `maxStateDim`.

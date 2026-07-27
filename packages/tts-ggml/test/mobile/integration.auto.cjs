@@ -38,6 +38,10 @@ async function runOutputSampleRateTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/output-sample-rate.test.js', options)
 }
 
+async function runParlerTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parler.test.js', options)
+}
+
 async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/rtf-benchmark.test.js', options)
 }
@@ -67,6 +71,7 @@ module.exports = {
   runLavasrEnhancerTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
+  runParlerTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
