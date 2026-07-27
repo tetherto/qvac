@@ -45,9 +45,9 @@ namespace qvac_lib_inference_addon_cpp {
 /// model cannot know ids it never received): the job is unlinked in O(1) via
 /// queuedIndex_, its slot and exclusivity released, and a "Job cancelled" error
 /// queued as its terminal event. In-flight cancellation routes to the model:
-/// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(),
-/// falling back to per-id cancel of the in-flight snapshot on models that
-/// only implement cancelById (teardown cancels the same way); that
+/// cancel(id) via cancelById(), cancelAll() via per-id cancel of the
+/// in-flight snapshot, falling back to the whole-model cancel() on models
+/// that only implement it (teardown prefers the whole-model switch); that
 /// id -> internal-slot mapping is the model's concern. cancelJobs(liveJobIds())
 /// is the snapshot form the JS binding uses for cancel-all, so jobs admitted
 /// after the cancel was requested survive it — on a per-id model; the
@@ -457,8 +457,11 @@ public:
       outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
     }
     // Await only this snapshot: jobs admitted while the wait runs are not
-    // cancelled and must not extend it. The whole-model cancel is
-    // indiscriminate, so it is dispatched under the same lock as the
+    // cancelled and must not extend it. Per-id cancellation is preferred
+    // whenever the model offers it: the scheduler owns the exact in-flight
+    // id set, so delivery is precise and point-in-time by construction. The
+    // whole-model cancel is the fallback for models offering nothing finer;
+    // it is indiscriminate, so it is dispatched under the same lock as the
     // snapshot: a worker needs mtx_ to dequeue a job into inFlight_, so no
     // job admitted after the snapshot can be collaterally swept into this
     // cancel while it is still being dispatched.
@@ -466,21 +469,18 @@ public:
     {
       std::lock_guard lock(mtx_);
       inFlightSnapshot.assign(inFlight_.begin(), inFlight_.end());
-      if (cancel_ != nullptr) {
+      if (cancelById_ == nullptr && cancel_ != nullptr) {
         cancel_->cancel();
       }
     }
-    if (cancel_ != nullptr) {
-      awaitJobsGone(inFlightSnapshot);
-      return;
-    }
     if (cancelById_ != nullptr) {
-      // No whole-model cancel (a per-job-context model may have no global
-      // stop switch): the scheduler owns the id set, cancel each in-flight
-      // job individually.
       for (const JobId id : inFlightSnapshot) {
         cancelById_->cancelById(id);
       }
+      awaitJobsGone(inFlightSnapshot);
+      return;
+    }
+    if (cancel_ != nullptr) {
       awaitJobsGone(inFlightSnapshot);
       return;
     }
