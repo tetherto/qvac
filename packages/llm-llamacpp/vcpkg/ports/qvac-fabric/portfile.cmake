@@ -1,6 +1,6 @@
 # TEMPORARY overlay override (llm-llamacpp only). Builds qvac-fabric from
 # qvac-fabric-llm.cpp PR #187 "Disable weight repacking for training loads"
-# (https://github.com/tetherto/qvac-fabric-llm.cpp/pull/187, head commit a055ec94,
+# (https://github.com/tetherto/qvac-fabric-llm.cpp/pull/187, head commit be8a91ea,
 # reachable via the base repo as the PR head) instead of the pinned v9840.0.0.
 # Copied verbatim from the CURRENT tetherto/qvac-registry-vcpkg ports/qvac-fabric
 # (the 9840.0.0 port — already has LLAMA_BUILD_APP=OFF / MTMD_VIDEO=OFF and the
@@ -9,8 +9,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
-  REF a055ec9469982008538bdec71b58d8314903d995
-  SHA512 f5e2aee1eb324c8216f567a5a3845a8b9825f1d2d471bedcf7cecd1ca78f57cf1641bacbee0097ec4af0d5e27495dfe62710132368842e4e12b7ebc2f6feae53
+  REF be8a91eac6ca030b998fd714568defd1a8436da0
+  SHA512 0e974b8efb323818f2dc0f4770b3ab6545297fc24178787919e6689bae67b46c51132826a13dc585a59c27084401af810e1a1d61a87f1fa9b87f72f765b459d6
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
