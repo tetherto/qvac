@@ -8,9 +8,9 @@ name: Mobile Integration Tests (Fit)
 # NOTE: this workflow needs the fit-llamacpp Device Farm project + device pools
 # provisioned and these repo/org secrets to exist, otherwise the schedule step
 # has no ARN to target:
-#   AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_FIT
-#   ANDROID_DEVICE_POOL_ARN_LLAMACPP_FIT
-#   IOS_DEVICE_POOL_ARN_LLAMACPP_FIT
+#   AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED
+#   ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED
+#   IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED
 
 on:
   workflow_call:
@@ -129,7 +129,7 @@ jobs:
           app-type: ${{ steps.build.outputs.app-type }}
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_FIT }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
           enables-perf: 'false'
 
       - name: Schedule Device Farm test run
@@ -137,9 +137,9 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
         with:
           platform: ${{ matrix.platform }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_FIT }}
-          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_LLAMACPP_FIT }}
-          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_LLAMACPP_FIT }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
