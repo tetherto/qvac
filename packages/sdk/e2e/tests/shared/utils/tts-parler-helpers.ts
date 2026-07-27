@@ -105,7 +105,7 @@ async function synthesizeSentenceStream(modelId: string, params: ParlerParams) {
   const buffer: number[] = []
   let chunks = 0
   for await (const chunk of result.chunkUpdates) {
-    buffer.push(...chunk.buffer)
+    for (const sample of chunk.buffer) buffer.push(sample)
     chunks++
   }
   if (!(await result.done) || chunks === 0) {
@@ -125,7 +125,7 @@ async function synthesizeDuplex(modelId: string, params: ParlerParams) {
 
   const buffer: number[] = []
   for await (const response of session) {
-    buffer.push(...response.buffer)
+    for (const sample of response.buffer) buffer.push(sample)
     if (response.done) break
   }
   return buffer

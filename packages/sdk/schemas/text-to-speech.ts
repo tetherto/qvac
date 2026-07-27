@@ -375,6 +375,10 @@ const ttsClientParamsShape = {
   ...ttsParlerDescriptionFieldsShape
 }
 
+// Requests carry only an opaque modelId, so client-side validation cannot know
+// which TTS engine is loaded. Description conflicts are intentionally rejected
+// as malformed request shapes before the server performs engine compatibility
+// validation in assertParlerJobOptionsSupported.
 export const ttsClientParamsSchema = z
   .object(ttsClientParamsShape)
   .superRefine(refineParlerDescriptionFields)

@@ -210,6 +210,20 @@ export const ttsParlerDuplexStreaming: TestDefinition = {
   metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 90000 }
 }
 
+export const ttsParlerIndicMultilingual: TestDefinition = {
+  testId: 'tts-parler-indic-multilingual',
+  params: {
+    text: 'नमस्ते, आज २७ जुलाई है।',
+    operation: 'batch',
+    emotion: 'conversation'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=batch', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler-indic', estimatedDurationMs: 120000 }
+}
+
 export const ttsParlerInvalidEmotion: TestDefinition = {
   testId: 'tts-parler-invalid-emotion',
   params: {
@@ -242,5 +256,6 @@ export const ttsTests = [
   ttsParlerStreaming,
   ttsParlerSentenceStreaming,
   ttsParlerDuplexStreaming,
+  ttsParlerIndicMultilingual,
   ttsParlerInvalidEmotion
 ]

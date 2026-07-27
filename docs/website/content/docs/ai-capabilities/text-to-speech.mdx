@@ -61,6 +61,8 @@ await loadModel({
 Parler-TTS uses a **single GGUF** and conditions speech from either a free-text
 description or structured voice fields. Load-time fields provide defaults;
 `textToSpeech()` and `textToSpeechStream()` can override them per request.
+The registry includes Mini v1, Large v1, and Indic variants; the Indic model
+supports 21 languages and script-native digit normalization.
 
 ```ts
 const modelId = await loadModel({
