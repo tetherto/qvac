@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "bare test/coload.test.js",
+    "test:unit": "node --test test/coload.unit.test.js test/combinations.unit.test.js",
     "coload": "bare test/coload.test.js",
     "combinations": "node scripts/coload-combinations.mjs",
     "lint": "standard \"*.js\" \"test/**/*.js\" \"scripts/**/*.mjs\""

@@ -349,18 +349,6 @@ export class TextToSpeechStreamFailedError extends QvacErrorBase {
   }
 }
 
-export class TranslationFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.TRANSLATION_FAILED,
-        details ? [details] : undefined,
-        cause
-      )
-    )
-  }
-}
-
 export class CancelFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(

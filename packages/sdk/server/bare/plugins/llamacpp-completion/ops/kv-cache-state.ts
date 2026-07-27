@@ -33,6 +33,24 @@ export interface HistorySliceDecision {
   clearStaleCount: boolean
 }
 
+interface CacheCommitContext {
+  aborted: boolean
+  producedTokens: boolean
+  generatedTokens?: number | undefined
+  predict?: number | undefined
+}
+
+export function shouldCommitCachedTurn(context: CacheCommitContext): boolean {
+  const { aborted, producedTokens, generatedTokens, predict } = context
+  const stoppedByBudget =
+    predict !== undefined &&
+    predict > 0 &&
+    generatedTokens !== undefined &&
+    generatedTokens >= predict
+
+  return !aborted && producedTokens && !stoppedByBudget
+}
+
 /**
  * Pure slice decision for `prepareMessagesForCache`.
  *

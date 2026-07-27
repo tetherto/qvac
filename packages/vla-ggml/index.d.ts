@@ -23,6 +23,18 @@ export interface VlaHparams {
      * back-compat.
      */
     stateInputMode?: "continuous" | "discrete";
+    /**
+     * How the consumer passes camera images. `'pixels'` (SmolVLA, π₀.₅) means
+     * each image is a `3 · w · h` float pixel plane; `'patches'` (GR00T) means
+     * each image is already patchified by Gr00tPolicy into a
+     * `patches · patch_flat` buffer. Optional for back-compat.
+     */
+    imageInputMode?: "pixels" | "patches";
+    /**
+     * Exact per-image buffer length (in floats) required when
+     * `imageInputMode === 'patches'`. Optional for back-compat.
+     */
+    imagePatchElems?: number;
 }
 export interface VlaRunInput {
     images: Float32Array[];

@@ -3,15 +3,14 @@
 // Polymorphic VLA model interface for multi-architecture dispatch.
 //
 // `IVlaModel` hides the SmolVLA-specific C-style types and entry points from
-// the addon layer so the same `VlaModel` shell can dispatch to either the
-// existing SmolVLA implementation or the upcoming π₀.₅ implementation, keyed
-// off the GGUF `general.architecture` metadata string (see
-// `model_factory.hpp`).
+// the addon layer so the same `VlaModel` shell can dispatch to any of the
+// SmolVLA, π₀.₅, or GR00T implementations, keyed off the GGUF
+// `general.architecture` metadata string (see `model_factory.hpp`).
 //
 // The generic hparams and timing structs intentionally use architecture-
 // neutral field names. The SmolVLA adapter back-fills `prefill_*` from
 // `smollm2_*`; the addon's runtimeStats() also re-emits the legacy SmolVLA-
-// named keys until consumers migrate (TODO: drop after π₀.₅ ships).
+// named keys until consumers migrate.
 
 #include <cstdint>
 #include <string>
@@ -37,6 +36,20 @@ struct VlaHparamsGeneric {
   // is ignored on the discrete path.
   enum class StateInputMode { Continuous, Discrete };
   StateInputMode state_input_mode = StateInputMode::Continuous;
+  // How the consumer passes camera images. SmolVLA and π₀.₅ take raw pixel
+  // planes (`3 · vision_image_size²` floats per camera); GR00T takes images
+  // already resized/normalized/patchified by Gr00tPolicy (a
+  // `patches · patch_flat` buffer per camera). Both are `Continuous` state
+  // models, so `state_input_mode` can't distinguish the image contract — this
+  // is the axis the JS validator branches on to accept groot's patch buffers.
+  enum class ImageInputMode { Pixels, Patches };
+  ImageInputMode image_input_mode = ImageInputMode::Pixels;
+  // Exact float count of one camera's patch buffer, for the `Patches` contract
+  // (0 on the `Pixels` path, where the JS validator derives `3 · w · h`
+  // instead). Fixed per model — `imgWidth`/`imgHeight` must equal
+  // `vision_image_size`, so the patch geometry is constant. The JS validator
+  // uses this to reject a mis-sized patch buffer before the native memcpy.
+  int image_patch_elems = 0;
 };
 
 // Architecture-neutral wall-clock timings (milliseconds). The SmolVLA-named

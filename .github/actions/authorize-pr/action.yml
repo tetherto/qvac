@@ -1,6 +1,6 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Checks actor write permission, author association, and label presence for external fork PRs. Strips the gate label on synchronize events from non-writers to force re-review after new commits.
+  Security gate for pull_request_target workflows. Same-repo PRs and write-access actors are trusted; every other external fork PR requires a SHA-bound `verified` approval — the label alone is not proof, the current head commit must carry the trusted qvac/fork-verified status recorded by label-gate when a merge/release member approved that exact SHA. author_association (MEMBER/OWNER/COLLABORATOR) does NOT bypass the gate for forks. Strips the gate label on every external-fork synchronize event to force re-review after any commit change.
 inputs:
   label:
     description: "Label name required for external fork PRs (default: verified)"
@@ -33,7 +33,37 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     # -----------------------------------------------------------------
-    # 2. Decide whether the run is authorized
+    # 2. Resolve the SHA-bound approval status for the PR head. label-gate
+    #    records a `qvac/fork-verified` commit status on the exact SHA a
+    #    merge/release member approved; reading it here makes authorization
+    #    follow the approved commit, not workflow-event ordering (closes the
+    #    draft->ready and close->reopen flip bypasses).
+    # -----------------------------------------------------------------
+    - name: Resolve approved-SHA commit status
+      id: approved
+      if: >-
+        github.event_name == 'pull_request_target' ||
+        github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        STATUS_CONTEXT: qvac/fork-verified
+      run: |
+        approved=false
+        if [ -n "$HEAD_SHA" ]; then
+          state=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" \
+            --jq "map(select(.context == \"${STATUS_CONTEXT}\"))[0].state // \"\"" \
+            2>/dev/null || echo "")
+          if [ "$state" = "success" ]; then
+            approved=true
+          fi
+        fi
+        echo "approved=$approved" >> "$GITHUB_OUTPUT"
+
+    # -----------------------------------------------------------------
+    # 3. Decide whether the run is authorized
     # -----------------------------------------------------------------
     - name: Check authorization
       id: check
@@ -43,8 +73,9 @@ runs:
         ACTION: ${{ github.event.action }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         BASE_REPO: ${{ github.repository }}
-        AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+        IS_DRAFT: ${{ github.event.pull_request.draft }}
         HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        HAS_APPROVED_SHA: ${{ steps.approved.outputs.approved }}
         LABEL_NAME: ${{ inputs.label }}
         LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       run: |
@@ -55,59 +86,92 @@ runs:
           exit 0
         fi
 
-        # Same-repo PRs are always trusted
-        if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+        if [ "$IS_DRAFT" = "true" ]; then
+          echo "::notice::Draft PR — blocked until ready-for-review"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Same-repo PRs are always trusted. Compare case-insensitively and
+        # require a non-empty head repo; missing metadata fails closed.
+        IS_SAME_REPO=false
+        shopt -s nocasematch
+        if [[ -n "$HEAD_REPO" && "$HEAD_REPO" == "$BASE_REPO" ]]; then
+          IS_SAME_REPO=true
+        fi
+        shopt -u nocasematch
+        if [ "$IS_SAME_REPO" = "true" ]; then
           echo "::notice::Same-repo PR — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
+        # Any external-fork synchronize invalidates the commit-specific
+        # approval, regardless of who pushed it (including a maintainer using
+        # "allow edits"). The strip step below forces re-review + re-label.
+        if [ "$ACTION" = "synchronize" ]; then
+          echo "::warning::External fork synchronize — blocking until re-review"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         echo "::notice::Actor '$GITHUB_ACTOR' write-or-higher: $HAS_WRITE"
 
-        # Actor with write (or higher) is trusted even from a fork
+        # Actor with write (or higher) is trusted even from a fork — they could
+        # push to the base repo directly, so a fork PR from them is no riskier.
         if [ "$HAS_WRITE" = "1" ]; then
           echo "::notice::Actor has write-or-higher permission — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # Org members / collaborators are trusted even from forks
-        if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
-          echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
-          echo "allowed=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
+        # NOTE: author_association (MEMBER / OWNER / COLLABORATOR) does NOT bypass
+        # the gate for EXTERNAL FORKS. An org member (or read/triage collaborator)
+        # WITHOUT repo write could otherwise run unreviewed fork code in a
+        # pull_request_target workflow without `verified` (reported by NamelsKing).
+        # Org members keep the frictionless path by working from an in-org branch
+        # (same-repo, already trusted above); a fork PR always requires the
+        # SHA-bound `verified` approval below.
 
-        # External fork: require the gate label
+        # External fork: require the gate label.
         HAS_LABEL=$(echo "$LABELS_JSON" | jq -r --arg l "$LABEL_NAME" \
           'if . == null then "false" elif any(. == $l) then "true" else "false" end')
 
-        # On synchronize from a non-writer, reject even if the label is still
-        # present. The label was granted for the previous commit; new unreviewed
-        # code must not run with secrets. The strip step below removes the label
-        # so that a re-review + re-label is required for the next run.
-        if [ "$ACTION" = "synchronize" ]; then
-          echo "::warning::External fork synchronize from non-writer — blocking until re-review"
+        if [ "$HAS_LABEL" != "true" ]; then
+          echo "::warning::External fork PR without '$LABEL_NAME' label — skipping"
+          echo "::warning::A merge/release team member must review the code and apply the '$LABEL_NAME' label"
           echo "allowed=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        if [ "$HAS_LABEL" = "true" ]; then
-          echo "::notice::Fork PR with '$LABEL_NAME' label — authorized"
+        # SHA-bound approval. The label alone is NOT proof: a draft->ready or
+        # close->reopen flip can replay a stale approval onto a new commit while
+        # its run is still active. On the `labeled` event the reviewer is
+        # approving THIS head (label-gate, running in parallel, enforces
+        # merge/release-team trust and records the qvac/fork-verified status).
+        # On ANY other event, require the current head SHA to already carry
+        # that trusted, merge/release-approved status.
+        if [ "$ACTION" = "labeled" ]; then
+          echo "::notice::'$LABEL_NAME' applied — authorized for this commit (label-gate enforces applier trust)"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ "$HAS_APPROVED_SHA" = "true" ]; then
+          echo "::notice::Fork PR head carries a trusted '$LABEL_NAME' approval — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
         else
-          echo "::warning::External fork PR without '$LABEL_NAME' label — skipping"
-          echo "::warning::A team member must review the code and apply the '$LABEL_NAME' label"
+          echo "::warning::'$LABEL_NAME' is present but the current head commit was not approved — re-review required (approval is SHA-bound, not order-based)"
           echo "allowed=false" >> "$GITHUB_OUTPUT"
         fi
 
     # -----------------------------------------------------------------
-    # 3. Strip the gate label on synchronize from non-writers
+    # 4. Strip the gate label on every external-fork synchronize
     #    This forces a maintainer to re-review before the NEXT run.
     # -----------------------------------------------------------------
-    - name: Strip label on new pushes from non-writers
+    - name: Strip label on new external-fork pushes
+      # GitHub expression string comparisons are case-insensitive.
       if: |
-        steps.perm.outputs.has-permission != '1' &&
         github.event.action == 'synchronize' &&
         github.event.pull_request.head.repo.full_name != github.repository
       shell: bash
@@ -119,4 +183,4 @@ runs:
         gh api -X DELETE \
           "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/${LABEL}" \
           2>/dev/null || true
-        echo "::warning::Removed '${LABEL}' label — new commits from non-writer. Re-review required."
+        echo "::warning::Removed '${LABEL}' label — external fork commit changed. Re-review required."

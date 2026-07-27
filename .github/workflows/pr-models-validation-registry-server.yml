@@ -79,9 +79,14 @@ jobs:
           github-token: ${{ github.token }}
 
   detect-changes:
-    needs: authorize
+    needs: [authorize, label-gate]
     runs-on: ubuntu-latest
-    if: needs.authorize.outputs.allowed == 'true'
+    # Fork PR code (checkout + git diff, and downstream npm install / tests)
+    # only runs once BOTH gates pass: authorize-pr (draft / same-repo / fork
+    # synchronize safety) AND label-gate (verified applied by a merge/release
+    # team member). Gating on authorize alone let an external org member run
+    # unreviewed fork code without verified — closed here.
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
@@ -155,8 +160,9 @@ jobs:
           fi
 
   validate-json:
-    needs: [authorize, detect-changes]
+    needs: [authorize, label-gate, detect-changes]
     if: |
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.models_changed == 'true'
     runs-on: ubuntu-latest
@@ -181,8 +187,9 @@ jobs:
         run: node scripts/validate-models-json.js --file=./data/models.prod.json
 
   test:
-    needs: [authorize, detect-changes]
+    needs: [authorize, label-gate, detect-changes]
     if: |
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.other_changed == 'true'
     runs-on: ubuntu-latest
@@ -200,6 +207,11 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: npm install
+
+      - name: Format
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm run format
 
       - name: Lint
         working-directory: ${{ env.PKG_DIR }}

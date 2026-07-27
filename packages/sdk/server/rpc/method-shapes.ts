@@ -13,6 +13,7 @@ export const methodShapes = {
   bciTranscribeStream: 'duplex',
   cancel: 'reply',
   classify: 'stream',
+  completionOrchestrate: 'duplex',
   completionStream: 'stream',
   deleteCache: 'reply',
   diffusionStream: 'stream',

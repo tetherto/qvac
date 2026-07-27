@@ -1,7 +1,8 @@
 export interface AddonLogging {
-  setLogger(callback: (priority: number, message: string) => void): void
-  releaseLogger(): void
+    setLogger(this: void, callback: (priority: number, message: string) => void): void;
+    releaseLogger(this: void): void;
 }
-
-declare const addonLogging: AddonLogging
-export default addonLogging
+export declare const setLogger: (this: void, callback: (priority: number, message: string) => void) => void;
+export declare const releaseLogger: (this: void) => void;
+declare const addonLogging: AddonLogging;
+export default addonLogging;

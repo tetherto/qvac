@@ -10,10 +10,7 @@ const fs = require('fs')
 // ---------------------------------------------------------------------------
 const HF_TOKEN = process.env.HF_TOKEN
 const GH_TOKEN = process.env.GH_TOKEN
-const MODELS_PATH = path.join(
-  __dirname,
-  '..', 'data', 'models.prod.json'
-)
+const MODELS_PATH = path.join(__dirname, '..', 'data', 'models.prod.json')
 const REQUEST_DELAY_MS = 120 // throttle between API calls
 const FETCH_TIMEOUT_MS = 10_000
 
@@ -41,23 +38,23 @@ const SKIP_HF_REPOS = new Set([
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function sleep (ms) {
+function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function extractHfRepo (url) {
+function extractHfRepo(url) {
   if (!url) return null
   const m = url.match(/huggingface\.co\/([^/]+\/[^/]+)/)
   return m ? m[1] : null
 }
 
-function extractGhRepo (url) {
+function extractGhRepo(url) {
   if (!url) return null
   const m = url.match(/github\.com\/([^/]+\/[^/]+)/)
   return m ? m[1] : null
 }
 
-function getLinkDomain (url) {
+function getLinkDomain(url) {
   if (!url) return null
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -66,15 +63,15 @@ function getLinkDomain (url) {
   }
 }
 
-function isShardRecord (source) {
+function isShardRecord(source) {
   return /-\d{5}-of-\d{5}/.test(source || '')
 }
 
-function shardBaseKey (source) {
+function shardBaseKey(source) {
   return (source || '').replace(/-\d{5}-of-\d{5}/, '')
 }
 
-function isTensorsTxt (source) {
+function isTensorsTxt(source) {
   return (source || '').endsWith('.tensors.txt')
 }
 
@@ -84,7 +81,7 @@ function isTensorsTxt (source) {
 const hfCache = new Map()
 const ghCache = new Map()
 
-async function fetchWithTimeout (url, opts = {}) {
+async function fetchWithTimeout(url, opts = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
@@ -95,7 +92,7 @@ async function fetchWithTimeout (url, opts = {}) {
   }
 }
 
-async function fetchHfLicense (repo) {
+async function fetchHfLicense(repo) {
   if (hfCache.has(repo)) return hfCache.get(repo)
 
   const url = `https://huggingface.co/api/models/${repo}`
@@ -129,7 +126,7 @@ async function fetchHfLicense (repo) {
   }
 }
 
-async function fetchGhLicense (repo) {
+async function fetchGhLicense(repo) {
   if (ghCache.has(repo)) return ghCache.get(repo)
 
   const url = `https://api.github.com/repos/${repo}/license`
@@ -159,7 +156,7 @@ async function fetchGhLicense (repo) {
 // ---------------------------------------------------------------------------
 // Classify a record and resolve the API to use
 // ---------------------------------------------------------------------------
-function classifyRecord (record) {
+function classifyRecord(record) {
   const { source, link } = record
   const isS3 = (source || '').startsWith('s3://')
 
@@ -199,12 +196,12 @@ function classifyRecord (record) {
 // ---------------------------------------------------------------------------
 // Normalize license strings for comparison
 // ---------------------------------------------------------------------------
-function normalizeLicense (license) {
+function normalizeLicense(license) {
   if (!license) return ''
   return license.toLowerCase().replace(/[^a-z0-9.-]/g, '')
 }
 
-function licensesMatch (existing, fetched) {
+function licensesMatch(existing, fetched) {
   if (!fetched) return false
   const a = normalizeLicense(existing)
   const b = normalizeLicense(fetched)
@@ -227,7 +224,7 @@ function licensesMatch (existing, fetched) {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-async function main () {
+async function main() {
   if (!HF_TOKEN) {
     console.error('HF_TOKEN is required. Run: source .env')
     process.exit(1)
@@ -282,9 +279,7 @@ async function main () {
     }
 
     if (classification.type === 'hf' && SKIP_HF_REPOS.has(classification.repo)) {
-      process.stderr.write(
-        `\r[${processed}/${unique.length}] SKIP: ${classification.repo}     `
-      )
+      process.stderr.write(`\r[${processed}/${unique.length}] SKIP: ${classification.repo}     `)
       entry.fetchSource = `HF: ${classification.repo}`
       entry.status = 'SKIPPED'
       entry.detail = 'No license metadata on HF, manually verified'
@@ -293,9 +288,7 @@ async function main () {
     }
 
     if (classification.type === 'hf') {
-      process.stderr.write(
-        `\r[${processed}/${unique.length}] HF: ${classification.repo}     `
-      )
+      process.stderr.write(`\r[${processed}/${unique.length}] HF: ${classification.repo}     `)
       const result = await fetchHfLicense(classification.repo)
       entry.fetchSource = `HF: ${classification.repo}`
 
@@ -318,9 +311,7 @@ async function main () {
         }
       }
     } else if (classification.type === 'gh') {
-      process.stderr.write(
-        `\r[${processed}/${unique.length}] GH: ${classification.repo}     `
-      )
+      process.stderr.write(`\r[${processed}/${unique.length}] GH: ${classification.repo}     `)
       const result = await fetchGhLicense(classification.repo)
       entry.fetchSource = `GH: ${classification.repo}`
 

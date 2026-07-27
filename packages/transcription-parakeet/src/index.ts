@@ -583,6 +583,7 @@ namespace TranscriptionParakeet {
     backendDevice: number;
     backendId: number;
     gpuUnsupported: number;
+    encoderOnCoreml: number;
   }
 
   export type BackendInfo = ParakeetBackendInfo;

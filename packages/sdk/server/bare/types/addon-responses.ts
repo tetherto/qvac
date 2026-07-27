@@ -30,6 +30,8 @@ export interface NmtResponse {
 export interface TtsStats {
   audioDurationMs?: number
   totalSamples?: number
+  enhancerBackendDevice?: number
+  enhancerBackendId?: number
 }
 
 export interface TtsResponse {

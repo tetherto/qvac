@@ -71,7 +71,8 @@ async function runSupertonicTTS(model, params = {}, expectation = {}) {
 
     const sampleCount = outputArray.length
     const stats = response.stats || null
-    const durationMs = stats?.audioDurationMs || sampleCount / (sampleRate / 1000)
+    const outputSampleRate = reportedSampleRate || sampleRate
+    const durationMs = stats?.audioDurationMs || sampleCount / (outputSampleRate / 1000)
 
     let passed = true
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) passed = false
@@ -81,7 +82,7 @@ async function runSupertonicTTS(model, params = {}, expectation = {}) {
     if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs)
       passed = false
 
-    const wavBuffer = createWavBuffer(outputArray, sampleRate)
+    const wavBuffer = createWavBuffer(outputArray, outputSampleRate)
 
     if (params.saveWav === true) {
       const wavPath = params.wavOutputPath || path.join(__dirname, '../output/supertonic.wav')
@@ -102,7 +103,7 @@ async function runSupertonicTTS(model, params = {}, expectation = {}) {
         samples: outputArray,
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate,
         wavBuffer,
         stats
