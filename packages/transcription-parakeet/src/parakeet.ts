@@ -66,6 +66,8 @@ export interface BackendInfo {
   backendId: number;
   backendName: string;
   backendDescription: string;
+  encoderBackend: string;
+  encoderOnCoreml: boolean;
 }
 
 export interface WeightData {

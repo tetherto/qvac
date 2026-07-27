@@ -12,3 +12,7 @@ examples
 addon
 benchmarks
 *.d.ts
+index.js
+addon.js
+addonLogging.js
+src
