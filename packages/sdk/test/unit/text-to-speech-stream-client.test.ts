@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { textToSpeechStream } from '@/client/api/text-to-speech'
+import { encodeTextToSpeechFragment, textToSpeechStream } from '@/client/api/text-to-speech'
 import { RequestValidationFailedError } from '@/utils/errors-client'
 
 async function captureValidationError(params: Parameters<typeof textToSpeechStream>[0]) {
@@ -30,4 +30,17 @@ test('textToSpeechStream validates description conflicts before opening the RPC'
 
   t.ok(error instanceof RequestValidationFailedError)
   t.ok((error as Error).message.includes('emotion'))
+})
+
+test('textToSpeechStream encodes string fragments without Buffer', (t) => {
+  const encoded = encodeTextToSpeechFragment('Parler 🎙️')
+
+  t.ok(encoded instanceof Uint8Array)
+  t.alike(Array.from(encoded), Array.from(new TextEncoder().encode('Parler 🎙️')))
+})
+
+test('textToSpeechStream preserves Uint8Array fragments', (t) => {
+  const fragment = new Uint8Array([80, 97, 114, 108, 101, 114])
+
+  t.is(encodeTextToSpeechFragment(fragment), fragment)
 })

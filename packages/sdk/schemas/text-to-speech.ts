@@ -479,7 +479,7 @@ export interface TextToSpeechStreamResult {
 }
 
 export interface TextToSpeechStreamSession {
-  write(textFragment: string | Buffer): void
+  write(textFragment: string | Uint8Array): void
   end(): void
   destroy(): void
   [Symbol.asyncIterator](): AsyncIterator<TextToSpeechStreamResponse>

@@ -415,9 +415,13 @@ async function collectTtsBuffer(
   }
 }
 
+export function encodeTextToSpeechFragment(textFragment: string | Uint8Array) {
+  return typeof textFragment === 'string' ? new TextEncoder().encode(textFragment) : textFragment
+}
+
 /**
  * Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
- * Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+ * Uint8Array should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
  */
@@ -441,15 +445,13 @@ export async function textToSpeechStream(
   let closed = false
 
   return {
-    write(textFragment: string | Buffer) {
+    write(textFragment: string | Uint8Array) {
       if (closed) {
         throw new TextToSpeechStreamFailedError(
           'TextToSpeechStreamSession.write() called after end()/destroy()'
         )
       }
-      const buf =
-        typeof textFragment === 'string' ? Buffer.from(textFragment, 'utf8') : textFragment
-      requestStream.write(buf)
+      requestStream.write(encodeTextToSpeechFragment(textFragment))
     },
     end() {
       if (closed) return
