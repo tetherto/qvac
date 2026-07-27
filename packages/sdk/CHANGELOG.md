@@ -1,5 +1,223 @@
 # Changelog
 
+## [0.16.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.16.0
+
+QVAC SDK 0.16.0 adds Ideogram 4 image generation, per-phase timing stats for the diffusion pipeline, and first-class GR00T support in the VLA SDK. It includes a full-fidelity Python SDK client (not yet published) that mirrors the TypeScript surface, reuses the KV cache across turns in the OpenAI-compatible serve endpoints for faster multi-turn chat, and refreshes the TTS and transcription model registry with new Parler-TTS voices and multimodal LLMs.
+
+## New APIs
+
+### Ideogram 4 Diffusion
+
+Image generation now supports Ideogram 4 through the `sdcpp-generation` model type. Load the diffusion model together with its companion LLM, VAE, and unconditional models, then generate as with other diffusion backends.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: IDEOGRAM_MODEL_URL,
+  modelType: 'sdcpp-generation',
+  modelConfig: {
+    llmModelSrc: QWEN3_VL_MODEL_URL,
+    vaeModelSrc: VAE_MODEL_URL,
+    uncondModelSrc: IDEOGRAM_UNCOND_MODEL_URL
+  }
+})
+```
+
+### Per-Phase Diffusion Timing Stats
+
+Diffusion results now include a per-phase timing breakdown, so you can see where generation time goes — conditioning, the denoising loop, VAE decode, post-processing, and overall throughput.
+
+```typescript
+const { stats } = await result
+console.log(stats.conditionerMs) // prompt conditioning time (ms)
+console.log(stats.denoiseMs) // denoising loop time (ms)
+console.log(stats.vaeMs) // VAE decode time (ms)
+console.log(stats.postProcessMs) // encode/upscale/mux time (ms)
+console.log(stats.stepsPerSecond) // denoising throughput (steps/s)
+```
+
+### Python SDK Client
+
+> **Note:** The Python client has landed in the SDK source but is **not yet published** as an installable package. The example below previews the upcoming client; it is not installable yet.
+
+A full-fidelity Python client mirrors the TypeScript SDK surface, with an async `Client`, `load_model`, and a streaming `completion` that yields events and resolves a final result.
+
+```python
+from tetherto.qvac_sdk import Client, load_model, completion
+from tetherto.qvac_sdk.models import LLAMA_3_2_1B_INST_Q4_0
+
+async with Client() as client:
+    transport = client.transport
+    model_id = await load_model(transport, model_src=LLAMA_3_2_1B_INST_Q4_0)
+    run = completion(
+        transport,
+        model_id=model_id,
+        history=[{"role": "user", "content": "hi"}],
+    )
+    async for event in run.events:
+        ...
+    final = await run.final
+```
+
+### GR00T Support in the VLA SDK
+
+The VLA SDK now exposes GR00T as a first-class model, including its registry entry, hyperparameters, and helpers. GR00T uses a patch-based image input mode: when `hparams.imageInputMode` is `"patches"`, each camera image is supplied as a pre-patchified float buffer. A runnable usage example and desktop e2e ship alongside it.
+
+```typescript
+import { loadModel, vlaHparams, vla, vlaPadState } from '@qvac/sdk'
+
+const modelId = await loadModel({ modelSrc, modelType: 'ggml-vla' })
+const { hparams } = await vlaHparams({ modelId })
+
+if (hparams.imageInputMode === 'patches') {
+  // GR00T: each images[] entry is a pre-patchified buffer of imagePatchElems floats
+  const images = Array.from(
+    { length: hparams.numCameras },
+    () => new Float32Array(hparams.imagePatchElems)
+  )
+  const state = vlaPadState(robotState, hparams.maxStateDim)
+  const noise = new Float32Array(hparams.chunkSize * hparams.maxActionDim)
+
+  const { actions, actionDim, chunkSize } = await vla({
+    modelId,
+    images,
+    imgWidth: hparams.visionImageSize,
+    imgHeight: hparams.visionImageSize,
+    state,
+    tokens, // Qwen3-VL tokens, length hparams.tokenizerMaxLength
+    mask,
+    noise
+  })
+}
+```
+
+## Features
+
+### KV Cache Reuse Across Turns in OpenAI-Compatible Endpoints
+
+The OpenAI-compatible serve endpoints now reuse the KV cache across turns of a conversation instead of reprocessing the full prompt each time. Multi-turn chat that shares a growing prefix skips redundant prefill work, lowering latency and compute for each follow-up message.
+
+## Bug Fixes
+
+Registry-hosted GGUF OCR models now load through the documented `ocr()` path, so OCR models resolved from the model registry work as described instead of failing to load.
+
+## Model Changes
+
+This release refreshes the TTS and transcription model registry. New multimodal LLM constants (Gemma4, Qwen3.5) and Parler-TTS voices (English mini and large, plus Indic multilingual) are added, while a large set of legacy per-component Supertonic, Chatterbox, and Parakeet registry constants — along with the previous `QWEN3_4B_Q4_K_M` entry — are removed.
+
+### Added Models
+
+```text
+GEMMA4_2B_MULTIMODAL_Q8_0
+QWEN3_4B_4B_Q4_K_M
+QWEN3_5_2B_MULTIMODAL_Q8_0
+TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16
+TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32
+TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0
+TTS_LARGE_V1_EN_PARLER_TTS_FP16
+TTS_LARGE_V1_EN_PARLER_TTS_FP32
+TTS_LARGE_V1_EN_PARLER_TTS_Q8_0
+TTS_MINI_V1_EN_PARLER_TTS_FP16
+TTS_MINI_V1_EN_PARLER_TTS_FP32
+TTS_MINI_V1_EN_PARLER_TTS_Q8_0
+```
+
+### Removed Models
+
+```text
+PARAKEET_CTC_FP32
+PARAKEET_CTC_TOKENIZER
+PARAKEET_EOU_DECODER_FP32
+PARAKEET_EOU_ENCODER_FP32
+PARAKEET_EOU_TOKENIZER
+PARAKEET_SORTFORMER_FP32
+PARAKEET_TDT_DECODER_FP32
+PARAKEET_TDT_DECODER_INT8
+PARAKEET_TDT_ENCODER_FP32
+PARAKEET_TDT_ENCODER_INT8
+PARAKEET_TDT_PREPROCESSOR_FP32
+PARAKEET_TDT_PREPROCESSOR_INT8
+QWEN3_4B_Q4_K_M
+TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16
+TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32
+TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4
+TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16
+TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED
+TTS_DENOISER_LAVASR_FP32_1
+TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16
+TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32
+TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4
+TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16
+TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED
+TTS_ENHANCER_BACKBONE_LAVASR_FP32
+TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32
+TTS_EN_ES_CHATTERBOX_Q4F16
+TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16
+TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32
+TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4
+TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16
+TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED
+TTS_LATENT_DENOISER_SUPERTONIC_FP32
+TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32
+TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32
+TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX
+TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16
+TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32
+TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4
+TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32
+TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16
+TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32
+TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4
+TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16
+TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED
+TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32
+TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32
+TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE
+TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32
+TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32
+TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8
+TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9
+TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32
+TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32
+TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE
+TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE
+TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8
+TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9
+TTS_TEXT_ENCODER_SUPERTONIC_FP32
+TTS_TOKENIZER_EN_CHATTERBOX
+TTS_TOKENIZER_SUPERTONIC
+TTS_VOICE_DECODER_SUPERTONIC_FP32
+TTS_VOICE_STYLE_SUPERTONIC
+TTS_VOICE_STYLE_SUPERTONIC_1
+TTS_VOICE_STYLE_SUPERTONIC_2
+TTS_VOICE_STYLE_SUPERTONIC_3
+TTS_VOICE_STYLE_SUPERTONIC_4
+TTS_VOICE_STYLE_SUPERTONIC_5
+TTS_VOICE_STYLE_SUPERTONIC_6
+TTS_VOICE_STYLE_SUPERTONIC_7
+TTS_VOICE_STYLE_SUPERTONIC_8
+TTS_VOICE_STYLE_SUPERTONIC_9
+```
+
 ## [0.15.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.15.0
