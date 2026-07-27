@@ -1,0 +1,17 @@
+# Extra deps for scripts/dump-lam-a2e-upstream-reference.py only.
+#
+# Install *on top of* requirements.txt, which already provides numpy and CPU
+# torch. These two are what upstream's models/network.py additionally imports.
+#
+# The transformers pin is load-bearing rather than cautious: the Wav2Vec2
+# encoder is instantiated from upstream's configs/wav2vec2_config.json, and its
+# internals have moved across releases. Letting pip resolve this freely can
+# shift the reference itself, which would turn a parity failure into a hunt for
+# a bug that lives in neither our converter nor our graph. The version matches
+# upstream's own requirements.txt.
+transformers==4.36.2
+
+# Imported at module scope by upstream's models/network.py for the Meshtalk
+# mel-spectrogram encoder. That encoder is not on the audio2expression path, so
+# this is only needed to satisfy the import.
+torchaudio
