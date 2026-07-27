@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstdio>
 #include <string>
 
 #include <bare.h>
@@ -160,6 +161,10 @@ JSCATCH
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {
+  // DIAGNOSTIC (temporary): unbuffer stderr so native llama/ggml logs survive a
+  // hard crash (Windows CI pipes stderr => block-buffered => lost on crash).
+  std::setvbuf(stderr, nullptr, _IONBF, 0);
+  std::fprintf(stderr, "[fit-diag] module loaded, diagnostics active\n");
   installCrashHandler();  // DIAGNOSTIC (temporary): capture Windows crash stack
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)

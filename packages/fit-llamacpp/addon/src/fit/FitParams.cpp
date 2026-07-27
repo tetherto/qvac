@@ -13,8 +13,15 @@ FitResult runFit(const FitRequest& req) {
   }
 
   FitResult out;
+  // DIAGNOSTIC (temporary): fflush'd markers to locate the win32 crash. On
+  // Windows CI stderr is block-buffered (piped), so llama_params_fit's own logs
+  // are lost on a hard crash; these explicit flushes survive.
+  std::fprintf(stderr, "[fit-diag] runFit: entered\n");
+  std::fflush(stderr);
   const size_t maxDevices = llama_max_devices();
   out.maxDevices = maxDevices;
+  std::fprintf(stderr, "[fit-diag] runFit: maxDevices=%zu\n", maxDevices);
+  std::fflush(stderr);
 
   // `llama_params_fit` segfaults on a path it cannot open: gguf_init_from_file
   // logs the failure but the fit path then dereferences the null model. Guard
@@ -55,6 +62,17 @@ FitResult runFit(const FitRequest& req) {
       maxDevices,
       static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
 
+  std::fprintf(
+      stderr,
+      "[fit-diag] runFit: calling llama_params_fit (nCtx=%u nCtxMin=%u "
+      "ngl=%d marginMiB=%u bufts=%zu)\n",
+      cparams.n_ctx,
+      req.nCtxMin,
+      mparams.n_gpu_layers,
+      req.marginMiB,
+      buftOverrides.size());
+  std::fflush(stderr);
+
   const llama_params_fit_status status = llama_params_fit(
       req.modelPath.c_str(),
       &mparams,
@@ -64,6 +82,11 @@ FitResult runFit(const FitRequest& req) {
       margins.data(),
       req.nCtxMin,
       GGML_LOG_LEVEL_INFO);
+
+  std::fprintf(
+      stderr, "[fit-diag] runFit: llama_params_fit returned status=%d\n",
+      static_cast<int>(status));
+  std::fflush(stderr);
 
   out.status = static_cast<int>(status);
   out.fits = (status == LLAMA_PARAMS_FIT_STATUS_SUCCESS);
