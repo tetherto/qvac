@@ -1,0 +1,36 @@
+#include <limits>
+
+#include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
+
+#include "handlers/LlmParsers.hpp"
+
+using qvac_errors::StatusError;
+using qvac_lib_inference_addon_llama::parsers::validateReasoningBudgetOverride;
+
+// -1 = unrestricted, 0 = disabled, N>0 = token cap.
+TEST(LlmParsers_ReasoningBudget, AcceptsUnrestricted) {
+  EXPECT_EQ(validateReasoningBudgetOverride(-1.0), -1);
+}
+
+TEST(LlmParsers_ReasoningBudget, AcceptsDisabled) {
+  EXPECT_EQ(validateReasoningBudgetOverride(0.0), 0);
+}
+
+TEST(LlmParsers_ReasoningBudget, AcceptsPositiveCap) {
+  EXPECT_EQ(validateReasoningBudgetOverride(128.0), 128);
+}
+
+TEST(LlmParsers_ReasoningBudget, RejectsFractional) {
+  EXPECT_THROW(validateReasoningBudgetOverride(0.5), StatusError);
+}
+
+TEST(LlmParsers_ReasoningBudget, RejectsBelowMinusOne) {
+  EXPECT_THROW(validateReasoningBudgetOverride(-2.0), StatusError);
+}
+
+TEST(LlmParsers_ReasoningBudget, RejectsAboveIntMax) {
+  const double aboveMax =
+      static_cast<double>(std::numeric_limits<int>::max()) + 1.0;
+  EXPECT_THROW(validateReasoningBudgetOverride(aboveMax), StatusError);
+}

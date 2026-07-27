@@ -75,6 +75,10 @@ endif()
   )
 
   list(APPEND ADDON_SOURCES
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/GenerationParamHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/FinetuneParamHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
