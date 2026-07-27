@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ai-sdk-provider",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Vercel AI SDK provider for the QVAC local AI runtime (chat, embeddings, transcription, translation, speech, OCR, image)",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -73,7 +73,7 @@
   },
   "peerDependencies": {
     "@ai-sdk/openai-compatible": "^3.0",
-    "@qvac/cli": "^0.6.0 || ^0.7.0 || ^0.8.0",
+    "@qvac/cli": "^0.9.0",
     "ai": "^7.0"
   },
   "peerDependenciesMeta": {
