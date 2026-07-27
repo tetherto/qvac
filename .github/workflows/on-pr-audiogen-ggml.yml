@@ -7,8 +7,6 @@ on:
     paths:
       - "packages/audiogen-ggml/**"
       - ".github/workflows/*audiogen-ggml*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/**"
 
   workflow_dispatch:
     inputs:
