@@ -17,15 +17,26 @@ export type TtsOpYield = {
   sentenceChunk?: string
 }
 
-export function collectTtsStats(response: {
-  stats?: { audioDurationMs?: number; totalSamples?: number }
-}): TtsStats {
+type AddonTtsStats = {
+  audioDurationMs?: number
+  totalSamples?: number
+  enhancerBackendDevice?: number
+  enhancerBackendId?: number
+}
+
+export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
   return {
     ...(response.stats?.audioDurationMs !== undefined && {
       audioDuration: response.stats.audioDurationMs
     }),
     ...(response.stats?.totalSamples !== undefined && {
       totalSamples: response.stats.totalSamples
+    }),
+    ...(response.stats?.enhancerBackendDevice !== undefined && {
+      enhancerBackendDevice: response.stats.enhancerBackendDevice
+    }),
+    ...(response.stats?.enhancerBackendId !== undefined && {
+      enhancerBackendId: response.stats.enhancerBackendId
     })
   }
 }
