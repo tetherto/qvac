@@ -391,12 +391,30 @@ public:
     // for the model to finish on its own. Fall back to per-id cancellation
     // when the model has no whole-model cancel(). Cancel only while a job is
     // in flight — an idle scheduler's model may already be destroyed.
+    // Cancellation may throw (a throw rejects it, see IModelCancel) and this
+    // destructor is noexcept: swallow the failure — escaping here would be
+    // std::terminate. On the per-id path each id keeps its own attempt, so
+    // one failing cancel does not abandon the remaining jobs. Jobs whose
+    // cancel never landed simply run to their natural end before the joins
+    // below, which is teardown's semantic anyway.
     if (!jobsInFlight.empty()) {
       if (cancel_ != nullptr) {
-        cancel_->cancel();
+        try {
+          cancel_->cancel();
+        } catch (...) {
+          QLOG(logger::Priority::WARNING,
+              "Model cancel() threw during scheduler teardown; waiting for "
+              "in-flight jobs to end on their own");
+        }
       } else if (cancelById_ != nullptr) {
         for (const JobId id : jobsInFlight) {
-          cancelById_->cancelById(id);
+          try {
+            cancelById_->cancelById(id);
+          } catch (...) {
+            QLOG(logger::Priority::WARNING,
+                "Model cancelById() threw during scheduler teardown; waiting "
+                "for that job to end on its own");
+          }
         }
       }
     }
