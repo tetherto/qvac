@@ -3,6 +3,7 @@
   "compilerOptions": {
     "declaration": true,
     "declarationMap": false,
+    "newLine": "lf",
     "noEmit": false,
     "sourceMap": false,
     "stripInternal": true

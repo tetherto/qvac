@@ -22,6 +22,23 @@ const queuedResult: Promise<number> = exclusiveRunQueue()(async function run() {
 })
 const apiDefinition: string = getApiDefinition()
 
+// Signals predating `AbortSignal.reason` omit the property entirely, so they
+// must stay assignable to the published abort-signal contract.
+const reasonlessSignal: InferBase.AbortSignalLike = {
+  aborted: false,
+  addEventListener(type: 'abort', listener: () => void) {
+    void [type, listener]
+  },
+  removeEventListener(type: 'abort', listener: () => void) {
+    void [type, listener]
+  }
+}
+const reasonlessResponse = new QvacResponse<string>({
+  cancelHandler,
+  signal: reasonlessSignal
+})
+handler.start({ signal: reasonlessSignal })
+
 response.onUpdate(function onUpdate(output) {
   const text: string = output
   void text
@@ -38,6 +55,7 @@ if (latest !== null) {
 void [
   response,
   bareResponse,
+  reasonlessResponse,
   responseConstructor,
   handler,
   namespaceHandler,

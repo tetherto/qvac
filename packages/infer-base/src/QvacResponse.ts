@@ -335,9 +335,13 @@ class QvacResponse<Output = any> extends EventEmitter {
 }
 
 namespace QvacResponse {
+  /**
+   * Structural abort-signal contract covering only the members this package
+   * touches, so Bare, DOM, and Node signals are all assignable.
+   */
   export interface AbortSignalLike {
     readonly aborted: boolean;
-    readonly reason: unknown;
+    readonly reason?: unknown;
     addEventListener(
       type: "abort",
       listener: () => void,

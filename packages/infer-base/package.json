@@ -15,7 +15,8 @@
     "format": "prettier --write \"scripts/**/*.mjs\" \"test/**/*.{js,ts}\" \"tsconfig*.json\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:dts": "node scripts/check-dts.mjs",
-    "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
+    "test:node": "node --test scripts/*.test.mjs",
+    "test:types": "npm run typecheck && npm run test:dts && npm run check:generated && npm run test:node",
     "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:types && npm run test:unit"
   },
