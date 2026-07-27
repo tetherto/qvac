@@ -2377,4 +2377,57 @@ TEST_F(MultiJobSchedulerTest, CancelAllPrefersPerIdCancelWhenAvailable) {
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 }
 
+// Dropped queued targets are irreversibly unlinked before their terminals
+// are published, so the publication loop must tolerate one publication
+// failing (queueException enqueues the event, then the consumer callback's
+// notify() may throw): every remaining dropped job must still get its
+// terminal, with the first failure rethrown only after all were attempted.
+// Otherwise a single throwing notify() leaves every later dropped job with
+// no result, error or jobEnded — its consumer pends forever.
+TEST_F(MultiJobSchedulerTest, DroppedTerminalsSurviveAThrowingPublication) {
+  model_ =
+      std::make_unique<ConcurrentTestModel>(std::chrono::milliseconds{10000});
+  callback_ = std::make_unique<ThrowOnceCallback>();
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      model_.get(), 1, model_.get(), model_.get(), /*queueCapacity=*/2);
+  scheduler_->start(outputQueue_);
+
+  const std::optional<JobId> blocker =
+      scheduler_->runJob(std::string("blocker"));
+  ASSERT_TRUE(blocker.has_value());
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  const std::optional<JobId> firstQueued =
+      scheduler_->runJob(std::string("first-queued"));
+  const std::optional<JobId> secondQueued =
+      scheduler_->runJob(std::string("second-queued"));
+  ASSERT_TRUE(firstQueued.has_value());
+  ASSERT_TRUE(secondQueued.has_value());
+
+  // Both targets are dropped from the queue; the first terminal's notify()
+  // throws (ThrowOnceCallback). The call rejects with that failure — after
+  // attempting the second terminal too.
+  EXPECT_THROW(
+      scheduler_->cancelJobs({*firstQueued, *secondQueued}),
+      std::runtime_error);
+
+  const auto secondHasError = [&secondQueued](const Outputs& outputs) {
+    for (const std::pair<JobId, std::any>& entry : outputs) {
+      if (entry.first == *secondQueued &&
+          entry.second.type() == typeid(Output::Error)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const Outputs drained =
+      drainUntil(*outputQueue_, secondHasError, std::chrono::seconds{2});
+  EXPECT_TRUE(secondHasError(drained))
+      << "the second dropped job lost its terminal to the first job's "
+         "throwing publication";
+
+  scheduler_->cancelAll();
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+}
+
 } // namespace qvac_lib_inference_addon_cpp
