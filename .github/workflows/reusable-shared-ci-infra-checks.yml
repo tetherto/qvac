@@ -1,0 +1,113 @@
+name: Shared CI Infra Checks (reusable)
+
+# Reusable building block invoked by on-pr-shared-ci-infra.yml AFTER its
+# label-gate + authorize-pr trust gate has passed. ALL PR-head code execution
+# lives here — never in the pull_request_target entrypoint — so the privileged
+# entrypoint never checks out untrusted code. This mirrors the pattern the addon
+# pipelines use (cpp-tests-*, integration-test-*) and is what keeps CodeQL's
+# "untrusted checkout / cache-poisoning in a privileged context" alerts clear.
+#
+# The caller pins `ref` to the immutable approved commit SHA (never a mutable
+# branch ref) and every checkout below uses persist-credentials: false.
+#
+# All checks are cheap and read-only: no model cache is ever written and no
+# prebuild is ever published.
+#   1. cache-models action unit tests — shared warm/verify/marker logic.
+#   2. model-availability matrix — HF header fingerprint, no body download.
+#   3. qvac-fabric version lockstep — jq check, no build.
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: "Repo to check out (owner/name)."
+        type: string
+        required: true
+      ref:
+        description: "Immutable commit SHA to check out (never a mutable branch ref)."
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repo to check out (owner/name). Defaults to this repo."
+        type: string
+        required: false
+      ref:
+        description: "Git ref/SHA to check out. Defaults to the dispatched ref."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  action-unit-tests:
+    name: cache-models action unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Run cache-models action unit tests
+        run: node --test .github/actions/cache-models/test/*.test.mjs
+
+  model-availability:
+    name: Model availability (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # HF-backed manifests. Parakeet's set is S3-staged (no HF LFS source to
+        # fingerprint from headers), so its availability is covered by its own
+        # integration/stage flow rather than here.
+        package: [diffusion-cpp, llm-llamacpp, embed-llamacpp]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Verify pinned models are reachable and unchanged
+        env:
+          # Sent as Bearer ONLY to huggingface.co by the checker (gated repos);
+          # the redirect is never followed, so it can never reach a signed CDN.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          node .github/actions/cache-models/check-manifest-availability.mjs \
+            --package ${{ matrix.package }} \
+            --root "$GITHUB_WORKSPACE"
+
+  fabric-lockstep:
+    name: qvac-fabric version lockstep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Verify qvac-fabric versions are lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
