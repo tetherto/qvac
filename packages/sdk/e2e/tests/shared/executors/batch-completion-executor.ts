@@ -9,7 +9,6 @@ interface BatchCompletionTestParams {
   stream?: boolean
   resourceKey?: string
   toolDialect?: Parameters<typeof batchCompletion>[0]['toolDialect']
-  expectedNonEmptyIds?: string[]
   expectedById?: Record<string, string[]>
   expectedAnyById?: Record<string, string[]>
   expectedToolCall?: {
@@ -101,11 +100,6 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchC
         }
       }
 
-      if (params.expectedNonEmptyIds) {
-        const validation = this.validateExpectedNonEmptyIds(results, params.expectedNonEmptyIds)
-        if (validation) return validation
-      }
-
       if (params.expectedToolCall) {
         return await this.validateToolCall(run, results, params.expectedToolCall)
       }
@@ -152,38 +146,6 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchC
       resolved.push({ ...prompt, history })
     }
     return resolved
-  }
-
-  private validateExpectedNonEmptyIds(
-    results: Awaited<ReturnType<typeof batchCompletion>['results']>,
-    expectedIds: string[]
-  ): TestResult | undefined {
-    const actualIds = results.map((result) => result.id)
-    const actualIdSet = new Set(actualIds)
-    const expectedIdSet = new Set(expectedIds)
-    const missingIds = expectedIds.filter((id) => !actualIdSet.has(id))
-    const unexpectedIds = actualIds.filter((id) => !expectedIdSet.has(id))
-
-    if (missingIds.length > 0 || unexpectedIds.length > 0) {
-      return {
-        passed: false,
-        output: `Batch result ids differ: missing [${missingIds.join(', ')}], unexpected [${unexpectedIds.join(', ')}]`
-      }
-    }
-
-    const invalidContentIds = results
-      .filter(
-        (result) =>
-          typeof result.final.contentText !== 'string' ||
-          result.final.contentText.trim().length === 0
-      )
-      .map((result) => result.id)
-    if (invalidContentIds.length > 0) {
-      return {
-        passed: false,
-        output: `Expected non-empty string content for ids: ${invalidContentIds.join(', ')}`
-      }
-    }
   }
 
   private async validateToolCall(
