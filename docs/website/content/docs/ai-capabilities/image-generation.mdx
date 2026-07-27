@@ -26,6 +26,7 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 Supported model families and their file layouts:
 
 - **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+- **Ideogram 4**: split layout — diffusion model `*.gguf` + unconditional diffusion model `*.gguf` (via `uncondModelSrc`) + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
 - **ESRGAN**: post-generation upscaler, `*.pth` format. Two ways to load:
@@ -62,6 +63,34 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 </Tab>
 </Tabs>
 
+### Ideogram 4
+
+Ideogram 4 uses a split layout with an extra **unconditional diffusion model** (`uncondModelSrc`) alongside the Qwen3-VL LLM text encoder (`llmModelSrc`) and VAE (`vaeModelSrc`). Unlike the other families, its `prompt` must be a **JSON-serialized structured caption** — an object with a `high_level_description`, a `style_description`, and a `compositional_deconstruction` that lays out each element with an explicit bounding box (`bbox`) and, for text elements, the literal `text` to render. Plain-text prompts produce degenerate or placeholder output.
+
+<Callout type="warn">
+Pass the structured caption through `JSON.stringify(...)` when calling `diffusion({ prompt })`. The bounding boxes are expressed in the target canvas coordinate space (`[x0, y0, x1, y1]`), so keep them consistent with the requested `width`/`height`. Failure to abide by the JSON format specified within the examples, or adding NSFW prompts, will result in censored image output.
+</Callout>
+
+The following script loads Ideogram 4 in split-layout (diffusion model + unconditional model + LLM text encoder + VAE) and generates from a structured caption:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-ideogram.js title="diffusion-ideogram.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-ideogram.ts title="diffusion-ideogram.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ### Stable Diffusion
 
 The following script shows a minimal text-to-image generation example using a single all-in-one SD 2.1 model:
@@ -83,8 +112,6 @@ The following script shows a minimal text-to-image generation example using a si
 </WrapCode>
 </Tab>
 </Tabs>
-
-
 
 ### Image-to-image
 

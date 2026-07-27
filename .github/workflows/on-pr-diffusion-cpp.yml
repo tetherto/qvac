@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -130,7 +131,7 @@ jobs:
     with:
       workdir: packages/diffusion-cpp
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   cpp-lint:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -267,7 +268,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   prebuild-artifact-save:
     if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
@@ -308,7 +309,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   run-mobile-integration-tests:
     permissions:
@@ -327,7 +328,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   combine-perf-reports:
     name: Combined Performance Report
@@ -367,5 +368,5 @@ jobs:
       packages: read
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       general-checks-status: ${{ github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' }}

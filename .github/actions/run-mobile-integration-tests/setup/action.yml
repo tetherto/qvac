@@ -115,6 +115,12 @@ runs:
         repository: tetherto/qvac-test-addon-mobile
         ref: ${{ inputs.test-framework-ref }}
         token: ${{ inputs.pat-token }}
+        # Do not persist the PAT into test-framework/.git/config: the build phase
+        # runs fork-controlled code (addon npm install, expo/gradle/xcode) in the
+        # same workspace and could otherwise read the credential from disk. The
+        # token is still used for the clone itself. Applies to every mobile addon
+        # that consumes this composite.
+        persist-credentials: false
         path: test-framework
         fetch-depth: 0
 

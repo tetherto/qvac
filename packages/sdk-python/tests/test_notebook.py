@@ -10,6 +10,7 @@ import base64
 import importlib.util
 import io
 import os
+import threading
 import wave
 from typing import Any
 
@@ -18,6 +19,7 @@ import pandas as pd
 import pytest
 from _worker_env import BARE_BIN, WORKER_AVAILABLE
 
+from tetherto.qvac_sdk.client import WorkerNotFoundError
 from tetherto.qvac_sdk.notebook import EmbedFailedError, SyncClient
 
 SDK_DIR = os.environ.get(
@@ -47,6 +49,18 @@ class FakeTransport:
     async def call_duplex(self, payload, up):
         raise NotImplementedError
         yield
+
+
+def test_sync_client_init_failure_stops_background_thread():
+    """Client()/connect() failures must not leave the daemon loop running."""
+    with pytest.raises(WorkerNotFoundError):
+        SyncClient(worker_path="/no/such/worker.js", bare_path="/no/such/bare")
+    lingering = [
+        thread
+        for thread in threading.enumerate()
+        if thread.name == "qvac-sync-client" and thread.is_alive()
+    ]
+    assert lingering == []
 
 
 def test_embed_single_returns_1d_float32():

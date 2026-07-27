@@ -109,6 +109,7 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/VideoModelCapabilities.cpp
   )
 
   target_sources(

@@ -37,6 +37,9 @@ test(
 
         assert.equal(typeof provider, 'function')
         assert.equal(typeof provider.chatModel, 'function')
+        assert.equal(typeof provider.files, 'function')
+        assert.equal(typeof provider.transcriptionModel, 'function')
+        assert.equal(typeof provider.speechModel, 'function')
         assert.equal(typeof provider.close, 'function')
         assert.equal(typeof provider[Symbol.asyncDispose], 'function')
         assert.ok(provider.port > 0)

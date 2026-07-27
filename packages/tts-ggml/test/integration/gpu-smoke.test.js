@@ -34,17 +34,23 @@ const {
   resolveRefWavPath
 } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
+const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
-  ensureSupertonic3Model
+  ensureSupertonic3Model,
+  ensureParlerModel
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
+// Parler's only validated GPU backend is Metal (Apple); it has no vulkan/opencl/
+// cuda kernels yet, so its GPU smoke is gated to Apple — every other platform
+// runs Parler on CPU (covered by the unconditional CPU smoke below).
+const isApple = platform === 'darwin' || platform === 'ios'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
@@ -532,3 +538,97 @@ test(
     }
   }
 )
+
+// Parler smoke over the two mobile-target variants (mini + indic, q8). The GPU
+// leg is gated to Apple: Metal is Parler's only validated GPU backend, so it
+// runs on darwin/ios GPU runners and the iOS Device Farm where useGPU=true must
+// engage Metal (backendId=1). The CPU leg runs everywhere and locks the
+// explicit-CPU contract in. Both are strict assertions.
+for (const v of [
+  { variant: 'mini', label: 'mini q8' },
+  { variant: 'indic', label: 'indic q8', optional: true }
+]) {
+  test(
+    `Parler GPU smoke (${v.label}) - useGPU=true must engage the Metal backend on Apple`,
+    { timeout: 600000, skip: NO_GPU || !isApple },
+    async (t) => {
+      const modelsDir = path.join(getBaseDir(), 'models')
+      const download = await ensureParlerModel({ targetDir: modelsDir, variant: v.variant })
+      if (!download || !download.success) {
+        const msg = `Parler ${v.label} GGUF not available - registry fetch failed. Run \`npm run download-models:registry -- --group parler\` or stage models locally.`
+        // Optional tier (indic): a device-farm fetch flake shouldn't red the PR; mini stays strict.
+        if (v.optional) {
+          t.pass(`skipped: ${msg}`)
+          return
+        }
+        t.fail(msg)
+        return
+      }
+      const model = await loadParlerTTS({
+        parlerModelPath: download.path,
+        seed: 42,
+        useGPU: true
+      })
+      try {
+        const t0 = Date.now()
+        const result = await runParlerTTS(
+          model,
+          { text: 'GPU smoke check for the Parler engine.' },
+          { minSamples: 10000 }
+        )
+        const wallMs = Date.now() - t0
+        console.log(result.output)
+        t.ok(result.passed, `Parler ${v.label}/GPU produced expected sample count`)
+        t.ok(result.data.sampleCount > 0, `Parler ${v.label}/GPU produced audio`)
+        assertGpuBackend(t, `Parler ${v.label}`, result.data.stats)
+        recordSmoke(t, `parler ${v.label} gpu-smoke`, result, wallMs)
+      } finally {
+        try {
+          await model.unload()
+        } catch (_e) {}
+      }
+    }
+  )
+
+  test(
+    `Parler CPU smoke (${v.label}) - useGPU=false must run on the CPU backend`,
+    { timeout: 600000 },
+    async (t) => {
+      const modelsDir = path.join(getBaseDir(), 'models')
+      const download = await ensureParlerModel({ targetDir: modelsDir, variant: v.variant })
+      if (!download || !download.success) {
+        const msg = `Parler ${v.label} GGUF not available - registry fetch failed. Run \`npm run download-models:registry -- --group parler\` or stage models locally.`
+        // Optional tier (indic): a device-farm fetch flake shouldn't red the PR; mini stays strict.
+        if (v.optional) {
+          t.pass(`skipped: ${msg}`)
+          return
+        }
+        t.fail(msg)
+        return
+      }
+      const model = await loadParlerTTS({
+        parlerModelPath: download.path,
+        seed: 42,
+        useGPU: false
+      })
+      try {
+        const t0 = Date.now()
+        const result = await runParlerTTS(
+          model,
+          { text: 'CPU smoke check for the Parler engine.' },
+          { minSamples: 10000 }
+        )
+        const wallMs = Date.now() - t0
+        console.log(result.output)
+        t.ok(result.passed, `Parler ${v.label}/CPU produced expected sample count`)
+        t.ok(result.data.sampleCount > 0, `Parler ${v.label}/CPU produced audio`)
+        assertCpuBackend(t, `Parler ${v.label}`, result.data.stats)
+        recordSmoke(t, `parler ${v.label} cpu-smoke`, result, wallMs)
+      } finally {
+        try {
+          await model.unload()
+        } catch (_e) {}
+      }
+    }
+  )
+}
