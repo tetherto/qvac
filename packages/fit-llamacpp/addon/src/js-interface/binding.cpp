@@ -10,6 +10,81 @@
 
 #include "fit/FitParams.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+
+#include <cstdint>
+#include <cstdio>
+
+namespace {
+
+// DIAGNOSTIC ONLY (temporary): the Windows-desktop Vulkan path in
+// llama_params_fit hard-crashes (access violation) with no output, because a
+// hard crash loses all buffered stdout/stderr. A vectored exception handler
+// fires before the SEH chain / runtime unhandled-filter, so it reliably prints
+// the faulting module + return-address stack (module!+offset — enough to tell
+// vulkan-1.dll vs ggml-vulkan vs llama) and flushes before the process dies.
+LONG CALLBACK fitCrashHandler(EXCEPTION_POINTERS* info) {
+  const DWORD code = info->ExceptionRecord->ExceptionCode;
+  switch (code) {
+    case EXCEPTION_ACCESS_VIOLATION:
+    case EXCEPTION_ILLEGAL_INSTRUCTION:
+    case EXCEPTION_STACK_OVERFLOW:
+    case EXCEPTION_IN_PAGE_ERROR:
+    case 0xC0000374:  // STATUS_HEAP_CORRUPTION  // NOLINT
+      break;
+    default:
+      return EXCEPTION_CONTINUE_SEARCH;
+  }
+  std::fprintf(
+      stderr,
+      "\n[fit-llamacpp] FATAL native exception 0x%08lx at %p\n",
+      static_cast<unsigned long>(code),
+      info->ExceptionRecord->ExceptionAddress);
+  void* frames[64] = {nullptr};  // NOLINT
+  const USHORT n = CaptureStackBackTrace(0, 64, frames, nullptr);  // NOLINT
+  for (USHORT i = 0; i < n; ++i) {
+    HMODULE mod = nullptr;
+    char path[MAX_PATH] = {0};
+    if (GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(frames[i]),
+            &mod) != 0 &&
+        GetModuleFileNameA(mod, path, MAX_PATH) != 0) {
+      std::fprintf(
+          stderr,
+          "[fit-llamacpp]   #%02u %p  %s+0x%llx\n",
+          i,
+          frames[i],
+          path,
+          static_cast<unsigned long long>(
+              reinterpret_cast<uintptr_t>(frames[i]) -
+              reinterpret_cast<uintptr_t>(mod)));
+    } else {
+      std::fprintf(
+          stderr, "[fit-llamacpp]   #%02u %p  <unknown module>\n", i, frames[i]);
+    }
+  }
+  std::fflush(stderr);
+  return EXCEPTION_CONTINUE_SEARCH;  // let the crash proceed to terminate
+}
+
+void installCrashHandler() {
+  static bool installed = false;
+  if (!installed) {
+    AddVectoredExceptionHandler(1, fitCrashHandler);
+    installed = true;
+  }
+}
+
+}  // namespace
+#else
+namespace {
+inline void installCrashHandler() {}
+}  // namespace
+#endif
+
 namespace fit_llamacpp::bindings {
 
 namespace addon_cpp = qvac_lib_inference_addon_cpp;
@@ -85,6 +160,8 @@ JSCATCH
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {
+  installCrashHandler();  // DIAGNOSTIC (temporary): capture Windows crash stack
+
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
   {                                                                            \
