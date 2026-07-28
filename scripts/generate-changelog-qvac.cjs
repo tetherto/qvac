@@ -18,6 +18,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const { getPackageDir } = require("./sdk/package-paths.cjs");
 
 /**
  * Execute git command
@@ -302,7 +303,7 @@ function parseArgs(argv) {
  */
 async function generateChangelog(options) {
   const { packageName, baseCommit, baseVersion, dryRun } = options;
-  const packagePath = `packages/${packageName}`;
+  const packagePath = getPackageDir(packageName);
 
   // Verify git repo
   try {
