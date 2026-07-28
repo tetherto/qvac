@@ -134,7 +134,12 @@ export * from './constants/index.ts'
 
 // Value-clean helpers @qvac/sdk's registry codegen and server-side profiler reach
 // for; not part of either barrel, so re-exported explicitly here.
-export { getAddonFromEngine, resolveCanonicalEngine } from './schemas/engine-addon-map.ts'
+export {
+  getAddonFromEngine,
+  resolveCanonicalEngine,
+  ENGINE_TO_ADDON,
+  LEGACY_ENGINE_TO_CANONICAL
+} from './schemas/engine-addon-map.ts'
 export { generateProfileId } from './profiling/clock.ts'
 export { readModelExecutionMs } from './profiling/model-execution.ts'
 export {
