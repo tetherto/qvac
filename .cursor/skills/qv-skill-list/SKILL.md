@@ -54,6 +54,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-changelog`](../qv-sdk-changelog/SKILL.md) | Changelogs for SDK pod packages (tag-based GitFlow). | Release prep, `CHANGELOG_LLM.md`. **Auto** |
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
 | [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
+| [`qv-sdk-update-models`](../qv-sdk-update-models/SKILL.md) | Regen SDK `models.ts` from live registry and open a `[mod]` PR; optional provider/python cascade. | After registry model updates; `/qv-sdk-update-models`. **Manual** |
 | [`qv-agent-stack-sync`](../qv-agent-stack-sync/SKILL.md) | Plan / draft-cascade / promote the SDK → CLI → AI SDK provider → OpenCode + OpenClaw release chain. | Agent-stack release prep; `/qv-agent-stack-sync --plan`. **Auto** |
 
 ---
@@ -120,6 +121,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | DevOps team PR board | `qv-devops-pr-status` |
 | Why CI/merge is blocked | `qv-devops-why-my-pr-not` |
 | Write SDK PR body | `qv-sdk-pr-create` |
+| Sync SDK models.ts from registry | `qv-sdk-update-models` |
 | Write addon PR body | `qv-addon-pr-create` |
 | SDK release changelog | `qv-sdk-changelog` |
 | Addon release changelog | `qv-addon-changelog` |
