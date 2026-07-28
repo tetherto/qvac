@@ -1,5 +1,4 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
@@ -347,5 +346,4 @@ class TranslationNmtcpp {
         }
     }
 }
-exports.default = TranslationNmtcpp;
 module.exports = TranslationNmtcpp;
