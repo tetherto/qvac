@@ -11,15 +11,27 @@
 //   getAssetPath(name)   resolves a bundled asset to its on-device path
 //   global.testDir       writable base dir (Documents/app sandbox)
 //
-// ACE-Step GGUFs are ~4.3 GB, far too large to bundle in testAssets, so they
-// are side-loaded onto the device under `<testDir>/models/` (adb push on
-// Android, app container / Files on iOS). The tests read them from there.
+// The turbo-q4 ACE-Step GGUFs (~3 GB) are too large to bundle in testAssets, so
+// the tests fetch them from the QVAC model registry on-device at runtime into
+// `<testDir>/models/` (same client the desktop suite uses). A pre-side-loaded
+// set under `<testDir>/models` or `$AUDIOGEN_MODEL_DIR` is used as-is if present.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
 // Import by package name: on device this file is flattened into the runner's
-// backend.cjs, so a relative require('..') would not resolve to the addon.
-const { AudioGen } = require('@qvac/audiogen-ggml')
+// backend.cjs, so a relative require('..') would not resolve to the addon. The
+// addon re-exports the model manifest helpers from models.js, so we get the
+// registry paths + filenames without a second (possibly unresolved) require.
+const {
+  AudioGen,
+  modelManifest,
+  modelFilenames,
+  REGISTRY_SOURCE,
+  DEFAULT_DIT_VARIANT
+} = require('@qvac/audiogen-ggml')
+
+// Smoke uses the smallest/fastest DiT (turbo-q4): 3 fixed stages + turbo-q4 DiT.
+const SMOKE_VARIANT = DEFAULT_DIT_VARIANT
 
 // Turbo profile: fast 8-step schedule, short clip -> keeps on-device wall time
 // and peak RAM bounded for a smoke run.
@@ -28,7 +40,26 @@ const TURBO_SHIFT = 3.0
 const SMOKE_DURATION_S = 10
 const SMOKE_CAPTION = 'Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook'
 
-function _modelDir () {
+// The four turbo-q4 stage filenames the smoke needs on disk.
+function _stageFilenames () {
+  const f = modelFilenames(SMOKE_VARIANT)
+  return [f.textEnc, f.lm, f.dit, f.vae]
+}
+
+function _fileOk (p) {
+  try {
+    return fs.statSync(p).size > 0
+  } catch (_e) {
+    return false
+  }
+}
+
+function _hasAllStages (dir) {
+  return _stageFilenames().every((name) => _fileOk(path.join(dir, name)))
+}
+
+// Candidate dirs that may already hold a side-loaded model set, in order.
+function _candidateDirs () {
   const candidates = []
   try {
     if (typeof process !== 'undefined' && process.env && process.env.AUDIOGEN_MODEL_DIR) {
@@ -37,18 +68,69 @@ function _modelDir () {
   } catch (_e) {}
   if (global.testDir) candidates.push(path.join(global.testDir, 'models'))
   if (typeof dirPath === 'string' && dirPath) candidates.push(path.join(dirPath, 'models'))
+  return candidates
+}
 
-  for (const dir of candidates) {
+// Resolve the model dir: use a complete side-loaded set if present, otherwise
+// download the turbo-q4 GGUFs from the registry into `<testDir>/models`.
+async function _ensureModels () {
+  for (const dir of _candidateDirs()) {
+    if (dir && _hasAllStages(dir)) {
+      console.log('[audiogen-mobile] using models in ' + dir)
+      return dir
+    }
+  }
+
+  const base = (global.testDir || (typeof dirPath === 'string' && dirPath)) || '.'
+  const outDir = path.join(base, 'models')
+  fs.mkdirSync(outDir, { recursive: true })
+
+  let QVACRegistryClient
+  try {
+    ;({ QVACRegistryClient } = require('@qvac/registry-client'))
+  } catch (e) {
+    throw new Error(
+      'ACE-Step models not present and @qvac/registry-client is unavailable on ' +
+      'device to fetch them: ' + (e && e.message)
+    )
+  }
+
+  const files = modelFilenames(SMOKE_VARIANT)
+  const manifest = modelManifest(SMOKE_VARIANT)
+  const entries = [
+    { name: files.textEnc, registryPath: manifest.textEnc },
+    { name: files.lm, registryPath: manifest.lm },
+    { name: files.dit, registryPath: manifest.dit },
+    { name: files.vae, registryPath: manifest.vae }
+  ]
+
+  console.log('[audiogen-mobile] downloading turbo-q4 GGUFs into ' + outDir)
+  const client = new QVACRegistryClient()
+  try {
+    await client.ready()
+    for (const entry of entries) {
+      const dest = path.join(outDir, entry.name)
+      if (_fileOk(dest)) {
+        console.log('[audiogen-mobile]   [ok] ' + entry.name + ' (cached)')
+        continue
+      }
+      const t0 = Date.now()
+      await client.downloadModel(entry.registryPath, REGISTRY_SOURCE, {
+        outputFile: dest,
+        timeout: 1800000
+      })
+      console.log('[audiogen-mobile]   [ok] ' + entry.name + ' (' + (Date.now() - t0) + ' ms)')
+    }
+  } finally {
     try {
-      if (dir && fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir
+      await client.close()
     } catch (_e) {}
   }
-  throw new Error(
-    'ACE-Step models not found on device. Side-load the GGUFs into ' +
-    (global.testDir ? path.join(global.testDir, 'models') : '<testDir>/models') +
-    ' (Qwen3-Embedding, acestep-5Hz-lm, acestep-v15-turbo, vae). Checked: ' +
-    candidates.join(', ')
-  )
+
+  if (!_hasAllStages(outDir)) {
+    throw new Error('ACE-Step model download incomplete in ' + outDir)
+  }
+  return outDir
 }
 
 function _findGguf (dir, needle) {
@@ -110,7 +192,7 @@ function _persistWav (modelDir, wav) {
 // Load every stage GGUF and tear down again — cheap smoke to isolate model
 // load (I/O + parse + graph alloc) from full diffusion inference.
 async function testLoadModels () {
-  const modelDir = _modelDir()
+  const modelDir = await _ensureModels()
   console.log('[audiogen-mobile] model dir: ' + modelDir)
   console.log('[audiogen-mobile] files: ' + fs.readdirSync(modelDir).join(', '))
 
@@ -129,7 +211,7 @@ async function testLoadModels () {
 // End-to-end generation of a short turbo clip. Returns interleaved Int16 PCM so
 // the runner can play it back on device.
 async function testGenerateMusic () {
-  const modelDir = _modelDir()
+  const modelDir = await _ensureModels()
 
   const chunks = []
   let sampleRate = 48000
