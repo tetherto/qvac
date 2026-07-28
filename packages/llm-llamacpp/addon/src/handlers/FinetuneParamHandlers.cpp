@@ -11,7 +11,7 @@ readOpt(js_env_t* env, js::Object& obj, const char* key, FieldT& field) {
   }
 }
 
-const FinetuneParamHandlersMap FINETUNE_PARAM_HANDLERS = {
+const FinetuneParamHandlerList FINETUNE_PARAM_HANDLERS = {
     {"numberOfEpochs",
      [](js_env_t* env, js::Object& obj, LlamaFinetuningParams& p) {
        readOpt<js::Number, int64_t>(

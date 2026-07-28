@@ -64,7 +64,7 @@ handleImageMinTokens(common_params& params, const std::string& raw) {
   }
 }
 
-const LoadConfigHandlersMap LOAD_CONFIG_HANDLERS = {
+const LoadConfigHandlerList LOAD_CONFIG_HANDLERS = {
     {"reasoning-budget", handleReasoningBudget},
     {"reasoning_budget", handleReasoningBudget},
     {"image-tile-mode", handleImageTileMode},
@@ -78,13 +78,10 @@ const LoadConfigHandlersMap LOAD_CONFIG_HANDLERS = {
 void applyLoadConfigHandlers(
     common_params& params,
     std::unordered_map<std::string, std::string>& configFilemap) {
-  for (auto it = configFilemap.begin(); it != configFilemap.end();) {
-    if (auto h = LOAD_CONFIG_HANDLERS.find(it->first);
-        h != LOAD_CONFIG_HANDLERS.end()) {
-      h->second(params, it->second);
-      it = configFilemap.erase(it);
-    } else {
-      ++it;
+  for (const auto& [key, handler] : LOAD_CONFIG_HANDLERS) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      handler(params, it->second);
+      configFilemap.erase(it);
     }
   }
 }

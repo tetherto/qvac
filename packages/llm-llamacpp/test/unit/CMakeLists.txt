@@ -23,6 +23,7 @@ add_executable(
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
   test_load_config_handlers.cpp
+  test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp

@@ -2,7 +2,8 @@
 
 #include <functional>
 #include <string>
-#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
@@ -16,10 +17,12 @@ namespace js = qvac_lib_inference_addon_cpp::js;
 // Reads one `generationParams` key off the JS object into the override struct.
 using GenerationParamHandler =
     std::function<void(js_env_t*, js::Object&, GenerationParams&)>;
-using GenerationParamHandlersMap =
-    std::unordered_map<std::string, GenerationParamHandler>;
+using GenerationParamHandlerList =
+    std::vector<std::pair<std::string, GenerationParamHandler>>;
 
-extern const GenerationParamHandlersMap GENERATION_PARAM_HANDLERS;
+// Order is significant: handlers run in listed order (deterministic error
+// precedence when multiple fields are invalid).
+extern const GenerationParamHandlerList GENERATION_PARAM_HANDLERS;
 
 // Apply all handlers, then enforce grammar/json_schema mutual exclusion.
 // Absent and unknown keys are ignored.

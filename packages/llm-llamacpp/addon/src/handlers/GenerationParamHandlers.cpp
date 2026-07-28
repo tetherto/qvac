@@ -26,7 +26,7 @@ static void readNonEmptyStrInto(
   }
 }
 
-const GenerationParamHandlersMap GENERATION_PARAM_HANDLERS = {
+const GenerationParamHandlerList GENERATION_PARAM_HANDLERS = {
     {"temp",
      [](js_env_t* env, js::Object& obj, GenerationParams& p) {
        readNumInto(env, obj, "temp", p.temp);

@@ -65,6 +65,22 @@ TEST(LoadConfigHandlers_ImageTokens, ParsesMaxAndMin) {
   EXPECT_EQ(applyOne("image-min-tokens", "16").image_min_tokens, 16);
 }
 
+TEST(LoadConfigHandlers_ImageTokens, UnderscoreAliasesParse) {
+  EXPECT_EQ(applyOne("image_max_tokens", "512").image_max_tokens, 512);
+  EXPECT_EQ(applyOne("image_min_tokens", "8").image_min_tokens, 8);
+}
+
+// Both spellings supplied: the later (underscore) entry wins deterministically,
+// and both keys are consumed.
+TEST(LoadConfigHandlers_Aliases, SimultaneousSpellingsAreDeterministic) {
+  common_params params;
+  std::unordered_map<std::string, std::string> map{
+      {"reasoning-budget", "128"}, {"reasoning_budget", "0"}};
+  applyLoadConfigHandlers(params, map);
+  EXPECT_EQ(params.reasoning_budget, 0);
+  EXPECT_TRUE(map.empty());
+}
+
 TEST(LoadConfigHandlers_ImageTokens, RejectsNonInteger) {
   common_params params;
   std::unordered_map<std::string, std::string> map{{"image-max-tokens", "big"}};
