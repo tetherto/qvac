@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -1185,4 +1186,78 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
       << "syncPosition advanced the logical position but not physical KV-cell "
          "usage; onLogitsReady's per-slot KV-cell cap would be checked against "
          "a frozen prefill count";
+}
+
+// The post-reasoning-recovery EOG ban stops a forced `</think>` from being
+// immediately followed by another EOS (an empty answer). It is armed only from
+// inside a reasoning recovery — i.e. only when the model emits EOS *inside*
+// `<think>` — which no black-box integration test can force deterministically,
+// so the arm/consume contract is pinned here at the unit level instead.
+//
+// Deliberately not covered: the `logits == nullptr` deferral branch (ban stays
+// armed). Reaching it needs an out-of-range `logitIdx`, and
+// `llama_get_logits_ith` may assert rather than return null depending on the
+// fabric build, which would abort the suite rather than fail a check.
+TEST_F(MtmdLlmContextTest, PendingEogBanMasksEveryEogTokenAndIsConsumedOnce) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+
+  // Decode once so the context owns a live logits row for the ban to write to.
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hi"}])";
+  ASSERT_NO_THROW({ (void)model->processPrompt(prompt); });
+
+  LlmContext* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr) << "model reported loaded but exposes no context";
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "expected the multimodal context implementation";
+
+  using Peer = MtmdLlmContextTestPeer;
+
+  // Qwen3.5 is in the Qwen3 reasoning family, so initializeCommonState()
+  // precomputed the EOG id set. An empty set would silently make the ban a
+  // no-op, so assert it is populated before relying on it.
+  const std::vector<llama_token>& eogTokens = Peer::eogTokens(*ctx);
+  ASSERT_FALSE(eogTokens.empty())
+      << "EOG set must be precomputed for a qwen35 arch";
+
+  float* logits = Peer::logits(*ctx, -1);
+  ASSERT_NE(logits, nullptr) << "expected a decoded logits row";
+
+  // 1. Disarmed: applying the ban must leave the row untouched.
+  Peer::setBanArmed(*ctx, false);
+  for (const llama_token token : eogTokens) {
+    logits[token] = 1.0F;
+  }
+  Peer::applyPendingEogBan(*ctx, -1);
+  EXPECT_FALSE(Peer::banArmed(*ctx));
+  for (const llama_token token : eogTokens) {
+    EXPECT_FLOAT_EQ(logits[token], 1.0F)
+        << "disarmed ban modified EOG token " << token;
+  }
+
+  // 2. Armed: every EOG id is masked to -inf, and the flag disarms itself.
+  Peer::setBanArmed(*ctx, true);
+  Peer::applyPendingEogBan(*ctx, -1);
+  EXPECT_FALSE(Peer::banArmed(*ctx))
+      << "ban must disarm after a single application";
+  for (const llama_token token : eogTokens) {
+    EXPECT_TRUE(std::isinf(logits[token]) && logits[token] < 0.0F)
+        << "EOG token " << token << " was not banned";
+  }
+
+  // 3. Consume-once: the following sample must be unaffected, otherwise the
+  //    recovery would suppress EOS for the rest of the generation.
+  for (const llama_token token : eogTokens) {
+    logits[token] = 2.0F;
+  }
+  Peer::applyPendingEogBan(*ctx, -1);
+  for (const llama_token token : eogTokens) {
+    EXPECT_FLOAT_EQ(logits[token], 2.0F)
+        << "ban re-applied to EOG token " << token << " after being consumed";
+  }
 }

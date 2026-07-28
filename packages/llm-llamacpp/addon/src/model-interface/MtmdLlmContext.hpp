@@ -287,6 +287,14 @@ public:
   void snapshotPreRequestRollbackAnchor() override;
 
 private:
+  // Grants unit tests access to the reasoning-recovery EOG-ban internals
+  // (`applyPendingEogBan` + `banEogAfterReasoningRecovery_` + `eogTokens_`),
+  // which are otherwise only reachable via a model that happens to emit EOS
+  // inside <think>. Declared in test/unit/test_internal_peers.hpp; see the
+  // rationale there for why a peer is used instead of `*ForTesting()`
+  // accessors on the shipped surface.
+  friend class MtmdLlmContextTestPeer;
+
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
