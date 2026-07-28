@@ -38,11 +38,13 @@ const skipFinetuning = useCpu || (noGpu && !isWindows)
 const FINETUNE_TIMEOUT_MS = 3600_000
 
 // Download source (sha256/bytes) is resolved from models.manifest.json by `name`
-// at run time; ensureModel ignores the inline `url`. The `url` is kept here —
-// commit-pinned to match the manifest — because scripts/generate-model-manifest.js
-// scrapes name+url pairs from this file to (re)generate the mobile prestage
-// manifest; dropping it would make a regen silently lose this test's prestaged
-// model (finetuning-pause-resume.test.js keeps its urls for the same reason).
+// at run time; ensureModel ignores the inline `url`. QWEN35_MODEL KEEPS its
+// (commit-pinned) `url` because scripts/generate-model-manifest.js scrapes
+// name+url pairs from this file to (re)generate the mobile prestage manifest, and
+// Qwen3.5-0.8B IS prestaged for this shard — dropping it would make a regen
+// silently lose it. GEMMA4_MODEL deliberately OMITS `url`: it is desktop-only and
+// opt-in (QVAC_RUN_ARCHS_GEMMA4) and must NEVER be mobile-prestaged, so it must
+// not be scraped into the mobile manifest (same rationale as finetuning-moe.test.js).
 const QWEN35_MODEL = {
   id: 'qwen3.5-0.8b-q4_0',
   name: 'Qwen3.5-0.8B-Q4_0.gguf',
@@ -51,8 +53,7 @@ const QWEN35_MODEL = {
 
 const GEMMA4_MODEL = {
   id: 'gemma-4-e2b-q4_0',
-  name: 'google_gemma-4-E2B-it-Q4_0.gguf',
-  url: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_0.gguf'
+  name: 'google_gemma-4-E2B-it-Q4_0.gguf'
 }
 
 // Gemma-4 (~3.3 GB) is the expensive leg and desktop-only. Keep it opt-in so the
