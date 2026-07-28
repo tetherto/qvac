@@ -197,6 +197,7 @@ When a question relates to one of these topics, read the corresponding knowledge
 |-------|-------------|------|
 | CI / GitHub Actions | CI failures, workflow triggers, validation, publishing | `packages/ocr-onnx/.agent/knowledge/ci-validation.md` |
 | Self-hosted CI runners | Manual Workspace Cleanup, `working-directory: .`, `runner.environment`, `qvac-*` labels | `docs/ci/SELF-HOSTED-RUNNERS.md` |
+| Merge Guard / required status checks | Adding a new job/workflow that should gate merges, wiring it into `qvac-merge-guard / validate-pr` vs. registering a standalone required check | `docs/ci/MERGE-GUARD.md` (actionable checklist: `qv-merge-guard-wire` skill) |
 | vcpkg / native builds | vcpkg deps, triplets, registries, CMake integration, build failures | `packages/ocr-onnx/.agent/knowledge/vcpkg-management.md` |
 | llama.cpp Android | Cross-compiling llama.cpp, ADB deployment, Vulkan GPU, Android inference | `packages/ocr-onnx/.agent/knowledge/llama-cpp-android.md` |
 | Model registry | Adding/updating models, registry format, vcpkg port config | `packages/ocr-onnx/.agent/knowledge/registry-models.md` |

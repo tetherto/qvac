@@ -13,6 +13,8 @@
 import { createJobHandler, type JobHandler, type QvacResponse } from '@qvac/infer-base'
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 import QvacLogger = require('@qvac/logging')
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
+import path = require('bare-path')
 
 import {
   AudioGenInterface,
@@ -52,6 +54,13 @@ export interface AudioGenRuntimeConfig {
   nGpuLayers?: number
   /** 0 = engine auto-picks. */
   threads?: number
+  /**
+   * Override the prebuilds root the native engine scans for dlopen'd ggml
+   * backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped
+   * package); only set this for a non-standard prebuilds layout. Needed on
+   * arm64, where the CPU backend is a set of per-microarch MODULE .so files.
+   */
+  backendsDir?: string
 }
 
 export interface AudioGenOptions {
@@ -201,7 +210,12 @@ export class AudioGen {
       shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
       useGPU: useGpu,
       nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
-      threads: requireFiniteNumber(config.threads ?? 0, 'threads', true)
+      threads: requireFiniteNumber(config.threads ?? 0, 'threads', true),
+      // Where the native engine dlopens the ggml backend modules staged next to
+      // the `.bare`. Default to the package's own prebuilds dir; the C++ side
+      // appends the per-target BACKENDS_SUBDIR. Required on arm64 (per-microarch
+      // MODULE CPU backends); harmless on static desktop / Apple builds.
+      backendsDir: config.backendsDir ?? path.join(__dirname, 'prebuilds')
     }
 
     this.addon = null
