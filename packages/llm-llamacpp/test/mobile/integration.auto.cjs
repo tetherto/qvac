@@ -496,6 +496,11 @@ async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unuse
   return runIntegrationModule('../integration/ocr-paddle.test.js', options)
 }
 
+async function runOcrUnlimitedTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrUnlimitedTest')) return __FILTERED
+  return runIntegrationModule('../integration/ocr-unlimited.test.js', options)
+}
+
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
@@ -554,6 +559,11 @@ async function runToolsCompactTest (options = {}) { // eslint-disable-line no-un
 async function runTurboquantTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runTurboquantTest')) return __FILTERED
   return runIntegrationModule('../integration/turboquant.test.js', options)
+}
+
+async function runUnlimitedOcrPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUnlimitedOcrPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/unlimited-ocr-perf.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars

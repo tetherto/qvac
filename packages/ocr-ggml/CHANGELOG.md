@@ -10,6 +10,12 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `ocr-ggml.js`, `addonLogging.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and OCR output are unchanged.
 
+## [0.12.2] - 2026-07-21
+
+### Fixed
+
+- The C++ → JS logger callback in `ocr-ggml.js` invoked the logger method detached from its instance (`const write = transitionCb[level]; write(message)`), introduced by the TypeScript-wrapper migration. `QvacLogger` methods use `this` internally, so the first native-side log line crashed with `Cannot read properties of undefined (reading '_log')`. The callback now invokes `transitionCb[level](message)` as a method, restoring the pre-migration behavior (same bug class as the translation-nmtcpp Bergamot e2e failure).
+
 ## [0.12.1] - 2026-07-20
 
 ### Fixed

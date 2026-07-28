@@ -45,6 +45,9 @@ Third-Party Model Licenses
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   LightOnOCR-2-1B-ocr-soup-GGUF
     https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF
+  unlimited-ocr-gguf
+    https://huggingface.co/vimalnakrani/unlimited-ocr-gguf
+    (GGUF conversion of https://huggingface.co/baidu/Unlimited-OCR)
   Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
     https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
   Qwen3-0.6B-GGUF

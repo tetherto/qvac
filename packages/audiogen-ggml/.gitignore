@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+build/
+build_*/
+build-*/
+dist/
+out/
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Prebuilds (platform-specific binaries)
+prebuilds/
+
+# vcpkg
+_vcpkg/
+vcpkg_installed/
+
+# CMake build files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE and editor files
+.vscode/
+.idea/
+.DS_Store
