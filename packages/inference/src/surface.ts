@@ -134,7 +134,12 @@ export * from './constants/index.ts'
 
 // Value-clean helpers @qvac/sdk's registry codegen and server-side profiler reach
 // for; not part of either barrel, so re-exported explicitly here.
-export { getAddonFromEngine, resolveCanonicalEngine } from './schemas/engine-addon-map.ts'
+export {
+  getAddonFromEngine,
+  resolveCanonicalEngine,
+  ENGINE_TO_ADDON,
+  LEGACY_ENGINE_TO_CANONICAL
+} from './schemas/engine-addon-map.ts'
 export { generateProfileId } from './profiling/clock.ts'
 export { readModelExecutionMs } from './profiling/model-execution.ts'
 export {
@@ -149,7 +154,9 @@ export * from './models/registry/index.ts'
 
 export { SUPPORTED_AUDIO_FORMATS } from './constants/audio.ts'
 
-// Error classes consumers need for `instanceof` checks on rejected promises.
+// Error classes consumers need for `instanceof` checks: on rejected promises,
+// and on the synchronous throws of `plugins()` / `registerPlugin` (the plugin
+// group below).
 export {
   InferenceCancelledError,
   ContextOverflowError,
@@ -157,7 +164,12 @@ export {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
-  ModelNotLoadedError
+  ModelNotLoadedError,
+  TranslationFailedError,
+  PluginDefinitionInvalidError,
+  PluginModelTypeReservedError,
+  PluginAlreadyRegisteredError,
+  PluginLoggingInvalidError
 } from './errors/index.ts'
 export type { InferenceCancelledPartial } from './errors/index.ts'
 
