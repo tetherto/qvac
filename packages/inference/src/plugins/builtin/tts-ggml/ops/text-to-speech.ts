@@ -16,7 +16,12 @@ type RunStreamModel = {
     options?: { locale?: string; maxChunkScalars?: number }
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
-    stats?: { audioDurationMs?: number; totalSamples?: number }
+    stats?: {
+      audioDurationMs?: number
+      totalSamples?: number
+      enhancerBackendDevice?: number
+      enhancerBackendId?: number
+    }
   }>
 }
 
@@ -109,14 +114,7 @@ export async function* textToSpeech(
     }
 
     const modelExecutionMs = nowMs() - modelStart
-    const stats: TtsStats = {
-      ...(response.stats?.audioDurationMs !== undefined && {
-        audioDuration: response.stats.audioDurationMs
-      }),
-      ...(response.stats?.totalSamples !== undefined && {
-        totalSamples: response.stats.totalSamples
-      })
-    }
+    const stats = collectTtsStats(response)
 
     yield { buffer: completeBuffer }
     return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
@@ -127,14 +125,7 @@ export async function* textToSpeech(
   }
 
   const modelExecutionMs = nowMs() - modelStart
-  const stats: TtsStats = {
-    ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs
-    }),
-    ...(response.stats?.totalSamples !== undefined && {
-      totalSamples: response.stats.totalSamples
-    })
-  }
+  const stats = collectTtsStats(response)
 
   return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
 }

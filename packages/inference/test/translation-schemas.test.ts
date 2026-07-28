@@ -93,3 +93,22 @@ test("translateServerParamsSchema: normalizes 'nmt' to canonical modelType", (t)
     t.is(result.data.modelType, ModelType.nmtcppTranslation)
   }
 })
+
+test('translateServerParamsSchema (LLM): rejects missing `to` while allowing omitted `from`', (t) => {
+  const missingTo = translateServerParamsSchema.safeParse({
+    modelId: 'm1',
+    text: 'Hello',
+    stream: false,
+    modelType: 'llamacpp-completion'
+  })
+  t.is(missingTo.success, false)
+
+  const omittedFrom = translateServerParamsSchema.safeParse({
+    modelId: 'm1',
+    text: 'Hello',
+    stream: false,
+    modelType: 'llamacpp-completion',
+    to: 'fr'
+  })
+  t.is(omittedFrom.success, true)
+})

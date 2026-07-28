@@ -13,7 +13,7 @@ import { TOOLS_MODE } from '../../../../schemas/tools.ts'
 import { logCacheDisabled, logCacheInit, logCacheSave, logMessagesToAddon } from './cache-logger.ts'
 import { extractSystemPrompt, getCurrentCacheInfo } from '../../../ops/kv-cache-utils.ts'
 import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry.ts'
-import { decideCachedHistorySlice } from './kv-cache-state.ts'
+import { decideCachedHistorySlice, shouldCommitCachedTurn } from './kv-cache-state.ts'
 import {
   createKvCacheSession,
   generateConfigHash,
@@ -85,23 +85,6 @@ export type CompletionGenerationParams = GenerationParams & {
 
 type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'saveCacheToDisk' | 'prefill'> & {
   generationParams?: CompletionGenerationParams
-}
-
-/**
- * Decide whether a completed turn earned the right to record its kv-cache
- * boundary. A `savedCount` is only safe to write when the turn ran to
- * completion AND produced at least one token — anything else (cancelled
- * mid-decode, zero-token reply, early EOS) leaves the on-disk cache file
- * in an unknown state relative to `history.length + 1`, and a stale entry
- * would slice the next turn's history down to an empty payload.
- *
- * Replaces the pre-0.11.0 `shouldRecordSavedCount(wasCancelled, ...)` with
- * a signal-driven check that reads directly from the request's
- * `AbortSignal`. The local helper keeps the call sites in
- * `completion-stream.ts` honest without importing the registry every time.
- */
-function shouldCommitTurn(signal: AbortSignal, producedTokens: boolean): boolean {
-  return !signal.aborted && producedTokens
 }
 
 function transformMessage(
@@ -556,12 +539,18 @@ export async function* completion(
     { cacheKey: turn.cachePath, saveCacheToDisk: true },
     dialect
   )
+  const shouldCommitTurn = shouldCommitCachedTurn({
+    aborted: signal.aborted,
+    producedTokens: result.producedTokens,
+    generatedTokens: result.stats?.generatedTokens,
+    predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict
+  })
 
   if (typeof kvCache === 'string') {
     // Custom-key path: the addon wrote the new cache state inline at
     // the same path. Either commit (records the boundary, suppresses
     // rollback) or fall through to the deferred rollback.
-    if (shouldCommitTurn(signal, result.producedTokens)) {
+    if (shouldCommitTurn) {
       await session.commitTurn(turn, {
         kind: 'static',
         messageCount: history.length + 1
@@ -585,10 +574,9 @@ export async function* completion(
     return result
   }
 
-  if (!shouldCommitTurn(signal, result.producedTokens)) {
-    // Cancelled or zero-token turn — the addon wrote the file but its
-    // contents don't correspond to a clean turn boundary. Let the
-    // deferred rollback unlink it.
+  if (!shouldCommitTurn) {
+    // Cancelled, zero-token, or budget-exhausted turns do not establish
+    // a trustworthy message boundary.
     return result
   }
 

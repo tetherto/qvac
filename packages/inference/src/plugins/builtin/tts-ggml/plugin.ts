@@ -167,6 +167,7 @@ function createChatterboxModel(
       ? { streamFirstChunkTokens: config.streamFirstChunkTokens }
       : {}),
     ...(config.cfmSteps !== undefined ? { cfmSteps: config.cfmSteps } : {}),
+    ...(config.cfgRate !== undefined ? { cfgRate: config.cfgRate } : {}),
     ...(config.threads !== undefined ? { threads: config.threads } : {}),
     ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
@@ -209,7 +210,8 @@ function createSupertonicModel(
       useGPU: config.useGPU ?? false,
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
-        : {})
+        : {}),
+      ...(config.vulkanCacheDir !== undefined ? { vulkanCacheDir: config.vulkanCacheDir } : {})
     },
     logger,
     opts: { stats: true },

@@ -217,6 +217,81 @@ export const completionStreamResponseSchema = z
   })
   .strict()
 
+// ============================================
+// Worker-orchestrated completion (duplex)
+// ============================================
+
+export const completionOrchestrateRequestSchema = completionClientParamsBaseSchema
+  .extend({
+    type: z.literal('completionOrchestrate'),
+    maxToolTurns: z
+      .number()
+      .int()
+      .min(1)
+      .max(32)
+      .optional()
+      .describe(
+        'Upper bound on generation turns the worker will run before ending the ' +
+          'loop with `stopReason: "maxToolTurns"`. Each turn is one completion ' +
+          'pass; a turn that requests tool calls consumes callbacks and starts ' +
+          'the next turn. Defaults to 8.'
+      )
+  })
+  .superRefine(refineNoToolsWithStructuredOutput)
+
+/**
+ * Downstream frame of the orchestrated completion duplex stream. Exactly one
+ * payload field is set per frame:
+ *
+ * - `events` — pass-through of the inner completion turn's events (with
+ *   `turn` identifying which generation pass they belong to).
+ * - `toolCallback` — the worker is asking the CLIENT to run a tool. The
+ *   client executes its registered handler and writes a JSON line
+ *   (`toolCallbackResultSchema`) up the request stream. The worker blocks
+ *   this run (not the socket) until the matching `callId` arrives.
+ * - `done` — terminal frame; the loop ended (final answer produced, error,
+ *   cancellation, or the `maxToolTurns` cap).
+ *
+ * Only a LOCAL worker may emit `toolCallback`: tool handlers execute code on
+ * the client machine, so a remote delegate streaming through this shape must
+ * never trigger them.
+ */
+export const completionOrchestrateResponseSchema = z
+  .object({
+    type: z.literal('completionOrchestrate'),
+    turn: z.number().int().nonnegative().optional(),
+    events: z.array(completionEventSchema).optional(),
+    toolCallback: z
+      .object({
+        callId: z.string().describe('Correlates the upstream result line to this request.'),
+        name: z.string(),
+        arguments: z.record(z.string(), z.unknown())
+      })
+      .optional(),
+    done: z.boolean().optional(),
+    stopReason: z
+      .literal('maxToolTurns')
+      .optional()
+      .describe(
+        'Set on the terminal `done` frame only when the loop stopped because it ' +
+          'hit `maxToolTurns` (the model still wanted a tool). Absent on a natural ' +
+          'finish, so the caller can tell a truncated run from a completed one.'
+      )
+  })
+  .strict()
+
+/**
+ * Upstream JSON line the client writes after running a tool callback.
+ * Newline-delimited on the duplex request stream, after the initial request
+ * payload. `error` reports a handler failure; the worker forwards it to the
+ * model as the tool result so the loop can recover or finish.
+ */
+export const toolCallbackResultSchema = z.object({
+  callId: z.string(),
+  result: z.unknown().optional(),
+  error: z.string().optional()
+})
+
 export type GenerationParams = z.infer<typeof generationParamsSchema>
 export type CompletionParams = z.infer<typeof completionParamsSchema>
 export type ToolDialect = z.infer<typeof toolDialectSchema>
@@ -224,4 +299,7 @@ export type ResponseFormat = z.infer<typeof responseFormatSchema>
 export type CompletionClientParams = z.input<typeof completionClientParamsSchema>
 export type CompletionStreamRequest = z.infer<typeof completionStreamRequestSchema>
 export type CompletionStreamResponse = z.infer<typeof completionStreamResponseSchema>
+export type CompletionOrchestrateRequest = z.infer<typeof completionOrchestrateRequestSchema>
+export type CompletionOrchestrateResponse = z.infer<typeof completionOrchestrateResponseSchema>
+export type ToolCallbackResult = z.infer<typeof toolCallbackResultSchema>
 export type Attachment = z.infer<typeof attachmentSchema>
