@@ -28,6 +28,7 @@
 #include <gguf.h>
 #include <gtest/gtest.h>
 
+#include "groot_embodiment_test_util.hpp"
 #include "model-interface/groot.hpp"
 #include "pi05_compute.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -76,9 +77,18 @@ struct ggml_tensor* gt(struct ggml_context* c, const std::string& n) {
   return ggml_get_tensor(c, n.c_str());
 }
 
-qvac_lib_infer_vla_ggml::GrootLinearWeights
-linW(struct ggml_context* c, const std::string& p) {
-  return {gt(c, p + ".weight"), gt(c, p + ".bias")};
+// Slices the default embodiment row when the fixture is multi-embodiment
+// (rank-3 weight / rank-2 bias); `view` owns the byte-copied rows, `src` the
+// GGUF data.
+qvac_lib_infer_vla_ggml::GrootLinearWeights linW(
+    struct ggml_context* src, struct ggml_context* view,
+    struct gguf_context* gguf, const std::string& p) {
+  const int row = groot_embodiment_test_util::defaultEmbodimentRow(gguf);
+  return {
+      groot_embodiment_test_util::embodimentRow(
+          view, gt(src, p + ".weight"), row, 2),
+      groot_embodiment_test_util::embodimentRow(
+          view, gt(src, p + ".bias"), row, 1)};
 }
 
 } // namespace
@@ -101,6 +111,15 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   struct gguf_context* gguf = gguf_init_from_file(ggufPath, gp);
   ASSERT_NE(gguf, nullptr);
   ASSERT_NE(ctxW, nullptr);
+
+  // Holds the byte-copied multi-embodiment rows (own data — data-backed, not a
+  // view context), so it must outlive the per-step compute contexts below. 64
+  // MiB covers the sliced action-encoder + decoder weights (w2 alone is ~9 MiB
+  // F16).
+  std::vector<uint8_t> viewBuf(64u * 1024u * 1024u);
+  struct ggml_init_params viewIp{viewBuf.size(), viewBuf.data(), false};
+  struct ggml_context* ctxView = ggml_init(viewIp);
+  ASSERT_NE(ctxView, nullptr);
 
   using namespace qvac_lib_infer_vla_ggml;
 
@@ -129,13 +148,16 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
     bw.ffn_out_w = gt(ctxW, b + ".ffn_out.weight");
     bw.ffn_out_b = gt(ctxW, b + ".ffn_out.bias");
   }
-  const GrootLinearWeights aeW1 = linW(ctxW, "embodiment.action_encoder.w1");
-  const GrootLinearWeights aeW2 = linW(ctxW, "embodiment.action_encoder.w2");
-  const GrootLinearWeights aeW3 = linW(ctxW, "embodiment.action_encoder.w3");
+  const GrootLinearWeights aeW1 =
+      linW(ctxW, ctxView, gguf, "embodiment.action_encoder.w1");
+  const GrootLinearWeights aeW2 =
+      linW(ctxW, ctxView, gguf, "embodiment.action_encoder.w2");
+  const GrootLinearWeights aeW3 =
+      linW(ctxW, ctxView, gguf, "embodiment.action_encoder.w3");
   const GrootLinearWeights dec1 =
-      linW(ctxW, "embodiment.action_decoder.layer1");
+      linW(ctxW, ctxView, gguf, "embodiment.action_decoder.layer1");
   const GrootLinearWeights dec2 =
-      linW(ctxW, "embodiment.action_decoder.layer2");
+      linW(ctxW, ctxView, gguf, "embodiment.action_decoder.layer2");
   struct ggml_tensor* posEmbedW = gt(ctxW, "dit.position_embedding.weight");
   ASSERT_NE(posEmbedW, nullptr);
 
@@ -263,6 +285,9 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
     if (step + 1 < N_STEPS) {
       const std::vector<float> exp = act.readF32(
           "action_encoder_input.call" + std::to_string(step + 1) + ".args.0");
+      // Both comparisons iterate exp.size() over `actions`; a fixture whose
+      // horizon disagrees with ours would read past the end of the vector.
+      ASSERT_EQ(exp.size(), actions.size());
       const float cos = cosineSim(actions.data(), exp.data(), exp.size());
       const float rel = relMaxDiff(actions.data(), exp.data(), exp.size());
       std::cerr << "[M4.4] after step " << step << ": cos=" << cos
@@ -275,5 +300,6 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   }
 
   gguf_free(gguf);
+  ggml_free(ctxView);
   ggml_free(ctxW);
 }

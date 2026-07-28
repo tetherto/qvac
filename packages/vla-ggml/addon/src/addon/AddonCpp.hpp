@@ -45,8 +45,9 @@ public:
   // path rather than relative to process CWD (required on mobile).
   explicit VlaModel(
       const std::string& ggufPath, bool forceCpu = false,
-      std::string backendsDir = {})
-      : model_(createVlaModelFromGguf(ggufPath, forceCpu, backendsDir)) {
+      std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {})
+      : model_(createVlaModelFromGguf(
+            ggufPath, forceCpu, backendsDir, embodiment)) {
     // Canonical `backendDevice` encoding used across the inference addons
     // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
     // `runtimeStats()` can report it without re-querying ggml.
@@ -65,6 +66,13 @@ public:
   // tag each result with its execution provider. Implementation-specific
   // sentinel values ("none", "unknown") are passed through.
   std::string backendName() const { return model_->backendName(); }
+
+  // Switch the active embodiment on the loaded model (multi-embodiment GR00T
+  // only; throws otherwise). Called from the JS thread — the model
+  // implementation serializes it against the worker thread's process().
+  void setEmbodiment(const VlaEmbodimentRequest& embodiment) {
+    model_->setEmbodiment(embodiment);
+  }
 
   // ─── IModel interface ─────────────────────────────────────────────────────
 

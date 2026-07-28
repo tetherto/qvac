@@ -424,6 +424,288 @@ test('groot integration: VlaModel rejects missing/invalid files.model', (t) => {
   t.ok(err2 && /absolute path/.test(err2.message))
 })
 
+// Multi-embodiment: selecting a non-default embodiment at load time surfaces
+// that embodiment's camera count. The default (libero_sim) is 2 cameras; the
+// droid embodiment is 4. This exercises the load-time selector end-to-end
+// (config.embodiment -> tag -> stored row -> numCameras) through the full
+// JS/addon path, on-device included. Load+select only, no run(): the other
+// stored rows have no qvac camera config and can't run(), and per-embodiment
+// numerical parity for all stored rows is the desktop C++ sweep gtest
+// (GrootEmbodimentSweep). Skips cleanly on a single-embodiment GGUF (the
+// selector rejects a non-default override), so it's a no-op until the
+// multi-embodiment fixture ships.
+const DROID_EMBODIMENT_TAG = 'oxe_droid_relative_eef_relative_joint'
+const DROID_NUM_CAMERAS = 4
+
+test(
+  'groot integration: non-default embodiment selection surfaces its camera count (multi-embodiment GGUF)',
+  { timeout: 2400000 },
+  async (t) => {
+    let ggufPath
+    if (_isMobile) {
+      ggufPath = await _ensureMobileModel()
+    } else {
+      if (_assetsState.state === 'SKIP') {
+        t.comment('skipping: ' + SKIP_REASON)
+        return
+      }
+      if (_assetsState.state === 'FAIL') {
+        t.fail(_assetsState.reason)
+        return
+      }
+      ggufPath = process.env.GROOT_TEST_GGUF
+    }
+
+    const model = new VlaModel({
+      files: { model: [path.resolve(ggufPath)] },
+      config: { verbosity: 1, embodiment: DROID_EMBODIMENT_TAG }
+    })
+    let loadErr = null
+    try {
+      await model.load({ backend: 'cpu' })
+    } catch (e) {
+      loadErr = e
+    }
+    if (loadErr) {
+      // A single-embodiment GGUF rejects any non-default override — expected
+      // until the multi-embodiment fixture lands. Anything else is a real bug.
+      if (/single-embodiment/.test(loadErr.message || '')) {
+        t.comment('skipping: GGUF is single-embodiment (no multi fixture yet)')
+        return
+      }
+      t.fail(`unexpected load error selecting '${DROID_EMBODIMENT_TAG}': ${loadErr.message}`)
+      return
+    }
+    try {
+      t.ok(model.hparams, 'hparams populated')
+      t.is(
+        model.hparams.numCameras,
+        DROID_NUM_CAMERAS,
+        `num_cameras follows selected embodiment (${DROID_EMBODIMENT_TAG} = ${DROID_NUM_CAMERAS})`
+      )
+      t.is(
+        model.hparams.selectedEmbodimentTag,
+        DROID_EMBODIMENT_TAG,
+        'selectedEmbodimentTag reports the load-time selection'
+      )
+      t.ok(
+        Number.isInteger(model.hparams.selectedEmbodimentCatId),
+        'selectedEmbodimentCatId reports the numeric form of the same selection'
+      )
+      t.is(model.hparams.stateInputMode, 'continuous', 'state_input_mode')
+    } finally {
+      await model.unload().catch(() => {})
+    }
+  }
+)
+
+// Find a stored row whose num_cameras the GGUF doesn't carry. The addon exposes
+// no embodiment table to JS, so probe cat_ids: the resolver's messages tell
+// "not in this ship set" apart from "no known num_cameras". Restores whatever
+// embodiment was active on entry, since probing switches rows.
+async function findUnknownCameraCatId(model, maxCatId = 31) {
+  const restoreTo = model.hparams.selectedEmbodimentCatId
+  let found = null
+  for (let catId = 0; catId <= maxCatId && found === null; catId++) {
+    try {
+      await model.setEmbodiment(catId)
+    } catch (e) {
+      if (/no known num_cameras/.test(e.message || '')) found = catId
+    }
+  }
+  await model.setEmbodiment(restoreTo)
+  return found
+}
+
+// Multi-embodiment: one load serves any shipped embodiment. Switches the loaded
+// model between embodiments through the JS API and checks the reported contract
+// follows (numCameras + selectedEmbodimentTag), that an unknown tag is rejected
+// without disturbing the active embodiment, and that switching back restores the
+// default. Numerical equivalence of a switched model vs a fresh load of that
+// embodiment is the C++ gtest
+// (GrootEmbodimentSweep.SwitchEmbodimentMatchesFreshLoadOfThatEmbodiment); this
+// covers the binding + wrapper plumbing, on-device included. Skips cleanly on a
+// single-embodiment GGUF.
+test(
+  'groot integration: setEmbodiment switches embodiment on a loaded model (multi-embodiment GGUF)',
+  { timeout: 2400000 },
+  async (t) => {
+    let ggufPath
+    if (_isMobile) {
+      ggufPath = await _ensureMobileModel()
+    } else {
+      if (_assetsState.state === 'SKIP') {
+        t.comment('skipping: ' + SKIP_REASON)
+        return
+      }
+      if (_assetsState.state === 'FAIL') {
+        t.fail(_assetsState.reason)
+        return
+      }
+      ggufPath = process.env.GROOT_TEST_GGUF
+    }
+
+    const model = new VlaModel({
+      files: { model: [path.resolve(ggufPath)] },
+      config: { verbosity: 1 }
+    })
+    await model.load({ backend: 'cpu' })
+    try {
+      const defaultTag = model.hparams.selectedEmbodimentTag
+      const defaultCams = model.hparams.numCameras
+      t.ok(defaultTag, 'default embodiment tag reported')
+
+      let switchErr = null
+      let switched = null
+      try {
+        switched = await model.setEmbodiment(DROID_EMBODIMENT_TAG)
+      } catch (e) {
+        switchErr = e
+      }
+      if (switchErr) {
+        // Single-embodiment GGUF: nothing to switch to. Anything else is a bug.
+        if (/single embodiment|single-embodiment/.test(switchErr.message || '')) {
+          t.comment('skipping: GGUF is single-embodiment (no multi fixture yet)')
+          return
+        }
+        t.fail(`unexpected setEmbodiment error: ${switchErr.message}`)
+        return
+      }
+
+      t.is(switched.numCameras, DROID_NUM_CAMERAS, 'returned hparams follow the new embodiment')
+      t.is(model.hparams.numCameras, DROID_NUM_CAMERAS, 'cached hparams refreshed')
+      t.is(
+        model.hparams.selectedEmbodimentTag,
+        DROID_EMBODIMENT_TAG,
+        'selectedEmbodimentTag follows the switch'
+      )
+      const droidCatId = model.hparams.selectedEmbodimentCatId
+      t.ok(Number.isInteger(droidCatId), 'selectedEmbodimentCatId reported')
+
+      // The same embodiment, named by its numeric id instead of its tag. Many
+      // tags share one cat_id, so the reported tag is that id's canonical
+      // spelling (the first in the GGUF's tag map) and need not be the alias
+      // used above — the id and the camera count are what must match.
+      await model.setEmbodiment(defaultTag)
+      const byId = await model.setEmbodiment(droidCatId)
+      t.is(byId.selectedEmbodimentCatId, droidCatId, 'cat_id selection lands on that id')
+      t.ok(
+        typeof byId.selectedEmbodimentTag === 'string' && byId.selectedEmbodimentTag.length > 0,
+        `cat_id selection still reports a tag (${byId.selectedEmbodimentTag})`
+      )
+      t.is(byId.numCameras, DROID_NUM_CAMERAS, 'cat_id selection carries its camera count')
+
+      // Every stored row is runnable: one whose num_cameras the GGUF doesn't
+      // carry is rejected bare and accepted with an explicit count.
+      const unknownCatId = await findUnknownCameraCatId(model)
+      if (unknownCatId === null) {
+        t.comment('no stored row lacks a camera count in this GGUF')
+      } else {
+        let noCamsErr = null
+        try {
+          await model.setEmbodiment(unknownCatId)
+        } catch (e) {
+          noCamsErr = e
+        }
+        t.ok(noCamsErr, `cat_id ${unknownCatId} rejected without an explicit camera count`)
+        const withCams = await model.setEmbodiment({ catId: unknownCatId, numCameras: 2 })
+        t.is(
+          withCams.selectedEmbodimentCatId,
+          unknownCatId,
+          'camera override makes the row runnable'
+        )
+        t.is(withCams.numCameras, 2, 'explicit numCameras drives the reported contract')
+        await model.setEmbodiment(droidCatId)
+      }
+
+      const activeTag = model.hparams.selectedEmbodimentTag
+      const activeCams = model.hparams.numCameras
+
+      let badErr = null
+      try {
+        await model.setEmbodiment('definitely-not-an-embodiment')
+      } catch (e) {
+        badErr = e
+      }
+      t.ok(badErr, 'unknown embodiment tag rejected')
+
+      let bothErr = null
+      try {
+        await model.setEmbodiment({ tag: DROID_EMBODIMENT_TAG, catId: droidCatId })
+      } catch (e) {
+        bothErr = e
+      }
+      t.ok(bothErr, 'naming both a tag and a catId is rejected')
+
+      // An id past the 0..31 id space must be an error, not a narrowing: as an
+      // int32, 2**32 is 0, which would silently select a different embodiment.
+      for (const hugeId of [2 ** 32, 2 ** 31, 32, 1.5, -1]) {
+        let hugeErr = null
+        try {
+          await model.setEmbodiment(hugeId)
+        } catch (e) {
+          hugeErr = e
+        }
+        t.ok(hugeErr, `catId ${hugeId} rejected`)
+      }
+      t.is(
+        model.hparams.selectedEmbodimentTag,
+        activeTag,
+        'rejected switch leaves the active embodiment in place'
+      )
+      t.is(model.hparams.numCameras, activeCams, 'rejected switch leaves the camera count in place')
+
+      await model.setEmbodiment(defaultTag)
+      t.is(
+        model.hparams.numCameras,
+        defaultCams,
+        'switching back restores the default camera count'
+      )
+      t.is(
+        model.hparams.selectedEmbodimentTag,
+        defaultTag,
+        'switching back restores the default embodiment'
+      )
+
+      // A switch must NOT slip between a dispatched inference and the worker
+      // reaching it. run() releases the exclusive queue once the job is
+      // dispatched, so without the active-response guard this switch would land
+      // while the worker still had the old embodiment's validated input, and the
+      // actions would come from an embodiment the caller never selected.
+      const probe = _isMobile ? _buildSyntheticInputs(ggufPath) : _loadInputs()
+      const response = await model.run({
+        images: probe.images,
+        imgWidth: IMAGE_SIZE,
+        imgHeight: IMAGE_SIZE,
+        state: probe.state,
+        tokens: probe.tokens,
+        mask: probe.mask,
+        noise: probe.noise
+      })
+      let overlapErr = null
+      try {
+        await model.setEmbodiment(DROID_EMBODIMENT_TAG)
+      } catch (e) {
+        overlapErr = e
+      }
+      t.ok(overlapErr, 'switch during an un-awaited inference is rejected')
+      t.is(
+        model.hparams.selectedEmbodimentTag,
+        defaultTag,
+        'rejected overlapping switch leaves the active embodiment in place'
+      )
+      const overlapped = await response.await()
+      t.ok(overlapped.actions.length > 0, 'the in-flight inference still completes')
+      // Once it has settled the same switch is accepted.
+      const after = await model.setEmbodiment(DROID_EMBODIMENT_TAG)
+      t.is(after.numCameras, DROID_NUM_CAMERAS, 'switch accepted after the response settles')
+      await model.setEmbodiment(defaultTag)
+    } finally {
+      await model.unload().catch(() => {})
+    }
+  }
+)
+
 // GR00T's embodiment is fixed-shape (2 cameras, state.length === maxStateDim).
 // The validator must fail these closed as INVALID_INPUT *before* native infer,
 // since GrootModel::infer accepts nImages >= 1 and would otherwise produce

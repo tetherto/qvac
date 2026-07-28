@@ -73,8 +73,8 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
 }
 
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
-    const std::string& ggufPath, bool forceCpu,
-    const std::string& backendsDir) {
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
+    const VlaEmbodimentRequest& embodiment) {
   const std::string arch = sniffGgufArchitecture(ggufPath);
 
   if (arch == "smolvla") {
@@ -85,7 +85,10 @@ std::unique_ptr<IVlaModel> createVlaModelFromGguf(
     return std::make_unique<Pi05Model>(ggufPath, forceCpu, backendsDir);
   }
   if (arch == "groot") {
-    return std::make_unique<GrootModel>(ggufPath, forceCpu, backendsDir);
+    // `embodiment` selects the embodiment on multi-embodiment GGUFs; the other
+    // architectures have no embodiment concept and ignore it.
+    return std::make_unique<GrootModel>(
+        ggufPath, forceCpu, backendsDir, embodiment);
   }
 
   throw std::runtime_error(

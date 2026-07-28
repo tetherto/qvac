@@ -23,13 +23,28 @@ const { QvacErrorAddonVla, ERR_CODES } = errorModule;
 interface VlaConfig {
   verbosity?: number;
   backendsDir?: string;
+  embodiment?: VlaModel.VlaEmbodimentSelector;
   [key: string]: unknown;
 }
 
+// createInstance's config map is all strings on the native side, so the
+// embodiment's numeric id and camera-count override travel as strings too, with
+// "" meaning unset. See parseOptionalConfigInt in AddonJs.hpp.
 interface VlaInstanceConfig {
   ggufPath: string;
   backend: string;
   backendsDir: string;
+  embodiment: string;
+  embodimentCatId: string;
+  embodimentNumCameras: string;
+}
+
+// Normalized form of an embodiment selection: exactly one of `tag` / `catId`
+// identifies the embodiment (catId -1 = unset), `numCameras` 0 = unset.
+interface NormalizedEmbodiment {
+  tag: string;
+  catId: number;
+  numCameras: number;
 }
 
 type AddonOutputCallback = (
@@ -63,6 +78,11 @@ interface VlaBinding {
   ): object;
   activate(handle: object): void;
   getVlaHparams(handle: object): VlaModel.VlaHparams;
+  setVlaEmbodiment(
+    handle: object,
+    embodiment: string | number,
+    numCameras: number,
+  ): VlaModel.VlaHparams;
   getVlaBackendName(handle: object): string;
   runJob(handle: object, job: VlaJob): boolean;
   cancel(handle: object): Promise<void>;
@@ -91,6 +111,90 @@ const DEFAULT_NATIVE_VERBOSITY = 2; // INFO
 function pickPrimaryGgufPath(files: string[]): string {
   const FIRST_SHARD_REGEX = /-0*1-of-\d+\.gguf$/;
   return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0];
+}
+
+// Largest camera count the native resolver accepts (GROOT_MAX_SANE_NUM_CAMERAS)
+// — validated here too so a typo is a JS config error instead of a native throw.
+const MAX_NUM_CAMERAS = 64;
+
+// Largest embodiment id (GROOT_MAX_EMBODIMENT_CAT_ID). A cat_id indexes GR00T's
+// CategorySpecificLinear bank, whose category dim the architecture fixes at 32,
+// so 0..31 is the whole id space. Bounded here as well as natively because the
+// binding would otherwise have to narrow a JS number to int32, and 2**32 narrows
+// to 0 — silently selecting a different embodiment instead of failing.
+const MAX_EMBODIMENT_CAT_ID = 31;
+
+// Normalize the three accepted spellings of an embodiment selection into
+// { tag, catId, numCameras }: a tag string, a numeric cat_id, or an object
+// carrying either plus an optional camera-count override. `requireSelection`
+// is set for setEmbodiment (a switch must name an embodiment) and clear for the
+// load path (nothing named = the GGUF's default embodiment).
+//
+// A tag and a catId are two spellings of one selection, so passing both is an
+// error rather than a precedence rule — the native resolver rejects it too.
+function normalizeEmbodiment(
+  value: VlaModel.VlaEmbodimentSelector | undefined | null,
+  requireSelection: boolean,
+): NormalizedEmbodiment {
+  const bad = (adds: string) =>
+    new QvacErrorAddonVla({ code: ERR_CODES.INVALID_CONFIG, adds });
+  const out: NormalizedEmbodiment = { tag: "", catId: -1, numCameras: 0 };
+
+  // Unpack the accepted spellings into one { selector, numCameras } shape.
+  let selector: string | number | undefined;
+  let numCameras: number | undefined;
+  if (value === undefined || value === null) {
+    if (requireSelection) {
+      throw bad(
+        "embodiment must be a tag string, a cat_id number, or an object",
+      );
+    }
+    return out;
+  } else if (typeof value === "string" || typeof value === "number") {
+    selector = value;
+  } else if (typeof value === "object") {
+    if (value.tag !== undefined && value.catId !== undefined) {
+      throw bad("embodiment accepts either tag or catId, not both");
+    }
+    selector = value.tag !== undefined ? value.tag : value.catId;
+    numCameras = value.numCameras;
+  } else {
+    throw bad("embodiment must be a string, number, or object");
+  }
+
+  if (typeof selector === "string") {
+    if (selector.length === 0) {
+      throw bad("embodiment tag must be a non-empty string");
+    }
+    out.tag = selector;
+  } else if (typeof selector === "number") {
+    if (
+      !Number.isInteger(selector) ||
+      selector < 0 ||
+      selector > MAX_EMBODIMENT_CAT_ID
+    ) {
+      throw bad(
+        `embodiment catId must be an integer in 0..${MAX_EMBODIMENT_CAT_ID}`,
+      );
+    }
+    out.catId = selector;
+  } else if (requireSelection) {
+    throw bad("embodiment must name a tag or a catId");
+  }
+
+  if (numCameras !== undefined && numCameras !== null) {
+    if (
+      !Number.isInteger(numCameras) ||
+      numCameras < 1 ||
+      numCameras > MAX_NUM_CAMERAS
+    ) {
+      throw bad(
+        `embodiment numCameras must be an integer in 1..${MAX_NUM_CAMERAS}`,
+      );
+    }
+    out.numCameras = numCameras;
+  }
+  return out;
 }
 
 function validateRunInput(
@@ -511,6 +615,10 @@ class VlaModel {
         adds: ggufPath,
       });
     }
+    // Validated before createInstance so a malformed selector is a JS config
+    // error rather than a native throw. Nothing named = the GGUF's own default
+    // embodiment, which is also a no-op on single-embodiment / non-GR00T GGUFs.
+    const embodimentSel = normalizeEmbodiment(this._config.embodiment, false);
     try {
       // Canonical instance lifecycle (mirrors LLM/embed/NMT):
       // createInstance(jsHandle, params, outputCb) — the framework's
@@ -520,7 +628,18 @@ class VlaModel {
         : path.join(__dirname, "prebuilds");
       this._handle = binding.createInstance(
         this,
-        { ggufPath, backend, backendsDir },
+        {
+          ggufPath,
+          backend,
+          backendsDir,
+          embodiment: embodimentSel.tag,
+          embodimentCatId:
+            embodimentSel.catId >= 0 ? String(embodimentSel.catId) : "",
+          embodimentNumCameras:
+            embodimentSel.numCameras > 0
+              ? String(embodimentSel.numCameras)
+              : "",
+        },
         (jsHandle, eventTypeName, outputData, errorData) => {
           this._onAddonEvent(jsHandle, eventTypeName, outputData, errorData);
         },
@@ -555,6 +674,61 @@ class VlaModel {
 
   get backendName(): string | null {
     return this._backendName;
+  }
+
+  // Switch a loaded multi-embodiment GR00T model to another embodiment shipped
+  // in the same GGUF — no reload, only that embodiment's weight rows are re-read
+  // (~20MB vs a multi-GB model load). Refreshes the cached hparams:
+  // `numCameras` follows the new embodiment, so subsequent run() calls must pass
+  // that many images.
+  //
+  // Takes a tag string, a numeric cat_id, or `{ tag | catId, numCameras }` —
+  // `numCameras` overrides the GGUF's camera count for that embodiment, which is
+  // how a row whose count was unknown at conversion time is run.
+  //
+  // Rejects (leaving the current embodiment active) for an unknown tag or
+  // cat_id, one not stored in this GGUF, an embodiment with no known camera
+  // count and no override, a single-embodiment model, or an inference that has
+  // not been awaited yet.
+  // eslint-disable-next-line @typescript-eslint/require-await -- kept async so it serializes through the exclusive run queue like run().
+  async setEmbodiment(
+    embodiment: VlaModel.VlaEmbodimentSelector,
+  ): Promise<VlaModel.VlaHparams> {
+    const sel = normalizeEmbodiment(embodiment, true);
+    return this._run(async () => {
+      if (!this._handle) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INSTANCE_NOT_INITIALIZED,
+        });
+      }
+      // The _run queue is NOT sufficient on its own: run() releases it as soon
+      // as it has dispatched the job and returned the QvacResponse, while the
+      // worker thread reaches infer() later. Switching in that window would run
+      // inference on the NEW weights against input already validated against the
+      // OLD hparams — the native mutex serializes the two but cannot restore the
+      // caller's intended order, so the result would be silently wrong for an
+      // embodiment the caller never selected. Refuse until the response settles.
+      if (this._hasActiveResponse) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.JOB_ALREADY_RUNNING,
+          adds: "await the in-flight run() response before switching embodiment",
+        });
+      }
+      try {
+        this._hparams = binding.setVlaEmbodiment(
+          this._handle,
+          sel.catId >= 0 ? sel.catId : sel.tag,
+          sel.numCameras,
+        );
+      } catch (err) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_CONFIG,
+          adds: (err as Error).message,
+          cause: err as Error,
+        });
+      }
+      return this._hparams;
+    });
   }
 
   async run(input: VlaModel.VlaRunInput): Promise<VlaModel.QvacResponse> {
@@ -746,7 +920,41 @@ namespace VlaModel {
      * `imageInputMode === 'patches'`. Optional for back-compat.
      */
     imagePatchElems?: number;
+    /**
+     * Multi-embodiment GR00T only: the embodiment tag resolved at load, so a
+     * caller can confirm which embodiment a default selection picked. Absent
+     * for single-embodiment GR00T and for SmolVLA / π₀.₅.
+     */
+    selectedEmbodimentTag?: string;
+    /**
+     * The resolved embodiment's numeric id (the checkpoint's `cat_id`) — the
+     * value to pass back to select the same embodiment by id. Absent when no
+     * embodiment was resolved (SmolVLA / π₀.₅).
+     *
+     * Many tags map to one `cat_id`, so selecting by id reports that id's
+     * canonical tag (the first in the GGUF's tag map), which may differ from the
+     * alias a tag-based selection was made with. The id is the stable identity.
+     */
+    selectedEmbodimentCatId?: number;
   }
+
+  /**
+   * How an embodiment is named when selecting one: a tag string, its numeric
+   * `cat_id` in `0..31`, or an object carrying either plus a camera-count
+   * override. `cat_id` indexes GR00T's CategorySpecificLinear bank, whose
+   * category dim the architecture fixes at 32, so ids outside that range are
+   * rejected rather than resolved.
+   *
+   * `numCameras` overrides the count stored in the GGUF for that embodiment. It
+   * is required to select a row whose count was unknown at conversion time
+   * (`num_cameras` is a data-config property, not a checkpoint tensor), and it
+   * also covers a rig whose view count differs from the stored one. Passing both
+   * `tag` and `catId` is an error.
+   */
+  export type VlaEmbodimentSelector =
+    | string
+    | number
+    | { tag?: string; catId?: number; numCameras?: number };
 
   export interface VlaRunInput {
     images: Float32Array[];
