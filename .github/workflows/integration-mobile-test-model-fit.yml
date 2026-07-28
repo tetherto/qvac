@@ -3,14 +3,15 @@ name: Mobile Integration Tests (Model Fit)
 # Runs the model-fit integration suite on real iOS/Android devices via AWS
 # Device Farm, using the shared .github/actions/run-mobile-integration-tests
 # composite actions. Single-pool scheduling (one Device Farm run per platform
-# against the addon's own pool).
+# against the shared LLM pool).
 #
-# NOTE: this workflow needs the model-fit Device Farm project + device pools
-# provisioned and these repo/org secrets to exist, otherwise the schedule step
-# has no ARN to target:
-#   AWS_DEVICE_FARM_PROJECT_ARN_MODEL_FIT
-#   ANDROID_DEVICE_POOL_ARN_MODEL_FIT
-#   IOS_DEVICE_POOL_ARN_MODEL_FIT
+# Device Farm projects and device pools are addon-agnostic — they only decide
+# which physical devices the run lands on — so this track shares the llm-llamacpp
+# project/pools rather than provisioning its own, matching what diffusion-cpp and
+# classification-ggml already do:
+#   LLM_AWS_DEVICE_FARM_PROJECT_ARN
+#   LLM_ANDROID_DEVICE_POOL_ARN
+#   LLM_IOS_DEVICE_POOL_ARN
 
 on:
   workflow_call:
@@ -129,7 +130,7 @@ jobs:
           app-type: ${{ steps.build.outputs.app-type }}
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_MODEL_FIT }}
+          device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
           enables-perf: 'false'
 
       - name: Schedule Device Farm test run
@@ -137,9 +138,9 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
         with:
           platform: ${{ matrix.platform }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_MODEL_FIT }}
-          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_MODEL_FIT }}
-          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_MODEL_FIT }}
+          device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
+          android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
+          ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
