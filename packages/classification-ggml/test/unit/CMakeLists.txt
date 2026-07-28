@@ -2,7 +2,13 @@ cmake_minimum_required(VERSION 3.25)
 
 project(ggml_classification_tests LANGUAGES C CXX)
 
-find_package(GTest CONFIG REQUIRED)
+# Plain test build: pull GoogleTest from vcpkg. Combined tests+fuzz build: the
+# parent already made FuzzTest's GoogleTest available (GTest::gtest defined), so
+# reuse it — a second find_package would fetch a colliding gtest. See
+# docs/architecture/ADDON-FUZZING.md.
+if(NOT TARGET GTest::gtest)
+  find_package(GTest CONFIG REQUIRED)
+endif()
 
 option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 

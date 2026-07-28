@@ -5,9 +5,25 @@ testing to QVAC's native (C++) inference addons. It is the reference for
 maintainers and agents implementing, reviewing, or extending fuzz coverage
 across the addon fleet.
 
-Status: **design approved, implementation not yet started.** Chosen framework:
+Status: **Phase 0 landed for `classification-ggml`** (template fuzz helper +
+first `FUZZ_TEST`); remaining phases not yet started. Chosen framework:
 **Google FuzzTest** (backed by libFuzzer), with OSS-Fuzz as an optional later
 phase.
+
+> **FuzzTest is sourced via CMake `FetchContent`, not vcpkg.** There is no
+> `fuzztest` vcpkg port (upstream request
+> [microsoft/vcpkg#36901](https://github.com/microsoft/vcpkg/issues/36901) was
+> closed as not-planned: FuzzTest ships no `install()` rules and `FetchContent`s
+> Abseil / RE2 / ANTLR / GoogleTest itself). Phase 0 therefore pins FuzzTest to a
+> commit and pulls it via `FetchContent`, gated behind `BUILD_FUZZING`. FuzzTest's
+> bundled GoogleTest (`GTest::gtest`) shares a target name with the vcpkg gtest the
+> unit tests link, so a `BUILD_FUZZING` build drops the vcpkg `tests` feature and
+> the unit tests reuse FuzzTest's GoogleTest — letting tests + fuzz build together
+> in one tree (see "Build integration"). Pinned source built
+> through the normal CMake dep flow is allowed by the dependency-pinning rule and
+> is **not** remote code execution. A proper vcpkg port (which would need to patch
+> FuzzTest for `install()` + `find_package`, and add `re2`/`antlr4` ports to the
+> registry) is deferred; revisit if fuzzing graduates to always-on CI.
 
 > **This effort rides on the shared CMake template + fabric migration.** As of
 > the `qvac-addon` CMake template
@@ -130,8 +146,10 @@ Two consequences for fuzzing, both important:
   on self-hosted `qvac-*` runners, gated by the SHA-bound fork-CI trust policy.
 - Builds are CMake + vcpkg with existing `BUILD_TESTING` and `ENABLE_COVERAGE`
   options — a `BUILD_FUZZING` option added to `qvac_addon_preproject` follows the
-  same established pattern (and maps a `fuzz` vcpkg feature for FuzzTest + Abseil
-  + RE2, mirroring how `BUILD_TESTING` maps the `tests` feature).
+  same established pattern. Unlike `BUILD_TESTING` it does **not** map a vcpkg
+  feature (FuzzTest has no vcpkg port); it instead triggers a `FetchContent` pull
+  of a pinned FuzzTest and short-circuits the addon's normal `project()` into a
+  fuzz-only configure.
 
 ## Attack surface (grouped by shared input family)
 
@@ -185,8 +203,23 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
 
 ### Accepted trade-offs
 
-- FuzzTest pulls in Abseil + RE2 (via vcpkg), scoped behind `BUILD_FUZZING=OFF`
-  so normal builds and the existing coverage job are unaffected.
+- FuzzTest pulls in Abseil + RE2 + ANTLR + GoogleTest (via `FetchContent` at a
+  pinned commit), scoped behind `BUILD_FUZZING=OFF` so normal builds and the
+  existing coverage job are unaffected. The fuzz configure fetches + compiles
+  that stack (~1 min incremental locally); it is a dedicated build, never on the
+  default path.
+- **Abseil pin override (bug #2091).** FuzzTest (as of `2026-06-29` and `main`)
+  `FetchContent`s Abseil `20260526.0`, whose `absl_strings` CMake target links to
+  itself — a fatal generate-time error under the vcpkg toolchain. The template
+  overrides FuzzTest's `abseil-cpp` declaration with the upstream fix commit
+  (`d21659a`, 2026-07-01). Drop the override once a FuzzTest release pins a
+  post-fix Abseil.
+- **Whole fetched subtree forced to C++20.** FuzzTest hard-sets
+  `CMAKE_CXX_STANDARD 17` for its subtree, but `absl::SourceLocation` aliases
+  `std::source_location` under C++20, so an Abseil built at C++17 emits different
+  `MakeErrorImpl(...)` symbols than a C++20 consumer TU (our addon code needs
+  `std::span`) references — an undefined-symbol link error. The template lifts
+  every fetched target to C++20 after `FetchContent` to keep one consistent ABI.
 - Continuous-fuzzing mode is Linux/clang-first. Fuzzing is treated as a
   **Linux-only** CI concern, consistent with the existing `if(NOT WIN32)` ASan
   gating.
@@ -201,21 +234,49 @@ each addon exactly the way the test harness is, so onboarding an addon is a few
 lines in the PR that already migrates it to the template + fabric.
 
 - **`BUILD_FUZZING` option** lives in `qvac_addon_preproject` next to
-  `BUILD_TESTING` / `ENABLE_COVERAGE`, and appends a `fuzz` entry to
-  `VCPKG_MANIFEST_FEATURES` (FuzzTest + Abseil + RE2), mirroring how
-  `BUILD_TESTING` appends `tests`.
-- **`qvac_addon_add_fuzz_target(<name> SOURCES … [LINK_FABRIC])`** — a new helper
-  that builds a plain `add_executable`, applies
-  `-fsanitize=address,undefined,fuzzer` (non-Windows), wires FuzzTest/GTest, and
-  — **only when `LINK_FABRIC` is given** — calls the existing
-  `qvac_addon_stage_fabric_for_test()` so the runtime `.bare` + backends stage
-  next to the fuzz binary. Omitting `LINK_FABRIC` (the default, preferred for the
-  pure parse/transform targets) keeps full ASan + LSan.
+  `BUILD_TESTING` / `ENABLE_COVERAGE`. It maps no vcpkg feature of its own;
+  instead it **suppresses** the `tests` feature (see the next bullet) and the
+  addon's `CMakeLists.txt` branches on it. `BUILD_FUZZING` **without**
+  `BUILD_TESTING` short-circuits into a **fuzz-only configure**
+  (`add_subdirectory(test/fuzz)` then `return()`), skipping the `.bare` module and
+  the `@qvac/fabric` runtime so a pure parse/transform fuzz driver keeps full
+  ASan + LSan.
+- **`BUILD_TESTING` + `BUILD_FUZZING` build together** in one tree by sharing a
+  single GoogleTest. The collision they used to have was purely about target
+  names — vcpkg's `GTest::gtest` vs FuzzTest's FetchContent'd `GTest::gtest`. So
+  whenever `BUILD_FUZZING` is on, `qvac_addon_preproject` drops the vcpkg `tests`
+  feature, `qvac_addon_enable_fuzztest()` is made available **before**
+  `test/unit`, and the unit tests reuse FuzzTest's GoogleTest
+  (`if(NOT TARGET GTest::gtest)` in `test/unit/CMakeLists.txt` skips the vcpkg
+  `find_package`). The combined configure builds only the two test executables —
+  the production `.bare` module is skipped so the fuzzing toolchain never
+  instruments the shipped addon. A plain `BUILD_TESTING`-only build is unchanged:
+  vcpkg gtest, full production module, no FuzzTest fetch. Because the combined
+  configure caches `BUILD_FUZZING=ON`, it uses its own tree
+  (`bare-make … -b build-fuzz`, wired into the `test:cpp:fuzz*` npm scripts) so it
+  never poisons the default `build/` cache.
+- **`qvac_addon_enable_fuzztest()`** — fetches + builds a pinned FuzzTest once per
+  configure (idempotent), overriding FuzzTest's Abseil pin (bug #2091) and
+  forcing the fetched subtree to C++20. Defines `link_fuzztest()` /
+  `fuzztest_setup_fuzzing_flags()`.
+- **`qvac_addon_add_fuzz_target(<name> SOURCES … [INCLUDE_DIRS …] [LINK_LIBS …]
+  [LINK_FABRIC])`** — builds a plain `add_executable`, calls
+  `fuzztest_setup_fuzzing_flags()` (adds coverage instrumentation in fuzzing
+  mode), links FuzzTest + its GoogleTest, applies `-fsanitize=address`
+  + `-fno-omit-frame-pointer` (non-Windows) for the bounded unit-test runs, and
+  registers a `ctest` case. Only when `LINK_FABRIC` is given does it link the
+  fabric headers/module and call `qvac_addon_stage_fabric_for_test()`. Omitting
+  `LINK_FABRIC` (the default, preferred for pure parse/transform targets) keeps
+  full ASan + LSan.
+- **Two run modes off one source.** Default configure builds FuzzTest's
+  unit-test mode: every `FUZZ_TEST` runs bounded via `ctest` (free per-PR
+  regression coverage). Configure with `-D FUZZTEST_FUZZING_MODE=ON` for
+  coverage-guided fuzzing, then run `<binary> --fuzz=Suite.Test [--fuzz_for=…]`.
 - **Runner parity.** A fuzz binary that links fabric must run under the same
   `ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0` that
   `scripts/run-cpp-tests.js` applies to `addon-test`; a non-fabric fuzz binary
-  runs with default (full) options. The scheduled fuzz job selects the right
-  option string per target.
+  (the `classification-ggml` Phase 0 target) runs with default (full) options —
+  `scripts/run-cpp-fuzz.js` deliberately sets **no** `ASAN_OPTIONS` relaxations.
 - **Drift guard.** Because the wiring is in the template, the planned
   `scripts/check-addon-cmake.mjs` guard covers it — a re-inlined fuzz block or a
   missing `qvac_addon_add_fuzz_target` call is a CI failure like any other
@@ -232,13 +293,15 @@ diffusion (separate vcpkg ports) are fuzzed after they migrate. Within that
 order the plan front-loads the shared parsing families that protect several
 addons at once.
 
-- **Phase 0 — template fuzz helper + spike (`classification-ggml`).** Add the
-  `fuzz` vcpkg feature + FuzzTest dependency, the `BUILD_FUZZING` option in
-  `qvac_addon_preproject`, and the `qvac_addon_add_fuzz_target()` helper to
-  `cmake/qvac-addon/qvac-addon.cmake`. Prove it with one `FUZZ_TEST` over
-  `preprocessToTensor` in `classification-ggml` (already migrated), built
-  **without** `LINK_FABRIC` so it keeps full ASan + LSan. Confirm it runs both
-  as a bounded unit test and in fuzzing mode locally.
+- **Phase 0 — template fuzz helper + spike (`classification-ggml`). ✅ Done.**
+  Added the `BUILD_FUZZING` option in `qvac_addon_preproject`, the
+  `qvac_addon_enable_fuzztest()` + `qvac_addon_add_fuzz_target()` helpers (pinned
+  FuzzTest via `FetchContent`, Abseil #2091 override, C++20 subtree forcing) to
+  `cmake/qvac-addon/qvac-addon.cmake`, a `test/fuzz` `FUZZ_TEST` over
+  `preprocessToTensor` built **without** `LINK_FABRIC` (full ASan + LSan), and
+  `fuzz*` npm scripts + `scripts/run-cpp-fuzz.js`. Validated locally: bounded
+  unit-test run passes clean, and 20 s coverage-guided fuzzing (`~933k` runs)
+  found no crash/leak.
 - **Phase 1 — image + model-header families (as addons migrate).** As each
   direct-ggml addon adopts the template, add its fuzz targets: the image family
   (`classification-ggml`, `ocr-ggml`, `vla-ggml`; `diffusion-cpp` after it
@@ -286,9 +349,15 @@ addons at once.
   in-process model produces false crashes. Keeping targets to pure
   parse/transform functions (not `runJob`) avoids this — and is the same choice
   that lets most targets skip the fabric link.
-- **Build-time cost.** FuzzTest + Abseil + RE2 stay behind `BUILD_FUZZING=OFF`
-  (via the template's `fuzz` vcpkg feature); normal builds and coverage are
-  unaffected.
+- **Build-time cost.** FuzzTest + Abseil + RE2 + ANTLR + GoogleTest are pulled
+  and compiled only under `BUILD_FUZZING=ON` (a dedicated `FetchContent`
+  configure); normal builds and coverage are unaffected. The fuzz configure needs
+  network access to fetch the pinned sources — fine for the local/scheduled fuzz
+  job, and cacheable in CI.
+- **Upstream-pin maintenance.** The FuzzTest commit, the Abseil #2091 override,
+  and the C++20 subtree forcing are all workarounds for the current FuzzTest
+  release. Each is documented at its definition in `qvac-addon.cmake` with a
+  "drop this once…" note; revisit on every FuzzTest bump.
 - **Platform scope.** libFuzzer + ASan is Linux-first here; treat fuzzing as a
   Linux-only CI concern (matches the existing `if(NOT WIN32)` ASan gate).
 - **Migration coupling.** An addon can't be fuzzed via the shared helper until
@@ -301,9 +370,19 @@ addons at once.
 
 ## References
 
-- `cmake/qvac-addon/qvac-addon.cmake` — the shared addon build template; where
-  `BUILD_FUZZING` + `qvac_addon_add_fuzz_target()` land, and home of the existing
-  `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
+- `cmake/qvac-addon/qvac-addon.cmake` — the shared addon build template; home of
+  `BUILD_FUZZING`, `qvac_addon_enable_fuzztest()`, `qvac_addon_add_fuzz_target()`
+  (with the FuzzTest pin, Abseil #2091 override, and C++20 subtree forcing) and
+  the existing `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
+- `packages/classification-ggml/test/fuzz/` — Phase 0 reference: the
+  `CMakeLists.txt` fuzz wiring and `preprocess_fuzz.cpp` (`FUZZ_TEST` over
+  `preprocessToTensor`, no fabric link).
+- `packages/classification-ggml/scripts/run-cpp-fuzz.js` — bounded /
+  `--continuous` fuzz runner (full ASan + LSan, no `ASAN_OPTIONS` relaxation);
+  wired via the `fuzz`, `fuzz:build`, `fuzz:run`, `fuzz:continuous` npm scripts
+  (fuzz-only tree) and the `test:cpp:fuzz*` scripts (combined tests+fuzz tree).
+  Both runners take `--build-dir <dir>` (default `build` / `build-fuzz`) so the
+  combined `build-fuzz` tree can host `addon-test` and `preprocess-fuzz` together.
 - `docs/architecture/ADDON-CMAKE-TEMPLATE.md` — template design, the fabric
   migration shape, migration order, and the planned `check-addon-cmake.mjs`
   drift guard.

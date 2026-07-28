@@ -34,7 +34,17 @@ set(QVAC_ADDON_CMAKE_VERSION "0.1.0")
 macro(qvac_addon_preproject)
   option(BUILD_TESTING "Build tests" OFF)
   option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
-  if(BUILD_TESTING)
+  # Fuzzing (see qvac_addon_add_fuzz_target and docs/architecture/ADDON-FUZZING.md)
+  # pulls GoogleTest from FuzzTest's FetchContent tree rather than vcpkg. Its
+  # GTest::gtest targets would collide with the vcpkg gtest, so whenever
+  # BUILD_FUZZING is on we must NOT enable the "tests" vcpkg feature — the unit
+  # tests (if BUILD_TESTING is also on) then share FuzzTest's GoogleTest, which is
+  # exactly what lets tests + fuzz configure together in one build tree.
+  option(BUILD_FUZZING "Build fuzz targets (FuzzTest via FetchContent)" OFF)
+  # The vcpkg "tests" feature only exists to install gtest for the plain unit-test
+  # build. In the combined tests+fuzz build the shared FuzzTest GoogleTest takes
+  # its place, so skip it there.
+  if(BUILD_TESTING AND NOT BUILD_FUZZING)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
   endif()
 
@@ -327,4 +337,160 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
   elseif(NOT WIN32)
     set_target_properties(${test_target} PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
+endfunction()
+
+# ---------------------------------------------------------------------------
+# FuzzTest integration (Google FuzzTest).
+#
+# FuzzTest has no vcpkg port (upstream request microsoft/vcpkg#36901 was closed
+# as not-planned: it has no install() rules and FetchContents Abseil/RE2/ANTLR/
+# GoogleTest itself), so we consume it via CMake FetchContent pinned to a commit.
+# Pinned source built through the normal CMake dep flow is allowed by the
+# dependency-pinning rule; this is NOT remote code execution. Bump both values
+# together when moving to a newer FuzzTest release.
+# ---------------------------------------------------------------------------
+set(QVAC_ADDON_FUZZTEST_GIT_REPOSITORY "https://github.com/google/fuzztest.git")
+# Release 2026-06-29.
+set(QVAC_ADDON_FUZZTEST_GIT_TAG "704efb341c23011cab2a750efcdd16ad04882c80")
+
+# FuzzTest (as of 2026-06-29 and main) FetchContents Abseil 20260526.0, which
+# carries abseil bug #2091: the absl_strings CMake target links to itself, which
+# the toolchain treats as a fatal generate-time error. It was fixed upstream on
+# 2026-07-01 (abseil commit d21659a). We override FuzzTest's abseil-cpp
+# declaration with that fix commit — FetchContent honours the first declaration,
+# so declaring abseil-cpp before pulling FuzzTest wins. Drop this override once
+# a FuzzTest release pins a post-fix Abseil.
+set(QVAC_ADDON_ABSEIL_GIT_REPOSITORY "https://github.com/abseil/abseil-cpp.git")
+set(QVAC_ADDON_ABSEIL_GIT_TAG "d21659a5affab9def3333ae70c1123c3fe1a9873")
+
+# ---------------------------------------------------------------------------
+# _qvac_addon_force_cxx_standard(<dir> <standard>)
+#
+# Recursively set CXX_STANDARD on every non-interface target under <dir>.
+#
+# FuzzTest hard-sets `set(CMAKE_CXX_STANDARD 17)` for its whole fetched subtree
+# (FuzzTest + Abseil + RE2 + GoogleTest). Abseil's `absl::SourceLocation` aliases
+# std::source_location under C++20, so an Abseil built at C++17 emits different
+# MakeErrorImpl(...) symbols than a C++20 consumer TU references — an undefined-
+# symbol link error. Our addon TUs need C++20 (std::span), so we lift the fetched
+# subtree to C++20 after creation to keep one consistent ABI. Applied after
+# FetchContent so it wins over FuzzTest's in-scope set().
+# ---------------------------------------------------------------------------
+function(_qvac_addon_force_cxx_standard dir standard)
+  get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(_t ${_targets})
+    get_target_property(_type ${_t} TYPE)
+    if(NOT _type STREQUAL "INTERFACE_LIBRARY")
+      set_target_properties(${_t} PROPERTIES
+        CXX_STANDARD ${standard} CXX_STANDARD_REQUIRED ON)
+    endif()
+  endforeach()
+  get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+  foreach(_sd ${_subdirs})
+    _qvac_addon_force_cxx_standard("${_sd}" ${standard})
+  endforeach()
+endfunction()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_enable_fuzztest()
+#
+# Fetch + build FuzzTest once per configure. Defines the link_fuzztest() and
+# fuzztest_setup_fuzzing_flags() functions in global scope. Idempotent: the
+# guard makes a second call a no-op so several fuzz targets can share one build.
+#
+# Pass -DFUZZTEST_FUZZING_MODE=ON at configure time for coverage-guided fuzzing
+# mode; the default (OFF) is FuzzTest's unit-test mode, which runs each
+# FUZZ_TEST as a bounded GoogleTest.
+# ---------------------------------------------------------------------------
+macro(qvac_addon_enable_fuzztest)
+  if(NOT DEFINED _QVAC_ADDON_FUZZTEST_READY)
+    include(FetchContent)
+    if(POLICY CMP0135)
+      cmake_policy(SET CMP0135 NEW)
+      set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
+    endif()
+    message(STATUS
+      "qvac-addon: fetching FuzzTest ${QVAC_ADDON_FUZZTEST_GIT_TAG}")
+    # Override FuzzTest's abseil-cpp pin (see the bug #2091 note above). Must be
+    # declared before FuzzTest is made available so this declaration wins.
+    FetchContent_Declare(
+      abseil-cpp
+      GIT_REPOSITORY "${QVAC_ADDON_ABSEIL_GIT_REPOSITORY}"
+      GIT_TAG "${QVAC_ADDON_ABSEIL_GIT_TAG}"
+    )
+    FetchContent_Declare(
+      fuzztest
+      GIT_REPOSITORY "${QVAC_ADDON_FUZZTEST_GIT_REPOSITORY}"
+      GIT_TAG "${QVAC_ADDON_FUZZTEST_GIT_TAG}"
+    )
+    FetchContent_MakeAvailable(fuzztest)
+    _qvac_addon_force_cxx_standard("${fuzztest_SOURCE_DIR}" 20)
+    set(_QVAC_ADDON_FUZZTEST_READY ON)
+  endif()
+endmacro()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_add_fuzz_target(<target>
+#     SOURCES <src>...
+#     [INCLUDE_DIRS <dir>...]
+#     [LINK_LIBS <lib>...]
+#     [LINK_FABRIC])
+#
+# Build a FuzzTest binary from the given SOURCES (the fuzz driver plus the
+# addon TUs under test). The binary works in two modes off the same build:
+#   * unit-test mode (default)   — every FUZZ_TEST runs bounded, via ctest.
+#   * fuzzing mode               — configure with -DFUZZTEST_FUZZING_MODE=ON,
+#                                  then run `<target> --fuzz=Suite.Test`.
+#
+# The target is linked with AddressSanitizer; without LINK_FABRIC it keeps FULL
+# ASan + LeakSanitizer (the fabric prebuild's static-libstdc++ boundary is the
+# only thing that forces relaxed ASan options — see qvac_addon_stage_fabric_for_test),
+# so prefer fuzzing pure parse/transform code with LINK_FABRIC omitted.
+# ---------------------------------------------------------------------------
+function(qvac_addon_add_fuzz_target target)
+  cmake_parse_arguments(_QAFZ "LINK_FABRIC" "" "SOURCES;INCLUDE_DIRS;LINK_LIBS" ${ARGN})
+  if(NOT _QAFZ_SOURCES)
+    message(FATAL_ERROR "qvac_addon_add_fuzz_target(${target}): SOURCES required")
+  endif()
+
+  qvac_addon_enable_fuzztest()
+
+  # fuzztest_setup_fuzzing_flags() applies coverage/sanitizer flags (fuzzing
+  # mode only) to targets declared after it in this directory scope, so it must
+  # run before add_executable().
+  fuzztest_setup_fuzzing_flags()
+
+  add_executable(${target} ${_QAFZ_SOURCES})
+  target_compile_features(${target} PRIVATE cxx_std_20)
+  target_compile_options(${target} PRIVATE -Wall -Wextra -g)
+  if(_QAFZ_INCLUDE_DIRS)
+    target_include_directories(${target} PRIVATE ${_QAFZ_INCLUDE_DIRS})
+  endif()
+  if(_QAFZ_LINK_LIBS)
+    target_link_libraries(${target} PRIVATE ${_QAFZ_LINK_LIBS})
+  endif()
+
+  link_fuzztest(${target})
+
+  # ASan + LSan for the bounded unit-test runs (fuzzing mode layers coverage on
+  # top via fuzztest_setup_fuzzing_flags()).
+  if(NOT WIN32)
+    target_compile_options(${target} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(${target} PRIVATE -fsanitize=address)
+  endif()
+
+  if(_QAFZ_LINK_FABRIC)
+    if(NOT DEFINED qvac_fabric_target)
+      message(FATAL_ERROR
+        "qvac_addon_add_fuzz_target(${target} LINK_FABRIC): call "
+        "qvac_addon_use_fabric() first to set qvac_fabric_target")
+    endif()
+    target_link_libraries(${target} PRIVATE
+      qvac-fabric::headers ${qvac_fabric_target}_module)
+    qvac_addon_stage_fabric_for_test(${target} ${qvac_fabric_target})
+  endif()
+
+  include(GoogleTest)
+  add_test(NAME ${target} COMMAND ${target})
+  set_tests_properties(${target} PROPERTIES TIMEOUT 600)
 endfunction()

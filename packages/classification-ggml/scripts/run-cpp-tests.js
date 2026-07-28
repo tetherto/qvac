@@ -39,9 +39,28 @@ function resolveExitCode(result) {
   return result.status ?? 1
 }
 
+/**
+ * Resolve which build tree holds addon-test. Defaults to the plain test tree
+ * (build/); the combined tests+fuzz build lives in build-fuzz/. A `--build-dir
+ * <dir>` (or `--build-dir=<dir>`) flag wins over the CPP_BUILD_DIR env var,
+ * which wins over the default.
+ */
+function resolveBuildDir(argv, processEnv) {
+  const eq = argv.find((a) => a.startsWith('--build-dir='))
+  if (eq) {
+    return eq.slice('--build-dir='.length)
+  }
+  const idx = argv.indexOf('--build-dir')
+  if (idx !== -1 && argv[idx + 1]) {
+    return argv[idx + 1]
+  }
+  return processEnv.CPP_BUILD_DIR || 'build'
+}
+
 function main() {
   const binary = os.platform() === 'win32' ? 'addon-test.exe' : './addon-test'
-  const cwd = path.resolve(__dirname, '..', 'build', 'test', 'unit')
+  const buildDir = resolveBuildDir(process.argv.slice(2), process.env)
+  const cwd = path.resolve(__dirname, '..', buildDir, 'test', 'unit')
 
   const result = spawnSync(binary, ['--gtest_output=xml:cpp-test-results.xml'], {
     cwd,
@@ -68,5 +87,6 @@ if (require.main === module) {
 module.exports = {
   DEFAULT_ASAN_OPTIONS,
   buildRunnerEnv,
-  resolveExitCode
+  resolveExitCode,
+  resolveBuildDir
 }
