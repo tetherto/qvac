@@ -154,7 +154,9 @@ export * from './models/registry/index.ts'
 
 export { SUPPORTED_AUDIO_FORMATS } from './constants/audio.ts'
 
-// Error classes consumers need for `instanceof` checks on rejected promises.
+// Error classes consumers need for `instanceof` checks: on rejected promises,
+// and on the synchronous throws of `plugins()` / `registerPlugin` (the plugin
+// group below).
 export {
   InferenceCancelledError,
   ContextOverflowError,
@@ -163,7 +165,11 @@ export {
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
   ModelNotLoadedError,
-  TranslationFailedError
+  TranslationFailedError,
+  PluginDefinitionInvalidError,
+  PluginModelTypeReservedError,
+  PluginAlreadyRegisteredError,
+  PluginLoggingInvalidError
 } from './errors/index.ts'
 export type { InferenceCancelledPartial } from './errors/index.ts'
 

@@ -62,6 +62,10 @@
       "types": "./dist/plugins/index.d.ts",
       "import": "./dist/plugins/index.js"
     },
+    "./plugin-registry": {
+      "types": "./dist/plugins/registry.d.ts",
+      "import": "./dist/plugins/registry.js"
+    },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
       "import": "./dist/schemas/plugin.js"
