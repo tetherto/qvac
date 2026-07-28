@@ -84,13 +84,33 @@ describe('timed transcription response formatting', () => {
     assert.equal(
       formatTimedTranscription('vtt', segments).body,
       'WEBVTT\n\n' +
-        '1\n00:00:00.000 --> 00:00:02.000\nlater\n\n' +
-        '2\n00:00:00.000 --> 00:00:01.000\nearlier\n'
+        '1\n00:00:00.000 --> 00:00:01.000\nearlier\n\n' +
+        '2\n00:00:00.000 --> 00:00:02.000\nlater\n'
     )
     assert.equal(
       (formatTimedTranscription('verbose_json', segments).body as { duration: number }).duration,
       2
     )
+  })
+
+  it('orders cues by start time while verbose segments keep SDK order', () => {
+    const segments: TranscribeSegment[] = [
+      { id: 0, startMs: 2_000, endMs: 3_000, text: ' second', append: false },
+      { id: 1, startMs: 0, endMs: 1_000, text: ' first', append: true }
+    ]
+
+    assert.equal(
+      formatTimedTranscription('srt', segments).body,
+      '1\n00:00:00,000 --> 00:00:01,000\nfirst\n\n' + '2\n00:00:02,000 --> 00:00:03,000\nsecond\n'
+    )
+    assert.deepEqual(formatTimedTranscription('verbose_json', segments).body, {
+      text: 'second first',
+      duration: 3,
+      segments: [
+        { id: 0, start: 2, end: 3, text: ' second' },
+        { id: 1, start: 0, end: 1, text: ' first' }
+      ]
+    })
   })
 
   it('normalizes embedded cue line breaks without changing verbose segment text', () => {

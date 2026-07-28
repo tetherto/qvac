@@ -65,12 +65,18 @@ export function formatTimedTranscription(
 }
 
 function formatCues(segments: TranscribeSegment[], separator: ',' | '.'): string {
+  // SRT and WebVTT both require cue start times in non-decreasing order.
   return segments
     .map((segment) => ({
       ...segment,
       text: segment.text.trim().replace(/\s*[\r\n]+\s*/g, ' ')
     }))
     .filter((segment) => segment.text.length > 0)
+    .sort(
+      (a, b) =>
+        cueMilliseconds(a.startMs) - cueMilliseconds(b.startMs) ||
+        cueMilliseconds(a.endMs) - cueMilliseconds(b.endMs)
+    )
     .map(
       (segment, index) =>
         `${index + 1}\n${formatTimestamp(segment.startMs, separator)} --> ${formatTimestamp(
@@ -82,12 +88,16 @@ function formatCues(segments: TranscribeSegment[], separator: ',' | '.'): string
 }
 
 function formatTimestamp(milliseconds: number, separator: ',' | '.'): string {
-  const roundedMilliseconds = Math.max(0, roundMilliseconds(milliseconds))
+  const roundedMilliseconds = cueMilliseconds(milliseconds)
   const hours = Math.floor(roundedMilliseconds / 3_600_000)
   const minutes = Math.floor((roundedMilliseconds % 3_600_000) / 60_000)
   const seconds = Math.floor((roundedMilliseconds % 60_000) / 1_000)
   const millis = roundedMilliseconds % 1_000
   return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}${separator}${pad(millis, 3)}`
+}
+
+function cueMilliseconds(milliseconds: number): number {
+  return Math.max(0, roundMilliseconds(milliseconds))
 }
 
 function roundMilliseconds(milliseconds: number): number {
