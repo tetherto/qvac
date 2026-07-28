@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.39.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1`. This fixes MoE/GDN LoRA
+  finetuning: weight repacking is disabled for training loads (backward ops cannot
+  read repacked layouts), the Metal `acc`/`set` threadgroup dispatch now covers rows
+  wider than one threadgroup, and training on MoE / hybrid / recurrent architectures
+  seeds the backward pass from a down-scaled loss so gradients stay within fp32
+  range (persisted with the optimizer state). No API change for this package.
+
 ## [0.38.2] - 2026-07-23
 
 Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.
