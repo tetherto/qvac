@@ -23,8 +23,7 @@ const DEFAULT_ASAN_OPTIONS = 'alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_e
 function buildRunnerEnv(processEnv) {
   return {
     ...processEnv,
-    ASAN_OPTIONS:
-      'ASAN_OPTIONS' in processEnv ? processEnv.ASAN_OPTIONS : DEFAULT_ASAN_OPTIONS
+    ASAN_OPTIONS: 'ASAN_OPTIONS' in processEnv ? processEnv.ASAN_OPTIONS : DEFAULT_ASAN_OPTIONS
   }
 }
 
