@@ -38,6 +38,11 @@ The owning package also owns `bare-stow` assembly, platform packaging, spawn
 lifecycle, and readiness checks. Workers are not installed or upgraded as
 independent local services.
 
+The
+[interactive deployment and package composition map](https://packages-deployment-options-demo.netlify.app/)
+shows how this ownership rule applies to Assistant-managed and direct package
+entry points.
+
 Where supported, TypeScript, Python, Swift, and Kotlin bindings are generated
 from the same worker contract. They are client implementations inside an
 application host, not separate deployment hosts. Each supported client
@@ -131,12 +136,16 @@ instances.
 - Packages carry platform-specific worker artifacts.
 - Separate worker bundles may repeat private dependencies.
 - Semver ranges need ongoing minimum-version and latest-version CI coverage.
-- Multiple independent Inference workers remain possible and may duplicate
-  model memory or compete for compute resources.
 
-Resource ownership is separate from dependency versioning. Two workers must
-fail fast if they attempt to own the same exclusive storage or runtime
-resource.
+The normal composed application stack creates one shared Inference worker.
+Creating another independent SDK client and worker requires explicit
+application composition; the stack does not create one implicitly for each
+agent or Harness consumer. Explicit additional workers may duplicate model
+memory or compete for compute resources.
+
+Resource ownership is separate from dependency versioning. Explicitly composed
+workers must fail fast if they attempt to own the same exclusive storage or
+runtime resource.
 
 ## Alternatives considered
 
@@ -175,12 +184,12 @@ Change this ADR to Accepted only after:
    artifacts.
 7. Every supported language distribution installs its matching worker
    artifacts and uses the equivalent worker contract.
+8. Assistant/Harness composition starts one shared Inference worker by
+   default; another worker is created only through explicit application
+   composition.
 
 ## Related material
 
-- [Composable Agent Runtime QIP](../../../../../arch/qips/agentic-sdk-p2p-layering.md)
-- Local deployment and contract design (companion QIP, pending repo publication)
-- SDK and Inference split (companion QIP, pending repo publication)
 - [Package-owned Bare-Stow runtimes](../tech-debt/TD-PACKAGE-OWNED-BARE-STOW-RUNTIMES.md)
 - [Multilanguage RPC client generation](../tech-debt/TD-MULTILANGUAGE-RPC-CLIENT-GENERATION.md)
 - [Mobile RPC contract parity](../tech-debt/TD-MOBILE-RPC-CONTRACT-PARITY.md)

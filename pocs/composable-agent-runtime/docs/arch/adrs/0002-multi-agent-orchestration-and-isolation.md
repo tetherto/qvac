@@ -36,26 +36,43 @@ flowchart LR
   end
   harness --> agents["@qvac/agents\n(per-run engine)"]
   agents --> sdkAdapter["ModelAdapter (RPC)"]
-  sdkAdapter --> sdk["@qvac/sdk / model weights\n(shared per device)"]
+  sdkAdapter --> sdk["@qvac/sdk / model weights\n(shared per app stack)"]
   broker --> sandbox["Per-agent tool sandbox\n(exec/fs/net/Pyodide)"]
 ```
 
-### Process topology
+### Runtime topology
 
-Three process roles per device, not one:
+Three runtime roles per composed application stack, not one:
 
-1. **Harness (orchestrator)** - one shared process. Hosts the run registry
+1. **Harness (orchestrator)** - one shared runtime. Hosts the run registry
    and the tool/data broker. Calls `@qvac/agents` per active run.
-2. **SDK/model** - one shared process, sole owner of model weights and
-   pools. Agents never load models themselves; they call the SDK through an
-   RPC `ModelAdapter`, identical in shape to today's `createSdkModelAdapter`.
+2. **SDK/model** - one shared runtime per composed application stack, sole
+   owner of that stack's model weights and pools. Agents never load models
+   themselves; they call the SDK through an RPC `ModelAdapter`, identical in
+   shape to today's `createSdkModelAdapter`. The stack does not create another
+   SDK runtime per agent. An application may explicitly compose an additional
+   independent SDK client and worker when it intentionally needs one.
 3. **Per-agent tool sandbox** - a lightweight, restartable unit (process or
    Worklet) that only side-effecting tool calls (`exec`, filesystem, network,
-   MCP, Python/Pyodide) are routed into. One sandbox per agent, not shared
-   and not spawned per-call, so state only needs resetting when an agent is
-   GC'd. This is the actual isolation boundary; the orchestration loop itself
-   is not isolated per agent, since it never touches raw external resources
+   MCP, Python/Pyodide) are routed into. One sandbox per agent, not shared and
+   not spawned per-call. It may retain agent-local runtime state while active;
+   idle teardown or agent GC discards that state. This is the agent's
+   execution-state and lifecycle boundary; the orchestration loop itself is
+   not isolated per agent, since it never touches raw external resources
    directly.
+
+Skills are curated packages bundled with Harness. Harness loads their
+manifests and resource files, derives their tool and resource grants, and
+dispatches selected skill operations through the broker into the owning
+agent's sandbox. User-defined agents bind available skills; they do not inject
+arbitrary executable code into the Harness process.
+
+The portable sandbox does not claim an OS security boundary on every platform.
+A Worklet can isolate runtime state and lifecycle while still sharing the host
+process. Authority is enforced by broker-mediated tools, scoped resource and
+credential handles, and the absence of raw host or Sync handles. A process or
+service backend may additionally provide crash containment where the platform
+supports it.
 
 ### Mediation: no raw Sync/P2P handles in agent code
 
@@ -123,9 +140,12 @@ flowchart TB
 - **Ownership/handoff**: unchanged from qvac-app's `assistant` package - only the device
   matching `providerDeviceId` executes; losing ownership mid-run aborts
   without a terminal chunk, so another device can claim and resume.
-- **Cancellation**: explicit cancel writes a terminal `run-canceled` chunk
-  immediately; signal-driven cancel additionally tells the broker to abort
-  any in-flight sandbox call for that run, not just the model completion.
+- **Cancellation**: explicit cancel durably records cancellation intent and
+  tells the broker to abort any in-flight sandbox call for that run, not just
+  the model completion. Terminal `run-canceled` means no later result may be
+  committed. If an external effect cannot be confirmed stopped, recovery
+  records it as interrupted or indeterminate rather than implying rollback or
+  silently replaying it.
 
 ### Garbage collection - three independent clocks
 
@@ -163,6 +183,9 @@ of those chunk types included.
 - Harness takes on materially more responsibility (registry + broker) than
   today's single-shot completion boundary - this is new code, not a
   refactor.
+- Worklet sandboxes provide runtime-state and lifecycle separation but not
+  process crash containment. Platform process or service backends have
+  stronger failure boundaries where available.
 - Per-agent sandbox pooling (especially for Pyodide/Python) needs explicit
   reset discipline between an agent's own sequential calls at minimum, and
   careful handling if pool affinity is ever relaxed to allow sharing.
@@ -199,4 +222,15 @@ must call into on every run.
    durable chunks + checkpoints, with no ephemeral state required.
 5. Per-agent tool sandboxes tear down on idle timeout independent of agent
    deletion.
+6. Bundled skill manifests and resources are loaded by Harness, but every
+   side-effecting operation executes with only the selected agent's brokered
+   grants.
+7. Cancellation aborts the active model and sandbox work, rejects late result
+   commits, and preserves an explicit interrupted/indeterminate outcome when
+   an external effect cannot be confirmed stopped.
+
+## Related material
+
+- [Durable agent effect recovery](../tech-debt/TD-DURABLE-AGENT-EFFECT-RECOVERY.md)
+- [Per-agent tool sandboxing](../tech-debt/TD-PER-AGENT-TOOL-SANDBOXING.md)
 
