@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "GGML image classification addon for QVAC (MobileNetV3-Small CPU inference)",
   "addon": true,
   "scripts": {
@@ -27,8 +27,9 @@
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
-    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp:run": "npm run test:scripts && node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js",
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
@@ -73,7 +74,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.2.0",
+    "@qvac/fabric": "^0.3.0",
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",

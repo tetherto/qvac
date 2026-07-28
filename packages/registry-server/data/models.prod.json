@@ -8129,6 +8129,40 @@
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 tokenizer merge rules",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "cosyvoice",
+      "cosyvoice3",
+      "tokenizer",
+      "merges"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 tokenizer vocabulary",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "cosyvoice",
+      "cosyvoice3",
+      "tokenizer",
+      "vocab"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Fun-CosyVoice3 English speaker voice embedding (GGUF)",

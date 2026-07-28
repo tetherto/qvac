@@ -7,9 +7,6 @@ on:
     paths:
       - "packages/transcription-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
 
   workflow_dispatch:
     inputs:

@@ -16,10 +16,6 @@ on:
     paths:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
-      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
 
 permissions:
@@ -126,10 +122,6 @@ jobs:
             pkg:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
-              - ".github/actions/cache-models/**"
-              - "vcpkg-overlays/triplets/**"
-              - "vcpkg-overlays/toolchains/**"
-              - "vcpkg-overlays/ports/qvac-fabric/**"
   verify-fabric-lockstep:
     needs: [fork-approval, authorize, changes]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')

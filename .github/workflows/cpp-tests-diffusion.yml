@@ -36,7 +36,7 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: qvac-macos26-arm64-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
