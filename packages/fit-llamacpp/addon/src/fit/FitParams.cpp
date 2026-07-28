@@ -6,7 +6,7 @@
 #include <llama.h>
 
 #ifdef _WIN32
-#include <excpt.h>  // __try/__except, GetExceptionCode, EXCEPTION_EXECUTE_HANDLER
+#include <excpt.h> // __try/__except, GetExceptionCode, EXCEPTION_EXECUTE_HANDLER
 #endif
 
 namespace fit_llamacpp {
@@ -35,14 +35,10 @@ int fitSehFilter(unsigned long code) {
 }
 
 bool callLlamaParamsFitGuarded(
-    const char* pathModel,
-    llama_model_params* mparams,
-    llama_context_params* cparams,
-    float* tensorSplit,
-    llama_model_tensor_buft_override* buftOverrides,
-    size_t* margins,
-    uint32_t nCtxMin,
-    llama_params_fit_status* outStatus) {
+    const char* pathModel, llama_model_params* mparams,
+    llama_context_params* cparams, float* tensorSplit,
+    llama_model_tensor_buft_override* buftOverrides, size_t* margins,
+    uint32_t nCtxMin, llama_params_fit_status* outStatus) {
   __try {
     *outStatus = llama_params_fit(
         pathModel,
@@ -60,7 +56,7 @@ bool callLlamaParamsFitGuarded(
 }
 #endif
 
-}  // namespace
+} // namespace
 
 FitResult runFit(const FitRequest& req) {
   if (req.modelPath.empty()) {
@@ -89,7 +85,7 @@ FitResult runFit(const FitRequest& req) {
 
   // `llama_params_fit` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
-  if (req.nGpuLayers != kGpuLayersAuto) {
+  if (req.nGpuLayers != GPU_LAYERS_AUTO) {
     mparams.n_gpu_layers = req.nGpuLayers;
   }
   // n_ctx is the documented exception: the fitter reduces it iff it is 0.
@@ -108,8 +104,7 @@ FitResult runFit(const FitRequest& req) {
   std::vector<llama_model_tensor_buft_override> buftOverrides(
       llama_max_tensor_buft_overrides());
   std::vector<size_t> margins(
-      maxDevices,
-      static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
+      maxDevices, static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
 
   llama_params_fit_status status = LLAMA_PARAMS_FIT_STATUS_ERROR;
 
@@ -151,4 +146,4 @@ FitResult runFit(const FitRequest& req) {
   return out;
 }
 
-}  // namespace fit_llamacpp
+} // namespace fit_llamacpp

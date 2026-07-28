@@ -2,11 +2,10 @@
 #include <string>
 
 #include <bare.h>
-#include <js.h>
-
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
+#include <js.h>
 
 #include "fit/FitParams.hpp"
 
@@ -59,7 +58,9 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
 
   auto out = jsu::Object::create(env);
   out.setProperty(
-      env, "status", jsu::Number::create(env, static_cast<int32_t>(res.status)));
+      env,
+      "status",
+      jsu::Number::create(env, static_cast<int32_t>(res.status)));
   out.setProperty(env, "fits", jsu::Boolean::create(env, res.fits));
   out.setProperty(env, "nGpuLayers", jsu::Number::create(env, res.nGpuLayers));
   out.setProperty(env, "nCtx", jsu::Number::create(env, res.nCtx));
@@ -73,7 +74,9 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   auto split = jsu::Array::create(env);
   for (size_t i = 0; i < res.tensorSplit.size(); ++i) {
     split.set(
-        env, i, jsu::Number::create(env, static_cast<double>(res.tensorSplit[i])));
+        env,
+        i,
+        jsu::Number::create(env, static_cast<double>(res.tensorSplit[i])));
   }
   out.setProperty(env, "tensorSplit", split);
 
@@ -81,7 +84,7 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-}  // namespace fit_llamacpp::bindings
+} // namespace fit_llamacpp::bindings
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {

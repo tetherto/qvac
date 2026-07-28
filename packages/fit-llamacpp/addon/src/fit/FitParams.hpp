@@ -9,7 +9,7 @@ namespace fit_llamacpp {
 
 /// Sentinel meaning "caller did not pin n_gpu_layers" — leave the field at the
 /// llama default so `llama_params_fit` is free to choose the layer count.
-inline constexpr int32_t kGpuLayersAuto = std::numeric_limits<int32_t>::min();
+inline constexpr int32_t GPU_LAYERS_AUTO = std::numeric_limits<int32_t>::min();
 
 /// Inputs to a single memory-fit preflight. Mirrors the knobs the upstream
 /// `llama-fit-params` CLI exposes, restricted to the fields the SDK needs.
@@ -28,10 +28,10 @@ struct FitRequest {
   uint32_t nBatch = 0;
   uint32_t nUbatch = 0;
 
-  /// GPU layers to offload. `kGpuLayersAuto` leaves it at the llama default so
+  /// GPU layers to offload. `GPU_LAYERS_AUTO` leaves it at the llama default so
   /// the fitter can choose; any other value pins it (the fitter won't touch a
   /// non-default field).
-  int32_t nGpuLayers = kGpuLayersAuto;
+  int32_t nGpuLayers = GPU_LAYERS_AUTO;
 
   /// Free headroom to leave on every device, in MiB. Upstream default is 1024.
   uint32_t marginMiB = 1024;
@@ -59,4 +59,4 @@ struct FitResult {
 /// model path.
 FitResult runFit(const FitRequest& req);
 
-}  // namespace fit_llamacpp
+} // namespace fit_llamacpp
