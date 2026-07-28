@@ -620,7 +620,9 @@ const errorDefinitions: ErrorCodesMap = {
   [ERROR_CODES.PLUGIN_NOT_FOUND]: {
     name: 'PLUGIN_NOT_FOUND',
     message: (modelType: string) =>
-      `Plugin not found for model type "${modelType}". Register the plugin in code with \`registerPlugin\` / \`plugins([...])\` before this call.`
+      modelType === 'onnx-ocr'
+        ? 'Plugin not found for model type "onnx-ocr": the ONNX OCR engine has been removed. Use modelType "ggml-ocr" with GGUF registry models instead (EasyOCR: OCR_LATIN; DocTR: OCR_DOCTR).'
+        : `Plugin not found for model type "${modelType}". Register the plugin in code with \`registerPlugin\` / \`plugins([...])\` before this call.`
   },
   [ERROR_CODES.PLUGIN_HANDLER_NOT_FOUND]: {
     name: 'PLUGIN_HANDLER_NOT_FOUND',

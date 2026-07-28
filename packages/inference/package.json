@@ -1,6 +1,6 @@
 {
   "name": "@qvac/inference",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Bare-only in-process core of the QVAC SDK. Runs inference directly on the Bare runtime with explicit plugin assembly and no RPC, worker, or subprocess layer.",
   "license": "Apache-2.0",
   "repository": {
@@ -61,6 +61,10 @@
     "./plugins": {
       "types": "./dist/plugins/index.d.ts",
       "import": "./dist/plugins/index.js"
+    },
+    "./plugin-registry": {
+      "types": "./dist/plugins/registry.d.ts",
+      "import": "./dist/plugins/registry.js"
     },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
@@ -171,18 +175,18 @@
   },
   "peerDependencies": {
     "@qvac/bci-whispercpp": "^0.5.0",
-    "@qvac/classification-ggml": "^0.10.2",
+    "@qvac/classification-ggml": "^0.13.0",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.15.0",
-    "@qvac/embed-llamacpp": "^0.26.2",
+    "@qvac/embed-llamacpp": "^0.28.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.36.3",
-    "@qvac/ocr-ggml": "^0.10.2",
+    "@qvac/llm-llamacpp": "^0.38.0",
+    "@qvac/ocr-ggml": "^0.12.1",
     "@qvac/transcription-parakeet": "^0.10.0",
     "@qvac/transcription-whispercpp": "^0.12.0",
-    "@qvac/translation-nmtcpp": "^7.2.2",
+    "@qvac/translation-nmtcpp": "^8.1.0",
     "@qvac/tts-ggml": "^0.5.0",
-    "@qvac/vla-ggml": "^0.11.2"
+    "@qvac/vla-ggml": "^0.14.0"
   },
   "peerDependenciesMeta": {
     "@qvac/bci-whispercpp": {
@@ -227,18 +231,18 @@
   },
   "devDependencies": {
     "@qvac/bci-whispercpp": "^0.5.0",
-    "@qvac/classification-ggml": "^0.10.2",
+    "@qvac/classification-ggml": "^0.13.0",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.15.0",
-    "@qvac/embed-llamacpp": "^0.26.2",
+    "@qvac/embed-llamacpp": "^0.28.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.36.3",
-    "@qvac/ocr-ggml": "^0.10.2",
+    "@qvac/llm-llamacpp": "^0.38.0",
+    "@qvac/ocr-ggml": "^0.12.1",
     "@qvac/transcription-parakeet": "^0.10.0",
     "@qvac/transcription-whispercpp": "^0.12.0",
-    "@qvac/translation-nmtcpp": "^7.2.2",
+    "@qvac/translation-nmtcpp": "^8.1.0",
     "@qvac/tts-ggml": "^0.5.0",
-    "@qvac/vla-ggml": "^0.11.2",
+    "@qvac/vla-ggml": "^0.14.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
