@@ -200,3 +200,10 @@ must call into on every run.
 5. Per-agent tool sandboxes tear down on idle timeout independent of agent
    deletion.
 
+## Related material
+
+- [ADR 0001: Package-owned workers and compatibility](0001-package-owned-workers-and-compatibility.md)
+- [Local deployment and contract design](../../../../../arch/qips/agentic-sdk-local-deployment-and-contract-design.md)
+- `@qvac/agents` (`packages/agents/index.ts`) - checkpoint/resume/cancel primitives
+- qvac-app `assistant/lib/assistant.ts` - existing dispatch/ownership/chunk model this ADR generalizes
+

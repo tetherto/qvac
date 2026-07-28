@@ -38,26 +38,42 @@ The owning package also owns `bare-stow` assembly, platform packaging, spawn
 lifecycle, and readiness checks. Workers are not installed or upgraded as
 independent local services.
 
-TypeScript, Python, Swift, and Kotlin bindings follow the same worker contract.
-They are client implementations inside an application host, not separate
-deployment hosts.
+Where supported, TypeScript, Python, Swift, and Kotlin bindings are generated
+from the same worker contract. They are client implementations inside an
+application host, not separate deployment hosts. Each supported client
+distribution installs its matching worker artifacts. A client that requires a
+separately installed worker is outside this proposed decision and requires an
+explicit exception or a superseding ADR.
 
-### Validate every client-worker boundary
+### Verify package-owned workers during initialization
 
-Before exposing a public client as ready, the worker reports:
+Packaging a client with its matching worker removes the need for local version
+negotiation. During initialization, the client starts the packaged worker and
+verifies:
 
+- readiness;
 - contract identity;
-- exact protocol version;
-- supported capabilities;
-- build version;
-- runtime identity.
+- exact protocol version.
 
-The client rejects the wrong contract or protocol version and verifies all
-required capabilities. Missing optional capabilities do not block readiness;
-callers check capability availability before using those features. Build and
-runtime identities are diagnostic and do not determine compatibility.
+Initialization fails with a compatibility error if either identity or protocol
+does not match, and API operations cannot proceed until readiness succeeds.
+Build and runtime identities remain diagnostic and do not determine
+compatibility. Package versions are not negotiated over local RPC.
 
-Package versions are not negotiated over local RPC.
+### Separate compatibility from feature availability
+
+The generic client-worker compatibility check does not represent every feature
+available in a particular build or environment. Availability is reported
+through separate, scoped inventories:
+
+- packaged plugins and model types are build-dependent;
+- execution backends are platform and hardware-dependent;
+- model capabilities are resolved from the selected model.
+
+A client may require configured plugins during initialization and fail if they
+are absent. Backend support and model capabilities are checked when the
+corresponding operation or model is selected, not as generic initialization
+requirements.
 
 ### Use semver for package composition
 
@@ -136,8 +152,9 @@ checks belong to the package that owns each worker boundary.
 
 ### Negotiate package versions over RPC
 
-Package versions do not express wire compatibility precisely. Contract
-identity, protocol version, and capabilities provide the runtime decision.
+Package versions do not express wire compatibility precisely. Local packaged
+boundaries use contract identity and exact protocol version. Independently
+deployed Sync peers additionally negotiate capabilities.
 
 ### Force one version of every shared dependency
 
@@ -151,13 +168,13 @@ Change this ADR to Accepted only after:
 
 1. Sync, Harness, and SDK can each build and launch their package-owned worker.
 2. Direct consumers and Assistant-managed composition pass clean-install tests.
-3. Contract, protocol, and required-capability mismatches fail before
-   readiness.
-4. Cross-package CI covers the minimum and latest supported semver ranges.
-5. Desktop and mobile packaging verifies duplicate versions in final
+3. Contract and protocol mismatches fail before readiness.
+4. A configured required plugin fails initialization when it is absent.
+5. Cross-package CI covers the minimum and latest supported semver ranges.
+6. Desktop and mobile packaging verifies duplicate versions in final
    artifacts.
-6. TypeScript, Python, Swift, and Kotlin clients use equivalent worker
-   contracts where those clients are supported.
+7. Every supported language distribution installs its matching worker
+   artifacts and uses the equivalent worker contract.
 
 ## Related material
 
