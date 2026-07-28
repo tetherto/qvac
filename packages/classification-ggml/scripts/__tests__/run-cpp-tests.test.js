@@ -39,3 +39,8 @@ test('buildRunnerEnv replaces rather than merges explicit ASAN_OPTIONS', () => {
   assert.equal(env.ASAN_OPTIONS, override)
   assert.notEqual(env.ASAN_OPTIONS, DEFAULT_ASAN_OPTIONS)
 })
+
+test('buildRunnerEnv preserves an explicit empty ASAN_OPTIONS', () => {
+  const env = buildRunnerEnv({ ASAN_OPTIONS: '' })
+  assert.equal(env.ASAN_OPTIONS, '')
+})

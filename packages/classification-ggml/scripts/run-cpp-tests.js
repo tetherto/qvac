@@ -14,16 +14,17 @@ const { spawnSync } = require('child_process')
 const DEFAULT_ASAN_OPTIONS = 'alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1'
 
 /**
- * Build the child-process env for addon-test. When ASAN_OPTIONS is unset, apply
- * DEFAULT_ASAN_OPTIONS for local runs. When it is already set (CI workflow env
- * or ad-hoc shell export), that value is used as-is — we do not merge with or
+ * Build the child-process env for addon-test. When ASAN_OPTIONS is absent, apply
+ * DEFAULT_ASAN_OPTIONS for local runs. When it is present — including an explicit
+ * empty string (ASAN_OPTIONS=) — that value is used as-is; we do not merge with or
  * patch the default string. Setting only ASAN_OPTIONS=abort_on_error=0 drops
  * alloc_dealloc_mismatch=0 and detect_leaks=0 unless you include them yourself.
  */
 function buildRunnerEnv(processEnv) {
   return {
     ...processEnv,
-    ASAN_OPTIONS: processEnv.ASAN_OPTIONS || DEFAULT_ASAN_OPTIONS
+    ASAN_OPTIONS:
+      'ASAN_OPTIONS' in processEnv ? processEnv.ASAN_OPTIONS : DEFAULT_ASAN_OPTIONS
   }
 }
 
