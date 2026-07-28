@@ -9,7 +9,7 @@
 
 #include "fit/FitParams.hpp"
 
-namespace fit_llamacpp::bindings {
+namespace model_fit::bindings {
 
 namespace addon_cpp = qvac_lib_inference_addon_cpp;
 namespace jsu = qvac_lib_inference_addon_cpp::js;
@@ -31,7 +31,7 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   if (req.modelPath.empty()) {
     throw StatusError(
         InvalidArgument,
-        "fit-llamacpp: 'modelPath' is required and must be a non-empty string "
+        "model-fit: 'modelPath' is required and must be a non-empty string "
         "pointing at the GGUF weights file");
   }
 
@@ -84,10 +84,10 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-} // namespace fit_llamacpp::bindings
+} // namespace model_fit::bindings
 
 // NOLINTNEXTLINE(readability-identifier-naming)
-js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {
+js_value_t* model_fit_exports(js_env_t* env, js_value_t* exports) {
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
   {                                                                            \
@@ -100,7 +100,7 @@ js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {
     }                                                                          \
   }
 
-  V("paramsFit", fit_llamacpp::bindings::paramsFit)
+  V("paramsFit", model_fit::bindings::paramsFit)
 
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
@@ -108,4 +108,4 @@ js_value_t* fit_llamacpp_exports(js_env_t* env, js_value_t* exports) {
   return exports;
 }
 
-BARE_MODULE(fit_llamacpp, fit_llamacpp_exports)
+BARE_MODULE(model_fit, model_fit_exports)

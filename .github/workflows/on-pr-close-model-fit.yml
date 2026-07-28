@@ -1,10 +1,10 @@
-name: Delete NPM Versions (Fit)
+name: Delete NPM Versions (Model Fit)
 
 on:
   pull_request:
     types: [closed]
     paths:
-      - "packages/fit-llamacpp/**"
+      - "packages/model-fit/**"
 
   workflow_dispatch:
     inputs:
@@ -24,7 +24,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "fit-llamacpp"
+        default: "model-fit"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
@@ -78,7 +78,7 @@ jobs:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'fit-llamacpp' }}
+      packages: ${{ inputs.packages || 'model-fit' }}
       # PR-close runs default to dry-run=true for safety; manual runs respect the UI toggle (true/false)
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
     secrets: inherit

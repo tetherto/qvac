@@ -1,4 +1,4 @@
-name: Integration Tests (FIT)
+name: Integration Tests (Model Fit)
 
 on:
   workflow_call:
@@ -16,7 +16,7 @@ on:
         required: false
         default: main
       prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/fit-llamacpp@1.0.0)"
+        description: "NPM package containing prebuilds (e.g. @qvac/model-fit@1.0.0)"
         type: string
         required: true
 
@@ -30,7 +30,7 @@ jobs:
       packages: read
 
     env:
-      WORKDIR: packages/fit-llamacpp
+      WORKDIR: packages/model-fit
 
     strategy:
       fail-fast: false
@@ -87,7 +87,7 @@ jobs:
         if: runner.environment != 'github-hosted'
         uses: ./.github/actions/cache-models
         with:
-          package: fit-llamacpp
+          package: model-fit
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}

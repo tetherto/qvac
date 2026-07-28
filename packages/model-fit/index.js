@@ -13,7 +13,7 @@ function validateNumber (config, key) {
   const value = config[key]
   if (value === undefined) return
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new TypeError(`fit-llamacpp: config.${key} must be a finite number when provided`)
+    throw new TypeError(`model-fit: config.${key} must be a finite number when provided`)
   }
 }
 
@@ -39,10 +39,10 @@ function validateNumber (config, key) {
  */
 function fitParams (config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
-    throw new TypeError('fit-llamacpp: config object is required')
+    throw new TypeError('model-fit: config object is required')
   }
   if (typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
-    throw new TypeError('fit-llamacpp: config.modelPath must be a non-empty string')
+    throw new TypeError('model-fit: config.modelPath must be a non-empty string')
   }
   for (const key of ['nCtx', 'nCtxMin', 'nBatch', 'nUbatch', 'nGpuLayers', 'marginMiB']) {
     validateNumber(config, key)

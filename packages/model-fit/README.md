@@ -1,4 +1,4 @@
-# @qvac/fit-llamacpp
+# @qvac/model-fit
 
 Memory-fit **preflight** addon for QVAC. It wraps llama.cpp's public
 `llama_params_fit` C API (the library behind the upstream `llama-fit-params`
@@ -20,7 +20,7 @@ call is a **single shot**: run it, read the plan, tear the worklet down.
 ## API
 
 ```js
-const { fitParams, FIT_STATUS } = require('@qvac/fit-llamacpp')
+const { fitParams, FIT_STATUS } = require('@qvac/model-fit')
 
 const plan = fitParams({
   modelPath: '/abs/path/model.gguf',

@@ -9,7 +9,7 @@
 #include <excpt.h> // __try/__except, GetExceptionCode, EXCEPTION_EXECUTE_HANDLER
 #endif
 
-namespace fit_llamacpp {
+namespace model_fit {
 
 namespace {
 
@@ -27,7 +27,7 @@ namespace {
 int fitSehFilter(unsigned long code) {
   std::fprintf(
       stderr,
-      "fit-llamacpp: llama_params_fit raised a fatal native exception 0x%08lx; "
+      "model-fit: llama_params_fit raised a fatal native exception 0x%08lx; "
       "reporting ERROR (projection unavailable on this platform)\n",
       code);
   std::fflush(stderr);
@@ -60,7 +60,7 @@ bool callLlamaParamsFitGuarded(
 
 FitResult runFit(const FitRequest& req) {
   if (req.modelPath.empty()) {
-    throw std::invalid_argument("fit-llamacpp: modelPath is required");
+    throw std::invalid_argument("model-fit: modelPath is required");
   }
 
   FitResult out;
@@ -146,4 +146,4 @@ FitResult runFit(const FitRequest& req) {
   return out;
 }
 
-} // namespace fit_llamacpp
+} // namespace model_fit

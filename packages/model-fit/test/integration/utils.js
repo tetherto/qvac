@@ -1,6 +1,6 @@
 'use strict'
 
-// Minimal test-model downloader for the fit-llamacpp integration test. Fetches
+// Minimal test-model downloader for the model-fit integration test. Fetches
 // a small public GGUF into test/model/ (cached in CI by the cache-models
 // action) so the projection path runs against a real model on every platform.
 // Download logic mirrors the proven helper in embed-llamacpp / llm-llamacpp

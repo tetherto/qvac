@@ -1,16 +1,16 @@
-name: Mobile Integration Tests (Fit)
+name: Mobile Integration Tests (Model Fit)
 
-# Runs the fit-llamacpp integration suite on real iOS/Android devices via AWS
+# Runs the model-fit integration suite on real iOS/Android devices via AWS
 # Device Farm, using the shared .github/actions/run-mobile-integration-tests
 # composite actions. Single-pool scheduling (one Device Farm run per platform
 # against the addon's own pool).
 #
-# NOTE: this workflow needs the fit-llamacpp Device Farm project + device pools
+# NOTE: this workflow needs the model-fit Device Farm project + device pools
 # provisioned and these repo/org secrets to exist, otherwise the schedule step
 # has no ARN to target:
-#   AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED
-#   ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED
-#   IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED
+#   AWS_DEVICE_FARM_PROJECT_ARN_MODEL_FIT
+#   ANDROID_DEVICE_POOL_ARN_MODEL_FIT
+#   IOS_DEVICE_POOL_ARN_MODEL_FIT
 
 on:
   workflow_call:
@@ -43,7 +43,7 @@ on:
         description: "Full NPM package spec to test"
         type: string
         required: true
-        default: '@qvac/fit-llamacpp@latest'
+        default: '@qvac/model-fit@latest'
 
 jobs:
   build-and-test:
@@ -94,16 +94,16 @@ jobs:
           fetch-depth: 0
 
       - name: Validate mobile tests are up-to-date
-        working-directory: addon/packages/fit-llamacpp
+        working-directory: addon/packages/model-fit
         run: npm run test:mobile:validate || true
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup
         with:
           platform: ${{ matrix.platform }}
-          addon-workdir: 'packages/fit-llamacpp'
-          addon-npm-name: '@qvac/fit-llamacpp'
-          prebuild-artifact-prefix: 'fit-llamacpp-'
+          addon-workdir: 'packages/model-fit'
+          addon-npm-name: '@qvac/model-fit'
+          prebuild-artifact-prefix: 'model-fit-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       - name: Build mobile app
@@ -111,8 +111,8 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
         with:
           platform: ${{ matrix.platform }}
-          addon-workdir: 'packages/fit-llamacpp'
-          addon-npm-name: '@qvac/fit-llamacpp'
+          addon-workdir: 'packages/model-fit'
+          addon-npm-name: '@qvac/model-fit'
           ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
           ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
@@ -124,12 +124,12 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
         with:
           platform: ${{ matrix.platform }}
-          addon-workdir: 'packages/fit-llamacpp'
+          addon-workdir: 'packages/model-fit'
           app-path: ${{ steps.build.outputs.app-path }}
           app-type: ${{ steps.build.outputs.app-type }}
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_MODEL_FIT }}
           enables-perf: 'false'
 
       - name: Schedule Device Farm test run
@@ -137,9 +137,9 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
         with:
           platform: ${{ matrix.platform }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
-          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
-          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_MODEL_FIT }}
+          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_MODEL_FIT }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_MODEL_FIT }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
@@ -165,7 +165,7 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
         with:
           platform: ${{ matrix.platform }}
-          addon-npm-name: '@qvac/fit-llamacpp'
+          addon-npm-name: '@qvac/model-fit'
           enables-perf: 'false'
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
@@ -174,7 +174,7 @@ jobs:
         if: always() && !cancelled()
         uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
         with:
-          addon-npm-name: '@qvac/fit-llamacpp'
+          addon-npm-name: '@qvac/model-fit'
           platform: ${{ matrix.platform }}
           test-result: ${{ steps.monitor.outputs.test-result }}
           test-total: ${{ steps.monitor.outputs.test-total }}

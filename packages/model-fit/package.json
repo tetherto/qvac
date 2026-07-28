@@ -1,5 +1,5 @@
 {
-  "name": "@qvac/fit-llamacpp",
+  "name": "@qvac/model-fit",
   "version": "0.1.0",
   "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's llama_params_fit to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
@@ -14,7 +14,7 @@
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy fit-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy fit-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy fit-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy model-fit prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy model-fit prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy model-fit prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "test:dts": "tsc -p tsconfig.dts.json"
   },
   "standard": {
@@ -36,12 +36,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/fit-llamacpp"
+    "directory": "packages/model-fit"
   },
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/fit-llamacpp#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/model-fit#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "brittle": "^3.16.5",

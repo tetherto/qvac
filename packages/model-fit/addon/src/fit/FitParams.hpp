@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace fit_llamacpp {
+namespace model_fit {
 
 /// Sentinel meaning "caller did not pin n_gpu_layers" — leave the field at the
 /// llama default so `llama_params_fit` is free to choose the layer count.
@@ -59,4 +59,4 @@ struct FitResult {
 /// model path.
 FitResult runFit(const FitRequest& req);
 
-} // namespace fit_llamacpp
+} // namespace model_fit

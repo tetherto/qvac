@@ -1,5 +1,5 @@
-# Build-only workflow. Publishing is handled by on-merge-fit-llamacpp.yml
-name: Prebuilds (Fit)
+# Build-only workflow. Publishing is handled by on-merge-model-fit.yml
+name: Prebuilds (Model Fit)
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/fit-llamacpp"
+        default: "packages/model-fit"
 
   workflow_call:
     inputs:
@@ -32,7 +32,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/fit-llamacpp"
+        default: "packages/model-fit"
 
 permissions:
   contents: read
@@ -48,7 +48,7 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: fit-llamacpp-
+      artifact-name-prefix: model-fit-
       include-vulkan-sdk: true
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
     secrets: inherit

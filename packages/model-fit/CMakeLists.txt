@@ -8,7 +8,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-project(fit-llamacpp C CXX)
+project(model-fit C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -38,7 +38,7 @@ endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building fit-llamacpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+message("Building model-fit with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 # Install the ggml backend shared libs next to the prebuild. `llama_params_fit`
 # needs the backends loaded to query per-device free memory.
@@ -49,10 +49,10 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endforeach()
 endif()
 
-add_bare_module(fit-llamacpp EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(model-fit EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${fit-llamacpp}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${model-fit}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 set(ADDON_SOURCES
@@ -60,24 +60,24 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/fit/FitParams.cpp
 )
 
-target_sources(${fit-llamacpp} PRIVATE ${ADDON_SOURCES})
+target_sources(${model-fit} PRIVATE ${ADDON_SOURCES})
 
 target_include_directories(
-  ${fit-llamacpp}
+  ${model-fit}
   PRIVATE
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/addon/src
 )
 
 target_link_libraries(
-  ${fit-llamacpp}
+  ${model-fit}
   PRIVATE
     llama::llama
 )
 
-target_compile_definitions(${fit-llamacpp} PUBLIC JS_LOGGER)
-target_compile_definitions(${fit-llamacpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${model-fit} PUBLIC JS_LOGGER)
+target_compile_definitions(${model-fit} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 if(WIN32)
-  target_link_libraries(${fit-llamacpp} PRIVATE msvcrt.lib)
+  target_link_libraries(${model-fit} PRIVATE msvcrt.lib)
 endif()
