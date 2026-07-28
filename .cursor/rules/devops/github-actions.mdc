@@ -147,6 +147,9 @@ Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workfl
 - **Names are descriptive and lowercase-hyphenated** (e.g., `lint`, `unit-tests`, `cpp-tests`). Choose once and treat as part of the public contract.
 - **Required checks are declared in the GitHub ruleset**, not in YAML. The ruleset is the source of truth.
 - **Renaming a required check requires a coordinated change**: update the ruleset and the workflow in the same change window, or add the new name as required while leaving the old one until merges drain.
+- **Check-name collisions are silent.** GitHub matches required checks by literal context string with no per-workflow scoping — two jobs producing the same name (e.g. same job id called via `uses:` from different callers) can satisfy each other's requirement. Grep for the job id across `.github/workflows/*.yml` before requiring a new check.
+- **A new job that should gate merges almost always folds into `qvac-merge-guard / validate-pr`** (`pr-gate-merge.yml`'s aggregated required check) rather than becoming its own standalone required check — a disconnected new check is invisible to the merge gate if the ruleset never requires it. See [`docs/ci/MERGE-GUARD.md`](../../../docs/ci/MERGE-GUARD.md) for the wiring patterns (fold into an existing category, add a caller workflow for a repeated job family, or claim a spare `public-pr.yml` boolean input) and the `qv-merge-guard-wire` skill for the actionable checklist.
+- **Hard rule: only `pr-gate-merge.yml`'s `qvac-merge-guard` job may produce the `qvac-merge-guard / validate-pr` check.** No other workflow may define a job id `qvac-merge-guard` (or call a reusable workflow whose job id is `validate-pr`) — that would collide with the real Merge Guard check name and let another workflow silently satisfy it. Verify with `grep -rl "^  qvac-merge-guard:$" .github/workflows/*.yml` — must return only `pr-gate-merge.yml`.
 
 ## Outputs and step IDs
 
