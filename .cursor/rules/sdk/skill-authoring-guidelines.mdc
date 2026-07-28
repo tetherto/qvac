@@ -27,7 +27,7 @@ Guidelines for creating effective Cursor skills, based on the [Agent Skills spec
 
 **Use `qv-` prefix plus pod segment for skill directories:**
 
-- SDK pod skills: `qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`
+- SDK pod skills: `qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`, `qv-sdk-update-models`
 - DevOps pod: `qv-devops-pr-create`, `qv-devops-pr-review`
 - Addon pod: `qv-addon-changelog`, `qv-addon-pr-create`
 - Cross-pod PR workflow: `qv-pr-review`, `qv-pr-test`, `qv-pr-mine`

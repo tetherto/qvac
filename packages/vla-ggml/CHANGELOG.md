@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
 ## [0.14.0] - 2026-07-20
 
 ### Added
