@@ -379,6 +379,25 @@ TEST(SdVidGenHandlers_VaceStrength, OutOfRangeRejected) {
   expectThrows("vace_strength", num(1.5));
 }
 
+TEST(SdVidGenHandlers_LtxIngredients, ParsesLoraAndStgSettings) {
+  EXPECT_EQ(
+      applyOne("lora", str("/tmp/ingredients.safetensors")).loraPath,
+      "/tmp/ingredients.safetensors");
+  EXPECT_FLOAT_EQ(
+      applyOne("lora_strength", num(1.4)).loraStrength,
+      1.4f);
+  EXPECT_FLOAT_EQ(applyOne("stg_scale", num(1.0)).stgScale, 1.0f);
+  EXPECT_EQ(applyOne("stg_block", num(29)).stgBlock, 29);
+}
+
+TEST(SdVidGenHandlers_LtxIngredients, RejectsInvalidStrengthAndStg) {
+  expectThrows("lora_strength", num(-0.1));
+  expectThrows("lora_strength", num(10.1));
+  expectThrows("stg_scale", num(-0.1));
+  expectThrows("stg_scale", num(10.1));
+  expectThrows("stg_block", num(-1));
+}
+
 // -----------------------------------------------------------------------------
 // 12. VAE tiling
 // -----------------------------------------------------------------------------

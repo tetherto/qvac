@@ -34,6 +34,7 @@ export interface SdJobParams {
   init_image?: Uint8Array
   init_images?: Uint8Array[]
   control_frames?: Uint8Array[]
+  reference_images?: Uint8Array[]
 }
 
 export interface NativeJobArgs {
@@ -42,6 +43,7 @@ export interface NativeJobArgs {
   initImageBuffer?: Uint8Array
   initImageBuffers?: Uint8Array[]
   controlFramesBuffers?: Uint8Array[]
+  referenceImagesBuffers?: Uint8Array[]
 }
 
 export interface NativeUpscaleJobArgs {
@@ -246,12 +248,16 @@ export class SdInterface {
     }
 
     const controlFramesBuffers = Array.isArray(params.control_frames) ? params.control_frames : null
+    const referenceImagesBuffers = Array.isArray(params.reference_images)
+      ? params.reference_images
+      : null
 
     if (Array.isArray(params.init_images) && params.init_images.length > 0) {
       const initImageBuffers = params.init_images
       const serializable: SdJobParams = { ...params }
       delete serializable.init_images
       delete serializable.control_frames
+      delete serializable.reference_images
 
       this._fillDimsFromImage(serializable, initImageBuffers[0])
 
@@ -263,6 +269,9 @@ export class SdInterface {
       if (controlFramesBuffers) {
         jobArgs.controlFramesBuffers = controlFramesBuffers
       }
+      if (referenceImagesBuffers) {
+        jobArgs.referenceImagesBuffers = referenceImagesBuffers
+      }
       return this._binding.runJob(this._handle, jobArgs)
     }
 
@@ -271,6 +280,7 @@ export class SdInterface {
       const serializable: SdJobParams = { ...params }
       delete serializable.init_image
       delete serializable.control_frames
+      delete serializable.reference_images
 
       this._fillDimsFromImage(serializable, initImageBuffer)
 
@@ -282,17 +292,24 @@ export class SdInterface {
       if (controlFramesBuffers) {
         jobArgs.controlFramesBuffers = controlFramesBuffers
       }
+      if (referenceImagesBuffers) {
+        jobArgs.referenceImagesBuffers = referenceImagesBuffers
+      }
       return this._binding.runJob(this._handle, jobArgs)
     }
 
     const serializable: SdJobParams = { ...params }
     delete serializable.control_frames
+    delete serializable.reference_images
     const jobArgs: NativeJobArgs = {
       type: 'text',
       input: JSON.stringify(serializable)
     }
     if (controlFramesBuffers) {
       jobArgs.controlFramesBuffers = controlFramesBuffers
+    }
+    if (referenceImagesBuffers) {
+      jobArgs.referenceImagesBuffers = referenceImagesBuffers
     }
     return this._binding.runJob(this._handle, jobArgs)
   }

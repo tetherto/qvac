@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -113,6 +114,16 @@ struct SdVidGenConfig {
   // control influence, 0.0 = ignore control frames entirely. Only used
   // when control_frames are supplied on the GenerationJob.
   float vaceStrength = 1.0f;
+
+  // -- LTX IC-LoRA -----------------------------------------------------------
+  // Reference image bytes are carried by GenerationJob. These optionals are
+  // assigned only when supplied so sd_vid_gen_params_init() retains defaults.
+  std::string loraPath;
+  float loraStrength = 1.0f;
+  std::optional<float> referenceAttentionStrength;
+  std::optional<float> referenceDownscaleFactor;
+  float stgScale = 0.0f;
+  int stgBlock = 29;
 
   // -- VAE tiling -- strongly recommended ON for Wan (VAE peaks ~4-6 GB
   //                  at 832x480 / 480x832 without tiling). Mapped to

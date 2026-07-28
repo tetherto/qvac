@@ -118,11 +118,15 @@ class SdInterface {
             throw new Error('addon.runJob: init_image and init_images are mutually exclusive — pick one.');
         }
         const controlFramesBuffers = Array.isArray(params.control_frames) ? params.control_frames : null;
+        const referenceImagesBuffers = Array.isArray(params.reference_images)
+            ? params.reference_images
+            : null;
         if (Array.isArray(params.init_images) && params.init_images.length > 0) {
             const initImageBuffers = params.init_images;
             const serializable = { ...params };
             delete serializable.init_images;
             delete serializable.control_frames;
+            delete serializable.reference_images;
             this._fillDimsFromImage(serializable, initImageBuffers[0]);
             const jobArgs = {
                 type: 'text',
@@ -132,6 +136,9 @@ class SdInterface {
             if (controlFramesBuffers) {
                 jobArgs.controlFramesBuffers = controlFramesBuffers;
             }
+            if (referenceImagesBuffers) {
+                jobArgs.referenceImagesBuffers = referenceImagesBuffers;
+            }
             return this._binding.runJob(this._handle, jobArgs);
         }
         if (params.init_image) {
@@ -139,6 +146,7 @@ class SdInterface {
             const serializable = { ...params };
             delete serializable.init_image;
             delete serializable.control_frames;
+            delete serializable.reference_images;
             this._fillDimsFromImage(serializable, initImageBuffer);
             const jobArgs = {
                 type: 'text',
@@ -148,16 +156,23 @@ class SdInterface {
             if (controlFramesBuffers) {
                 jobArgs.controlFramesBuffers = controlFramesBuffers;
             }
+            if (referenceImagesBuffers) {
+                jobArgs.referenceImagesBuffers = referenceImagesBuffers;
+            }
             return this._binding.runJob(this._handle, jobArgs);
         }
         const serializable = { ...params };
         delete serializable.control_frames;
+        delete serializable.reference_images;
         const jobArgs = {
             type: 'text',
             input: JSON.stringify(serializable)
         };
         if (controlFramesBuffers) {
             jobArgs.controlFramesBuffers = controlFramesBuffers;
+        }
+        if (referenceImagesBuffers) {
+            jobArgs.referenceImagesBuffers = referenceImagesBuffers;
         }
         return this._binding.runJob(this._handle, jobArgs);
     }
