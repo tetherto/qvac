@@ -60,7 +60,12 @@ on:
 jobs:
   run-integration-tests:
     timeout-minutes: 60
-    continue-on-error: true
+    # Non-gating by default (most legs run on self-hosted GPU runners whose
+    # flakiness shouldn't block PRs), except for matrix entries that opt in
+    # with `gating: true`. An unset `matrix.gating` evaluates to null, so
+    # `!= true` keeps every other leg on the previous continue-on-error
+    # behaviour.
+    continue-on-error: ${{ matrix.gating != true }}
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
@@ -96,10 +101,19 @@ jobs:
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
+          # Gating: linux-arm64 is the only desktop leg where the ggml CPU
+          # backend ships as dlopen'd per-microarch MODULE .so files
+          # (GGML_BACKEND_DL + GGML_CPU_ALL_VARIANTS since ggml-speech
+          # 2026-07-14). Everywhere else the CPU backend is static-linked, so a
+          # backend-discovery regression leaves the device registry empty here
+          # and only here -- and aborts the process (SIGABRT, exit 134) inside
+          # whisper_init rather than failing an assertion a reviewer would see.
+          # This leg must block the merge guard; see PR #3430.
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             no_gpu: 'true'
+            gating: true
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
           - os: macos-26
