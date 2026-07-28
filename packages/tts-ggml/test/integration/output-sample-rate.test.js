@@ -10,7 +10,7 @@ const path = require('bare-path')
 const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
-const { ensureSupertonicModel } = require('../utils/downloadModel')
+const { ensureSupertonicModel, ensureParlerModel } = require('../utils/downloadModel')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -77,6 +77,66 @@ test(
       t.is(r.sampleRate, 16000, 'outputSampleRate=16000 reported on the chunk')
       t.ok(r.samples > 0, 'resampled synthesis produced audio')
       // 16 kHz is ~36% of 44.1 kHz, so the resampled stream is materially shorter.
+      if (nativeSamples) {
+        t.ok(
+          r.samples < nativeSamples * 0.6,
+          `resampled sample count (${r.samples}) well below native (${nativeSamples})`
+        )
+      }
+    } finally {
+      try {
+        await resampled.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+test(
+  'Parler: outputSampleRate=16000 resamples and reports 16 kHz',
+  { timeout: 600000 },
+  async (t) => {
+    const baseDir = getBaseDir()
+    const dl = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
+    if (!dl.success) {
+      t.fail('Parler GGUF not available — registry fetch failed.')
+      return
+    }
+
+    const text = 'Output rate selection resamples the synthesized audio.'
+
+    const native = new TTSGgml({
+      engine: TTSGgml.ENGINE_PARLER,
+      files: { parlerModel: dl.path },
+      voice: 'Laura',
+      seed: 42,
+      opts: { stats: true }
+    })
+    await native.load()
+    let nativeSamples
+    try {
+      const r = await collect(native, text)
+      t.is(r.sampleRate, 44100, 'native Parler reports 44.1 kHz')
+      nativeSamples = r.samples
+    } finally {
+      try {
+        await native.unload()
+      } catch (_e) {}
+    }
+
+    const resampled = new TTSGgml({
+      engine: TTSGgml.ENGINE_PARLER,
+      files: { parlerModel: dl.path },
+      voice: 'Laura',
+      seed: 42,
+      config: { outputSampleRate: 16000 },
+      opts: { stats: true }
+    })
+    await resampled.load()
+    try {
+      const r = await collect(resampled, text)
+      t.is(r.sampleRate, 16000, 'outputSampleRate=16000 reported on the chunk')
+      t.ok(r.samples > 0, 'resampled synthesis produced audio')
+      // Same fixed seed => same generation; 16 kHz is ~36% of 44.1 kHz.
       if (nativeSamples) {
         t.ok(
           r.samples < nativeSamples * 0.6,

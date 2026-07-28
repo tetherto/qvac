@@ -1,0 +1,16 @@
+---
+BasedOnStyle: LLVM
+---
+Language: Cpp
+DerivePointerAlignment: false
+PointerAlignment: Left
+AlignAfterOpenBracket: AlwaysBreak
+BinPackArguments: false
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: "^<[^.]*>"
+    Priority: 1 # Standard includes
+  - Regex: "^<.*>"
+    Priority: 2 # System includes
+  - Regex: ".*"
+    Priority: 3 # Other includes

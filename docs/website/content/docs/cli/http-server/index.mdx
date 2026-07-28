@@ -315,7 +315,16 @@ The following OpenAI parameters are forwarded to the model on each request:
 | `seed` | `seed` | Random seed for deterministic output |
 | `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
 | `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
-| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not accept a numeric token budget. |
+| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not take a positive token cap — only the booleans (or their numeric equivalents `-1`/`0`). |
+
+#### Reasoning (`reasoning_content`)
+
+Models that emit `<think>…</think>` blocks (e.g. Qwen3.5) have their reasoning routed to the `reasoning_content` channel instead of leaking into `content`:
+
+- **Blocking** — the reasoning is returned in `choices[0].message.reasoning_content`; `content` carries only the final answer.
+- **Streaming** — reasoning arrives as `choices[0].delta.reasoning_content` chunks, interleaved with the regular `delta.content` chunks.
+
+`reasoning_content` is present only when the model actually produced a reasoning block. Set `reasoning_budget: false` (see above) to disable reasoning entirely. Numeric `0` is also accepted; positive token caps are not.
 
 #### Structured output (`response_format`)
 
@@ -345,9 +354,15 @@ curl http://localhost:11434/v1/chat/completions \
 Structured output (`json_object` / `json_schema`) cannot be combined with `tools`. Sending both returns `400 invalid_response_format`.
 </Callout>
 
+<Callout type="warn">
+On hybrid-thinking models, structured output with a tight `max_tokens` can hit `finish_reason: length` while generation is still inside the reasoning channel, leaving `content` empty. Disable reasoning (`reasoning_budget: false`) or raise `max_tokens` to avoid this.
+</Callout>
+
 #### Unsupported parameters
 
-The following OpenAI parameters are accepted but ignored (a warning is logged): `n`, `logprobs`, `stop`, `top_logprobs`, `logit_bias`, `parallel_tool_calls`, `stream_options`.
+The following OpenAI parameters are accepted but ignored (a warning is logged): `n`, `logprobs`, `stop`, `top_logprobs`, `logit_bias`, `parallel_tool_calls`.
+
+`stream_options.include_usage` is supported — see [Response: `finish_reason` and token usage](#response-finish_reason-and-token-usage).
 
 #### Response: `finish_reason` and token usage
 
@@ -359,7 +374,18 @@ Each choice carries a `finish_reason` that reflects how generation actually ende
 | `length` | Generation was truncated because it hit `max_tokens` / `max_completion_tokens` (the SDK's token budget was exhausted). |
 | `tool_calls` | The model emitted one or more function/tool calls. |
 
-`usage.prompt_tokens` is reported as `0` (the SDK does not yet expose a prompt token count). `usage.completion_tokens` comes from the SDK completion stats (`generatedTokens`) when available, falling back to a whitespace word count of the output. The same accounting is shared across `/v1/chat/completions`, `/v1/completions`, and `/v1/responses`, so token counts no longer drift between blocking and streaming paths. In streaming mode the `usage` object is attached to the final SSE chunk (for plain completions; tool-call streams end on a `tool_calls` chunk).
+`usage` is populated from the SDK's `CompletionStats`:
+
+- **`prompt_tokens`** — real prompt token count when the SDK reports it, else `0`.
+- **`completion_tokens`** — the SDK's `generatedTokens` when available, falling back to a whitespace word count of the output.
+- **`total_tokens`** — the sum of the two.
+- **`prompt_tokens_details.cached_tokens`** — present only when the SDK reports a KV-cache hit; it is the count of prompt tokens reused from a previous turn's cache, not the full prompt size.
+
+Blocking and streaming share the same accounting, so counts do not drift between the two paths. By default a **streaming** response carries no `usage` object; set `stream_options: { include_usage: true }` to receive it as a trailing SSE chunk whose `choices` array is empty (it follows the `finish_reason` / `tool_calls` chunk), matching OpenAI's streaming shape.
+
+<Callout type="info">
+Real prompt-token accounting is currently **chat-only**. [`/v1/completions`](#legacy-completions) and [`/v1/responses`](#responses) still report `prompt_tokens` / `input_tokens` as `0`.
+</Callout>
 
 <Callout type="warn">
 If inference fails mid-stream, the request surfaces a `502 inference_failed` error instead of returning a partial `200`.

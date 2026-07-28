@@ -1086,6 +1086,115 @@ function supertonic3Gguf(quant) {
   return gguf
 }
 
+// Parler family (registered per PR #3372): mini / large / indic each ship
+// q8_0 + f16 + f32. tts-cpp reads the quant tier from GGUF metadata.
+// One generous size band covers every tier (mini q8_0 ~1.1 GB up to indic
+// f32 ~3.67 GB); the ~50%-headroom convention of the other bands.
+const REGISTRY_DATE_PARLER = '2026-07-20'
+const SIZE_PARLER = { minSize: 500_000_000, maxSize: 5_500_000_000 }
+const PARLER_PUBLISHED = {
+  mini: { file: 'parler-mini-v1', tiers: ['q8_0', 'f16', 'f32'] },
+  large: { file: 'parler-large-v1', tiers: ['q8_0', 'f16', 'f32'] },
+  indic: { file: 'parler-indic', tiers: ['q8_0', 'f16', 'f32'] }
+}
+const DEFAULT_PARLER_QUANT = 'q8_0'
+
+// Map a benchmark `variant` label (q8 / f16 / q6_k) to the published Parler
+// quant tier. Like Supertonic 3, Parler encodes the tier in the on-disk
+// filename, so benchmarks resolve the label before fetching. Kept next to
+// PARLER_PUBLISHED so the mapping lives in one place.
+function parlerQuantFromVariant(variant) {
+  switch (variant) {
+    case 'q8':
+      return 'q8_0'
+    case 'f16':
+      return 'f16'
+    case 'q6_k':
+      return 'q6_k'
+    default:
+      return DEFAULT_PARLER_QUANT
+  }
+}
+
+function parlerGguf(variant, quant) {
+  const pub = PARLER_PUBLISHED[variant]
+  if (!pub) return null
+  const gguf = {
+    name: `${pub.file}-${quant}.gguf`,
+    ...SIZE_PARLER
+  }
+  if (pub.tiers.includes(quant)) {
+    gguf.registryPath = `qvac_models_compiled/ggml/parler-tts/${REGISTRY_DATE_PARLER}/${pub.file}-${quant}.gguf`
+    gguf.registrySource = REGISTRY_SOURCE
+  }
+  return gguf
+}
+
+/**
+ * Ensure a Parler GGUF for the requested variant + quant tier is staged in
+ * a directory the native addon can read, and return that path.  Mirrors
+ * ensureSupertonic3Model: reuse an already-staged copy, else fetch from the
+ * QVAC model registry.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - dir to look in (default ./models).
+ * @param {string} [options.variant] - 'mini' | 'large' | 'indic' (default 'mini').
+ * @param {string} [options.quant] - published tier (default 'q8_0').
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string, variant: string, quant: string }>}
+ */
+async function ensureParlerModel(options = {}) {
+  const variant = options.variant || 'mini'
+  const quant = options.quant || DEFAULT_PARLER_QUANT
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  const gguf = parlerGguf(variant, quant)
+  if (!gguf) {
+    console.log(` Unknown parler variant '${variant}' (expected mini | large | indic).`)
+    return { success: false, path: null, targetDir: requestedDir, variant, quant }
+  }
+  console.log(`Ensuring Parler GGUF (${variant} ${quant}) (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, [gguf])) {
+      console.log(` ✓ using Parler ${variant} ${quant} GGUF at ${dir}`)
+      return { success: true, path: path.join(dir, gguf.name), targetDir: dir, variant, quant }
+    }
+  }
+
+  if (gguf.registryPath) {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return {
+        success: true,
+        path: path.join(requestedDir, gguf.name),
+        targetDir: requestedDir,
+        variant,
+        quant
+      }
+    }
+    console.log(
+      ` Parler ${variant} ${quant} GGUF (${gguf.name}) not staged and registry fetch failed`
+    )
+    console.log(` Expected on the registry at: ${gguf.registryPath}`)
+    return { success: false, path: null, targetDir: requestedDir, variant, quant }
+  }
+
+  console.log(
+    ` Parler ${variant} ${quant} GGUF (${gguf.name}) is not a published tier ` +
+      `(published: ${PARLER_PUBLISHED[variant].tiers.join(', ')}).`
+  )
+  return { success: false, path: null, targetDir: requestedDir, variant, quant }
+}
+
 /**
  * Ensure a Supertonic 3 GGUF for the requested quant tier is staged in a
  * directory the native addon can read, and return that path.
@@ -1527,6 +1636,9 @@ module.exports = {
   ensureSupertonic3Model,
   supertonic3QuantFromVariant,
   DEFAULT_SUPERTONIC3_QUANT,
+  ensureParlerModel,
+  parlerQuantFromVariant,
+  DEFAULT_PARLER_QUANT,
   ensureMecabDict,
   ensureCangjieTsv,
   ensureLavaSREnhancerGguf,

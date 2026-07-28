@@ -1,89 +1,56 @@
-import type { QvacResponse } from '@qvac/infer-base'
-import type QvacLogger from '@qvac/logging'
-
-export { QvacResponse }
-
-export interface Addon {
-  loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
-  activate(): Promise<void>
-  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<boolean>
-  cancel(): Promise<void>
-  unload(): Promise<void>
-}
-
-export type NumericLike = `${number}`
-
-export interface GGMLConfig {
-  device: 'gpu' | 'cpu'
-  gpu_layers?: NumericLike
-  batch_size?: NumericLike
-  ctx_size?: NumericLike
-  pooling?: 'none' | 'mean' | 'cls' | 'last' | 'rank'
-  attention?: 'causal' | 'non-causal'
-  embd_normalize?: NumericLike
-  flash_attn?: 'on' | 'off' | 'auto'
-  'main-gpu'?: NumericLike | 'integrated' | 'dedicated'
-  'split-mode'?: 'none' | 'layer' | 'row'
-  'tensor-split'?: string
-  verbosity?: NumericLike
-  /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
-  openclCacheDir?: string
-  [key: string]: string | number | boolean | string[] | undefined
-}
-
+import QvacLogger = require("@qvac/logging");
+import { type QvacResponse } from "@qvac/infer-base";
+import { type Addon, type GGMLConfig } from "./addon";
+export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon } from "./addon";
+export { BertInterface } from "./addon";
+export type { QvacResponse };
 export interface GGMLBertArgs {
-  files: { model: string[] }
-  config?: GGMLConfig
-  logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
+    files: {
+        model: string[];
+    };
+    config?: GGMLConfig;
+    logger?: QvacLogger | Console | null;
+    opts?: {
+        stats?: boolean;
+    };
 }
-
-export interface AddonConfigurationParams {
-  path: string
-  config: GGMLConfig
-  backendsDir?: string
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export declare function pickPrimaryGgufPath(files: string[]): string;
+/** BERT client wrapping the native BertInterface for embedding generation. */
+export declare class GGMLBert {
+    protected addon: Addon | null;
+    logger: QvacLogger;
+    opts: {
+        stats?: boolean;
+    };
+    state: {
+        configLoaded: boolean;
+    };
+    private readonly _files;
+    private readonly _config;
+    private readonly _job;
+    private readonly _run;
+    private _hasActiveResponse;
+    constructor({ files, config, logger, opts }: GGMLBertArgs);
+    load(): Promise<void>;
+    private _load;
+    private _streamShards;
+    run(input: string | string[]): Promise<QvacResponse>;
+    private _runInternal;
+    private _addonOutputCallback;
+    private _createAddon;
+    /**
+     * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
+     */
+    unload(): Promise<void>;
+    /** Cancel the current task. */
+    cancel(): Promise<void>;
+    getState(): {
+        configLoaded: boolean;
+    };
 }
-
-export interface RuntimeStats {
-  total_tokens: number
-  total_time_ms: number
-  tokens_per_second?: number
-  batch_size: number
-  trained_context_size: number
-  context_size: number
-  backendDevice: 'cpu' | 'gpu'
-}
-
-export default class GGMLBert {
-  protected addon: Addon | null
-  opts: { stats?: boolean }
-  logger: QvacLogger
-  state: { configLoaded: boolean }
-
-  constructor(args: GGMLBertArgs)
-
-  load(): Promise<void>
-  run(text: string | string[]): Promise<QvacResponse>
-  unload(): Promise<void>
-  cancel(): Promise<void>
-  getState(): { configLoaded: boolean }
-}
-
-export { GGMLBert }
-
-export class BertInterface implements Addon {
-  constructor(
-    binding: unknown,
-    configurationParams: AddonConfigurationParams,
-    outputCb: (addon: unknown, event: string, data: unknown, error?: Error) => void
-  )
-
-  loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
-  activate(): Promise<void>
-  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<boolean>
-  cancel(): Promise<void>
-  unload(): Promise<void>
-}
-
-/** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
-export function pickPrimaryGgufPath(files: string[]): string
+export default GGMLBert;
