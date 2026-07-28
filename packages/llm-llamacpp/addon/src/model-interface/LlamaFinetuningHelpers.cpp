@@ -123,6 +123,10 @@ uint32_t parseLoraModules(const std::string& modulesStr) {
       {"ffn_gate", LLAMA_LORA_TARGET_FFN_GATE},
       {"ffn_up", LLAMA_LORA_TARGET_FFN_UP},
       {"ffn_down", LLAMA_LORA_TARGET_FFN_DOWN},
+      {"ffn_gate_exps", LLAMA_LORA_TARGET_FFN_GATE_EXPS},
+      {"ffn_up_exps", LLAMA_LORA_TARGET_FFN_UP_EXPS},
+      {"ffn_down_exps", LLAMA_LORA_TARGET_FFN_DOWN_EXPS},
+      {"ffn_gate_up_exps", LLAMA_LORA_TARGET_FFN_GATE_UP_EXPS},
       {"output", LLAMA_LORA_TARGET_OUTPUT},
       {"all", LLAMA_LORA_TARGET_ALL}};
 
