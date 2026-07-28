@@ -5,8 +5,6 @@
 
 namespace qvac_lib_inference_addon_llama {
 
-// Inline defaults are the single source of truth for omitted options:
-// FinetuneParamHandlers only assigns fields the caller provides.
 struct LlamaFinetuningParams {
   std::string outputParametersDir;
   int numberOfEpochs{1};
