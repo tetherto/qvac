@@ -1,0 +1,15 @@
+{
+  "_comment": "Mobile test sharding for @qvac/audiogen-ggml. The mobile CI action runs ONLY the tests listed here. Local `npm run ios/android` in qvac-test-addon-mobile extracts the async functions from test/mobile/test.cjs directly and does not consume this file. testGenerateMusic and testLoadModels each need the ACE-Step GGUFs (~4.3 GB) side-loaded under <testDir>/models.",
+  "ios": {
+    "functional": [
+      "testLoadModels",
+      "testGenerateMusic"
+    ]
+  },
+  "android": {
+    "functional": [
+      "testLoadModels",
+      "testGenerateMusic"
+    ]
+  }
+}
