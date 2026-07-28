@@ -62,10 +62,7 @@ test('buildManifest drops shards with missing/non-https configs', () => {
 })
 
 test('MODEL_SHARDS excludes pi05 (deferred on mobile)', () => {
-  assert.deepEqual(
-    MODEL_SHARDS.map((s) => s.test).sort(),
-    ['runAddonTest', 'runGrootTest']
-  )
+  assert.deepEqual(MODEL_SHARDS.map((s) => s.test).sort(), ['runAddonTest', 'runGrootTest'])
 })
 
 test('buildScript reads the shard grep and stages only matching models via adb', () => {

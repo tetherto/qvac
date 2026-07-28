@@ -33,15 +33,12 @@ test('readModels maps every presigned URL key to its on-device filename', () => 
 
     const models = readModels(dir)
     assert.equal(models.length, MODEL_KEYS.length)
-    assert.deepEqual(
-      models.map((m) => m.name).sort(),
-      [
-        'craft_mlt_25k.gguf',
-        'crnn_mobilenet_v3_small.gguf',
-        'db_mobilenet_v3_large.gguf',
-        'latin_g2.gguf'
-      ]
-    )
+    assert.deepEqual(models.map((m) => m.name).sort(), [
+      'craft_mlt_25k.gguf',
+      'crnn_mobilenet_v3_small.gguf',
+      'db_mobilenet_v3_large.gguf',
+      'latin_g2.gguf'
+    ])
   })
 })
 

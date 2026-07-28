@@ -667,8 +667,11 @@ function prestagedModelPath(modelName) {
 }
 
 // Returns true when a valid (>= minBytes) copy landed, so the caller can skip
-// the network download.
-function copyPrestagedModel(modelName, destPath, minBytes = 1024) {
+// the network download. The default 1MB floor guards against a truncated adb
+// push being accepted as a real model: every OCR GGUF is well above 1MB, so a
+// short copy falls through to the presigned-S3 download instead of failing the
+// test on a corrupt file.
+function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
   const src = prestagedModelPath(modelName)
   if (!src) return false
   try {
