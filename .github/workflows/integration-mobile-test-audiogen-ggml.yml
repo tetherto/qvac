@@ -8,6 +8,10 @@ name: Mobile Integration Tests (AudioGen GGML)
 # the registry at runtime (no host-side adb prestage), so there is no benchmark /
 # manifest / prestage machinery here. Device Farm project + iOS pool fall back to
 # the shared ONNX_TTS ARNs until dedicated audiogen ARNs are provisioned.
+#
+# Android-only for now; iOS is deferred pending a devops entitlement/signing fix
+# (see the matrix NOTE below). The iOS wiring (ARNs, signing inputs) is kept so the
+# row can be restored with a one-line matrix change once that lands.
 
 on:
   workflow_call:
@@ -70,14 +74,21 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
+      # Android-only for now. iOS is DEFERRED: the on-device flow works up to model
+      # load (the ~3 GB turbo-q4 GGUFs download fine on-device), but the app is then
+      # jetsam-OOM-killed while loading them. The increased-memory-limit /
+      # extended-virtual-addressing entitlements are already declared in
+      # tetherto/qvac-test-addon-mobile's app.json (PR #34), but they are not
+      # effective at runtime — the CI Apple provisioning profile doesn't authorize
+      # them and/or AWS Device Farm re-signs the IPA and strips them. Re-enabling iOS
+      # needs a devops/infra fix (enable Increased Memory Limit on the App ID,
+      # regenerate the provisioning profile + CI secret, confirm Device Farm keeps
+      # the entitlement); add the iOS row back once that lands.
       matrix:
         include:
           - platform: Android
             os: ubuntu-24.04
             runner: qvac-ubuntu2404-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
 
     steps:
       - name: Checkout composite action source
