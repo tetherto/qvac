@@ -15,6 +15,8 @@ exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegis
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 const QvacLogger = require("@qvac/logging");
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
+const path = require("bare-path");
 const audiogen_1 = require("./audiogen");
 const models_1 = require("./models");
 const audio_format_1 = require("./lib/audio-format");
@@ -84,7 +86,12 @@ class AudioGen {
             shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
             useGPU: useGpu,
             nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
-            threads: requireFiniteNumber(config.threads ?? 0, 'threads', true)
+            threads: requireFiniteNumber(config.threads ?? 0, 'threads', true),
+            // Where the native engine dlopens the ggml backend modules staged next to
+            // the `.bare`. Default to the package's own prebuilds dir; the C++ side
+            // appends the per-target BACKENDS_SUBDIR. Required on arm64 (per-microarch
+            // MODULE CPU backends); harmless on static desktop / Apple builds.
+            backendsDir: config.backendsDir ?? path.join(__dirname, 'prebuilds')
         };
         this.addon = null;
         this._job = (0, infer_base_1.createJobHandler)({
