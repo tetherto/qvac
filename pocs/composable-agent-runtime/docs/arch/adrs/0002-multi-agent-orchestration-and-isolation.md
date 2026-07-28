@@ -202,8 +202,8 @@ must call into on every run.
 
 ## Related material
 
-- [ADR 0001: Package-owned workers and compatibility](0001-package-owned-workers-and-compatibility.md)
-- [Local deployment and contract design](../../../../../arch/qips/agentic-sdk-local-deployment-and-contract-design.md)
+- ADR 0001: Package-owned workers and compatibility
+- Local deployment and contract design (arch/qips)
 - `@qvac/agents` (`packages/agents/index.ts`) - checkpoint/resume/cancel primitives
 - qvac-app `assistant/lib/assistant.ts` - existing dispatch/ownership/chunk model this ADR generalizes
 
