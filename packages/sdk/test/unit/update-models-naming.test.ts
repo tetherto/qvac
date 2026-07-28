@@ -941,6 +941,36 @@ test('sha256 fallback: reads from blobBinding.sha256 when model.sha256 is empty'
 })
 
 // ---------------------------------------------------------------------------
+// AudioGen registry engine alias
+// ---------------------------------------------------------------------------
+
+test('audiogen: registry package alias resolves and generates a namespaced export', (t) => {
+  const { model, exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf',
+    source: 's3',
+    engine: '@qvac/audiogen',
+    license: 'MIT',
+    name: '',
+    sizeBytes: 100,
+    sha256: 'audio_gen_hash',
+    quantization: 'q4_k_m',
+    params: '',
+    tags: ['audio-generation', 'acestep', 'v1.5', 'turbo', 'gguf'],
+    blobBinding: {
+      coreKey: Buffer.from('c2'.repeat(32), 'hex'),
+      blockOffset: 0,
+      blockLength: 1,
+      byteOffset: 0,
+      byteLength: 100
+    }
+  })
+
+  t.is(model.engine, 'audiogen-ggml')
+  t.is(model.addon, 'audiogen')
+  t.is(exportName, 'AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M')
+})
+
+// ---------------------------------------------------------------------------
 // Unknown engine → processRegistryModel returns null
 // ---------------------------------------------------------------------------
 

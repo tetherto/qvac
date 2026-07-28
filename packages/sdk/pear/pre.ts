@@ -59,6 +59,7 @@ const BUILTIN_PLUGINS = [
   '@qvac/sdk/tts-ggml/plugin',
   '@qvac/sdk/ggml-ocr/plugin',
   '@qvac/sdk/sdcpp-generation/plugin',
+  '@qvac/sdk/audiogen-ggml/plugin',
   '@qvac/sdk/ggml-vla/plugin',
   '@qvac/sdk/ggml-classification/plugin'
 ]
@@ -72,6 +73,7 @@ const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   'tts-ggml': 'ttsPlugin',
   'ggml-ocr': 'ocrPlugin',
   'sdcpp-generation': 'diffusionPlugin',
+  'audiogen-ggml': 'audioGenPlugin',
   'ggml-vla': 'vlaPlugin',
   'ggml-classification': 'classificationPlugin'
 }

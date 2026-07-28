@@ -77,6 +77,7 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-inference-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
+import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
@@ -442,6 +443,21 @@ resources.define('diffusion', {
   }
 })
 
+const audioGenRegistryPrefix = 'registry://s3/qvac_models_compiled/ggml/acestep/2026-07-22'
+
+resources.define('audiogen-turbo', {
+  type: 'audiogen-ggml',
+  skipPreDownload: true,
+  config: {
+    textEncModelSrc: `${audioGenRegistryPrefix}/Qwen3-Embedding-0.6B-Q8_0.gguf`,
+    lmModelSrc: `${audioGenRegistryPrefix}/acestep-5Hz-lm-0.6B-Q8_0.gguf`,
+    ditModelSrc: `${audioGenRegistryPrefix}/acestep-v15-turbo-Q4_K_M.gguf`,
+    vaeModelSrc: `${audioGenRegistryPrefix}/vae-BF16.gguf`,
+    useGPU: true,
+    inferenceSteps: 8
+  }
+})
+
 resources.define('diffusion-fa', {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: 'sdcpp-generation',
@@ -522,9 +538,16 @@ function ensureDesktopE2EConfig() {
     ...fixtureConfig,
     ...existingConfig
   }
+  const configuredPlugins = Array.isArray(mergedConfig['plugins'])
+    ? mergedConfig['plugins'].filter((plugin): plugin is string => typeof plugin === 'string')
+    : []
+  const desktopConfig = {
+    ...mergedConfig,
+    plugins: Array.from(new Set([...configuredPlugins, '@qvac/sdk/audiogen-ggml/plugin']))
+  }
   const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
 
-  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
+  fs.writeFileSync(generatedPath, `${JSON.stringify(desktopConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
 
   if (existingPath) {
@@ -594,6 +617,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
+    new AudioGenExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),

@@ -108,6 +108,10 @@
       "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
       "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
     },
+    "./audiogen-ggml/plugin": {
+      "types": "./dist/server/bare/plugins/audiogen-ggml/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/audiogen-ggml/plugin.js"
+    },
     "./ggml-vla/plugin": {
       "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
@@ -202,12 +206,14 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/audiogen-ggml": "../audiogen-ggml",
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.13.0",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.17.0",
     "@qvac/embed-llamacpp": "^0.28.0",
     "@qvac/error": "^0.1.1",
+    "@qvac/infer-base": "0.4.2",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.38.0",
     "@qvac/logging": "^0.1.0",
