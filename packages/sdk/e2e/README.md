@@ -169,8 +169,8 @@ See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-te
 Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto/qvac/actions/workflows/test-sdk.yml)
 and submit the form.
 
-Snap runs are manual-only. Select `snap` to run only the strict Snap consumer, or `all` to include it with
-the other manually selected consumers.
+Select any combination of the platform checkboxes. Desktop, Android, and iOS are selected by default.
+Electron and strict Snap runs are manual-only and must be selected explicitly.
 
 Non-obvious inputs:
 
@@ -179,11 +179,11 @@ Non-obvious inputs:
   the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
   workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
-- `desktop-platforms` — JSON array of runner labels; defaults to all three GPU runners. Narrow to one during
-  debugging.
+- `desktop-platforms`, `electron-platforms`, and `snap-platforms` — advanced JSON runner overrides,
+  pre-filled with the workflow defaults. Narrow them to specific runners only when debugging.
 
-The remaining inputs (`targets`, `filter`, `exclude-suite`, timeouts, `cache-models`) are self-explanatory in
-the form.
+The remaining inputs (`filter`, `exclude-suite`, timeouts, device pools, and `cache-models`) are described
+in the form.
 
 ## Developing new tests
 
