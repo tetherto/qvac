@@ -63,7 +63,7 @@ export class SyncCore extends ReadyResource {
       info: write,
       debug: write
     })
-    this.logger.setLevel(options.logging?.level ?? 'off')
+    this.logger.setLevel(options.logging?.level ?? 'info')
   }
 
   get deviceId() {

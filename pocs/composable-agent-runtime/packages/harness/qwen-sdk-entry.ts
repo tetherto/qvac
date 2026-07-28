@@ -1,11 +1,18 @@
 import process from 'bare-process'
 import { createHarness } from './lib/harness.ts'
+import { createHarnessLogger, loggingFromArgv } from './lib/logger.ts'
 import { createSdkDirectAdapter } from './lib/sdk-direct-adapter.ts'
 import { serveHarness } from './lib/serve.ts'
 import type { HarnessStream } from './lib/transport.ts'
 
+const logging = loggingFromArgv(process.argv)
+
 export default async function start(stream: HarnessStream, ready?: () => void) {
-  const harness = createHarness({ sdk: await createSdkDirectAdapter() })
+  const logger = createHarnessLogger(logging)
+  const harness = createHarness({
+    sdk: await createSdkDirectAdapter({ logger }),
+    logging
+  })
   serveHarness(stream, harness, () => ({
     component: 'sdk',
     runtime: 'bare',

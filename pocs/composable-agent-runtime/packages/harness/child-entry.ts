@@ -1,11 +1,12 @@
 import { createChildEntry } from './lib/child-entry.ts'
+import { loggingFromArgv } from './lib/logger.ts'
 import { createSdkSidecarAdapter } from './lib/sdk-sidecar-adapter.ts'
 import type { HarnessStream } from './lib/transport.ts'
 import type { HarnessRuntimeInfo } from './lib/connect.ts'
 import process from 'bare-process'
 
 const sdkEntry = argument('--sdk-entry=')
-const logging = JSON.parse(argument('--logging=') ?? '{}')
+const logging = loggingFromArgv(process.argv)
 let sdkIdentity: HarnessRuntimeInfo | undefined
 const startChild = createChildEntry({
   logging,
@@ -15,6 +16,7 @@ const startChild = createChildEntry({
     }
     return createSdkSidecarAdapter({
       entry: sdkEntry,
+      logging,
       onIdentity(identity) {
         sdkIdentity = identity
       }

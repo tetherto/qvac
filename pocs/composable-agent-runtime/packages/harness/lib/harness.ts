@@ -1,8 +1,8 @@
-import QvacLogger from '@qvac/logging'
 import {
   HarnessExecutionError,
   serializeHarnessError
 } from './errors.ts'
+import { createHarnessLogger } from './logger.ts'
 import { createMemoryStateAdapter } from './memory-state.ts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
 import type {
@@ -25,14 +25,7 @@ export function createHarness({
   logging
 }: CreateHarnessOptions): HarnessRuntime {
   let closed = false
-  const write = (...values: unknown[]) => console.error(...values)
-  const logger = new QvacLogger({
-    error: write,
-    warn: write,
-    info: write,
-    debug: write
-  })
-  logger.setLevel(logging?.level ?? 'off')
+  const logger = createHarnessLogger(logging)
   const logPrefix = '[harness]'
 
   async function* run(input: HarnessRunInput): AsyncGenerator<HarnessEvent> {

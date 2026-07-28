@@ -6,6 +6,7 @@ export {
 } from './lib/connect.ts'
 export { createChildEntry, type ChildEntryOptions } from './lib/child-entry.ts'
 export { createHarness, mapSdkEvent, type CreateHarnessOptions } from './lib/harness.ts'
+export { argvForLogging } from './lib/logger.ts'
 export { createMemoryStateAdapter } from './lib/memory-state.ts'
 export { createSdkDirectAdapter } from './lib/sdk-direct-adapter.ts'
 export { createSupervisedSdkPort } from './lib/supervised-sdk-port.ts'

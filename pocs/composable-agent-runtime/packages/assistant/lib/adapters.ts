@@ -1,4 +1,5 @@
 import {
+  argvForLogging,
   spawnHarness,
   type HarnessEvent,
   type HarnessStateAdapter,
@@ -118,7 +119,7 @@ export async function startHarnessComponent(
         sdkEntry,
         new URL('../../../', import.meta.url)
       )}`,
-      `--logging=${JSON.stringify(logging ?? {})}`
+      ...argvForLogging(logging)
     ]
     const remote = spawnHarness({ entry: harnessEntry, args })
     let identity = await remote.describeRuntime()

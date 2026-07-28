@@ -73,7 +73,7 @@ export function createAssistant(
     info: write,
     debug: write
   })
-  logger.setLevel(options.logging?.level ?? 'off')
+  logger.setLevel(options.logging?.level ?? 'info')
   const lifecycle = createLifecycleEvents(supervisor, logger)
   let sdkStarts = 0
   const components =

@@ -20,8 +20,19 @@ interface SdkCompletionEvent {
   readonly stopReason?: 'eos' | 'length' | 'stopSequence' | 'cancelled' | 'error'
 }
 
+interface ModelLogger {
+  error(...args: unknown[]): void
+  warn(...args: unknown[]): void
+  info(...args: unknown[]): void
+  debug(...args: unknown[]): void
+}
+
 interface SdkModule {
-  loadModel(input: { readonly modelSrc: string; readonly modelType: string }): Promise<string>
+  loadModel(input: {
+    readonly modelSrc: string
+    readonly modelType: string
+    readonly logger?: ModelLogger
+  }): Promise<string>
   completion(input: {
     readonly modelId: string
     readonly history: readonly { readonly role: string; readonly content: string }[]
@@ -36,7 +47,13 @@ interface SdkModule {
   close(): Promise<void>
 }
 
-export async function createSdkDirectAdapter(): Promise<SdkRuntimePort> {
+export interface CreateSdkDirectAdapterOptions {
+  readonly logger?: ModelLogger
+}
+
+export async function createSdkDirectAdapter({
+  logger
+}: CreateSdkDirectAdapterOptions = {}): Promise<SdkRuntimePort> {
   const [{ close, plugins }, { llmPlugin }] = await Promise.all([
     import('@qvac/sdk'),
     import('@qvac/sdk/llamacpp-completion/plugin')
@@ -47,7 +64,8 @@ export async function createSdkDirectAdapter(): Promise<SdkRuntimePort> {
     async loadModel({ model }) {
       const modelId = await sdk.loadModel({
         modelSrc: model,
-        modelType: 'llamacpp-completion'
+        modelType: 'llamacpp-completion',
+        logger
       })
       return { modelId }
     },
