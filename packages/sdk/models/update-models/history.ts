@@ -3,6 +3,53 @@ import { generateExportName } from './naming'
 import type { CurrentModel, ProcessedModel } from './types'
 import { getCommitHash } from './utils'
 
+// Splits the body of the generated `models` array into one string per
+// top-level entry. Brace-depth scanning (rather than a `[^}]+` regex) is
+// required because entries carrying `shardMetadata` / `companionSet` contain
+// nested objects, and quote tracking keeps braces inside string literals from
+// throwing the depth off.
+export function extractEntryBlocks(arrayContent: string): string[] {
+  const entries: string[] = []
+  let depth = 0
+  let start = -1
+  let quote: string | null = null
+
+  for (let i = 0; i < arrayContent.length; i++) {
+    const char = arrayContent[i]
+
+    if (quote !== null) {
+      if (char === '\\') i++
+      else if (char === quote) quote = null
+      continue
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char
+    } else if (char === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (char === '}') {
+      depth--
+      if (depth === 0 && start !== -1) {
+        entries.push(arrayContent.slice(start, i + 1))
+        start = -1
+      }
+    }
+  }
+
+  return entries
+}
+
+// Reads the first `<field>: '<value>'` pair out of an entry block. Accepts
+// either quote style because codegen emits double quotes and Prettier then
+// rewrites them to single quotes, and tolerates the line break Prettier
+// inserts after the colon on long values.
+function readStringField(entry: string, field: string): string | null {
+  const match = new RegExp(`\\b${field}:\\s*(?:'([^']*)'|"([^"]*)")`).exec(entry)
+  if (!match) return null
+  return match[1] ?? match[2] ?? null
+}
+
 export function loadCurrentModels(outputFile: string): CurrentModel[] {
   try {
     if (!fs.existsSync(outputFile)) {
@@ -10,26 +57,30 @@ export function loadCurrentModels(outputFile: string): CurrentModel[] {
     }
 
     const content = fs.readFileSync(outputFile, 'utf-8')
-    const modelsMatch = content.match(/export const models = \[([\s\S]*?)\] as const/)
+    const modelsMatch = content.match(/export const models = \[([\s\S]*?)\n\] as const/)
 
     if (!modelsMatch?.[1]) {
+      console.warn(`⚠️  Could not locate the models array in ${outputFile}`)
       return []
     }
 
-    const modelsArrayContent = modelsMatch[1]
     const currentModels: CurrentModel[] = []
 
-    const modelRegex =
-      /\{[^}]+name:\s*"([^"]+)"[^}]+(?:registryPath|hyperbeeKey):\s*"([^"]+)"[^}]+\}/g
-    let match
-
-    while ((match = modelRegex.exec(modelsArrayContent)) !== null) {
-      if (match[1] && match[2]) {
-        currentModels.push({
-          name: match[1],
-          registryPath: match[2]
-        })
+    // `name` and `registryPath` are emitted as the first two fields of every
+    // entry, so the first match in a block always belongs to the model itself
+    // and never to a nested companion file.
+    for (const entry of extractEntryBlocks(modelsMatch[1])) {
+      const name = readStringField(entry, 'name')
+      const registryPath = readStringField(entry, 'registryPath')
+      if (name && registryPath) {
+        currentModels.push({ name, registryPath })
       }
+    }
+
+    if (currentModels.length === 0) {
+      // Silently returning an empty list makes every remote model look new and
+      // hides removals entirely, so surface it instead of reporting bogus drift.
+      console.warn(`⚠️  Parsed 0 models from ${outputFile} — drift comparison is unreliable`)
     }
 
     return currentModels
