@@ -6916,6 +6916,140 @@
                       "required": ["ttsEngine", "language"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonic"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "parler"
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "voiceDescription": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "voice": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "emotion": {
+                          "type": "string",
+                          "enum": [
+                            "command",
+                            "anger",
+                            "narration",
+                            "conversation",
+                            "disgust",
+                            "fear",
+                            "happy",
+                            "neutral",
+                            "proper noun",
+                            "news",
+                            "sad",
+                            "surprise"
+                          ],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"
+                        },
+                        "pitch": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "pace": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "expressivity": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "noise": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "reverb": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "quality": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "streamChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "streamFirstChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "temperature": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "topK": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "topP": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "maxFrames": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 0
+                            },
+                            {
+                              "type": "integer",
+                              "minimum": 10,
+                              "maximum": 2147483647
+                            }
+                          ]
+                        },
+                        "minNewTokens": {
+                          "type": "integer",
+                          "minimum": -1,
+                          "maximum": 2147483647
+                        },
+                        "normalizeNumbers": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigParler"
                     }
                   ]
                 }
@@ -10488,6 +10622,60 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "voiceDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "voice": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emotion": {
+          "type": "string",
+          "enum": [
+            "command",
+            "anger",
+            "narration",
+            "conversation",
+            "disgust",
+            "fear",
+            "happy",
+            "neutral",
+            "proper noun",
+            "news",
+            "sad",
+            "surprise"
+          ],
+          "title": "TextToSpeechRequestEmotion"
+        },
+        "pitch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expressivity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "noise": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reverb": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality": {
+          "type": "string",
+          "minLength": 1
+        },
         "type": {
           "type": "string",
           "const": "textToSpeech"
@@ -10570,6 +10758,60 @@
         "flushAfterMs": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "voiceDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "voice": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emotion": {
+          "type": "string",
+          "enum": [
+            "command",
+            "anger",
+            "narration",
+            "conversation",
+            "disgust",
+            "fear",
+            "happy",
+            "neutral",
+            "proper noun",
+            "news",
+            "sad",
+            "surprise"
+          ],
+          "title": "TextToSpeechStreamRequestEmotion"
+        },
+        "pitch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expressivity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "noise": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reverb": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality": {
+          "type": "string",
+          "minLength": 1
         },
         "type": {
           "type": "string",
