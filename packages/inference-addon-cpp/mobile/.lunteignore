@@ -1,0 +1,11 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+**/*.auto.cjs
+# Generated from the desktop suite — see .prettierignore for why it must not be
+# reformatted or linted into divergence.
+test/integration
+*.d.ts

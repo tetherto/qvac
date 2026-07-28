@@ -15,58 +15,70 @@ desktop integration test as an on-device test.
 
 ## Layout
 
-- `binding.cpp` / `CMakeLists.txt` — unified Bare module (`add_bare_module`),
-  including the header-only library from `../src`.
-- `index.js` / `binding.js` — `require.addon()` glue.
-- `test/integration/*.test.js` — the brittle tests, ported to run on-device
-  (each `require`s `../../index.js`).
+- `binding.cpp` / `CMakeLists.txt` — unified Bare module (`add_bare_module`)
+  aggregating **all three** desktop sub-package bindings, plus the header-only
+  library from `../src`. `test_logger.cpp` and `output_callback_lifetime.cpp` are
+  ports of the logger / output-callback-lifetime binding bodies.
+- `index.js` / `binding.js` / `addon.js` — `require.addon()` glue.
+- `test/integration/<suite>/**` — **GENERATED**. Mirrors
+  `../tests/integration_js/<suite>/` (tests + their `bare-thread` workers). Never
+  hand-edit; change the desktop test and regenerate.
 - `test/mobile/integration-runtime.cjs` — installs Bare
   `unhandledRejection`/`uncaughtException`/`beforeExit` handlers that force a
   non-zero exit on device (so a dlopen/ABI crash fails the Device Farm run
   instead of going false-green) and exposes `runIntegrationModule`.
-- `test/mobile/integration.auto.cjs` — **generated**; one `run<Name>` wrapper
-  per `test/integration/*.test.js`. The harness invokes these as on-device
-  tests.
-- `scripts/generate-mobile-integration-tests.js` — regenerates
-  `integration.auto.cjs`. `scripts/validate-mobile-tests.js` — checks it is in
-  sync (CI runs this, advisory).
+- `test/mobile/integration.auto.cjs` — **generated**; one `run<Name>Test` wrapper
+  per desktop test entry. The harness invokes these as on-device tests.
+- `scripts/lib/desktop-suites.js` — the single source of truth for the port
+  (which files, and the two mechanical rewrites). Shared by:
+  `scripts/generate-mobile-integration-tests.js` (writes the tree) and
+  `scripts/validate-mobile-tests.js` (re-derives it and fails on any difference).
+  `scripts/run-desktop-tests.js` runs every generated entry locally under `bare`.
 
-## Keeping in sync with the desktop suite ⚠️
+## No mobile-only tests: the suite is generated from desktop
 
-`binding.cpp` and `test/integration/*.test.js` are **manual ports** of the
-standalone desktop sub-packages under `../tests/integration_js/*` (phase 1:
-`js-create-double-first-call/`). The llamacpp mobile addons avoid this by sharing
-one `test/integration/` between desktop and mobile; inference-addon-cpp can't,
-because its desktop suite is separate one-addon-per-package bindings, so the port
-is a copy.
+There are **no hand-written mobile tests**. Every on-device test IS a desktop
+test, copied by `npm run test:mobile:generate` from
+`../tests/integration_js/<suite>/` with exactly **two mechanical rewrites**:
 
-**There is no automated check tying these copies to their desktop originals**
-(`validate-mobile-tests.js` only verifies `integration.auto.cjs` ↔
-`test/integration/`). So when a desktop binding or test changes, update the copy
-here too — otherwise the on-device test silently drifts from what desktop
-asserts. A normalized drift-check (the files aren't byte-identical — require
-paths differ and `binding.cpp` is aggregated/renamed) is tracked for the phase-2
-port, when several bindings aggregate and the risk grows.
+1. `require('.')` → `require('../../../index.js')` — the desktop sub-packages each
+   load their own addon; on mobile there is one aggregated addon.
+2. `new Thread('./worker-x.js')` → `new Thread(require.resolve('./worker-x.js'))` —
+   the desktop suite only gets away with a CWD-relative worker path because it
+   runs with cwd set to its own sub-package dir. Anchoring to the module's own
+   directory is correct in any cwd (and on device).
 
-## Test scope (phased)
+`npm run test:mobile:validate` re-derives the whole expected tree from the desktop
+sources and fails on **any** difference — a desktop test changed without
+regenerating, a suite added/removed, a hand-edit here, or a stale
+`integration.auto.cjs`. That check runs in CI as its own non-advisory job, so
+drift is a hard failure rather than a silent divergence.
 
-- **Phase 1:** `js-create-double` — pure js::Number / js_create_int32
-  marshalling; no threads/timing/I/O, so near-zero on-device flake. Proves the
-  full pipeline (prebuild → app → Device Farm → PASS/FAIL).
-- **Phase 2 (current):** the `logger` **bridge** tests (`logger.test.js`, ported
-  from `tests/integration_js/logger/test.js`) — C++→JS logger delivery via
-  `setLogger`/`cppLog`/`dummyCppLogWork`/`dummyMultiThreadedCppLogWork`/
-  `releaseLogger`, with `test_logger.cpp` folded into the unified binding
-  (`JS_LOGGER`). These use only native `std::thread`, no `bare-thread`, so
-  they're portable; timeouts are widened for device.
-- **Deferred (phase-2 follow-up):** logger's `teardown.test.js` /
-  `reject.test.js` — they spawn `bare-thread` workers loaded by relative path.
-  Their on-device viability (worker-file bundling + `bare-thread` runtime
-  support in the mobile Bare runtime) is unconfirmed and may need harness
-  changes, so they land only after the first Device Farm dispatch validates
-  `bare-thread` on device.
-- The `output-callback-lifetime` UAF stress test stays desktop-ASan-only — no
-  reliable signal without AddressSanitizer, which is unavailable on device.
+Why copy at all? The llamacpp mobile addons share one `test/integration/` between
+desktop and mobile. inference-addon-cpp can't: it's a header-only *library* whose
+desktop suite is three **standalone one-addon-per-package** sub-packages, and the
+harness only bundles files under this addon's own `test/` dir. Generation gives us
+the same single-source-of-truth guarantee without restructuring the desktop suite.
+
+> Generated files are excluded from `prettier`/`lunte` (see `.prettierignore`) —
+> reformatting them would register as drift.
+
+## Coverage caveats (device vs desktop)
+
+All five desktop test entries run on device, but two carry less signal there than
+on desktop — worth knowing before treating a green mobile run as equivalent:
+
+- **`output-callback-lifetime/test.js`** is a heap-use-after-free stress test whose
+  detection depends on **AddressSanitizer**, which is not available in the mobile
+  app. On device it is effectively a "does not crash" smoke test (a crash *is*
+  still caught, via `integration-runtime.cjs`'s crash-to-failure handlers). The
+  real UAF signal remains the desktop `linux-x64-asan` leg.
+- **`logger/teardown.test.js` and `logger/reject.test.js`** drive `bare-thread`
+  worker envs with timing-sensitive `terminate()` races. They pass locally after
+  the worker-path rewrite, but `bare-thread` behaviour in the on-device Bare
+  runtime is unverified until the first Device Farm run. Timeouts are inherited
+  from the desktop sources; if the device proves too slow, raise them **in the
+  desktop test** so both platforms stay in sync (never patch the generated copy).
 
 ## Local development
 

@@ -13,9 +13,12 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # build and Device-Farm phases run in SEPARATE jobs so no fork code executes in a
 # job that holds AWS/OIDC access (see the build/device-farm split below).
 #
-# Test scope (phase 1): the js-create-double marshalling test only. Advisory
+# Test scope: EVERY desktop integration test (tests/integration_js/*) runs on
+# device — no mobile-only tests exist. The mobile suite is generated from the
+# desktop sources and drift-checked by the validate-mobile job below. Advisory
 # (continue-on-error) until on-device flake is characterised. See
-# packages/inference-addon-cpp/mobile/.
+# packages/inference-addon-cpp/mobile/README.md for the two coverage caveats
+# (output-callback-lifetime needs ASan; bare-thread device behaviour unverified).
 
 on:
   workflow_call:
@@ -50,8 +53,11 @@ env:
   PREBUILD_PREFIX: infer-cpp-
 
 jobs:
-  # Fast, deterministic drift check: fails if the committed
-  # test/mobile/integration.auto.cjs is out of sync with test/integration/.
+  # Fast, deterministic drift check: the on-device suite is GENERATED from the
+  # desktop tests (tests/integration_js/*), so this re-derives the expected tree
+  # and fails if the committed copies differ — a desktop test changed without
+  # regenerating, a suite added/removed, a hand-edit, or a stale
+  # integration.auto.cjs.
   # Kept as its OWN job (not a step in build) and NOT continue-on-error, so drift
   # shows as a clear red job rather than a silent green no-op. It gates the
   # prebuild/build/device-farm chain, so drift stops the run early — before any
@@ -416,13 +422,13 @@ jobs:
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
           scheduling-mode: 'single-pool'
-          # Cost cap (default is 120 device-min): the phase-1/phase-2 tests
-          # (js-create-double + logger bridge) are well under a minute of device
-          # compute, and a launch-hang that never throws would NOT trip
-          # integration-runtime.cjs's crash-to-failure handlers. 20 min leaves
-          # margin for app launch + the logger bridge; raise again if the
-          # bare-thread teardown/reject tests are added.
-          job-timeout-minutes: '20'
+          # Cost cap (default is 120 device-min). The full suite is only seconds of
+          # compute on desktop; 25 min leaves ample margin for app launch plus the
+          # logger bare-thread teardown rounds and the output-callback churn on a
+          # slow device, while still bounding a launch-hang — which would NOT trip
+          # integration-runtime.cjs's crash-to-failure handlers, since it never
+          # throws. Revisit if the device legs come back near the ceiling.
+          job-timeout-minutes: '25'
 
       - name: Monitor Device Farm test run
         id: monitor

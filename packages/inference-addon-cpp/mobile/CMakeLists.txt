@@ -19,6 +19,7 @@ target_sources(
   PRIVATE
   binding.cpp
   test_logger.cpp
+  output_callback_lifetime.cpp
 )
 
 # Pull in the header-only inference-addon-cpp library (src/inference-addon-cpp/*).

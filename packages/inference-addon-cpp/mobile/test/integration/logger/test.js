@@ -1,24 +1,15 @@
+// AUTO-GENERATED FROM THE DESKTOP SUITE — DO NOT EDIT.
+//
+// Source: tests/integration_js/logger/test.js
+// Regenerate: npm run test:mobile:generate   (verify: npm run test:mobile:validate)
+//
+// Only mechanical change from the source: `require('.')` is repointed at the
+// unified mobile addon, because the mobile harness runs one aggregated addon
+// instead of the three standalone desktop sub-packages.
 const test = require('brittle')
-const addon = require('../../index.js')
+const addon = require('../../../index.js')
 
-// Ported from tests/integration_js/logger/test.js — the C++→JS logger bridge
-// tests (setLogger / cppLog / dummyCppLogWork / dummyMultiThreadedCppLogWork /
-// releaseLogger). dummyMultiThreadedCppLogWork uses native std::thread (NOT
-// bare-thread), so this file is portable to device.
-//
-// MANUAL PORT — KEEP IN SYNC with the source above. Two deliberate divergences:
-//   1. require path: `require('.')` there → `require('../../index.js')` here.
-//   2. timeouts are widened — mobile CPUs are slower/jitterier than the desktop
-//      runners the original values were tuned for.
-// No automated drift-check yet; tracked for phase-2. See ../../README.md.
-//
-// NOTE: logger's teardown.test.js / reject.test.js are NOT ported — they use
-// bare-thread workers loaded by relative path, whose on-device viability
-// (worker bundling + bare-thread runtime) is unconfirmed. Tracked as a phase-2
-// follow-up pending the first Device Farm dispatch.
-
-// Widened for device (desktop original: 1000ms).
-function waitForMessages(messages, count, timeout = 10000) {
+function waitForMessages(messages, count, timeout = 1000) {
   return new Promise((resolve, reject) => {
     const start = Date.now()
     const tick = () => {
@@ -38,7 +29,7 @@ function assertMessage(t, actual, expected, index) {
 }
 
 test('async C++ to JS logger bridge receives single-thread logs', async (t) => {
-  t.timeout(15000)
+  t.timeout(1000)
 
   const messages = []
   const expected = [
@@ -65,7 +56,7 @@ test('async C++ to JS logger bridge receives single-thread logs', async (t) => {
 })
 
 test('async C++ to JS logger bridge receives multi-threaded logs', async (t) => {
-  t.timeout(20000)
+  t.timeout(2000)
 
   const messages = []
   const expectedCount = 40
@@ -89,7 +80,7 @@ test('async C++ to JS logger bridge receives multi-threaded logs', async (t) => 
 })
 
 test('releaseLogger allows logger to be set again', async (t) => {
-  t.timeout(15000)
+  t.timeout(1000)
 
   const firstMessages = []
   t.is(
@@ -128,8 +119,11 @@ test('releaseLogger allows logger to be set again', async (t) => {
 // (once clearQueueLocked has already run) leaves an orphaned entry in the shared
 // queue. setLogger does not clear that queue, so the stale entry bleeds into the
 // next owner's callback on the following drain.
+//
+// EXPECTED TO FAIL before the fix: the new callback receives both the orphaned
+// 'stale-after-release' entry and its own fresh message.
 test('log emitted between releaseLogger and setLogger does not bleed into the new callback', async (t) => {
-  t.timeout(15000)
+  t.timeout(1000)
 
   const STALE = 'stale-after-release'
   const FRESH = 'fresh-after-reinstall'
@@ -138,7 +132,8 @@ test('log emitted between releaseLogger and setLogger does not bleed into the ne
   addon.setLogger((prio, msg) => {})
   addon.releaseLogger()
 
-  // Emit a C++ log while NO logger is installed.
+  // Emit a C++ log while NO logger is installed. Today this enqueues an orphaned
+  // entry that survives into the next owner instead of being dropped.
   addon.cppLog(3, STALE)
 
   // A brand-new owner installs and emits its own fresh log.
@@ -154,7 +149,8 @@ test('log emitted between releaseLogger and setLogger does not bleed into the ne
   addon.cppLog(3, FRESH)
 
   await waitForMessages(messages, 1)
-  // Give any additional queued entries a chance to be delivered too.
+  // Give any additional queued entries a chance to be delivered too, so a stale
+  // bleed cannot be missed by a premature assertion.
   await new Promise((resolve) => setTimeout(resolve, 50))
 
   t.absent(
@@ -170,8 +166,12 @@ test('log emitted between releaseLogger and setLogger does not bleed into the ne
 })
 
 test('setLogger replaces the callback on the same env without releaseLogger', async (t) => {
-  t.timeout(15000)
+  t.timeout(1000)
 
+  // Install an initial callback, then re-install on the SAME env WITHOUT
+  // releaseLogger in between. This exercises setLogger's same-env branch
+  // (oldState->env == env): it frees the previous callback ref and swaps in the
+  // new one while reusing the already-armed async handle.
   const firstMessages = []
   t.is(
     addon.setLogger((prio, msg) => {

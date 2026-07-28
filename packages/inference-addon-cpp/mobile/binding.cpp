@@ -1,7 +1,9 @@
 #include <bare.h>
 #include <js.h>
 
+#include "inference-addon-cpp/JsInterface.hpp"
 #include "inference-addon-cpp/JsUtils.hpp"
+#include "output_callback_lifetime.hpp"
 #include "test_logger.hpp"
 
 // Unified native binding for the on-device (iOS/Android) integration tests.
@@ -12,18 +14,18 @@
 // native hooks into this single Bare module. Export names are kept identical to
 // the originals so the ported JS tests read the same.
 //
-// MANUAL PORT — KEEP IN SYNC. The hooks below are hand-copied from
-// tests/integration_js/*/binding.cpp (phase 1: js-create-double-first-call).
-// There is no automated check tying them to the desktop originals yet, so if a
-// desktop binding's signature/behaviour changes, update the copy here too or
-// the on-device test silently stops matching what desktop asserts. An automated
-// normalized drift-check in scripts/validate-mobile-tests.js is tracked for the
-// phase-2 port (when several bindings aggregate). See README.md.
+// ALL THREE desktop sub-packages are aggregated here, so every desktop
+// integration test can run on device:
+//   * js-create-double-first-call → createDouble / createInt32 (inline below)
+//   * logger                      → test_logger.cpp (JS_LOGGER)
+//   * output-callback-lifetime    → output_callback_lifetime.cpp
 //
-// Phase 1: js-create-double hooks. Phase 2: the logger hooks
-// (setLogger/cppLog/... implemented in test_logger.cpp, JS_LOGGER-gated). The
-// output-callback-lifetime UAF stress test stays desktop-Linux-x64-ASan-only —
-// no signal without ASan, which is unavailable on device. See README.md.
+// MANUAL PORT — KEEP IN SYNC. These hooks are hand-copied from
+// tests/integration_js/*/binding.cpp; if a desktop binding's signature or
+// behaviour changes, update the copy here too. (The JS test files, by contrast,
+// are GENERATED from the desktop sources by scripts/generate-mobile-integration-tests.js
+// and drift-checked by scripts/validate-mobile-tests.js — only the native side
+// is hand-maintained.) See README.md.
 
 namespace {
 
@@ -68,6 +70,10 @@ js_value_t* createInt32(js_env_t* env, js_callback_info_t* info) {
 js_value_t* inferenceAddonCppMobileTestsExports(
     js_env_t* env,
     js_value_t* moduleExports) {
+  // Mirrors the desktop output-callback-lifetime binding, which records the
+  // module-init thread id in its exports function so onJsThread() can compare.
+  output_callback_lifetime::recordModuleInitThread();
+
 #define V(name, fn)                                                            \
   {                                                                            \
     js_value_t* val;                                                           \
@@ -90,6 +96,16 @@ js_value_t* inferenceAddonCppMobileTestsExports(
   V("dummyCppLogWork", test_logger::dummyCppLogWork)
   V("dummyMultiThreadedCppLogWork", test_logger::dummyMultiThreadedCppLogWork)
   V("releaseLogger", test_logger::releaseLogger)
+
+  // output-callback-lifetime (implemented in output_callback_lifetime.cpp).
+  // destroyInstance comes straight from JsInterface, as on desktop.
+  V("createInstance", output_callback_lifetime::createInstance)
+  V("createMultiInstance", output_callback_lifetime::createMultiInstance)
+  V("runJob", output_callback_lifetime::runJob)
+  V("cancelJob", output_callback_lifetime::cancelJob)
+  V("onJsThread", output_callback_lifetime::onJsThread)
+  V("blockEventLoop", output_callback_lifetime::blockEventLoop)
+  V("destroyInstance", qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
 #undef V
 
   return moduleExports;
