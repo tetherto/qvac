@@ -16,6 +16,8 @@ function createDependencies() {
   return {
     calls,
     dependencies: {
+      cpuArchitectures: [1, 2, 3, 4],
+      gpuTypes: [1, 2, 3, 4],
       createCPUInfo() {
         calls.cpuCreated++
         return {

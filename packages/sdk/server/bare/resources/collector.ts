@@ -4,6 +4,7 @@ import {
   normalizeEnumMetric,
   normalizeNonNegativeIntegerMetric,
   normalizeNonNegativeMetric,
+  normalizePositiveIntegerMetric,
   normalizeStringMetric,
   normalizeUtilizationMetric,
   unavailableMetric,
@@ -22,14 +23,12 @@ import type {
   ResourceMetric,
   ResourceProvenance,
   SystemResourceCapabilities,
-  SystemResourceCollector,
-  SystemResourceSample
+  SystemResourceCollector
 } from '@/server/bare/resources/types'
 
 const CPU_SOURCE = 'bare-cpu-info'
 const GPU_SOURCE = 'bare-gpu-info'
-const CPU_ARCHITECTURES = [1, 2, 3, 4] as const
-const GPU_TYPES = [1, 2, 3, 4] as const
+const GPU_MEMORY_SCOPE_REASON = 'GPU memory scope is unverified'
 
 const cpuSystemProvenance = {
   source: CPU_SOURCE,
@@ -58,15 +57,13 @@ function normalizeAmbiguousNonNegativeMetric(
   reason: string
 ): ResourceMetric<number> {
   if (value === undefined || value === null) return unavailableMetric()
-  const normalized = normalizeNonNegativeMetric(value, gpuDeviceProvenance, true)
+  const normalized = normalizeNonNegativeMetric(value, gpuDeviceProvenance)
   if (normalized.status !== 'supported') return normalized
 
   return unverifiedMetric(reason)
 }
 
-function normalizeDriverCapabilities(
-  drivers: NativeGPUCapabilities['drivers']
-): GraphicsDriverCapabilities {
+function normalizeDriverCapabilities(drivers: NativeGPUCapabilities['drivers']) {
   return {
     vulkan: normalizeBooleanMetric(drivers.vulkan, gpuProvenance),
     opencl: normalizeBooleanMetric(drivers.opencl, gpuProvenance),
@@ -78,45 +75,56 @@ function normalizeDriverCapabilities(
     cuda: normalizeBooleanMetric(drivers.cuda, gpuProvenance),
     levelZero: normalizeBooleanMetric(drivers.levelZero, gpuProvenance),
     rocm: normalizeBooleanMetric(drivers.rocm, gpuProvenance)
-  }
+  } satisfies GraphicsDriverCapabilities
 }
 
-function normalizeCPUCapabilities(cpu: ReturnType<CPUInfoContext['query']>) {
-  const capabilities: CPUResourceCapabilities = {
+function normalizeCPUCapabilities(
+  cpu: ReturnType<CPUInfoContext['query']>,
+  architectures: readonly number[]
+) {
+  return {
     name: normalizeStringMetric(cpu.name, cpuProvenance),
     vendor: normalizeStringMetric(cpu.vendor, cpuProvenance),
-    architecture: normalizeEnumMetric(cpu.arch, CPU_ARCHITECTURES, cpuProvenance),
-    physicalCores: normalizeNonNegativeIntegerMetric(cpu.physicalCores, cpuProvenance, false),
-    logicalCores: normalizeNonNegativeIntegerMetric(cpu.logicalCores, cpuProvenance, false),
-    performanceCores: normalizeNonNegativeIntegerMetric(cpu.performanceCores, cpuProvenance, true),
-    efficiencyCores: normalizeNonNegativeIntegerMetric(cpu.efficiencyCores, cpuProvenance, true),
-    frequencyHz: normalizeNonNegativeIntegerMetric(cpu.frequency, cpuProvenance, false),
-    cacheLineBytes: normalizeNonNegativeIntegerMetric(cpu.cacheLine, cpuProvenance, false)
-  }
-
-  return capabilities
+    architecture: normalizeEnumMetric(cpu.arch, architectures, cpuProvenance),
+    physicalCores: normalizePositiveIntegerMetric(cpu.physicalCores, cpuProvenance),
+    logicalCores: normalizePositiveIntegerMetric(cpu.logicalCores, cpuProvenance),
+    performanceCores: normalizeNonNegativeIntegerMetric(cpu.performanceCores, cpuProvenance),
+    efficiencyCores: normalizeNonNegativeIntegerMetric(cpu.efficiencyCores, cpuProvenance),
+    frequencyHz: normalizePositiveIntegerMetric(cpu.frequency, cpuProvenance),
+    cacheLineBytes: normalizePositiveIntegerMetric(cpu.cacheLine, cpuProvenance)
+  } satisfies CPUResourceCapabilities
 }
 
-function normalizeGPUCapabilities(gpu: NativeGPUCapabilities, id: string) {
-  const capabilities: GPUResourceCapabilities = {
+function normalizeGPUCapabilities(
+  gpu: NativeGPUCapabilities,
+  id: string,
+  gpuTypes: readonly number[]
+) {
+  return {
     id,
     name: normalizeStringMetric(gpu.name, gpuDeviceProvenance),
     vendor: normalizeStringMetric(gpu.vendor, gpuDeviceProvenance),
-    type: normalizeEnumMetric(gpu.type, GPU_TYPES, gpuDeviceProvenance),
+    type: normalizeEnumMetric(gpu.type, gpuTypes, gpuDeviceProvenance),
     driverName: normalizeStringMetric(gpu.driverName, gpuDeviceProvenance),
     driverVersion: normalizeStringMetric(gpu.driverVersion, gpuDeviceProvenance),
     drivers: normalizeDriverCapabilities(gpu.drivers),
     unifiedMemory: normalizeBooleanMetric(gpu.unifiedMemory, gpuDeviceProvenance),
-    memoryTotalBytes: normalizeAmbiguousNonNegativeMetric(
-      gpu.memory,
-      'GPU memory scope is unverified'
-    )
-  }
-
-  return capabilities
+    memoryTotalBytes: normalizeAmbiguousNonNegativeMetric(gpu.memory, GPU_MEMORY_SCOPE_REASON)
+  } satisfies GPUResourceCapabilities
 }
 
-function failedGPUSample(id: string, reason: string): GPUResourceSample {
+function failedCPUSample(reason: string) {
+  const failure = failedMetric<number>(reason)
+  return {
+    cpu: failure,
+    memory: {
+      usedBytes: failure,
+      totalBytes: failure
+    }
+  }
+}
+
+function failedGPUSample(id: string, reason: string) {
   return {
     id,
     compute: failedMetric(reason),
@@ -126,10 +134,10 @@ function failedGPUSample(id: string, reason: string): GPUResourceSample {
     memoryTotalBytes: failedMetric(reason),
     powerWatts: failedMetric(reason),
     temperatureCelsius: failedMetric(reason)
-  }
+  } satisfies GPUResourceSample
 }
 
-function normalizeGPUSample(id: string, usage: NativeGPUUsage): GPUResourceSample {
+function normalizeGPUSample(id: string, usage: NativeGPUUsage) {
   return {
     id,
     compute: normalizeUtilizationMetric(usage.compute, gpuDeviceProvenance),
@@ -141,16 +149,22 @@ function normalizeGPUSample(id: string, usage: NativeGPUUsage): GPUResourceSampl
     ),
     memoryTotalBytes: normalizeAmbiguousNonNegativeMetric(
       usage.memoryTotal,
-      'GPU memory scope is unverified'
+      GPU_MEMORY_SCOPE_REASON
     ),
-    powerWatts: normalizeNonNegativeMetric(usage.power, gpuDeviceProvenance, true),
-    temperatureCelsius: normalizeNonNegativeMetric(usage.temperature, gpuDeviceProvenance, true)
+    powerWatts: normalizeNonNegativeMetric(usage.power, gpuDeviceProvenance),
+    temperatureCelsius: normalizeNonNegativeMetric(usage.temperature, gpuDeviceProvenance)
+  } satisfies GPUResourceSample
+}
+
+function destroyContext(context: { destroy(): void } | undefined) {
+  try {
+    context?.destroy()
+  } catch {
+    // Teardown must continue so every native context gets a release attempt.
   }
 }
 
-export function createSystemResourceCollector(
-  dependencies: ResourceCollectorDependencies
-): SystemResourceCollector {
+export function createSystemResourceCollector(dependencies: ResourceCollectorDependencies) {
   let cpuContext: CPUInfoContext | undefined
   let gpuContext: GPUInfoContext | undefined
   let gpuIds: string[] = []
@@ -170,9 +184,12 @@ export function createSystemResourceCollector(
     } else {
       cpuContext = context
       const cpu = context.query()
-      cpuCapabilities = supportedMetric(normalizeCPUCapabilities(cpu), cpuProvenance)
+      cpuCapabilities = supportedMetric(
+        normalizeCPUCapabilities(cpu, dependencies.cpuArchitectures),
+        cpuProvenance
+      )
       memoryCapabilities = {
-        totalBytes: normalizeNonNegativeIntegerMetric(cpu.memory, cpuSystemProvenance, false)
+        totalBytes: normalizePositiveIntegerMetric(cpu.memory, cpuSystemProvenance)
       }
     }
   } catch {
@@ -190,7 +207,7 @@ export function createSystemResourceCollector(
       gpuContext = context
       const gpus = context.gpus()
       const normalized = gpus.map((gpu) =>
-        normalizeGPUCapabilities(gpu, dependencies.createGPUId())
+        normalizeGPUCapabilities(gpu, dependencies.createGPUId(), dependencies.gpuTypes)
       )
       gpuIds = normalized.map((gpu) => gpu.id)
       gpuCapabilities = supportedMetric(normalized, gpuProvenance)
@@ -199,11 +216,11 @@ export function createSystemResourceCollector(
     gpuCapabilities = failedMetric('GPU collector initialization failed')
   }
 
-  const capabilities: SystemResourceCapabilities = {
+  const capabilities = {
     cpu: cpuCapabilities,
     memory: memoryCapabilities,
     gpus: gpuCapabilities
-  }
+  } satisfies SystemResourceCapabilities
 
   function getCapabilities() {
     return capabilities
@@ -211,14 +228,7 @@ export function createSystemResourceCollector(
 
   function sampleCPU() {
     if (!cpuContext) {
-      const failure = failedMetric<number>('CPU collector is unavailable')
-      return {
-        cpu: failure,
-        memory: {
-          usedBytes: failure,
-          totalBytes: failure
-        }
-      }
+      return failedCPUSample('CPU collector is unavailable')
     }
 
     try {
@@ -226,30 +236,19 @@ export function createSystemResourceCollector(
       return {
         cpu: normalizeUtilizationMetric(usage.compute, cpuSystemProvenance),
         memory: {
-          usedBytes: normalizeNonNegativeIntegerMetric(usage.memoryUsed, cpuSystemProvenance, true),
-          totalBytes: normalizeNonNegativeIntegerMetric(
-            usage.memoryTotal,
-            cpuSystemProvenance,
-            false
-          )
+          usedBytes: normalizeNonNegativeIntegerMetric(usage.memoryUsed, cpuSystemProvenance),
+          totalBytes: normalizePositiveIntegerMetric(usage.memoryTotal, cpuSystemProvenance)
         }
       }
     } catch {
-      const failure = failedMetric<number>('CPU resource sampling failed')
-      return {
-        cpu: failure,
-        memory: {
-          usedBytes: failure,
-          totalBytes: failure
-        }
-      }
+      return failedCPUSample('CPU resource sampling failed')
     }
   }
 
-  function sampleGPUs(): SystemResourceSample['gpus'] {
-    if (!gpuContext) return failedMetric('GPU collector is unavailable')
+  function sampleGPUs() {
+    if (!gpuContext) return failedMetric<GPUResourceSample[]>('GPU collector is unavailable')
     if (gpuCapabilities.status !== 'supported') {
-      return failedMetric('GPU inventory is unavailable')
+      return failedMetric<GPUResourceSample[]>('GPU inventory is unavailable')
     }
 
     const context = gpuContext
@@ -278,13 +277,8 @@ export function createSystemResourceCollector(
     if (destroyed) return
     destroyed = true
 
-    try {
-      cpuContext?.destroy()
-    } catch {}
-
-    try {
-      gpuContext?.destroy()
-    } catch {}
+    destroyContext(cpuContext)
+    destroyContext(gpuContext)
 
     cpuContext = undefined
     gpuContext = undefined
@@ -295,5 +289,5 @@ export function createSystemResourceCollector(
     getCapabilities,
     sample,
     destroy
-  }
+  } satisfies SystemResourceCollector
 }

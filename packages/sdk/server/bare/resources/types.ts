@@ -140,6 +140,8 @@ export interface GPUInfoContext {
 }
 
 export interface ResourceCollectorDependencies {
+  cpuArchitectures: readonly number[]
+  gpuTypes: readonly number[]
   createCPUInfo(): CPUInfoContext | undefined
   createGPUInfo(): GPUInfoContext | undefined
   createGPUId(): string

@@ -23,6 +23,9 @@ function createFixture(options?: {
   missingGPUCollector?: boolean
   cpuArchitecture?: number
   gpuType?: number
+  cpuArchitectures?: readonly number[]
+  gpuTypes?: readonly number[]
+  gpuMemory?: number
 }) {
   const calls = {
     createCPU: 0,
@@ -83,7 +86,7 @@ function createFixture(options?: {
           subsystemId: 789,
           revision: 3,
           unifiedMemory: true,
-          memory: 8_000
+          memory: options?.gpuMemory ?? 8_000
         }
       ]
     },
@@ -106,6 +109,8 @@ function createFixture(options?: {
   }
 
   const dependencies = {
+    cpuArchitectures: options?.cpuArchitectures ?? [1, 2, 3, 4],
+    gpuTypes: options?.gpuTypes ?? [1, 2, 3, 4],
     createCPUInfo() {
       calls.createCPU++
       if (options?.missingCPUCollector) return undefined
@@ -218,6 +223,46 @@ test('normalizes unknown and malformed hardware enums as unverified', (t) => {
   }
   if (malformed.gpus.status === 'supported') {
     t.is(malformed.gpus.value[0]?.type.status, 'unverified')
+  }
+})
+
+test('normalizes hardware enums against native dependency constants', (t) => {
+  const capabilities = createSystemResourceCollector(
+    createFixture({
+      cpuArchitecture: 1,
+      gpuType: 2,
+      cpuArchitectures: [2, 3, 4],
+      gpuTypes: [1, 3, 4]
+    }).dependencies
+  ).getCapabilities()
+
+  t.is(capabilities.cpu.status, 'supported')
+  t.is(capabilities.gpus.status, 'supported')
+  if (capabilities.cpu.status === 'supported') {
+    t.is(capabilities.cpu.value.architecture.status, 'unverified')
+  }
+  if (capabilities.gpus.status === 'supported') {
+    t.is(capabilities.gpus.value[0]?.type.status, 'unverified')
+  }
+})
+
+test('distinguishes malformed GPU memory from ambiguous memory scope', (t) => {
+  const valid = createSystemResourceCollector(createFixture().dependencies).getCapabilities()
+  const malformed = createSystemResourceCollector(
+    createFixture({ gpuMemory: -1 }).dependencies
+  ).getCapabilities()
+
+  t.is(valid.gpus.status, 'supported')
+  t.is(malformed.gpus.status, 'supported')
+  if (valid.gpus.status === 'supported' && malformed.gpus.status === 'supported') {
+    t.alike(valid.gpus.value[0]?.memoryTotalBytes, {
+      status: 'unverified',
+      reason: 'GPU memory scope is unverified'
+    })
+    t.alike(malformed.gpus.value[0]?.memoryTotalBytes, {
+      status: 'unverified',
+      reason: 'Metric value could not be verified'
+    })
   }
 })
 

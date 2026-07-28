@@ -17,24 +17,43 @@ export function failedMetric<T>(reason: string): ResourceMetric<T> {
 
 export function normalizeNonNegativeMetric(
   value: unknown,
-  provenance: ResourceProvenance,
-  zeroIsSupported: boolean
+  provenance: ResourceProvenance
 ): ResourceMetric<number> {
   if (value === undefined || value === null) return unavailableMetric()
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return unverifiedMetric()
   }
-  if (value === 0 && !zeroIsSupported) return unverifiedMetric()
 
   return { status: 'supported', value, provenance }
 }
 
+export function normalizePositiveMetric(
+  value: unknown,
+  provenance: ResourceProvenance
+): ResourceMetric<number> {
+  const metric = normalizeNonNegativeMetric(value, provenance)
+  if (metric.status !== 'supported') return metric
+  if (metric.value === 0) return unverifiedMetric()
+
+  return metric
+}
+
 export function normalizeNonNegativeIntegerMetric(
   value: unknown,
-  provenance: ResourceProvenance,
-  zeroIsSupported: boolean
+  provenance: ResourceProvenance
 ): ResourceMetric<number> {
-  const metric = normalizeNonNegativeMetric(value, provenance, zeroIsSupported)
+  const metric = normalizeNonNegativeMetric(value, provenance)
+  if (metric.status !== 'supported') return metric
+  if (!Number.isInteger(metric.value)) return unverifiedMetric()
+
+  return metric
+}
+
+export function normalizePositiveIntegerMetric(
+  value: unknown,
+  provenance: ResourceProvenance
+): ResourceMetric<number> {
+  const metric = normalizePositiveMetric(value, provenance)
   if (metric.status !== 'supported') return metric
   if (!Number.isInteger(metric.value)) return unverifiedMetric()
 
@@ -45,7 +64,7 @@ export function normalizeUtilizationMetric(
   value: unknown,
   provenance: ResourceProvenance
 ): ResourceMetric<number> {
-  const metric = normalizeNonNegativeMetric(value, provenance, true)
+  const metric = normalizeNonNegativeMetric(value, provenance)
   if (metric.status !== 'supported') return metric
   if (metric.value > 1) return unverifiedMetric()
 
