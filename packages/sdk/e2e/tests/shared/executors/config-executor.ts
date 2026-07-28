@@ -1,4 +1,4 @@
-import { downloadAsset, cancel, WHISPER_TINY, OCR_CYRILLIC_RECOGNIZER } from '@qvac/sdk'
+import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@tetherto/qvac-test-suite'
 import {
   configRegistryDownloadSmoke,
@@ -6,6 +6,10 @@ import {
 } from '../../config-tests.js'
 
 const configTests = [configRegistryDownloadSmoke, configRegistryDownloadRespectsCancel] as const
+
+// Must be a model no other test downloads: a cached target short-circuits on
+// the cache-hit branch below and the cancel path is never exercised.
+const CANCEL_TARGET = BERGAMOT_ZH_EN
 
 /**
  * Exercises the registry-download path end-to-end while a non-default
@@ -77,7 +81,7 @@ export class ConfigExecutor extends BaseExecutor<typeof configTests> {
     const startTime = Date.now()
 
     const op = downloadAsset({
-      assetSrc: OCR_CYRILLIC_RECOGNIZER,
+      assetSrc: CANCEL_TARGET,
       onProgress: (p: { downloadKey?: string; percentage: number }) => {
         progressEvents++
         if (!cancelTriggered && p.percentage >= 1) {
