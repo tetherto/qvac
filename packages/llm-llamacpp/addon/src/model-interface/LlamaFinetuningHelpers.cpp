@@ -26,7 +26,7 @@ namespace llama_finetuning_helpers {
 
 using qvac_lib_inference_addon_cpp::logger::Priority;
 
-static thread_local TrainingCheckpointState* tlsCurrentCheckpointState =
+static thread_local TrainingCheckpointState* g_tlsCurrentCheckpointState =
     nullptr;
 
 std::string readTextFile(const std::string& path) {
@@ -639,14 +639,14 @@ void optEpochCallbackWrapper(
       ibatch,
       ibatchMax,
       tStartUs,
-      tlsCurrentCheckpointState);
+      g_tlsCurrentCheckpointState);
 }
 
 void setCurrentCheckpointState(TrainingCheckpointState* state) {
-  tlsCurrentCheckpointState = state;
+  g_tlsCurrentCheckpointState = state;
 }
 
-void clearCurrentCheckpointState() { tlsCurrentCheckpointState = nullptr; }
+void clearCurrentCheckpointState() { g_tlsCurrentCheckpointState = nullptr; }
 
 #ifndef STANDALONE_TEST_BUILD
 std::string resolveAdapterOutputPath(
