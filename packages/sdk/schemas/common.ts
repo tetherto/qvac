@@ -81,6 +81,10 @@ import {
 import { suspendRequestSchema, suspendResponseSchema } from './suspend'
 import { resumeRequestSchema, resumeResponseSchema } from './resume'
 import { stateRequestSchema, stateResponseSchema } from './state'
+import {
+  getSystemResourcesRequestSchema,
+  getSystemResourcesResponseSchema
+} from './system-resources'
 import { classifyRequestSchema, classifyResponseSchema } from './classification'
 
 export const requestSchema = z.union([
@@ -120,6 +124,7 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
+  getSystemResourcesRequestSchema,
   classifyRequestSchema
 ])
 
@@ -164,6 +169,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
+  getSystemResourcesResponseSchema,
   classifyResponseSchema
 ])
 
