@@ -27,8 +27,9 @@
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
-    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp:run": "npm run test:scripts && node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js",
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
