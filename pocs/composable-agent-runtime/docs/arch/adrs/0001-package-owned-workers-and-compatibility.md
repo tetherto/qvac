@@ -161,9 +161,9 @@ Change this ADR to Accepted only after:
 
 ## Related material
 
-- [Local deployment and contract design](../../../../../arch/qips/agentic-sdk-local-deployment-and-contract-design.md)
 - [Composable Agent Runtime QIP](../../../../../arch/qips/agentic-sdk-p2p-layering.md)
-- [SDK and Inference split](../../../../../arch/qips/sdk-split-to-core-sdk.md)
+- Local deployment and contract design (companion QIP, pending repo publication)
+- SDK and Inference split (companion QIP, pending repo publication)
 - [Package-owned Bare-Stow runtimes](../tech-debt/TD-PACKAGE-OWNED-BARE-STOW-RUNTIMES.md)
 - [Multilanguage RPC client generation](../tech-debt/TD-MULTILANGUAGE-RPC-CLIENT-GENERATION.md)
 - [Mobile RPC contract parity](../tech-debt/TD-MOBILE-RPC-CONTRACT-PARITY.md)

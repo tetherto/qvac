@@ -7,9 +7,10 @@ Date: 2026-07-28
 
 `@qvac/agents` exists as a transport-free, single-run execution primitive
 (workflow steps, checkpoint emission, cancel plumbing) but nothing in the PoC
-or in `wb/assistant` currently orchestrates multiple agent instances with it.
-`wb/assistant`'s `QvacAssistant` improvised a single-agent-per-chat dispatch
-loop (`_dispatch`/`_runs`/`_seen`/`_chats`) directly inside the facade layer,
+or in qvac-app's `assistant` package currently orchestrates multiple agent
+instances with it. That package's `QvacAssistant` improvised a
+single-agent-per-chat dispatch loop (`_dispatch`/`_runs`/`_seen`/`_chats`)
+directly inside the facade layer,
 without `@qvac/agents`, without per-agent tool isolation, and without a
 mediation boundary between agent code and the mesh/Sync layer.
 
@@ -119,7 +120,7 @@ flowchart TB
 - **Ephemeral tier**: the live run object inside harness. Intentionally
   throwaway; recovery replays purely from the durable tier by feeding the
   last checkpoint back into `defineAgent().run()`.
-- **Ownership/handoff**: unchanged from `wb/assistant` - only the device
+- **Ownership/handoff**: unchanged from qvac-app's `assistant` package - only the device
   matching `providerDeviceId` executes; losing ownership mid-run aborts
   without a terminal chunk, so another device can claim and resume.
 - **Cancellation**: explicit cancel writes a terminal `run-canceled` chunk
@@ -139,7 +140,7 @@ flowchart TB
 Extend the existing `AgentEvent`→chunk mapping to also carry
 `@qvac/agents`' workflow-level events (`operation-started`, `checkpoint`,
 `run-canceled`), tagged with `agentId`+`runId`. Additionally close a known
-gap: `wb/assistant`'s `HISTORY_TYPES` currently drops `tool-call`/
+gap: qvac-app's `assistant` package's `HISTORY_TYPES` currently drops `tool-call`/
 `tool-result`/`thinking` chunks from the next turn's prompt reconstruction.
 That was tolerable for single-shot chat replies; it is wrong once agents run
 multi-step workflows where their own prior tool use is working memory.
@@ -150,8 +151,8 @@ of those chunk types included.
 
 ### Positive
 
-- Reuses proven pieces (`@qvac/agents` checkpointing, `wb/assistant`'s
-  chunk/ownership model) instead of inventing new mechanisms.
+- Reuses proven pieces (`@qvac/agents` checkpointing, qvac-app's `assistant`
+  package's chunk/ownership model) instead of inventing new mechanisms.
 - Isolation boundary matches actual risk: side-effecting tool calls, not the
   orchestration loop, which never touches raw resources directly.
 - GC has no single point of failure: agent identity, sandbox lifetime, and
@@ -181,7 +182,7 @@ OpenClaw's production precedent.
 
 ### Keep dispatch logic in `@qvac/assistant`
 
-This is the status quo in `wb/assistant`. Rejected because it couples the
+This is the status quo in qvac-app's `assistant` package. Rejected because it couples the
 facade/lifecycle layer to per-device execution mechanics, and because
 `@qvac/harness` already owns the SDK/model boundary that the orchestrator
 must call into on every run.
