@@ -400,7 +400,7 @@ function generatePearWorkerEntry(plugins: string[], appWorkerPath: string): stri
 ${pluginsList}
  */
 
-import { registerPlugin } from "${SDK_NAME}/plugins";
+import { registerPlugin } from "@qvac/inference/plugins";
 
 ${imports.join('\n')}
 

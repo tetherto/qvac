@@ -7,4 +7,4 @@ export {
   getAllPlugins,
   clearPlugins,
   unregisterPlugin
-} from './registry'
+} from '@qvac/inference/plugin-registry'
