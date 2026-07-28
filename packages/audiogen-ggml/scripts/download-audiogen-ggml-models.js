@@ -27,8 +27,14 @@ const {
   allRegistryPaths
 } = require('../models.js')
 
+// Default download target: the package's own `models/` dir. Mirrors
+// download-tts-ggml-models.js so `npm run download-models:registry` (no args)
+// works both locally and in CI, which then points the integration tests at
+// ./models. An explicit --output overrides it.
+const OUT_DIR = path.resolve(__dirname, '..', 'models')
+
 function parseArgs(argv) {
-  const args = { output: null, variant: DEFAULT_DIT_VARIANT }
+  const args = { output: OUT_DIR, variant: DEFAULT_DIT_VARIANT }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const next = argv[i + 1]
@@ -58,7 +64,7 @@ function usage() {
 
 Download the ACE-Step GGUFs from the QVAC model registry into <dir>.
 
-  --output, -o   <dir>                              (required)
+  --output, -o   <dir>                              (default: ./models)
   --variant, -v  ${ditVariants().join('|')}|all   (default: ${DEFAULT_DIT_VARIANT})
   --help, -h
 `)
@@ -113,10 +119,6 @@ async function downloadOne(client, registryPath, outputDir) {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help) return usage()
-  if (!args.output) {
-    console.error('ERROR: --output <dir> is required')
-    process.exit(2)
-  }
 
   const paths = pathsFor(args.variant)
   fs.mkdirSync(args.output, { recursive: true })

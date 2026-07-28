@@ -30,6 +30,13 @@ export interface AudioGenRuntimeConfig {
     nGpuLayers?: number;
     /** 0 = engine auto-picks. */
     threads?: number;
+    /**
+     * Override the prebuilds root the native engine scans for dlopen'd ggml
+     * backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped
+     * package); only set this for a non-standard prebuilds layout. Needed on
+     * arm64, where the CPU backend is a set of per-microarch MODULE .so files.
+     */
+    backendsDir?: string;
 }
 export interface AudioGenOptions {
     /** Model file paths for the four stages. */
