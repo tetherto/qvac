@@ -1,5 +1,6 @@
 import {
   textToSpeechStreamResponseSchema,
+  textToSpeechStreamRequestSchema,
   ttsClientParamsSchema,
   type TtsClientParams,
   type TtsClientParamsInput,
@@ -156,7 +157,17 @@ function buildTtsRequest(params: TtsClientParams): TtsRequest {
     }),
     ...(params.sentenceStreamMaxChunkScalars !== undefined && {
       sentenceStreamMaxChunkScalars: params.sentenceStreamMaxChunkScalars
-    })
+    }),
+    ...(params.description !== undefined && { description: params.description }),
+    ...(params.voiceDescription !== undefined && { voiceDescription: params.voiceDescription }),
+    ...(params.voice !== undefined && { voice: params.voice }),
+    ...(params.emotion !== undefined && { emotion: params.emotion }),
+    ...(params.pitch !== undefined && { pitch: params.pitch }),
+    ...(params.pace !== undefined && { pace: params.pace }),
+    ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
+    ...(params.noise !== undefined && { noise: params.noise }),
+    ...(params.reverb !== undefined && { reverb: params.reverb }),
+    ...(params.quality !== undefined && { quality: params.quality })
   }
 }
 
@@ -178,7 +189,17 @@ function buildTextToSpeechStreamRequest(
     }),
     ...(params.flushAfterMs !== undefined && {
       flushAfterMs: params.flushAfterMs
-    })
+    }),
+    ...(params.description !== undefined && { description: params.description }),
+    ...(params.voiceDescription !== undefined && { voiceDescription: params.voiceDescription }),
+    ...(params.voice !== undefined && { voice: params.voice }),
+    ...(params.emotion !== undefined && { emotion: params.emotion }),
+    ...(params.pitch !== undefined && { pitch: params.pitch }),
+    ...(params.pace !== undefined && { pace: params.pace }),
+    ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
+    ...(params.noise !== undefined && { noise: params.noise }),
+    ...(params.reverb !== undefined && { reverb: params.reverb }),
+    ...(params.quality !== undefined && { quality: params.quality })
   }
 }
 
@@ -394,9 +415,13 @@ async function collectTtsBuffer(
   }
 }
 
+export function encodeTextToSpeechFragment(textFragment: string | Uint8Array) {
+  return typeof textFragment === 'string' ? new TextEncoder().encode(textFragment) : textFragment
+}
+
 /**
  * Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
- * Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+ * Uint8Array should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
  */
@@ -404,7 +429,10 @@ export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
   options?: RPCOptions
 ): Promise<TextToSpeechStreamSession> {
-  const request = buildTextToSpeechStreamRequest(params)
+  const request = parseClientInput(
+    textToSpeechStreamRequestSchema,
+    buildTextToSpeechStreamRequest(params)
+  )
 
   const { requestStream, responseStream } = await duplex(request, options)
 
@@ -417,15 +445,13 @@ export async function textToSpeechStream(
   let closed = false
 
   return {
-    write(textFragment: string | Buffer) {
+    write(textFragment: string | Uint8Array) {
       if (closed) {
         throw new TextToSpeechStreamFailedError(
           'TextToSpeechStreamSession.write() called after end()/destroy()'
         )
       }
-      const buf =
-        typeof textFragment === 'string' ? Buffer.from(textFragment, 'utf8') : textFragment
-      requestStream.write(buf)
+      requestStream.write(encodeTextToSpeechFragment(textFragment))
     },
     end() {
       if (closed) return

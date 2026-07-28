@@ -28,6 +28,8 @@ Every step is mandatory. Do **not** ask the user whether to do `CHANGELOG_LLM.md
 
 If the user doesn't specify, ask which SDK pod package they want to generate a changelog for.
 
+Package slugs match git tags (`sdk`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
+
 ### Step 2: Fetch Tags and Resolve Base
 
 Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
