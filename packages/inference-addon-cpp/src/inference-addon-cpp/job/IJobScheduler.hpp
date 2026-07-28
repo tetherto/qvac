@@ -49,11 +49,23 @@ struct IJobScheduler {
   /// defined); never call this from a thread the scheduler itself is using to
   /// run @p id's job — that job cannot leave while its own thread is blocked
   /// here waiting on its departure.
+  ///
+  /// A throw — the model cancel or the terminal publication failing — rejects
+  /// the call with the basic guarantee: scheduler state stays consistent, a
+  /// cancel already delivered before the failure keeps unwinding on its own
+  /// (the job's slot releases and its terminal publishes as it leaves),
+  /// targets the call never reached keep running unharmed, and nothing is
+  /// awaited — a rejected call must not block on the cooperation of a model
+  /// that just failed. Retrying the same call is safe: finished or unknown
+  /// ids are no-ops and ids are never reused.
   virtual void cancel(JobId id) = 0;
 
   /// Cancel every in-flight and queued job. Never call this from a thread the
   /// scheduler itself is using to run one of the jobs it would cancel, for
-  /// the same self-wait reason as cancel(id).
+  /// the same self-wait reason as cancel(id). Same exception guarantee as
+  /// cancel(id): a mid-batch failure rejects the call with only some jobs
+  /// delivered a cancel — those unwind on their own, and a retry covers the
+  /// rest.
   virtual void cancelAll() = 0;
 
   /// Ids of every live (queued + in-flight) job. Pairs with cancelJobs(): a
@@ -73,7 +85,7 @@ struct IJobScheduler {
   /// worker-thread restriction as cancel(id), scoped to that actual breadth:
   /// never call this from a thread the scheduler itself is using to run any
   /// job this call may cancel (on the whole-model fallback, any in-flight
-  /// job).
+  /// job). Same exception guarantee as cancel(id).
   virtual void cancelJobs(const std::vector<JobId>& ids) {
     for (const JobId id : ids) {
       cancel(id);

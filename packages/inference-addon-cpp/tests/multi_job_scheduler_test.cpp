@@ -270,6 +270,37 @@ public:
   }
 };
 
+/// ConcurrentTestModel whose cancelById() throws for one configured id
+/// (until disarmed) and behaves normally for every other id: pins the
+/// exception guarantee when a batched per-id cancel fails midway.
+class CancelByIdThrowsForTestModel final : public ConcurrentTestModel {
+  mutable std::mutex throwMtx_;
+  std::optional<JobId> throwId_;
+
+public:
+  using ConcurrentTestModel::ConcurrentTestModel;
+
+  void throwForCancelOf(JobId id) {
+    std::lock_guard lock(throwMtx_);
+    throwId_ = id;
+  }
+
+  void disarm() {
+    std::lock_guard lock(throwMtx_);
+    throwId_.reset();
+  }
+
+  void cancelById(JobId id) const override {
+    {
+      std::lock_guard lock(throwMtx_);
+      if (throwId_ == id) {
+        throw std::runtime_error("per-id cancel failed");
+      }
+    }
+    ConcurrentTestModel::cancelById(id);
+  }
+};
+
 /// ConcurrentTestModel whose process() calls back into its own scheduler's
 /// cancel(id) — the worker-originated cancel the IJobScheduler contract
 /// forbids — and records the outcome, so a test can assert the scheduler
@@ -2485,6 +2516,93 @@ TEST(MultiJobSchedulerDeathTest, TeardownSurvivesThrowingPerIdCancel) {
       destroySchedulerWithInFlightJob<ThrowingCancelByIdTestModel>(
           /*wholeModel=*/false),
       ::testing::ExitedWithCode(0), "");
+}
+
+// Pins the documented exception guarantee on cancelAll's per-id loop:
+// cancelById(first) is delivered, cancelById(second) throws. The call
+// rejects without awaiting anything — the delivered cancel unwinds on its
+// own (the rejected call must not block on a model that just failed), the
+// untouched job keeps running, and retrying completes the cancellation.
+TEST_F(MultiJobSchedulerTest, PerIdCancelThrowMidBatchRejectsWithBasicGuarantee) {
+  auto throwing = std::make_unique<CancelByIdThrowsForTestModel>(
+      std::chrono::milliseconds{10000});
+  CancelByIdThrowsForTestModel* raw = throwing.get();
+  model_ = std::move(throwing);
+  callback_ = std::make_unique<MockOutputCallback>();
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      model_.get(), 2, /*cancel=*/nullptr, model_.get(), 0);
+  scheduler_->start(outputQueue_);
+
+  const std::optional<JobId> delivered =
+      scheduler_->runJob(std::string("delivered"));
+  const std::optional<JobId> failing =
+      scheduler_->runJob(std::string("failing"));
+  ASSERT_TRUE(delivered.has_value());
+  ASSERT_TRUE(failing.has_value());
+  ASSERT_EQ(waitForActive(*model_, 2, std::chrono::seconds{2}), 2);
+  raw->throwForCancelOf(*failing);
+
+  EXPECT_THROW(scheduler_->cancelAll(), std::runtime_error);
+
+  // The delivered cancel keeps unwinding with no help from the rejected
+  // call: its job leaves and only the never-reached one stays.
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{5};
+  while (scheduler_->activeJobs() != 1 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  EXPECT_EQ(scheduler_->activeJobs(), 1u);
+  EXPECT_EQ(model_->active(), 1);
+
+  // Retry is safe and completes what the rejected call could not.
+  raw->disarm();
+  scheduler_->cancelAll();
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  EXPECT_EQ(scheduler_->activeJobs(), 0u);
+}
+
+// Pins the guarantee for a mixed queued/in-flight batch with a throwing
+// terminal publication: the dropped queued target keeps its terminal (the
+// event is enqueued before notify() throws), the rejected call never
+// dispatches the in-flight target's cancel, and a retry completes it.
+TEST_F(MultiJobSchedulerTest, PublicationThrowRejectsBeforeInFlightDispatch) {
+  model_ =
+      std::make_unique<ConcurrentTestModel>(std::chrono::milliseconds{10000});
+  callback_ = std::make_unique<ThrowOnceCallback>();
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      model_.get(), 1, model_.get(), model_.get(), /*queueCapacity=*/1);
+  scheduler_->start(outputQueue_);
+
+  const std::optional<JobId> inFlight =
+      scheduler_->runJob(std::string("in-flight"));
+  ASSERT_TRUE(inFlight.has_value());
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  const std::optional<JobId> queued = scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queued.has_value());
+
+  EXPECT_THROW(
+      scheduler_->cancelJobs({*queued, *inFlight}), std::runtime_error);
+
+  bool queuedHasTerminal = false;
+  for (const std::pair<JobId, std::any>& entry : outputQueue_->clear()) {
+    if (entry.first == *queued &&
+        entry.second.type() == typeid(Output::Error)) {
+      queuedHasTerminal = true;
+    }
+  }
+  EXPECT_TRUE(queuedHasTerminal)
+      << "the dropped queued job lost its terminal to the publication throw";
+  EXPECT_FALSE(model_->wasCancelledById(*inFlight))
+      << "the rejected call dispatched the in-flight cancel after the "
+         "publication failure";
+  EXPECT_EQ(model_->active(), 1);
+
+  scheduler_->cancelJobs({*inFlight});
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  EXPECT_EQ(scheduler_->activeJobs(), 0u);
 }
 
 } // namespace qvac_lib_inference_addon_cpp
