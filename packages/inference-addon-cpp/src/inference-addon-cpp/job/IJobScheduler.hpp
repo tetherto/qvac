@@ -56,8 +56,11 @@ struct IJobScheduler {
   /// (the job's slot releases and its terminal publishes as it leaves),
   /// targets the call never reached keep running unharmed, and nothing is
   /// awaited — a rejected call must not block on the cooperation of a model
-  /// that just failed. Retrying the same call is safe: finished or unknown
-  /// ids are no-ops and ids are never reused.
+  /// that just failed. Retrying the same call is safe — immediately, even
+  /// while an already-delivered cancel is still unwinding: finished or
+  /// unknown ids are no-ops, ids are never reused, and a model's per-id
+  /// cancel must tolerate duplicate delivery for a live id (see
+  /// IModelCancelById).
   virtual void cancel(JobId id) = 0;
 
   /// Cancel every in-flight and queued job. Never call this from a thread the

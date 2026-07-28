@@ -301,6 +301,91 @@ public:
   }
 };
 
+/// Deferred per-id cancel model for immediate-retry coverage: cancelById()
+/// only records the request (counting deliveries per id, so a test can
+/// assert a duplicate landed) and can be armed to throw for one id until
+/// disarmed; jobs leave only via release(id), never as a side effect of the
+/// cancel — keeping an already-cancelled job in flight while a retry runs.
+class DeferredThrowingCancelByIdTestModel final
+    : public model::IModel,
+      public model::IModelMultiprocessor,
+      public model::IModelCancelById,
+      public model::IModelJobLifecycle {
+  mutable std::mutex mtx_;
+  mutable std::condition_variable cv_;
+  std::unordered_set<JobId> entered_;
+  std::unordered_set<JobId> released_;
+  mutable std::map<JobId, int> requestCounts_;
+  std::optional<JobId> throwId_;
+  bool releaseAll_{false};
+
+public:
+  std::string getName() const override {
+    return "DeferredThrowingCancelByIdTestModel";
+  }
+
+  RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
+
+  std::any process(const std::any& input) override { return input; }
+
+  /// Satisfies the ctor's cancelById-requires-lifecycle contract.
+  void jobStarting(JobId /*id*/) override {}
+
+  std::any process(const std::any& input, JobId id) override {
+    std::unique_lock lock(mtx_);
+    entered_.insert(id);
+    cv_.notify_all();
+    cv_.wait(
+        lock, [this, id] { return releaseAll_ || released_.count(id) != 0; });
+    return input;
+  }
+
+  void cancelById(JobId id) const override {
+    auto* self = const_cast<DeferredThrowingCancelByIdTestModel*>(this);
+    std::lock_guard lock(self->mtx_);
+    if (self->throwId_ == id) {
+      throw std::runtime_error("per-id cancel failed");
+    }
+    ++self->requestCounts_[id];
+    self->cv_.notify_all();
+  }
+
+  void throwForCancelOf(JobId id) {
+    std::lock_guard lock(mtx_);
+    throwId_ = id;
+  }
+
+  void disarm() {
+    std::lock_guard lock(mtx_);
+    throwId_.reset();
+  }
+
+  /// Apply the deferred teardown for @p id: lets its process() return.
+  void release(JobId id) {
+    std::lock_guard lock(mtx_);
+    released_.insert(id);
+    cv_.notify_all();
+  }
+
+  void releaseAll() {
+    std::lock_guard lock(mtx_);
+    releaseAll_ = true;
+    cv_.notify_all();
+  }
+
+  bool waitEntered(JobId id, std::chrono::milliseconds timeout) const {
+    std::unique_lock lock(mtx_);
+    return cv_.wait_for(
+        lock, timeout, [this, id] { return entered_.count(id) != 0; });
+  }
+
+  int requestCount(JobId id) const {
+    std::lock_guard lock(mtx_);
+    const auto found = requestCounts_.find(id);
+    return found == requestCounts_.end() ? 0 : found->second;
+  }
+};
+
 /// ConcurrentTestModel whose process() calls back into its own scheduler's
 /// cancel(id) — the worker-originated cancel the IJobScheduler contract
 /// forbids — and records the outcome, so a test can assert the scheduler
@@ -2603,6 +2688,81 @@ TEST_F(MultiJobSchedulerTest, PublicationThrowRejectsBeforeInFlightDispatch) {
   scheduler_->cancelJobs({*inFlight});
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   EXPECT_EQ(scheduler_->activeJobs(), 0u);
+}
+
+// Pins the "retrying is safe — immediately" half of the exception
+// guarantee: after cancelById(A) was delivered and cancelById(B) threw, the
+// retry runs while A is STILL unwinding (its release is deferred). The
+// retry must deliver a duplicate cancel for live A (the idempotency
+// IModelCancelById requires), deliver B's, block until both actually leave,
+// and drain the scheduler completely.
+TEST_F(MultiJobSchedulerTest, ImmediateRetryWhileDeliveredCancelStillUnwinding) {
+  DeferredThrowingCancelByIdTestModel model;
+  DeferredThrowingCancelByIdTestModel* raw = &model;
+  callback_ = std::make_unique<MockOutputCallback>();
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, model);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      &model, 2, /*cancel=*/nullptr, &model, 0);
+  scheduler_->start(outputQueue_);
+
+  const std::optional<JobId> delivered =
+      scheduler_->runJob(std::string("delivered"));
+  const std::optional<JobId> failing =
+      scheduler_->runJob(std::string("failing"));
+  ASSERT_TRUE(delivered.has_value());
+  ASSERT_TRUE(failing.has_value());
+  ASSERT_TRUE(raw->waitEntered(*delivered, std::chrono::seconds{2}));
+  ASSERT_TRUE(raw->waitEntered(*failing, std::chrono::seconds{2}));
+
+  raw->throwForCancelOf(*failing);
+  EXPECT_THROW(scheduler_->cancelAll(), std::runtime_error);
+  EXPECT_EQ(raw->requestCount(*delivered), 1);
+  EXPECT_EQ(scheduler_->activeJobs(), 2u);
+
+  // Immediate retry: the delivered job has NOT left (release is deferred).
+  raw->disarm();
+  std::atomic_bool retryReturned{false};
+  std::thread retry([this, &retryReturned] {
+    scheduler_->cancelAll();
+    retryReturned.store(true);
+  });
+
+  // The retry re-delivers the still-active id's cancel (duplicate, safe)
+  // and delivers the previously-failed one.
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while ((raw->requestCount(*delivered) < 2 ||
+          raw->requestCount(*failing) < 1) &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  EXPECT_EQ(raw->requestCount(*delivered), 2)
+      << "the retry did not re-deliver the still-unwinding id's cancel";
+  EXPECT_EQ(raw->requestCount(*failing), 1);
+
+  // It stays pending until BOTH jobs actually leave.
+  raw->release(*delivered);
+  const std::chrono::steady_clock::time_point watch =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds{300};
+  bool returnedEarly = false;
+  while (std::chrono::steady_clock::now() < watch) {
+    if (retryReturned.load()) {
+      returnedEarly = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  EXPECT_FALSE(returnedEarly)
+      << "the retry returned while its second target was still in flight";
+
+  raw->release(*failing);
+  retry.join();
+  EXPECT_EQ(scheduler_->activeJobs(), 0u);
+
+  // The model is a stack local: drop the scheduler and queue that hold
+  // pointers into it before it goes out of scope.
+  scheduler_.reset();
+  outputQueue_.reset();
 }
 
 } // namespace qvac_lib_inference_addon_cpp

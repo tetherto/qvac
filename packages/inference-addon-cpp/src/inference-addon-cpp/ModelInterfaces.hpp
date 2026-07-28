@@ -109,6 +109,12 @@ struct IModelJobStats {
 /// A no-op when the id is unknown (already finished, or never admitted).
 /// Same obligations as IModelCancel::cancel(): be quick (record the request,
 /// do not wait for the job to end) and never call back into the scheduler.
+/// Duplicate delivery must be safe: the scheduler may cancel the same
+/// still-active id more than once — an immediate retry after a mid-batch
+/// failure re-covers ids the failed call already reached — so repeated calls
+/// for a live id are idempotent (re-record or ignore, never an error). This
+/// is what lets the scheduler promise that retrying a rejected cancel is
+/// always safe.
 struct IModelCancelById {
   virtual ~IModelCancelById() = default;
   IModelCancelById() = default;
