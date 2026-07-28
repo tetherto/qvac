@@ -18,6 +18,7 @@ target_sources(
   ${inference_addon_cpp_mobile_tests}
   PRIVATE
   binding.cpp
+  test_logger.cpp
 )
 
 # Pull in the header-only inference-addon-cpp library (src/inference-addon-cpp/*).
@@ -26,6 +27,10 @@ target_include_directories(
   PRIVATE
   ../src
 )
+
+# Route QLOG/JsLogger to the JS bridge, matching the desktop logger sub-package
+# (tests/integration_js/logger builds with ENABLE_JS_LOGGER=ON → JS_LOGGER).
+target_compile_definitions(${inference_addon_cpp_mobile_tests} PUBLIC JS_LOGGER)
 
 if(WIN32)
   target_compile_definitions(

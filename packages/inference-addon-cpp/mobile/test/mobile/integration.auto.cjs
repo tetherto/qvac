@@ -15,3 +15,8 @@ async function runJsCreateDoubleTest (options = {}) { // eslint-disable-line no-
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runJsCreateDoubleTest')) return __FILTERED
   return runIntegrationModule('../integration/js-create-double.test.js', options)
 }
+
+async function runLoggerTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLoggerTest')) return __FILTERED
+  return runIntegrationModule('../integration/logger.test.js', options)
+}

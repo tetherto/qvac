@@ -50,14 +50,23 @@ port, when several bindings aggregate and the risk grows.
 
 ## Test scope (phased)
 
-- **Phase 1 (current):** `js-create-double` only — pure js::Number /
-  js_create_int32 marshalling; no threads/timing/I/O, so near-zero on-device
-  flake. Proves the full pipeline (prebuild → app → Device Farm → PASS/FAIL).
-- **Phase 2:** the `logger` suite, after hardening its `bare-thread` workers
-  (resolve worker paths absolutely) and widening its host-tuned timeouts.
-- The `output-callback-lifetime` UAF stress test stays desktop-ASan-only — it
-  has no reliable signal without AddressSanitizer, which is unavailable on
-  device.
+- **Phase 1:** `js-create-double` — pure js::Number / js_create_int32
+  marshalling; no threads/timing/I/O, so near-zero on-device flake. Proves the
+  full pipeline (prebuild → app → Device Farm → PASS/FAIL).
+- **Phase 2 (current):** the `logger` **bridge** tests (`logger.test.js`, ported
+  from `tests/integration_js/logger/test.js`) — C++→JS logger delivery via
+  `setLogger`/`cppLog`/`dummyCppLogWork`/`dummyMultiThreadedCppLogWork`/
+  `releaseLogger`, with `test_logger.cpp` folded into the unified binding
+  (`JS_LOGGER`). These use only native `std::thread`, no `bare-thread`, so
+  they're portable; timeouts are widened for device.
+- **Deferred (phase-2 follow-up):** logger's `teardown.test.js` /
+  `reject.test.js` — they spawn `bare-thread` workers loaded by relative path.
+  Their on-device viability (worker-file bundling + `bare-thread` runtime
+  support in the mobile Bare runtime) is unconfirmed and may need harness
+  changes, so they land only after the first Device Farm dispatch validates
+  `bare-thread` on device.
+- The `output-callback-lifetime` UAF stress test stays desktop-ASan-only — no
+  reliable signal without AddressSanitizer, which is unavailable on device.
 
 ## Local development
 

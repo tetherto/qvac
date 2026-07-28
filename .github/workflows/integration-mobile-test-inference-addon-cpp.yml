@@ -416,11 +416,13 @@ jobs:
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
           scheduling-mode: 'single-pool'
-          # Phase-1 cost cap (default is 120 device-min): js-create-double is
-          # sub-second on device, and a launch-hang that never throws would NOT
-          # trip integration-runtime.cjs's crash-to-failure handlers. Raise this
-          # deliberately when the logger suite lands in phase 2.
-          job-timeout-minutes: '15'
+          # Cost cap (default is 120 device-min): the phase-1/phase-2 tests
+          # (js-create-double + logger bridge) are well under a minute of device
+          # compute, and a launch-hang that never throws would NOT trip
+          # integration-runtime.cjs's crash-to-failure handlers. 20 min leaves
+          # margin for app launch + the logger bridge; raise again if the
+          # bare-thread teardown/reject tests are added.
+          job-timeout-minutes: '20'
 
       - name: Monitor Device Farm test run
         id: monitor
