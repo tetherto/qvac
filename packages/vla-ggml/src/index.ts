@@ -2,6 +2,13 @@
 import fs = require("bare-fs");
 import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
+// `./addon` and `./lib/error` are imported as whole-module aliases rather than
+// named imports so the `VlaModel` namespace at the bottom of this file can
+// re-export their members with `export import`. That is what makes the
+// CommonJS "class object with attached properties" export shape part of the
+// emitted declarations instead of an untyped `module.exports` cast.
+import addonModule = require("./addon");
+import errorModule = require("./lib/error");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   createJobHandler,
@@ -9,97 +16,9 @@ import {
   type JobHandler,
   type QvacResponse as InferQvacResponse,
 } from "@qvac/infer-base";
-import {
-  preprocessImage,
-  padState,
-  DEFAULT_IMAGE_SIZE,
-} from "./addon";
-import { QvacErrorAddonVla, ERR_CODES } from "./lib/error";
 
-export { preprocessImage, padState, DEFAULT_IMAGE_SIZE };
-export { QvacErrorAddonVla, ERR_CODES };
-
-export interface VlaHparams {
-  chunkSize: number;
-  actionDim: number;
-  maxActionDim: number;
-  maxStateDim: number;
-  tokenizerMaxLength: number;
-  visionImageSize: number;
-  /**
-   * Number of camera views the model accepts. 2 for SmolVLA, up to 3 for
-   * π₀.₅. Optional for back-compat — older addon builds may omit it.
-   */
-  numCameras?: number;
-  /**
-   * How the consumer passes the robot state. `'continuous'` (SmolVLA) means
-   * the `state` Float32Array is projected by an in-model linear layer;
-   * `'discrete'` (π₀.₅) means the state is already tokenized into the
-   * language prompt and the `state` buffer is ignored. Optional for
-   * back-compat.
-   */
-  stateInputMode?: "continuous" | "discrete";
-  /**
-   * How the consumer passes camera images. `'pixels'` (SmolVLA, π₀.₅) means
-   * each image is a `3 · w · h` float pixel plane; `'patches'` (GR00T) means
-   * each image is already patchified by Gr00tPolicy into a
-   * `patches · patch_flat` buffer. Optional for back-compat.
-   */
-  imageInputMode?: "pixels" | "patches";
-  /**
-   * Exact per-image buffer length (in floats) required when
-   * `imageInputMode === 'patches'`. Optional for back-compat.
-   */
-  imagePatchElems?: number;
-}
-
-export interface VlaRunInput {
-  images: Float32Array[];
-  imgWidth?: number;
-  imgHeight?: number;
-  state: Float32Array;
-  tokens: Int32Array;
-  mask: Uint8Array;
-  noise?: Float32Array | null;
-}
-
-export interface VlaRunStats {
-  vision_ms: number;
-  /**
-   * SmolVLA-specific legacy alias for `prefill_compute_ms`. Kept for
-   * back-compat with consumers written against v0.1.x; will be removed once
-   * π₀.₅ ships and consumers migrate to the architecture-neutral names.
-   */
-  smollm2_compute_ms: number;
-  /** Legacy alias for `prefill_total_ms`; see `smollm2_compute_ms`. */
-  smollm2_total_ms: number;
-  /** Architecture-neutral prefill compute time (ms). */
-  prefill_compute_ms: number;
-  /** Architecture-neutral prefill total time (ms). */
-  prefill_total_ms: number;
-  ode_ms: number;
-  total_ms: number;
-  /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
-  backendDevice: number;
-}
-
-export interface VlaRunResult {
-  actions: Float32Array;
-  stats: VlaRunStats;
-}
-
-export interface VlaModelOptions {
-  files: { model: string[] };
-  config?: VlaConfig;
-  logger?: QvacLogger.LoggerInterface | null;
-  opts?: { stats?: boolean };
-}
-
-export interface QvacResponse {
-  await(): Promise<VlaRunResult>;
-  cancel(): Promise<void>;
-  on(event: string, listener: (...args: unknown[]) => void): this;
-}
+const { DEFAULT_IMAGE_SIZE } = addonModule;
+const { QvacErrorAddonVla, ERR_CODES } = errorModule;
 
 interface VlaConfig {
   verbosity?: number;
@@ -143,7 +62,7 @@ interface VlaBinding {
     outputCallback: AddonOutputCallback,
   ): object;
   activate(handle: object): void;
-  getVlaHparams(handle: object): VlaHparams;
+  getVlaHparams(handle: object): VlaModel.VlaHparams;
   getVlaBackendName(handle: object): string;
   runJob(handle: object, job: VlaJob): boolean;
   cancel(handle: object): Promise<void>;
@@ -175,8 +94,8 @@ function pickPrimaryGgufPath(files: string[]): string {
 }
 
 function validateRunInput(
-  input: VlaRunInput,
-  hparams: VlaHparams | null,
+  input: VlaModel.VlaRunInput,
+  hparams: VlaModel.VlaHparams | null,
 ): { imgWidth: number; imgHeight: number } {
   if (!input || typeof input !== "object") {
     throw new QvacErrorAddonVla({
@@ -406,7 +325,7 @@ function validateRunInput(
   return { imgWidth, imgHeight };
 }
 
-export class VlaModel {
+class VlaModel {
   readonly logger: QvacLogger;
   opts: { stats?: boolean };
   state: VlaModelState;
@@ -416,7 +335,7 @@ export class VlaModel {
   private _job: JobHandler;
   private _run: RunExclusive;
   private _handle: object | null;
-  private _hparams: VlaHparams | null;
+  private _hparams: VlaModel.VlaHparams | null;
   private _backendName: string | null;
   private _hasActiveResponse: boolean;
   private _nativeLoggerActive: boolean;
@@ -425,12 +344,21 @@ export class VlaModel {
   // Per-run accumulator filled by _onAddonEvent; null between runs.
   private _pending: { actions: Float32Array | null } | null;
 
-  constructor({
-    files,
-    config = {},
-    logger = null,
-    opts = {},
-  }: VlaModelOptions = { files: { model: [] } }) {
+  // `options` is REQUIRED in the public signature: the pre-migration
+  // hand-written index.d.ts required it, and `new VlaModel()` has always
+  // thrown MISSING_REQUIRED_PARAMETER at runtime. The implementation
+  // signature still accepts `undefined` so that runtime behaviour is
+  // unchanged — a JS caller doing `new VlaModel()` gets the same
+  // "files.model (non-empty array of absolute paths)" error as before,
+  // while a TS caller is now told about it at compile time.
+  constructor(options: VlaModel.VlaModelOptions);
+  constructor(options?: VlaModel.VlaModelOptions) {
+    const {
+      files,
+      config = {},
+      logger = null,
+      opts = {},
+    } = options ?? { files: { model: [] } };
     if (!files || !Array.isArray(files.model) || files.model.length === 0) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.MISSING_REQUIRED_PARAMETER,
@@ -621,7 +549,7 @@ export class VlaModel {
     this.logger.info("Model load completed successfully");
   }
 
-  get hparams(): VlaHparams | null {
+  get hparams(): VlaModel.VlaHparams | null {
     return this._hparams;
   }
 
@@ -629,12 +557,14 @@ export class VlaModel {
     return this._backendName;
   }
 
-  async run(input: VlaRunInput): Promise<QvacResponse> {
+  async run(input: VlaModel.VlaRunInput): Promise<VlaModel.QvacResponse> {
     return this._run(() => this._runInternal(input));
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await -- kept async so run() can serialize it through the exclusive run queue; dispatch is fire-and-forget.
-  private async _runInternal(input: VlaRunInput): Promise<QvacResponse> {
+  private async _runInternal(
+    input: VlaModel.VlaRunInput,
+  ): Promise<VlaModel.QvacResponse> {
     if (!this._handle) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INSTANCE_NOT_INITIALIZED,
@@ -760,20 +690,111 @@ export class VlaModel {
   }
 }
 
-export default VlaModel;
+// Alias used by the namespace below to re-export the class as a property of
+// itself (`VlaModel.VlaModel`). `export import VlaModel = VlaModel` inside the
+// namespace would resolve to the alias being declared, so the indirection is
+// required.
+import VlaModelClass = VlaModel;
 
-const cjsExports = VlaModel as typeof VlaModel & {
-  VlaModel?: typeof VlaModel;
-  preprocessImage?: typeof preprocessImage;
-  padState?: typeof padState;
-  DEFAULT_IMAGE_SIZE?: typeof DEFAULT_IMAGE_SIZE;
-  QvacErrorAddonVla?: typeof QvacErrorAddonVla;
-  ERR_CODES?: typeof ERR_CODES;
-};
-cjsExports.VlaModel = VlaModel;
-cjsExports.preprocessImage = preprocessImage;
-cjsExports.padState = padState;
-cjsExports.DEFAULT_IMAGE_SIZE = DEFAULT_IMAGE_SIZE;
-cjsExports.QvacErrorAddonVla = QvacErrorAddonVla;
-cjsExports.ERR_CODES = ERR_CODES;
-module.exports = cjsExports;
+/**
+ * Declaration merging with the class above models this package's CommonJS
+ * export shape — `module.exports` IS the `VlaModel` constructor, carrying the
+ * named exports as own properties — directly in the type system. TypeScript
+ * emits the property attachments natively, so the generated `index.js` and
+ * `index.d.ts` can no longer drift from each other, and a CommonJS consumer
+ * (`import VlaModel = require('@qvac/vla-ggml')`) gets a real construct
+ * signature instead of TS2351.
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace -- class/namespace merging is the only way to type a constructor-first CommonJS export (`module.exports = VlaModel` plus attached members).
+namespace VlaModel {
+  export import VlaModel = VlaModelClass;
+  export import preprocessImage = addonModule.preprocessImage;
+  export import padState = addonModule.padState;
+  export import DEFAULT_IMAGE_SIZE = addonModule.DEFAULT_IMAGE_SIZE;
+  export import QvacErrorAddonVla = errorModule.QvacErrorAddonVla;
+  export import ERR_CODES = errorModule.ERR_CODES;
+
+  export interface VlaHparams {
+    chunkSize: number;
+    actionDim: number;
+    maxActionDim: number;
+    maxStateDim: number;
+    tokenizerMaxLength: number;
+    visionImageSize: number;
+    /**
+     * Number of camera views the model accepts. 2 for SmolVLA, up to 3 for
+     * π₀.₅. Optional for back-compat — older addon builds may omit it.
+     */
+    numCameras?: number;
+    /**
+     * How the consumer passes the robot state. `'continuous'` (SmolVLA) means
+     * the `state` Float32Array is projected by an in-model linear layer;
+     * `'discrete'` (π₀.₅) means the state is already tokenized into the
+     * language prompt and the `state` buffer is ignored. Optional for
+     * back-compat.
+     */
+    stateInputMode?: "continuous" | "discrete";
+    /**
+     * How the consumer passes camera images. `'pixels'` (SmolVLA, π₀.₅) means
+     * each image is a `3 · w · h` float pixel plane; `'patches'` (GR00T) means
+     * each image is already patchified by Gr00tPolicy into a
+     * `patches · patch_flat` buffer. Optional for back-compat.
+     */
+    imageInputMode?: "pixels" | "patches";
+    /**
+     * Exact per-image buffer length (in floats) required when
+     * `imageInputMode === 'patches'`. Optional for back-compat.
+     */
+    imagePatchElems?: number;
+  }
+
+  export interface VlaRunInput {
+    images: Float32Array[];
+    imgWidth?: number;
+    imgHeight?: number;
+    state: Float32Array;
+    tokens: Int32Array;
+    mask: Uint8Array;
+    noise?: Float32Array | null;
+  }
+
+  export interface VlaRunStats {
+    vision_ms: number;
+    /**
+     * SmolVLA-specific legacy alias for `prefill_compute_ms`. Kept for
+     * back-compat with consumers written against v0.1.x; will be removed once
+     * π₀.₅ ships and consumers migrate to the architecture-neutral names.
+     */
+    smollm2_compute_ms: number;
+    /** Legacy alias for `prefill_total_ms`; see `smollm2_compute_ms`. */
+    smollm2_total_ms: number;
+    /** Architecture-neutral prefill compute time (ms). */
+    prefill_compute_ms: number;
+    /** Architecture-neutral prefill total time (ms). */
+    prefill_total_ms: number;
+    ode_ms: number;
+    total_ms: number;
+    /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
+    backendDevice: number;
+  }
+
+  export interface VlaRunResult {
+    actions: Float32Array;
+    stats: VlaRunStats;
+  }
+
+  export interface VlaModelOptions {
+    files: { model: string[] };
+    config?: VlaConfig;
+    logger?: QvacLogger.LoggerInterface | null;
+    opts?: { stats?: boolean };
+  }
+
+  export interface QvacResponse {
+    await(): Promise<VlaRunResult>;
+    cancel(): Promise<void>;
+    on(event: string, listener: (...args: unknown[]) => void): this;
+  }
+}
+
+export = VlaModel;

@@ -20,7 +20,7 @@
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint:cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
     "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
@@ -36,7 +36,8 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "test:types": "npm run typecheck && npm run check:generated",
+    "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
+    "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
     "test:dts": "npm run test:types"
   },
   "files": [

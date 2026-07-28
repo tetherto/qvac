@@ -1,19 +1,19 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.VlaModel = exports.ERR_CODES = exports.QvacErrorAddonVla = exports.DEFAULT_IMAGE_SIZE = exports.padState = exports.preprocessImage = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
+// `./addon` and `./lib/error` are imported as whole-module aliases rather than
+// named imports so the `VlaModel` namespace at the bottom of this file can
+// re-export their members with `export import`. That is what makes the
+// CommonJS "class object with attached properties" export shape part of the
+// emitted declarations instead of an untyped `module.exports` cast.
+const addonModule = require("./addon");
+const errorModule = require("./lib/error");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
-const addon_1 = require("./addon");
-Object.defineProperty(exports, "preprocessImage", { enumerable: true, get: function () { return addon_1.preprocessImage; } });
-Object.defineProperty(exports, "padState", { enumerable: true, get: function () { return addon_1.padState; } });
-Object.defineProperty(exports, "DEFAULT_IMAGE_SIZE", { enumerable: true, get: function () { return addon_1.DEFAULT_IMAGE_SIZE; } });
-const error_1 = require("./lib/error");
-Object.defineProperty(exports, "QvacErrorAddonVla", { enumerable: true, get: function () { return error_1.QvacErrorAddonVla; } });
-Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
+const { DEFAULT_IMAGE_SIZE } = addonModule;
+const { QvacErrorAddonVla, ERR_CODES } = errorModule;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require("./binding");
 // Maps the C++ Priority enum (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) to the
@@ -29,19 +29,19 @@ function pickPrimaryGgufPath(files) {
 }
 function validateRunInput(input, hparams) {
     if (!input || typeof input !== "object") {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input must be an object",
         });
     }
     if (!Array.isArray(input.images) || input.images.length === 0) {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input.images must be a non-empty array of Float32Array",
         });
     }
-    const imgWidth = input.imgWidth ?? addon_1.DEFAULT_IMAGE_SIZE;
-    const imgHeight = input.imgHeight ?? addon_1.DEFAULT_IMAGE_SIZE;
+    const imgWidth = input.imgWidth ?? DEFAULT_IMAGE_SIZE;
+    const imgHeight = input.imgHeight ?? DEFAULT_IMAGE_SIZE;
     // The C++ inference path requires img_width == img_height == hparams.visionImageSize
     // (SigLIP's conv2d output is sized from runtime args, but the downstream
     // patch-embedding reshape uses hp.vision_image_size — a mismatch trips
@@ -51,8 +51,8 @@ function validateRunInput(input, hparams) {
     if (hparams && Number.isInteger(hparams.visionImageSize)) {
         const expected = hparams.visionImageSize;
         if (imgWidth !== expected || imgHeight !== expected) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `imgWidth/imgHeight (${imgWidth}x${imgHeight}) must equal hparams.visionImageSize (${expected})`,
             });
         }
@@ -71,8 +71,8 @@ function validateRunInput(input, hparams) {
     for (let i = 0; i < input.images.length; i++) {
         const img = input.images[i];
         if (!(img instanceof Float32Array)) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `input.images[${i}] must be a Float32Array`,
             });
         }
@@ -83,54 +83,54 @@ function validateRunInput(input, hparams) {
             // surface imagePatchElems (version skew), fail closed rather than pass an
             // unvalidated buffer to that memcpy.
             if (!patchElemsKnown) {
-                throw new error_1.QvacErrorAddonVla({
-                    code: error_1.ERR_CODES.INVALID_INPUT,
+                throw new QvacErrorAddonVla({
+                    code: ERR_CODES.INVALID_INPUT,
                     adds: `input.images[${i}] (patches): addon did not surface hparams.imagePatchElems, cannot validate patch buffer length`,
                 });
             }
             if (img.length !== patchElems) {
-                throw new error_1.QvacErrorAddonVla({
-                    code: error_1.ERR_CODES.INVALID_INPUT,
+                throw new QvacErrorAddonVla({
+                    code: ERR_CODES.INVALID_INPUT,
                     adds: `input.images[${i}] (patches) length ${img.length} != ${patchElems}`,
                 });
             }
         }
         else if (img.length !== expectedPerImage) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `input.images[${i}] length ${img.length} != 3*${imgWidth}*${imgHeight}`,
             });
         }
     }
     if (!(input.state instanceof Float32Array)) {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input.state must be a Float32Array",
         });
     }
     if (!(input.tokens instanceof Int32Array)) {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input.tokens must be an Int32Array",
         });
     }
     if (!(input.mask instanceof Uint8Array)) {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input.mask must be a Uint8Array",
         });
     }
     if (input.mask.length !== input.tokens.length) {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input.mask and input.tokens must have the same length",
         });
     }
     if (input.noise !== undefined &&
         input.noise !== null &&
         !(input.noise instanceof Float32Array)) {
-        throw new error_1.QvacErrorAddonVla({
-            code: error_1.ERR_CODES.INVALID_INPUT,
+        throw new QvacErrorAddonVla({
+            code: ERR_CODES.INVALID_INPUT,
             adds: "input.noise must be a Float32Array when provided",
         });
     }
@@ -138,8 +138,8 @@ function validateRunInput(input, hparams) {
         hparams.stateInputMode === "continuous" &&
         Number.isInteger(hparams.maxStateDim)) {
         if (input.state.length === 0 || input.state.length > hparams.maxStateDim) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `state.length (${input.state.length}) must be > 0 and <= hparams.maxStateDim (${hparams.maxStateDim})`,
             });
         }
@@ -158,23 +158,23 @@ function validateRunInput(input, hparams) {
         // check above allows state.length <= maxStateDim; GR00T needs it exact.
         if (Number.isInteger(hparams.numCameras) &&
             input.images.length !== hparams.numCameras) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `groot requires exactly ${hparams.numCameras} patch image buffers (got ${input.images.length})`,
             });
         }
         if (Number.isInteger(hparams.maxStateDim) &&
             input.state.length !== hparams.maxStateDim) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `groot requires state.length === ${hparams.maxStateDim} (got ${input.state.length})`,
             });
         }
         if (!input.noise ||
             !(input.noise instanceof Float32Array) ||
             input.noise.length === 0) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: "groot requires input.noise (Float32Array) — flow matching needs a noise prior at t=1",
             });
         }
@@ -185,8 +185,8 @@ function validateRunInput(input, hparams) {
             Number.isInteger(hparams.maxActionDim)) {
             const expectedNoise = hparams.chunkSize * hparams.maxActionDim;
             if (input.noise.length !== expectedNoise) {
-                throw new error_1.QvacErrorAddonVla({
-                    code: error_1.ERR_CODES.INVALID_INPUT,
+                throw new QvacErrorAddonVla({
+                    code: ERR_CODES.INVALID_INPUT,
                     adds: `input.noise length ${input.noise.length} != ${expectedNoise} (chunkSize*maxActionDim)`,
                 });
             }
@@ -195,23 +195,23 @@ function validateRunInput(input, hparams) {
     if (hparams && hparams.stateInputMode === "discrete") {
         if (Number.isInteger(hparams.numCameras) &&
             input.images.length !== hparams.numCameras) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `pi05 requires exactly ${hparams.numCameras} camera images (got ${input.images.length})`,
             });
         }
         if (Number.isInteger(hparams.tokenizerMaxLength) &&
             input.tokens.length !== hparams.tokenizerMaxLength) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: `pi05 requires tokens.length === ${hparams.tokenizerMaxLength} (got ${input.tokens.length})`,
             });
         }
         if (!input.noise ||
             !(input.noise instanceof Float32Array) ||
             input.noise.length === 0) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_INPUT,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_INPUT,
                 adds: "pi05 requires input.noise (Float32Array) — flow matching needs a noise prior at t=1",
             });
         }
@@ -222,8 +222,8 @@ function validateRunInput(input, hparams) {
             Number.isInteger(hparams.maxActionDim)) {
             const expectedNoise = hparams.chunkSize * hparams.maxActionDim;
             if (input.noise.length !== expectedNoise) {
-                throw new error_1.QvacErrorAddonVla({
-                    code: error_1.ERR_CODES.INVALID_INPUT,
+                throw new QvacErrorAddonVla({
+                    code: ERR_CODES.INVALID_INPUT,
                     adds: `input.noise length ${input.noise.length} != ${expectedNoise} (chunkSize*maxActionDim)`,
                 });
             }
@@ -248,23 +248,24 @@ class VlaModel {
     _packageVersion;
     // Per-run accumulator filled by _onAddonEvent; null between runs.
     _pending;
-    constructor({ files, config = {}, logger = null, opts = {}, } = { files: { model: [] } }) {
+    constructor(options) {
+        const { files, config = {}, logger = null, opts = {}, } = options ?? { files: { model: [] } };
         if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.MISSING_REQUIRED_PARAMETER,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.MISSING_REQUIRED_PARAMETER,
                 adds: "files.model (non-empty array of absolute paths)",
             });
         }
         for (const [i, entry] of files.model.entries()) {
             if (typeof entry !== "string" || entry.length === 0) {
-                throw new error_1.QvacErrorAddonVla({
-                    code: error_1.ERR_CODES.INVALID_CONFIG,
+                throw new QvacErrorAddonVla({
+                    code: ERR_CODES.INVALID_CONFIG,
                     adds: `files.model[${i}] must be an absolute path string`,
                 });
             }
             if (!path.isAbsolute(entry)) {
-                throw new error_1.QvacErrorAddonVla({
-                    code: error_1.ERR_CODES.INVALID_CONFIG,
+                throw new QvacErrorAddonVla({
+                    code: ERR_CODES.INVALID_CONFIG,
                     adds: `files.model[${i}] must be an absolute path (got: ${entry})`,
                 });
             }
@@ -332,8 +333,8 @@ class VlaModel {
         // this callback would mean the flag stays set forever if the worker
         // aborts before delivering JobEnded/Error.
         if (typeof eventTypeName === "string" && eventTypeName.includes("Error")) {
-            const err = new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INFERENCE_FAILED,
+            const err = new QvacErrorAddonVla({
+                code: ERR_CODES.INFERENCE_FAILED,
                 adds: typeof errorData === "string" ? errorData : "native error",
             });
             if (this._pending)
@@ -367,8 +368,8 @@ class VlaModel {
     }
     async load({ backend = "auto" } = {}) {
         if (backend !== "auto" && backend !== "cpu") {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INVALID_CONFIG,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INVALID_CONFIG,
                 adds: `backend must be 'auto' or 'cpu' (got: ${String(backend)})`,
             });
         }
@@ -392,8 +393,8 @@ class VlaModel {
             // before throwing so a `new VlaModel(...).load()` against a
             // non-existent file leaves no event-loop references behind.
             this._releaseNativeLogger();
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.MODEL_NOT_FOUND,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.MODEL_NOT_FOUND,
                 adds: ggufPath,
             });
         }
@@ -424,8 +425,8 @@ class VlaModel {
             }
             // Same logger-leak guard as the missing-file path above.
             this._releaseNativeLogger();
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
                 adds: loadError.message,
                 cause: loadError,
             });
@@ -444,12 +445,12 @@ class VlaModel {
     // eslint-disable-next-line @typescript-eslint/require-await -- kept async so run() can serialize it through the exclusive run queue; dispatch is fire-and-forget.
     async _runInternal(input) {
         if (!this._handle) {
-            throw new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.INSTANCE_NOT_INITIALIZED,
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INSTANCE_NOT_INITIALIZED,
             });
         }
         if (this._hasActiveResponse) {
-            throw new error_1.QvacErrorAddonVla({ code: error_1.ERR_CODES.JOB_ALREADY_RUNNING });
+            throw new QvacErrorAddonVla({ code: ERR_CODES.JOB_ALREADY_RUNNING });
         }
         const { imgWidth, imgHeight } = validateRunInput(input, this._hparams);
         this.logger.info("Starting inference");
@@ -480,8 +481,8 @@ class VlaModel {
         }
         if (!accepted) {
             this._pending = null;
-            const err = new error_1.QvacErrorAddonVla({
-                code: error_1.ERR_CODES.JOB_ALREADY_RUNNING,
+            const err = new QvacErrorAddonVla({
+                code: ERR_CODES.JOB_ALREADY_RUNNING,
             });
             this._job.fail(err);
             throw err;
@@ -524,7 +525,7 @@ class VlaModel {
         return this._run(async () => {
             await this.cancel();
             if (this._job.active) {
-                this._job.fail(new error_1.QvacErrorAddonVla({ code: error_1.ERR_CODES.MODEL_UNLOADED }));
+                this._job.fail(new QvacErrorAddonVla({ code: ERR_CODES.MODEL_UNLOADED }));
             }
             this._pending = null;
             this._hasActiveResponse = false;
@@ -535,8 +536,8 @@ class VlaModel {
                 catch (destroyError) {
                     this._handle = null;
                     this._releaseNativeLogger();
-                    throw new error_1.QvacErrorAddonVla({
-                        code: error_1.ERR_CODES.FAILED_TO_DESTROY,
+                    throw new QvacErrorAddonVla({
+                        code: ERR_CODES.FAILED_TO_DESTROY,
                         adds: destroyError.message,
                         cause: destroyError,
                     });
@@ -554,13 +555,27 @@ class VlaModel {
         return this.state;
     }
 }
-exports.VlaModel = VlaModel;
-exports.default = VlaModel;
-const cjsExports = VlaModel;
-cjsExports.VlaModel = VlaModel;
-cjsExports.preprocessImage = addon_1.preprocessImage;
-cjsExports.padState = addon_1.padState;
-cjsExports.DEFAULT_IMAGE_SIZE = addon_1.DEFAULT_IMAGE_SIZE;
-cjsExports.QvacErrorAddonVla = error_1.QvacErrorAddonVla;
-cjsExports.ERR_CODES = error_1.ERR_CODES;
-module.exports = cjsExports;
+// Alias used by the namespace below to re-export the class as a property of
+// itself (`VlaModel.VlaModel`). `export import VlaModel = VlaModel` inside the
+// namespace would resolve to the alias being declared, so the indirection is
+// required.
+var VlaModelClass = VlaModel;
+/**
+ * Declaration merging with the class above models this package's CommonJS
+ * export shape — `module.exports` IS the `VlaModel` constructor, carrying the
+ * named exports as own properties — directly in the type system. TypeScript
+ * emits the property attachments natively, so the generated `index.js` and
+ * `index.d.ts` can no longer drift from each other, and a CommonJS consumer
+ * (`import VlaModel = require('@qvac/vla-ggml')`) gets a real construct
+ * signature instead of TS2351.
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace -- class/namespace merging is the only way to type a constructor-first CommonJS export (`module.exports = VlaModel` plus attached members).
+(function (VlaModel) {
+    VlaModel.VlaModel = VlaModelClass;
+    VlaModel.preprocessImage = addonModule.preprocessImage;
+    VlaModel.padState = addonModule.padState;
+    VlaModel.DEFAULT_IMAGE_SIZE = addonModule.DEFAULT_IMAGE_SIZE;
+    VlaModel.QvacErrorAddonVla = errorModule.QvacErrorAddonVla;
+    VlaModel.ERR_CODES = errorModule.ERR_CODES;
+})(VlaModel || (VlaModel = {}));
+module.exports = VlaModel;
