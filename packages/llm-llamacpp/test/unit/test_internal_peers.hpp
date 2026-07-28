@@ -5,6 +5,7 @@
 
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/MtmdLlmContext.hpp"
 
 // Friend test peers grant unit tests direct access to internals that are not
 // part of the production public API. The production classes befriend these
@@ -31,6 +32,38 @@ public:
   static LlmContext* llmContext(LlamaModel& model) {
     std::shared_lock lock(model.stateMtx_);
     return model.state_ ? model.state_->llmContext_.get() : nullptr;
+  }
+};
+
+class MtmdLlmContextTestPeer {
+public:
+  /// The post-reasoning-recovery EOG-ban one-shot flag. Production code only
+  /// arms it from inside a reasoning recovery, which requires the model to emit
+  /// EOS inside `<think>` — not forceable in a black-box test, hence direct
+  /// access here.
+  static bool banArmed(const MtmdLlmContext& ctx) {
+    return ctx.banEogAfterReasoningRecovery_;
+  }
+  static void setBanArmed(MtmdLlmContext& ctx, bool armed) {
+    ctx.banEogAfterReasoningRecovery_ = armed;
+  }
+
+  /// EOG token ids precomputed at load (Qwen3 reasoning family only) — the set
+  /// the ban masks.
+  static const std::vector<llama_token>& eogTokens(const MtmdLlmContext& ctx) {
+    return ctx.eogTokens_;
+  }
+
+  /// Invoke the ban consumer directly, as `onLogitsReady` /
+  /// `specSampleAndAccept` do before sampling.
+  static void applyPendingEogBan(MtmdLlmContext& ctx, int logitIdx) {
+    ctx.applyPendingEogBan(logitIdx);
+  }
+
+  /// The live logits row the ban writes into. Requires a prior decode;
+  /// null otherwise.
+  static float* logits(MtmdLlmContext& ctx, int logitIdx) {
+    return llama_get_logits_ith(ctx.modelCtx_.lctx, logitIdx);
   }
 };
 

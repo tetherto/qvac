@@ -1675,6 +1675,21 @@ void LlamaModel::commonParamsParse(
     if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
       auto types =
           common_speculative_types_from_names(split(iter->second, ','));
+      // Only `draft-mtp` self-speculation is wired in this addon. `spec-type`
+      // accepts a comma list, so warn (don't fail) on any other parsed type so a
+      // silently-inert drafter is visible in the logs instead of appearing to
+      // work.
+      for (const auto specType : types) {
+        if (specType != COMMON_SPECULATIVE_TYPE_DRAFT_MTP &&
+            specType != COMMON_SPECULATIVE_TYPE_NONE) {
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] spec-type '%s' is not supported (only "
+                  "'draft-mtp' is wired); it will be ignored\n",
+                  common_speculative_type_to_str(specType).c_str()));
+        }
+      }
       params.speculative.types.insert(
           params.speculative.types.end(), types.begin(), types.end());
       configFilemap.erase(iter);

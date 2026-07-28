@@ -104,11 +104,22 @@ void MtmdLlmContext::initializeCommonState() {
   // MTP draft context: only text-only turns actually draft on the mtmd path
   // (image turns fall back). On failure `spec_` stays null and generation
   // runs non-speculatively.
-  const bool wantMtpDraft =
+  const bool specTypeIsMtp =
       std::find(
           params_.speculative.types.begin(),
           params_.speculative.types.end(),
           COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
+  // MTP self-speculation only runs on the single-prompt generateResponse path;
+  // under continuous batching (n_parallel > 1) the scheduler never calls
+  // runSpeculativeGeneration, so a per-slot draft context is pure waste. Gate on
+  // single-context and warn on the unsupported combo (mirrors TextLlmContext).
+  if (specTypeIsMtp && params_.n_parallel > 1) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] spec-type=draft-mtp is ignored under continuous batching "
+        "(n_parallel > 1); running non-speculatively\n");
+  }
+  const bool wantMtpDraft = specTypeIsMtp && params_.n_parallel <= 1;
   if (wantMtpDraft) {
     try {
       auto cparamsMtp = common_context_params_to_llama(params_);
@@ -127,6 +138,12 @@ void MtmdLlmContext::initializeCommonState() {
       } else {
         params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
         params_.speculative.draft.ctx_dft = ctxDraft_.get();
+        // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
+        // draft loop is bounded: it uses its own construction-time params.n_max
+        // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
+        // per-round dp.n_max hint. kMaxSpecDraft matches runSpeculativeGeneration.
+        params_.speculative.draft.n_max =
+            std::min(params_.speculative.draft.n_max, kMaxSpecDraft);
         spec_.reset(common_speculative_init(
             params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
         ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
@@ -235,6 +252,20 @@ void MtmdLlmContext::initializeCommonState() {
         arch.has_value() &&
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(arch.value());
+  }
+
+  // Precompute the EOG token id set used by the speculative reasoning-EOS
+  // recovery ban (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family
+  // arms that ban, so the O(nVocab) scan is gated on it and done once at load,
+  // mirroring TextLlmContext.
+  if (isQwen3ReasoningFamily_) {
+    const int32_t nVocab = llama_vocab_n_tokens(modelCtx_.vocab);
+    eogTokens_.reserve(8);
+    for (llama_token t = 0; t < nVocab; ++t) {
+      if (llama_vocab_is_eog(modelCtx_.vocab, t)) {
+        eogTokens_.push_back(t);
+      }
+    }
   }
 }
 
@@ -627,6 +658,22 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   llama_pos nPastLocal = current_.pos;
 
+  // Hoisted out of the per-chunk loop: on the MTP spec path a prompt with
+  // interleaved media produces several text chunks, so building a fresh
+  // llama_batch per text chunk is needless per-prefill heap churn. Allocate once
+  // (sized to the sub-batch cap) and reuse via common_batch_clear, matching the
+  // hoisting pattern in TextLlmContext::evalMessageWithTools and
+  // runSpeculativeGeneration. Left empty (unallocated) when MTP is inactive.
+  LlamaBatch specTextBatch;
+  if (spec_) {
+    // Size from the context's validated batch size, not the raw (untrusted)
+    // params_.n_batch: the pre-hoist per-chunk sizing was incidentally bounded by
+    // nTextTokens, and a negative/huge n_batch would wrap to a bad
+    // llama_batch_init size. llama_n_batch() is the effective, validated value.
+    const int nBatchCap = static_cast<int>(llama_n_batch(getCtx()));
+    specTextBatch = LlamaBatch((nBatchCap > 0 ? nBatchCap : 1) + 1, 0, 1);
+  }
+
   for (size_t i = 0; i < nChunks; i++) {
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
@@ -728,23 +775,27 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       const llama_token* textTokens =
           mtmd_input_chunk_get_tokens_text(chunk, &nTextTokens);
       res = 0;
-      const auto nBatch = static_cast<size_t>(params_.n_batch);
-      LlamaBatch textBatch(
-          static_cast<int>(std::min(nBatch, nTextTokens)) + 1, 0, 1);
+      // Step by the batch's OWN capacity, not the raw params_.n_batch: llama may
+      // clamp the effective batch below params_.n_batch, so specTextBatch (sized
+      // from the validated llama_n_batch) can be smaller — stepping by
+      // params_.n_batch would then add more tokens than fit and overflow
+      // common_batch_add. Deriving the step from capacity keeps
+      // tokens-per-iteration <= capacity by construction.
+      const auto nBatch = static_cast<size_t>(specTextBatch.capacity() - 1);
       for (size_t off = 0; off < nTextTokens && res == 0; off += nBatch) {
         const size_t end = std::min(off + nBatch, nTextTokens);
-        common_batch_clear(*textBatch);
+        common_batch_clear(*specTextBatch);
         for (size_t k = off; k < end; ++k) {
           const bool isFinalPrefillToken =
               chunkLogitsLast && (k + 1 == nTextTokens);
           common_batch_add(
-              *textBatch,
+              *specTextBatch,
               textTokens[k],
               nPastLocal + static_cast<llama_pos>(k),
               {seqId_},
               isFinalPrefillToken);
         }
-        res = decodeAndSpecProcess(*textBatch);
+        res = decodeAndSpecProcess(*specTextBatch);
       }
       nPastLocal += static_cast<llama_pos>(nTextTokens);
     } else {
@@ -908,6 +959,10 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   reasoningState_.recent_output_buffer.clear();
   compactor_.reset();
   generationStopReason_ = GenerationStopReason::None;
+  // Defensive symmetry with TextLlmContext + specBeginGeneration: never carry a
+  // reasoning-recovery EOG ban into a generation (armed + consumed within one
+  // speculative generation; only ever set on the spec path today).
+  banEogAfterReasoningRecovery_ = false;
 
   if (thinkingForcedOpen_) {
     if (outputCallback) {
@@ -1136,6 +1191,9 @@ void MtmdLlmContext::specBeginGeneration(
   reasoningState_.recent_output_buffer.clear();
   compactor_.reset();
   generationStopReason_ = GenerationStopReason::None;
+  // Never carry a reasoning-recovery EOG ban across generations (armed + consumed
+  // within one generation on the spec path).
+  banEogAfterReasoningRecovery_ = false;
 
   if (thinkingForcedOpen_) {
     if (outputCallback) {
@@ -1219,6 +1277,23 @@ SequenceStepResult MtmdLlmContext::specProcessToken(
   return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
 
+void MtmdLlmContext::applyPendingEogBan(int logitIdx) {
+  if (!banEogAfterReasoningRecovery_) {
+    return;
+  }
+  float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
+  if (logits == nullptr) {
+    // Stay armed and defer to the next sample rather than dropping the ban (see
+    // TextLlmContext::applyPendingEogBan).
+    return;
+  }
+  banEogAfterReasoningRecovery_ = false;
+  // `eogTokens_` is precomputed in initializeCommonState().
+  for (const llama_token t : eogTokens_) {
+    logits[t] = -INFINITY;
+  }
+}
+
 // Substitute the cached close marker and decode it so the span-end position
 // is recorded.
 void MtmdLlmContext::specRecoverReasoning(
@@ -1246,6 +1321,10 @@ void MtmdLlmContext::specRecoverReasoning(
   }
   ++current_.pos;
   ++current_.cacheTokens;
+  // Arm the one-shot EOG ban so the next speculative sample (specSampleAndAccept)
+  // is forced to produce a content token instead of immediately re-emitting EOS
+  // after the reasoning block was force-closed. Consumed once, then disarmed.
+  banEogAfterReasoningRecovery_ = true;
   capturePendingThinkClose();
 }
 
@@ -1705,6 +1784,14 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Finish queued backend work before mutating KV/recurrent memory.
   llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
+  // Keep the MTP draft context aligned with the target on reset (else its KV
+  // outlives the cleared target and the next generation drafts against a stale
+  // cache). No-op when MTP is inactive.
+  rollbackDraftContext();
+  // Never carry a reasoning-recovery EOG ban across a state reset — a reused
+  // continuous-batching slot must not ban EOG on the next sequence's first
+  // sampled token (parity with generateResponse / specBeginGeneration).
+  banEogAfterReasoningRecovery_ = false;
 
   // Reset the performance metrics
   if (resetStats) {
@@ -1740,6 +1827,9 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   }
 
   clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
+  // Mirror the tail removal onto the MTP draft context (pre-decrement cursor) so
+  // it drops the same tokens the target just did. No-op when MTP is inactive.
+  rollbackDraftContext(current_.pos - tokensToRemove);
 
   current_.pos -= tokensToRemove;
   refreshCurrentCacheTokensFromMemory();
@@ -2007,6 +2097,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   const bool sampledToken = forcedTokens_.empty();
   llama_token tokenId = LLAMA_TOKEN_NULL;
   if (sampledToken) {
+    // Consume a pending post-reasoning-recovery EOG ban (parity with
+    // TextLlmContext::sampleToken and the speculative path). Only real samples
+    // consume it; the forced recovery newlines below pass through untouched, so
+    // the ban lands on the first content token after </think>.
+    applyPendingEogBan(logitIdx);
     tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
     common_sampler_accept(smpl_.get(), tokenId, true);
   } else {
@@ -2067,6 +2162,10 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
       forcedTokens_.push_back(reasoningState_.cached_newline_token);
       forcedTokens_.push_back(reasoningState_.cached_newline_token);
     }
+    // Ban EOG on the next content sample so the forced </think> + newlines can't
+    // be immediately followed by another EOS -> empty answer (parity with the
+    // Text non-spec path and the speculative reasoning-recovery).
+    banEogAfterReasoningRecovery_ = true;
     const std::string closeChars = utf8Buffer_.addToken(tokenStr);
     if (!closeChars.empty() && outputCallback) {
       outputCallback(closeChars);
@@ -2221,6 +2320,8 @@ bool MtmdLlmContext::loadCache(
           Priority::ERROR,
           "[MtmdLlm] failed to clear sequence after invalid cache load\n");
     }
+    // Mirror the target-clear onto the MTP draft context (non-throwing).
+    rollbackDraftContext();
     current_ = {};
     protectedPrefix_ = {};
     tools_.reset();
@@ -2303,6 +2404,10 @@ bool MtmdLlmContext::loadCache(
   }
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
+  // The MTP draft context is not persisted in the cache; clear it so the next
+  // generation re-seeds it via decodeAndSpecProcess rather than drafting against
+  // a stale cache that diverges from the restored target. No-op off-MTP.
+  rollbackDraftContext();
   restoredKvGuard.dismiss();
   return true;
 }
