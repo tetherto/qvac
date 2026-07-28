@@ -50,9 +50,9 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.6.0",
-    "@qvac/logging": "^0.1.0",
+    "@qvac/error": "workspace:^0.1.0",
+    "@qvac/infer-base": "workspace:^0.6.0",
+    "@qvac/logging": "workspace:^0.1.0",
     "bare-ffmpeg": "^1.0.0-32"
   },
   "repository": {

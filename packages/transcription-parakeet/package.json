@@ -85,8 +85,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/registry-client": "^0.4.0",
+    "@qvac/decoder-audio": "workspace:^0.5.0",
+    "@qvac/registry-client": "workspace:^0.4.0",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^6.0.0",
     "brittle": "^3.17.0",
@@ -101,12 +101,17 @@
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "cmake-npm": "^1.1.0",
+    "bare-os": "^3.6.2",
+    "bare-stream": "^2.7.0",
+    "bare-https": "^3.0.0",
+    "bare-url": "^2.1.6"
   },
   "dependencies": {
-    "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.6.0",
-    "@qvac/logging": "^0.1.0",
+    "@qvac/error": "workspace:^0.1.0",
+    "@qvac/infer-base": "workspace:^0.6.0",
+    "@qvac/logging": "workspace:^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },

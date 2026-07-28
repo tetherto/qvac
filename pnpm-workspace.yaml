@@ -1,0 +1,22 @@
+packages:
+  - "packages/*"
+  - "packages/registry-server/client"
+  - "packages/registry-server/shared"
+
+# Some deps ship large binary tarballs (e.g. react-native-bare-kit@0.14.5 ~106MB).
+# pnpm's default fetchTimeout (60s) is too short for these on a normal connection;
+# raise it + retry/backoff so a slow-but-succeeding download doesn't abort.
+fetchTimeout: 300000
+fetchRetries: 5
+fetchRetryMaxtimeout: 120000
+
+overrides:
+  hyper-instrument>bare-v8: "^1.0.1"
+
+blockExoticSubdeps: false
+
+allowBuilds:
+  cld: true
+  esbuild: true
+  nx: true
+  unrs-resolver: true

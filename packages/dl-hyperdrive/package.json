@@ -19,9 +19,9 @@
   "author": "tetherto",
   "license": "Apache-2.0",
   "dependencies": {
-    "@qvac/dl-base": "^0.2.0",
-    "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
+    "@qvac/dl-base": "workspace:^0.2.0",
+    "@qvac/error": "workspace:^0.1.0",
+    "@qvac/infer-base": "workspace:^0.1.0",
     "bare-fs": "^4.0.2",
     "bare-path": "^3.0.0",
     "corestore": "^7.1.0",

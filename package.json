@@ -1,0 +1,8 @@
+{
+  "name": "qvac",
+  "private": true,
+  "version": "0.0.0",
+  "devDependencies": {
+    "nx": "23.1.0"
+  }
+}

@@ -41,6 +41,7 @@
   "devDependencies": {
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0"
+    "standard": "^17.0.0",
+    "cmake-npm": "^1.1.0"
   }
 }

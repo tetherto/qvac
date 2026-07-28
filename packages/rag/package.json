@@ -59,9 +59,9 @@
     }
   },
   "devDependencies": {
-    "@qvac/embed-llamacpp": "^0.14.0",
-    "@qvac/llm-llamacpp": "^0.16.0",
-    "@qvac/registry-client": "^0.6.0",
+    "@qvac/embed-llamacpp": "workspace:^0.14.0",
+    "@qvac/llm-llamacpp": "workspace:^0.16.0",
+    "@qvac/registry-client": "workspace:^0.6.0",
     "bare-fs": "^4.1.6",
     "bare-path": "^3.0.0",
     "brittle": "^3.14.0",
@@ -72,7 +72,7 @@
     "test-tmp": "^1.4.0"
   },
   "dependencies": {
-    "@qvac/error": "^0.1.1",
+    "@qvac/error": "workspace:^0.1.1",
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^3.0.1",
     "hyperdb": "^6.7.0",
@@ -80,6 +80,7 @@
     "hyperschema": "^1.13.0",
     "llm-splitter": "^0.2.0",
     "ready-resource": "^1.1.2",
-    "zod": "^4.1.13"
+    "zod": "^4.1.13",
+    "@qvac/logging": "workspace:^0.1.0"
   }
 }

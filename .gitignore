@@ -58,3 +58,11 @@ docs/website/scripts/api-docs/api-data.json
 
 # Local perf-report sim output (sim-*.js scripts)
 /tmp/
+
+graphify-out/
+.nx/polygraph
+
+
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs
