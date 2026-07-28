@@ -55,9 +55,10 @@ TEST(LlamaFinetuningHelpers, ParseLoraModules_DenseFfnAndOutput) {
        LLAMA_LORA_TARGET_FFN_DOWN | LLAMA_LORA_TARGET_OUTPUT));
 }
 
-// MoE expert LoRA targets added by this PR (bits 8-11). ffn_gate_up_exps (bit 11)
-// is otherwise exercised nowhere; this locks the string->enum mapping so a future
-// map edit that drops or mis-wires one fails here, not only in an on-device run.
+// MoE expert LoRA targets added by this PR (bits 8-11). ffn_gate_up_exps (bit
+// 11) is otherwise exercised nowhere; this locks the string->enum mapping so a
+// future map edit that drops or mis-wires one fails here, not only in an
+// on-device run.
 TEST(LlamaFinetuningHelpers, ParseLoraModules_ExpertModules) {
   uint32_t result = llama_finetuning_helpers::parseLoraModules(
       "ffn_gate_exps,ffn_up_exps,ffn_down_exps,ffn_gate_up_exps");

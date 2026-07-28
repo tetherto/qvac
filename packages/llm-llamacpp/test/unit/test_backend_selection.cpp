@@ -718,9 +718,10 @@ TEST_F(BackendSelectionTest, Finetuning_Bitnet_Adreno830_ChoosesVulkan) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
 }
 
-// Archs this PR added to SUPPORTED_FINETUNE_ARCHITECTURES (BackendSelection.cpp).
-// These lock the finetune allowlist so a future edit that drops one is caught by
-// a fast unit test rather than only by a slow, opt-in on-device finetune.
+// Archs this PR added to SUPPORTED_FINETUNE_ARCHITECTURES
+// (BackendSelection.cpp). These lock the finetune allowlist so a future edit
+// that drops one is caught by a fast unit test rather than only by a slow,
+// opt-in on-device finetune.
 TEST_F(BackendSelectionTest, Finetuning_Qwen35_Adreno830_ChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
