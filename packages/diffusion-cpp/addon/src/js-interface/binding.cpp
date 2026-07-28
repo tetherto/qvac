@@ -23,6 +23,7 @@ js_value_t* qvacLibInferenceAddonSdExports(js_env_t* env, js_value_t* exports) {
   V("runJob", qvac_lib_inference_addon_sd::runJob)
   V("runUpscaleJob", qvac_lib_inference_addon_sd::runUpscaleJob)
   V("runWorldStepJob", qvac_lib_inference_addon_sd::runWorldStepJob)
+  V("runWorldSceneJob", qvac_lib_inference_addon_sd::runWorldSceneJob)
 
   V("activate", qvac_lib_inference_addon_sd::activate)
   V("activateUpscaler", qvac_lib_inference_addon_sd::activateUpscaler)

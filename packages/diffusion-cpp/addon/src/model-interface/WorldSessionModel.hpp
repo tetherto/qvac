@@ -68,7 +68,25 @@ public:
     std::function<void(const std::vector<uint8_t>&)> outputCallback;
   };
 
+  // Create a scene pack natively (umT5-XXL prompt encode + Wan2.2 VAE
+  // first-frame encode -> scene.safetensors). Standalone: does not require
+  // load() and does not touch the walk session; the produced pack is loaded
+  // by a session via scenePath. Runs on the model's job queue like any job.
+  struct SceneCreateJob {
+    std::string prompt;              // encoded verbatim
+    std::vector<uint8_t> imageBytes; // first frame, PNG or JPEG
+    int width{832};                  // multiples of 32
+    int height{480};
+    std::string t5Path;   // umT5-XXL GGUF/safetensors
+    std::string vaePath;  // Wan2.2 VAE GGUF/safetensors
+    std::string outputPath;
+    std::function<void(const std::string&)> progressCallback;
+  };
+
 private:
+  std::any processWalkStep(const WalkStepJob& job);
+  std::any processSceneCreate(const SceneCreateJob& job);
+
   qvac_lib_inference_addon_sd::WorldSessionConfig config_;
   sd_abot_session_t* session_{nullptr};
   mutable std::atomic<bool> cancelRequested_{false};

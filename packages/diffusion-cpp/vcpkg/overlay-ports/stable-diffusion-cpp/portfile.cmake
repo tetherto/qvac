@@ -13,16 +13,15 @@
 #
 # Body is a verbatim copy of the registry port (2026-07-03, port-version 5)
 # with only REF + SHA512 changed to PR #22's head commit.
-# Engine pinned to PR #22 head (includes the RTX 5090 bounded-history/KV
-# work, the Mac Metal KV-cache fixes: capture pinning + decode/append
-# overlap serialization on shared backends, and the F32-params prefix fix:
-# DiT weights now load in their GGUF type - halves weight VRAM, ~25% faster
-# blocks, quantized GGUFs run natively).
+# Engine pinned to PR #22 head (adds native scene creation via
+# sd_abot_scene_create - umT5-XXL prompt encode + Wan2.2 VAE first-frame
+# encode - on top of the bounded-history/KV work, the Mac Metal KV-cache
+# fixes, and the F32-params prefix fix).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF ce22d2419746cb8ffa2253599d885e7095404250
-    SHA512 f9cb759149bf2205a80b802bffc434b1c83f115bfd5c36a87ead4c165464fa2f8bee1569fb3ba3982e53d7b9b4b42711320842c58472baf20b9fb2b30803021e
+    REF 07cee515a29a609d9e9d615376ab56166783bfbf
+    SHA512 2778a213439728db351b3a39e050e25480772dbe01b8900bab8cf9bb07544210abf4278ebc258956da046514d8f19925e076e303bd18e3df24d8f6a13145bc34
 )
 
 set(SD_FLASH_ATTN OFF)

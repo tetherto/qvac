@@ -73,13 +73,71 @@ void WorldSessionModel::load() {
 }
 
 std::any WorldSessionModel::process(const std::any& input) {
+  // Scene creation is standalone (loads its own encoders, no session needed).
+  if (const auto* sceneJob = std::any_cast<SceneCreateJob>(&input)) {
+    return processSceneCreate(*sceneJob);
+  }
   if (!isLoaded()) {
     throw StatusError(
         general_error::InternalError,
         "WorldSessionModel::process() called before load()");
   }
+  return processWalkStep(std::any_cast<const WalkStepJob&>(input));
+}
 
-  const auto& job = std::any_cast<const WalkStepJob&>(input);
+std::any WorldSessionModel::processSceneCreate(const SceneCreateJob& job) {
+  cancelRequested_.store(false);
+  const auto t0 = std::chrono::steady_clock::now();
+
+  sd_image_t decoded = image_codec::decodeImage(job.imageBytes);
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> decodedData(decoded.data);
+  if (decoded.data == nullptr) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene image could not be decoded; expected PNG or JPEG bytes");
+  }
+
+  qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
+
+  sd_abot_scene_params_t params;
+  sd_abot_scene_params_init(&params);
+  params.t5_path = job.t5Path.c_str();
+  params.vae_path = job.vaePath.c_str();
+  params.prompt = job.prompt.c_str();
+  params.init_image = decoded;
+  params.width = job.width;
+  params.height = job.height;
+  params.output_path = job.outputPath.c_str();
+  params.backend = config_.backend.c_str();
+  params.n_threads = config_.nThreads;
+  params.offload_params_to_cpu = config_.offloadParamsToCpu;
+
+  if (!sd_abot_scene_create(&params)) {
+    throw StatusError(
+        general_error::InternalError,
+        "ABot-World scene creation failed (see native logs)");
+  }
+
+  const int64_t sceneMs = static_cast<int64_t>(
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+          .count());
+  if (job.progressCallback) {
+    picojson::object progress;
+    progress["scene"] = picojson::value(job.outputPath);
+    progress["elapsed_ms"] = picojson::value(static_cast<double>(sceneMs));
+    job.progressCallback(picojson::value(progress).serialize());
+  }
+
+  lastStats_.clear();
+  lastStats_.emplace_back("sceneCreateMs", sceneMs);
+  lastStats_.emplace_back(
+      "width", static_cast<int64_t>(job.width));
+  lastStats_.emplace_back(
+      "height", static_cast<int64_t>(job.height));
+  return std::any{};
+}
+
+std::any WorldSessionModel::processWalkStep(const WalkStepJob& job) {
   cancelRequested_.store(false);
 
   const auto stepStart = std::chrono::steady_clock::now();

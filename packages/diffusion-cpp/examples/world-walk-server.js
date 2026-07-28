@@ -20,6 +20,14 @@
  * Optional env: HOST (127.0.0.1), PORT (8787), ABOT_THREADS, ABOT_SEED,
  * ABOT_BACKEND (e.g. "cpu", "cuda"), ABOT_JPEG_QUALITY (0/unset = PNG
  * frames; 1..100 = JPEG at that quality).
+ *
+ * Native scene creation (full world-generation workflow): when ABOT_SCENE
+ * points at a file that does not exist yet AND ABOT_PROMPT + ABOT_IMAGE are
+ * set, the server first builds the scene pack on-device (umT5-XXL prompt
+ * encode + Wan2.2 VAE first-frame encode; models via ABOT_T5 / ABOT_VAE or
+ * umt5-xxl-enc-f16.gguf / wan2.2_vae_f16.gguf in ABOT_MODELS_DIR), writes it
+ * to ABOT_SCENE, then loads the walk session with it. Optional ABOT_WIDTH /
+ * ABOT_HEIGHT (multiples of 32; default 832x480).
  */
 
 const http = require('bare-http1')
@@ -56,7 +64,11 @@ const DIT_PATH = resolveModelFile('ABOT_DIT', [
   'abot-world-0-5b-lf-dit-f16.gguf'
 ])
 const TAEHV_PATH = resolveModelFile('ABOT_TAEHV', ['taew2_2_f16.gguf'])
-const SCENE_PATH = resolveModelFile('ABOT_SCENE', ['scene.safetensors'])
+// The scene pack may not exist yet (native creation writes it at startup),
+// so resolve its PATH without requiring the file to be present.
+const SCENE_PATH =
+  process.env.ABOT_SCENE ||
+  path.join(process.env.ABOT_MODELS_DIR || '.', 'scene.safetensors')
 
 const world = new WorldStableDiffusion({
   files: { model: DIT_PATH, taehv: TAEHV_PATH, scene: SCENE_PATH },
@@ -368,13 +380,42 @@ server.listen(PORT, HOST, () => {
   console.log(`world-walk-server: http://${HOST}:${PORT}/ (models: ${path.dirname(DIT_PATH)})`)
 })
 
-world
-  .load()
+// Native scene creation at startup: when the scene pack does not exist yet
+// and ABOT_PROMPT + ABOT_IMAGE (+ ABOT_T5 + ABOT_VAE model paths) are set,
+// build it first — umT5 encodes the prompt, the Wan2.2 VAE encodes the image —
+// then load the session with the freshly written pack. This is the full
+// on-device world-generation workflow (no offline PyTorch extraction).
+async function createSceneIfRequested() {
+  if (fs.existsSync(SCENE_PATH)) return
+  const prompt = process.env.ABOT_PROMPT
+  const imagePath = process.env.ABOT_IMAGE
+  if (!prompt || !imagePath) {
+    return // no scene and no creation inputs -> load() will fail with a clear error
+  }
+  const t5 = process.env.ABOT_T5 || resolveModelFile('ABOT_T5', ['umt5-xxl-enc-f16.gguf'])
+  const vae = process.env.ABOT_VAE || resolveModelFile('ABOT_VAE', ['wan2.2_vae_f16.gguf'])
+  console.log(`world-walk-server: creating scene from "${prompt.slice(0, 60)}..." + ${imagePath}`)
+  const t0 = Date.now()
+  const response = await world.createScene({
+    prompt,
+    image: new Uint8Array(fs.readFileSync(imagePath)),
+    t5,
+    vae,
+    output: SCENE_PATH,
+    width: Number(process.env.ABOT_WIDTH || 832),
+    height: Number(process.env.ABOT_HEIGHT || 480)
+  })
+  await response.onUpdate(() => {}).await()
+  console.log(`world-walk-server: scene written to ${SCENE_PATH} in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
+createSceneIfRequested()
+  .then(() => world.load())
   .then(() => {
     state.loaded = true
     console.log('world-walk-server: session ready — open the page and press "Start walk"')
   })
   .catch((err) => {
     state.error = String(err?.message || err)
-    console.error('world-walk-server: model load failed:', err)
+    console.error('world-walk-server: startup failed:', err)
   })

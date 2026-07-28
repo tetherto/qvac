@@ -187,6 +187,98 @@ class WorldStableDiffusion {
     return this._run(() => this._stepInternal(keys))
   }
 
+  /**
+   * Create a scene pack natively: umT5-XXL encodes the prompt, the Wan2.2 VAE
+   * encodes the first-frame image (cover-scaled and center-cropped to
+   * width x height), reference slots are zero-filled, and the pack is written
+   * to `output` — loadable via `files.scene` for a walk session. Standalone:
+   * works before load() (it loads its own encoders and frees them after).
+   *
+   * Output stream (via `QvacResponse.onUpdate(data)`):
+   *   - `string` — completion JSON `{"scene":"<path>","elapsed_ms":T}`
+   *
+   * @param {object} params
+   * @param {string} params.prompt   - Scene prompt (encoded verbatim; reference
+   *        demos prefix "| unknown | ").
+   * @param {Uint8Array} params.image - First frame, PNG or JPEG bytes.
+   * @param {string} params.t5       - umT5-XXL model path (absolute).
+   * @param {string} params.vae      - Wan2.2 VAE model path (absolute).
+   * @param {string} params.output   - Destination scene pack path (absolute).
+   * @param {number} [params.width=832]  - Multiples of 32.
+   * @param {number} [params.height=480]
+   * @returns {Promise<QvacResponse>}
+   */
+  async createScene(params) {
+    return this._run(() => this._createSceneInternal(params))
+  }
+
+  async _createSceneInternal(params) {
+    if (!params || typeof params !== 'object') {
+      throw new TypeError('createScene(params): params must be an object')
+    }
+    for (const key of ['t5', 'vae', 'output']) {
+      assertAbsolute(key, params[key])
+    }
+    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
+      throw new TypeError('params.prompt must be a non-empty string')
+    }
+    if (!(params.image instanceof Uint8Array) || params.image.length === 0) {
+      throw new TypeError('params.image must be a non-empty Uint8Array (PNG/JPEG bytes)')
+    }
+    const width = params.width || 832
+    const height = params.height || 480
+    if (width % 32 !== 0 || height % 32 !== 0) {
+      throw new Error(`scene width/height must be multiples of 32 (got ${width}x${height})`)
+    }
+    if (!this.addon) {
+      // scene creation is standalone — create the native instance on demand
+      this.addon = this._createAddon({
+        diffusionModelPath: this._files.model,
+        taehvPath: this._files.taehv,
+        scenePath: this._files.scene,
+        config: this._config
+      })
+    }
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    const response = this._job.start()
+
+    let accepted
+    try {
+      accepted = await this.addon.runSceneCreate(
+        {
+          prompt: params.prompt,
+          width,
+          height,
+          t5Path: params.t5,
+          vaePath: params.vae,
+          outputPath: params.output
+        },
+        params.image
+      )
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+    if (!accepted) {
+      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
+    finalized.catch((err) => {
+      this.logger?.warn?.('Scene creation response rejected:', err?.message || err)
+    })
+    response.await = () => finalized
+
+    return response
+  }
+
   async _stepInternal(keys) {
     if (!this.state.configLoaded || !this.addon) {
       throw new Error('WorldStableDiffusion.step() called before load()')

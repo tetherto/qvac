@@ -386,6 +386,21 @@ class WorldSessionInterface {
     })
   }
 
+  /**
+   * Create a scene pack natively (umT5 prompt encode + Wan2.2 VAE first-frame
+   * encode). Standalone: works before/without activate().
+   * @param {object} params - { prompt, width, height, t5Path, vaePath, outputPath }
+   * @param {Uint8Array} imageBytes - first frame (PNG/JPEG bytes)
+   * @returns {Promise<boolean>} true if the job was accepted, false if busy
+   */
+  async runSceneCreate(params, imageBytes) {
+    return this._binding.runWorldSceneJob(this._handle, {
+      type: 'text',
+      input: JSON.stringify(params),
+      initImageBuffer: imageBytes
+    })
+  }
+
   async unload() {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)

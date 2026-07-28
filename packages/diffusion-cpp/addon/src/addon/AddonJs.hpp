@@ -417,6 +417,85 @@ runWorldStepJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /**
+ * Create a scene pack natively (umT5-XXL prompt encode + Wan2.2 VAE
+ * first-frame encode -> scene.safetensors). Standalone: does not require the
+ * session to be loaded; the pack is loaded later via `scenePath`.
+ * Args: [0] instance handle,
+ *       [1] { input: { type: 'text', data: paramsJson }, initImageBuffer }
+ * paramsJson: { prompt, width, height, t5Path, vaePath, outputPath }
+ */
+inline js_value_t*
+runWorldSceneJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto [type, jsInput] = JsInterface::getInput(args);
+  if (type != "text") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "runWorldSceneJob expects a single text input with JSON params");
+  }
+  const string paramsJson = js::String(env, jsInput).as<std::string>(env);
+
+  picojson::value parsed;
+  const std::string parseErr = picojson::parse(parsed, paramsJson);
+  if (!parseErr.empty() || !parsed.is<picojson::object>()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene params must be a JSON object: " + parseErr);
+  }
+  const auto& obj = parsed.get<picojson::object>();
+  auto getString = [&obj](const char* key) -> std::string {
+    auto it = obj.find(key);
+    return (it != obj.end() && it->second.is<std::string>())
+               ? it->second.get<std::string>()
+               : std::string();
+  };
+  auto getInt = [&obj](const char* key, int fallback) -> int {
+    auto it = obj.find(key);
+    return (it != obj.end() && it->second.is<double>())
+               ? static_cast<int>(it->second.get<double>())
+               : fallback;
+  };
+
+  WorldSessionModel::SceneCreateJob job;
+  job.prompt = getString("prompt");
+  job.width = getInt("width", 832);
+  job.height = getInt("height", 480);
+  job.t5Path = getString("t5Path");
+  job.vaePath = getString("vaePath");
+  job.outputPath = getString("outputPath");
+  if (job.prompt.empty() || job.t5Path.empty() || job.vaePath.empty() ||
+      job.outputPath.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene params require prompt, t5Path, vaePath and outputPath");
+  }
+
+  auto inputObj = args.getJsObject(1, "inputObj");
+  auto imgBuf =
+      inputObj
+          .getOptionalPropertyAs<js::TypedArray<uint8_t>, std::vector<uint8_t>>(
+              env, "initImageBuffer");
+  if (!imgBuf.has_value() || imgBuf.value().empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene creation requires initImageBuffer (PNG/JPEG bytes)");
+  }
+  job.imageBytes = std::move(imgBuf.value());
+
+  job.progressCallback = [&instance](const std::string& progressJson) {
+    instance.addonCpp->outputQueue->queueResult(std::any(progressJson));
+  };
+
+  return instance.runJob(std::any(std::move(job)));
+}
+JSCATCH
+
+/**
  * Load the walk session (DiT + taehv + scene). Mirrors activate()/
  * activateUpscaler(): WorldSessionModel does not implement IModelAsyncLoad.
  * Args: [0] instance handle
