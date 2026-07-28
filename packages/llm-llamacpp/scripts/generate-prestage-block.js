@@ -109,8 +109,10 @@ function buildIosScript(manifestB64) {
   //      pymobiledevice3 aborts trying to chown ~/.pymobiledevice3 (EPERM).
   //      Unsetting them makes it skip the chown.
   //   2. `apps push` can exit 0 while logging an AFC error, so success is NOT
-  //      inferred from the exit code — we scan the push output for an error and
-  //      fail hard (mirrors Android's `adb shell test -s`).
+  //      inferred from the exit code alone — we fail hard on a non-zero exit OR
+  //      a specific AFC/Python failure token. We deliberately do NOT match a
+  //      bare "error", which false-positives on benign log lines and would
+  //      fail-hard a perfectly good push (mirrors Android's `adb shell test -s`).
   return `set -e
 export PATH="$HOME/.local/bin:$PATH"
 unset SUDO_UID SUDO_GID
@@ -123,10 +125,10 @@ while IFS=$(printf '\\t') read -r NAME URL; do
   [ -z "$NAME" ] && continue
   echo "[prestage] staging $NAME"
   curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
-  PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1) || true
+  if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
   printf '%s\\n' "$PUSH_OUT"
-  if printf '%s' "$PUSH_OUT" | grep -qiE "error|traceback|failed with status"; then
-    echo "[prestage] FATAL: push of $NAME failed (see AFC error above)"; exit 1
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|failed with status|perm_denied|object_not_found|not permitted"; then
+    echo "[prestage] FATAL: push of $NAME failed (rc=$PUSH_RC; see AFC error above)"; exit 1
   fi
   echo "[prestage] pushed $NAME -> Documents/$NAME"
   rm -f "/tmp/prestage/$NAME"
