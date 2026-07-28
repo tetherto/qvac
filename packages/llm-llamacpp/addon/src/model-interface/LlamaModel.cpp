@@ -1301,8 +1301,6 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
-  // Parse and consume recognized non-llama.cpp keys so they are not forwarded
-  // to llama.cpp's argument parser below.
   qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
       params, configFilemap);
 

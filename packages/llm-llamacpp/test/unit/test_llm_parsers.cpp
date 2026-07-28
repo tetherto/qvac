@@ -8,7 +8,6 @@
 using qvac_errors::StatusError;
 using qvac_lib_inference_addon_llama::parsers::validateReasoningBudgetOverride;
 
-// -1 = unrestricted, 0 = disabled, N>0 = token cap.
 TEST(LlmParsers_ReasoningBudget, AcceptsUnrestricted) {
   EXPECT_EQ(validateReasoningBudgetOverride(-1.0), -1);
 }

@@ -8,7 +8,6 @@
 
 namespace qvac_lib_inference_addon_llama {
 
-// Set the override field only when the key is present.
 template <typename Opt>
 static void
 readNumInto(js_env_t* env, js::Object& obj, const char* key, Opt& out) {
@@ -91,7 +90,6 @@ void applyGenerationParamHandlers(
   for (const auto& [key, handler] : GENERATION_PARAM_HANDLERS) {
     handler(env, obj, params);
   }
-  // grammar and json_schema are mutually exclusive.
   if (params.grammar && params.json_schema) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,

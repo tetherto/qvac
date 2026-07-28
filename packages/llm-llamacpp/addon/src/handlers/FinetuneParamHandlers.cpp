@@ -2,7 +2,6 @@
 
 namespace qvac_lib_inference_addon_llama {
 
-// Set the field only when the key is present.
 template <typename JsT, typename ReadT, typename FieldT>
 static void
 readOpt(js_env_t* env, js::Object& obj, const char* key, FieldT& field) {
