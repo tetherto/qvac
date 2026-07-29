@@ -127,6 +127,25 @@ npm test                       # validation + enum tests (no model needed)
 FIT_MODEL_PATH=/abs/model.gguf npm test   # also runs the real fit projection
 ```
 
+## Known crash paths
+
+`llama_params_fit` can terminate the process on inputs this addon accepts. These
+are aborts inside the fitter, not exceptions, so they cannot be caught and
+turned into a status — the calling worklet dies with the process.
+
+- **A large `nCtx` aborts.** `ggml_abort()` fires in
+  `llama_context::graph_reserve` while sizing the worst-case compute graph,
+  reached from `llama_get_device_memory_data`. Reproduced on linux-x64 with
+  `nCtx: 100000000`, which is a perfectly valid `uint32_t`. The threshold is
+  model-dependent and not discoverable from outside.
+- **Windows GPU runners hit an integer divide-by-zero** (SEH `0xC0000094`)
+  inside the fit math. Currently contained by a Windows-only `__try/__except`
+  that reports `ERROR`; see the discussion on the trade-off in #3493.
+
+This is the argument for running the preflight in a **disposable** worklet and
+treating abnormal termination as `ERROR` in the parent: in-process containment
+cannot cover `abort()`, only the SEH case.
+
 ## Limitations (v1)
 
 - Narrow llama.cpp LLM path only. Multimodal `mmproj` GPU memory is **not**

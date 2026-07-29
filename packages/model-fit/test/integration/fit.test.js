@@ -6,16 +6,20 @@ const process = require('bare-process')
 const { fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
 
+// Deliberately never created. Argument validation must reject configs using it
+// before any file is opened, so these cases never reach the fitter.
+const UNREACHABLE_MODEL = '/model-fit-validation-only/never-created.gguf'
+
 test('fitParams rejects invalid config', async function (t) {
   await t.exception.all(() => fitParams(), /config object is required/)
   await t.exception.all(() => fitParams(null), /config object is required/)
   await t.exception.all(() => fitParams({}), /modelPath must be a non-empty string/)
   await t.exception.all(() => fitParams({ modelPath: '' }), /modelPath must be a non-empty string/)
-  await t.exception.all(() => fitParams({ modelPath: '/x.gguf', nCtx: 'big' }), /nCtx must be a safe integer/)
+  await t.exception.all(() => fitParams({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }), /nCtx must be a safe integer/)
 })
 
 test('fitParams rejects values that would truncate or wrap in the binding', async function (t) {
-  const base = { modelPath: '/x.gguf' }
+  const base = { modelPath: UNREACHABLE_MODEL }
 
   // Fractions truncate on the way to uint32_t/int32_t.
   await t.exception.all(() => fitParams({ ...base, nCtx: 4096.5 }), /nCtx must be a safe integer/)
@@ -41,9 +45,9 @@ test('binding.paramsFit enforces the same constraints as the wrapper', async fun
   // JS wrapper — a caller can reach the native entry point directly.
   const binding = require('../../binding.js')
 
-  await t.exception.all(() => binding.paramsFit({ modelPath: '/x.gguf', marginMiB: -1 }), /out of range/)
-  await t.exception.all(() => binding.paramsFit({ modelPath: '/x.gguf', nCtx: 4096.5 }), /must be an integer/)
-  await t.exception.all(() => binding.paramsFit({ modelPath: '/x.gguf', nBatch: 256, nUbatch: 512 }), /must not exceed/)
+  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, marginMiB: -1 }), /out of range/)
+  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nCtx: 4096.5 }), /must be an integer/)
+  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nBatch: 256, nUbatch: 512 }), /must not exceed/)
 })
 
 test('FIT_STATUS enum matches llama_params_fit_status', function (t) {
@@ -99,6 +103,42 @@ test('a successful plan always carries a concrete context', async function (t) {
   }
 })
 
+test('memory pressure moves the plan off the GPU rather than reporting FAILURE', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // `llama_params_fit` fits to free *device* memory and, per llama.h, "assumes
+  // system memory is unlimited". So an unmeetable device margin is satisfied by
+  // moving every layer to the host and shrinking the context — not by returning
+  // FAILURE. Driving this with the margin rather than with a large model keeps
+  // it deterministic: a model sized to overflow one CI runner's VRAM fits the
+  // next one, whereas no device can honour a multi-TiB margin.
+  //
+  // This is the load-bearing behaviour for anything gating admission: `fits`
+  // stays true under extreme pressure, so the plan is the signal, not the flag.
+  const res = fitParams({ modelPath, nCtx: 0, marginMiB: 10000000 })
+
+  t.is(res.status, FIT_STATUS.SUCCESS, 'host fallback is still reported as a fit')
+  t.is(res.fits, true)
+  t.is(res.nGpuLayers, 0, 'an unsatisfiable device margin offloads nothing to GPU')
+  t.ok(res.nCtx > 0, 'a fitted plan still carries a concrete context')
+  t.ok(res.nCtx <= 2048, 'context was reduced, not left at the trained maximum')
+})
+
+test('an explicit context is not reduced even under memory pressure', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // Context is reduced iff it was passed as 0, so a concrete request must
+  // survive pressure that would otherwise shrink it.
+  const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 10000000 })
+
+  if (res.fits) {
+    t.is(res.nCtx, 2048, 'explicit context is a hard constraint under pressure')
+    t.is(res.nGpuLayers, 0, 'pressure is absorbed by offload, not by context')
+  } else {
+    t.pass(`did not fit on this runner (status ${res.status})`)
+  }
+})
+
 test('fitParams reports the device inventory it fitted against', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
   const res = fitParams({ modelPath, nCtx: 4096, nCtxMin: 512, marginMiB: 1024 })
@@ -115,11 +155,11 @@ test('fitParams reports the device inventory it fitted against', async function 
 
 test('fitParams rejects a non-string backendsDir', async function (t) {
   await t.exception.all(
-    () => fitParams({ modelPath: '/x.gguf', backendsDir: 42 }),
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: 42 }),
     /backendsDir must be a non-empty string/
   )
   await t.exception.all(
-    () => fitParams({ modelPath: '/x.gguf', backendsDir: '' }),
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: '' }),
     /backendsDir must be a non-empty string/
   )
 })

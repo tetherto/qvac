@@ -30,6 +30,15 @@
 
 ### Added
 
+- Coverage for what the fitter does under memory pressure. `llama_params_fit`
+  assumes host memory is unlimited, so an unsatisfiable device margin is met by
+  moving every layer to the host rather than by reporting `FAILURE` — `fits`
+  stays true, and the plan rather than the flag is the admission signal. Driven
+  by the margin rather than by model size, which keeps it deterministic across
+  runners with different VRAM.
+- Documented two crash paths inside `llama_params_fit` that this addon cannot
+  contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
+  Windows divide-by-zero. Both terminate the process.
 - `nDevices` and `nGpuDevices` on the result — the device inventory the
   projection was actually made against. Zero registered devices now returns
   `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
