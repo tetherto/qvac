@@ -298,12 +298,14 @@ private:
       const SeqObserver& onSeqDone = {});
   void cancelImpl() const;
 
-  /// The armed cancel action of a tagged finetune job: pause, saving a
-  /// checkpoint only when the canceller armed the mode via
-  /// setFinetuneCancelSavesCheckpoint (consumed on read, so unarmed cancels
-  /// pause without a checkpoint). No-op in the standalone test build, where
-  /// the finetuner is compiled out.
-  void requestFinetuneCancel();
+  /// The armed cancel action of a tagged finetune job, also forwarded by
+  /// every whole-model cancelImpl(): pause, saving a checkpoint only when
+  /// the canceller armed the mode via setFinetuneCancelSavesCheckpoint
+  /// (consumed on read, so unarmed cancels pause without a checkpoint).
+  /// Const like the cancel paths that issue it (finetuner_ and the mode
+  /// atomic are mutable for the same reason liveJobs_ is). No-op in the
+  /// standalone test build, where the finetuner forward is compiled out.
+  void requestFinetuneCancel() const;
 
   /// True for a single Prompt that may run on the scheduler concurrently:
   /// text generation, or a prefill that persists its cache to disk
@@ -505,8 +507,9 @@ private:
 
   /// Checkpoint mode for the next targeted finetune cancel, armed by
   /// setFinetuneCancelSavesCheckpoint and consumed (reset to false) by
-  /// requestFinetuneCancel — see both for the hand-off.
-  std::atomic<bool> finetuneCancelSavesCheckpoint_{false};
+  /// requestFinetuneCancel — see both for the hand-off. Mutable like
+  /// liveJobs_: the const cancel paths consume it.
+  mutable std::atomic<bool> finetuneCancelSavesCheckpoint_{false};
 
   /// Count of finetune cancellation requests this model has forwarded to the
   /// finetuner (requestFinetuneCancel() calls). Bumped in every build so
@@ -544,6 +547,7 @@ private:
   FinetuneConfigOverrides pendingFinetuneOverrides_;
 
   // Declared last so it is destroyed first; the finetuner stores a
-  // reference back to this model.
-  LlamaFinetuner finetuner_{*this};
+  // reference back to this model. Mutable like liveJobs_: cancel paths are
+  // const and must reach requestPause().
+  mutable LlamaFinetuner finetuner_{*this};
 };

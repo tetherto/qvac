@@ -760,9 +760,19 @@ void LlamaModel::cancelImpl() const {
   // could take engine locks, and this cancel may be issued from a streaming
   // callback on the engine's own worker thread (see above).
   liveJobs_.parkAll();
+  // A running finetune is invisible to everything above: it increments
+  // neither run counter, and its registry entry was armed at tagged
+  // dispatch, so parkAll() only sets a flag nothing consumes again. Forward
+  // the cancellation explicitly — native teardown issues exactly this
+  // whole-model cancel (the multi-job scheduler destructor prefers
+  // IModelCancel::cancel()) and would otherwise join the worker for the
+  // finetune's full remaining training duration. Safe despite park-only:
+  // requestPause takes no engine locks, is cross-thread safe, and no-ops
+  // when no finetune is running.
+  requestFinetuneCancel();
 }
 
-void LlamaModel::requestFinetuneCancel() {
+void LlamaModel::requestFinetuneCancel() const {
   finetuneCancelRequests_.fetch_add(1);
 #ifndef STANDALONE_TEST_BUILD
   // requestPause is cross-thread safe by design (the JS cancel binding calls
