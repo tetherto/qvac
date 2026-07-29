@@ -62,6 +62,22 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -79,7 +95,7 @@ jobs:
           github-token: ${{ github.token }}
 
   detect-changes:
-    needs: [authorize, label-gate]
+    needs: [authorize, label-gate, fork-approval]
     runs-on: ubuntu-latest
     # Fork PR code (checkout + git diff, and downstream npm install / tests)
     # only runs once BOTH gates pass: authorize-pr (draft / same-repo / fork
@@ -160,7 +176,7 @@ jobs:
           fi
 
   validate-json:
-    needs: [authorize, label-gate, detect-changes]
+    needs: [authorize, label-gate, detect-changes, fork-approval]
     if: |
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -187,7 +203,7 @@ jobs:
         run: node scripts/validate-models-json.js --file=./data/models.prod.json
 
   test:
-    needs: [authorize, label-gate, detect-changes]
+    needs: [authorize, label-gate, detect-changes, fork-approval]
     if: |
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -239,7 +255,7 @@ jobs:
   # uses bare indices so they never appear in job names either. Fails loudly if
   # unset so a misconfiguration blocks the deploy rather than silently skipping.
   resolve-deploy-targets:
-    needs: [authorize, detect-changes, label-gate]
+    needs: [authorize, detect-changes, label-gate, fork-approval]
     if: |-
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
@@ -274,6 +290,7 @@ jobs:
   # Autobase quorum; each node must report indexer status before the next.
   deploy-staging:
     needs:
+      - fork-approval
       - detect-changes
       - validate-json
       - test
@@ -344,6 +361,7 @@ jobs:
 
   sync-staging:
     needs:
+      - fork-approval
       - detect-changes
       - validate-json
       - test
@@ -400,6 +418,7 @@ jobs:
 
   smoke-test:
     needs:
+      - fork-approval
       - sync-staging
       - label-gate
     runs-on: ubuntu-latest

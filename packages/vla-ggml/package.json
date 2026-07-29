@@ -1,23 +1,30 @@
 {
   "name": "@qvac/vla-ggml",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "VLA vision-language-action inference addon for QVAC (ggml backend)",
   "addon": true,
   "engines": {
     "bare": ">=1.24.0"
   },
   "scripts": {
-    "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js index.d.ts addon.d.ts lib/error.js lib/error.d.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy vla prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy vla prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy vla prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
-    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint:cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test": "npm run test:unit && npm run test:integration",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/test/unit/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -29,10 +36,13 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "test:dts": "tsc -p tsconfig.dts.json"
+    "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
+    "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
+    "test:dts": "npm run test:types"
   },
   "files": [
     "addon.js",
+    "addon.d.ts",
     "binding.js",
     "index.js",
     "index.d.ts",
@@ -62,10 +72,14 @@
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "exports": {
     "./package": "./package.json",
