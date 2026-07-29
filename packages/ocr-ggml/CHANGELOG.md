@@ -10,6 +10,14 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `ocr-ggml.js`, `addonLogging.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and OCR output are unchanged.
 
+## [0.13.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
 ## [0.12.2] - 2026-07-21
 
 ### Fixed

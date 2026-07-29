@@ -18,10 +18,18 @@ function makeLogger(t) {
   }
 
   return {
-    info(msg, data) { emit('info', msg, data) },
-    debug(msg, data) { emit('debug', msg, data) },
-    warn(msg, data) { emit('warn', msg, data) },
-    error(msg, data) { emit('error', msg, data) }
+    info(msg, data) {
+      emit('info', msg, data)
+    },
+    debug(msg, data) {
+      emit('debug', msg, data)
+    },
+    warn(msg, data) {
+      emit('warn', msg, data)
+    },
+    error(msg, data) {
+      emit('error', msg, data)
+    }
   }
 }
 
@@ -59,10 +67,12 @@ function makeClient(t) {
     on() {},
     off() {}
   }
-  // lunte-disable-next-line require-await
   const blobs = {
+    // lunte-disable-next-line require-await
     async close() {},
-    createReadStream() { return client._stream }
+    createReadStream() {
+      return client._stream
+    }
   }
   client._core = core
   client._blobs = blobs
@@ -102,11 +112,13 @@ function makeClient(t) {
 function fakeStream() {
   const handlers = {}
   return {
-    once(event, fn) { (handlers[event] = handlers[event] || []).push(fn) },
+    once(event, fn) {
+      ;(handlers[event] = handlers[event] || []).push(fn)
+    },
     emit(event) {
       const fns = handlers[event] || []
       handlers[event] = []
-      return Promise.all(fns.map(fn => fn()))
+      return Promise.all(fns.map((fn) => fn()))
     }
   }
 }
@@ -309,23 +321,25 @@ test('downloadModel aborts the reconnect wait when the signal is cancelled', asy
   t.is(attempt, 1, 'no second attempt started after the cancel')
 })
 
-test('downloadModel clears cached blocks when the download fails', async t => {
+test('downloadModel clears cached blocks when the download fails', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
   const client = makeClient(t)
   const clears = []
   client._core.download = () => ({
-    destroy () {
+    destroy() {
       client._events.push('destroy')
       t.comment('step: rangeDownload.destroy() called from the catch path')
     }
   })
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
     t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
   }
+  // lunte-disable-next-line require-await
   client._streamBlobToFile = async () => {
     client._events.push('stream')
     t.comment('step: _streamBlobToFile rejecting to force the catch path')
@@ -353,15 +367,16 @@ test('downloadModel clears cached blocks when the download fails', async t => {
   )
 })
 
-test('downloadModel clears cached blocks when the returned stream is destroyed', async t => {
+test('downloadModel clears cached blocks when the returned stream is destroyed', async (t) => {
   const client = makeClient(t)
   const clears = []
   client._core.download = () => ({
-    destroy () {
+    destroy() {
       client._events.push('destroy')
       t.comment('step: rangeDownload.destroy() called from the stream release')
     }
   })
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
@@ -388,9 +403,10 @@ test('downloadModel clears cached blocks when the returned stream is destroyed',
   )
 })
 
-test('downloadModel releases the stream download exactly once', async t => {
+test('downloadModel releases the stream download exactly once', async (t) => {
   const client = makeClient(t)
   let clears = 0
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async () => {
     clears++
     t.comment(`step: _clearBlobBlocks call #${clears}`)
@@ -406,10 +422,12 @@ test('downloadModel releases the stream download exactly once', async t => {
   t.is(clears, 1, 'the end-then-close sequence releases only once')
 })
 
-test('downloadBlob clears cached blocks when the returned stream is destroyed', async t => {
+test('downloadBlob clears cached blocks when the returned stream is destroyed', async (t) => {
   const client = makeClient(t)
+  // lunte-disable-next-line require-await
   client.ready = async () => {}
   const clears = []
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async (core, start, end) => {
     clears.push({ start, end })
     t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
@@ -429,24 +447,27 @@ test('downloadBlob clears cached blocks when the returned stream is destroyed', 
   t.alike(clears[0], { start: 3, end: 10 }, 'cleared the blob block range')
 })
 
-test('downloadBlob clears cached blocks when the download fails', async t => {
+test('downloadBlob clears cached blocks when the download fails', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'blob.bin')
 
   const client = makeClient(t)
+  // lunte-disable-next-line require-await
   client.ready = async () => {}
   const clears = []
   client._core.download = () => ({
-    destroy () {
+    destroy() {
       client._events.push('destroy')
       t.comment('step: rangeDownload.destroy() called from the catch path')
     }
   })
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
     t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
   }
+  // lunte-disable-next-line require-await
   client._streamBlobToFile = async () => {
     t.comment('step: _streamBlobToFile rejecting to force the catch path')
     throw new Error('Download cancelled')
@@ -474,13 +495,15 @@ test('downloadBlob clears cached blocks when the download fails', async t => {
   )
 })
 
-test('downloadModel releases nothing when it fails before the core is opened', async t => {
+test('downloadModel releases nothing when it fails before the core is opened', async (t) => {
   const client = makeClient(t)
   let clears = 0
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async () => {
     clears++
     t.comment('step: _clearBlobBlocks called')
   }
+  // lunte-disable-next-line require-await
   client.getModel = async () => {
     t.comment('step: getModel returning null, failing before _getBlobsCore')
     return null
@@ -495,18 +518,21 @@ test('downloadModel releases nothing when it fails before the core is opened', a
   t.is(clears, 0, 'nothing cleared when no core or block range exists yet')
 })
 
-test('downloadModel closes the core without clearing when the range is unknown', async t => {
+test('downloadModel closes the core without clearing when the range is unknown', async (t) => {
   const client = makeClient(t)
   let clears = 0
   let closed = 0
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async () => {
     clears++
     t.comment('step: _clearBlobBlocks called')
   }
+  // lunte-disable-next-line require-await
   client._core.close = async () => {
     closed++
     t.comment('step: core.close() called')
   }
+  // lunte-disable-next-line require-await
   client._core.update = async () => {
     t.comment('step: core.update() rejecting before the block range is computed')
     throw new Error('core update failed')
