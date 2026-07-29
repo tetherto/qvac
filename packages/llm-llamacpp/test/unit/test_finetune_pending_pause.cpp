@@ -57,3 +57,19 @@ TEST(FinetunePendingPauseTest, PauseBeforeCheckpointStatePublicationIsNotLost) {
   EXPECT_FALSE(laterState->pauseRequested.load())
       << "a consumed pending pause must not bleed into a later finetune";
 }
+
+TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {
+  LlamaModel model = makeUnloadedModel();
+  LlamaFinetuner& finetuner = model.finetuner();
+  const unsigned before = LlamaModelTestPeer::finetuneCancelRequests(model);
+
+  LlamaModelTestPeer::reloadDelayed(model);
+
+  EXPECT_EQ(LlamaModelTestPeer::finetuneCancelRequests(model), before)
+      << "reload housekeeping must not issue a user finetune cancellation";
+  auto state =
+      std::make_shared<llama_finetuning_helpers::TrainingCheckpointState>();
+  LlamaFinetunerTestPeer::publishCheckpointState(finetuner, state);
+  EXPECT_FALSE(state->pauseRequested.load())
+      << "an ordinary finetune must start without a pause from its own reload";
+}

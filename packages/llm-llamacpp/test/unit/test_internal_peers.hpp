@@ -50,6 +50,10 @@ public:
   static unsigned finetuneCancelRequests(const LlamaModel& model) {
     return model.finetuneCancelRequests_.load();
   }
+
+  static void reloadDelayed(LlamaModel& model) {
+    model.setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
+  }
 };
 
 class LlamaFinetunerTestPeer {
