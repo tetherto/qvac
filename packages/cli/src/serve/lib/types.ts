@@ -20,11 +20,9 @@ export interface QvacContext {
   /** Set at server start: `true` when `ffmpeg` is on PATH (probed once).
    * Gates both video MP4 transcoding and audio mp3/opus/aac/flac encoding. */
   ffmpegAvailable: boolean
-  transcribeOverride?: (opts: {
-    modelId: string
-    audioChunk: string | Buffer
-    prompt?: string | undefined
-  }) => Promise<string> & { requestId: string }
+  transcribeOverride?: (
+    opts: Parameters<typeof sdk.transcribe>[0]
+  ) => Promise<string | sdk.TranscribeSegment[]> & { requestId: string }
   /** Test seam — overrides `video()` from `@qvac/sdk` when set. */
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
