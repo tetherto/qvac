@@ -164,6 +164,34 @@ TEST(
       << "a mode nobody consumed must die with its job's window";
 }
 
+// The canceller arms the mode on the JS thread from a snapshot that may
+// contain a finetune still between the scheduler queue and
+// beginFinetuneJob(). The mode must survive until the per-id dispatch
+// reaches the job after it binds — arming has to key on the snapshot ids
+// themselves, not on whether the job's window happens to be open already.
+TEST(
+    FinetuneCancelCheckpointModeTest,
+    ArmingBeforeTheJobOpensItsWindowMustKeepTheMode) {
+  LlamaModel model = makeUnloadedModel();
+  constexpr qvac_lib_inference_addon_cpp::JobId finetuneId = 9;
+
+  // cancel(savePauseCheckpoint=true) snapshots A in flight, before
+  // beginFinetuneJob(A) ran.
+  model.setFinetuneCancelSavesCheckpoint(true, {finetuneId});
+  // A begins: opens its cancellation window, then binds its cancel action.
+  LlamaModelTestPeer::setActiveFinetuneJob(model, finetuneId);
+  EXPECT_TRUE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "a save mode armed from the snapshot before the job opened its "
+         "window was dropped; its cancel will pause without a checkpoint";
+
+  // The per-id dispatch lands: A's cancel consumes exactly its own entry.
+  const unsigned before = LlamaModelTestPeer::finetuneCancelRequests(model);
+  model.cancel();
+  EXPECT_EQ(LlamaModelTestPeer::finetuneCancelRequests(model), before + 1U);
+  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "the consumed mode must not linger after the cancel";
+}
+
 TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {
   LlamaModel model = makeUnloadedModel();
   LlamaFinetuner& finetuner = model.finetuner();
