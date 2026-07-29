@@ -60,6 +60,24 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Mandatory second trust factor for fork PRs (QVAC-22799), enforced by
+  # .github/scripts/test/ci-trust-policy.test.mjs. The SHA-bound label-gate proves
+  # a trusted actor approved THIS commit; this job additionally requires the
+  # `fork-ci` GitHub Environment's reviewers to approve before any privileged job
+  # runs, so a fork carrying only the `verified` label cannot reach the
+  # secret-bearing mobile pipeline on its own. The environment expression is
+  # fork-only: same-repo PRs and non-PR events resolve to '' (no gate).
+  # Every job that gates on label-gate.outputs.authorised MUST `needs:` this.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
+
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -82,6 +100,7 @@ jobs:
 
   run-mobile-integration-tests:
     needs:
+      - fork-approval
       - label-gate
       - ci-router
     if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
