@@ -181,8 +181,8 @@ void TextLlmContext::initializeCommonState() {
           params_.speculative.types.end(),
           COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
   // MTP self-speculation only runs on the single-prompt generateResponse path.
-  // Under continuous batching (n_parallel > 1) the scheduler decodes via its own
-  // path and never calls runSpeculativeGeneration, so building an MTP draft
+  // Under continuous batching (n_parallel > 1) the scheduler decodes via its
+  // own path and never calls runSpeculativeGeneration, so building an MTP draft
   // context + common_speculative per slot is pure memory waste (and stats stay
   // 0). Gate construction on single-context and warn on the unsupported combo.
   if (specTypeIsMtp && params_.n_parallel > 1) {
@@ -213,9 +213,10 @@ void TextLlmContext::initializeCommonState() {
         // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
         // draft loop is bounded: it uses its own construction-time params.n_max
         // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-        // per-round dp.n_max hint. kMaxSpecDraft matches runSpeculativeGeneration.
+        // per-round dp.n_max hint. MAX_SPEC_DRAFT matches
+        // runSpeculativeGeneration.
         params_.speculative.draft.n_max =
-            std::min(params_.speculative.draft.n_max, kMaxSpecDraft);
+            std::min(params_.speculative.draft.n_max, MAX_SPEC_DRAFT);
         spec_.reset(common_speculative_init(
             params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
         ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
@@ -965,8 +966,8 @@ void TextLlmContext::specBeginGeneration(
   banEogAfterReasoningRecovery_ = false;
   // The non-spec reset of generationStopReason_ lives in generateResponse AFTER
   // the `if (spec_) return runSpeculativeGeneration(...)` branch, so it never
-  // runs on the MTP path — reset it here or a stale prior-turn reason leaks into
-  // shouldRollbackKnownReasoningCutoff() (see specFinish).
+  // runs on the MTP path — reset it here or a stale prior-turn reason leaks
+  // into shouldRollbackKnownReasoningCutoff() (see specFinish).
   generationStopReason_ = GenerationStopReason::None;
 
   if (thinkingForcedOpen_ && outputCallback) {

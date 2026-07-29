@@ -346,8 +346,8 @@ private:
     // Honor a pending post-reasoning-recovery EOG ban on the speculative path.
     // This sampler bypasses sampleToken() — the normal path's ban consumer — so
     // without this a Qwen3 reasoning model that emitted EOS *inside* <think>
-    // could immediately sample EOS again here -> empty answer (the ban exists to
-    // prevent exactly that on the non-spec path). The flag is armed by
+    // could immediately sample EOS again here -> empty answer (the ban exists
+    // to prevent exactly that on the non-spec path). The flag is armed by
     // handleReasoningEOS()/specRecoverReasoning() and is consumed once here.
     applyPendingEogBan(logitIdx);
     const llama_token tok =
@@ -380,11 +380,12 @@ private:
     // A natural (ok) end of the speculative loop is a prediction-limit stop.
     // This MUST be set before onGenerationFinished: that call feeds
     // generationStopReason_ into shouldRollbackKnownReasoningCutoff(), which
-    // drops an unbalanced <think> span from the (recurrent/hybrid) KV cache only
-    // when the reason is PredictionLimit/SequenceLimit. Leaving it None here (the
-    // non-spec reset at generateResponse sits after the spec branch, so it never
-    // runs for MTP) would skip that rollback and corrupt later turns. Mirrors
-    // MtmdLlmContext::specFinish. Also propagate rollbackOk (nodiscard).
+    // drops an unbalanced <think> span from the (recurrent/hybrid) KV cache
+    // only when the reason is PredictionLimit/SequenceLimit. Leaving it None
+    // here (the non-spec reset at generateResponse sits after the spec branch,
+    // so it never runs for MTP) would skip that rollback and corrupt later
+    // turns. Mirrors MtmdLlmContext::specFinish. Also propagate rollbackOk
+    // (nodiscard).
     if (generationStopReason_ == GenerationStopReason::None) {
       // ok=false is only reached from the context-ceiling bail-outs, so report
       // ContextOverflow there rather than leaving the reason unset (matches the
@@ -403,9 +404,10 @@ private:
   }
 
   // Consume a pending post-reasoning-recovery EOG ban: if
-  // `banEogAfterReasoningRecovery_` is armed, mask every end-of-generation token
-  // (`eogTokens_`) in the logits at `logitIdx` for exactly this one sample, then
-  // disarm. Shared by the normal (`sampleToken`) and speculative
+  // `banEogAfterReasoningRecovery_` is armed, mask every end-of-generation
+  // token
+  // (`eogTokens_`) in the logits at `logitIdx` for exactly this one sample,
+  // then disarm. Shared by the normal (`sampleToken`) and speculative
   // (`specSampleAndAccept`) sampling paths so both honor the ban.
   void applyPendingEogBan(int logitIdx);
 

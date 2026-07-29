@@ -358,8 +358,8 @@ private:
   llama_token specSampleAndAccept(int logitIdx) override {
     // Honor a pending post-reasoning-recovery EOG ban (armed by
     // specRecoverReasoning). Without it, a Qwen3 reasoning model on the mtmd
-    // text-turn spec path that emitted EOS inside <think> could sample EOS again
-    // right after the forced close -> empty answer.
+    // text-turn spec path that emitted EOS inside <think> could sample EOS
+    // again right after the forced close -> empty answer.
     applyPendingEogBan(logitIdx);
     const llama_token tok =
         common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
@@ -462,9 +462,9 @@ private:
   std::vector<llama_token> antipromptTokens_;
   std::vector<llama_token> forcedTokens_;
   // EOG token ids (precomputed in initializeCommonState for Qwen3 reasoning
-  // family models) + a one-shot ban flag, mirroring TextLlmContext. Used only by
-  // the speculative reasoning-EOS recovery path (specRecoverReasoning arms the
-  // flag; specSampleAndAccept consumes it) to prevent an immediate EOS ->
+  // family models) + a one-shot ban flag, mirroring TextLlmContext. Used only
+  // by the speculative reasoning-EOS recovery path (specRecoverReasoning arms
+  // the flag; specSampleAndAccept consumes it) to prevent an immediate EOS ->
   // empty-answer right after the reasoning block is force-closed.
   std::vector<llama_token> eogTokens_;
   bool banEogAfterReasoningRecovery_ = false;
