@@ -53,9 +53,9 @@ jobs:
       # the Tier-1 C/C++ callers; requires qvac-actions >= 0.2.0.
       codeql-build-mode: none
 
-  # Repo-local CI trust-policy + label-gate regression tests (fork CI
-  # hardening). Kept here instead of a dedicated workflow so the coverage
-  # rides along with the security baseline that already runs on every PR.
+  # Repo-local CI trust-policy regression tests (fork CI hardening). Kept here
+  # instead of a dedicated workflow so the coverage rides along with the security
+  # baseline that already runs on every PR.
   # Runs UNPRIVILEGED only (plain pull_request, contents: read, no secrets) —
   # never move this under pull_request_target. NOTE: this job is repo-local and
   # NOT part of the org reusable baseline above; preserve it across any org
@@ -78,7 +78,4 @@ jobs:
       - name: Run trust-policy tests
         run: >-
           node --test
-          .github/actions/label-gate/test/gate.test.mjs
-          .github/actions/label-gate/test/github-client.test.mjs
-          .github/actions/label-gate/test/index.test.mjs
           .github/scripts/test/ci-trust-policy.test.mjs

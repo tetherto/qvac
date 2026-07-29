@@ -189,37 +189,29 @@ test('ci-router: run-coload-tests selects the co-load stage and its prebuild', (
   )
 })
 
-test('ci-router: external fork cannot use the co-load label without verified', () => {
-  assert.deepEqual(
-    route({
-      HEAD_REPO: 'outsider/qvac',
-      PR_LABELS_JSON: '["run-coload-tests"]',
-    }),
-    falseRoute,
-  )
-})
-
-test('ci-router: external fork cannot use granular labels without verified', () => {
+test('ci-router: external fork ready PR gets baseline routing without verified label', () => {
+  assert.deepEqual(route({ HEAD_REPO: 'outsider/qvac' }), baselineRoute)
   assert.deepEqual(
     route({
       HEAD_REPO: 'outsider/qvac',
       PR_LABELS_JSON: '["run-mobile-addon-tests"]',
-    }),
-    falseRoute,
-  )
-})
-
-test('ci-router: verified external fork gets baseline and selected heavy stage', () => {
-  assert.deepEqual(
-    route({
-      HEAD_REPO: 'outsider/qvac',
-      PR_LABELS_JSON: '["verified","run-mobile-addon-tests"]',
     }),
     {
       ...baselineRoute,
       run_prebuilds: 'true',
       run_mobile: 'true',
     },
+  )
+})
+
+test('ci-router: external fork draft runs nothing even with heavy labels', () => {
+  assert.deepEqual(
+    route({
+      HEAD_REPO: 'outsider/qvac',
+      IS_DRAFT: 'true',
+      PR_LABELS_JSON: '["run-coload-tests"]',
+    }),
+    falseRoute,
   )
 })
 
@@ -340,35 +332,20 @@ function authorizePr(overrides = {}) {
     HEAD_REPO: 'outsider/qvac',
     BASE_REPO: 'tetherto/qvac',
     IS_DRAFT: 'false',
-    AUTHOR_ASSOC: 'NONE',
     HAS_WRITE: '0',
-    // Default represents a legit, reviewed fork: the current head SHA carries
-    // the merge/release-approved qvac/fork-verified status (resolved by the
-    // separate 'approved' step, injected here for the decision-logic unit).
-    HAS_APPROVED_SHA: 'true',
-    LABEL_NAME: 'verified',
-    LABELS_JSON: '["verified"]',
+    LABEL_NAME: '',
+    LABELS_JSON: '[]',
     GITHUB_ACTOR: 'outsider',
     ...overrides,
   })
 }
 
-test('authorize-pr: external fork synchronize is denied regardless of actor trust', () => {
-  assert.equal(authorizePr({ ACTION: 'synchronize' }).allowed, 'false')
-  assert.equal(
-    authorizePr({ ACTION: 'synchronize', HAS_WRITE: '1' }).allowed,
-    'false',
-  )
-  assert.equal(
-    authorizePr({
-      ACTION: 'synchronize',
-      AUTHOR_ASSOC: 'MEMBER',
-    }).allowed,
-    'false',
-  )
+test('authorize-pr: external fork ready PR is authorized (fork-ci gates privileged jobs)', () => {
+  assert.equal(authorizePr().allowed, 'true')
+  assert.equal(authorizePr({ ACTION: 'synchronize' }).allowed, 'true')
 })
 
-test('authorize-pr: same-repo synchronize and reviewed fork open remain authorised', () => {
+test('authorize-pr: same-repo synchronize remains authorised', () => {
   assert.equal(
     authorizePr({
       ACTION: 'synchronize',
@@ -383,100 +360,44 @@ test('authorize-pr: same-repo synchronize and reviewed fork open remain authoris
     }).allowed,
     'true',
   )
-  assert.equal(authorizePr().allowed, 'true')
 })
 
-test('authorize-pr: SHA-bound — flip events do not authorise an unapproved head (Marcus)', () => {
-  // draft->ready and close->reopen replay a stale approval onto a new commit
-  // whose SHA was never approved (HAS_APPROVED_SHA=false). Both must deny.
+test('authorize-pr: write access bypasses optional label gate from a fork', () => {
   assert.equal(
-    authorizePr({ ACTION: 'ready_for_review', HAS_APPROVED_SHA: 'false' }).allowed,
-    'false',
-  )
-  assert.equal(
-    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false' }).allowed,
-    'false',
-  )
-  // Even a plain reopen/open with the label present but an unapproved head SHA.
-  assert.equal(
-    authorizePr({ ACTION: 'opened', HAS_APPROVED_SHA: 'false' }).allowed,
-    'false',
-  )
-})
-
-test('authorize-pr: SHA-bound — labeled event authorises on the approval moment even before the status lands', () => {
-  // On the `labeled` event label-gate records the status in a parallel job;
-  // authorize-pr must authorise on label presence here (race-safe) and let
-  // label-gate enforce applier-team trust + strip.
-  assert.equal(
-    authorizePr({ ACTION: 'labeled', HAS_APPROVED_SHA: 'false' }).allowed,
+    authorizePr({ HAS_WRITE: '1', LABEL_NAME: 'safe-to-test', LABELS_JSON: '[]' })
+      .allowed,
     'true',
   )
 })
 
-test('authorize-pr: SHA-bound — reviewed fork at the approved head stays authorised across events', () => {
-  assert.equal(
-    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'true' }).allowed,
-    'true',
-  )
-  assert.equal(
-    authorizePr({ ACTION: 'ready_for_review', HAS_APPROVED_SHA: 'true' }).allowed,
-    'true',
-  )
-})
-
-test('authorize-pr: write access still bypasses the label/SHA gate from a fork', () => {
-  // A write-access actor could push to base directly, so trusting their fork PR
-  // is no riskier — this stays true regardless of the SHA status.
-  assert.equal(
-    authorizePr({ ACTION: 'reopened', HAS_APPROVED_SHA: 'false', HAS_WRITE: '1' }).allowed,
-    'true',
-  )
-})
-
-test('authorize-pr: author_association does NOT bypass the fork gate (NamelsKing part 1)', () => {
-  // An org member / collaborator WITHOUT repo write, from a fork, must not run
-  // fork code without a SHA-bound approval — closes the AUTHOR_ASSOC fall-through.
+test('authorize-pr: org member without write is authorized when no pod label is required', () => {
   for (const assoc of ['MEMBER', 'OWNER', 'COLLABORATOR']) {
     assert.equal(
       authorizePr({
-        ACTION: 'opened',
         AUTHOR_ASSOC: assoc,
         HAS_WRITE: '0',
         LABELS_JSON: '[]',
       }).allowed,
-      'false',
-      `${assoc} without write must not bypass the fork label`,
-    )
-    // Even with the label present, an unapproved head SHA denies (no ordering proof).
-    assert.equal(
-      authorizePr({
-        ACTION: 'reopened',
-        AUTHOR_ASSOC: assoc,
-        HAS_WRITE: '0',
-        HAS_APPROVED_SHA: 'false',
-      }).allowed,
-      'false',
-      `${assoc} without write must not ride a stale approval on a flip`,
+      'true',
+      `${assoc} without write relies on fork-ci for privileged jobs`,
     )
   }
-  // With a genuine SHA-bound approval they ARE authorised — via the label/SHA
-  // path, not author_association.
-  assert.equal(
-    authorizePr({
-      ACTION: 'reopened',
-      AUTHOR_ASSOC: 'MEMBER',
-      HAS_WRITE: '0',
-      HAS_APPROVED_SHA: 'true',
-    }).allowed,
-    'true',
-  )
 })
 
-test('authorize-pr: external fork without the label is denied regardless of SHA status', () => {
+test('authorize-pr: external fork with pod label input requires that label', () => {
   assert.equal(
-    authorizePr({ ACTION: 'opened', LABELS_JSON: '[]', HAS_APPROVED_SHA: 'true' }).allowed,
+    authorizePr({
+      LABEL_NAME: 'safe-to-test',
+      LABELS_JSON: '[]',
+    }).allowed,
     'false',
+  )
+  assert.equal(
+    authorizePr({
+      LABEL_NAME: 'safe-to-test',
+      LABELS_JSON: '["safe-to-test"]',
+    }).allowed,
+    'true',
   )
 })
 
@@ -520,23 +441,20 @@ test('authorize-pr: drafts are denied before internal or fork trust checks', () 
   )
 })
 
-// SDK e2e must inherit the fork-only trust model: internal same-repo PRs run
-// e2e via their own dedicated labels (test-e2e-smoke / test-e2e-full) with NO
-// 'verified' requirement, while external forks stay gated. Both workflows
-// derive their run gate from the shared label-gate + authorize-pr composites
-// rather than hardcoding a 'verified' check.
+// SDK e2e: internal same-repo PRs run via dedicated labels; external forks rely
+// on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
 const sdkE2eWorkflows = [
   '.github/workflows/on-pr-test-sdk.yml',
   '.github/workflows/on-pr-bare-sdk-e2e.yml',
 ]
 
-test('sdk e2e: run gate derives from shared label-gate, never a hardcoded verified check', () => {
+test('sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified', () => {
   for (const path of sdkE2eWorkflows) {
     const source = read(path)
     assert.match(
       source,
-      /uses:\s*\.\/\.github\/actions\/label-gate/,
-      `${path} uses the shared label-gate composite`,
+      /\bfork-approval:/,
+      `${path} defines a fork-approval gate job`,
     )
     assert.match(
       source,
@@ -545,15 +463,17 @@ test('sdk e2e: run gate derives from shared label-gate, never a hardcoded verifi
     )
     assert.match(
       source,
-      /needs\.label-gate\.outputs\.authorised == 'true'/,
-      `${path} gates its run job on label-gate.authorised`,
+      /needs:[\s\S]*?\bfork-approval\b/,
+      `${path} gates privileged jobs on fork-approval`,
     )
-    // The only 'verified' token allowed is inside a comment line; a functional
-    // 'verified' gate here would re-gate internal PRs and regress Dima's ask.
+    // qvac/fork-verified commit status is expected; the retired label gate is not.
     const functionalVerified = source
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('#'))
-      .some((line) => line.includes('verified'))
+      .some((line) => {
+        const withoutForkStatus = line.replace(/fork-verified/g, '')
+        return withoutForkStatus.includes('verified')
+      })
     assert.equal(
       functionalVerified,
       false,
@@ -593,39 +513,6 @@ test('sdk e2e: internal PR authorised without verified; external fork stays gate
   assert.equal(fork.allowed, 'false')
 })
 
-// Applying `verified` is a privileged trust decision: only the merge and
-// release teams may do it. The label-gate action resolves the label applier
-// and authorises only if they belong to a configured team, so restricting the
-// team default to merge+release is the enforcement point. Individual
-// contributor / partner teams (qvac-internal-dev, qvac-collabora) must NOT be
-// trusted appliers.
-test('label-gate default teams are scoped to merge + release only', () => {
-  const source = read('.github/actions/label-gate/action.yml')
-  // Isolate the teams input's block-scalar default (from `default: |` up to
-  // the next input, `users:`), so the descriptive prose that mentions the
-  // excluded teams by name does not leak into the assertion.
-  const teamsIdx = source.indexOf('  teams:')
-  const usersIdx = source.indexOf('  users:', teamsIdx)
-  assert.ok(teamsIdx !== -1 && usersIdx > teamsIdx, 'teams then users inputs')
-  const defaultMarker = 'default: |'
-  const defaultIdx = source.indexOf(defaultMarker, teamsIdx)
-  assert.ok(
-    defaultIdx !== -1 && defaultIdx < usersIdx,
-    'teams uses a block-scalar default',
-  )
-  const defaultTeams = source
-    .slice(defaultIdx + defaultMarker.length, usersIdx)
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-  assert.deepEqual(defaultTeams, ['qvac-internal-merge', 'qvac-internal-release'])
-})
-
-// Regression for the authorize-pr-only bypass: the registry-server PR jobs
-// that check out fork head and run `npm install` / tests must gate on
-// label-gate (verified by merge/release), not authorize-pr alone — otherwise
-// an external org member runs unreviewed fork code in a pull_request_target
-// context without verified.
 function jobBlock(source, job) {
   const header = `\n  ${job}:\n`
   const start = source.indexOf(header)
@@ -635,7 +522,7 @@ function jobBlock(source, job) {
   return nextJob === -1 ? source.slice(start) : source.slice(start, after + nextJob)
 }
 
-test('registry-server PR jobs gate fork code on label-gate, not authorize alone', () => {
+test('registry-server PR jobs depend on fork-approval for fork trust', () => {
   const source = read(
     '.github/workflows/pr-models-validation-registry-server.yml',
   )
@@ -643,13 +530,8 @@ test('registry-server PR jobs gate fork code on label-gate, not authorize alone'
     const block = jobBlock(source, job)
     assert.match(
       block,
-      /needs:.*\blabel-gate\b/,
-      `'${job}' declares label-gate as a dependency`,
-    )
-    assert.match(
-      block,
-      /needs\.label-gate\.outputs\.authorised == 'true'/,
-      `'${job}' if-gates on label-gate.authorised`,
+      /needs:[\s\S]*?\bfork-approval\b/,
+      `'${job}' must depend on fork-approval`,
     )
   }
 })
@@ -681,25 +563,9 @@ test('public-pr: internal same-repo PR does not need verified', () => {
   assert.equal(publicPrLabelPolicy({ HEAD_REPO: 'TetherTo/QVAC' }), '0')
 })
 
-test('public-pr: external or missing head repo needs verified', () => {
-  assert.equal(publicPrLabelPolicy({ HEAD_REPO: 'outsider/qvac' }), '1')
-  assert.equal(publicPrLabelPolicy({ HEAD_REPO: '' }), '1')
-  assert.equal(
-    publicPrLabelPolicy({
-      HEAD_REPO: 'outsider/qvac',
-      PR_LABELS: 'verified',
-      PR_LABELS_JSON: '["verified"]',
-    }),
-    '0',
-  )
-  assert.equal(
-    publicPrLabelPolicy({
-      HEAD_REPO: 'outsider/qvac',
-      PR_LABELS: 'not verified',
-      PR_LABELS_JSON: '["not verified"]',
-    }),
-    '1',
-  )
+test('public-pr: external fork does not require verified label', () => {
+  assert.equal(publicPrLabelPolicy({ HEAD_REPO: 'outsider/qvac' }), '0')
+  assert.equal(publicPrLabelPolicy({ HEAD_REPO: '' }), '0')
 })
 
 test('public-pr: trusted non-PR calls do not require verified', () => {
@@ -760,8 +626,8 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
   // The standalone coload-smoke-mobile-ggml.yml is replaced by a reusable
   // workflow wired into each addon's on-pr pipeline. The expensive Device Farm
   // leg stays opt-in: it requires the co-load label AND the mobile label, and
-  // authorisation (ci-router already enforces same-repo/non-draft for internal
-  // PRs and verified for forks). The reusable itself must not carry a raw
+  // authorisation (ci-router enforces same-repo/non-draft for internal PRs;
+  // fork-ci gates external forks via fork-approval). The reusable itself must
   // pull_request trigger that could bypass that gating.
   const reusable = read('.github/workflows/coload-smoke-mobile.yml')
   assert.match(reusable, /on:\s*\n\s*workflow_call:/)
@@ -791,8 +657,8 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
     )
     assert.match(
       block,
-      /needs\.label-gate\.outputs\.authorised == 'true'/,
-      `${path} Device Farm co-load requires authorisation`,
+      /needs:[\s\S]*?\bfork-approval\b/,
+      `${path} Device Farm co-load requires fork-approval`,
     )
   }
 })
@@ -821,20 +687,11 @@ test('npm reusable pins PR checkout and keeps user input out of run scripts', ()
   assert.doesNotMatch(echoScript, /\$\{\{\s*(github\.event|inputs\.)/)
 })
 
-test('authorize-pr strips every external-fork synchronize', () => {
-  const source = read('.github/actions/authorize-pr/action.yml')
-  const stripStep = source.slice(
-    source.indexOf('name: Strip label on new external-fork pushes'),
-  )
-  assert.match(stripStep, /github\.event\.action == 'synchronize'/)
-  assert.match(
-    stripStep,
-    /github\.event\.pull_request\.head\.repo\.full_name != github\.repository/,
-  )
-  assert.doesNotMatch(
-    stripStep.split('shell: bash')[0],
-    /has-permission|HAS_WRITE/,
-  )
+test('fork-approval records qvac/fork-verified on external fork PRs', () => {
+  const sample = read('.github/workflows/on-pr-llm-llamacpp.yml')
+  const gate = jobBlock(sample, 'fork-approval')
+  assert.match(gate, /context=qvac\/fork-verified/)
+  assert.match(gate, /secrets\.PAT_TOKEN/)
 })
 
 test('audit-called-out privileged checkouts are pinned to event head SHA', () => {
@@ -960,23 +817,14 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
 })
 
 // --- fork-ci environment gating (QVAC-22799) --------------------------------
-// Every pull_request_target workflow that gates any job on the fork-trust
-// surface — label-gate.outputs.authorised OR authorize.outputs.allowed — must
-// ALSO carry the fork-ci environment gate: a `fork-approval` job bound to the
+// Every pull_request_target workflow that gates any job on authorize.outputs.allowed
+// must carry the fork-ci environment gate: a `fork-approval` job bound to the
 // fork-ci environment (PR-from-fork conditional), and every trust-gated job must
-// depend on it. This runs the environment approval alongside the SHA-bound
-// label-gate / authorize-pr. Derived (not a hardcoded list) so a newly-added
-// privileged pull_request_target workflow is automatically required to carry the
-// gate — including a job gated on authorize alone (no label-gate reference).
+// depend on it.
 
 const FORK_CI_ENV_RE =
   /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
-const FORK_CI_GATE_JOBS = new Set([
-  'label-gate',
-  'authorize',
-  'ci-router',
-  'fork-approval',
-])
+const FORK_CI_GATE_JOBS = new Set(['authorize', 'ci-router', 'fork-approval'])
 
 function eachJob(source) {
   const jobsIdx = source.search(/^jobs:\s*$/m)
@@ -1012,8 +860,7 @@ function forkCiTargets() {
       const head = onIdx === -1 ? '' : src.slice(onIdx, onIdx + 1200)
       return (
         /pull_request_target:/.test(head) &&
-        (src.includes('label-gate.outputs.authorised') ||
-          src.includes('authorize.outputs.allowed'))
+        src.includes('authorize.outputs.allowed')
       )
     })
 }
@@ -1036,23 +883,19 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
       if (FORK_CI_GATE_JOBS.has(job.name)) continue
-      if (
-        !job.text.includes('label-gate.outputs.authorised') &&
-        !job.text.includes('authorize.outputs.allowed')
-      )
-        continue
+      if (!job.text.includes('authorize.outputs.allowed')) continue
       assert.match(
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,
-        `${path}: job '${job.name}' gates on the fork-trust surface (label-gate or authorize) but does not depend on fork-approval (fail-open)`,
+        `${path}: job '${job.name}' gates on authorize but does not depend on fork-approval (fail-open)`,
       )
     }
   }
 })
 
 // Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
-// privileged context), so it deliberately carries no label-gate/authorize and
-// needs no SHA-bound fork coverage. Lock in that it is NOT a pull_request_target
+// privileged context), so it deliberately carries no authorize gate and needs
+// no fork-ci coverage.
 // workflow, so a future edit can't quietly reintroduce a secret-bearing
 // untrusted-checkout surface.
 test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {

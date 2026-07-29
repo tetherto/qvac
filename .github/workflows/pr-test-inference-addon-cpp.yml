@@ -27,7 +27,7 @@ jobs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
       # SHA-bound fork approval. Reads the `qvac/fork-verified` commit status that
-      # the sibling pull_request_target label-gate records on the EXACT SHA a
+      # fork-approval records on the PR head after fork-ci environment approval.
       # merge/release member approved. Gating self-hosted fork runs on this status
       # (not a stale label) is what stops a draft->ready / close->reopen flip — or
       # any later push — from running a new, unapproved SHA. Read-only: no secrets,
