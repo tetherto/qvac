@@ -270,6 +270,52 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
          "data race";
 }
 
+/// The whole-model runtimeStats() batch flavour must be composed purely from
+/// the scheduler-owned snapshot: it must not touch — and above all must not
+/// reset — the live llama_context perf counters. runtimeStats() is part of
+/// the concurrent contract (callable while peer jobs decode, holding only a
+/// shared stateMtx_), and the scheduler releases its own mutex around
+/// llama_decode, so ANY write to the context's plain non-atomic perf fields
+/// from this path is an unsynchronized native data race with an in-flight
+/// decode step. Observed deterministically at the idle boundary: counters
+/// read back unchanged across the call. If a reset is ever needed for epoch
+/// hygiene it belongs at an exclusive boundary (batch entry), never here.
+TEST_F(
+    ConcurrentProcessByIdTest, WholeModelRuntimeStatsLeavesPerfCountersAlone) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel(); // parallel = 4: batch scheduler active
+
+  // A tagged single prompt on a parallel model runs in a scheduler lane, so
+  // the model's lastRun is a batch run and runtimeStats() takes the batch
+  // branch — the same branch a caller hits while peers are still decoding.
+  std::any out = model->process(
+      std::any(makePrompt("What is two plus two? One word.")), JobId{1});
+  EXPECT_FALSE(std::any_cast<std::string>(out).empty());
+
+  // The finished run left its decode work in the context's perf counters.
+  const llama_perf_context_data before =
+      llama_perf_context(model->getContext());
+  ASSERT_GT(before.n_eval, 0)
+      << "test setup: the run left no eval work in the perf counters";
+
+  const auto stats = model->runtimeStats();
+  // Still the full scheduler-owned report: dropping the context reset must
+  // not cost any figure.
+  EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "TPS"), 0.0);
+  EXPECT_GE(test_common::getStatValue(stats, "avgConcurrentSeq"), 1.0);
+
+  const llama_perf_context_data after = llama_perf_context(model->getContext());
+  EXPECT_EQ(after.n_eval, before.n_eval)
+      << "whole-model runtimeStats() reset the live llama perf counters; "
+         "with a peer mid-decode on the shared context (scheduler mutex "
+         "released around llama_decode) that reset is an unsynchronized "
+         "data race";
+  EXPECT_EQ(after.n_p_eval, before.n_p_eval)
+      << "whole-model runtimeStats() reset the live llama prefill counters";
+}
+
 /// Variant: multiple concurrent batched runs (micro-batch < parallel). Each
 /// tagged group leaves ONE aggregated per-job entry (rates averaged over its
 /// own requests, counts summed), so two concurrent groups never read each
