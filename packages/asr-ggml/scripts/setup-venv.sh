@@ -85,7 +85,7 @@ case "$base_platform" in
     echo "       PyPI does not ship binary wheels for that platform tag, so" >&2
     echo "       pip would fall back to building numpy / torch from source." >&2
     echo "       Use a native Windows CPython instead, e.g.:" >&2
-    echo "         npm run setup-models -- --python \"\$(py -3 -c 'import sys; print(sys.executable)')\"" >&2
+    echo "         npm run setup-models:parakeet -- --python \"\$(py -3 -c 'import sys; print(sys.executable)')\"" >&2
     echo "       or install Python from https://www.python.org/downloads/windows/" >&2
     echo "       and re-run with PYTHON=/c/Python313/python.exe (or similar)." >&2
     exit 1
@@ -129,5 +129,5 @@ echo "Installing $REQS"
 "$VENV_PY" -m pip install -r "$REQS"
 
 echo
-echo "Venv ready. Next: ./scripts/download-models.sh && ./scripts/convert-nemo.sh"
-echo "(or:   npm run setup-models)"
+echo "Venv ready. Next: ./scripts/parakeet-download-models.sh && ./scripts/convert-nemo.sh"
+echo "(or:   npm run setup-models:parakeet)"

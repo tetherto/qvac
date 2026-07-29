@@ -4,8 +4,9 @@ const http = require('bare-http1')
 const logger = require('./utils/logger')
 const ApiError = require('./utils/ApiError')
 const { HTTP_METHODS, ERRORS } = require('./utils/constants')
-const { runAddon } = require('./services/runAddon')
-// const { runAddon } = require('./services/runAddon.cli')  // TEMP: Using original whisper.cpp CLI
+const { runWhisper } = require('./services/whisper')
+// const { runWhisper } = require('./services/whisper.cli')  // TEMP: Using original whisper.cpp CLI
+const { runParakeet } = require('./services/parakeet')
 const { runLiveAudio } = require('./services/runLiveAudio')
 const { URL } = require('bare-url')
 const { processJsonRequest, formatZodError } = require('./utils/helper')
@@ -103,12 +104,22 @@ const handleRequest = async (req, res) => {
   try {
     if (pathname === '/' && method === HTTP_METHODS.GET) {
       return res.end(JSON.stringify({
-        message: 'Whisper Addon Benchmark Server is running'
+        message: 'ASR GGML Benchmark Server is running'
       }))
     }
     if (pathname === '/run' && method === HTTP_METHODS.POST) {
-      const result = await runAddon(body)
-      logger.info(`Completed run request for ${result.outputs.length} inputs`)
+      // The body carries a required `engine` discriminator ("whisper" |
+      // "parakeet"); each service re-validates its own branch of the union.
+      const engine = body?.engine
+      let result
+      if (engine === 'whisper') {
+        result = await runWhisper(body)
+      } else if (engine === 'parakeet') {
+        result = await runParakeet(body)
+      } else {
+        throw new ApiError(400, ERRORS.INVALID_ENGINE)
+      }
+      logger.info(`Completed ${engine} run request for ${result.outputs.length} inputs`)
       return res.end(JSON.stringify({
         data: result
       }))

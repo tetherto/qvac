@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const TranscriptionWhispercpp = require('../index.js')
+const ASRGgml = require('../index.js')
 
 // Usage: node examples/example.reload.js [audioPath] [modelPath]
 // Demonstrates reloading the model with different configurations
@@ -34,16 +34,17 @@ async function main() {
   console.log(`Audio: ${audioFilePath}`)
   console.log(`Model: ${modelPath}\n`)
 
-  // Constructor arguments for TranscriptionWhispercpp
+  // Constructor arguments for ASRGgml
   const constructorArgs = {
     files: {
       model: modelPath
     },
-    opts: { stats: true }
+    enableStats: true
   }
 
   // Initial configuration with English language
   const config = {
+    engine: 'whisper',
     whisperConfig: {
       audio_format: 's16le',
       vad_model_path: path.join(modelsDir, 'ggml-silero-v5.1.2.bin'),
@@ -60,11 +61,11 @@ async function main() {
     }
   }
 
-  const model = new TranscriptionWhispercpp(constructorArgs, config)
+  const model = new ASRGgml({ ...constructorArgs, config })
 
   // Load the model
   console.log('📦 Loading model...')
-  await model._load()
+  await model.load()
   console.log('✅ Model loaded successfully\n')
 
   // First transcription with English

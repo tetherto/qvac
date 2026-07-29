@@ -71,6 +71,7 @@ class WhisperClient:
         resp = self.client.post(
             self.url,
             json={
+                "engine": "whisper",
                 "inputs": batch,
                 "whisper": {
                     "lib": self.lib,

@@ -4,10 +4,11 @@ Drop additional Parakeet RTF benchmark JSON files in this directory when you nee
 to include supported GPU backends that are not available on CI.
 
 The preferred input is the same JSON artifact shape emitted by
-`test/benchmark/rtf-benchmark.test.js`, for example:
+`test/benchmark/parakeet-rtf-benchmark.test.js`, for example:
 
 ```json
 {
+  "engine": "parakeet",
   "platform": "linux-x64",
   "model": {
     "type": "tdt"
@@ -54,14 +55,18 @@ usage for the model/platform/quantization under test:
 Rows without a `memory` block render as `n/a` in the aggregated report, so older
 artifacts remain valid.
 
+The top-level `engine` field is optional: when absent the aggregator resolves
+the engine from the report shape (`model.type` present ⇒ parakeet), so
+pre-merge artifacts stay valid without edits.
+
 File naming convention:
 
 - `rtf-benchmark-<platform>-<model>-<backend>.json`
 
 These files are picked up automatically by:
 
-- `scripts/perf-report/aggregate-parakeet-rtf.js`
-- `.github/workflows/benchmark-performance-transcription-parakeet.yml`
+- `scripts/perf-report/aggregate-asr-ggml-rtf.js`
+- `.github/workflows/benchmark-performance-asr-ggml.yml`
 
 Use this directory for results such as:
 

@@ -4,12 +4,12 @@
 # into `./models/nemo/`. The ggml backend takes `.gguf` files;
 # convert the staged `.nemo` archives with
 # `./scripts/convert-nemo.sh` afterwards (or run
-# `npm run setup-models` to do both in one go).
+# `npm run setup-models:parakeet` to do both in one go).
 #
 # Idempotent: skips files already present on disk.
 #
 # Usage:
-#   ./scripts/download-models.sh [flags]
+#   ./scripts/parakeet-download-models.sh [flags]
 #
 # Flags:
 #   --type, -t <ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all>
@@ -19,9 +19,9 @@
 #   --help, -h                                Show this help
 #
 # Examples:
-#   ./scripts/download-models.sh                   # all four .nemo files
-#   ./scripts/download-models.sh -t tdt            # just TDT
-#   ./scripts/download-models.sh -t eou -o /tmp/m  # EOU into a custom dir
+#   ./scripts/parakeet-download-models.sh                   # all four .nemo files
+#   ./scripts/parakeet-download-models.sh -t tdt            # just TDT
+#   ./scripts/parakeet-download-models.sh -t eou -o /tmp/m  # EOU into a custom dir
 
 set -euo pipefail
 

@@ -1,26 +1,29 @@
-# Whisper Addon Benchmark Server
+# ASR GGML Benchmark Server
 
-A JS server for benchmarking Whisper transcription addons, built with `bare` runtime.
+A JS server for benchmarking the `@qvac/asr-ggml` addon (Whisper + NVIDIA
+Parakeet engines), built with the `bare` runtime.
 
 ## Features
 
 - HTTP server using `bare-http1`
-- Input validation using Zod
+- Input validation using Zod (engine-discriminated union)
 - Comprehensive error handling and logging
-- Support for Whisper transcription addons
+- One `/run` endpoint serving both engines, selected by the required
+  top-level `engine` key
 - Benchmarking capabilities for model performance
 
 ## Prerequisites
 
 - `bare` runtime
-- Whisper transcription addons
+- The `@qvac/asr-ggml` addon (installed from npm or `npm install ../../`
+  against a local prebuild)
 
 ## Installation
 
 ```bash
 # Clone the repository
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/transcription-whispercpp/benchmarks/server
+cd qvac/packages/asr-ggml/benchmarks/server
 
 # Install dependencies
 npm install
@@ -34,7 +37,7 @@ Start the server:
 npm start
 ```
 
-The server will start and listen for incoming requests.
+The server will start and listen on port 8080 (override with `PORT`).
 
 ### API Endpoints
 
@@ -46,58 +49,90 @@ Response:
 
 ```json
 {
-  "message": "Whisper Addon Benchmark Server is running"
+  "message": "ASR GGML Benchmark Server is running"
 }
 ```
 
 #### POST /run
 
-Run inference with the Whisper model.
+Run inference. The body must carry `engine: "whisper" | "parakeet"`; the
+rest of the payload is engine-specific.
 
-Sample request body:
+Whisper request body:
 
 ```json
 {
+  "engine": "whisper",
   "inputs": ["some/path/to/audio.raw", "some/path/to/audio2.raw"],
   "whisper": {
-    "lib": "@qvac/transcription-whispercpp",
-    "version": "0.1.7"
+    "lib": "@qvac/asr-ggml",
+    "version": "0.1.0"
   },
   "config": {
-    "path": "./path/to/ggml-tiny.bin",
+    "path": "./models/ggml-tiny.bin",
     "whisperConfig": {
-      "mode": "batch",
-      "output_format": "plaintext",
-      "min_seconds": 0,
-      "max_seconds": 2,
-      "vad": false,
-      "vad_model_path": "./path/to/ggml-silero-v5.1.2.bin",
-      "language": ""
+      "vad_model_path": "./models/ggml-silero-v5.1.2.bin",
+      "language": "",
+      "audio_format": "f32le"
     },
-    "sampleRate": 16000
-  },
-  "opts": {}
-}
-```
-
-Sample response body:
-
-```json
-{
-  "outputs": ["HELLO", "WORLD"],
-  "version": "1.0.0",
-  "time": {
-    "loadModelMs": 5500.68625,
-    "runMs": 864.597875
+    "sampleRate": 16000,
+    "streaming": false,
+    "streamingChunkSize": 64000
   }
 }
 ```
+
+Parakeet request body (`config.path` is a single `.gguf` checkpoint; the
+model type is auto-detected from the GGUF metadata):
+
+```json
+{
+  "engine": "parakeet",
+  "inputs": ["some/path/to/audio.raw"],
+  "parakeet": {
+    "lib": "@qvac/asr-ggml"
+  },
+  "config": {
+    "path": "./models/parakeet-tdt-0.6b-v3.f16.gguf",
+    "parakeetConfig": {
+      "modelType": "tdt",
+      "maxThreads": 4,
+      "useGPU": false,
+      "timestampsEnabled": true
+    },
+    "sampleRate": 16000,
+    "streaming": false,
+    "streamingChunkSize": 64000
+  }
+}
+```
+
+Sample response body (`whisperVersion` / `parakeetVersion` mirrors the
+engine that ran):
+
+```json
+{
+  "data": {
+    "outputs": ["HELLO", "WORLD"],
+    "whisperVersion": "0.1.0",
+    "time": {
+      "loadModelMs": 5500.68625,
+      "runMs": 864.597875
+    }
+  }
+}
+```
+
+#### POST /live
+
+Whisper-only endpoint that accepts base64 audio for interactive
+live-transcription experiments (see `src/services/runLiveAudio.js`).
 
 ### Error Handling
 
 The server provides detailed error messages for various scenarios:
 
-- Validation errors (400 Bad Request)
+- Validation errors / missing `engine` key (400 Bad Request)
 - Route not found (404 Not Found)
 - Server errors (500 Internal Server Error)
 

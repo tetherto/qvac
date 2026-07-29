@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict'
 
-// Stage the transcription-parakeet integration test GGUFs declared in
-// test/integration/models.manifest.json into ./models/ by copying each object
+// Stage the parakeet-engine integration test GGUFs declared in
+// test/integration/parakeet-models.manifest.json into ./models/ by copying each object
 // from the QVAC S3 model registry (`aws s3 cp s3://$MODEL_S3_BUCKET/<s3Path>`).
 //
 // Why this exists:
@@ -33,7 +33,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'models.manifest.json')
+const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'parakeet-models.manifest.json')
 const DEFAULT_OUT_DIR = resolve(__dirname, '..', 'models')
 
 function parseArgs (argv) {

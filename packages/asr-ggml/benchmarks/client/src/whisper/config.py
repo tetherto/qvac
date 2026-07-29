@@ -116,7 +116,7 @@ class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig, description="Model configuration")
 
     @classmethod
-    def from_yaml(cls, path: str = "config/config.yaml") -> "Config":
+    def from_yaml(cls, path: str = "config/config-whisper.yaml") -> "Config":
         with open(path, "r", encoding="utf-8") as f:
             return cls(**yaml.safe_load(f))
     

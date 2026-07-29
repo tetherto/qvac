@@ -2,6 +2,12 @@
 
 This summary consolidates benchmarking results across all quantizations and speaker groups.
 
+The rows below are **whisper-engine** runs recorded before the whisper +
+parakeet merge; the `Model` column names the npm package that produced them
+(`@qvac/transcription-whispercpp`, now `@qvac/asr-ggml` with
+`engine: 'whisper'`) and is kept verbatim so the measurements stay
+attributable. Add an `Engine` column when the first parakeet rows land.
+
 Original Model: [Whisper-Tiny](https://huggingface.co/openai/whisper-tiny)
 
 | Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |

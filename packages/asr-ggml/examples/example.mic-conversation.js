@@ -5,7 +5,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
 const { spawn, spawnSync } = require('bare-subprocess')
-const TranscriptionWhispercpp = require('../index.js')
+const ASRGgml = require('../index.js')
 
 const SAMPLE_RATE = 16000
 const DEFAULT_DURATION_SECONDS = 30
@@ -95,14 +95,13 @@ async function main() {
   console.log(`Duration:  ${durationSeconds === 0 ? 'until Ctrl+C' : `${durationSeconds}s`}`)
   console.log('\nSpeak, then pause to see end-of-turn events.\n')
 
-  const model = new TranscriptionWhispercpp(
-    {
-      files: {
-        model: modelPath,
-        vadModel: vadModelPath
-      }
+  const model = new ASRGgml({
+    files: {
+      model: modelPath,
+      vadModel: vadModelPath
     },
-    {
+    config: {
+      engine: 'whisper',
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',
@@ -119,9 +118,9 @@ async function main() {
       },
       vadModelPath
     }
-  )
+  })
 
-  await model._load()
+  await model.load()
 
   const ffmpeg = startMicStream()
   let response
@@ -153,7 +152,7 @@ async function main() {
 
     response.onUpdate((data) => {
       if (data?.type === 'vad') {
-        console.log(`[vad] speaking=${data.speaking} probability=${data.probability}`)
+        console.log(`[vad] speaking=${data.speaking} score=${data.score}`)
         return
       }
       if (data?.type === 'endOfTurn') {

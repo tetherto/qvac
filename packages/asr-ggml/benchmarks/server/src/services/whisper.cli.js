@@ -1,6 +1,6 @@
 'use strict'
 
-const { InferenceArgsSchema } = require('../validation')
+const { WhisperInferenceArgsSchema } = require('../validation')
 const { spawn } = require('bare-subprocess')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
@@ -96,8 +96,8 @@ const runWhisperCppCli = async (audioFilePath, modelPath) => {
   })
 }
 
-const runAddon = async (payload) => {
-  const { inputs, config } = InferenceArgsSchema.parse(payload)
+const runWhisper = async (payload) => {
+  const { inputs, config } = WhisperInferenceArgsSchema.parse(payload)
 
   logger.info(`Running whisper.cpp CLI with ${inputs.length} inputs`)
 
@@ -130,5 +130,5 @@ const runAddon = async (payload) => {
 }
 
 module.exports = {
-  runAddon
+  runWhisper
 }

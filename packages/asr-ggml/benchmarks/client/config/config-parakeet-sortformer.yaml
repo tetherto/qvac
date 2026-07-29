@@ -1,8 +1,9 @@
+engine: "parakeet"
 server:
   url: "http://localhost:8080/run"
   timeout: 180
   batch_size: 10
-  lib: "@qvac/transcription-parakeet"
+  lib: "@qvac/asr-ggml"
 dataset:
   dataset_type: "librispeech"
   speaker_group: "clean"
@@ -13,7 +14,7 @@ wer:
 cer:
   enabled: false
 model:
-  path: "./models/sortformer-4spk-v2-onnx"
+  path: "./models/sortformer-4spk-v1.f16.gguf"
   sample_rate: 16000
   audio_format: "s16le"
   model_type: "sortformer"

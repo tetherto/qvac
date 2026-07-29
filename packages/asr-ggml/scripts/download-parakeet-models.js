@@ -79,7 +79,7 @@ function printUsage () {
 
 Download Parakeet GGUFs from the QVAC model registry into ./models/.
 Runs alongside (not instead of) the .nemo -> .gguf conversion pipeline
-exposed via "npm run setup-models".
+exposed via "npm run setup-models:parakeet".
 
 Flags:
   --type, -t   ${ALL_TYPES.join('|')}|all   (default: all)

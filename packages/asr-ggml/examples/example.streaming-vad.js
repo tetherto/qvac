@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const TranscriptionWhispercpp = require('../index.js')
+const ASRGgml = require('../index.js')
 const binding = require('../binding.js')
 
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
@@ -52,14 +52,13 @@ async function main() {
   console.log(`VAD Model: ${vadModelPath}`)
   console.log(`Audio:     ${audioFilePath}\n`)
 
-  const model = new TranscriptionWhispercpp(
-    {
-      files: {
-        model: modelPath,
-        vadModel: vadModelPath
-      }
+  const model = new ASRGgml({
+    files: {
+      model: modelPath,
+      vadModel: vadModelPath
     },
-    {
+    config: {
+      engine: 'whisper',
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',
@@ -76,9 +75,9 @@ async function main() {
       },
       vadModelPath
     }
-  )
+  })
 
-  await model._load()
+  await model.load()
 
   const SAMPLE_RATE = 16000
   const BYTES_PER_SAMPLE = 2

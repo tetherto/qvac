@@ -17,7 +17,7 @@ class TestServerConfig:
             url="http://localhost:8080/run",
             timeout=60,
             batch_size=10,
-            lib="@qvac/transcription-parakeet",
+            lib="@qvac/asr-ggml",
             version="0.1.0"
         )
         assert str(config.url) == "http://localhost:8080/run"
@@ -30,7 +30,7 @@ class TestServerConfig:
                 url="http://localhost:8080/run",
                 timeout=0,
                 batch_size=10,
-                lib="@qvac/transcription-parakeet"
+                lib="@qvac/asr-ggml"
             )
 
 

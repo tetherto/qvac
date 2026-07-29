@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "qvac-transcription-whispercpp-benchmark-client"
-version = "0.0.1"
-description = "Benchmark client for Whisper transcription addons"
+name = "qvac-asr-ggml-benchmark-client"
+version = "0.1.0"
+description = "Benchmark client for the asr-ggml addon (Whisper + Parakeet engines)"
 authors = ["Tether"]
 license = "Apache-2.0"
 readme = "README.md"

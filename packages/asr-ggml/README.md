@@ -1,345 +1,48 @@
-# transcription-whispercpp
+# @qvac/asr-ggml
 
-This library simplifies running inference with the Whisper transcription model within QVAC runtime applications. It provides an easy interface to load, execute, and manage Whisper inference instances from local model files.
+Multi-engine automatic speech recognition for QVAC runtime applications on the
+[Bare](#glossary) runtime. One npm package and one native prebuild serve two
+ggml-based ASR engines behind a single class, `ASRGgml`:
 
-**Note: This library now uses whisper.cpp for improved performance and compatibility. The previous MLC-based implementation has been replaced.**
+| Engine | Native library | Good for |
+| --- | --- | --- |
+| **Whisper** | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Multilingual offline transcription, translation, Silero-VAD-segmented live capture |
+| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
+
+This package replaces `@qvac/transcription-whispercpp` and
+`@qvac/transcription-parakeet`. See [CHANGELOG.md](CHANGELOG.md) for the
+breaking changes the merge introduced.
 
 ## Table of Contents
 
+- [Supported Engines and Models](#supported-engines-and-models)
 - [Supported Platforms](#supported-platforms)
 - [Installation](#installation)
+- [Quickstart](#quickstart)
+  - [Whisper — batch `run()`](#whisper--batch-run)
+  - [Whisper — VAD streaming `runStreaming()`](#whisper--vad-streaming-runstreaming)
+  - [Parakeet — batch `run()`](#parakeet--batch-run)
+  - [Parakeet — duplex streaming `runStreaming()`](#parakeet--duplex-streaming-runstreaming)
+- [Engine Selection](#engine-selection)
+- [API Surface](#api-surface)
+- [Configuration Reference](#configuration-reference)
+- [Audio Input](#audio-input)
+- [Backends and GPU Acceleration](#backends-and-gpu-acceleration)
+- [Staging Models](#staging-models)
+- [Error Codes](#error-codes)
 - [Development](#development)
-- [Usage](#usage)
-  - [1. Provide Model Files](#1-provide-model-files)
-  - [2. Configure Transcription Parameters](#2-configure-transcription-parameters)
-  - [3. Define Model Files Configuration](#3-define-model-files-configuration)
-  - [4. Create Model Instance](#4-create-model-instance)
-  - [5. Load Model](#5-load-model)
-  - [6. Run Transcription](#6-run-transcription)
-  - [7. Release Resources](#7-release-resources)
-- [Quickstart example](#quickstart-example)
-- [Other examples](#other-examples)
-- [Resources](#resources)
+- [Benchmarking](#benchmarking)
+- [Examples](#examples)
+- [Documentation](#documentation)
+- [Glossary](#glossary)
 - [License](#license)
 
-## Supported Platforms
+## Supported Engines and Models
 
-| Platform | Architecture | Min Version | Status | GPU Support |
-|----------|-------------|-------------|--------|-------------|
-| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
-| iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
-| Android | arm64 | 12+ | ✅ Tier 1 | Vulkan |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+### Whisper (`engine: 'whisper'`)
 
-**Dependencies:**
-- qvac-lib-inference-addon-cpp: C++ addon framework (vcpkg port; see `vcpkg.json` for the pinned version)
-- whisper-cpp: inference engine (vcpkg port; see `vcpkg.json` for the pinned version)
-- Bare Runtime: JavaScript runtime (see `package.json` `engines.bare` for the supported version)
-- Linux requires Clang/LLVM 22 with libc++
-
-## Installation
-
-### Prerequisites
-
-Make sure [Bare](#glossary) Runtime is installed:
-```bash
-npm install -g bare bare-make
-```
-
-Note : Make sure the Bare version is `>= 1.19.0`. Check this using :
-
-```bash
-bare -v
-```
-
-### Installing the Package
-
-Install the latest development version (adjust package name based on desired model/quantization):
-```bash
-npm install @qvac/transcription-whispercpp@latest
-```
-
-## Development
-
-### Building the AddOn Locally
-
-For local development, you'll need to build the native addon that interfaces with the Whisper model. Follow these steps:
-
-### Prerequisites
-
-First, make sure you have the prerequisites installed as described in the [Installation](#installation) section.
-
-#### System Requirements
-
-**Supported Platforms:**
-- **Linux** (x64, ARM64)
-- **macOS** (x64, ARM64)
-- **Windows** (x64)
-
-#### Required Tools
-
-**All Platforms:**
-- **CMake** (>= 3.25)
-- **Git** with submodule support
-- **C++ Compiler** with C++20 support
-  - Linux: GCC 9+ or Clang 10+
-  - macOS: Xcode 12+ (provides Clang 12+)
-  - Windows: Visual Studio 2019+ or MinGW-w64
-
-#### vcpkg Setup
-
-This project uses [vcpkg](https://vcpkg.io/) for C++ dependency management. You need to install and configure vcpkg before building:
-
-**1. Install vcpkg:**
-
-```bash
-# Clone vcpkg
-git clone https://github.com/Microsoft/vcpkg.git
-cd vcpkg
-
-# Bootstrap vcpkg
-# On Linux/macOS:
-./bootstrap-vcpkg.sh
-# On Windows:
-.\bootstrap-vcpkg.bat
-```
-
-**2. Set Environment Variable:**
-
-```bash
-# Linux/macOS (add to your shell profile):
-export VCPKG_ROOT=/path/to/vcpkg
-
-# Windows (PowerShell):
-$env:VCPKG_ROOT = "C:\path\to\vcpkg"
-# Or set permanently via System Properties > Environment Variables
-```
-
-**3. Integrate vcpkg (optional but recommended):**
-
-```bash
-# This makes vcpkg available to all CMake projects
-./vcpkg integrate install
-```
-
-#### Platform-Specific Setup
-
-**Linux:**
-```bash
-# Ubuntu/Debian — includes Clang and libc++ required by the native addon
-sudo apt update
-sudo apt install clang libc++-dev libc++abi-dev build-essential cmake git pkg-config
-
-# CentOS/RHEL/Fedora
-sudo yum groupinstall "Development Tools"
-sudo yum install cmake git pkgconfig clang
-# or for newer versions:
-sudo dnf groupinstall "Development Tools"
-sudo dnf install cmake git pkgconfig clang
-```
-
-**macOS:**
-```bash
-# Install Xcode Command Line Tools
-xcode-select --install
-
-# Using Homebrew (recommended)
-brew install cmake git
-
-# Using MacPorts
-sudo port install cmake git
-```
-
-**Windows:**
-- Install [Visual Studio 2019+](https://visualstudio.microsoft.com/) with C++ development tools
-- Or install [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019)
-- Install [CMake](https://cmake.org/download/) (3.25+)
-- Install [Git for Windows](https://git-scm.com/download/win)
-
-#### GPU Acceleration (Optional)
-
-**Metal (macOS):**
-- Automatically available on macOS 10.13+ with Metal-capable hardware
-- No additional setup required
-
-**Vulkan (Linux/Windows):**
-- Install Vulkan SDK from [LunarG](https://vulkan.lunarg.com/)
-- Ensure your GPU drivers support Vulkan 1.1+
-
-**Linux Vulkan Setup:**
-```bash
-# Ubuntu/Debian
-sudo apt install vulkan-tools libvulkan-dev vulkan-utility-libraries-dev spirv-tools
-
-# CentOS/RHEL/Fedora
-sudo yum install vulkan-tools vulkan-devel vulkan-validation-layers-devel spirv-tools
-```
-
-**Windows Vulkan Setup:**
-- Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows)
-- Ensure your graphics drivers are up to date
-
-#### Clone and Setup
-
-```bash
-git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/transcription-whispercpp
-
-# Initialize submodules (required for native dependencies)
-git submodule update --init --recursive
-
-# Install dependencies
-npm install
-```
-
-#### Build the Native AddOn
-
-```bash
-# Build the native addon
-npm run build
-```
-
-This command runs the complete build sequence:
-1. `bare-make generate` - Generates build configuration
-2. `bare-make build` - Compiles the native C++ addon
-3. `bare-make install` - Installs the built addon
-
-#### GPU acceleration
-
-GPU backends are selected automatically per platform via `vcpkg.json` features and the per-platform `whisper-cpp` feature deps:
-
-- **Linux / Windows** — Vulkan (requires the [Vulkan SDK](#gpu-acceleration-optional) on the host)
-- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped alongside the addon prebuild
-- **macOS / iOS** — Metal (statically linked)
-
-No `bare-make generate` flag is required; just `npm run build`. CI prebuilds for every platform include the matching GPU backends.
-
-#### Running Tests
-
-After building, you can run the test suite:
-```bash
-# Run the JS test suite: unit + several integration suites (does not run lint)
-npm test
-
-# Or run tests individually
-npm run test:unit
-npm run test:integration
-
-# Lint is separate from `npm test`
-npm run lint
-```
-
-The chunked reload flow and the live streaming flow have dedicated integration scripts — `npm run test:integration:chunking` (`test/integration/audio-ctx-chunking.test.js`) and `npm run test:integration:live-stream-simultion` (`test/integration/live-stream-simulation.test.js`) — so running those is the quickest way to verify those end-to-end scenarios after changes. (`npm run test:integration` runs `test/integration/addon.test.js`.)
-
-#### Development Workflow
-
-For ongoing development, the typical workflow is:
-```bash
-npm install && npm run build && npm run test:integration
-```
-
-## Usage
-
-The library provides a straightforward workflow for audio transcription:
-
-> **Heads up:** the package is intended to be used through `index.js`’s `TranscriptionWhispercpp` class. Advanced sections below document the native addon for completeness, but you rarely need them when integrating the published npm package.
-
-### 1. Provide Model Files
-
-The addon loads model weights directly from local file paths. Make sure the whisper model (and optional VAD model) already exist on disk — either staged manually, downloaded from HuggingFace (see [Downloading Models](#downloading-models)), or fetched through the [QVAC model registry](https://github.com/tetherto/qvac/tree/main/packages/registry-server).
-
-You pass the paths via the `files` field of the constructor arguments:
-
-```javascript
-const constructorArgs = {
-  files: {
-    model: './models/ggml-tiny.bin',           // whisper model weights
-    vadModel: './models/ggml-silero-v5.1.2.bin' // optional VAD model
-  }
-}
-```
-
-### 2. Configure Transcription Parameters
-
-Most users interact with the addon exclusively through `index.js`. From that entrypoint we surface a small, safe subset of options; everything else keeps whisper.cpp defaults.
-
-#### What index.js accepts
-
-| Section | Key | Description |
-| --- | --- | --- |
-| `contextParams` | `model` | Absolute or relative path to the `.bin` whisper model |
-| | | *(all other context keys keep their defaults because changing them forces a full reload, see below)* |
-| `whisperConfig` | *(whitelisted `whisper_full_params` keys)* | A curated whitelist of decoder/VAD keys is accepted (see `configChecker.js`); unknown keys throw. We surface convenience defaults in `index.js`—see [Advanced configuration](#advanced-configuration). |
-| | `backendsDir` | Root directory for dynamically-loaded ggml backend `.so` files (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the package's `prebuilds/` folder; the native addon appends `<bare-target>/<module-name>` before scanning. Pass an explicit path when prebuilds live elsewhere — e.g. Android `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the APK. No-op on Apple (statically linked). |
-| `miscConfig` | `caption_enabled` | Formats segments with `<\|start\|>..<\|end\|>` markers |
-
-#### GPU acceleration is opt-in
-
-`use_gpu` defaults to `false`. To enable Vulkan (Linux/Windows/Android) or Metal (macOS/iOS) acceleration, set `use_gpu: true` explicitly in `contextParams`:
-
-```javascript
-const config = {
-  contextParams: {
-    model: './models/ggml-tiny.bin',
-    use_gpu: true,   // opt-in to GPU
-    gpu_device: 0
-  }
-}
-```
-
-#### Context keys that force a full reload
-
-Internally `WhisperModel::configContextIsChanged()` watches `model`, `use_gpu`, `flash_attn` and `gpu_device`. If any of these change we must:
-
-1. Call `unload()` (destroys the current `whisper_context` and `whisper_state`).
-2. Recreate the context via `whisper_init_from_file_with_params`.
-3. Warm up the model again before the next job.
-
-Depending on model size this can take several seconds. Everything else in `whisperConfig`—language, temperatures, VAD settings, etc.—is applied in place and does **not** trigger a reload. If you are seeing unexpected pauses, double-check that you are not mutating these four context keys between jobs.
-
-#### Advanced configuration
-
-Need more than the handful of options surfaced by default? `whisperConfig` accepts a curated whitelist of `whisper_full_params` keys (validated in `configChecker.js`); keys outside that list are rejected. For the meaning of each accepted flag, refer to:
-
-- The official parameter reference: [`whisper_full_params`](https://github.com/ggerganov/whisper.cpp/blob/master/examples/stream/stream.cpp#L30-L96)
-- Our longer examples for concrete shapes:
-  - `examples/example.audio-ctx-chunking.js` (shows `offset_ms`, `duration_ms`, `audio_ctx`, and reload loops)
-  - `examples/example.live-transcription.js` (shows streaming chunks into a single job)
-
-Those scripts stay in sync with the codebase and are the best place to copy from when you need the raw addon surface.
-
-### 3. Configuration Example
-
-Quick JS-level configuration (what you typically pass to `new TranscriptionWhispercpp(...)`):
-
-```javascript
-const config = {
-  contextParams: {
-    model: './models/ggml-tiny.bin'
-  },
-  whisperConfig: {
-    language: 'en',
-    duration_ms: 0,
-    temperature: 0.0,
-    suppress_nst: true,
-    n_threads: 0,
-    vad_model_path: './models/ggml-silero-v5.1.2.bin',
-    vad_params: {
-      threshold: 0.6,
-      min_speech_duration_ms: 250,
-      min_silence_duration_ms: 200
-    }
-  },
-  miscConfig: {
-    caption_enabled: false
-  }
-}
-```
-
-Between this minimal configuration and the example scripts you should have everything needed, whether you are wiring the addon by hand or just instantiating `TranscriptionWhispercpp`.
-
-**Available Whisper Models** (from [HuggingFace](https://huggingface.co/ggerganov/whisper.cpp)):
+Legacy single-file GGML `.bin` checkpoints from
+[ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp):
 
 | Model | Size | Description |
 |-------|------|-------------|
@@ -350,226 +53,630 @@ Between this minimal configuration and the example scripts you should have every
 | `ggml-large-v3.bin` | 3.1 GB | Best accuracy |
 | `ggml-large-v3-turbo.bin` | 1.6 GB | Best accuracy, faster |
 
-Quantized variants (`q8_0`, `q5_1`, `q5_0`) are also available for all sizes.
+Quantized variants (`q8_0`, `q5_1`, `q5_0`) exist for all sizes. Whisper
+covers ~99 languages plus translation-to-English, and the fine-tuned
+per-language checkpoints listed in [NOTICE](NOTICE) also load.
 
-**VAD Model** (from [HuggingFace](https://huggingface.co/ggml-org/whisper-vad)):
+VAD model (required for `runStreaming()`), from
+[ggml-org/whisper-vad](https://huggingface.co/ggml-org/whisper-vad):
 
 | Model | Size | Description |
 |-------|------|-------------|
-| `ggml-silero-v5.1.2.bin` | 885 KB | Silero VAD for voice activity detection |
+| `ggml-silero-v5.1.2.bin` | 885 KB | Silero VAD for voice-activity detection |
 
-#### Downloading Models
+### Parakeet (`engine: 'parakeet'`)
 
-Use the provided script to download models from HuggingFace:
+Single-file `.gguf` checkpoints. **The model type is auto-detected from the
+GGUF metadata** — there is no `modelType` to pass.
+
+| Variant | Languages | Decoder | ~Size (q8_0) | Notes |
+|---------|-----------|---------|-------------:|-------|
+| **CTC** (`parakeet-ctc-0.6b`) | English | argmax CTC | ~700 MiB | Fast, no punctuation/capitalization |
+| **TDT** (`parakeet-tdt-0.6b-v3`) | ~25 | RNN-T greedy + duration | ~715 MiB | Recommended default; PnC + language auto-detect |
+| **EOU** (`parakeet-eou-120m-v1`) | English | RNN-T greedy + `<EOU>` | ~132 MiB | Streaming-trained; native end-of-turn token |
+| **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
+| **Sortformer v2.1 + AOSC** (`diar_streaming_sortformer_4spk-v2.1`) | n/a | Diarization head + speaker cache | ~141 MiB | 4-speaker. Default for **streaming** diarization; AOSC anchors speaker slots across silence, auto-detected from GGUF metadata |
+
+Upstream `.nemo` checkpoints are NVIDIA's; see the
+[Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2)
+for the per-checkpoint NVIDIA Open Model License terms.
+
+## Supported Platforms
+
+| Platform | Architecture | Min Version | Status | GPU Support |
+|----------|-------------|-------------|--------|-------------|
+| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
+| iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
+| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+
+**Dependencies:**
+
+- `qvac-lib-inference-addon-cpp` — C++ addon framework (vcpkg port; version pinned in `vcpkg.json`)
+- `whisper-cpp` — provides both the whisper.cpp and parakeet-cpp engines (vcpkg port; version pinned in `vcpkg.json`)
+- Bare runtime — see `engines.bare` in `package.json`
+- Linux requires Clang/LLVM 22 with libc++
+
+## Installation
+
+Make sure the Bare runtime is installed:
 
 ```bash
-npm run download-models
+npm install -g bare bare-make
+bare -v   # must satisfy package.json engines.bare
 ```
 
-Or download manually with curl:
+Then:
 
 ```bash
-# Whisper model
-curl -L -o models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
-
-# VAD model
-curl -L -o models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
+npm install @qvac/asr-ggml
 ```
 
-### 4. Create Model Instance
+## Quickstart
 
-Import the specific Whisper model class based on the installed package and instantiate it:
+All four snippets assume:
 
 ```javascript
-const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
-
-const model = new TranscriptionWhispercpp(constructorArgs, config)
+const fs = require('bare-fs')
+const ASRGgml = require('@qvac/asr-ggml')
 ```
 
-Note : This import changes depending on the package installed.
+Audio must be **16 kHz mono**. See [Audio Input](#audio-input) for the accepted
+shapes.
 
-### 5. Load Model
-
-Load the model weights and initialize the inference engine:
-
-```javascript
-try {
-  await model.load()
-} catch (error) {
-  console.error('Failed to load model:', error)
-}
-```
-
-`load()` accepts two optional positional arguments (`load(closeLoader, reportProgress)`) that are kept only for forwarding compatibility — they are currently inert, so there is no load-progress reporting today. Model files must already exist on disk before calling `load()`.
-
-### 6. Run Transcription
-
-Pass an audio stream (e.g., from `bare-fs.createReadStream`) to the `run` method. Process the transcription results asynchronously.
-
-> The snippets below assume `const fs = require('bare-fs')`.
-
-There are two ways to receive transcription results:
-
-#### Option 1: Real-time Streaming with `onUpdate()`
-
-The `onUpdate()` callback receives each transcription segment **in real-time** as whisper.cpp generates them during processing. This is ideal for live transcription display or progressive updates.
+### Whisper — batch `run()`
 
 ```javascript
-try {
-  const audioStream = fs.createReadStream('path/to/your/audio.ogg', {
-    highWaterMark: 16000 // Adjust based on bitrate (e.g., 128000 / 8)
-  })
-
-  const response = await model.run(audioStream)
-
-  // Receive segments as they are transcribed (real-time streaming)
-  await response
-          .onUpdate(segment => {
-            console.log('New segment transcribed:', segment)
-            // Each segment arrives immediately after whisper.cpp processes it
-          })
-          .await() // Wait for transcription to complete
-
-  console.log('Transcription finished!')
-
-} catch (error) {
-  console.error('Transcription failed:', error)
-}
-```
-
-#### Option 2: Async iteration with `iterate()`
-
-The `iterate()` method returns an async generator that yields transcription segments **incrementally** as whisper.cpp produces them (it wakes immediately on each output/end/error event). Use it when you prefer a pull-based `for await` loop over the push-based `onUpdate()` callback.
-
-```javascript
-try {
-  const audioStream = fs.createReadStream('path/to/your/audio.ogg', {
-    highWaterMark: 16000
-  })
-
-  const response = await model.run(audioStream)
-
-  // Yields each segment incrementally as it is produced
-  for await (const transcriptionChunk of response.iterate()) {
-    console.log('Transcription chunk:', transcriptionChunk)
+const model = new ASRGgml({
+  files: { model: './models/ggml-tiny.bin' },
+  config: {
+    engine: 'whisper',
+    whisperConfig: {
+      language: 'en',
+      audio_format: 's16le'   // how raw Uint8Array bytes are decoded
+    }
   }
+})
 
-  console.log('Transcription finished!')
+await model.load()
 
-} catch (error) {
-  console.error('Transcription failed:', error)
-}
+const audioStream = fs.createReadStream('./audio.raw', { highWaterMark: 16000 })
+const response = await model.run(audioStream)
+
+// Push-based: segments arrive as whisper.cpp emits them.
+await response
+  .onUpdate((out) => {
+    for (const segment of Array.isArray(out) ? out : [out]) {
+      console.log(segment.start, '→', segment.end, segment.text)
+    }
+  })
+  .await()
+
+await model.destroy()
 ```
 
-**Key Differences:**
-- **`onUpdate(cb)`**: push-based — the callback fires for each segment as whisper.cpp's `new_segment_callback` emits it.
-- **`iterate()`**: pull-based — an async generator that yields each segment incrementally in a `for await` loop.
-
-#### Chunking long recordings with reload()
-
-[`examples/example.audio-ctx-chunking.js`](examples/example.audio-ctx-chunking.js) shows the production pattern: reuse a model instance, call `reload()` with `{ offset_ms, duration_ms, audio_ctx }` per chunk (first chunk uses `audio_ctx = 0`, subsequent ones clamp to ~1500), then run the full audio stream. The matching integration test (`test/integration/audio-ctx-chunking.test.js`) exercises exactly the same flow.
-
-#### Live streaming a single job
-
-[`examples/example.live-transcription.js`](examples/example.live-transcription.js) feeds tiny PCM buffers into a pushable `Readable`, keeps a single `model.run(...)` open, and relies on `onUpdate()` for incremental text. `test/integration/live-stream-simulation.test.js` covers both the streaming case and a segmented loop without any `reload()` calls.
-
-#### VAD-based live streaming with `runStreaming()`
-
-`runStreaming(audioStream, opts?)` is the public VAD-segmented streaming entrypoint (part of the public API since 0.6.0). It requires a VAD model (via `files.vadModel`, `config.vadModelPath`, or `whisperConfig.vad_model_path`) and accepts the same audio input types as `run()`. Voice-activity detection splits the incoming audio into utterances and transcribes each one as it completes:
+Or pull-based, with `iterate()` instead of `onUpdate()`:
 
 ```javascript
-const response = await model.runStreaming(audioStream)
-for await (const segment of response.iterate()) {
-  console.log(segment)
+const response = await model.run(audioStream)
+for await (const out of response.iterate()) {
+  for (const segment of Array.isArray(out) ? out : [out]) {
+    console.log(segment.text)
+  }
 }
 ```
 
-Passing conversation options surfaces extra events alongside transcript segments:
+### Whisper — VAD streaming `runStreaming()`
+
+Silero VAD splits the incoming audio into utterances and each one is
+transcribed as it completes. A VAD model is **required** — pass it as
+`files.vadModel`, `config.vadModelPath`, or
+`config.whisperConfig.vad_model_path`; a missing file throws
+`VAD_MODEL_NOT_FOUND` (6018) from the constructor, and a missing path throws
+`VAD_MODEL_REQUIRED` (6009) from `runStreaming()`.
+
+```javascript
+const model = new ASRGgml({
+  files: {
+    model: './models/ggml-tiny.bin',
+    vadModel: './models/ggml-silero-v5.1.2.bin'
+  },
+  config: { engine: 'whisper', whisperConfig: { language: 'en' } }
+})
+
+await model.load()
+
+const response = await model.runStreaming(micStream, {
+  emitVadEvents: true,      // adds { type: 'vad', speaking, score, source }
+  endOfTurnSilenceMs: 800   // adds { type: 'endOfTurn', source: 'vad-silence' }
+})
+
+for await (const out of response.iterate()) {
+  if (out.type === 'vad') console.log('speaking:', out.speaking)
+  else if (out.type === 'endOfTurn') console.log('--- turn ended ---')
+  else for (const s of Array.isArray(out) ? out : [out]) console.log(s.text)
+}
+```
+
+### Parakeet — batch `run()`
+
+```javascript
+const model = new ASRGgml({
+  files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
+  config: {
+    engine: 'parakeet',
+    parakeetConfig: { useGPU: true, maxThreads: 4 }
+  }
+})
+
+await model.load()
+
+const response = await model.run(float32Samples)   // Float32Array, 16 kHz mono
+const segments = []
+await response
+  .onUpdate((out) => {
+    for (const s of Array.isArray(out) ? out : [out]) {
+      // `toAppend` marks a segment that continues the previous one rather
+      // than replacing it.
+      if (s.text && s.toAppend) segments.push(s)
+    }
+  })
+  .await()
+
+console.log(segments.map((s) => s.text).join(''))
+await model.unload()
+```
+
+> **Buffer cap (`run()` only):** every chunk of one `run()` call is normalized
+> to Float32 and batched into a single native `process()` call, capped at
+> 500 MiB (≈2.7 h at 16 kHz mono). Exceeding it raises
+> `BUFFER_LIMIT_EXCEEDED`. For longer captures use `runStreaming()`, which
+> feeds the engine as audio arrives, or split into sequential `run()` calls.
+
+### Parakeet — duplex streaming `runStreaming()`
+
+`runStreaming()` opens one long-lived native session for the lifetime of the
+call and forwards each chunk as it arrives — no batching, no per-chunk session
+recreation. Speaker IDs stay stable across appends, and an EOU model's `<EOU>`
+boundaries surface both as `segment.isEndOfTurn` and as a synthesized
+`{ type: 'endOfTurn', source: 'model-eou' }` event.
+
+```javascript
+const model = new ASRGgml({
+  engine: 'parakeet',                                  // no config → alias form
+  files: { model: './models/parakeet-eou-120m-v1.q8_0.gguf' }
+})
+
+await model.load()
+
+const response = await model.runStreaming(micStream, { chunkMs: 480 })
+await response
+  .onUpdate((out) => {
+    if (out.type === 'endOfTurn') return console.log('--- turn ended ---')
+    for (const s of Array.isArray(out) ? out : [out]) process.stdout.write(s.text)
+  })
+  .await()
+```
+
+Only one streaming session may be open per instance; a concurrent `run()` or
+`runStreaming()` throws `STREAMING_SESSION_ACTIVE` (6020).
+
+## Engine Selection
+
+The engine is resolved **once, in the constructor**, from three sources in
+strict precedence order:
+
+1. **`config.engine`** — authoritative, and the recommended form. If `config`
+   is supplied at all, it must carry `engine`; a missing or unrecognized value
+   throws `INVALID_ENGINE` (6021).
+2. **`engine`** — a top-level convenience alias, used only when `config` is
+   omitted entirely. Unrecognized values throw `INVALID_ENGINE`.
+3. **Model-file sniffing** — last resort when neither is given. The first four
+   bytes of `files.model` are read: `GGUF` ⇒ parakeet, anything else ⇒ whisper.
+
+**Sniffing is a convenience for scripts, not an integration path.** It opens
+the model file synchronously inside the constructor, it cannot distinguish a
+GGUF whisper build from a GGUF parakeet build, and it throws `INVALID_ENGINE`
+if the file cannot be read at all. Library and SDK callers should always pass
+`config.engine` explicitly.
+
+`getEngineType()` reports the resolved engine; `ASRGgml.ENGINE_WHISPER` and
+`ASRGgml.ENGINE_PARAKEET` are available as statics.
+
+## API Surface
+
+Every verb has one signature and one meaning regardless of engine.
+
+| Member | Description |
+| --- | --- |
+| `new ASRGgml({ files, config?, engine?, enableStats?, logger?, exclusiveRun? })` | Resolves the engine, validates model files and the engine config vocabulary. Throws on any problem — nothing is deferred to `load()`. |
+| `load()` | Creates the native instance and activates the model. Calling it on a loaded instance unloads first. Throws `INSTANCE_DESTROYED` after `destroy()`. |
+| `run(audio)` | Batch transcription. Returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). |
+| `runStreaming(audio, opts?)` | Duplex/VAD-segmented streaming. Resolves once the native session is open; `opts` is the engine's streaming vocabulary. |
+| `reload(newConfig?)` | Applies an engine-scoped partial config in place where possible. |
+| `cancel(jobId?)` | Cancels the active job. The native verb takes no id; `jobId` is accepted for source compatibility only. |
+| `status()` | Native state string. |
+| `unload()` / `destroy()` | Release the model / retire the instance. |
+| `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
+| `getEngineType()` | `'whisper'` \| `'parakeet'`. |
+| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
+| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). Neither engine implements a correct pause/resume. |
+
+Constructor options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `files.model` | — | **Required.** Path to the `.bin` (whisper) or `.gguf` (parakeet) checkpoint. Must exist. |
+| `files.vadModel` | — | Whisper streaming only: path to the Silero VAD model. Must exist if given. |
+| `config` | — | Engine-scoped config; **must** carry `engine` when present. |
+| `engine` | — | Alias for `config.engine`, used when `config` is omitted. |
+| `enableStats` | `true` | Attach `RuntimeStats` to the job-end payload. |
+| `logger` | `null` | A `@qvac/logging` `LoggerInterface`. |
+| `exclusiveRun` | `true` | Serialize `run()` calls to completion. `runStreaming`/`reload`/`unload`/`destroy` release the slot on return. |
+
+`run()` / `runStreaming()` output payloads are:
+
+- bare `TranscriptionSegment[]` (or a single segment) for transcripts — there
+  is no `{ type: 'segment' }` wrapper;
+- `{ type: 'vad', speaking, score, source }` for voice-activity events;
+- `{ type: 'endOfTurn', source, silenceDurationMs? }` for turn boundaries.
+
+## Configuration Reference
+
+Configuration vocabularies are **engine-scoped** — there is no merged config
+namespace. A key belonging to one engine is rejected, not ignored, by the
+other, and unknown keys throw at construction time.
+
+### Whisper: `config.whisperConfig` / `contextParams` / `miscConfig`
+
+```javascript
+const config = {
+  engine: 'whisper',
+  contextParams: {
+    model: './models/ggml-tiny.bin',
+    use_gpu: true,      // opt-in; defaults to false
+    gpu_device: 0
+  },
+  whisperConfig: {
+    language: 'en',     // 'auto' for language detection
+    duration_ms: 0,
+    temperature: 0.0,
+    suppress_nst: true,
+    n_threads: 0,
+    audio_format: 's16le',
+    vad_model_path: './models/ggml-silero-v5.1.2.bin',
+    vad_params: {
+      threshold: 0.6,
+      min_speech_duration_ms: 250,
+      min_silence_duration_ms: 200
+    }
+  },
+  miscConfig: { caption_enabled: false }
+}
+```
+
+**The authoritative vocabulary is the whitelist in
+[`src/engines/whisper/configChecker.ts`](src/engines/whisper/configChecker.ts).**
+It accepts a curated subset of `whisper_full_params` (decoder strategy,
+thresholds, timestamps, VAD, prompts) plus the `vadParams` sub-object; any key
+outside the list throws from the constructor. `contextParams` accepts only
+`model`, `use_gpu`, `flash_attn`, `gpu_device`; `miscConfig` only
+`caption_enabled`, `seed`. For what each flag means see the upstream
+[`whisper_full_params` reference](https://github.com/ggerganov/whisper.cpp/blob/master/examples/stream/stream.cpp#L30-L96).
+
+Notes:
+
+- **GPU is opt-in.** `use_gpu` defaults to `false`; set it in `contextParams`.
+- **Four context keys force a full reload** — `model`, `use_gpu`,
+  `flash_attn`, `gpu_device`. Changing any of them destroys and rebuilds the
+  whisper context (seconds, depending on model size). Everything in
+  `whisperConfig` is applied in place.
+- `backendsDir` (in `whisperConfig`) overrides where dynamically-loaded ggml
+  backend libraries are found. See
+  [Backends and GPU Acceleration](#backends-and-gpu-acceleration).
+- `max_seconds` is a convenience that derives `duration_ms`.
+
+Whisper `runStreaming(audio, opts)` options:
 
 | Option | Description |
 |--------|-------------|
-| `emitVadEvents` / `conversationMode` | Emit `{ type: 'vad' }` state updates as speech starts and stops. |
+| `emitVadEvents` / `conversationMode` | Emit `{ type: 'vad' }` as speech starts and stops. |
 | `endOfTurnSilenceMs` | Emit `{ type: 'endOfTurn' }` after this much trailing silence. |
 | `vadRunIntervalMs` | How often the VAD is evaluated. |
 
-See [`examples/example.streaming-vad.js`](examples/example.streaming-vad.js) and [`examples/example.mic-conversation.js`](examples/example.mic-conversation.js).
-
-### 7. Release Resources
-
-Always unload the model when finished to free up memory and resources:
+### Parakeet: `config.parakeetConfig`
 
 ```javascript
-try {
-  await model.unload()
-} catch (error) {
-  console.error('Failed to unload model:', error)
+const config = {
+  engine: 'parakeet',
+  parakeetConfig: {
+    useGPU: true,
+    maxThreads: 4,
+    timestampsEnabled: true,
+    streaming: false     // true opens a session at load time
+  }
 }
 ```
 
-## Quickstart example
+**The authoritative vocabulary is `ParakeetConfig` in
+[`src/engines/parakeet/driver.ts`](src/engines/parakeet/driver.ts)** — every
+key is documented inline there, and any key outside it throws
+`INVALID_CONFIG` (24015) from the constructor. Groups:
 
-### 1. Clone the repo & Install the dependencies
+| Group | Keys |
+| --- | --- |
+| Compute | `maxThreads`, `useGPU`, `seed` |
+| Audio | `sampleRate` (16000), `channels` (1) |
+| Output | `captionEnabled`, `timestampsEnabled` |
+| Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
+| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Backends | `backendsDir`, `openclCacheDir` |
+
+The `streamingSpkCache*` / `streamingFifoLen` /
+`streamingChunk{Left,Right}ContextMs` defaults are the NeMo-port tuning
+parakeet-cpp ships — keep them unless you are A/B comparing AOSC against the
+v1 sliding-window path. There is no `modelType`: CTC / TDT / EOU / Sortformer,
+and Sortformer v1 vs v2.1+AOSC, are all detected from the GGUF metadata.
+
+Parakeet `runStreaming(audio, opts)` options are per-call overrides of the same
+knobs without the `streaming` prefix: `chunkMs`, `historyMs`, `leftContextMs`,
+`rightLookaheadMs`, `emitPartials`, `emitEnergyVad`, `spkCacheEnable`,
+`spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`,
+`spkCacheUpdatePeriod`.
+
+For a deep dive on Sortformer streaming, AOSC, and the `.nemo` → `.gguf`
+pipeline, see the heritage
+[`docs/PARAKEET-README.md`](docs/PARAKEET-README.md) (pre-merge API names).
+
+## Audio Input
+
+Both engines take **16 kHz mono** audio. `run()` and `runStreaming()` accept a
+stream, an iterable, a single chunk, or an array of chunks. A chunk's *class*
+decides how it is interpreted:
+
+| Chunk type | Interpretation |
+| --- | --- |
+| `Float32Array` | f32 samples in `[-1, 1]` |
+| `Int16Array` | s16 samples |
+| `Uint8Array` | raw bytes, decoded as `s16le` by default; whisper's `whisperConfig.audio_format: 'f32le'` switches the byte interpretation |
+
+A byte length that is not a whole number of samples raises
+`INVALID_AUDIO_INPUT` (6011). `audio_format` only ever describes raw
+`Uint8Array` bytes — it never reinterprets a typed array.
+
+## Backends and GPU Acceleration
+
+GPU backends are selected per platform via `vcpkg.json` features; no
+`bare-make generate` flag is needed:
+
+- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host)
+- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
+- **macOS / iOS** — Metal, statically linked
+
+Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
+parakeet needs `parakeetConfig.useGPU: true`.
+
+`getBackendInfo()` reports what actually ran — `backendName`, `backendId`
+(see the `BackendId` enum), `backendDevice`, `backendDescription`,
+`encoderBackend`, and `encoderOnCoreml` (Apple: whether the Neural Engine
+Core ML sidecar drove the encoder). Whisper additionally reports
+`gpuMemTotalMb` / `gpuMemFreeMb`.
+
+Two paths matter on mobile:
+
+- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
+  holding dynamically-loaded ggml backend libraries (Vulkan, OpenCL, per-arch
+  CPU variants). Defaults to the package's `prebuilds/`; the native addon
+  appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
+  when backend libraries ship elsewhere — e.g. Android's
+  `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.
+  No-op on Apple, where backends are statically linked.
+- **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
+  compiled program-binary cache. Android-only; pass the host app's cache
+  directory to avoid a cold `clBuildProgram` on every process start.
+
+## Staging Models
+
+The addon loads weights from local paths only — it never downloads. Stage
+files with the bundled scripts, from the
+[QVAC model registry](https://github.com/tetherto/qvac/tree/main/packages/registry-server),
+or by hand.
+
+**Whisper** (HuggingFace):
+
+```bash
+npm run download-models                 # interactive picker into ./models/
+```
+
+**Parakeet**, prebuilt GGUFs from the QVAC registry (fastest path):
+
+```bash
+npm run download-models:parakeet:registry              # all types
+npm run download-models:parakeet:registry -- -t tdt    # just TDT
+```
+
+**Parakeet**, converting NVIDIA `.nemo` yourself:
+
+```bash
+npm run setup-models:parakeet                  # venv + download + convert (all types, q8_0)
+npm run setup-models:parakeet -- -t tdt        # just TDT
+npm run setup-models:parakeet -- -t eou -q f16 # full-precision EOU
+```
+
+`setup-models:parakeet` chains `setup:venv` → `download-models:parakeet` →
+`convert-models:parakeet` and is idempotent. Each step is also flag-driven on
+its own (`scripts/setup-venv.sh`, `scripts/parakeet-download-models.sh`,
+`scripts/convert-nemo.sh` — all accept `--help`). The converter reads the
+`.nemo` archive directly and does **not** need the heavy `nemo_toolkit`
+package, but it does need `sentencepiece` to decode the tokenizer (without it
+transcripts come out as raw token IDs). Full requirements:
+`scripts/requirements.txt`.
+
+## Error Codes
+
+Thrown errors are `QvacErrorAddonASRGgml` instances (extending
+`QvacErrorBase`) carrying a numeric `.code`, so callers can match
+programmatically. `ERR_CODES` is exposed as `ASRGgml.ERR_CODES` and the class
+as `ASRGgml.Error`.
+
+The map spans **two ranges**, because no historical code was allowed to move:
+
+- **Shared verbs are canonical in the whisper `6001–7000` range** —
+  `FAILED_TO_LOAD_WEIGHTS` 6001 … `VAD_MODEL_NOT_FOUND` 6018, plus the codes
+  the merge added: `NOT_SUPPORTED` 6019, `STREAMING_SESSION_ACTIVE` 6020,
+  `INVALID_ENGINE` 6021.
+- **Parakeet-only names keep their historical `24001–25000` numbers** —
+  `MODEL_NOT_FOUND` 24009, `INVALID_AUDIO_FORMAT` 24010, `INVALID_CONFIG`
+  24015, `INSTANCE_DESTROYED` 24018, `JOB_CANCELLED` 24019. Shared verbs
+  raised *by the parakeet engine* also stay in `24xxx` (a parakeet append
+  failure is 24003, not 6003).
+
+Every number from both historical tables is registered, so pre-merge codes
+still resolve to a name and message. See
+[`src/lib/error.ts`](src/lib/error.ts) for the full table and
+[`docs/engines.md`](docs/engines.md#error-codes-across-engines) for the
+rationale.
+
+## Development
+
+### Prerequisites
+
+- **CMake** ≥ 3.25, **Git** with submodule support, a **C++20** compiler
+  - Linux: Clang/LLVM 22 with libc++ (`clang libc++-dev libc++abi-dev`)
+  - macOS: Xcode command-line tools
+  - Windows: Visual Studio 2019+ or Build Tools
+- **vcpkg** — clone it, run `bootstrap-vcpkg.sh`/`.bat`, and export
+  `VCPKG_ROOT=/path/to/vcpkg`
+- Optional GPU SDKs: [Vulkan SDK](https://vulkan.lunarg.com/) on
+  Linux/Windows (`vulkan-tools libvulkan-dev vulkan-utility-libraries-dev
+  spirv-tools` on Ubuntu/Debian); Metal needs nothing on macOS/iOS
+
+### Build
+
 ```bash
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/transcription-whispercpp
+cd qvac/packages/asr-ggml
+git submodule update --init --recursive
 npm install
+npm run build          # build:ts (TypeScript) + build:native (bare-make)
 ```
 
-### 2. Run the quickstart example inside `examples` folder
+`build:native` runs `bare-make generate` → `bare-make build` →
+`bare-make install`.
+
+### Test
+
 ```bash
-bare examples/quickstart.js
+npm test                              # unit + the main integration suites
+npm run test:unit
+npm run test:integration              # both engines
+npm run test:integration:whisper
+npm run test:integration:parakeet
+npm run test:cpp                      # native gtest suite
+npm run lint                          # separate from npm test
 ```
 
-### 3. Code Walkthrough
+Targeted suites worth knowing: `test:integration:chunking` (reload-per-chunk
+long audio), `test:integration:live-stream-simultion` (single long-lived job),
+`test:integration:gpu`, `test:integration:model-file-validation`.
 
-See `examples/quickstart.js` for the full workflow (`TranscriptionWhispercpp` loading model files from disk), including streaming audio and cleanup.
+Typical loop: `npm install && npm run build && npm run test:integration`.
 
 ## Benchmarking
 
-We conduct comprehensive benchmarking of our Whisper transcription models to evaluate their performance across different audio conditions and metrics. The evaluations are performed using the LibriSpeech dataset, a standard benchmark for speech recognition tasks.
+Accuracy (WER / CER / AraDiaWER) and RTF benchmarks live under
+[`benchmarks/`](benchmarks) and are engine-keyed throughout:
 
-Our benchmarking suite measures transcription accuracy using Word Error Rate (WER) and Character Error Rate (CER), along with performance metrics such as model load times and inference speeds.
+- [`benchmarks/server/`](benchmarks/server/README.md) — one bare HTTP server;
+  `POST /run` takes an `engine: "whisper" | "parakeet"` discriminator.
+- [`benchmarks/client/`](benchmarks/client/README.md) — one Python client;
+  `src/main.py` dispatches on the config's required top-level `engine:` key
+  over `src/whisper/` and `src/parakeet/`.
+- `benchmarks/client/config/config-whisper*.yaml` (incl. three Common Voice
+  Arabic variants) and `config-parakeet{,-ctc,-eou,-sortformer}.yaml`.
+- `benchmarks/manual-results/{whisper,parakeet}/` — drop RTF artifacts for
+  backends CI cannot host.
+- `benchmarks/ci/` — the HuggingFace → GGML conversion step the accuracy
+  workflow uses for whisper's `custom_model_repo` input.
 
-### Benchmark Results
+```bash
+# accuracy
+cd benchmarks/client && poetry install
+poetry run python -u -m src.main --config config/config-whisper.yaml
+poetry run python -u -m src.main --config config/config-parakeet.yaml
 
-For detailed benchmark results across all supported audio conditions and model configurations, see our [Benchmark Results Summary](benchmarks/results/results_summary.md).
+# RTF matrix (engine-keyed entries via QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON)
+npm run test:benchmark:rtf:matrix
+```
 
-The benchmarking covers:
+`scripts/trigger-benchmark.sh -e whisper|parakeet` dispatches the CI accuracy
+workflow. Aggregated historical results:
+[`benchmarks/results/results_summary.md`](benchmarks/results/results_summary.md).
 
-- **Transcription Accuracy**: WER and CER scores for accuracy assessment
-- **Performance Metrics**: Model loading times and inference speeds
-- **Audio Conditions**: Clean speech, noisy environments and varied accents
-- **Model Variants**: Different quantization levels and model sizes
+## Examples
 
-Results are updated regularly as new model versions are released.
+Whisper:
 
-## Other examples
+- [`examples/quickstart.js`](examples/quickstart.js) — basic transcription (`npm run example:whisper`)
+- [`examples/example.streaming-vad.js`](examples/example.streaming-vad.js) — VAD-segmented `runStreaming()`
+- [`examples/example.mic-conversation.js`](examples/example.mic-conversation.js) — mic capture with VAD state and end-of-turn events
+- [`examples/example.live-transcription.js`](examples/example.live-transcription.js) — small chunks into one long-lived job
+- [`examples/example.audio-ctx-chunking.js`](examples/example.audio-ctx-chunking.js) — long recordings via per-chunk `reload()`
+- [`examples/example.reload.js`](examples/example.reload.js) — reloading with a different language/temperature
+- [`examples/example.decoder.js`](examples/example.decoder.js) — the FFmpeg decoder standalone
 
--   [Quickstart](examples/quickstart.js) – Basic transcription example.
--   [Standalone Decoder](examples/example.decoder.js) – Demonstrates the FFmpeg decoder independently for audio format conversion.
--   [Model Reload](examples/example.reload.js) – Shows how to reload models with different configurations (language, temperature).
--   [Audio ctx chunking](examples/example.audio-ctx-chunking.js) – Processes long recordings by reloading with `offset_ms`, `duration_ms`, and `audio_ctx` per chunk (mirrors the `audio-ctx-chunking` integration test).
--   [Live transcription](examples/example.live-transcription.js) – Streams small chunks into a single job while maintaining Whisper state between updates (mirrors the `live-stream-simulation` integration test).
--   [VAD streaming](examples/example.streaming-vad.js) – Uses `runStreaming()` for VAD-segmented live transcription.
--   [Mic conversation](examples/example.mic-conversation.js) – Streams microphone audio through `runStreaming()` with VAD state and end-of-turn events.
+Parakeet:
+
+- [`examples/parakeet-transcribe.js`](examples/parakeet-transcribe.js) — universal transcribe/diarize, any GGUF (`npm run example:parakeet`)
+- [`examples/parakeet-diarized-transcribe.js`](examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
+- [`examples/parakeet-live-mic.js`](examples/parakeet-live-mic.js) — live mic via the duplex streaming session
+- [`examples/parakeet-live-mic-diarized.js`](examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
+- [`examples/parakeet-live-mic-diarized-aosc.js`](examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
+- [`examples/parakeet-decode-audio.js`](examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+
+The live-mic examples capture the default input device via `sox -d`
+(`brew install sox` / `apt install sox` / `choco install sox`). With
+`npm run example:* -- ...`, keep the `--` separator or npm eats the flags.
+
+## Documentation
+
+- [`docs/engines.md`](docs/engines.md) — the orchestrator + driver layout, the
+  native verb table, engine resolution, and how to add a third engine
+- [`docs/architecture.md`](docs/architecture.md) — full architecture write-up
+  (heritage: whisper engine, pre-merge naming)
+- [`docs/data-flows-detailed.md`](docs/data-flows-detailed.md) — sequence
+  diagrams for load / run / streaming / reload (heritage: whisper engine)
+- [`docs/whisper-addon-help.md`](docs/whisper-addon-help.md) — whisper.cpp
+  parameter reference
+- [`docs/PARAKEET-README.md`](docs/PARAKEET-README.md) — heritage
+  `@qvac/transcription-parakeet` README; still the deepest reference for
+  Sortformer/AOSC behaviour and the `.nemo` → `.gguf` pipeline
+- [`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) /
+  [`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md) — the two
+  pre-merge histories, preserved verbatim
+- [`CHANGELOG.md`](CHANGELOG.md) — the merged package's history, starting at
+  `0.1.0`
 
 ## Glossary
 
-• **Bare** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
-• **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications.  
-• **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
-
-## Error Range
-All the errors from this library are in the range of 6001-7000
+- **Bare** — small, modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).
+- **GGUF** — single-file model format used by ggml-based runtimes; carries weights, tokenizer, and hyperparameters together.
+- **QVAC** — Tether's open-source AI SDK for building decentralized AI applications.
+- **RTF** — real-time factor: processing time divided by audio duration. Lower is better; below 1.0 is faster than real time.
+- **AOSC** — Audio-Online Speaker Cache, the NeMo-derived mechanism that anchors Sortformer v2.1 speaker slots across silence.
+- **EOU** — end of utterance; Parakeet's EOU model emits a native `<EOU>` token at turn boundaries.
 
 ## Resources
 
-*   PoC Repo: [tetherto/qvac-transcription-poc](https://github.com/tetherto/qvac-transcription-poc)
-*   Pear app (Desktop): TBD
+- [NVIDIA Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2) — upstream `.nemo` checkpoints
+- [whisper.cpp GGML models](https://huggingface.co/ggerganov/whisper.cpp) — upstream whisper checkpoints
 
 ## License
 
-This project is licensed under the Apache-2.0 License – see the LICENSE file for details.
+This project is licensed under the Apache-2.0 License — see [LICENSE](LICENSE)
+for details, and [NOTICE](NOTICE) for third-party components. Parakeet model
+files are distributed under the **NVIDIA Open Model License**; see the
+upstream HuggingFace model cards for the per-checkpoint terms.
 
 For questions or issues, please open an issue on the GitHub repository.
-

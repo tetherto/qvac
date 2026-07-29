@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const TranscriptionWhispercpp = require('../index.js')
+const ASRGgml = require('../index.js')
 const binding = require('../binding.js')
 
 // Configure C++ logger to see logs
@@ -38,16 +38,17 @@ async function main() {
     process.exit(1)
   }
 
-  // Constructor arguments for TranscriptionWhispercpp
+  // Constructor arguments for ASRGgml
   const constructorArgs = {
     files: {
       model: modelPath
     },
-    opts: { stats: true }
+    enableStats: true
   }
 
-  // Configuration object
+  // Configuration object (the engine discriminator lives in the config)
   const config = {
+    engine: 'whisper',
     whisperConfig: {
       audio_format: 's16le',
       // VAD tuning to avoid trimming the beginning
@@ -66,14 +67,12 @@ async function main() {
 
   // no onOutput override; keep internal handler intact
 
-  const model = new TranscriptionWhispercpp(constructorArgs, config)
+  const model = new ASRGgml({ ...constructorArgs, config })
 
   // We'll attach streaming via response.onUpdate(), not model.onOutputReceived
   const streamingChunks = []
 
-  // Don't override _outputCallback - let our override handle it
-  // model._outputCallback = onOutput
-  await model._load()
+  await model.load()
 
   const bitRate = 128000
   const bytesPerSecond = bitRate / 8

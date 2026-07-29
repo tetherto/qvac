@@ -1,4 +1,11 @@
-# Changelog
+# Changelog — @qvac/transcription-whispercpp (heritage)
+
+> **Historical reference.** This is the final changelog of the standalone
+> `@qvac/transcription-whispercpp` package, up to and including the release
+> that was folded into `@qvac/asr-ggml`. Versions here are **whisper's own**
+> numbering (through `0.12.1`) and do not continue into the merged package;
+> the merged history starts at `0.1.0` in [`../CHANGELOG.md`](../CHANGELOG.md),
+> whose `0.1.0` entry lists every behavioural change the merge introduced.
 
 All notable changes to this project will be documented in this file.
 

@@ -42,20 +42,19 @@ const runLiveAudio = async (payload) => {
       throw new Error(`Model file not found at path: ${modelPath}`)
     }
 
-    const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
+    const ASRGgml = require('@qvac/asr-ggml')
 
     const resolvedModelPath = path.resolve(modelPath)
-    const constructorArgs = {
-      files: {
-        model: resolvedModelPath
-      }
+    const files = {
+      model: resolvedModelPath
     }
 
     if (vadModelPath) {
-      constructorArgs.files.vadModel = path.resolve(vadModelPath)
+      files.vadModel = path.resolve(vadModelPath)
     }
 
     const modelConfig = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         audio_format: audioFormat,
@@ -83,12 +82,12 @@ const runLiveAudio = async (payload) => {
     }
 
     logger.info('Creating model instance for live audio:', {
-      constructorArgs,
+      files,
       whisperConfig: modelConfig.whisperConfig
     })
 
-    modelInstance = new TranscriptionWhispercpp(constructorArgs, modelConfig)
-    await modelInstance._load()
+    modelInstance = new ASRGgml({ files, config: modelConfig })
+    await modelInstance.load()
 
     const [loadSec, loadNano] = process.hrtime(loadStart)
     const loadModelMs = loadSec * 1e3 + loadNano / 1e6

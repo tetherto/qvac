@@ -242,7 +242,7 @@ def generate_summary():
         "",
         "VAD is a technique used to identify and separate speech from non-speech segments in audio. It is often used in speech recognition systems to improve accuracy by reducing the impact of background noise and other non-speech sounds.",
         "",
-        "For @qvac/transcription-whispercpp, VAD is built-in and can be enabled/disabled via the `vad` flag in whisperConfig.",
+        "For @qvac/asr-ggml, VAD is built-in and can be enabled/disabled via the `vad` flag in whisperConfig.",
         "",
         "| VAD | Description |",
         "|-----|-------------|",

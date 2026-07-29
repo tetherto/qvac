@@ -23,7 +23,7 @@ MOCK_CONFIG = {
     "server": {
         "url": "http://localhost:8080/run",
         "batch_size": 32,
-        "lib": "@qvac/transcription-whispercpp",
+        "lib": "@qvac/asr-ggml",
         "version": "0.3.2",
     },
     "dataset": {
@@ -132,19 +132,19 @@ def test_server_config():
     with pytest.raises(ValueError):
         ServerConfig(
             url="invalid_url",
-            lib="@qvac/transcription-whispercpp",
+            lib="@qvac/asr-ggml",
             version="0.3.2",
             batch_size=32,
         )
 
     cfg = ServerConfig(
         url="http://localhost:8080/run",
-        lib="@qvac/transcription-whispercpp",
+        lib="@qvac/asr-ggml",
         version="0.3.2",
         batch_size=32,
     )
     assert str(cfg.url) == "http://localhost:8080/run"
-    assert cfg.lib == "@qvac/transcription-whispercpp"
+    assert cfg.lib == "@qvac/asr-ggml"
     assert cfg.version == "0.3.2"
     assert cfg.batch_size == 32
 

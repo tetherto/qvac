@@ -1,6 +1,6 @@
 'use strict'
 
-const { InferenceArgsSchema } = require('../validation')
+const { ParakeetInferenceArgsSchema } = require('../validation')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
 const { Readable } = require('bare-stream')
@@ -8,7 +8,7 @@ const process = require('bare-process')
 const path = require('bare-path')
 
 const ALLOWED_LIBS = [
-  '@qvac/transcription-parakeet'
+  '@qvac/asr-ggml'
 ]
 
 const loadedModels = new Map()
@@ -42,40 +42,10 @@ const getPackageVersion = (lib) => {
   }
 }
 
-const getFilesMap = (modelType, modelDir) => {
-  switch (modelType) {
-    case 'ctc':
-      return {
-        model: path.join(modelDir, 'model.onnx'),
-        modelData: path.join(modelDir, 'model.onnx_data'),
-        tokenizer: path.join(modelDir, 'tokenizer.json')
-      }
-    case 'eou':
-      return {
-        eouEncoder: path.join(modelDir, 'encoder.onnx'),
-        eouDecoder: path.join(modelDir, 'decoder_joint.onnx'),
-        tokenizer: path.join(modelDir, 'tokenizer.json')
-      }
-    case 'sortformer':
-      return {
-        sortformer: path.join(modelDir, 'sortformer.onnx')
-      }
-    case 'tdt':
-    default:
-      return {
-        encoder: path.join(modelDir, 'encoder-model.onnx'),
-        encoderData: path.join(modelDir, 'encoder-model.onnx.data'),
-        decoder: path.join(modelDir, 'decoder_joint-model.onnx'),
-        vocab: path.join(modelDir, 'vocab.txt'),
-        preprocessor: path.join(modelDir, 'preprocessor.onnx')
-      }
-  }
-}
-
-const runAddon = async (payload) => {
+const runParakeet = async (payload) => {
   try {
     const { inputs, parakeet, config } =
-      InferenceArgsSchema.parse(payload)
+      ParakeetInferenceArgsSchema.parse(payload)
 
     const { lib: parakeetLib } = parakeet
 
@@ -85,18 +55,21 @@ const runAddon = async (payload) => {
 
     const parakeetVersion = getPackageVersion(parakeetLib) || 'unknown'
     logger.info(`Loading addon: ${parakeetLib}`)
-    const TranscriptionParakeet = require(parakeetLib)
+    const ASRGgml = require(parakeetLib)
     logger.info('Addon loaded successfully')
 
-    logger.info(`Running addon with ${inputs.length} inputs`)
+    logger.info(`Running parakeet addon with ${inputs.length} inputs`)
 
+    // config.path points at a single .gguf checkpoint (the GGML backend
+    // auto-detects the model type from the GGUF metadata; modelType is kept
+    // in the payload only for cache keys / logging).
     const modelPath = config.path || ''
     const modelType = config.parakeetConfig?.modelType || 'tdt'
     const useGPU = config.parakeetConfig?.useGPU || false
     const streaming = config.streaming || false
     const streamingChunkSize = config.streamingChunkSize || 16384
 
-    const cacheKey = `${parakeetLib}:model=${modelPath}:type=${modelType}:gpu=${useGPU}`
+    const cacheKey = `${parakeetLib}:parakeet:model=${modelPath}:type=${modelType}:gpu=${useGPU}`
 
     let modelInstance = loadedModels.get(cacheKey)
     let loadModelMs = 0
@@ -107,33 +80,36 @@ const runAddon = async (payload) => {
       if (!config.path) {
         throw new Error('Model path is required in config')
       }
-      validateFilePath(config.path)
+      const resolvedModelPath = validateFilePath(config.path)
 
       const parakeetConfig = config.parakeetConfig || {}
-      const files = getFilesMap(modelType, config.path)
+
+      // The addon's ParakeetConfig has no modelType key (auto-detected from
+      // the GGUF), so it is not forwarded.
+      const modelConfig = {
+        engine: 'parakeet',
+        parakeetConfig: {
+          maxThreads: parakeetConfig.maxThreads || 4,
+          useGPU: parakeetConfig.useGPU || false,
+          sampleRate: config.sampleRate || 16000,
+          channels: 1,
+          captionEnabled: parakeetConfig.captionEnabled || false,
+          timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
+          seed: parakeetConfig.seed ?? -1
+        }
+      }
 
       logger.info('Creating model instance:', {
-        files,
-        parakeetConfig,
+        model: resolvedModelPath,
+        parakeetConfig: modelConfig.parakeetConfig,
         streaming
       })
 
-      modelInstance = new TranscriptionParakeet({
-        files,
-        config: {
-          parakeetConfig: {
-            modelType: parakeetConfig.modelType || 'tdt',
-            maxThreads: parakeetConfig.maxThreads || 4,
-            useGPU: parakeetConfig.useGPU || false,
-            sampleRate: config.sampleRate || 16000,
-            channels: 1,
-            captionEnabled: parakeetConfig.captionEnabled || false,
-            timestampsEnabled: parakeetConfig.timestampsEnabled !== false,
-            seed: parakeetConfig.seed ?? -1
-          }
-        }
+      modelInstance = new ASRGgml({
+        files: { model: resolvedModelPath },
+        config: modelConfig
       })
-      await modelInstance._load()
+      await modelInstance.load()
 
       const [loadSec, loadNano] = process.hrtime(loadStart)
       loadModelMs = loadSec * 1e3 + loadNano / 1e6
@@ -202,12 +178,12 @@ const runAddon = async (payload) => {
       }
     }
   } catch (error) {
-    logger.error(`runAddon error: ${error.message}`)
+    logger.error(`runParakeet error: ${error.message}`)
     logger.error(`Stack: ${error.stack}`)
     throw error
   }
 }
 
 module.exports = {
-  runAddon
+  runParakeet
 }

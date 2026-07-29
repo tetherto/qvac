@@ -1,4 +1,16 @@
-# transcription-parakeet
+# transcription-parakeet (heritage README)
+
+> **Historical reference.** This is the final README of the standalone
+> `@qvac/transcription-parakeet` package, kept because it remains the most
+> detailed write-up of the Parakeet engine's model variants, Sortformer /
+> AOSC streaming behaviour, and `.nemo` → `.gguf` conversion pipeline.
+>
+> It is **not** the current API. `TranscriptionParakeet` no longer exists —
+> use `ASRGgml` with `config.engine: 'parakeet'` as documented in the package
+> [`README.md`](../README.md), and see [`engines.md`](engines.md) for the
+> orchestrator/driver layout. Package names (`@qvac/transcription-parakeet`),
+> subpath exports (`./parakeet`), npm script names (`setup-models` is now
+> `setup-models:parakeet`), and example filenames below are all pre-merge.
 
 This library simplifies running NVIDIA Parakeet speech-to-text and Sortformer speaker-diarization inference within QVAC runtime applications. It provides an easy interface to load, execute, and manage Parakeet inference instances, supporting CTC, TDT, EOU, and Sortformer checkpoints from a single binding.
 
@@ -509,13 +521,13 @@ The live-mic examples capture the default input device via `sox -d` (install: `b
 
 ## Other examples
 
-- [`examples/transcribe.js`](examples/transcribe.js) -- universal single-file transcribe / diarize (any GGUF, all model types).
-- [`examples/diarized-transcribe.js`](examples/diarized-transcribe.js) -- combined Sortformer + ASR pipeline ("who said what").
-- [`examples/live-mic.js`](examples/live-mic.js) -- live microphone transcription via `sox` and the streaming session.
-- [`examples/live-mic-diarized.js`](examples/live-mic-diarized.js) -- live mic with parallel Sortformer + ASR for speaker-tagged transcripts. Pass a v2.1 Sortformer GGUF to get AOSC speaker-cache streaming automatically.
-- [`examples/live-mic-diarized-aosc.js`](examples/live-mic-diarized-aosc.js) -- same as above but with CLI flags for the AOSC tuning knobs (`--spk-cache-len`, `--fifo-len`, `--chunk-right-context-ms`, `--spk-cache-enable`, etc.). Useful for A/B comparing AOSC vs the v1 sliding-window code path on the same v2.1 GGUF.
-- [`examples/decode-audio.js`](examples/decode-audio.js) -- decode + transcribe in one step. Same flag surface as `transcribe.js` but pipes the input through `@qvac/decoder-audio` (FFmpeg) first, so any container / codec FFmpeg supports (mp3, m4a, ogg, flac, mp4, ...) works -- not just 16 kHz mono `.wav` / raw s16le PCM.
-- [`examples/utils.js`](examples/utils.js) -- shared helpers used by the examples: `setupLogger` (native-log filtering), `readFileAsStream`, `parseWavFile`, `convertRawToFloat32`, `validatePaths`, `pushableStream` (live-mic feed), and `printResults`.
+- [`examples/transcribe.js`](../examples/parakeet-transcribe.js) -- universal single-file transcribe / diarize (any GGUF, all model types).
+- [`examples/diarized-transcribe.js`](../examples/parakeet-diarized-transcribe.js) -- combined Sortformer + ASR pipeline ("who said what").
+- [`examples/live-mic.js`](../examples/parakeet-live-mic.js) -- live microphone transcription via `sox` and the streaming session.
+- [`examples/live-mic-diarized.js`](../examples/parakeet-live-mic-diarized.js) -- live mic with parallel Sortformer + ASR for speaker-tagged transcripts. Pass a v2.1 Sortformer GGUF to get AOSC speaker-cache streaming automatically.
+- [`examples/live-mic-diarized-aosc.js`](../examples/parakeet-live-mic-diarized-aosc.js) -- same as above but with CLI flags for the AOSC tuning knobs (`--spk-cache-len`, `--fifo-len`, `--chunk-right-context-ms`, `--spk-cache-enable`, etc.). Useful for A/B comparing AOSC vs the v1 sliding-window code path on the same v2.1 GGUF.
+- [`examples/decode-audio.js`](../examples/parakeet-decode-audio.js) -- decode + transcribe in one step. Same flag surface as `transcribe.js` but pipes the input through `@qvac/decoder-audio` (FFmpeg) first, so any container / codec FFmpeg supports (mp3, m4a, ogg, flac, mp4, ...) works -- not just 16 kHz mono `.wav` / raw s16le PCM.
+- [`examples/utils.js`](../examples/parakeet-utils.js) -- shared helpers used by the examples: `setupLogger` (native-log filtering), `readFileAsStream`, `parseWavFile`, `convertRawToFloat32`, `validatePaths`, `pushableStream` (live-mic feed), and `printResults`.
 
 ## Glossary
 
@@ -551,6 +563,6 @@ Thrown errors are `QvacErrorAddonParakeet` instances (extending `QvacErrorBase`)
 
 ## License
 
-This project is licensed under the Apache-2.0 License -- see [LICENSE](LICENSE) for details. Model files are distributed under the **NVIDIA Open Model License**; see the upstream HuggingFace cards for the per-checkpoint terms.
+This project is licensed under the Apache-2.0 License -- see [LICENSE](../LICENSE) for details. Model files are distributed under the **NVIDIA Open Model License**; see the upstream HuggingFace cards for the per-checkpoint terms.
 
 For questions or issues, please open an issue on the GitHub repository.

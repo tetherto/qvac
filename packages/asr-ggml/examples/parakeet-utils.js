@@ -3,7 +3,7 @@
 // Shared helpers for the (flag-driven) examples. They orchestrate
 // audio decode + native logger filtering + a small pushable async
 // iterable for live-mic streaming. The examples themselves drive
-// transcription through the public `TranscriptionParakeet` class
+// transcription through the public `ASRGgml` class
 // (`require('../index.js')`).
 
 const fs = require('bare-fs')
@@ -104,7 +104,7 @@ function validatePaths(paths) {
  * Pushable async-iterable: consumers `await for (const chunk of
  * stream)` while producers `stream.push(chunk)` and `stream.end()`
  * close it. Used by the live-mic examples to feed chunks captured
- * from `sox` into `TranscriptionParakeet.runStreaming()` (duplex
+ * from `sox` into `ASRGgml.runStreaming()` (duplex
  * path) without buffering the entire stream. Also accepted by the
  * batched `run()` path; both consumers iterate it lazily.
  */

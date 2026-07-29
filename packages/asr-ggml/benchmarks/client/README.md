@@ -1,24 +1,31 @@
-# Whisper Addon Benchmark Client
+# ASR GGML Benchmark Client
 
-A Python client for benchmarking Whisper transcription addons. It sends requests to the Whisper addon server using multiple datasets (LibriSpeech and Google FLEURS) and evaluation metrics.
+A Python client for benchmarking the `@qvac/asr-ggml` addon. One dispatcher
+entrypoint (`src.main`) serves both engines — Whisper and NVIDIA Parakeet —
+selected by the required top-level `engine:` key in the YAML config. It sends
+requests to the benchmark server using multiple datasets (LibriSpeech and
+Google FLEURS; Common Voice for the Arabic Whisper configs) and evaluation
+metrics.
 
 ## Features
 
-- HTTP client for Whisper transcription service
+- HTTP client for the asr-ggml benchmark server
+- Engine-keyed configs: `config/config-whisper*.yaml` and
+  `config/config-parakeet*.yaml`
 - Multiple dataset support:
   - [LibriSpeech](https://huggingface.co/datasets/openslr/librispeech_asr) dataset integration
   - [Google FLEURS](https://huggingface.co/datasets/google/fleurs) multilingual dataset integration
-- Support for 11 languages: English, French, German, Spanish, Italian, Portuguese, Mandarin Chinese, Arabic, Russian, Japanese, and Czech
-- Multiple evaluation metrics (WER, CER)
+  - Common Voice manifests (Arabic dialect benchmarks, whisper engine)
+- Whisper: 11 languages, WER / CER / AraDiaWER metrics, VAD support
+- Parakeet: tdt / ctc / eou / sortformer model types, WER / CER metrics
 - Configurable batch processing
-- VAD support
 
 ## Installation
 
 ```bash
 # Clone the repository
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/transcription-whispercpp/benchmarks/client
+cd qvac/packages/asr-ggml/benchmarks/client
 
 # Install poetry if you haven't already
 curl -sSL https://install.python-poetry.org | python3 -
@@ -27,31 +34,64 @@ curl -sSL https://install.python-poetry.org | python3 -
 poetry install
 ```
 
+## Usage
+
+Run a benchmark with:
+
+```bash
+# Whisper
+poetry run python -u -m src.main --config config/config-whisper.yaml
+
+# Parakeet
+poetry run python -u -m src.main --config config/config-parakeet.yaml
+```
+
+The dispatcher requires the config's top-level `engine:` key
+(`"whisper"` or `"parakeet"`) and errors out if it is missing — there is no
+engine sniffing. The engine modules can also be invoked directly
+(`python -m src.whisper.main` / `python -m src.parakeet.main`).
+
+The client will:
+
+1. Load the specified dataset and convert it to raw audio files
+2. Send paths to audio files to the server for transcription
+3. Calculate WER/CER (and AraDiaWER for Arabic, whisper engine)
+4. Report timing statistics
+
 ## Configuration
 
-Create a `config.yaml` file with the following structure:
+Shipped configs:
+
+| Config | Engine | Purpose |
+|---|---|---|
+| `config-whisper.yaml` | whisper | LibriSpeech/FLEURS baseline |
+| `config-whisper-arabic.yaml` | whisper | Common Voice Arabic (validated) |
+| `config-whisper-arabic-levantine.yaml` | whisper | Common Voice Levantine Arabic |
+| `config-whisper-arabic-egyptian.yaml` | whisper | Common Voice Egyptian Arabic |
+| `config-parakeet.yaml` | parakeet | TDT baseline |
+| `config-parakeet-ctc.yaml` | parakeet | CTC |
+| `config-parakeet-eou.yaml` | parakeet | EOU (streaming) |
+| `config-parakeet-sortformer.yaml` | parakeet | Sortformer diarization |
+
+Common structure (whisper example):
 
 ```yaml
+engine: "whisper"
 server:
   url: "http://localhost:8080/run"
-  batch_size: 100
-  lib: "@qvac/transcription-whispercpp"
-  version: "0.1.7"
-
+  batch_size: 10
+  lib: "@qvac/asr-ggml"
 dataset:
-  dataset_type: "librispeech"
+  dataset_type: "librispeech"   # librispeech or fleurs
   speaker_group: "clean"
   language: "english"
-  max_samples: 0
-
-cer:
-  enabled: true
-
+  max_samples: 0                # 0 = unlimited
 wer:
   enabled: true
-
+cer:
+  enabled: true
 model:
-  path: "./examples/ggml-tiny.bin"
+  path: "../../models/ggml-tiny.bin"
   sample_rate: 16000
   audio_format: "f32le"
   vad_model_path: ""
@@ -60,69 +100,47 @@ model:
   streaming_chunk_size: 64000
 ```
 
+The parakeet `model` block differs: `path` points at a single `.gguf`
+checkpoint (the addon auto-detects the model type from GGUF metadata) and
+carries `model_type`, `max_threads`, `use_gpu`, `caption_enabled`,
+`timestamps_enabled` instead of the VAD/language keys.
+
 ### Configuration Details
 
 - **Server**:
-  - `url`: The URL of the Whisper addon server
+  - `url`: The URL of the benchmark server (`/run`)
   - `batch_size`: The number of audio files to transcribe in each request
-  - `lib`: The Whisper addon library to use
-  - `version`: The version of the Whisper addon library to use
-  - `timeout`: HTTP request timeout in seconds (default: 90)
+  - `lib`: The addon library to use (`@qvac/asr-ggml`)
+  - `version`: Optional addon version string (informational)
+  - `timeout`: HTTP request timeout in seconds
 
 - **Dataset**:
-  - `dataset_type`: Dataset to use (`librispeech` or `fleurs`)
-  - `speaker_group`: Subset of LibriSpeech speakers based on transcript WER (`clean`, `other`, `all`) - only used for LibriSpeech
-  - `language`: Dataset language - supports:
-    - **LibriSpeech/Multilingual LibriSpeech**: `english`, `french`, `german`, `spanish`, `italian`, `portuguese`
-    - **FLEURS**: All languages above plus `mandarin_chinese`, `arabic`, `russian`, `japanese`, `czech`
+  - `dataset_type`: `librispeech`, `fleurs` (whisper additionally supports
+    `common_voice` with `common_voice_manifest`)
+  - `speaker_group`: LibriSpeech speaker subset (`clean`, `other`, `all`)
+  - `language`: Dataset language (English, French, German, Spanish, Italian,
+    Portuguese, Mandarin Chinese, Russian, Japanese, Czech; whisper also
+    supports Arabic)
   - `max_samples`: Maximum number of samples to process (0 = unlimited)
 
-- **CER**:
-  - `enabled`: Enable Character Error Rate calculation
+- **Metrics**: `wer.enabled`, `cer.enabled`, and (whisper, Arabic only)
+  `aradiawer.enabled` + `aradiawer.min_score_threshold`
 
-- **WER**:
-  - `enabled`: Enable Word Error Rate calculation
+- **Model (whisper)**: `path`, `sample_rate`, `audio_format`
+  (`f32le`/`s16le`), `vad_model_path`, `language`, `streaming`,
+  `streaming_chunk_size`
 
-- **Model**:
-  - `path`: Path to the whisper model file (e.g., ggml-tiny.bin)
-  - `sample_rate`: Audio sample rate in Hz (default: 16000)
-  - `audio_format`: Audio format (`f32le` or `s16le`)
-  - `vad_model_path`: Path to VAD model file (empty string to disable)
-  - `language`: Language code for transcription (e.g., "en", "fr", "zh" - empty string for auto-detect)
-  - `streaming`: Enable streaming mode for chunked processing
-  - `streaming_chunk_size`: Chunk size in bytes for streaming mode (default: 64000)
-
-## Usage
-
-Run the benchmark with:
-
-```bash
-poetry run python -m src.whisper.main --config config/config.yaml
-```
-
-The client will:
-
-1. Load the specified dataset (LibriSpeech or FLEURS) and convert it to raw audio files
-2. Send paths to audio files to the server for transcription
-3. Calculate WER and CER scores
-4. Report timing statistics
-
-### Using Different Datasets and Languages
-
-To benchmark with FLEURS instead of LibriSpeech, update your config:
-
-```yaml
-dataset:
-  dataset_type: "fleurs"
-  language: "mandarin_chinese"
-```
+- **Model (parakeet)**: `path` (`.gguf` file), `sample_rate`, `audio_format`,
+  `model_type` (`tdt`/`ctc`/`eou`/`sortformer`), `max_threads`, `use_gpu`,
+  `caption_enabled`, `timestamps_enabled`, `streaming`,
+  `streaming_chunk_size`
 
 ## Output
 
-- WER score (if enabled)
-- CER score (if enabled)
+- WER / CER scores (if enabled); AraDiaWER details for Arabic whisper runs
 - Total model load time
 - Total transcription time
+- Result markdown files under `../results/<model>/`
 
 ## Development
 
@@ -131,6 +149,9 @@ dataset:
 ```bash
 poetry run python -m pytest tests/ -v
 ```
+
+Whisper-side tests live under `tests/whisper/`, parakeet-side tests under
+`tests/parakeet/`.
 
 ## Acknowledgments
 

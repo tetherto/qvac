@@ -8,6 +8,7 @@ The preferred input is the same JSON artifact shape emitted by
 
 ```json
 {
+  "engine": "whisper",
   "platform": "linux-x64",
   "model": {
     "name": "ggml-tiny.bin"
@@ -54,14 +55,18 @@ usage for the model/platform/quantization under test:
 Rows without a `memory` block render as `n/a` in the aggregated report, so older
 artifacts remain valid.
 
+The top-level `engine` field is optional: when absent the aggregator resolves
+the engine from the report shape (no `model.type` ⇒ whisper), so pre-merge
+artifacts stay valid without edits.
+
 File naming convention:
 
 - `rtf-benchmark-<platform>-<model>-<backend>.json`
 
 These files are picked up automatically by:
 
-- `scripts/perf-report/aggregate-whisper-rtf.js`
-- `.github/workflows/benchmark-performance-transcription-whispercpp.yml`
+- `scripts/perf-report/aggregate-asr-ggml-rtf.js`
+- `.github/workflows/benchmark-performance-asr-ggml.yml`
 
 Use this directory for results such as:
 

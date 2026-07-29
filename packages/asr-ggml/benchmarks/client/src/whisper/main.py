@@ -7,15 +7,17 @@ from src.whisper.utils import save_benchmark_results
 from transformers import WhisperProcessor
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Run Whisper transcription benchmark")
-    parser.add_argument(
-        "--config", type=str, default="config/config.yaml", help="Path to config file"
-    )
-    args = parser.parse_args()
+def main(config_path=None):
+    if config_path is None:
+        parser = argparse.ArgumentParser(description="Run Whisper transcription benchmark")
+        parser.add_argument(
+            "--config", type=str, default="config/config-whisper.yaml", help="Path to config file"
+        )
+        args = parser.parse_args()
+        config_path = args.config
 
-    cfg = Config.from_yaml(args.config)
-    print(f"Loaded config from {args.config}")
+    cfg = Config.from_yaml(config_path)
+    print(f"Loaded config from {config_path}")
 
     dataset_info = f"{cfg.dataset.dataset_type.value} dataset for language [{cfg.dataset.language.value}]"
     if cfg.dataset.dataset_type == DatasetType.LIBRISPEECH:

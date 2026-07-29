@@ -64,7 +64,7 @@
 const path = require('bare-path')
 const process = require('bare-process')
 const subprocess = require('bare-subprocess')
-const TranscriptionParakeet = require('../index.js')
+const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const { setupLogger, validatePaths, pushableStream } = require('./utils.js')
 
@@ -222,9 +222,10 @@ async function main() {
   const diarConfig = buildDiarConfig(args)
   console.log(`AOSC config: ${describeAoscConfig(diarConfig)}`)
 
-  const asr = new TranscriptionParakeet({
+  const asr = new ASRGgml({
     files: { model: asrPath },
     config: {
+      engine: 'parakeet',
       parakeetConfig: {
         streaming: true,
         streamingChunkMs: args.chunkMs ?? 2000,
@@ -232,9 +233,9 @@ async function main() {
       }
     }
   })
-  const diar = new TranscriptionParakeet({
+  const diar = new ASRGgml({
     files: { model: diarPath },
-    config: { parakeetConfig: diarConfig }
+    config: { engine: 'parakeet', parakeetConfig: diarConfig }
   })
 
   await asr.load()

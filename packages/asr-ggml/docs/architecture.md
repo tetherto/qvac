@@ -1,8 +1,17 @@
-# Architecture Documentation
+# Architecture Documentation (Whisper engine)
 
-**Package:** `@qvac/transcription-whispercpp` v0.6.7
+**Package:** `@qvac/asr-ggml` (formerly `@qvac/transcription-whispercpp` v0.6.7)
 **Stack:** JavaScript, C++20, whisper.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
+
+> **Heritage document.** This describes the **whisper engine's** internals as
+> they stood before the whisper + parakeet merge, when the package shipped a
+> single `TranscriptionWhispercpp` class. The native model interface, config
+> pipeline, and whisper.cpp integration it documents are still accurate, but
+> the JS entrypoint is now the engine-agnostic `ASRGgml` orchestrator with
+> `WhisperDriver` behind it — read [`engines.md`](engines.md) for the current
+> layering, and mentally substitute `ASRGgml` + `WhisperDriver` wherever this
+> document says `TranscriptionWhispercpp`.
 
 ---
 

@@ -1,5 +1,5 @@
 {
-  "name": "@qvac/transcription-whispercpp-benchmark-server",
+  "name": "@qvac/asr-ggml-benchmark-server",
   "version": "0.1.0",
   "main": "index.js",
   "scripts": {
@@ -12,14 +12,14 @@
   ],
   "author": "Tether",
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/transcription-whispercpp/issues",
+  "bugs": "https://github.com/tetherto/qvac/issues",
   "devDependencies": {
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
-    "@qvac/transcription-whispercpp": "^0.2.1",
+    "@qvac/asr-ggml": "^0.1.0",
     "bare-buffer": "^3.1.0",
     "bare-fs": "^4.1.5",
     "bare-http1": "^4.0.2",

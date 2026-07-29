@@ -1,8 +1,9 @@
+engine: "parakeet"
 server:
   url: "http://localhost:8080/run"
   timeout: 60
   batch_size: 10
-  lib: "@qvac/transcription-parakeet"
+  lib: "@qvac/asr-ggml"
   # version not specified - uses locally installed package
 dataset:
   dataset_type: "librispeech" # librispeech or fleurs
@@ -14,7 +15,7 @@ wer:
 cer:
   enabled: true
 model:
-  path: "/home/raju/Documents/T/workspace/transcription-parakeet/models/parakeet-tdt-0.6b-v3-onnx"
+  path: "./models/parakeet-tdt-0.6b-v3.f16.gguf"
   sample_rate: 16000
   audio_format: "s16le"
   model_type: "tdt" # tdt, ctc, eou, sortformer

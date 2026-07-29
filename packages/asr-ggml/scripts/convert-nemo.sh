@@ -2,8 +2,8 @@
 #
 # Convert staged Parakeet `.nemo` checkpoints into the single-file
 # `.gguf` format the ggml backend consumes. Wraps the in-tree
-# `scripts/convert-nemo-to-gguf.py` (vendored from 
-# qvac-ext-lib-whisper.cpp/parakeet-cpp/scripts).
+# `scripts/convert-nemo-to-gguf.py` (vendored from
+# qvac-ext-lib-whisper.cpp/engines/parakeet/scripts; resync on bump).
 #
 # Requirements:
 #   - A Python venv at ./venv with `gguf`, `numpy`, `torch`, `pyyaml`
@@ -11,7 +11,7 @@
 #     once -- the converter does not depend on the heavy `nemo_toolkit`
 #     package, despite the .nemo extension.
 #   - The downloaded `.nemo` files in ./models/nemo (run
-#     `./scripts/download-models.sh` first).
+#     `./scripts/parakeet-download-models.sh` first).
 #
 # Usage:
 #   ./scripts/convert-nemo.sh [flags]
@@ -159,7 +159,7 @@ convert_one() {
 
   if [[ ! -f "$nemo" ]]; then
     echo "  x ${t}: .nemo missing -- expected ${nemo}"
-    echo "         run \`./scripts/download-models.sh -t ${t}\` first."
+    echo "         run \`./scripts/parakeet-download-models.sh -t ${t}\` first."
     return 1
   fi
   if [[ -f "$gguf" ]] && [[ "$FORCE" -eq 0 ]]; then

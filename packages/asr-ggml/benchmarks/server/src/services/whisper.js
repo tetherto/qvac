@@ -1,6 +1,6 @@
 'use strict'
 
-const { InferenceArgsSchema } = require('../validation')
+const { WhisperInferenceArgsSchema } = require('../validation')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
 const { Readable } = require('bare-stream')
@@ -8,7 +8,7 @@ const process = require('bare-process')
 const path = require('bare-path')
 
 const ALLOWED_LIBS = [
-  '@qvac/transcription-whispercpp'
+  '@qvac/asr-ggml'
 ]
 
 const loadedModels = new Map()
@@ -42,9 +42,9 @@ const getPackageVersion = (lib) => {
   }
 }
 
-const runAddon = async (payload) => {
+const runWhisper = async (payload) => {
   const { inputs, whisper, config } =
-    InferenceArgsSchema.parse(payload)
+    WhisperInferenceArgsSchema.parse(payload)
 
   const { lib: whisperLib } = whisper
 
@@ -53,16 +53,16 @@ const runAddon = async (payload) => {
   }
 
   const whisperVersion = getPackageVersion(whisperLib) || 'unknown'
-  const TranscriptionWhispercpp = require(whisperLib)
+  const ASRGgml = require(whisperLib)
 
-  logger.info(`Running addon with ${inputs.length} inputs`)
+  logger.info(`Running whisper addon with ${inputs.length} inputs`)
 
   const vadModelPath = config.whisperConfig?.vad_model_path || ''
   const streaming = config.streaming || false
   const streamingChunkSize = config.streamingChunkSize || 16384
   const modelPath = config.path || ''
   const vadEnabled = !!vadModelPath
-  const cacheKey = `${whisperLib}:model=${modelPath}:vad=${vadEnabled}:vadModel=${vadModelPath}`
+  const cacheKey = `${whisperLib}:whisper:model=${modelPath}:vad=${vadEnabled}:vadModel=${vadModelPath}`
 
   let modelInstance = loadedModels.get(cacheKey)
   let loadModelMs = 0
@@ -75,14 +75,12 @@ const runAddon = async (payload) => {
     }
     const resolvedModelPath = validateFilePath(config.path)
 
-    const constructorArgs = {
-      files: {
-        model: resolvedModelPath
-      }
+    const files = {
+      model: resolvedModelPath
     }
 
     if (vadModelPath) {
-      constructorArgs.files.vadModel = validateFilePath(vadModelPath)
+      files.vadModel = validateFilePath(vadModelPath)
     }
 
     const unsupportedParams = ['mode', 'output_format', 'min_seconds', 'max_seconds']
@@ -100,6 +98,7 @@ const runAddon = async (payload) => {
     }
 
     const modelConfig = {
+      engine: 'whisper',
       path: config.path,
       whisperConfig: filteredWhisperConfig
     }
@@ -109,15 +108,15 @@ const runAddon = async (payload) => {
     }
 
     logger.info('Creating model instance:', {
-      constructorArgs,
+      files,
       whisperConfig: modelConfig.whisperConfig,
       vadModelPath,
       streaming,
       hasVadModelPath: !!modelConfig.vadModelPath
     })
 
-    modelInstance = new TranscriptionWhispercpp(constructorArgs, modelConfig)
-    await modelInstance._load()
+    modelInstance = new ASRGgml({ files, config: modelConfig })
+    await modelInstance.load()
 
     const [loadSec, loadNano] = process.hrtime(loadStart)
     loadModelMs = loadSec * 1e3 + loadNano / 1e6
@@ -188,5 +187,5 @@ const runAddon = async (payload) => {
 }
 
 module.exports = {
-  runAddon
+  runWhisper
 }

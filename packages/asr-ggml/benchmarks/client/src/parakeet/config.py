@@ -66,7 +66,7 @@ class WERConfig(BaseModel):
 
 
 class ModelConfig(BaseModel):
-    path: str = Field("./models/parakeet-tdt-0.6b-v3-onnx", description="Path to the model directory")
+    path: str = Field("./models/parakeet-tdt-0.6b-v3.f16.gguf", description="Path to the .gguf model file")
     sample_rate: int = Field(16000, description="Audio sample rate")
     audio_format: str = Field("s16le", description="Audio format (s16le or f32le)")
     model_type: ModelType = Field(ModelType.TDT, description="Model type (tdt, ctc, eou, sortformer)")
@@ -80,11 +80,11 @@ class ModelConfig(BaseModel):
     @model_validator(mode='after')
     def validate_paths(self):
         abs_path = os.path.abspath(self.path)
-        if not os.path.isdir(self.path):
+        if not os.path.exists(self.path):
             raise ValueError(
-                f"Model directory not found: {self.path}\n"
+                f"Model file not found: {self.path}\n"
                 f"Absolute path: {abs_path}\n"
-                f"Please ensure the model directory exists before running the benchmark."
+                f"Please ensure the model file exists before running the benchmark."
             )
         return self
 
@@ -97,7 +97,7 @@ class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig, description="Model configuration")
 
     @classmethod
-    def from_yaml(cls, path: str = "config/config.yaml") -> "Config":
+    def from_yaml(cls, path: str = "config/config-parakeet.yaml") -> "Config":
         with open(path, "r", encoding="utf-8") as f:
             return cls(**yaml.safe_load(f))
 

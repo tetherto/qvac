@@ -45,7 +45,7 @@
 const path = require('bare-path')
 const process = require('bare-process')
 const subprocess = require('bare-subprocess')
-const TranscriptionParakeet = require('../index.js')
+const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const { setupLogger, validatePaths, pushableStream } = require('./utils.js')
 
@@ -153,9 +153,10 @@ async function main() {
   console.log(`Loading ${asrPath}...`)
   console.log(`Loading ${diarPath}...`)
 
-  const asr = new TranscriptionParakeet({
+  const asr = new ASRGgml({
     files: { model: asrPath },
     config: {
+      engine: 'parakeet',
       parakeetConfig: {
         streaming: true,
         streamingChunkMs: args.chunkMs ?? 2000,
@@ -163,9 +164,10 @@ async function main() {
       }
     }
   })
-  const diar = new TranscriptionParakeet({
+  const diar = new ASRGgml({
     files: { model: diarPath },
     config: {
+      engine: 'parakeet',
       parakeetConfig: {
         streaming: true,
         streamingChunkMs: args.chunkMs ?? 2000,

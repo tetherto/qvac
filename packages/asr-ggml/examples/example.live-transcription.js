@@ -4,7 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const { Readable } = require('streamx')
-const TranscriptionWhispercpp = require('../index.js')
+const ASRGgml = require('../index.js')
 
 /**
  * Example: Simulating live transcription with small audio chunks
@@ -187,6 +187,7 @@ async function main() {
   }
 
   const config = {
+    engine: 'whisper',
     path: modelPath,
     whisperConfig: {
       language: 'en',
@@ -197,8 +198,8 @@ async function main() {
     }
   }
 
-  const model = new TranscriptionWhispercpp(constructorArgs, config)
-  await model._load()
+  const model = new ASRGgml({ ...constructorArgs, config })
+  await model.load()
 
   const audioStats = fs.statSync(audioPath)
 

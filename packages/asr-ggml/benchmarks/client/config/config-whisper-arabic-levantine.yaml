@@ -1,9 +1,10 @@
+engine: "whisper"
 server:
   url: "http://localhost:8080/run"
   timeout: 90
   batch_size: 10
-  lib: "@qvac/transcription-whispercpp"
-  version: "0.3.2"
+  lib: "@qvac/asr-ggml"
+  version: "0.1.0"
 
 dataset:
   dataset_type: "common_voice"

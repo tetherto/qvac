@@ -72,6 +72,7 @@ class ParakeetClient:
         resp = self.client.post(
             self.url,
             json={
+                "engine": "parakeet",
                 "inputs": batch,
                 "parakeet": parakeet_info,
                 "config": {

@@ -5,7 +5,7 @@
  *
  * Loads a single Parakeet GGUF (CTC, TDT, EOU, or Sortformer) and
  * runs inference on a wav / raw PCM file via the public
- * `TranscriptionParakeet` class. The binding auto-detects the model
+ * `ASRGgml` class. The binding auto-detects the model
  * type from GGUF metadata, so the same script handles every engine.
  *
  * Usage:
@@ -15,7 +15,7 @@
 /* global Bare */
 const path = require('bare-path')
 const process = require('bare-process')
-const TranscriptionParakeet = require('../index.js')
+const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const {
   setupLogger,
@@ -62,7 +62,8 @@ async function main() {
   console.log(`Model: ${modelPath}`)
   console.log(`Audio: ${audioPath}`)
 
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
+    engine: 'parakeet',
     files: { model: modelPath }
   })
 

@@ -1,15 +1,17 @@
 #!/bin/bash
 
-# Trigger the Parakeet Benchmark GitHub Action workflow from local
+# Trigger the ASR GGML accuracy benchmark GitHub Action workflow from local
 # Usage: ./scripts/trigger-benchmark.sh [options]
 
 set -e
 
+ENGINE="parakeet"
 MODEL_TYPE="tdt"
 MAX_SAMPLES="50"
 BRANCH=""
 REMOTE="upstream"
 WATCH="false"
+WORKFLOW="benchmark-asr-ggml.yml"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -20,10 +22,11 @@ show_help() {
     cat << EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Trigger the Parakeet Benchmark GitHub Action workflow.
+Trigger the ASR GGML accuracy benchmark GitHub Action workflow.
 
 OPTIONS:
-    -t, --model-type        Model type: tdt, ctc, eou, sortformer, all (default: $MODEL_TYPE)
+    -e, --engine            Engine: whisper, parakeet (default: $ENGINE)
+    -t, --model-type        Parakeet model type: tdt, ctc, eou, sortformer, all (default: $MODEL_TYPE)
     -m, --max-samples       Maximum samples to test, 0 = unlimited (default: $MAX_SAMPLES)
     -b, --branch            Git branch to run workflow on (default: current branch)
     -R, --remote            Git remote to use: origin, upstream (default: $REMOTE)
@@ -54,6 +57,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -e|--engine)
+            ENGINE="$2"
+            shift 2
+            ;;
         -t|--model-type)
             MODEL_TYPE="$2"
             shift 2
@@ -86,7 +93,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate model type
+# Validate engine
+case "$ENGINE" in
+    whisper|parakeet) ;;
+    *)
+        echo -e "${RED}Error: Invalid engine '$ENGINE'. Must be one of: whisper, parakeet${NC}"
+        exit 1
+        ;;
+esac
+
+# Validate model type (parakeet-only input)
 case "$MODEL_TYPE" in
     tdt|ctc|eou|sortformer|all) ;;
     *)
@@ -126,22 +142,27 @@ else
     exit 1
 fi
 
-echo -e "${GREEN}Triggering Parakeet Benchmark workflow...${NC}"
+echo -e "${GREEN}Triggering ASR GGML benchmark workflow...${NC}"
 echo ""
 echo -e "${YELLOW}Configuration:${NC}"
 echo "  Remote:       $REMOTE"
 echo "  Repository:   $REPO"
 echo "  Branch:       $BRANCH"
+echo "  Engine:       $ENGINE"
 echo "  Model Type:   $MODEL_TYPE"
 echo "  Max Samples:  $MAX_SAMPLES"
 echo "  Watch:        $WATCH"
 echo ""
 
-if ! gh workflow run benchmark-transcription-parakeet.yml \
+WORKFLOW_ARGS=(-f engine="$ENGINE" -f max_samples="$MAX_SAMPLES")
+if [ "$ENGINE" = "parakeet" ]; then
+    WORKFLOW_ARGS+=(-f model_type="$MODEL_TYPE")
+fi
+
+if ! gh workflow run "$WORKFLOW" \
     -R "$REPO" \
     --ref "$BRANCH" \
-    -f model_type="$MODEL_TYPE" \
-    -f max_samples="$MAX_SAMPLES"; then
+    "${WORKFLOW_ARGS[@]}"; then
     echo -e "${RED}Failed to trigger workflow.${NC}"
     exit 1
 fi
@@ -151,7 +172,7 @@ echo ""
 
 sleep 3
 
-RUN_ID=$(gh run list --workflow=benchmark-transcription-parakeet.yml -R "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --workflow="$WORKFLOW" -R "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
 
 if [ -z "$RUN_ID" ]; then
     echo -e "${RED}Error: Could not get workflow run ID.${NC}"

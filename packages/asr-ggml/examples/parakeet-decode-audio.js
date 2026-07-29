@@ -7,7 +7,7 @@
  * audio through `@qvac/decoder-audio` (FFmpeg) first so any
  * container / codec FFmpeg supports (mp3, m4a, ogg, flac, mp4, ...)
  * works -- not just 16 kHz mono `.wav` / raw s16le PCM. Drives
- * inference through the public `TranscriptionParakeet` class.
+ * inference through the public `ASRGgml` class.
  *
  * Usage:
  *   bare examples/decode-audio.js --model <gguf> --audio <file>
@@ -18,7 +18,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const { FFmpegDecoder } = require('@qvac/decoder-audio')
-const TranscriptionParakeet = require('../index.js')
+const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const { setupLogger, validatePaths, printResults } = require('./utils.js')
 
@@ -104,7 +104,8 @@ async function main() {
   console.log(`Model: ${modelPath}`)
   console.log(`Audio: ${audioPath}`)
 
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
+    engine: 'parakeet',
     files: { model: modelPath }
   })
   await model.load()

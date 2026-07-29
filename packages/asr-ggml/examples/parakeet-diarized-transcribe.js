@@ -6,7 +6,7 @@
  * Runs Sortformer to find speaker time-segments, then transcribes
  * each speaker's audio slice with the ASR model. Output is a
  * "Speaker N: ..." per-segment transcript. Both engines run
- * through the public `TranscriptionParakeet` class.
+ * through the public `ASRGgml` class.
  *
  * Recommended `--diar-model`: the v1 Sortformer GGUF
  * (`sortformer-4spk-v1.q8_0.gguf`). v2.1 also works but the AOSC
@@ -24,7 +24,7 @@
 /* global Bare */
 const path = require('bare-path')
 const process = require('bare-process')
-const TranscriptionParakeet = require('../index.js')
+const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const {
   setupLogger,
@@ -140,7 +140,7 @@ async function main() {
   console.log(`Audio: ${(audioData.length / SAMPLE_RATE).toFixed(2)}s\n`)
 
   // Step 1: diarize.
-  const diarModel = new TranscriptionParakeet({ files: { model: diarPath } })
+  const diarModel = new ASRGgml({ engine: 'parakeet', files: { model: diarPath } })
   await diarModel.load()
   const sortformerSegments = []
   const diarResponse = await diarModel.run(audioData)
@@ -166,7 +166,7 @@ async function main() {
   }
 
   // Step 2: transcribe each speaker segment.
-  const asrModel = new TranscriptionParakeet({ files: { model: asrPath } })
+  const asrModel = new ASRGgml({ engine: 'parakeet', files: { model: asrPath } })
   await asrModel.load()
   const results = await transcribeSegments(asrModel, audioData, segments)
   await asrModel.unload()

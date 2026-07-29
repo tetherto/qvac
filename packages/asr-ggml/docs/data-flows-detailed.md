@@ -1,6 +1,13 @@
-# Data Flows: @qvac/transcription-whispercpp
+# Data Flows: @qvac/asr-ggml (Whisper engine)
 
 > **⚠️ Staleness Warning:** These diagrams were generated from the codebase at a point in time and may become outdated as the code evolves. When debugging or verifying behavior, regenerate these diagrams from the current source code rather than relying on this document as the sole source of truth.
+
+> **Heritage document.** These flows trace the **whisper engine** as it stood
+> before the whisper + parakeet merge, when the JS entrypoint was a single
+> `TranscriptionWhispercpp` class. The sequences still hold; the entrypoint is
+> now `ASRGgml` delegating to `WhisperDriver`, so read
+> `TranscriptionWhispercpp` below as "`ASRGgml` + `WhisperDriver`". See
+> [`engines.md`](engines.md) for the current orchestrator/driver split.
 
 ---
 

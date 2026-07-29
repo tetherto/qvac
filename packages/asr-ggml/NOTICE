@@ -1,14 +1,34 @@
-@qvac/transcription-whispercpp
+@qvac/asr-ggml
 Copyright 2026 Tether Data, S.A. de C.V.
 
 This product includes third-party components under their
-respective licenses. @qvac/transcription-whispercpp itself is licensed under
+respective licenses. @qvac/asr-ggml itself is licensed under
 Apache-2.0; bundled dependencies are governed by the licenses
 listed below.
+
+@qvac/asr-ggml is the merge of @qvac/transcription-whispercpp and
+@qvac/transcription-parakeet; the entries below are the union of both
+packages' notices.
 
 =========================================================================
 Third-Party Model Licenses
 =========================================================================
+
+--- nvidia-open-model-license ---
+
+  Parakeet and Sortformer checkpoints, converted from the upstream
+  NVIDIA NeMo `.nemo` releases. See each model card for the terms.
+
+  parakeet-ctc-0.6b
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  parakeet-tdt-0.6b-v3
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  parakeet_realtime_eou_120m-v1
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  diar_sortformer_4spk-v1
+    https://huggingface.co/nvidia/diar_sortformer_4spk-v1
+  diar_streaming_sortformer_4spk-v2.1
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
 
 --- apache-2.0 (Apache License 2.0) ---
 
@@ -129,6 +149,8 @@ Python Dependencies
     UNKNOWN
   safetensors
     https://github.com/huggingface/safetensors
+  sentencepiece
+    https://github.com/google/sentencepiece
   transformers
     https://github.com/huggingface/transformers
 
@@ -153,6 +175,8 @@ Python Dependencies
 
 --- mit (MIT License) ---
 
+  gguf
+    https://github.com/ggml-org/llama.cpp/tree/master/gguf-py
   jieba
     https://github.com/fxsjy/jieba
   openai-whisper
@@ -181,6 +205,8 @@ C++ Dependencies
 
 --- apache-2.0 (Apache License 2.0) ---
 
+  parakeet-cpp
+    https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/main/engines/parakeet
   qvac-lib-inference-addon-cpp
     https://github.com/tetherto/qvac
 

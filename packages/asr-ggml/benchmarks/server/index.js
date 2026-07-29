@@ -4,7 +4,7 @@ const { server } = require('./src/server')
 const logger = require('./src/utils/logger')
 const process = require('bare-process')
 
-const port = 8080
+const port = process.env?.PORT || 8080
 
 server.listen(port, () => {
   logger.info(`Server is running on port ${port}`)
