@@ -336,7 +336,7 @@ curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
   -F response_format=srt
 ```
 
-See [Timed responses](#timed-responses) for the shared SRT, WebVTT, and partial `verbose_json` examples, and [Audio transcription errors](#audio-transcription-errors) for timed-format failures.
+See [Audio transcription and translation timed responses](#audio-transcription-and-translation-timed-responses) for the shared SRT, WebVTT, and partial `verbose_json` examples, and [Audio transcription and translation errors](#audio-transcription-and-translation-errors) for timed-format failures.
 
 ## `POST /v1/audio/translations`
 
@@ -414,7 +414,7 @@ curl -s http://127.0.0.1:11434/v1/audio/translations \
 Response (`json`): `{ "text": "..." }`  
 Response (`text`): body is plain UTF-8 text.
 
-### Timed responses
+### Audio transcription and translation timed responses
 
 SRT responses use `Content-Type: text/plain; charset=utf-8` and comma-separated milliseconds:
 
@@ -461,7 +461,7 @@ This is not full OpenAI `verbose_json` compatibility. Its `duration` is the maxi
 
 You normally use the **same** underlying weights for both transcription and translation; register **two aliases** that share the same `"model": "WHISPER_…"` constant — one without `type` (defaults to transcription) and one with `type: "whispercpp-audio-translation"`.
 
-### Audio transcription errors
+### Audio transcription and translation errors
 
 | HTTP | `error.code`                     | When                                                                                                         |
 | ---- | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
