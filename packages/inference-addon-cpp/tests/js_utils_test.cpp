@@ -183,4 +183,76 @@ TEST(JsUtilsTest, JsAsyncTaskEnvTeardownDuringBlockedWorker) {
       << "no promise/JS operation may run once env teardown has begun";
 }
 
+// The work functor commonly captures the last shared_ptr to the addon, and
+// its destructors are JS-facing. They must run before the deferred teardown
+// is finished — after the finish, env teardown proceeds and the env can be
+// gone. Today the detached worker lambda owns the functor and destroys it
+// after uv_async_send, i.e. after the loop may already have finished the
+// teardown: the exact off-loop use-after-free window this guard exists to
+// close.
+TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
+  js_env_t env;
+
+  mock_js::lastCreatedDeferred = nullptr;
+  mock_js::lastDeferredTeardownCb = nullptr;
+  mock_js::lastDeferredTeardownData = nullptr;
+  mock_js::lastDeferredTeardownHandle = nullptr;
+
+  std::atomic<bool> probeDestroyed{false};
+  std::atomic<bool> teardownFinishedFirst{false};
+  struct Probe {
+    std::atomic<bool>* destroyed;
+    std::atomic<bool>* finishedFirst;
+    ~Probe() {
+      finishedFirst->store(
+          mock_js::lastDeferredTeardownHandle != nullptr &&
+          mock_js::lastDeferredTeardownHandle->finished.load());
+      destroyed->store(true);
+    }
+  };
+  std::shared_ptr<Probe> probe(
+      new Probe{&probeDestroyed, &teardownFinishedFirst});
+
+  js_value_t* promise = js::JsAsyncTask::run(&env, [probe]() {});
+  EXPECT_NE(promise, nullptr);
+  // Drop the test's reference: the task owns the last one, so the probe's
+  // destructor runs wherever the task destroys the work functor.
+  probe.reset();
+
+  for (int i = 0; i != 1000 && !probeDestroyed.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_TRUE(probeDestroyed.load()) << "work captures were never destroyed";
+  EXPECT_FALSE(teardownFinishedFirst.load())
+      << "work captures were destroyed after the deferred teardown finished: "
+         "their (JS-facing) destructors ran off-loop against an env that "
+         "teardown may already have freed";
+}
+
+// A settlement failure inside completion (any JS() call failing) must not
+// skip the close/finish handshake: completion runs from a C callback, so a
+// throw escaping it terminates the process, and an unfinished deferred
+// teardown blocks env teardown (unload) forever.
+TEST(JsUtilsTest, JsAsyncTaskSettlementFailureStillFinishesTeardown) {
+  js_env_t env;
+
+  mock_js::lastCreatedDeferred = nullptr;
+  mock_js::lastDeferredTeardownCb = nullptr;
+  mock_js::lastDeferredTeardownData = nullptr;
+  mock_js::lastDeferredTeardownHandle = nullptr;
+  mock_js::failNextResolveDeferred = true;
+
+  js_value_t* promise = js::JsAsyncTask::run(&env, []() {});
+  EXPECT_NE(promise, nullptr);
+  js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  ASSERT_NE(teardown, nullptr);
+
+  for (int i = 0; i != 1000 && !teardown->finished.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  EXPECT_TRUE(teardown->finished.load())
+      << "a failed settlement skipped the close/finish handshake; env "
+         "teardown would block forever on this task's deferred teardown";
+}
+
 } // namespace qvac_lib_inference_addon_cpp::js_utils

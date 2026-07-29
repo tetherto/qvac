@@ -49,6 +49,10 @@ inline js_deferred_t* lastCreatedDeferred = nullptr;
 inline js_deferred_teardown_cb lastDeferredTeardownCb = nullptr;
 inline void* lastDeferredTeardownData = nullptr;
 inline js_deferred_teardown_t* lastDeferredTeardownHandle = nullptr;
+/// One-shot failure injection: the next js_resolve_deferred call returns
+/// non-zero (a JS() failure) instead of settling, so tests can drive the
+/// completion path where settlement fails mid-flight.
+inline std::atomic<bool> failNextResolveDeferred{false};
 } // namespace mock_js
 
 // js_loop_t is an alias for uv_loop_t in the real implementation
@@ -465,6 +469,9 @@ inline int js_create_promise(
 
 inline int js_resolve_deferred(
     js_env_t* env, js_deferred_t* deferred, js_value_t* resolution) {
+  if (mock_js::failNextResolveDeferred.exchange(false)) {
+    return -1;
+  }
   deferred->settled = true;
   return 0;
 }
