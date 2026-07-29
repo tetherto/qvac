@@ -113,7 +113,21 @@ test('a negative nGpuLayers is valid input meaning "all layers"', async function
   const res = fitParams({ modelPath, nGpuLayers: -1, marginMiB: 1024 })
 
   t.ok([FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status), 'accepted, not rejected')
-  t.is(res.nGpuLayers, -1, 'a pinned negative is preserved rather than normalised')
+
+  // Deliberately not asserting the value comes back as -1. The fitter only
+  // rewrites fields still holding their llama default, and -1 *is* the default
+  // for n_gpu_layers — so passing it is indistinguishable from passing nothing
+  // and the fitter stays free to choose. Pinning requires a non-default value.
+  t.is(typeof res.nGpuLayers, 'number', 'a plan is still returned')
+})
+
+test('a non-default nGpuLayers is what actually pins the offload', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // 0 is non-default, so unlike -1 it is a real constraint the fitter honours.
+  const res = fitParams({ modelPath, nGpuLayers: 0, marginMiB: 1024 })
+
+  t.is(res.nGpuLayers, 0, 'a non-default pin is preserved')
 })
 
 test('memory pressure moves the plan off the GPU rather than reporting FAILURE', async function (t) {

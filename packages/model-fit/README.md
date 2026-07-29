@@ -77,6 +77,11 @@ reference counting.
 - `llama_params_fit` only rewrites `mparams`/`cparams` fields that still hold
   their **default** value. Pinning `nGpuLayers` therefore *fixes* it and the
   fitter fits the rest around it; omit it to let the fitter choose.
+- One consequence worth knowing: `-1` **is** the llama default for
+  `n_gpu_layers`, so passing `nGpuLayers: -1` ("all layers") does not pin
+  anything — it is indistinguishable from omitting the field, and the fitter
+  stays free to rewrite it. Pin with `0`, a positive count, or any negative
+  other than `-1`.
 - Context is the documented exception: it is reduced **iff** `nCtx == 0`. A
   concrete `nCtx` is treated as a hard requirement and comes back unchanged.
 - `nCtxMin` defaults to **4096** when left at 0, matching upstream's

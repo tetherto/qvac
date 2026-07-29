@@ -21,7 +21,11 @@ export interface FitConfig {
   /**
    * Pin the GPU offload layer count; omit to let the fitter choose. Per
    * llama.h a negative value means "all layers", so negatives are valid.
-   * Pinning makes offload a hard constraint the fitter will not relax.
+   *
+   * Only a *non-default* value pins: the fitter rewrites any field still
+   * holding its llama default, and -1 is the default for this one. Passing -1
+   * is therefore equivalent to omitting it. Use 0 or a positive count (or any
+   * negative other than -1) to make offload a hard constraint.
    */
   nGpuLayers?: number
   /** Free headroom to leave on every device, in MiB (default 1024). */
