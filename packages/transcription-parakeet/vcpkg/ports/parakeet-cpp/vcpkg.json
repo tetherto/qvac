@@ -1,0 +1,89 @@
+{
+  "name": "parakeet-cpp",
+  "version-date": "2026-07-29",
+  "description": "Parakeet (NVIDIA FastConformer ASR + Sortformer diarization) inference in pure C++/ggml. Ships CTC, TDT, EOU and Sortformer engines under one Engine umbrella, plus the cross-engine StreamEvent API (VadStateChanged / EndOfTurn). Sourced from tetherto/qvac-ext-lib-whisper.cpp engines/parakeet/ subfolder; consumes the ggml-speech port. BREAKING (consumers): this pin moves the installable artifacts to the `qvac-parakeet` namespace so this port is co-installable with `whisper-cpp`, whose upstream (v1.9.1+) ships its own `parakeet` library and CMake package and previously collided on lib/parakeet.lib. Consumers must switch from find_package(parakeet-cpp) + parakeet::parakeet to find_package(qvac-parakeet CONFIG) + qvac::parakeet; the installed library is libqvac-parakeet.*, the package config lives at lib/cmake/qvac-parakeet and a qvac-parakeet.pc is now shipped (self-sufficient: it advertises ggml's include/lib dirs and, via Libs.private, the OpenMP / Core ML framework deps a static consumer needs). The C++ `parakeet::` namespace, the include/parakeet/ header directory and this port's name are unchanged. The same change fixes two latent packaging defects: the exported target now carries cxx_std_17 (consumers that set no CMAKE_CXX_STANDARD previously failed to compile the headers) and the package config resolves OpenMP when the build used it. The prior pin added the optional Apple-only `coreml` feature (default on osx/ios): when enabled and a `<model>-encoder.mlmodelc` sidecar is present at runtime the FastConformer encoder runs on the Apple Neural Engine, otherwise it falls back to the ggml encoder (additive and presence-driven; non-Apple platforms unaffected). It also bounds offline-transcription memory on long audio: transcribe_samples / transcribe_samples_stream used to run the conformer encoder over the whole input in one graph (O(T_enc^2) self-attention), OOMing on multi-hour files (~100 GB for 90 min); the encoder now computes the mel once (global CMVN) and slides over it in overlapping windows with context trimmed at the seams, while inputs that fit one window keep the bit-identical single-pass path. Layered on master ecac5bb7 (PR #85, EOU RNN-T decoder as ggml graphs on GPU: span-batched joint, persistent LSTM/pred state and full-window enc-projection on device, on-device argmax and <EOU> reset; RTX 4000 Vulkan EOU RTF 0.0052 -> 0.0031). Earlier pins: master 2e2f4d5 (PR #87, CPU repack of quantized encoder GEMM weights) and df54e37 (PR #83, on-device TDT predictor multi-layer state).",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/engines/parakeet",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "version>=": "2026-07-15"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "coreml",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "coreml": {
+      "description": "Enable the Apple Core ML (Neural Engine) encoder sidecar (Apple-only; presence-driven at runtime).",
+      "supports": "osx | ios"
+    },
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "cuda"
+          ]
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration (macOS / iOS)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "metal"
+          ]
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android / Adreno)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "vulkan"
+          ]
+        }
+      ]
+    }
+  }
+}
