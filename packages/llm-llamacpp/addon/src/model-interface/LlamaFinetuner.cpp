@@ -407,6 +407,7 @@ std::string LlamaFinetuner::finetune(
     // racing completion) has nothing left to stop and must not bleed into a
     // later finetune. Only publication may consume the latch; only this job
     // teardown may discard it.
+    model_.closeFinetuneCancellationWindow();
     discardPendingPauseRequest();
 
     if (!wasPaused) {
@@ -434,6 +435,7 @@ std::string LlamaFinetuner::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
+    model_.closeFinetuneCancellationWindow();
     discardPendingPauseRequest();
     try {
       model_.reload(FinetuneConfigOverrides{});

@@ -54,6 +54,11 @@ public:
   static void reloadDelayed(LlamaModel& model) {
     model.setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
   }
+
+  static void setActiveFinetuneJob(
+      LlamaModel& model, qvac_lib_inference_addon_cpp::JobId id) {
+    model.beginFinetuneJob(id);
+  }
 };
 
 class LlamaFinetunerTestPeer {

@@ -296,16 +296,14 @@ private:
       const std::vector<Prompt>& prompts,
       const SeqAssignedObserver& onSeqAssigned = {},
       const SeqObserver& onSeqDone = {});
+  void cancelInference() const;
   void cancelImpl() const;
 
-  /// The armed cancel action of a tagged finetune job, also forwarded by
-  /// every whole-model cancelImpl(): pause, saving a checkpoint only when
-  /// the canceller armed the mode via setFinetuneCancelSavesCheckpoint
-  /// (consumed on read, so unarmed cancels pause without a checkpoint).
-  /// Const like the cancel paths that issue it (finetuner_ and the mode
-  /// atomic are mutable for the same reason liveJobs_ is). No-op in the
-  /// standalone test build, where the finetuner forward is compiled out.
-  void requestFinetuneCancel() const;
+  /// Pause the active tagged finetune when @p id still owns it, saving a
+  /// checkpoint only when armed via setFinetuneCancelSavesCheckpoint.
+  void requestFinetuneCancel(qvac_lib_inference_addon_cpp::JobId id) const;
+  void beginFinetuneJob(qvac_lib_inference_addon_cpp::JobId id);
+  void closeFinetuneCancellationWindow();
 
   /// True for a single Prompt that may run on the scheduler concurrently:
   /// text generation, or a prefill that persists its cache to disk
@@ -504,6 +502,12 @@ private:
   /// single-path job (prefill-only, or no scheduler) arms the single-prompt
   /// context stop on entry, and a finetune job binds requestFinetuneCancel.
   mutable JobCancelRegistry liveJobs_;
+
+  /// Tagged finetune currently in setup or training. This lifecycle marker is
+  /// independent of stateMtx_ so cancellation can target setup-time reloads.
+  mutable std::atomic<qvac_lib_inference_addon_cpp::JobId>
+      currentFinetuneJobId_{qvac_lib_inference_addon_cpp::kNoJobId};
+  mutable std::mutex finetuneCancelMtx_;
 
   /// Checkpoint mode for the next targeted finetune cancel, armed by
   /// setFinetuneCancelSavesCheckpoint and consumed (reset to false) by

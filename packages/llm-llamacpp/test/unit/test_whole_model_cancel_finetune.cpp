@@ -18,26 +18,18 @@ LlamaModel makeUnloadedModel() {
 
 // Whole-model cancel is the only cancel signal native teardown issues: the
 // multi-job scheduler destructor prefers IModelCancel::cancel() whenever it
-// is wired (it always is, see AddonJs.hpp), which lands in cancelImpl(). A
-// running finetune increments neither run counter, so both engine-stop
-// branches no-op, and its registry entry armed at tagged dispatch means
-// parkAll() only sets a cancelRequested flag that nothing ever consumes
-// again. The finetune therefore keeps training and the destructor joins its
-// worker for the full remaining training duration.
+// is wired. A running finetune owns neither inference run counter, so teardown
+// must use its explicit lifecycle marker rather than an engine-stop branch.
 //
-// The contract pinned here: every whole-model cancel must forward an
-// explicit finetune cancellation request (the same pause-without-checkpoint
-// the armed per-id action issues). The forward is unconditional — it must
-// not be gated on state_ or the run counters, because a finetune holds
-// neither — so it is observable on an unloaded model; the finetuner side
-// no-ops when no finetune is running. Asserted as a delta on purpose:
-// construction itself already issues a whole-model cancel (setInitLoader
-// cancels any prior work), so the counter need not start at zero — what
-// matters is that THIS cancel adds a forward.
+// The contract pinned here: whole-model cancel must forward an explicit
+// cancellation to the active finetune even though it owns neither inference
+// run counter.
 TEST(
     WholeModelCancelFinetuneTest,
     WholeModelCancelForwardsFinetuneCancellation) {
   LlamaModel model = makeUnloadedModel();
+  constexpr qvac_lib_inference_addon_cpp::JobId finetuneId = 1;
+  LlamaModelTestPeer::setActiveFinetuneJob(model, finetuneId);
   const unsigned before = LlamaModelTestPeer::finetuneCancelRequests(model);
 
   model.cancel();

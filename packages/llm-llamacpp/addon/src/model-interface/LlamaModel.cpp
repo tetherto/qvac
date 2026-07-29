@@ -450,7 +450,7 @@ void LlamaModel::reload(
 void LlamaModel::setInitLoader(
     std::optional<InitLoader::LOADER_TYPE> loaderType,
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
-  cancel();
+  cancelInference();
   std::unique_lock lock(stateMtx_);
   // Unconditionally stop the old contexts before destroying them, regardless
   // of job counters. cancel() above only routes to active engines (counters >
@@ -735,6 +735,17 @@ void LlamaModel::cancel() const {
     return;
   }
   cancelImpl();
+  const auto finetuneId = currentFinetuneJobId_.load();
+  if (finetuneId != qvac_lib_inference_addon_cpp::kNoJobId) {
+    requestFinetuneCancel(finetuneId);
+  }
+}
+
+void LlamaModel::cancelInference() const {
+  std::shared_lock lock(stateMtx_, std::try_to_lock);
+  if (lock.owns_lock()) {
+    cancelImpl();
+  }
 }
 
 void LlamaModel::cancelImpl() const {
@@ -760,29 +771,32 @@ void LlamaModel::cancelImpl() const {
   // could take engine locks, and this cancel may be issued from a streaming
   // callback on the engine's own worker thread (see above).
   liveJobs_.parkAll();
-  // A running finetune is invisible to everything above: it increments
-  // neither run counter, and its registry entry was armed at tagged
-  // dispatch, so parkAll() only sets a flag nothing consumes again. Forward
-  // the cancellation explicitly — native teardown issues exactly this
-  // whole-model cancel (the multi-job scheduler destructor prefers
-  // IModelCancel::cancel()) and would otherwise join the worker for the
-  // finetune's full remaining training duration. Safe despite park-only:
-  // requestPause takes no engine locks, is cross-thread safe, and no-ops
-  // when no finetune is running.
-  requestFinetuneCancel();
 }
 
-void LlamaModel::requestFinetuneCancel() const {
+void LlamaModel::requestFinetuneCancel(
+    const qvac_lib_inference_addon_cpp::JobId id) const {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  if (currentFinetuneJobId_.load() != id) {
+    finetuneCancelSavesCheckpoint_.store(false);
+    return;
+  }
   finetuneCancelRequests_.fetch_add(1);
 #ifndef STANDALONE_TEST_BUILD
-  // requestPause is cross-thread safe by design (the JS cancel binding calls
-  // it from a detached thread); it no-ops when no finetune is running.
-  // Consume-on-read: only the cancel that armed the checkpoint mode (the JS
-  // cancel binding, right before it cancels its snapshot) saves a pause
-  // checkpoint; every other entry point (scheduler teardown, whole-model
-  // cancel) keeps the no-checkpoint default.
   finetuner_.requestPause(finetuneCancelSavesCheckpoint_.exchange(false));
+#else
+  static_cast<void>(finetuneCancelSavesCheckpoint_.exchange(false));
 #endif
+}
+
+void LlamaModel::beginFinetuneJob(
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  currentFinetuneJobId_.store(id);
+}
+
+void LlamaModel::closeFinetuneCancellationWindow() {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  currentFinetuneJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
 }
 
 void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
@@ -905,9 +919,11 @@ std::any LlamaModel::process(
   if (isSingle) {
     const auto& prompt = std::any_cast<const Prompt&>(input);
     if (prompt.finetuningParams.has_value()) {
+      beginFinetuneJob(id);
+      ScopeGuard finetuneGuard([this] { closeFinetuneCancellationWindow(); });
       // Arm the finetune cancel so cancelById(id) reaches the finetuner; a
       // cancel parked before this point aborts the job before training starts.
-      if (liveJobs_.bind(id, [this] { requestFinetuneCancel(); })) {
+      if (liveJobs_.bind(id, [this, id] { requestFinetuneCancel(id); })) {
         return std::any(FinetuneTerminalResult{"finetune", "PAUSED"});
       }
       return process(input);
