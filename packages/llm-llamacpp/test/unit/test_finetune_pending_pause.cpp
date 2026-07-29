@@ -128,15 +128,40 @@ TEST(
 // ownership problem: armed with no live finetune to consume it, it must not
 // linger for a later unrelated finetune cancellation to inherit.
 TEST(
-    FinetuneCancelCheckpointModeTest,
-    ArmingWithoutLiveFinetuneMustNotPersist) {
+    FinetuneCancelCheckpointModeTest, ArmingWithoutLiveFinetuneMustNotPersist) {
   LlamaModel model = makeUnloadedModel();
 
-  model.setFinetuneCancelSavesCheckpoint(true);
+  model.setFinetuneCancelSavesCheckpoint(
+      true, {qvac_lib_inference_addon_cpp::kNoJobId});
 
   EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
       << "a checkpoint mode armed while no finetune is live has no owner and "
          "must not outlive the cancel that armed it";
+}
+
+// The armed mode is owned by the snapshotted live finetune: never armed for
+// a finetune outside the canceller's snapshot, consumed by that job's own
+// cancel, discarded when the job's cancellation window closes.
+TEST(
+    FinetuneCancelCheckpointModeTest, ModeBelongsToTheSnapshottedLiveFinetune) {
+  LlamaModel model = makeUnloadedModel();
+  constexpr qvac_lib_inference_addon_cpp::JobId finetuneId = 7;
+  LlamaModelTestPeer::setActiveFinetuneJob(model, finetuneId);
+
+  model.setFinetuneCancelSavesCheckpoint(true, {finetuneId + 1});
+  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "a snapshot that does not cover the live finetune must not arm it";
+
+  model.setFinetuneCancelSavesCheckpoint(true, {finetuneId});
+  EXPECT_TRUE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model));
+  model.cancel();
+  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "the owning job's cancel must consume the mode";
+
+  model.setFinetuneCancelSavesCheckpoint(true, {finetuneId});
+  LlamaModelTestPeer::endFinetuneJob(model);
+  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "a mode nobody consumed must die with its job's window";
 }
 
 TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {

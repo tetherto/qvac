@@ -66,6 +66,13 @@ public:
   bool requestPause(bool savePauseCheckpoint = true);
   void clearPauseRequest();
 
+  /// Discard a pause/cancel latched during the setup window that no
+  /// publication consumed. Job teardown calls this (finetune() on its own
+  /// exits, the model's per-job scope guard on the exits finetune() never
+  /// sees: a parked-cancel abort before training, a setup throw before the
+  /// finetuner's catch) so the request cannot bleed into a later finetune.
+  void discardPendingPauseRequest();
+
   /// Block until the training thread has completed the finetuning pause path.
   void waitUntilFinetuningPauseComplete();
 
@@ -126,7 +133,6 @@ private:
   void setPausedCheckpointStateShared(
       std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
   void clearPausedCheckpointStateShared();
-  void discardPendingPauseRequest();
 
   LlamaModel& model_;
 

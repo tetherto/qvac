@@ -67,7 +67,9 @@ public:
   /// Whether a checkpoint-save mode armed by setFinetuneCancelSavesCheckpoint
   /// is still waiting for a finetune cancel to consume it.
   static bool finetuneCancelCheckpointModeArmed(const LlamaModel& model) {
-    return model.finetuneCancelSavesCheckpoint_.load();
+    std::scoped_lock lock(model.finetuneCancelMtx_);
+    return model.finetuneCancelSaveOwner_ !=
+           qvac_lib_inference_addon_cpp::kNoJobId;
   }
 
   static std::shared_mutex& stateMutex(LlamaModel& model) {

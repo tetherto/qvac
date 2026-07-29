@@ -672,7 +672,8 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
         // after this cancel must never be paused by it.
         auto* llamaModel = tryGetLlamaModel(*addonCppRef);
         if (llamaModel != nullptr) {
-          llamaModel->setFinetuneCancelSavesCheckpoint(savePauseCheckpoint);
+          llamaModel->setFinetuneCancelSavesCheckpoint(
+              savePauseCheckpoint, liveJobs);
         }
         // cancelJobs(snapshot), not cancelAllJobs(): the snapshot carries
         // the real tagged ids under the multi-job scheduler (cancelById

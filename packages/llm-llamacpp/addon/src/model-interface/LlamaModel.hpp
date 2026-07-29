@@ -259,14 +259,19 @@ public:
   LlamaFinetuner& finetuner() { return finetuner_; }
   const LlamaFinetuner& finetuner() const { return finetuner_; }
 
-  /// Arm the checkpoint mode consumed by the next targeted finetune cancel
+  /// Arm the checkpoint mode a targeted cancel of the live finetune consumes
   /// (see requestFinetuneCancel): the JS cancel(savePauseCheckpoint) binding
   /// sets it right before routing its snapshotted job ids through the
   /// scheduler's per-id cancel, so the mode rides with the targeted cancel
-  /// instead of a direct "pause whichever finetune is running" call.
-  void setFinetuneCancelSavesCheckpoint(bool save) {
-    finetuneCancelSavesCheckpoint_.store(save);
-  }
+  /// instead of a direct "pause whichever finetune is running" call. Armed
+  /// only for the finetune live right now AND covered by @p cancelledJobs
+  /// (the canceller's snapshot; kNoJobId is the single-job scheduler's
+  /// whole-model sentinel) — a cancel that targets no live finetune must not
+  /// leave a save/no-save choice behind for a later unrelated cancellation
+  /// to inherit.
+  void setFinetuneCancelSavesCheckpoint(
+      bool save,
+      const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
 
 private:
   friend class LlamaFinetuner;
@@ -509,11 +514,17 @@ private:
       currentFinetuneJobId_{qvac_lib_inference_addon_cpp::kNoJobId};
   mutable std::mutex finetuneCancelMtx_;
 
-  /// Checkpoint mode for the next targeted finetune cancel, armed by
-  /// setFinetuneCancelSavesCheckpoint and consumed (reset to false) by
-  /// requestFinetuneCancel — see both for the hand-off. Mutable like
-  /// liveJobs_: the const cancel paths consume it.
-  mutable std::atomic<bool> finetuneCancelSavesCheckpoint_{false};
+  /// Checkpoint mode for a targeted cancel of the live finetune job, owned
+  /// by that job: armed by setFinetuneCancelSavesCheckpoint for the finetune
+  /// live at arm time (when the canceller's snapshot covers it), consumed by
+  /// that job's requestFinetuneCancel, discarded when the job's cancellation
+  /// window closes — so an unconsumed mode can never carry a stale
+  /// save/no-save choice into a later finetune's cancellation. Guarded by
+  /// finetuneCancelMtx_; mutable like liveJobs_: the const cancel paths
+  /// consume it.
+  mutable qvac_lib_inference_addon_cpp::JobId finetuneCancelSaveOwner_{
+      qvac_lib_inference_addon_cpp::kNoJobId};
+  mutable bool finetuneCancelSavesCheckpoint_{false};
 
   /// Count of finetune cancellation requests this model has forwarded to the
   /// finetuner (requestFinetuneCancel() calls). Bumped in every build so

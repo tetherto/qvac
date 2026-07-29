@@ -773,18 +773,44 @@ void LlamaModel::cancelImpl() const {
   liveJobs_.parkAll();
 }
 
+void LlamaModel::setFinetuneCancelSavesCheckpoint(
+    const bool save,
+    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  const auto live = currentFinetuneJobId_.load();
+  if (live == qvac_lib_inference_addon_cpp::kNoJobId) {
+    return;
+  }
+  const auto covers =
+      [&cancelledJobs](const qvac_lib_inference_addon_cpp::JobId id) {
+        return std::find(cancelledJobs.begin(), cancelledJobs.end(), id) !=
+               cancelledJobs.end();
+      };
+  // The mode belongs to the snapshotted live finetune: a finetune the
+  // canceller never targeted (admitted after its snapshot) must not carry
+  // this cancel's save choice. kNoJobId is the single-job scheduler's
+  // whole-model sentinel and covers whatever is live.
+  if (!covers(live) && !covers(qvac_lib_inference_addon_cpp::kNoJobId)) {
+    return;
+  }
+  finetuneCancelSaveOwner_ = live;
+  finetuneCancelSavesCheckpoint_ = save;
+}
+
 void LlamaModel::requestFinetuneCancel(
     const qvac_lib_inference_addon_cpp::JobId id) const {
   std::scoped_lock lock(finetuneCancelMtx_);
   if (currentFinetuneJobId_.load() != id) {
-    finetuneCancelSavesCheckpoint_.store(false);
     return;
   }
+  const bool save =
+      finetuneCancelSaveOwner_ == id && finetuneCancelSavesCheckpoint_;
+  finetuneCancelSaveOwner_ = qvac_lib_inference_addon_cpp::kNoJobId;
   finetuneCancelRequests_.fetch_add(1);
 #ifndef STANDALONE_TEST_BUILD
-  finetuner_.requestPause(finetuneCancelSavesCheckpoint_.exchange(false));
+  finetuner_.requestPause(save);
 #else
-  static_cast<void>(finetuneCancelSavesCheckpoint_.exchange(false));
+  static_cast<void>(save);
 #endif
 }
 
@@ -797,6 +823,8 @@ void LlamaModel::beginFinetuneJob(
 void LlamaModel::closeFinetuneCancellationWindow() {
   std::scoped_lock lock(finetuneCancelMtx_);
   currentFinetuneJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
+  // A checkpoint mode nobody consumed died with its job.
+  finetuneCancelSaveOwner_ = qvac_lib_inference_addon_cpp::kNoJobId;
 }
 
 void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
@@ -920,7 +948,15 @@ std::any LlamaModel::process(
     const auto& prompt = std::any_cast<const Prompt&>(input);
     if (prompt.finetuningParams.has_value()) {
       beginFinetuneJob(id);
-      ScopeGuard finetuneGuard([this] { closeFinetuneCancellationWindow(); });
+      ScopeGuard finetuneGuard([this] {
+        // Window first: once currentFinetuneJobId_ is cleared no cancel can
+        // latch a new pause (requestFinetuneCancel serializes on the same
+        // mutex), so the discard leaves nothing behind for the next finetune.
+        // Covers the exits finetune() never sees: the parked-cancel PAUSED
+        // return below and setup throws before the finetuner's own catch.
+        closeFinetuneCancellationWindow();
+        finetuner_.discardPendingPauseRequest();
+      });
       // Arm the finetune cancel so cancelById(id) reaches the finetuner; a
       // cancel parked before this point aborts the job before training starts.
       if (liveJobs_.bind(id, [this, id] { requestFinetuneCancel(id); })) {
