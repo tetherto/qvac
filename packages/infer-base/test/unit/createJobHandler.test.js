@@ -308,6 +308,35 @@ test('createJobHandler - already-aborted signal clears active once settled', asy
   t.is(job.active, null, 'active should be cleared once the already-aborted response settles')
 })
 
+test('createJobHandler - prepended throwing end listener cannot leave a settled job active', (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.prependListener('end', () => {
+    throw new Error('end listener boom')
+  })
+
+  t.exception(() => response.ended('done'), /end listener boom/)
+
+  t.is(job.active, null, 'settled response must not stay active')
+  job.output('late')
+  t.alike(response.output, [], 'late output must not reach the settled response')
+})
+
+test('createJobHandler - prepended throwing error listener cannot leave a settled job active', (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.prependListener('error', () => {
+    throw new Error('error listener boom')
+  })
+
+  t.exception(
+    () => response.failed(new Error('job failed')),
+    /error listener boom/
+  )
+
+  t.is(job.active, null, 'settled response must not stay active')
+})
+
 test('createJobHandler - is exported from package root', (t) => {
   const { createJobHandler: exported } = require('../..')
   t.is(typeof exported, 'function', 'should be exported as a function')
