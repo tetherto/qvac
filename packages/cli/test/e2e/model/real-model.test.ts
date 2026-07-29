@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { useModelServer } from '../helpers/server.js'
 import { assertError, multipart, collectSSE, assertStatusAndError } from '../helpers/http.js'
 import { MODEL_CONFIG, E2E } from '../helpers/config.js'
@@ -20,6 +22,18 @@ const wavField = {
   filename: 'silence.wav',
   contentType: 'audio/wav',
   data: silenceWav()
+}
+function timedWavField() {
+  const fixturePath = fileURLToPath(
+    new URL('../../../../sdk/e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
+  )
+  assert.ok(existsSync(fixturePath), `Timed transcription fixture is missing: ${fixturePath}`)
+  return {
+    name: 'file',
+    filename: 'transcription-short-wav.wav',
+    contentType: 'audio/wav',
+    data: readFileSync(fixturePath)
+  }
 }
 
 describe('models', () => {
@@ -450,6 +464,21 @@ describe('transcriptions', () => {
     })
     assertPlainText(res.payload)
   })
+
+  it('response_format=srt returns timed cues', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/transcriptions',
+      ...multipart([
+        { name: 'model', value: E2E.whisper },
+        { name: 'response_format', value: 'srt' },
+        timedWavField()
+      ])
+    })
+    assert.equal(res.statusCode, 200)
+    assert.match(res.headers['content-type'] ?? '', /^text\/plain/)
+    assert.match(res.payload, /^1\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n/m)
+  })
 })
 
 describe('translations', () => {
@@ -473,6 +502,22 @@ describe('translations', () => {
       ])
     })
     assertPlainText(res.payload)
+  })
+
+  it('response_format=vtt returns timed cues', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/translations',
+      ...multipart([
+        { name: 'model', value: E2E.whisperTranslate },
+        { name: 'response_format', value: 'vtt' },
+        timedWavField()
+      ])
+    })
+    assert.equal(res.statusCode, 200)
+    assert.match(res.headers['content-type'] ?? '', /^text\/vtt/)
+    assert.match(res.payload, /^WEBVTT\n/)
+    assert.match(res.payload, /\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}/)
   })
 
   it('rejects transcription-only alias', async () => {
