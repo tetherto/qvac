@@ -1,55 +1,69 @@
 #pragma once
-// JSAdapter - bridges between JavaScript objects and WhisperConfig
-// This class handles the conversion from JS parameters to WhisperConfig
-// without requiring WhisperConfig to know about JavaScript types
+// JSAdapter -- bridges between JavaScript objects and the per-engine config
+// structs (whisper::WhisperConfig / parakeet::ParakeetConfig) without
+// requiring either config to know about JavaScript types. Engine selection
+// (readEngineType) follows the tts-ggml pattern: explicit `engineType`
+// string -> hard error on unknown -> file-key inference -> default engine.
 
-#include <functional>
 #include <map>
 #include <string>
-#include <unordered_map>
 
 #include <js.h>
-#include <whisper.h>
 
-#include "addon/WhisperErrors.hpp"
-#include "model-interface/whisper.cpp/WhisperConfig.hpp"
-#include "model-interface/whisper.cpp/WhisperHandlers.hpp"
-#include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/parakeet/ParakeetConfig.hpp"
+#include "model-interface/whisper/WhisperConfig.hpp"
 
 namespace qvac_lib_inference_addon_cpp::js {
 class Object;
 }
 
-namespace qvac_lib_inference_addon_whisper {
+namespace qvac::asrggml {
+
+enum class EngineType {
+  Whisper,
+  Parakeet,
+};
 
 class JSAdapter {
 public:
   JSAdapter() = default;
 
-  auto loadFromJSObject(
-      qvac_lib_inference_addon_cpp::js::Object jsObject, js_env_t* env)
-      -> qvac_lib_inference_addon_whisper::WhisperConfig;
+  // Resolves which engine `configurationParams` describes. An explicit
+  // `engineType: 'whisper' | 'parakeet'` always wins; any other non-empty
+  // string throws InvalidArgument. Without it, a top-level model path key
+  // (`modelPath`/`path`) infers Parakeet -- whisper's model arrives via
+  // loadWeights and its config nests under whisperConfig/contextParams/
+  // miscConfig -- and the fallback is Whisper (the default engine).
+  EngineType readEngineType(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
 
-  auto loadVadParams(
-      qvac_lib_inference_addon_cpp::js::Object vadParamsObj, js_env_t* env,
-      qvac_lib_inference_addon_whisper::WhisperConfig& whisperConfig)
-      -> qvac_lib_inference_addon_whisper::WhisperConfig;
+  // == the old whisper JSAdapter::loadFromJSObject, verbatim.
+  whisper::WhisperConfig buildWhisperConfig(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
 
-  auto loadContextParams(
-      qvac_lib_inference_addon_cpp::js::Object contextParamsObj, js_env_t* env,
-      qvac_lib_inference_addon_whisper::WhisperConfig& whisperConfig)
-      -> qvac_lib_inference_addon_whisper::WhisperConfig;
-
-  auto loadMiscParams(
-      qvac_lib_inference_addon_cpp::js::Object miscParamsObj, js_env_t* env,
-      qvac_lib_inference_addon_whisper::WhisperConfig& whisperConfig)
-      -> qvac_lib_inference_addon_whisper::WhisperConfig;
+  // == the old parakeet JSAdapter::loadFromJSObject, verbatim.
+  parakeet::ParakeetConfig buildParakeetConfig(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
 
 private:
+  void loadVadParams(
+      qvac_lib_inference_addon_cpp::js::Object vadParamsObj, js_env_t* env,
+      whisper::WhisperConfig& whisperConfig);
+
+  void loadContextParams(
+      qvac_lib_inference_addon_cpp::js::Object contextParamsObj, js_env_t* env,
+      whisper::WhisperConfig& whisperConfig);
+
+  void loadMiscParams(
+      qvac_lib_inference_addon_cpp::js::Object miscParamsObj, js_env_t* env,
+      whisper::WhisperConfig& whisperConfig);
+
   void loadMap(
       qvac_lib_inference_addon_cpp::js::Object jsObject, js_env_t* env,
-      std::map<std::string, qvac_lib_inference_addon_whisper::JSValueVariant>&
-          output);
+      std::map<std::string, whisper::JSValueVariant>& output);
 };
 
-} // namespace qvac_lib_inference_addon_whisper
+} // namespace qvac::asrggml

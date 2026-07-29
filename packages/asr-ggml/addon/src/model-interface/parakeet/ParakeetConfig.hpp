@@ -4,7 +4,7 @@
 
 #include "model-interface/ParakeetTypes.hpp"
 
-namespace qvac_lib_infer_parakeet {
+namespace qvac::asrggml::parakeet {
 
 struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_CHUNK_MS = 2000;
@@ -55,7 +55,7 @@ struct ParakeetConfig {
       DEFAULT_STREAMING_HISTORY_MS; // Sortformer rolling window only
   bool streamingEmitPartials = true;
   bool streamingEnergyVad = false; // CTC/TDT only; ignored elsewhere
-  // Forwarded to parakeet::StreamingOptions.left_context_ms /
+  // Forwarded to pkt::StreamingOptions.left_context_ms /
   // right_lookahead_ms. ASR sessions only (Sortformer ignores both --
   // it has its own SortformerStreamingOptions::history_ms knob).
   // right_lookahead_ms adds directly to the per-segment latency floor
@@ -67,7 +67,7 @@ struct ParakeetConfig {
   int streamingRightLookaheadMs = -1;
 
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) ───────────
-  // Forwarded to parakeet::SortformerStreamingOptions.spkcache_* /
+  // Forwarded to pkt::SortformerStreamingOptions.spkcache_* /
   // fifo_len / chunk_{left,right}_context_ms / spkcache_update_period.
   // Ignored on non-Sortformer models and on v1/v2 Sortformer GGUFs;
   // parakeet-cpp auto-enables AOSC for v2.1 via the GGUF metadata tag
@@ -88,7 +88,7 @@ struct ParakeetConfig {
   int streamingSpkCacheUpdatePeriod = DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD;
 
   // ── Dynamic-backend loading ────────────────────────────────────────────
-  // Forwarded to parakeet::EngineOptions::backends_dir /
+  // Forwarded to pkt::EngineOptions::backends_dir /
   // opencl_cache_dir. On Android (and any other GGML_BACKEND_DL=ON
   // build) the ggml core is statically linked into this addon's
   // `.bare` module while the GPU backends ship as separately
@@ -135,4 +135,4 @@ struct ParakeetConfig {
   bool operator!=(const ParakeetConfig& other) const { return !(*this == other); }
 };
 
-} // namespace qvac_lib_infer_parakeet
+} // namespace qvac::asrggml::parakeet

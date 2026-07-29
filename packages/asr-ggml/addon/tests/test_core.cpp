@@ -10,16 +10,18 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "WhisperTypes.hpp"
+#include "model-interface/WhisperTypes.hpp"
 #include "addon/GgmlLogForwarding.hpp"
-#include "addon/WhisperErrors.hpp"
+#include "addon/AsrErrors.hpp"
+#include "addon/StreamingSessionRegistry.hpp"
 #include "inference-addon-cpp/queue/OutputCallbackInterface.hpp"
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
 #include "model-interface/StreamingProcessor.hpp"
-#include "whisper.cpp/WhisperConfig.hpp"
-#include "whisper.cpp/WhisperModel.hpp"
+#include "model-interface/whisper/WhisperConfig.hpp"
+#include "model-interface/whisper/WhisperModel.hpp"
 
-using namespace qvac_lib_inference_addon_whisper;
+using namespace qvac::asrggml;
+using namespace qvac::asrggml::whisper;
 
 // Helper function used across multiple test classes
 std::string getValidModelPath() {
@@ -58,7 +60,7 @@ TEST_F(WhisperCoreSimpleTest, WhisperConfigTest) {
   std::cout << "Testing whisper-core compilation..." << std::endl;
 
   // Test creating a WhisperConfig without JavaScript
-  qvac_lib_inference_addon_whisper::WhisperConfig config;
+  qvac::asrggml::whisper::WhisperConfig config;
 
   // Test setting parameters directly
   config.whisperMainCfg["model"] = std::string("test-model.bin");
@@ -83,37 +85,41 @@ TEST_F(WhisperCoreSimpleTest, WhisperConfigTest) {
 class WhisperErrorsTest : public ::testing::Test {};
 
 TEST_F(WhisperErrorsTest, ErrorCodeToString) {
-  using namespace qvac_lib_inference_addon_whisper::errors;
+  using namespace qvac::asrggml::errors::whisper;
 
   // Test all error codes
   EXPECT_EQ(
-      toString(UnableToCreateWhisperContext), "UnableToCreateWhisperContext");
-  EXPECT_EQ(toString(UnableToTranscribe), "UnableToTranscribe");
-  EXPECT_EQ(toString(UnableToCreateVadContext), "UnableToCreateVadContext");
-  EXPECT_EQ(toString(UnableToDetectVADSegments), "UnableToDetectVADSegments");
-  EXPECT_EQ(toString(MisalignedBuffer), "MisalignedBuffer");
-  EXPECT_EQ(toString(NonFiniteSample), "NonFiniteSample");
-  EXPECT_EQ(toString(UnsupportedAudioFormat), "UnsupportedAudioFormat");
+      toString(Code::UnableToCreateWhisperContext),
+      "UnableToCreateWhisperContext");
+  EXPECT_EQ(toString(Code::UnableToTranscribe), "UnableToTranscribe");
+  EXPECT_EQ(
+      toString(Code::UnableToCreateVadContext), "UnableToCreateVadContext");
+  EXPECT_EQ(
+      toString(Code::UnableToDetectVADSegments), "UnableToDetectVADSegments");
+  EXPECT_EQ(toString(Code::MisalignedBuffer), "MisalignedBuffer");
+  EXPECT_EQ(toString(Code::NonFiniteSample), "NonFiniteSample");
+  EXPECT_EQ(toString(Code::UnsupportedAudioFormat), "UnsupportedAudioFormat");
 
   // Test invalid error code (should return "UnknownError")
-  WhisperErrorCode invalidCode = static_cast<WhisperErrorCode>(255);
+  Code invalidCode = static_cast<Code>(255);
   EXPECT_EQ(toString(invalidCode), "UnknownError");
 }
 
 TEST_F(WhisperErrorsTest, QvacErrorsWhisperStatus) {
-  using namespace qvac_errors::whisper_error;
+  using namespace qvac::asrggml::errors::whisper;
 
-  // Test creating status errors
+  // Test creating status errors. makeStatus() emits the real code name --
+  // the pre-merge version hardcoded "WhisperError" regardless of `code`.
   auto status1 = makeStatus(Code::MisalignedBuffer, "Buffer alignment issue");
-  EXPECT_EQ(status1.codeString(), "[ Whisper :: WhisperError ]");
+  EXPECT_EQ(status1.codeString(), "[ Whisper :: MisalignedBuffer ]");
   EXPECT_EQ(std::string(status1.what()), "Buffer alignment issue");
 
   auto status2 = makeStatus(Code::NonFiniteSample, "Invalid audio sample");
-  EXPECT_EQ(status2.codeString(), "[ Whisper :: WhisperError ]");
+  EXPECT_EQ(status2.codeString(), "[ Whisper :: NonFiniteSample ]");
   EXPECT_EQ(std::string(status2.what()), "Invalid audio sample");
 
   auto status3 = makeStatus(Code::UnsupportedAudioFormat, "Unsupported format");
-  EXPECT_EQ(status3.codeString(), "[ Whisper :: WhisperError ]");
+  EXPECT_EQ(status3.codeString(), "[ Whisper :: UnsupportedAudioFormat ]");
   EXPECT_EQ(std::string(status3.what()), "Unsupported format");
   EXPECT_FALSE(status3.isJSError());
 }
@@ -206,6 +212,14 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
     processor.appendAudio(std::vector<float>(
         static_cast<std::size_t>(streamConfig.vadRunIntervalSamples), 0.0F));
     processor.end();
+
+    // end() joined the worker, so the IStreamingSession teardown counters
+    // are race-free and reflect everything appended above.
+    EXPECT_EQ(processor.sampleRate(), streamConfig.sampleRate);
+    EXPECT_DOUBLE_EQ(
+        processor.audioSeconds(),
+        static_cast<double>(streamConfig.vadRunIntervalSamples) /
+            static_cast<double>(streamConfig.sampleRate));
   }
 
   const auto outputs = outputQueue->clear();
@@ -1337,4 +1351,111 @@ TEST(WhisperGgmlLogForwarding, EachCallEmittedIndependently) {
       captureForwarded(GGML_LOG_LEVEL_ERROR, "whisper: failed to load");
   EXPECT_THAT(out, testing::HasSubstr("whisper: failed to load"));
   EXPECT_THAT(out, testing::HasSubstr("ERROR"));
+}
+
+// ============================================================================
+// StreamingSessionRegistry Tests - one registry for both engines
+// ============================================================================
+
+namespace {
+
+class FakeStreamingSession : public qvac::asrggml::IStreamingSession {
+public:
+  explicit FakeStreamingSession(bool* cancelledFlag = nullptr)
+      : cancelledFlag_(cancelledFlag) {}
+
+  void appendAudio(std::vector<float>&& samples) override {
+    samplesReceived_ += static_cast<std::int64_t>(samples.size());
+  }
+  void end() override { ended_ = true; }
+  void cancel() override {
+    if (cancelledFlag_ != nullptr) {
+      *cancelledFlag_ = true;
+    }
+  }
+  double audioSeconds() const override {
+    return static_cast<double>(samplesReceived_) / 16000.0;
+  }
+  int sampleRate() const override { return 16000; }
+
+  bool ended() const { return ended_; }
+
+private:
+  bool* cancelledFlag_ = nullptr;
+  std::int64_t samplesReceived_ = 0;
+  bool ended_ = false;
+};
+
+// The registry keys sessions by AddonJs* without ever dereferencing it, so
+// distinct opaque addresses are enough for a unit test.
+qvac_lib_inference_addon_cpp::AddonJs* fakeInstanceKey(int& slot) {
+  return reinterpret_cast<qvac_lib_inference_addon_cpp::AddonJs*>(&slot);
+}
+
+} // namespace
+
+TEST(StreamingSessionRegistry, InsertFindTakeRoundTrip) {
+  int slot = 0;
+  auto* key = fakeInstanceKey(slot);
+
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(key), nullptr);
+  EXPECT_EQ(qvac::asrggml::takeStreamingSession(key), nullptr);
+
+  qvac::asrggml::insertStreamingSession(
+      key, std::make_unique<FakeStreamingSession>());
+  EXPECT_NE(qvac::asrggml::findStreamingSession(key), nullptr);
+
+  auto taken = qvac::asrggml::takeStreamingSession(key);
+  ASSERT_NE(taken, nullptr);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(key), nullptr);
+  EXPECT_EQ(qvac::asrggml::takeStreamingSession(key), nullptr);
+}
+
+TEST(StreamingSessionRegistry, DuplicateInsertThrows) {
+  int slot = 0;
+  auto* key = fakeInstanceKey(slot);
+
+  qvac::asrggml::insertStreamingSession(
+      key, std::make_unique<FakeStreamingSession>());
+  EXPECT_THROW(
+      qvac::asrggml::insertStreamingSession(
+          key, std::make_unique<FakeStreamingSession>()),
+      std::runtime_error);
+
+  // Cleanup so later tests (and the atexit handler) see an empty registry.
+  EXPECT_NE(qvac::asrggml::takeStreamingSession(key), nullptr);
+}
+
+TEST(StreamingSessionRegistry, ClearAllCancelsEverySurvivingSession) {
+  int slotA = 0;
+  int slotB = 0;
+  bool cancelledA = false;
+  bool cancelledB = false;
+
+  qvac::asrggml::insertStreamingSession(
+      fakeInstanceKey(slotA), std::make_unique<FakeStreamingSession>(&cancelledA));
+  qvac::asrggml::insertStreamingSession(
+      fakeInstanceKey(slotB), std::make_unique<FakeStreamingSession>(&cancelledB));
+
+  qvac::asrggml::clearAllStreamingSessions();
+
+  EXPECT_TRUE(cancelledA);
+  EXPECT_TRUE(cancelledB);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)), nullptr);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)), nullptr);
+}
+
+TEST(StreamingSessionRegistry, TakeSharedTransfersOwnership) {
+  int slot = 0;
+  auto* key = fakeInstanceKey(slot);
+
+  qvac::asrggml::insertStreamingSession(
+      key, std::make_unique<FakeStreamingSession>());
+  std::shared_ptr<qvac::asrggml::IStreamingSession> shared =
+      qvac::asrggml::takeStreamingSessionShared(key);
+  ASSERT_NE(shared, nullptr);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(key), nullptr);
+
+  // Absent key -> null shared_ptr.
+  EXPECT_EQ(qvac::asrggml::takeStreamingSessionShared(key), nullptr);
 }

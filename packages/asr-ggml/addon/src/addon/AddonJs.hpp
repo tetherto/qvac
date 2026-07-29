@@ -1,11 +1,18 @@
 #pragma once
 
+// Unified JS verb implementations for the two ASR engines (whisper +
+// parakeet). One verb table (binding.cpp) registers every verb
+// unconditionally; per-engine behavior is decided inside each verb by
+// `dynamic_cast` on `instance.addonCpp->model.get()` -- the tts-ggml
+// three-engine dispatch pattern. Engine selection at createInstance() time
+// goes through JSAdapter::readEngineType().
+
 #include <any>
+#include <cmath>
 #include <memory>
 #include <mutex>
-#include <span>
 #include <string>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -15,77 +22,91 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <ggml.h>
 #include <js.h>
 #include <whisper.h>
 
+#include "addon/AsrErrors.hpp"
 #include "addon/GgmlLogForwarding.hpp"
+#include "addon/StreamingSessionRegistry.hpp"
+#include "js-interface/JSAdapter.hpp"
+#include "model-interface/ParakeetStreamingProcessor.hpp"
+#include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
-#include "model-interface/whisper.cpp/WhisperModel.hpp"
-#include "src/js-interface/JSAdapter.hpp"
+#include "model-interface/parakeet/ParakeetModel.hpp"
+#include "model-interface/whisper/WhisperModel.hpp"
 
-namespace qvac_lib_inference_addon_whisper {
-
-inline std::mutex g_streamingMtx;
-inline std::unordered_map<
-    qvac_lib_inference_addon_cpp::AddonJs*,
-    std::unique_ptr<StreamingProcessor>> g_streamingSessions;
+namespace qvac::asrggml::addon_js {
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
 
-// whisper.cpp / ggml native-log forwarding lives in GgmlLogForwarding.hpp
-// (kept JS-free so the level mapping + per-call forwarding can be unit-tested).
-// createInstance() installs forwardGgmlLog() via whisper_log_set().
+// ── Native log forwarding ────────────────────────────────────────────────
 //
-// Hook choice: whisper_log_set() — NOT a raw ggml_log_set(). whisper_log_set()
-// stores the callback in g_state.log_callback and re-applies it to ggml via
-// ggml_log_set(); whisper_backend_init_gpu() then re-applies
-// g_state.log_callback to ggml again during init (src/whisper.cpp). A raw
-// ggml_log_set() would therefore be clobbered, while whisper_log_set()
-// reliably captures BOTH whisper.cpp's own lines (whisper_model_load,
-// "whisper_backend_init_gpu: using <name> backend", ...) and ggml's
-// ("ggml_vulkan: Found N Vulkan devices ...").
-
-inline WhisperConfig
-createWhisperConfig(js_env_t* env, const js::Object& configurationParams) {
-  JSAdapter adapter;
-  return adapter.loadFromJSObject(configurationParams, env);
+// One process-wide install, shared by both engines. Hook choice:
+//   - ggml_log_set(forwardGgmlLog) covers parakeet-only processes (the
+//     parakeet engine logs exclusively through ggml's callback).
+//   - whisper_log_set(forwardGgmlLog) stores the callback in whisper's
+//     g_state.log_callback AND re-applies it to ggml -- both immediately and
+//     again inside whisper_backend_init_gpu() (src/whisper.cpp). A raw
+//     ggml_log_set alone would therefore be clobbered by whisper's init,
+//     while this order guarantees whisper-origin lines (whisper_model_load,
+//     "whisper_backend_init_gpu: using <name> backend", ...) and ggml-origin
+//     lines ("ggml_vulkan: Found N Vulkan devices ...") all land in the same
+//     forwardGgmlLog -> QLOG -> JsLogger pipe, whichever engine initializes
+//     later. There is no second callback left to clobber.
+inline void installNativeLogForwarderOnce() {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    ggml_log_set(&forwardGgmlLog, nullptr);
+    whisper_log_set(&forwardGgmlLog, nullptr);
+  });
 }
 
-struct JsTranscriptOutputHandler
-    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<Transcript> {
-  JsTranscriptOutputHandler()
+// ── Whisper output handlers (payload shapes byte-for-byte pre-merge) ─────
+
+struct JsWhisperTranscriptHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          whisper::Transcript> {
+  JsWhisperTranscriptHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-            Transcript>([this](const Transcript& output) -> js_value_t* {
-          auto jsTranscript = js::Object::create(this->env_);
-          jsTranscript.setProperty(
-              this->env_, "text", js::String::create(this->env_, output.text));
-          jsTranscript.setProperty(
-              this->env_,
-              "toAppend",
-              js::Boolean::create(this->env_, output.toAppend));
-          jsTranscript.setProperty(
-              this->env_,
-              "start",
-              js::Number::create(this->env_, output.start));
-          jsTranscript.setProperty(
-              this->env_, "end", js::Number::create(this->env_, output.end));
-          jsTranscript.setProperty(
-              this->env_,
-              "id",
-              js::Number::create(this->env_, static_cast<uint64_t>(output.id)));
-          return jsTranscript;
-        }) {}
+            whisper::Transcript>(
+            [this](const whisper::Transcript& output) -> js_value_t* {
+              auto jsTranscript = js::Object::create(this->env_);
+              jsTranscript.setProperty(
+                  this->env_,
+                  "text",
+                  js::String::create(this->env_, output.text));
+              jsTranscript.setProperty(
+                  this->env_,
+                  "toAppend",
+                  js::Boolean::create(this->env_, output.toAppend));
+              jsTranscript.setProperty(
+                  this->env_,
+                  "start",
+                  js::Number::create(this->env_, output.start));
+              jsTranscript.setProperty(
+                  this->env_,
+                  "end",
+                  js::Number::create(this->env_, output.end));
+              jsTranscript.setProperty(
+                  this->env_,
+                  "id",
+                  js::Number::create(
+                      this->env_, static_cast<uint64_t>(output.id)));
+              return jsTranscript;
+            }) {}
 };
 
-struct JsTranscriptArrayOutputHandler
+struct JsWhisperTranscriptArrayHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-          std::vector<Transcript>> {
-  JsTranscriptArrayOutputHandler()
+          std::vector<whisper::Transcript>> {
+  JsWhisperTranscriptArrayHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-            std::vector<Transcript>>(
-            [this](const std::vector<Transcript>& output) -> js_value_t* {
+            std::vector<whisper::Transcript>>(
+            [this](const std::vector<whisper::Transcript>& output)
+                -> js_value_t* {
               auto jsOutput = js::Array::create(this->env_);
               for (size_t i = 0; i < output.size(); ++i) {
                 auto jsTranscript = js::Object::create(this->env_);
@@ -116,13 +137,13 @@ struct JsTranscriptArrayOutputHandler
             }) {}
 };
 
-struct JsVadStateOutputHandler
+struct JsVadStateHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-          VadStateUpdate> {
-  JsVadStateOutputHandler()
+          whisper::VadStateUpdate> {
+  JsVadStateHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-            VadStateUpdate>(
-            [this](const VadStateUpdate& output) -> js_value_t* {
+            whisper::VadStateUpdate>(
+            [this](const whisper::VadStateUpdate& output) -> js_value_t* {
               auto jsOutput = js::Object::create(this->env_);
               jsOutput.setProperty(
                   this->env_, "type", js::String::create(this->env_, "vad"));
@@ -138,13 +159,13 @@ struct JsVadStateOutputHandler
             }) {}
 };
 
-struct JsEndOfTurnOutputHandler
+struct JsEndOfTurnHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-          EndOfTurnEvent> {
-  JsEndOfTurnOutputHandler()
+          whisper::EndOfTurnEvent> {
+  JsEndOfTurnHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
-            EndOfTurnEvent>(
-            [this](const EndOfTurnEvent& output) -> js_value_t* {
+            whisper::EndOfTurnEvent>(
+            [this](const whisper::EndOfTurnEvent& output) -> js_value_t* {
               auto jsOutput = js::Object::create(this->env_);
               jsOutput.setProperty(
                   this->env_,
@@ -158,22 +179,73 @@ struct JsEndOfTurnOutputHandler
             }) {}
 };
 
+// ── Parakeet output handler + helpers ────────────────────────────────────
+
+inline js::Object
+transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
+  auto obj = js::Object::create(env);
+  obj.setProperty(env, "text", js::String::create(env, t.text));
+  obj.setProperty(env, "toAppend", js::Boolean::create(env, t.toAppend));
+  obj.setProperty(env, "start", js::Number::create(env, t.start));
+  obj.setProperty(env, "end", js::Number::create(env, t.end));
+  obj.setProperty(
+      env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
+  obj.setProperty(env, "isEndOfTurn", js::Boolean::create(env, t.isEndOfTurn));
+  obj.setProperty(env, "startsWord", js::Boolean::create(env, t.startsWord));
+  return obj;
+}
+
+inline js_value_t* transcriptsToJsArray(
+    js_env_t* env, const std::vector<parakeet::Transcript>& output) {
+  auto jsOutput = js::Array::create(env);
+  for (size_t i = 0; i < output.size(); ++i) {
+    jsOutput.set(env, i, transcriptToJsObject(env, output[i]));
+  }
+  return jsOutput;
+}
+
+struct JsParakeetTranscriptArrayHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          std::vector<parakeet::Transcript>> {
+  JsParakeetTranscriptArrayHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            std::vector<parakeet::Transcript>>(
+            [this](const std::vector<parakeet::Transcript>& output)
+                -> js_value_t* {
+              return transcriptsToJsArray(this->env_, output);
+            }) {}
+};
+
+// ── createInstance ───────────────────────────────────────────────────────
+
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
-  whisper_log_set(forwardGgmlLog, nullptr);
+  installNativeLogForwarderOnce();
+
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
 
-  unique_ptr<model::IModel> model =
-      make_unique<WhisperModel>(createWhisperConfig(env, configurationParams));
+  JSAdapter adapter;
+  const EngineType engineType =
+      adapter.readEngineType(configurationParams, env);
 
+  unique_ptr<model::IModel> model;
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outputHandlers;
-  outputHandlers.add(make_shared<JsTranscriptOutputHandler>());
-  outputHandlers.add(make_shared<JsTranscriptArrayOutputHandler>());
-  outputHandlers.add(make_shared<JsVadStateOutputHandler>());
-  outputHandlers.add(make_shared<JsEndOfTurnOutputHandler>());
+  if (engineType == EngineType::Parakeet) {
+    model = make_unique<parakeet::ParakeetModel>(
+        adapter.buildParakeetConfig(configurationParams, env));
+    outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
+  } else {
+    model = make_unique<whisper::WhisperModel>(
+        adapter.buildWhisperConfig(configurationParams, env));
+    outputHandlers.add(make_shared<JsWhisperTranscriptHandler>());
+    outputHandlers.add(make_shared<JsWhisperTranscriptArrayHandler>());
+    outputHandlers.add(make_shared<JsVadStateHandler>());
+    outputHandlers.add(make_shared<JsEndOfTurnHandler>());
+  }
+
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -185,6 +257,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+// ── runJob ───────────────────────────────────────────────────────────────
+//
+// Per-engine input encoding is kept (QIP audio-boundary rule lives in JS):
+// parakeet takes a Float32Array; whisper takes raw bytes + audio_format
+// (default "s16le"). Whisper is the fall-through arm (the default engine),
+// matching tts-ggml where chatterbox is fall-through.
+
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -192,7 +271,6 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
-  auto inputObj = args.getJsObject(1, "inputObj");
 
   if (type != "audio") {
     throw qvac_errors::StatusError(
@@ -200,6 +278,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
+  if (dynamic_cast<parakeet::ParakeetModel*>(&instance.addonCpp->model.get()) !=
+      nullptr) {
+    vector<float> inputSamples =
+        js::TypedArray<float>(env, jsInput).as<vector<float>>(env);
+    return instance.runJob(any(std::move(inputSamples)));
+  }
+
+  auto inputObj = args.getJsObject(1, "inputObj");
   string audioFormat = "s16le";
   auto maybeAudioFormat =
       inputObj.getOptionalProperty<js::String>(env, "audio_format");
@@ -209,17 +295,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   vector<uint8_t> audioBytes =
       js::TypedArray<uint8_t>(env, jsInput).as<std::vector<uint8_t>>(env);
-  auto samples = WhisperModel::preprocessAudioData(audioBytes, audioFormat);
+  auto samples =
+      whisper::WhisperModel::preprocessAudioData(audioBytes, audioFormat);
 
-  WhisperModel::AnyInput anyInput;
+  whisper::WhisperModel::AnyInput anyInput;
   anyInput.input = std::move(samples);
-  anyInput.outputCallback = [&instance](const Transcript& transcript) {
-    instance.addonCpp->outputQueue->queueResult(std::any(transcript));
-  };
+  anyInput.outputCallback =
+      [&instance](const whisper::Transcript& transcript) {
+        instance.addonCpp->outputQueue->queueResult(std::any(transcript));
+      };
 
   return instance.runJob(std::any(std::move(anyInput)));
 }
 JSCATCH
+
+// ── reload (whisper-only; the parakeet arm is a guard rail) ─────────────
 
 inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -227,14 +317,25 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  if (dynamic_cast<parakeet::ParakeetModel*>(&instance.addonCpp->model.get()) !=
+      nullptr) {
+    throw errors::parakeet::makeStatus(
+        errors::parakeet::Code::ReloadNotSupported,
+        "reload is not supported for the parakeet engine; destroy and "
+        "recreate the instance");
+  }
+
   auto configurationParams = args.getJsObject(1, "configurationParams");
-  WhisperConfig config = createWhisperConfig(env, configurationParams);
+  JSAdapter adapter;
+  whisper::WhisperConfig config =
+      adapter.buildWhisperConfig(configurationParams, env);
 
   return js::JsAsyncTask::run(
       env,
       [addonCpp = instance.addonCpp, config = std::move(config)]() mutable {
         auto* whisperModel =
-            dynamic_cast<WhisperModel*>(&addonCpp->model.get());
+            dynamic_cast<whisper::WhisperModel*>(&addonCpp->model.get());
         if (whisperModel == nullptr) {
           throw std::runtime_error("Invalid model type for reload");
         }
@@ -243,15 +344,113 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t*
-startStreaming(js_env_t* env, js_callback_info_t* info) try {
+// ── getBackendInfo ───────────────────────────────────────────────────────
+//
+// Returns the backend the engine resolved at load() as a JS object:
+// `{ backendDevice, backendId, backendName, backendDescription,
+// encoderBackend, encoderOnCoreml }` (+ whisper-only extras
+// `gpuMemTotalMb`/`gpuMemFreeMb`, -1 = device does not report). The
+// description is the human-readable GPU name (e.g. "NVIDIA GeForce RTX
+// 3090") recovered from the ggml device registry; it is the
+// nvidia-smi-independent fallback the perf reporter uses on CI runners
+// where the host probes can't see the GPU. encoderBackend is "coreml" when
+// parakeet's FastConformer encoder runs on the Apple Neural Engine sidecar,
+// else it mirrors backendName; the whisper-cpp port builds without
+// WHISPER_COREML, so its arm always reports encoderOnCoreml=false -- the
+// keys exist purely for cross-engine shape stability. Available after
+// activate(); reports CPU/"" before load.
+
+inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-  auto configObj = args.getJsObject(1, "config");
 
-  StreamingProcessor::Config config;
+  auto result = js::Object::create(env);
+
+  if (auto* parakeetModel = dynamic_cast<parakeet::ParakeetModel*>(
+          &instance.addonCpp->model.get())) {
+    const int deviceClass = parakeetModel->getBackendDeviceClass();
+    result.setProperty(
+        env,
+        "backendDevice",
+        js::String::create(env, std::string(deviceClass == 1 ? "GPU" : "CPU")));
+    result.setProperty(
+        env,
+        "backendId",
+        js::Number::create(env, parakeetModel->getBackendId()));
+    result.setProperty(
+        env,
+        "backendName",
+        js::String::create(env, parakeetModel->getBackendName()));
+    result.setProperty(
+        env,
+        "backendDescription",
+        js::String::create(env, parakeetModel->getBackendDescription()));
+    result.setProperty(
+        env,
+        "encoderBackend",
+        js::String::create(env, parakeetModel->getEncoderBackend()));
+    result.setProperty(
+        env,
+        "encoderOnCoreml",
+        js::Boolean::create(env, parakeetModel->getEncoderOnCoreml() != 0));
+    return result;
+  }
+
+  auto& whisperModel =
+      dynamic_cast<whisper::WhisperModel&>(instance.addonCpp->model.get());
+  const auto deviceClass = whisperModel.getBackendDeviceClass();
+  result.setProperty(
+      env,
+      "backendDevice",
+      js::String::create(env, std::string(deviceClass == 1 ? "GPU" : "CPU")));
+  result.setProperty(
+      env,
+      "backendId",
+      js::Number::create(
+          env, static_cast<double>(whisperModel.getBackendId())));
+  result.setProperty(
+      env,
+      "backendName",
+      js::String::create(env, whisperModel.getBackendName()));
+  result.setProperty(
+      env,
+      "backendDescription",
+      js::String::create(env, whisperModel.getBackendDescription()));
+  // Mirror of backendName: whisper has no encoder sidecar.
+  result.setProperty(
+      env,
+      "encoderBackend",
+      js::String::create(env, whisperModel.getBackendName()));
+  result.setProperty(env, "encoderOnCoreml", js::Boolean::create(env, false));
+  // Whisper-only extras: device-memory snapshot at load().
+  result.setProperty(
+      env,
+      "gpuMemTotalMb",
+      js::Number::create(
+          env, static_cast<double>(whisperModel.getGpuMemTotalMb())));
+  result.setProperty(
+      env,
+      "gpuMemFreeMb",
+      js::Number::create(
+          env, static_cast<double>(whisperModel.getGpuMemFreeMb())));
+  return result;
+}
+JSCATCH
+
+// ── startStreaming ───────────────────────────────────────────────────────
+//
+// The two config vocabularies stay disjoint by design (QIP amendment 2):
+// whisper requires `vadModelPath` + `jobId` and takes VAD tuning knobs;
+// parakeet takes model-default overrides. Both arms insert into the one
+// registry, throwing on double-start, and return `true`.
+
+namespace detail {
+
+inline whisper::StreamingProcessor::Config
+parseWhisperStreamingConfig(js_env_t* env, js::Object& configObj) {
+  whisper::StreamingProcessor::Config config;
 
   auto maybeVadModelPath =
       configObj.getOptionalProperty<js::String>(env, "vadModelPath");
@@ -342,34 +541,126 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  {
-    std::lock_guard lock(g_streamingMtx);
-
-    if (g_streamingSessions.count(&instance) != 0) {
-      throw std::runtime_error(
-          "Streaming session already active for this instance");
-    }
-
-    auto& whisperModel =
-        dynamic_cast<WhisperModel&>(instance.addonCpp->model.get());
-    g_streamingSessions[&instance] = std::make_unique<StreamingProcessor>(
-        whisperModel,
-        instance.addonCpp->outputQueue,
-        config);
-  }
-
-  return js::Boolean::create(env, true);
+  return config;
 }
-JSCATCH
+
+inline parakeet::ParakeetStreamingProcessor::Config
+streamingConfigFromModel(parakeet::ParakeetModel& model) {
+  parakeet::ParakeetStreamingProcessor::Config config;
+  config.sampleRate = model.getSampleRate();
+  config.chunkMs = model.getStreamingChunkMs();
+  config.historyMs = model.getStreamingHistoryMs();
+  config.emitPartials = model.getStreamingEmitPartials();
+  config.emitEnergyVad = model.getStreamingEnergyVad();
+  config.diarOnsetThreshold = model.getDiarOnsetThreshold();
+  config.diarMinSegmentMs =
+      static_cast<int>(model.getDiarMinDurationOn() * 1000.0F);
+  config.leftContextMs = model.getStreamingLeftContextMs();
+  config.rightLookaheadMs = model.getStreamingRightLookaheadMs();
+  config.spkCacheEnable = model.getStreamingSpkCacheEnable();
+  config.spkCacheLen = model.getStreamingSpkCacheLen();
+  config.fifoLen = model.getStreamingFifoLen();
+  config.chunkLeftContextMs = model.getStreamingChunkLeftContextMs();
+  config.chunkRightContextMs = model.getStreamingChunkRightContextMs();
+  config.spkCacheUpdatePeriod = model.getStreamingSpkCacheUpdatePeriod();
+  return config;
+}
+
+inline void overrideIfPositive(
+    js_env_t* env, js::Object& obj, const char* name, int& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    const int intValue = static_cast<int>(*value);
+    if (intValue > 0)
+      target = intValue;
+  }
+}
+
+inline void overrideIfNonNegative(
+    js_env_t* env, js::Object& obj, const char* name, int& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    const int intValue = static_cast<int>(*value);
+    if (intValue >= 0)
+      target = intValue;
+  }
+}
+
+inline void
+overrideBool(js_env_t* env, js::Object& obj, const char* name, bool& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(env, name)) {
+    target = *value;
+  }
+}
+
+inline void applyStreamingOverrides(
+    js_env_t* env, js::Object& configObj,
+    parakeet::ParakeetStreamingProcessor::Config& config) {
+  overrideIfPositive(env, configObj, "chunkMs", config.chunkMs);
+  overrideIfPositive(env, configObj, "historyMs", config.historyMs);
+  overrideIfPositive(env, configObj, "leftContextMs", config.leftContextMs);
+  overrideIfNonNegative(
+      env, configObj, "rightLookaheadMs", config.rightLookaheadMs);
+  overrideBool(env, configObj, "emitPartials", config.emitPartials);
+  overrideBool(env, configObj, "emitEnergyVad", config.emitEnergyVad);
+  // AOSC per-call overrides (v2.1+ Sortformer only).
+  overrideBool(env, configObj, "spkCacheEnable", config.spkCacheEnable);
+  overrideIfPositive(env, configObj, "spkCacheLen", config.spkCacheLen);
+  overrideIfPositive(env, configObj, "fifoLen", config.fifoLen);
+  overrideIfNonNegative(
+      env, configObj, "chunkLeftContextMs", config.chunkLeftContextMs);
+  overrideIfNonNegative(
+      env, configObj, "chunkRightContextMs", config.chunkRightContextMs);
+  overrideIfPositive(
+      env, configObj, "spkCacheUpdatePeriod", config.spkCacheUpdatePeriod);
+}
+
+} // namespace detail
 
 inline js_value_t*
-appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
+startStreaming(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto configObj = args.getJsObject(1, "config");
+
+  std::unique_ptr<IStreamingSession> session;
+  if (auto* parakeetModel = dynamic_cast<parakeet::ParakeetModel*>(
+          &instance.addonCpp->model.get())) {
+    parakeet::ParakeetStreamingProcessor::Config config =
+        detail::streamingConfigFromModel(*parakeetModel);
+    detail::applyStreamingOverrides(env, configObj, config);
+    session = std::make_unique<parakeet::ParakeetStreamingProcessor>(
+        *parakeetModel, instance.addonCpp->outputQueue, config);
+  } else {
+    whisper::StreamingProcessor::Config config =
+        detail::parseWhisperStreamingConfig(env, configObj);
+    auto& whisperModel =
+        dynamic_cast<whisper::WhisperModel&>(instance.addonCpp->model.get());
+    session = std::make_unique<whisper::StreamingProcessor>(
+        whisperModel, instance.addonCpp->outputQueue, config);
+  }
+
+  // Throws on double-start ("Streaming session already active ...").
+  insertStreamingSession(&instance, std::move(session));
+
+  // Informational only; the JS drivers synthesise their own jobIds.
+  return js::Boolean::create(env, true);
+}
+JSCATCH
+
+// ── appendStreamingAudio ─────────────────────────────────────────────────
+//
+// Returns false iff the decoded sample count was 0; throws when no session
+// is active. Input encoding matches runJob's per-engine rule.
+
+inline js_value_t*
+appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
-  auto inputObj = args.getJsObject(1, "inputObj");
 
   if (type != "audio") {
     throw qvac_errors::StatusError(
@@ -377,59 +668,85 @@ appendStreamingAudio(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
-  std::string audioFormat = "s16le";
-  auto maybeAudioFormat =
-      inputObj.getOptionalProperty<js::String>(env, "audio_format");
-  if (maybeAudioFormat.has_value()) {
-    audioFormat = maybeAudioFormat.value().as<std::string>(env);
+  vector<float> samples;
+  if (dynamic_cast<parakeet::ParakeetModel*>(&instance.addonCpp->model.get()) !=
+      nullptr) {
+    samples = js::TypedArray<float>(env, jsInput).as<vector<float>>(env);
+  } else {
+    auto inputObj = args.getJsObject(1, "inputObj");
+    std::string audioFormat = "s16le";
+    auto maybeAudioFormat =
+        inputObj.getOptionalProperty<js::String>(env, "audio_format");
+    if (maybeAudioFormat.has_value()) {
+      audioFormat = maybeAudioFormat.value().as<std::string>(env);
+    }
+    auto audioBytes =
+        js::TypedArray<uint8_t>(env, jsInput).as<std::vector<uint8_t>>(env);
+    samples =
+        whisper::WhisperModel::preprocessAudioData(audioBytes, audioFormat);
   }
-
-  auto audioBytes =
-      js::TypedArray<uint8_t>(env, jsInput).as<std::vector<uint8_t>>(env);
-  auto samples = WhisperModel::preprocessAudioData(audioBytes, audioFormat);
 
   if (samples.empty()) {
     return js::Boolean::create(env, false);
   }
 
-  StreamingProcessor* processor = nullptr;
-  {
-    std::lock_guard lock(g_streamingMtx);
-    auto it = g_streamingSessions.find(&instance);
-    if (it == g_streamingSessions.end()) {
-      throw std::runtime_error("No active streaming session for this instance");
-    }
-    processor = it->second.get();
+  IStreamingSession* session = findStreamingSession(&instance);
+  if (session == nullptr) {
+    throw std::runtime_error("No active streaming session for this instance");
   }
 
-  processor->appendAudio(std::move(samples));
+  session->appendAudio(std::move(samples));
   return js::Boolean::create(env, true);
 }
 JSCATCH
 
-// Tear down and remove any active streaming session for `instance`.
-// When `forceful` is true the model is asked to abort in-flight work first.
-// Returns true if a session was cleaned up, false if none existed.
-inline bool
-cleanupStreamingSession(
-    qvac_lib_inference_addon_cpp::AddonJs& instance, bool forceful = false) {
-  std::unique_ptr<StreamingProcessor> processor;
-  {
-    std::lock_guard lock(g_streamingMtx);
-    auto it = g_streamingSessions.find(&instance);
-    if (it == g_streamingSessions.end()) {
-      return false;
-    }
-    processor = std::move(it->second);
-    g_streamingSessions.erase(it);
+// ── endStreaming ─────────────────────────────────────────────────────────
+//
+// Unified teardown-object return for both engines:
+// `{ cleaned, audioDurationMs, totalSamples }`. `cleaned` is false when no
+// session existed. end() is the graceful path: trailing audio flushes and
+// the worker joins before the counters are read, so the JS drivers can
+// populate a synthetic JobEnded's stats with real values.
+
+inline js_value_t*
+endStreaming(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  bool cleaned = false;
+  double audioDurationMs = 0.0;
+  int64_t totalSamples = 0;
+
+  if (std::unique_ptr<IStreamingSession> session =
+          takeStreamingSession(&instance)) {
+    session->end();
+    // end() joined the worker thread, so the counters are read race-free.
+    const double audioSeconds = session->audioSeconds();
+    cleaned = true;
+    audioDurationMs = audioSeconds * 1000.0;
+    totalSamples = static_cast<int64_t>(
+        std::llround(audioSeconds * static_cast<double>(session->sampleRate())));
   }
-  if (forceful) {
-    processor->cancel();
-  } else {
-    processor->end();
-  }
-  return true;
+
+  auto out = js::Object::create(env);
+  out.setProperty(env, "cleaned", js::Boolean::create(env, cleaned));
+  out.setProperty(
+      env, "audioDurationMs", js::Number::create(env, audioDurationMs));
+  out.setProperty(
+      env,
+      "totalSamples",
+      js::Number::create(env, static_cast<double>(totalSamples)));
+  return out;
 }
+JSCATCH
+
+// ── cancel ───────────────────────────────────────────────────────────────
+//
+// One implementation for both engines, on whisper's async shape: the
+// session cancel (worker-thread join) and the framework job cancel both run
+// inside JsAsyncTask, off the JS event loop.
 
 inline js_value_t*
 cancelWithStreaming(js_env_t* env, js_callback_info_t* info) try {
@@ -438,27 +755,21 @@ cancelWithStreaming(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  std::shared_ptr<StreamingProcessor> processor;
-  {
-    std::lock_guard lock(g_streamingMtx);
-    auto it = g_streamingSessions.find(&instance);
-    if (it != g_streamingSessions.end()) {
-      processor = std::shared_ptr<StreamingProcessor>(
-          std::move(it->second));
-      g_streamingSessions.erase(it);
-    }
-  }
+  std::shared_ptr<IStreamingSession> session =
+      takeStreamingSessionShared(&instance);
 
   return js::JsAsyncTask::run(
       env,
-      [addonCppRef = instance.addonCpp, processor]() {
-        if (processor) {
-          processor->cancel();
+      [addonCpp = instance.addonCpp, session]() {
+        if (session) {
+          session->cancel();
         }
-        addonCppRef->cancelJob();
+        addonCpp->cancelJob();
       });
 }
 JSCATCH
+
+// ── destroyInstance ──────────────────────────────────────────────────────
 
 inline js_value_t*
 destroyInstanceWithStreaming(js_env_t* env, js_callback_info_t* info) try {
@@ -467,21 +778,14 @@ destroyInstanceWithStreaming(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  cleanupStreamingSession(instance, true);
+  // Forceful streaming cleanup first, then the framework teardown.
+  if (std::unique_ptr<IStreamingSession> session =
+          takeStreamingSession(&instance)) {
+    session->cancel();
+  }
 
   return JsInterface::destroyInstance(env, info);
 }
 JSCATCH
 
-inline js_value_t*
-endStreaming(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-  bool cleaned = cleanupStreamingSession(instance, false);
-  return js::Boolean::create(env, cleaned);
-}
-JSCATCH
-
-} // namespace qvac_lib_inference_addon_whisper
+} // namespace qvac::asrggml::addon_js

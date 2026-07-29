@@ -10,7 +10,12 @@
 #include "inference-addon-cpp/Logger.hpp"
 #include "model-interface/parakeet/ParakeetModel.hpp"
 
-namespace qvac_lib_infer_parakeet {
+namespace qvac::asrggml::parakeet {
+
+// Inside `namespace qvac::asrggml::parakeet` the unqualified name `parakeet`
+// resolves to this namespace itself, so the external parakeet-cpp library is
+// referenced through the `pkt` alias.
+namespace pkt = ::parakeet;
 
 namespace logger = qvac_lib_inference_addon_cpp::logger;
 
@@ -39,7 +44,7 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     Config config)
     : model_(model), output_queue_(std::move(outputQueue)), config_(config) {
   if (model_.isSortformer()) {
-    parakeet::SortformerStreamingOptions opts;
+    pkt::SortformerStreamingOptions opts;
     opts.sample_rate    = config_.sampleRate;
     opts.chunk_ms       = config_.chunkMs;
     opts.history_ms     = config_.historyMs;
@@ -57,11 +62,11 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     opts.spkcache_update_period = config_.spkCacheUpdatePeriod;
 
     diar_session_ = model_.createDuplexDiarizationSession(
-        opts, [this](const parakeet::StreamingDiarizationSegment& seg) {
+        opts, [this](const pkt::StreamingDiarizationSegment& seg) {
           onDiarSegment(seg);
         });
   } else {
-    parakeet::StreamingOptions opts;
+    pkt::StreamingOptions opts;
     opts.sample_rate       = config_.sampleRate;
     opts.chunk_ms          = config_.chunkMs;
     if (config_.leftContextMs > 0) {
@@ -75,7 +80,7 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
 
     asr_session_ = model_.createDuplexAsrSession(
         opts,
-        [this](const parakeet::StreamingSegment& seg) { onAsrSegment(seg); });
+        [this](const pkt::StreamingSegment& seg) { onAsrSegment(seg); });
   }
 
   thread_ = std::thread([this]() { processLoop(); });
@@ -141,7 +146,7 @@ void ParakeetStreamingProcessor::joinWorkerOnce() {
 }
 
 void ParakeetStreamingProcessor::onAsrSegment(
-    const parakeet::StreamingSegment& seg) {
+    const pkt::StreamingSegment& seg) {
   if (seg.text.empty() && !seg.is_eou_boundary) return;
   Transcript t;
   t.text        = seg.text;
@@ -154,7 +159,7 @@ void ParakeetStreamingProcessor::onAsrSegment(
 }
 
 void ParakeetStreamingProcessor::onDiarSegment(
-    const parakeet::StreamingDiarizationSegment& seg) {
+    const pkt::StreamingDiarizationSegment& seg) {
   if (seg.speaker_id < 0) return;
   Transcript t;
   std::ostringstream os;
@@ -244,4 +249,4 @@ void ParakeetStreamingProcessor::processLoop() {
   worker_done_.store(true);
 }
 
-} // namespace qvac_lib_infer_parakeet
+} // namespace qvac::asrggml::parakeet

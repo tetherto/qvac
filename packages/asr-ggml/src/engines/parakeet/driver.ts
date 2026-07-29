@@ -1,33 +1,39 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import QvacLogger = require("@qvac/logging");
-/* eslint-enable @typescript-eslint/no-require-imports */
-import {
-  createJobHandler,
-  type JobHandler,
-  type QvacResponse,
-} from "@qvac/infer-base";
-import type { Readable } from "stream";
+import type { QvacResponse } from "@qvac/infer-base";
 
 import {
   ParakeetInterface,
-  type BackendInfo as ParakeetBackendInfo,
   type ParakeetBinding,
   type ParakeetConfigurationParams,
   type StreamingConfig,
 } from "./parakeet";
 import {
-  END_OF_INPUT,
-  ERR_CODES,
-  QvacErrorAddonParakeet,
-} from "./lib/error";
-import { toFloat32Chunk } from "./lib/audio";
+  ERR_CODES_PARAKEET,
+  QvacErrorAddonASRGgml,
+} from "../../lib/error";
+import { END_OF_INPUT } from "../../lib/constants";
+import { normalizeAudioStream } from "../../lib/audio";
+import type {
+  ASRRunOutput,
+  ASRStreamOutput,
+  AudioInput,
+  BackendInfo,
+  TranscriptionSegment,
+} from "../../lib/types";
+import type {
+  ASRGgmlFiles,
+  ASRGgmlReloadConfig,
+  ASRStreamingOptions,
+  AsrDriver,
+  DriverContext,
+  NormalizedAudioStream,
+  StreamingSession,
+} from "../types";
 
-/** Model type auto-detected from the loaded GGUF metadata. */
-type ModelType = "tdt" | "ctc" | "eou" | "sortformer";
-
-/** Parakeet-specific configuration options. */
-interface ParakeetConfig {
+/**
+ * Parakeet-specific configuration options. The model type (CTC, TDT, EOU,
+ * or Sortformer) is auto-detected from the loaded GGUF metadata.
+ */
+export interface ParakeetConfig {
   /** Maximum CPU threads for inference (0 lets the engine pick). */
   maxThreads?: number;
   /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
@@ -83,136 +89,279 @@ interface ParakeetConfig {
   openclCacheDir?: string;
 }
 
-interface TranscriptionParakeetFiles {
-  /** Absolute path to a CTC, TDT, EOU, or Sortformer `.gguf` checkpoint. */
-  model?: string;
-}
-
-interface TranscriptionParakeetArgs {
-  files?: TranscriptionParakeetFiles;
-  config?: TranscriptionParakeetConfig;
-  logger?: QvacLogger.LoggerInterface;
-  exclusiveRun?: boolean;
-  [key: string]: unknown;
-}
-
-interface TranscriptionParakeetConfig {
-  enableStats?: boolean;
+/** Parakeet branch of the discriminated engine-config union. */
+export interface ParakeetEngineConfig {
+  engine: "parakeet";
   parakeetConfig?: ParakeetConfig;
-  [key: string]: unknown;
 }
-
-interface TranscriptionSegment {
-  text: string;
-  start: number;
-  end: number;
-  toAppend: boolean;
-  id?: number;
-  /** True when this segment ends on a recognized end-of-utterance boundary. */
-  isEndOfTurn?: boolean;
-  /** True when the segment begins a new SentencePiece word. */
-  startsWord?: boolean;
-}
-
-type OutputEvent = "JobStarted" | "Output" | "JobEnded" | "Error";
-
-type AppendInput =
-  | { type: "audio"; data: ArrayBuffer; priority?: number }
-  | { type: "end of job" };
 
 /** Per-call overrides for a duplex streaming session. */
-type StreamingRunConfig = StreamingConfig;
+export type ParakeetStreamingRunConfig = StreamingConfig;
 
-interface Addon {
-  activate(): Promise<void>;
-  append(input: AppendInput): Promise<number>;
-  cancel(jobId?: number): Promise<void>;
-  loadWeights(weightsData: {
-    filename: string;
-    chunk: Uint8Array;
-    completed: boolean;
-  }): Promise<void>;
-  getBackendInfo(): ParakeetBackendInfo | null;
-  status(): Promise<string>;
-  pause(): Promise<void>;
-  stop(): Promise<void>;
-  reload(config: ParakeetConfig): Promise<void>;
-  destroyInstance(): Promise<void>;
-  startStreaming(config?: StreamingRunConfig): Promise<number>;
-  appendStreamingAudio(
-    data: Float32Array | Int16Array | ArrayBuffer | ArrayBufferView,
-  ): Promise<boolean>;
-  endStreaming(): Promise<void>;
-  cancelStreaming(): Promise<void>;
+export interface ParakeetReloadConfig {
+  parakeetConfig?: Partial<ParakeetConfig>;
 }
 
-interface InferenceClientState {
-  configLoaded: boolean;
-  weightsLoaded: boolean;
-  destroyed: boolean;
+const PARAKEET_CONFIG_KEYS: readonly string[] = [
+  "maxThreads",
+  "useGPU",
+  "sampleRate",
+  "channels",
+  "captionEnabled",
+  "timestampsEnabled",
+  "seed",
+  "streaming",
+  "streamingChunkMs",
+  "streamingHistoryMs",
+  "streamingEmitPartials",
+  "streamingEnergyVad",
+  "streamingLeftContextMs",
+  "streamingRightLookaheadMs",
+  "streamingSpkCacheEnable",
+  "streamingSpkCacheLen",
+  "streamingFifoLen",
+  "streamingChunkLeftContextMs",
+  "streamingChunkRightContextMs",
+  "streamingSpkCacheUpdatePeriod",
+  "backendsDir",
+  "openclCacheDir",
+];
+
+const PARAKEET_STREAMING_OPT_KEYS: readonly string[] = [
+  "chunkMs",
+  "historyMs",
+  "leftContextMs",
+  "rightLookaheadMs",
+  "emitPartials",
+  "emitEnergyVad",
+  "spkCacheEnable",
+  "spkCacheLen",
+  "fifoLen",
+  "chunkLeftContextMs",
+  "chunkRightContextMs",
+  "spkCacheUpdatePeriod",
+];
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
-interface InternalConfig extends TranscriptionParakeetConfig {
-  modelPath?: string;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
-
-type AudioChunk = Uint8Array | Float32Array;
-type AudioStream =
-  | AsyncIterable<AudioChunk>
-  | Iterable<AudioChunk>
-  | AudioChunk;
 
 /**
- * High-level Parakeet speech-to-text client backed by qvac-parakeet.cpp.
- * Accepts CTC, TDT, EOU, and Sortformer GGUF checkpoints; model type is
- * auto-detected from GGUF metadata.
+ * Returns the (last) transcription segment of an output payload, or null
+ * when the payload is not segment-shaped.
  */
-class TranscriptionParakeet {
-  readonly logger: QvacLogger;
-  readonly exclusiveRun: boolean;
-  state: InferenceClientState;
-  protected addon?: ParakeetInterface;
-  protected params: ParakeetConfig;
+function lastSegmentOf(data: unknown): TranscriptionSegment | null {
+  const candidate: unknown = Array.isArray(data)
+    ? (data as unknown[])[data.length - 1]
+    : data;
+  if (isRecord(candidate) && typeof candidate.text === "string") {
+    return candidate as TranscriptionSegment;
+  }
+  return null;
+}
 
-  protected readonly _config: InternalConfig;
-  private _runQueueWaiter: Promise<void>;
-  private readonly _job: JobHandler;
+/**
+ * Returns an ArrayBuffer covering exactly the chunk's samples. Guards
+ * against Float32Array views whose backing buffer is larger than the view.
+ */
+function chunkBuffer(chunk: Float32Array): ArrayBuffer {
+  if (
+    chunk.byteOffset === 0 &&
+    chunk.byteLength === chunk.buffer.byteLength
+  ) {
+    return chunk.buffer as ArrayBuffer;
+  }
+  return chunk.buffer.slice(
+    chunk.byteOffset,
+    chunk.byteOffset + chunk.byteLength,
+  ) as ArrayBuffer;
+}
 
-  constructor({
-    files = {},
-    config = {},
-    logger = undefined,
-    exclusiveRun = true,
-  }: TranscriptionParakeetArgs) {
-    this.logger = new QvacLogger(logger);
-    this.exclusiveRun = !!exclusiveRun;
-    this._runQueueWaiter = Promise.resolve();
-    this.state = {
-      configLoaded: false,
-      weightsLoaded: false,
-      destroyed: false,
-    };
-    this._config = { ...config, modelPath: files.model };
+/**
+ * Parakeet engine driver: owns the `ParakeetInterface`, the parakeet event
+ * mapping, and the parakeet streaming lifecycle. Backed by
+ * qvac-parakeet.cpp; accepts CTC, TDT, EOU, and Sortformer GGUF
+ * checkpoints.
+ */
+export class ParakeetDriver implements AsrDriver {
+  readonly engineType = "parakeet" as const;
+  readonly supportsReload = true;
+
+  addon?: ParakeetInterface;
+  params: ParakeetConfig;
+
+  private readonly ctx: DriverContext;
+  private readonly _files: { model: string };
+
+  constructor(
+    ctx: DriverContext,
+    files: ASRGgmlFiles,
+    config: ParakeetEngineConfig,
+  ) {
+    this.ctx = ctx;
+    this._files = { model: files.model };
     this.params = config.parakeetConfig || {};
-    this._job = createJobHandler({ cancel: () => this.addon?.cancel() });
-
-    this.logger.debug("TranscriptionParakeet constructor called", {
-      params: this.params,
-      config: this._config,
-    });
-    this.validateModelFiles();
   }
 
-  validateModelFiles(): void {
-    const modelPath = this._config.modelPath;
-    if (modelPath && !fs.existsSync(modelPath)) {
-      this.logger.warn("Model file not found", { path: modelPath });
+  validateConfig(): void {
+    for (const key of Object.keys(this.params)) {
+      if (!PARAKEET_CONFIG_KEYS.includes(key)) {
+        throw new QvacErrorAddonASRGgml({
+          code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+          adds: `${key} is not a valid parameter for parakeetConfig`,
+        });
+      }
     }
   }
 
-  protected _buildConfigurationParams(): ParakeetConfigurationParams {
+  normalizeAudio(input: AudioInput): NormalizedAudioStream {
+    return normalizeAudioStream(input, "s16le");
+  }
+
+  async load(): Promise<void> {
+    const configurationParams = this._buildConfigurationParams();
+    this.ctx.logger.info(
+      "Creating Parakeet addon with configuration:",
+      configurationParams,
+    );
+    this.addon = this._createAddon(configurationParams);
+    await this.addon.activate();
+    this.ctx.logger.debug("Addon activated");
+  }
+
+  async unload(): Promise<void> {
+    if (this.addon) await this.addon.destroyInstance();
+  }
+
+  async reload(newConfig: ASRGgmlReloadConfig = {}): Promise<void> {
+    const overrides = newConfig as ParakeetReloadConfig;
+    this.ctx.logger.debug(
+      "Reloading addon with new configuration",
+      overrides,
+    );
+    if (overrides.parakeetConfig) {
+      this.params = { ...this.params, ...overrides.parakeetConfig };
+    }
+    const configurationParams = this._buildConfigurationParams();
+    await this.cancelActive();
+    if (this.ctx.job.active) {
+      this.ctx.job.fail(new Error("Model was reloaded"));
+    }
+    const addon = this._requireAddon();
+    await addon.reload(configurationParams);
+    await addon.activate();
+    this.ctx.logger.debug("Addon reloaded and activated successfully");
+  }
+
+  async cancelActive(jobId?: number): Promise<void> {
+    if (this.addon?.cancel) await this.addon.cancel(jobId);
+    if (this.ctx.job.active) {
+      this.ctx.job.fail(
+        new QvacErrorAddonASRGgml(ERR_CODES_PARAKEET.JOB_CANCELLED),
+      );
+    }
+  }
+
+  async status(): Promise<string> {
+    if (!this.addon?.status) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES_PARAKEET.FAILED_TO_GET_STATUS,
+        adds: "addon is not loaded",
+      });
+    }
+    return await this.addon.status();
+  }
+
+  getBackendInfo(): BackendInfo | null {
+    return this.addon?.getBackendInfo?.() ?? null;
+  }
+
+  run(
+    audio: NormalizedAudioStream,
+  ): Promise<QvacResponse<ASRRunOutput>> {
+    const response = this.ctx.job.start() as QvacResponse<ASRRunOutput>;
+    void this._pumpBatchAudio(audio).catch((error: unknown) => {
+      this.ctx.job.fail(asError(error));
+    });
+    return Promise.resolve(response);
+  }
+
+  async createStreamingSession(
+    audio: NormalizedAudioStream,
+    opts: ASRStreamingOptions = {},
+  ): Promise<StreamingSession> {
+    const streamingOpts = this._validateStreamingOptions(opts);
+    const addon = this._requireAddon();
+    const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
+    try {
+      await addon.startStreaming(streamingOpts);
+    } catch (error) {
+      this.ctx.job.fail(asError(error));
+      throw error;
+    }
+    void this._pumpStreamingAudio(audio).catch((error: unknown) => {
+      void this.addon?.endStreaming().catch(() => {});
+      this.ctx.job.fail(asError(error));
+    });
+    // `endStreaming` already resets the interface state, so settlement of
+    // the response is the end of driver teardown.
+    const done = response.await().then(
+      () => {},
+      () => {},
+    );
+    return { response, done };
+  }
+
+  _validateStreamingOptions(
+    opts: ASRStreamingOptions,
+  ): ParakeetStreamingRunConfig {
+    for (const key of Object.keys(opts)) {
+      if (!PARAKEET_STREAMING_OPT_KEYS.includes(key)) {
+        throw new QvacErrorAddonASRGgml({
+          code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+          adds: `${key} is not a valid parakeet streaming option`,
+        });
+      }
+    }
+    return opts as ParakeetStreamingRunConfig;
+  }
+
+  async _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void> {
+    const addon = this._requireAddon();
+    this.ctx.logger.debug("Start handling audio stream");
+    for await (const chunk of audio) {
+      this.ctx.logger.debug("Appending audio chunk", {
+        chunkLength: chunk.length,
+      });
+      await addon.append({ type: "audio", data: chunkBuffer(chunk) });
+    }
+    this.ctx.logger.debug("Sending end-of-input signal");
+    await addon.append({ type: END_OF_INPUT });
+  }
+
+  async _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void> {
+    const addon = this._requireAddon();
+    this.ctx.logger.debug(
+      "Start pumping audio into duplex streaming session",
+    );
+    for await (const chunk of audio) {
+      if (chunk.length === 0) continue;
+      await addon.appendStreamingAudio(chunk);
+    }
+    this.ctx.logger.debug(
+      "Audio stream completed; closing duplex streaming session",
+    );
+    await addon.endStreaming();
+  }
+
+  _buildConfigurationParams(): ParakeetConfigurationParams {
     return {
-      modelPath: this._config.modelPath || "",
+      engineType: "parakeet",
+      modelPath: this._files.model || "",
       maxThreads: this.params.maxThreads ?? 4,
       useGPU: this.params.useGPU === true,
       sampleRate: this.params.sampleRate || 16000,
@@ -243,191 +392,20 @@ class TranscriptionParakeet {
     };
   }
 
-  getState(): InferenceClientState {
-    return this.state;
-  }
-
-  async load(): Promise<void> {
-    if (this.state.destroyed) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED);
-    }
-    if (this.state.configLoaded || this.state.weightsLoaded) {
-      this.logger.info(
-        "Reload requested - unloading existing model first",
-      );
-      await this.unload();
-    }
-    await this._load();
-    this.state.configLoaded = true;
-    this.state.weightsLoaded = true;
-  }
-
-  async run(
-    audioStream: Readable,
-  ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>> {
-    const input = audioStream as AudioStream;
-    if (this.exclusiveRun) {
-      return this._withExclusiveRun(() => this._runInternal(input));
-    }
-    return this._runInternal(input);
-  }
-
-  /**
-   * Opens a long-lived native streaming session and forwards chunks as they
-   * arrive. Segment updates surface through `response.onUpdate(...)`.
-   */
-  async runStreaming(
-    audioStream: Readable,
-    streamingConfig: StreamingRunConfig = {},
-  ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>> {
-    const input = audioStream as AudioStream;
-    if (this.exclusiveRun) {
-      return this._withExclusiveRun(() =>
-        this._runStreamingInternal(input, streamingConfig),
-      );
-    }
-    return this._runStreamingInternal(input, streamingConfig);
-  }
-
-  private async _withExclusiveRun<T>(
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const prev = this._runQueueWaiter;
-    let release: () => void = () => {};
-    this._runQueueWaiter = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await prev;
-    try {
-      return await fn();
-    } finally {
-      release();
-    }
-  }
-
-  protected async _load(): Promise<void> {
-    const configurationParams = this._buildConfigurationParams();
-    this.logger.info(
-      "Creating Parakeet addon with configuration:",
+  _createAddon(
+    configurationParams: ParakeetConfigurationParams,
+  ): ParakeetInterface {
+    this.ctx.logger.info(
+      "Creating Parakeet interface with configuration:",
       configurationParams,
     );
-    this.addon = this._createAddon(configurationParams);
-    await this.addon.activate();
-    this.logger.debug("Addon activated");
-  }
-
-  private _runInternal(
-    audioStream: AudioStream,
-  ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>> {
-    const response =
-      this._job.start() as QvacResponse<TranscriptionParakeet.ParakeetRunOutput>;
-    let normalized: AsyncIterable<AudioChunk> | Iterable<AudioChunk>;
-    try {
-      normalized = this._normalizeAudioStream(audioStream);
-    } catch (error) {
-      this._job.fail(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-      throw error;
-    }
-    void this._handleAudioStream(normalized).catch((error: unknown) => {
-      this._job.fail(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    });
-    return Promise.resolve(response);
-  }
-
-  private async _runStreamingInternal(
-    audioStream: AudioStream,
-    streamingConfig: StreamingRunConfig,
-  ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>> {
-    const normalized = this._normalizeAudioStream(audioStream);
-    const addon = this._requireAddon();
-    const response =
-      this._job.start() as QvacResponse<TranscriptionParakeet.ParakeetRunOutput>;
-    try {
-      await addon.startStreaming(streamingConfig || {});
-    } catch (error) {
-      this._job.fail(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-      throw error;
-    }
-    void this._pumpStreamingAudio(normalized).catch(
-      (error: unknown) => {
-        void addon.endStreaming().catch(() => {});
-        this._job.fail(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      },
-    );
-    return response;
-  }
-
-  private async _pumpStreamingAudio(
-    audioStream: AsyncIterable<AudioChunk> | Iterable<AudioChunk>,
-  ): Promise<void> {
-    const addon = this._requireAddon();
-    this.logger.debug(
-      "Start pumping audio into duplex streaming session",
-    );
-    for await (const chunk of audioStream) {
-      const audioData = toFloat32Chunk(chunk);
-      if (audioData.length === 0) continue;
-      await addon.appendStreamingAudio(audioData);
-    }
-    this.logger.debug(
-      "Audio stream completed; closing duplex streaming session",
-    );
-    await addon.endStreaming();
-  }
-
-  private async _handleAudioStream(
-    audioStream: AsyncIterable<AudioChunk> | Iterable<AudioChunk>,
-  ): Promise<void> {
-    const addon = this._requireAddon();
-    this.logger.debug("Start handling audio stream");
-    for await (const chunk of audioStream) {
-      this.logger.debug("Appending audio chunk", {
-        chunkLength: chunk.length,
-      });
-      const audioData = toFloat32Chunk(chunk);
-      await addon.append({ type: "audio", data: audioData.buffer });
-    }
-    this.logger.debug("Sending end-of-input signal");
-    await addon.append({ type: END_OF_INPUT });
-  }
-
-  private _normalizeAudioStream(
-    audioStream: AudioStream,
-  ): AsyncIterable<AudioChunk> | Iterable<AudioChunk> {
-    if (!audioStream) throw new Error("audioStream is required");
-    if (
-      typeof (audioStream as { [Symbol.asyncIterator]?: unknown })[
-        Symbol.asyncIterator
-      ] === "function"
-    ) {
-      return audioStream as AsyncIterable<AudioChunk>;
-    }
-    if (
-      audioStream instanceof Uint8Array ||
-      audioStream instanceof Float32Array
-    ) {
-      return [audioStream];
-    }
-    if (Array.isArray(audioStream)) {
-      return audioStream as AudioChunk[];
-    }
-    if (
-      typeof (audioStream as { [Symbol.iterator]?: unknown })[
-        Symbol.iterator
-      ] === "function"
-    ) {
-      return [Uint8Array.from(audioStream as Iterable<number>)];
-    }
-    throw new Error(
-      "Unsupported audio input. Expected stream, TypedArray, or chunk array.",
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+    const binding = require("../../binding.js") as ParakeetBinding;
+    return new ParakeetInterface(
+      binding,
+      configurationParams,
+      this._outputCallback.bind(this),
+      this.ctx.logger.info.bind(this.ctx.logger),
     );
   }
 
@@ -439,97 +417,24 @@ class TranscriptionParakeet {
     error: unknown,
   ): void {
     if (event === "Error") {
-      this._job.fail(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    } else if (event === "Output") {
-      this._job.output(data);
-    } else if (event === "JobEnded") {
-      this._job.end(data);
+      this.ctx.job.fail(asError(error));
+      return;
     }
-  }
-
-  async reload(
-    newConfig: { parakeetConfig?: Partial<ParakeetConfig> } = {},
-  ): Promise<void> {
-    return this._withExclusiveRun(async () => {
-      this.logger.debug(
-        "Reloading addon with new configuration",
-        newConfig,
-      );
-      if (newConfig.parakeetConfig) {
-        this.params = { ...this.params, ...newConfig.parakeetConfig };
+    if (event === "Output") {
+      // The segment payload passes through untouched; a typed endOfTurn
+      // event is additionally synthesized when the (last) segment carries
+      // the model's end-of-utterance flag (double-signal).
+      this.ctx.job.output(data);
+      const segment = lastSegmentOf(data);
+      if (segment?.isEndOfTurn === true) {
+        this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
       }
-      const configurationParams = this._buildConfigurationParams();
-      await this.cancel();
-      this._job.fail(new Error("Model was reloaded"));
-      const addon = this._requireAddon();
-      await addon.reload(configurationParams);
-      await addon.activate();
-      this.logger.debug(
-        "Addon reloaded and activated successfully",
-      );
-    });
-  }
-
-  protected _createAddon(
-    configurationParams: ParakeetConfigurationParams,
-  ): ParakeetInterface {
-    this.logger.info(
-      "Creating Parakeet interface with configuration:",
-      configurationParams,
-    );
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
-    const binding = require("./binding") as ParakeetBinding;
-    return new ParakeetInterface(
-      binding,
-      configurationParams,
-      this._outputCallback.bind(this),
-      this.logger.info.bind(this.logger),
-    );
-  }
-
-  async unload(): Promise<void> {
-    return this._withExclusiveRun(async () => {
-      await this.cancel();
-      this._job.fail(new Error("Model was unloaded"));
-      if (this.addon) await this.addon.destroyInstance();
-      this.state.configLoaded = false;
-      this.state.weightsLoaded = false;
-    });
-  }
-
-  async cancel(jobId?: number): Promise<void> {
-    if (this.addon?.cancel) await this.addon.cancel(jobId);
-    if (this._job.active) {
-      this._job.fail(new QvacErrorAddonParakeet(ERR_CODES.JOB_CANCELLED));
+      return;
     }
-  }
-
-  async status(): Promise<string | undefined> {
-    return this.addon?.status();
-  }
-
-  getBackendInfo(): ParakeetBackendInfo | null {
-    return this.addon?.getBackendInfo?.() ?? null;
-  }
-
-  async pause(): Promise<void> {
-    await this.addon?.pause();
-  }
-
-  async unpause(): Promise<void> {
-    await this.addon?.activate();
-  }
-
-  async destroy(): Promise<void> {
-    return this._withExclusiveRun(async () => {
-      await this.cancel();
-      this._job.fail(new Error("Model was destroyed"));
-      if (this.addon) await this.addon.destroyInstance();
-      this.state.configLoaded = false;
-      this.state.destroyed = true;
-    });
+    if (event === "JobEnded") {
+      if (this.ctx.enableStats) this.ctx.job.end(data);
+      else this.ctx.job.end();
+    }
   }
 
   private _requireAddon(): ParakeetInterface {
@@ -539,71 +444,3 @@ class TranscriptionParakeet {
     return this.addon;
   }
 }
-
-type NamespaceModelType = ModelType;
-type NamespaceParakeetConfig = ParakeetConfig;
-type NamespaceTranscriptionParakeetFiles = TranscriptionParakeetFiles;
-type NamespaceTranscriptionParakeetArgs = TranscriptionParakeetArgs;
-type NamespaceTranscriptionParakeetConfig = TranscriptionParakeetConfig;
-type NamespaceTranscriptionSegment = TranscriptionSegment;
-type NamespaceOutputEvent = OutputEvent;
-type NamespaceAppendInput = AppendInput;
-type NamespaceAddon = Addon;
-type NamespaceInferenceClientState = InferenceClientState;
-type NamespaceStreamingRunConfig = StreamingRunConfig;
-
-// eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the package's established class namespace API.
-namespace TranscriptionParakeet {
-  /**
-   * Numeric code identifying the compute backend selected by the engine.
-   */
-  export enum BackendId {
-    CPU = 0,
-    Metal = 1,
-    CUDA = 2,
-    Vulkan = 3,
-    OpenCL = 4,
-    Other = 99,
-  }
-
-  /** Runtime statistics returned by the native Parakeet model. */
-  export interface RuntimeStats {
-    totalTime: number;
-    audioDurationMs: number;
-    totalSamples: number;
-    totalTokens: number;
-    totalTranscriptions: number;
-    processCalls: number;
-    modelLoadMs: number;
-    melSpecMs: number;
-    encoderMs: number;
-    decoderMs: number;
-    totalWallMs: number;
-    totalEncodedFrames: number;
-    backendDevice: number;
-    backendId: number;
-    gpuUnsupported: number;
-    encoderOnCoreml: number;
-  }
-
-  export type BackendInfo = ParakeetBackendInfo;
-  export type ParakeetRunOutput =
-    | TranscriptionSegment[]
-    | TranscriptionSegment;
-  export type ModelType = NamespaceModelType;
-  export type ParakeetConfig = NamespaceParakeetConfig;
-  export type TranscriptionParakeetFiles =
-    NamespaceTranscriptionParakeetFiles;
-  export type TranscriptionParakeetArgs =
-    NamespaceTranscriptionParakeetArgs;
-  export type TranscriptionParakeetConfig =
-    NamespaceTranscriptionParakeetConfig;
-  export type TranscriptionSegment = NamespaceTranscriptionSegment;
-  export type OutputEvent = NamespaceOutputEvent;
-  export type AppendInput = NamespaceAppendInput;
-  export type Addon = NamespaceAddon;
-  export type InferenceClientState = NamespaceInferenceClientState;
-  export type StreamingRunConfig = NamespaceStreamingRunConfig;
-}
-
-export = TranscriptionParakeet;

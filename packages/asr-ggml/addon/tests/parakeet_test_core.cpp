@@ -20,11 +20,12 @@
 #include <thread>
 #include <vector>
 
+#include "addon/AsrErrors.hpp"
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/parakeet/ParakeetConfig.hpp"
 #include "model-interface/parakeet/ParakeetModel.hpp"
 
-using namespace qvac_lib_infer_parakeet;
+using namespace qvac::asrggml::parakeet;
 
 // ─────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -424,4 +425,27 @@ TEST_F(ParakeetModelTest, GgufStreambufOverloadIfAvailable) {
     m.setWeightsForFile("model.gguf", std::move(sb));
     EXPECT_NO_THROW(m.load());
     EXPECT_TRUE(m.isLoaded());
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Merged error table (AsrErrors.hpp)
+// ─────────────────────────────────────────────────────────────────────
+
+TEST(ParakeetErrors, ReloadNotSupportedStatus) {
+    using namespace qvac::asrggml::errors::parakeet;
+    auto status = makeStatus(
+        Code::ReloadNotSupported,
+        "reload is not supported for the parakeet engine");
+    EXPECT_EQ(status.codeString(), "[ Parakeet :: ReloadNotSupported ]");
+    EXPECT_EQ(std::string(status.what()),
+              "reload is not supported for the parakeet engine");
+}
+
+TEST(ParakeetErrors, ToStringCoversEveryCode) {
+    using namespace qvac::asrggml::errors::parakeet;
+    EXPECT_EQ(toString(Code::EncoderNotLoaded),   "EncoderNotLoaded");
+    EXPECT_EQ(toString(Code::InferenceFailed),    "InferenceFailed");
+    EXPECT_EQ(toString(Code::ModelNotReady),      "ModelNotReady");
+    EXPECT_EQ(toString(Code::ReloadNotSupported), "ReloadNotSupported");
+    EXPECT_EQ(toString(static_cast<Code>(255)),   "UnknownError");
 }

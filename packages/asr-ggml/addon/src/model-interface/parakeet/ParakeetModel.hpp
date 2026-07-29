@@ -6,13 +6,13 @@
 // + decoder + ctc/sortformer) plus a hand-rolled mel-spectrogram, CMVN,
 // chunked-limited streaming state machine for EOU, and a Sortformer
 // post-processing pipeline. All of that has been replaced by a single
-// `parakeet::Engine` from `parakeet-cpp` (vcpkg overlay port). The
+// `pkt::Engine` from `parakeet-cpp` (vcpkg overlay port). The
 // engine internally handles mel + encoder + decoder + diarization for any
 // of the four model types (CTC, TDT, EOU, Sortformer) given a single GGUF
 // file, so the binding's job is reduced to:
 //
 //   1. accumulate GGUF bytes from `setWeightsForFile()` into a temp file,
-//   2. open `parakeet::Engine` against that path,
+//   2. open `pkt::Engine` against that path,
 //   3. dispatch `process()` to either `transcribe_samples()` (CTC / TDT /
 //      EOU) or `diarize_samples()` (Sortformer),
 //   4. wrap the engine result in `Transcript` and fire the on-segment
@@ -43,7 +43,12 @@ namespace parakeet {
 class Engine;
 } // namespace parakeet
 
-namespace qvac_lib_infer_parakeet {
+namespace qvac::asrggml::parakeet {
+
+// Inside `namespace qvac::asrggml::parakeet` the unqualified name `parakeet`
+// resolves to this namespace itself, so the external parakeet-cpp library is
+// referenced through the `pkt` alias.
+namespace pkt = ::parakeet;
 
 class ParakeetModel : public qvac_lib_inference_addon_cpp::model::IModel,
                       public qvac_lib_inference_addon_cpp::model::IModelCancel,
@@ -103,15 +108,15 @@ public:
   // cancel directly on its own thread, and the on_segment callback fires
   // synchronously inside feed_pcm_f32 / finalize whenever the engine
   // emits a segment. Throws if the engine isn't loaded.
-  std::unique_ptr<parakeet::StreamSession> createDuplexAsrSession(
-      const parakeet::StreamingOptions& opts,
-      parakeet::StreamingCallback onSegment);
+  std::unique_ptr<pkt::StreamSession> createDuplexAsrSession(
+      const pkt::StreamingOptions& opts,
+      pkt::StreamingCallback onSegment);
 
   // Same idea for Sortformer-flavoured GGUFs.
-  std::unique_ptr<parakeet::SortformerStreamSession>
+  std::unique_ptr<pkt::SortformerStreamSession>
   createDuplexDiarizationSession(
-      const parakeet::SortformerStreamingOptions& opts,
-      parakeet::SortformerSegmentCallback onSegment);
+      const pkt::SortformerStreamingOptions& opts,
+      pkt::SortformerSegmentCallback onSegment);
 
   // Cheap accessors used by the duplex processor (and unit tests) to
   // build session opts from cfg_ when the JS caller doesn't override
@@ -254,7 +259,7 @@ private:
   // The addon framework streams the GGUF bytes via setWeightsForFile().
   // We accumulate them into `gguf_buffer_` keyed by the (single) GGUF
   // filename; on load() we materialise the buffer into a temp file and
-  // hand the path to parakeet::Engine.
+  // hand the path to pkt::Engine.
   std::string                          gguf_filename_;
   std::vector<uint8_t>                 gguf_buffer_;
   std::filesystem::path                gguf_temp_path_;
@@ -274,15 +279,15 @@ private:
 
   // The Engine itself (pimpl-owned via unique_ptr to keep the
   // qvac-parakeet headers out of the binding's public include surface).
-  std::unique_ptr<parakeet::Engine> engine_;
+  std::unique_ptr<pkt::Engine> engine_;
   mutable std::mutex                     engine_mutex_;
 
   // Only one session is open at a time (model_type decides which).
   // session_mutex_ guards the unique_ptrs against the race between cancel()
   // (callable from any thread) and the open/close/unload lifecycle.
   mutable std::mutex                                 session_mutex_;
-  std::unique_ptr<parakeet::StreamSession>           asr_session_;
-  std::unique_ptr<parakeet::SortformerStreamSession> diar_session_;
+  std::unique_ptr<pkt::StreamSession>           asr_session_;
+  std::unique_ptr<pkt::SortformerStreamSession> diar_session_;
 
   // Wall-clock seconds of audio fed to the streaming sessions so far,
   // used to translate per-session relative segment timestamps into a
@@ -354,8 +359,8 @@ private:
   // path uses createDuplexAsrSession() / createDuplexDiarizationSession()
   // and ParakeetStreamingProcessor instead.
   void openStreamingSession();
-  void openSortformerStreamingSession(parakeet::Engine& engine);
-  void openAsrStreamingSession(parakeet::Engine& engine);
+  void openSortformerStreamingSession(pkt::Engine& engine);
+  void openAsrStreamingSession(pkt::Engine& engine);
   void closeStreamingSession();
   void pushPendingSegment(Transcript segment);
   std::vector<Transcript> takePendingStreamingSegments();
@@ -393,4 +398,4 @@ private:
   mutable std::atomic_uint64_t         cancelGeneration_ = 0;
 };
 
-} // namespace qvac_lib_infer_parakeet
+} // namespace qvac::asrggml::parakeet

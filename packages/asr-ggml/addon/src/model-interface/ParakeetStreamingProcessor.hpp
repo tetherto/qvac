@@ -11,16 +11,22 @@
 #include <parakeet/diarization.h>
 #include <parakeet/streaming.h>
 
+#include "addon/StreamingSessionRegistry.hpp"
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/parakeet/ParakeetConfig.hpp"
 
-namespace qvac_lib_infer_parakeet {
+namespace qvac::asrggml::parakeet {
+
+// Inside `namespace qvac::asrggml::parakeet` the unqualified name `parakeet`
+// resolves to this namespace itself, so the external parakeet-cpp library is
+// referenced through the `pkt` alias.
+namespace pkt = ::parakeet;
 
 class ParakeetModel;
 
 // Long-lived worker that bridges JS-side audio chunks and the
-// parakeet::StreamSession (or SortformerStreamSession) without going
+// pkt::StreamSession (or SortformerStreamSession) without going
 // through the addon framework's append() -> runJob() -> process()
 // lifecycle. One processor per addon instance; lifetime is bound to
 // the JS startStreaming() / endStreaming() control verbs.
@@ -40,7 +46,7 @@ class ParakeetModel;
 //     joins.
 //   - cancel() flips cancelled_, calls session_->cancel(), notifies
 //     cv_; the worker exits without finalizing.
-class ParakeetStreamingProcessor {
+class ParakeetStreamingProcessor : public qvac::asrggml::IStreamingSession {
 public:
   struct Config {
     int sampleRate = 16000;
@@ -71,7 +77,7 @@ public:
       std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
       Config config);
 
-  ~ParakeetStreamingProcessor();
+  ~ParakeetStreamingProcessor() override;
 
   ParakeetStreamingProcessor(const ParakeetStreamingProcessor&) = delete;
   ParakeetStreamingProcessor& operator=(const ParakeetStreamingProcessor&) =
@@ -81,15 +87,15 @@ public:
 
   // Push s16le or float32 samples already converted to float32 in [-1,1].
   // Thread-safe; safe to call from the JS-binding thread.
-  void appendAudio(std::vector<float>&& samples);
+  void appendAudio(std::vector<float>&& samples) override;
 
   // Graceful shutdown: flush trailing audio via finalize(), drain
   // remaining segments, then join the worker thread.
-  void end();
+  void end() override;
 
   // Forceful shutdown: cancel the underlying session, drop pending
   // audio, then join the worker thread.
-  void cancel();
+  void cancel() override;
 
   // Cumulative seconds of audio fed to the underlying parakeet streaming
   // session so far. Used by the JS layer to populate the synthetic
@@ -97,13 +103,13 @@ public:
   // `response.stats.audioDurationMs` / `totalSamples` after a duplex run
   // get a non-zero value (the framework's RuntimeStats path is bypassed
   // by this processor entirely).
-  double audioSeconds() const { return audio_seconds_; }
-  int    sampleRate()   const { return config_.sampleRate; }
+  double audioSeconds() const override { return audio_seconds_; }
+  int sampleRate() const override { return config_.sampleRate; }
 
 private:
   void processLoop();
-  void onAsrSegment(const parakeet::StreamingSegment& seg);
-  void onDiarSegment(const parakeet::StreamingDiarizationSegment& seg);
+  void onAsrSegment(const pkt::StreamingSegment& seg);
+  void onDiarSegment(const pkt::StreamingDiarizationSegment& seg);
   void emitPending();
   void joinWorkerOnce();
 
@@ -111,8 +117,8 @@ private:
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> output_queue_;
   Config config_;
 
-  std::unique_ptr<parakeet::StreamSession> asr_session_;
-  std::unique_ptr<parakeet::SortformerStreamSession> diar_session_;
+  std::unique_ptr<pkt::StreamSession> asr_session_;
+  std::unique_ptr<pkt::SortformerStreamSession> diar_session_;
 
   mutable std::mutex mtx_;
   std::condition_variable cv_;
@@ -138,4 +144,4 @@ private:
   double audio_seconds_ = 0.0;
 };
 
-} // namespace qvac_lib_infer_parakeet
+} // namespace qvac::asrggml::parakeet

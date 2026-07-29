@@ -6,14 +6,11 @@ export default [
   {
     ignores: [
       'index.js',
-      'whisper.js',
-      'configChecker.js',
       'addonLogging.js',
-      'lib/**',
       'index.d.ts',
-      'whisper.d.ts',
-      'configChecker.d.ts',
       'addonLogging.d.ts',
+      'lib/**',
+      'engines/**',
       'build/**',
       'prebuilds/**',
       'third-party/**',
@@ -23,7 +20,6 @@ export default [
       'test/**',
       'tmp/**',
       'benchmarks/**',
-      'transcription-addon/**',
       'eslint.config.*',
       'package-lock.json'
     ]
@@ -60,7 +56,7 @@ export default [
     rules: {
       'import/no-unresolved': [
         'error',
-        { ignore: ['^@qvac/transcription-whispercpp/'] }
+        { ignore: ['^@qvac/asr-ggml/'] }
       ],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'error',

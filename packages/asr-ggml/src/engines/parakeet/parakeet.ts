@@ -3,11 +3,17 @@ import path = require("bare-path");
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 import {
+  ERR_CODES_PARAKEET as ERR_CODES,
+  QvacErrorAddonASRGgml,
+} from "../../lib/error";
+import {
   END_OF_INPUT,
-  ERR_CODES,
-  QvacErrorAddonParakeet,
-} from "./lib/error";
-import { mergeFloat32Chunks, pcmS16ToFloat32 } from "./lib/audio";
+  MAX_BUFFERED_BYTES,
+} from "../../lib/constants";
+import { mergeFloat32Chunks, pcmS16ToFloat32 } from "../../lib/audio";
+import type { BackendInfo } from "../../lib/types";
+
+export type { BackendInfo };
 
 const state = Object.freeze({
   LOADING: "loading",
@@ -21,6 +27,8 @@ const state = Object.freeze({
 type ParakeetState = (typeof state)[keyof typeof state];
 
 export interface ParakeetConfigurationParams {
+  /** Unified native `createInstance` dispatch key. */
+  engineType?: string;
   modelPath?: string;
   maxThreads?: number;
   useGPU?: boolean;
@@ -59,15 +67,6 @@ export interface StreamingConfig {
   chunkLeftContextMs?: number;
   chunkRightContextMs?: number;
   spkCacheUpdatePeriod?: number;
-}
-
-export interface BackendInfo {
-  backendDevice: string;
-  backendId: number;
-  backendName: string;
-  backendDescription: string;
-  encoderBackend: string;
-  encoderOnCoreml: boolean;
 }
 
 export interface WeightData {
@@ -158,16 +157,13 @@ function normalizeError(error: unknown): {
   return { message, cause: new Error(message) };
 }
 
-// 500 MB — ~2.7 hours of 16 kHz f32le mono audio.
-const MAX_BUFFERED_BYTES = 500 * 1024 * 1024;
-
 function createParakeetError(
   code: number,
   message: string,
   error?: unknown,
-): QvacErrorAddonParakeet {
+): QvacErrorAddonASRGgml {
   const cause = error === undefined ? undefined : normalizeError(error).cause;
-  return new QvacErrorAddonParakeet({ code, adds: message, cause });
+  return new QvacErrorAddonASRGgml({ code, adds: message, cause });
 }
 
 /**
@@ -213,7 +209,9 @@ export class ParakeetInterface {
   ): ParakeetConfigurationParams {
     const out = { ...configurationParams };
     if (!out.backendsDir) {
-      out.backendsDir = path.join(__dirname, "prebuilds");
+      // Generated file lives at engines/parakeet/parakeet.js; prebuilds/
+      // sits at the package root, two levels up.
+      out.backendsDir = path.join(__dirname, "..", "..", "prebuilds");
     }
     return out;
   }
@@ -738,5 +736,3 @@ export class ParakeetInterface {
     return mergeFloat32Chunks(this._bufferedAudio);
   }
 }
-
-export { QvacErrorAddonParakeet, ERR_CODES };

@@ -3,18 +3,18 @@
 #include <bare.h>
 
 #include "src/addon/AddonJs.hpp"
+#include "src/addon/StreamingSessionRegistry.hpp"
 
 namespace {
 void atexitCleanup() {
-  std::lock_guard lock(qvac_lib_inference_addon_whisper::g_streamingMtx);
-  qvac_lib_inference_addon_whisper::g_streamingSessions.clear();
+  // Abortive teardown for every surviving streaming session (both engines):
+  // cancel() bounds the worker join, then the sessions are destroyed.
+  qvac::asrggml::clearAllStreamingSessions();
 }
 } // namespace
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
-auto qvac_lib_inference_addon_whisper_exports(
-    js_env_t* env,
-    js_value_t* exports)
+auto qvac_asr_ggml_exports(js_env_t* env, js_value_t* exports)
     -> js_value_t* { // NOLINT(readability-identifier-naming)
 
   static bool registered = false;
@@ -34,18 +34,17 @@ auto qvac_lib_inference_addon_whisper_exports(
     }                                                                          \
   }
 
-  V("createInstance", qvac_lib_inference_addon_whisper::createInstance)
-  V("runJob", qvac_lib_inference_addon_whisper::runJob)
-  V("reload", qvac_lib_inference_addon_whisper::reload)
-  V("startStreaming", qvac_lib_inference_addon_whisper::startStreaming)
-  V("appendStreamingAudio",
-    qvac_lib_inference_addon_whisper::appendStreamingAudio)
-  V("endStreaming", qvac_lib_inference_addon_whisper::endStreaming)
+  V("createInstance", qvac::asrggml::addon_js::createInstance)
+  V("runJob", qvac::asrggml::addon_js::runJob)
+  V("reload", qvac::asrggml::addon_js::reload)
+  V("getBackendInfo", qvac::asrggml::addon_js::getBackendInfo)
+  V("startStreaming", qvac::asrggml::addon_js::startStreaming)
+  V("appendStreamingAudio", qvac::asrggml::addon_js::appendStreamingAudio)
+  V("endStreaming", qvac::asrggml::addon_js::endStreaming)
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
-  V("cancel", qvac_lib_inference_addon_whisper::cancelWithStreaming)
-  V("destroyInstance",
-    qvac_lib_inference_addon_whisper::destroyInstanceWithStreaming)
+  V("cancel", qvac::asrggml::addon_js::cancelWithStreaming)
+  V("destroyInstance", qvac::asrggml::addon_js::destroyInstanceWithStreaming)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
@@ -53,6 +52,5 @@ auto qvac_lib_inference_addon_whisper_exports(
   return exports;
 }
 
-BARE_MODULE(
-    qvac_lib_inference_addon_whisper, qvac_lib_inference_addon_whisper_exports)
+BARE_MODULE(qvac_asr_ggml, qvac_asr_ggml_exports)
 // NOLINTEND(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)

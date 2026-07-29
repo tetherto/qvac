@@ -7,7 +7,7 @@
 #include "model-interface/parakeet/ParakeetConfig.hpp"
 #include "model-interface/parakeet/ParakeetModel.hpp"
 
-using namespace qvac_lib_infer_parakeet;
+using namespace qvac::asrggml::parakeet;
 
 namespace {
 

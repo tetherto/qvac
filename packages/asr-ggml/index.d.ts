@@ -1,194 +1,151 @@
 import QvacLogger = require("@qvac/logging");
-import { type JobHandler, type QvacResponse } from "@qvac/infer-base";
-import { WhisperInterface, type StreamingConfig } from "./whisper";
-import { type WhisperConfigurationParams } from "./configChecker";
-interface VadParams {
-    threshold?: number;
-    min_speech_duration_ms?: number;
-    min_silence_duration_ms?: number;
-    max_speech_duration_s?: number;
-    speech_pad_ms?: number;
-    samples_overlap?: number;
-}
-interface WhisperConfig extends Record<string, unknown> {
-    audio_format?: string;
-    language?: string;
-    vad_model_path?: string;
-    vad_params?: VadParams;
-    backendsDir?: string;
-    max_seconds?: number;
-    duration_ms?: number;
-    temperature?: number;
-    suppress_nst?: boolean;
-    n_threads?: number;
-}
-interface TranscriptionWhispercppFiles {
-    model: string;
-    vadModel?: string;
-}
-interface TranscriptionWhispercppArgs {
-    files: TranscriptionWhispercppFiles;
+import { type QvacResponse } from "@qvac/infer-base";
+import { QvacErrorAddonASRGgml } from "./lib/error";
+import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, EngineType } from "./engines/types";
+import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
+import { type ParakeetConfig, type ParakeetEngineConfig, type ParakeetStreamingRunConfig } from "./engines/parakeet/driver";
+type ASRGgmlConfig = WhisperEngineConfig | ParakeetEngineConfig;
+interface ASRGgmlOptions {
+    files: ASRGgmlFiles;
+    /** Engine-scoped configuration; the discriminant is `config.engine`. */
+    config?: ASRGgmlConfig;
+    /** Convenience alias when `config` is omitted; `config.engine` wins. */
+    engine?: EngineType;
+    /** Attach runtime stats to the job-end payload (default: true). */
+    enableStats?: boolean;
     logger?: QvacLogger.LoggerInterface | null;
     exclusiveRun?: boolean;
-    opts?: {
-        stats?: boolean;
-    };
-    [key: string]: unknown;
-}
-interface TranscriptionWhispercppConfig {
-    path?: string;
-    enableStats?: boolean;
-    vadModelPath?: string;
-    whisperConfig: WhisperConfig;
-    contextParams?: Record<string, unknown>;
-    miscConfig?: Record<string, unknown>;
-    audio_format?: string;
-    [key: string]: unknown;
-}
-interface InferenceClientState {
-    configLoaded: boolean;
-    weightsLoaded: boolean;
-    destroyed: boolean;
-}
-interface WhisperTranscriptionSegment {
-    text: string;
-    [key: string]: unknown;
-}
-interface WhisperStreamingOptions {
-    emitVadEvents?: boolean;
-    conversationMode?: boolean;
-    endOfTurnSilenceMs?: number;
-    vadRunIntervalMs?: number;
-}
-interface VadStateEvent {
-    type: "vad";
-    speaking: boolean;
-    probability: number;
-}
-interface EndOfTurnEvent {
-    type: "endOfTurn";
-    silenceDurationMs: number;
-}
-interface RuntimeStats {
-    totalTime: number;
-    realTimeFactor: number;
-    tokensPerSecond: number;
-    audioDurationMs: number;
-    totalSamples: number;
-    totalTokens: number;
-    totalSegments: number;
-    processCalls: number;
-    whisperSampleMs: number;
-    whisperEncodeMs: number;
-    whisperDecodeMs: number;
-    whisperBatchdMs: number;
-    whisperPromptMs: number;
-    totalWallMs: number;
-    backendDevice: number;
-    backendId: number;
-    gpuMemTotalMb: number;
-    gpuMemFreeMb: number;
-}
-type WhisperRunOutput = WhisperTranscriptionSegment[] | WhisperTranscriptionSegment | VadStateEvent | EndOfTurnEvent;
-type AudioChunk = Uint8Array;
-type AudioStream = AsyncIterable<AudioChunk> | Iterable<AudioChunk> | Uint8Array | Iterable<number>;
-type NormalizedAudioStream = AsyncIterable<AudioChunk> | Iterable<AudioChunk>;
-type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
-interface ReloadConfig {
-    whisperConfig?: Partial<WhisperConfig>;
-    miscConfig?: Record<string, unknown>;
-    audio_format?: string;
-}
-interface InternalRunOptions extends WhisperStreamingOptions {
-    streaming?: boolean;
 }
 /**
- * GGML client implementation for the Whisper transcription model.
+ * Unified multi-engine ASR client for the whisper and parakeet GGML
+ * engines. The engine is selected per instance (`config.engine`, `engine`,
+ * or model-file sniffing); the public method surface is engine-agnostic
+ * while config vocabularies stay engine-scoped.
  */
-declare class TranscriptionWhispercpp {
+declare class ASRGgml {
+    static readonly ENGINE_WHISPER = "whisper";
+    static readonly ENGINE_PARAKEET = "parakeet";
+    static readonly ERR_CODES: Readonly<{
+        FAILED_TO_LOAD_WEIGHTS: 6001;
+        FAILED_TO_CANCEL: 6002;
+        FAILED_TO_APPEND: 6003;
+        FAILED_TO_GET_STATUS: 6004;
+        FAILED_TO_DESTROY: 6005;
+        FAILED_TO_ACTIVATE: 6006;
+        FAILED_TO_RESET: 6007;
+        FAILED_TO_PAUSE: 6008;
+        VAD_MODEL_REQUIRED: 6009;
+        JOB_ALREADY_RUNNING: 6010;
+        INVALID_AUDIO_INPUT: 6011;
+        FAILED_TO_START_STREAMING: 6012;
+        FAILED_TO_APPEND_STREAMING: 6013;
+        FAILED_TO_END_STREAMING: 6014;
+        BUFFER_LIMIT_EXCEEDED: 6015;
+        FAILED_TO_STOP: 6016;
+        MODEL_REQUIRED: 6017;
+        VAD_MODEL_NOT_FOUND: 6018;
+        MODEL_NOT_FOUND: 24009;
+        INVALID_AUDIO_FORMAT: 24010;
+        INVALID_CONFIG: 24015;
+        INSTANCE_DESTROYED: 24018;
+        JOB_CANCELLED: 24019;
+        NOT_SUPPORTED: 6019;
+        STREAMING_SESSION_ACTIVE: 6020;
+        INVALID_ENGINE: 6021;
+    }>;
+    static readonly Error: typeof QvacErrorAddonASRGgml;
+    static readonly inferenceManagerConfig: Readonly<{
+        noAdditionalDownload: true;
+    }>;
+    static getModelKey(): string;
     readonly logger: QvacLogger;
     readonly exclusiveRun: boolean;
-    readonly opts: {
-        stats?: boolean;
-    };
+    readonly enableStats: boolean;
     readonly state: InferenceClientState;
-    params: WhisperConfig;
-    addon?: WhisperInterface;
-    _files: {
-        model: string;
-        vadModel: string | null;
-    };
-    _config: TranscriptionWhispercppConfig;
-    _withExclusiveRun: RunExclusive;
-    _inferenceQueueWaiter: Promise<void> | null;
-    _pendingWhisperJobId: number | null;
-    _job: JobHandler;
-    constructor({ files, logger, exclusiveRun, opts, }: TranscriptionWhispercppArgs, config: TranscriptionWhispercppConfig);
+    private readonly _engineType;
+    private readonly _driver;
+    private readonly _job;
+    private _queueTail;
+    private _openSession;
+    constructor(options: ASRGgmlOptions);
     getState(): InferenceClientState;
-    load(...loadArgs: unknown[]): Promise<void>;
-    pause(): Promise<void>;
-    unpause(): Promise<void>;
-    stop(): Promise<void>;
-    status(): Promise<string>;
-    _resolveVadModelPath(): string | null;
-    _load(..._loadArgs: unknown[]): Promise<void>;
-    _getModelFilePath(): string;
-    _buildConfigurationParams(overrides?: ReloadConfig): WhisperConfigurationParams;
-    _buildWhisperConfig(overrideWhisperConfig: Partial<WhisperConfig>): WhisperConfig;
-    _resolveDurationMs(overrideWhisperConfig: Partial<WhisperConfig>): number;
-    _stripNonAddonKeys(whisperConfig: WhisperConfig): void;
-    _applyVadConfig(whisperConfig: WhisperConfig, overrideWhisperConfig: Partial<WhisperConfig>): void;
-    _enqueueExclusiveRunResponse(runFn: () => Promise<QvacResponse<WhisperRunOutput>>): Promise<QvacResponse<WhisperRunOutput>>;
-    run(audioStream: AudioStream): Promise<QvacResponse<WhisperRunOutput>>;
-    runStreaming(audioStream: AudioStream, opts?: WhisperStreamingOptions): Promise<QvacResponse<WhisperRunOutput>>;
-    _runInternal(audioStream: AudioStream, opts?: InternalRunOptions): Promise<QvacResponse<WhisperRunOutput>>;
-    _runBatchTranscription(normalizedAudioStream: NormalizedAudioStream): Promise<QvacResponse<WhisperRunOutput>>;
-    _runStreaming(audioStream: NormalizedAudioStream, streamingOpts?: InternalRunOptions): Promise<QvacResponse<WhisperRunOutput>>;
-    _buildStreamingConfig(vadModelPath: string, streamingOpts: InternalRunOptions): StreamingConfig;
-    _handleAudioStream(audioStream: NormalizedAudioStream): Promise<void>;
-    _handleStreamingAudio(audioStream: NormalizedAudioStream): Promise<void>;
-    _normalizeAudioStream(audioStream: AudioStream): NormalizedAudioStream;
-    reload(newConfig?: ReloadConfig): Promise<void>;
-    _createAddon(configurationParams: WhisperConfigurationParams): WhisperInterface;
-    _outputCallback(_addon: unknown, event: string, jobId: number, data: unknown, error: unknown): void;
+    getEngineType(): EngineType;
+    getBackendInfo(): BackendInfo | null;
+    load(): Promise<void>;
     unload(): Promise<void>;
-    cancel(): Promise<void>;
     destroy(): Promise<void>;
-    validateModelFiles(): void;
-    private _requiredAddon;
+    reload(newConfig?: ASRGgmlReloadConfig): Promise<void>;
+    cancel(jobId?: number): Promise<void>;
+    status(): Promise<string>;
+    pause(): Promise<never>;
+    unpause(): Promise<never>;
+    run(audio: AudioInput): Promise<QvacResponse<ASRRunOutput>>;
+    runStreaming(audio: AudioInput, opts?: ASRStreamingOptions): Promise<QvacResponse<ASRStreamOutput>>;
+    private _resolveEngine;
+    private _validateWhisperVadModel;
+    private _assertNoOpenSession;
+    /**
+     * Single serialized queue for run/reload/unload/destroy. `"onReturn"`
+     * releases the slot when `fn()` settles; `"onSettle"` requires `fn()` to
+     * resolve with a `QvacResponse` and holds the slot until that response
+     * settles.
+     */
+    private _enqueue;
 }
-type VadParamsShape = VadParams;
+type EngineTypeShape = EngineType;
+type ASRGgmlOptionsShape = ASRGgmlOptions;
+type ASRGgmlFilesShape = ASRGgmlFiles;
+type ASRGgmlConfigShape = ASRGgmlConfig;
+type WhisperEngineConfigShape = WhisperEngineConfig;
+type ParakeetEngineConfigShape = ParakeetEngineConfig;
 type WhisperConfigShape = WhisperConfig;
-type TranscriptionWhispercppFilesShape = TranscriptionWhispercppFiles;
-type TranscriptionWhispercppArgsShape = TranscriptionWhispercppArgs;
-type TranscriptionWhispercppConfigShape = TranscriptionWhispercppConfig;
-type InferenceClientStateShape = InferenceClientState;
-type WhisperTranscriptionSegmentShape = WhisperTranscriptionSegment;
+type ParakeetConfigShape = ParakeetConfig;
+type VadParamsShape = VadParams;
+type ASRGgmlReloadConfigShape = ASRGgmlReloadConfig;
+type ASRStreamingOptionsShape = ASRStreamingOptions;
 type WhisperStreamingOptionsShape = WhisperStreamingOptions;
-type VadStateEventShape = VadStateEvent;
+type ParakeetStreamingRunConfigShape = ParakeetStreamingRunConfig;
+type TranscriptionSegmentShape = TranscriptionSegment;
+type VadEventShape = VadEvent;
 type EndOfTurnEventShape = EndOfTurnEvent;
+type ASRRunOutputShape = ASRRunOutput;
+type ASRStreamOutputShape = ASRStreamOutput;
+type AudioChunkShape = AudioChunk;
+type AudioInputShape = AudioInput;
+type BackendInfoShape = BackendInfo;
+type RuntimeStatsCoreShape = RuntimeStatsCore;
+type WhisperRuntimeStatsShape = WhisperRuntimeStats;
+type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
-type WhisperRunOutputShape = WhisperRunOutput;
-declare namespace TranscriptionWhispercpp {
-    type VadParams = VadParamsShape;
+type InferenceClientStateShape = InferenceClientState;
+declare namespace ASRGgml {
+    type EngineType = EngineTypeShape;
+    type ASRGgmlOptions = ASRGgmlOptionsShape;
+    type ASRGgmlFiles = ASRGgmlFilesShape;
+    type ASRGgmlConfig = ASRGgmlConfigShape;
+    type WhisperEngineConfig = WhisperEngineConfigShape;
+    type ParakeetEngineConfig = ParakeetEngineConfigShape;
     type WhisperConfig = WhisperConfigShape;
-    type WhisperTranscriptionSegment = WhisperTranscriptionSegmentShape;
+    type ParakeetConfig = ParakeetConfigShape;
+    type VadParams = VadParamsShape;
+    type ASRGgmlReloadConfig = ASRGgmlReloadConfigShape;
+    type ASRStreamingOptions = ASRStreamingOptionsShape;
     type WhisperStreamingOptions = WhisperStreamingOptionsShape;
-    type VadStateEvent = VadStateEventShape;
+    type ParakeetStreamingRunConfig = ParakeetStreamingRunConfigShape;
+    type TranscriptionSegment = TranscriptionSegmentShape;
+    type VadEvent = VadEventShape;
     type EndOfTurnEvent = EndOfTurnEventShape;
+    type ASRRunOutput = ASRRunOutputShape;
+    type ASRStreamOutput = ASRStreamOutputShape;
+    type AudioChunk = AudioChunkShape;
+    type AudioInput = AudioInputShape;
+    type BackendInfo = BackendInfoShape;
+    type RuntimeStatsCore = RuntimeStatsCoreShape;
+    type WhisperRuntimeStats = WhisperRuntimeStatsShape;
+    type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
     type RuntimeStats = RuntimeStatsShape;
-    enum BackendId {
-        CPU = 0,
-        Metal = 1,
-        CUDA = 2,
-        Vulkan = 3,
-        OpenCL = 4,
-        Other = 99
-    }
-    type WhisperRunOutput = WhisperRunOutputShape;
-    type TranscriptionWhispercppFiles = TranscriptionWhispercppFilesShape;
-    type TranscriptionWhispercppArgs = TranscriptionWhispercppArgsShape;
-    type TranscriptionWhispercppConfig = TranscriptionWhispercppConfigShape;
     type InferenceClientState = InferenceClientStateShape;
+    export import BackendId = BackendIdEnum;
 }
-export = TranscriptionWhispercpp;
+export = ASRGgml;

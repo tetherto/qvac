@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace qvac_lib_infer_parakeet {
+namespace qvac::asrggml::parakeet {
 
 /**
  * Transcription result segment
@@ -110,5 +110,5 @@ struct DiarizationConfig {
   int medianWindow = 11;
 };
 
-} // namespace qvac_lib_infer_parakeet
+} // namespace qvac::asrggml::parakeet
 

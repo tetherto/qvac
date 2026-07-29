@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace qvac_lib_inference_addon_whisper {
+namespace qvac::asrggml::whisper {
 
 struct Transcript {
   std::string text;
@@ -29,4 +29,4 @@ enum class TranscriptionProfile : std::uint8_t {
   Vad,
 };
 
-} // namespace qvac_lib_inference_addon_whisper
+} // namespace qvac::asrggml::whisper

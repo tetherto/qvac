@@ -10,9 +10,10 @@
 
 #include <whisper.h>
 
+#include "addon/StreamingSessionRegistry.hpp"
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
 
-namespace qvac_lib_inference_addon_whisper {
+namespace qvac::asrggml::whisper {
 
 class WhisperModel;
 
@@ -25,7 +26,7 @@ struct EndOfTurnEvent {
   int silenceDurationMs = 0;
 };
 
-class StreamingProcessor {
+class StreamingProcessor : public qvac::asrggml::IStreamingSession {
 public:
   struct Config {
     std::uint64_t jobId = 0;
@@ -54,16 +55,26 @@ public:
       std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue,
       Config config);
 
-  ~StreamingProcessor();
+  ~StreamingProcessor() override;
 
   StreamingProcessor(const StreamingProcessor&) = delete;
   StreamingProcessor& operator=(const StreamingProcessor&) = delete;
   StreamingProcessor(StreamingProcessor&&) = delete;
   StreamingProcessor& operator=(StreamingProcessor&&) = delete;
 
-  void appendAudio(std::vector<float>&& samples);
-  void end();
-  void cancel();
+  void appendAudio(std::vector<float>&& samples) override;
+  void end() override;
+  void cancel() override;
+
+  // Cumulative seconds of audio received so far. Used by endStreaming() to
+  // populate the synthetic `JobEnded` stats object (audioDurationMs /
+  // totalSamples). Only valid after end()/cancel() returned: both join
+  // `thread_` first, so reading totalSamplesReceived_ is race-free.
+  double audioSeconds() const override {
+    return static_cast<double>(totalSamplesReceived_) /
+           static_cast<double>(config_.sampleRate);
+  }
+  int sampleRate() const override { return config_.sampleRate; }
 
 private:
   void processLoop();
@@ -114,4 +125,4 @@ private:
   std::thread thread_;
 };
 
-} // namespace qvac_lib_inference_addon_whisper
+} // namespace qvac::asrggml::whisper

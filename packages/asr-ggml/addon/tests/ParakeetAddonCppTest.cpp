@@ -18,9 +18,9 @@
 
 namespace {
 
-auto makeConfig() -> qvac_lib_infer_parakeet::ParakeetConfig {
-  qvac_lib_infer_parakeet::ParakeetConfig config;
-  config.modelType = qvac_lib_infer_parakeet::ModelType::TDT;
+auto makeConfig() -> qvac::asrggml::parakeet::ParakeetConfig {
+  qvac::asrggml::parakeet::ParakeetConfig config;
+  config.modelType = qvac::asrggml::parakeet::ModelType::TDT;
   config.sampleRate = 16000;
   config.channels = 1;
   return config;
@@ -120,7 +120,7 @@ auto createBlockingAddon() -> std::pair<std::unique_ptr<qvac_lib_inference_addon
 } // namespace
 
 TEST(ParakeetAddonCppTest, RunJobEmitsOutputAndRuntimeStats) {
-  auto instance = qvac_lib_infer_parakeet::createInstance(makeConfig());
+  auto instance = qvac::asrggml::addon_cpp::createParakeetInstance(makeConfig());
 
   auto input = makeInputSamples(1);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(input))));
@@ -149,7 +149,7 @@ TEST(ParakeetAddonCppTest, RejectsSecondRunWhileBusy) {
 }
 
 TEST(ParakeetAddonCppTest, CancelAllowsNextRun) {
-  auto instance = qvac_lib_infer_parakeet::createInstance(makeConfig());
+  auto instance = qvac::asrggml::addon_cpp::createParakeetInstance(makeConfig());
 
   auto firstInput = makeInputSamples(5);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(firstInput))));

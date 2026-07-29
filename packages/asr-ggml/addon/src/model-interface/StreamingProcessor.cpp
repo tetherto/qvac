@@ -6,7 +6,7 @@
 
 #include "inference-addon-cpp/Logger.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
-#include "whisper.cpp/WhisperModel.hpp"
+#include "whisper/WhisperModel.hpp"
 
 namespace {
 struct VadSegmentsDeleter {
@@ -20,7 +20,7 @@ using VadSegmentsPtr = std::unique_ptr<whisper_vad_segments, VadSegmentsDeleter>
 constexpr float K_CENTISECONDS_TO_SECONDS = 0.01F;
 } // namespace
 
-namespace qvac_lib_inference_addon_whisper {
+namespace qvac::asrggml::whisper {
 
 StreamingProcessor::StreamingProcessor(
     WhisperModel& model,
@@ -416,4 +416,4 @@ void StreamingProcessor::processLoop() {
   finalizeStream();
 }
 
-} // namespace qvac_lib_inference_addon_whisper
+} // namespace qvac::asrggml::whisper

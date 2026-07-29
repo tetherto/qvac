@@ -19,8 +19,8 @@ constexpr std::size_t K_SHORT_AUDIO_SECONDS = 1;
 constexpr std::size_t K_LONG_AUDIO_SECONDS = 20;
 
 auto makeConfig(bool useGpu = false)
-    -> qvac_lib_inference_addon_whisper::WhisperConfig {
-  qvac_lib_inference_addon_whisper::WhisperConfig config;
+    -> qvac::asrggml::whisper::WhisperConfig {
+  qvac::asrggml::whisper::WhisperConfig config;
   config.whisperContextCfg["model"] =
       std::string("../../../models/ggml-tiny.bin");
   config.whisperContextCfg["use_gpu"] = useGpu;
@@ -54,7 +54,7 @@ TEST(WhisperAddonCppTest, RunJobEmitsRuntimeStats) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
   auto instance =
-      qvac_lib_inference_addon_whisper::createInstance(makeConfig());
+      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
   instance.addon->activate();
 
   auto input = makeInputSamples(K_SHORT_AUDIO_SECONDS);
@@ -78,7 +78,7 @@ TEST(WhisperAddonCppTest, RunJobWithGpuEnabledConfigCompletes) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
   auto instance =
-      qvac_lib_inference_addon_whisper::createInstance(makeConfig(true));
+      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig(true));
   instance.addon->activate();
 
   auto input = makeInputSamples(K_SHORT_AUDIO_SECONDS);
@@ -99,7 +99,7 @@ TEST(WhisperAddonCppTest, RejectsSecondRunWhileBusy) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
   auto instance =
-      qvac_lib_inference_addon_whisper::createInstance(makeConfig());
+      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
   instance.addon->activate();
 
   auto firstInput = makeInputSamples(K_LONG_AUDIO_SECONDS);
@@ -113,7 +113,7 @@ TEST(WhisperAddonCppTest, CancelAllowsNextRun) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
   auto instance =
-      qvac_lib_inference_addon_whisper::createInstance(makeConfig());
+      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
   instance.addon->activate();
 
   auto firstInput = makeInputSamples(K_LONG_AUDIO_SECONDS);

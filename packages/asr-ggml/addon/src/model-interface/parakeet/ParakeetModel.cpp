@@ -22,7 +22,12 @@
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
-namespace qvac_lib_infer_parakeet {
+namespace qvac::asrggml::parakeet {
+
+// Inside `namespace qvac::asrggml::parakeet` the unqualified name `parakeet`
+// resolves to this namespace itself, so the external parakeet-cpp library is
+// referenced through the `pkt` alias.
+namespace pkt = ::parakeet;
 
 namespace fs = std::filesystem;
 using namespace qvac_lib_inference_addon_cpp;
@@ -155,61 +160,11 @@ int64_t measureMs(Fn&& fn) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 }
 
-// Routes ggml's stderr logging through the binding's QLOG() pipe so it obeys
-// --native-logs (or stays silent by default). Multi-part CONT lines are
-// buffered and flushed together so QLOG sees one logical line per ggml line.
-
-std::mutex& ggmlLogBufMutex() {
-  static std::mutex m;
-  return m;
-}
-std::string& ggmlLogBuf() {
-  static std::string buf;
-  return buf;
-}
-ggml_log_level& ggmlLogBufLevel() {
-  static ggml_log_level lvl = GGML_LOG_LEVEL_INFO;
-  return lvl;
-}
-
-logger::Priority ggmlLevelToPriority(ggml_log_level level) {
-  switch (level) {
-    case GGML_LOG_LEVEL_ERROR: return logger::Priority::ERROR;
-    case GGML_LOG_LEVEL_WARN:  return logger::Priority::WARNING;
-    case GGML_LOG_LEVEL_DEBUG: return logger::Priority::DEBUG;
-    case GGML_LOG_LEVEL_INFO:
-    case GGML_LOG_LEVEL_CONT:
-    default:                   return logger::Priority::INFO;
-  }
-}
-
-void flushCompleteLogLines() {
-  for (size_t nl = ggmlLogBuf().find('\n'); nl != std::string::npos;
-       nl = ggmlLogBuf().find('\n')) {
-    std::string line = ggmlLogBuf().substr(0, nl);
-    ggmlLogBuf().erase(0, nl + 1);
-    if (line.empty()) continue;
-    QLOG(ggmlLevelToPriority(ggmlLogBufLevel()), line);
-  }
-}
-
-void ggmlLogTrampoline(
-    ggml_log_level level, const char* text, void* /*user_data*/) {
-  if (!text)
-    return;
-  std::lock_guard<std::mutex> lk(ggmlLogBufMutex());
-  if (level != GGML_LOG_LEVEL_CONT)
-    ggmlLogBufLevel() = level;
-  ggmlLogBuf().append(text);
-  flushCompleteLogLines();
-}
-
-void installGgmlLogTrampolineOnce() {
-  static std::once_flag once;
-  std::call_once(once, [] {
-    ggml_log_set(&ggmlLogTrampoline, nullptr);
-  });
-}
+// ggml log routing note: the process-wide unbuffered forwarder
+// (qvac::asrggml::forwardGgmlLog, see addon/GgmlLogForwarding.hpp) is
+// installed once per process by the binding's createInstance() via
+// installNativeLogForwarderOnce() -- it covers both engines, so this file's
+// old line-buffered trampoline was deleted in the asr-ggml merge.
 
 constexpr float PCM_S16_SCALE = 1.0F / 32768.0F;
 
@@ -253,7 +208,7 @@ std::string formatDiarizationSegments(const Segments& segments) {
 }
 
 Transcript
-makeDiarizationTranscript(const parakeet::StreamingDiarizationSegment& seg) {
+makeDiarizationTranscript(const pkt::StreamingDiarizationSegment& seg) {
   Transcript t;
   t.text = formatSpeakerSegment(seg.speaker_id, seg.start_s, seg.end_s);
   t.start = static_cast<float>(seg.start_s);
@@ -262,7 +217,7 @@ makeDiarizationTranscript(const parakeet::StreamingDiarizationSegment& seg) {
   return t;
 }
 
-Transcript makeAsrTranscript(const parakeet::StreamingSegment& seg) {
+Transcript makeAsrTranscript(const pkt::StreamingSegment& seg) {
   Transcript t;
   t.text = seg.text;
   t.start = static_cast<float>(seg.start_s);
@@ -284,9 +239,9 @@ std::string joinTranscriptText(
   return os.str();
 }
 
-parakeet::EngineOptions
+pkt::EngineOptions
 buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
-  parakeet::EngineOptions eopts;
+  pkt::EngineOptions eopts;
   eopts.model_gguf_path = ggufPath.string();
   // n_threads = 0 lets ggml pick hardware_concurrency; maxThreads is honoured
   // only when explicitly set non-zero.
@@ -309,10 +264,10 @@ buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
   return eopts;
 }
 
-parakeet::SortformerStreamingOptions buildSortformerStreamingOptions(
+pkt::SortformerStreamingOptions buildSortformerStreamingOptions(
     const ParakeetConfig& cfg, int sampleRate, float onset,
     float minDurationOn) {
-  parakeet::SortformerStreamingOptions opts;
+  pkt::SortformerStreamingOptions opts;
   opts.sample_rate = sampleRate;
   opts.chunk_ms = cfg.streamingChunkMs > 0
                       ? cfg.streamingChunkMs
@@ -333,9 +288,9 @@ parakeet::SortformerStreamingOptions buildSortformerStreamingOptions(
   return opts;
 }
 
-parakeet::StreamingOptions
+pkt::StreamingOptions
 buildAsrStreamingOptions(const ParakeetConfig& cfg, int sampleRate) {
-  parakeet::StreamingOptions opts;
+  pkt::StreamingOptions opts;
   opts.sample_rate = sampleRate;
   opts.chunk_ms = cfg.streamingChunkMs > 0
                       ? cfg.streamingChunkMs
@@ -367,9 +322,9 @@ ParakeetModel::~ParakeetModel() {
 }
 
 void ParakeetModel::initializeBackend() {
-  // Engine's constructor selects the ggml backend; here we only route ggml's
-  // own log lines through QLOG() so they obey --native-logs.
-  installGgmlLogTrampolineOnce();
+  // Engine's constructor selects the ggml backend. ggml log routing is
+  // process-wide and installed by the binding's createInstance()
+  // (installNativeLogForwarderOnce), so there is nothing to do here.
 }
 
 std::filesystem::path ParakeetModel::writeBufferToTempFile() {
@@ -456,7 +411,7 @@ void ParakeetModel::detectModelType() {
 void ParakeetModel::captureBackend() {
   if (!engine_)
     return;
-  backend_device_ = engine_->backend_device() == parakeet::BackendDevice::GPU
+  backend_device_ = engine_->backend_device() == pkt::BackendDevice::GPU
                         ? DeviceGpu
                         : DeviceCpu;
   backend_name_ = engine_->backend_name();
@@ -520,10 +475,9 @@ void ParakeetModel::load() {
 
   modelLoadMs_ = measureMs([&] {
     const fs::path ggufPath = resolveGgufPath();
-    installGgmlLogTrampolineOnce();
-    const parakeet::EngineOptions eopts = buildEngineOptions(cfg_, ggufPath);
+    const pkt::EngineOptions eopts = buildEngineOptions(cfg_, ggufPath);
     std::lock_guard<std::mutex> lk(engine_mutex_);
-    engine_ = std::make_unique<parakeet::Engine>(eopts);
+    engine_ = std::make_unique<pkt::Engine>(eopts);
   });
 
   is_loaded_ = true;
@@ -571,8 +525,8 @@ void ParakeetModel::reload() {
 void ParakeetModel::endOfStream() {
   stream_ended_ = true;
   if (!cfg_.streaming || streaming_finalized_) return;
-  parakeet::StreamSession*           asr  = nullptr;
-  parakeet::SortformerStreamSession* diar = nullptr;
+  pkt::StreamSession*           asr  = nullptr;
+  pkt::SortformerStreamSession* diar = nullptr;
   {
     std::lock_guard<std::mutex> lk(session_mutex_);
     asr  = asr_session_.get();
@@ -633,8 +587,8 @@ void ParakeetModel::cancel() const {
   // cancel() may race with the open/close/unload lifecycle, so snapshot the
   // session pointers under session_mutex_ and invoke the engine's own
   // (thread-safe) cancel() outside the lock.
-  parakeet::StreamSession*           asr  = nullptr;
-  parakeet::SortformerStreamSession* diar = nullptr;
+  pkt::StreamSession*           asr  = nullptr;
+  pkt::SortformerStreamSession* diar = nullptr;
   {
     std::lock_guard<std::mutex> lk(session_mutex_);
     asr  = asr_session_.get();
@@ -713,14 +667,14 @@ ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
 std::string ParakeetModel::runAsrProcess(const Input& input) {
   if (input.empty()) return ERR_AUDIO_SHORT;
 
-  parakeet::Engine* engine = nullptr;
+  pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
   }
   if (!engine) return ERR_MODEL_NOT_LOADED;
 
-  parakeet::EngineResult result =
+  pkt::EngineResult result =
       engine->transcribe_samples(input.data(),
                                  static_cast<int>(input.size()),
                                  sample_rate_);
@@ -739,18 +693,18 @@ std::string ParakeetModel::runAsrProcess(const Input& input) {
 std::string ParakeetModel::runSortformerProcess(const Input& input) {
   if (input.empty()) return ERR_AUDIO_SHORT;
 
-  parakeet::Engine* engine = nullptr;
+  pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
   }
   if (!engine) return ERR_MODEL_NOT_LOADED;
 
-  parakeet::DiarizationOptions dopts;
+  pkt::DiarizationOptions dopts;
   dopts.threshold      = diarConfig_.onset;
   dopts.min_segment_ms = static_cast<int>(diarConfig_.minDurationOn * 1000.0f);
 
-  parakeet::DiarizationResult diar;
+  pkt::DiarizationResult diar;
   encoderMs_ += measureMs([&] {
     diar = engine->diarize_samples(input.data(),
                                    static_cast<int>(input.size()),
@@ -762,10 +716,10 @@ std::string ParakeetModel::runSortformerProcess(const Input& input) {
   return formatDiarizationSegments(diar.segments);
 }
 
-std::unique_ptr<parakeet::StreamSession> ParakeetModel::createDuplexAsrSession(
-    const parakeet::StreamingOptions& opts,
-    parakeet::StreamingCallback onSegment) {
-  parakeet::Engine* engine = nullptr;
+std::unique_ptr<pkt::StreamSession> ParakeetModel::createDuplexAsrSession(
+    const pkt::StreamingOptions& opts,
+    pkt::StreamingCallback onSegment) {
+  pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
@@ -778,11 +732,11 @@ std::unique_ptr<parakeet::StreamSession> ParakeetModel::createDuplexAsrSession(
   return engine->stream_start(opts, std::move(onSegment));
 }
 
-std::unique_ptr<parakeet::SortformerStreamSession>
+std::unique_ptr<pkt::SortformerStreamSession>
 ParakeetModel::createDuplexDiarizationSession(
-    const parakeet::SortformerStreamingOptions& opts,
-    parakeet::SortformerSegmentCallback onSegment) {
-  parakeet::Engine* engine = nullptr;
+    const pkt::SortformerStreamingOptions& opts,
+    pkt::SortformerSegmentCallback onSegment) {
+  pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
@@ -796,7 +750,7 @@ ParakeetModel::createDuplexDiarizationSession(
 }
 
 void ParakeetModel::openStreamingSession() {
-  parakeet::Engine* engine = nullptr;
+  pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
@@ -821,12 +775,12 @@ void ParakeetModel::openStreamingSession() {
   }
 }
 
-void ParakeetModel::openSortformerStreamingSession(parakeet::Engine& engine) {
-  const parakeet::SortformerStreamingOptions opts =
+void ParakeetModel::openSortformerStreamingSession(pkt::Engine& engine) {
+  const pkt::SortformerStreamingOptions opts =
       buildSortformerStreamingOptions(
           cfg_, sample_rate_, diarConfig_.onset, diarConfig_.minDurationOn);
   auto session = engine.diarize_start(
-      opts, [this](const parakeet::StreamingDiarizationSegment& seg) {
+      opts, [this](const pkt::StreamingDiarizationSegment& seg) {
         // Negative speaker_id is the synthetic finalize terminator.
         if (seg.speaker_id < 0)
           return;
@@ -836,17 +790,17 @@ void ParakeetModel::openSortformerStreamingSession(parakeet::Engine& engine) {
   diar_session_ = std::move(session);
 }
 
-void ParakeetModel::openAsrStreamingSession(parakeet::Engine& engine) {
+void ParakeetModel::openAsrStreamingSession(pkt::Engine& engine) {
   if (cfg_.streamingHistoryMs > 0) {
     QLOG(
         logger::Priority::WARNING,
         "streamingHistoryMs is Sortformer-only and is ignored for ASR "
         "streaming sessions");
   }
-  const parakeet::StreamingOptions opts =
+  const pkt::StreamingOptions opts =
       buildAsrStreamingOptions(cfg_, sample_rate_);
   auto session =
-      engine.stream_start(opts, [this](const parakeet::StreamingSegment& seg) {
+      engine.stream_start(opts, [this](const pkt::StreamingSegment& seg) {
         if (seg.text.empty() && !seg.is_eou_boundary)
           return;
         pushPendingSegment(makeAsrTranscript(seg));
@@ -880,8 +834,8 @@ void ParakeetModel::emitStreamingSegments(
 void ParakeetModel::closeStreamingSession() {
   // Take ownership of the sessions under session_mutex_ so a concurrent
   // cancel() can't see a half-destroyed session, then destroy outside it.
-  std::unique_ptr<parakeet::StreamSession> asrToDestroy;
-  std::unique_ptr<parakeet::SortformerStreamSession> diarToDestroy;
+  std::unique_ptr<pkt::StreamSession> asrToDestroy;
+  std::unique_ptr<pkt::SortformerStreamSession> diarToDestroy;
   {
     std::lock_guard<std::mutex> lk(session_mutex_);
     asrToDestroy = std::move(asr_session_);
@@ -1135,4 +1089,4 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   return stats;
 }
 
-} // namespace qvac_lib_infer_parakeet
+} // namespace qvac::asrggml::parakeet

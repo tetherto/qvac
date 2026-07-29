@@ -1,4 +1,10 @@
+import { QvacErrorAddonASRGgml, ERR_CODES } from "./error";
+import type { AudioChunk, AudioInput } from "./types";
+
 export const PCM_S16_SCALE = 32768;
+
+/** Interpretation applied to raw `Uint8Array` bytes ("decoded" → "f32le"). */
+export type ByteFormat = "s16le" | "f32le";
 
 export function pcmS16ToFloat32(int16Samples: Int16Array): Float32Array {
   const audio = new Float32Array(int16Samples.length);
@@ -36,4 +42,133 @@ export function mergeFloat32Chunks(
     offset += chunk.length;
   }
   return merged;
+}
+
+function invalidAudioInput(message: string): QvacErrorAddonASRGgml {
+  return new QvacErrorAddonASRGgml({
+    code: ERR_CODES.INVALID_AUDIO_INPUT,
+    adds: message,
+  });
+}
+
+function s16BytesToFloat32(bytes: Uint8Array): Float32Array {
+  if (bytes.byteLength % 2 !== 0) {
+    throw invalidAudioInput(
+      `s16le byte chunk length must be a multiple of 2, got ${bytes.byteLength}`,
+    );
+  }
+  const aligned =
+    bytes.byteOffset % 2 === 0
+      ? bytes
+      : new Uint8Array(bytes); // aligned copy
+  const samples = new Int16Array(
+    aligned.buffer,
+    aligned.byteOffset,
+    aligned.byteLength / 2,
+  );
+  return pcmS16ToFloat32(samples);
+}
+
+function f32BytesToFloat32(bytes: Uint8Array): Float32Array {
+  if (bytes.byteLength % 4 !== 0) {
+    throw invalidAudioInput(
+      `f32le byte chunk length must be a multiple of 4, got ${bytes.byteLength}`,
+    );
+  }
+  const aligned =
+    bytes.byteOffset % 4 === 0
+      ? bytes
+      : new Uint8Array(bytes); // aligned copy
+  return new Float32Array(
+    aligned.buffer,
+    aligned.byteOffset,
+    aligned.byteLength / 4,
+  );
+}
+
+/**
+ * Normalizes one audio chunk to f32 samples. The chunk's class decides its
+ * interpretation; `byteFormat` only describes how raw `Uint8Array` bytes are
+ * decoded.
+ */
+export function normalizeChunkToFloat32(
+  chunk: AudioChunk,
+  byteFormat: ByteFormat,
+): Float32Array {
+  if (chunk instanceof Float32Array) return chunk;
+  if (chunk instanceof Int16Array) return pcmS16ToFloat32(chunk);
+  if (chunk instanceof Uint8Array) {
+    return byteFormat === "f32le"
+      ? f32BytesToFloat32(chunk)
+      : s16BytesToFloat32(chunk);
+  }
+  throw invalidAudioInput(
+    "Unsupported audio chunk. Expected Float32Array, Int16Array, or Uint8Array.",
+  );
+}
+
+function isAudioChunk(value: unknown): value is AudioChunk {
+  return (
+    value instanceof Float32Array ||
+    value instanceof Int16Array ||
+    value instanceof Uint8Array
+  );
+}
+
+async function* mapAsyncChunks(
+  source: AsyncIterable<AudioChunk>,
+  byteFormat: ByteFormat,
+): AsyncIterable<Float32Array> {
+  for await (const chunk of source) {
+    yield normalizeChunkToFloat32(chunk, byteFormat);
+  }
+}
+
+/**
+ * Normalizes any public {@link AudioInput} shape into a stream of f32
+ * chunks. Shared by both engine drivers; `byteFormat` is the driver's
+ * interpretation of raw `Uint8Array` bytes.
+ */
+export function normalizeAudioStream(
+  input: AudioInput,
+  byteFormat: ByteFormat,
+): AsyncIterable<Float32Array> | Iterable<Float32Array> {
+  if (!input) {
+    throw invalidAudioInput("audio input is required");
+  }
+  if (
+    typeof (input as { [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === "function"
+  ) {
+    return mapAsyncChunks(input as AsyncIterable<AudioChunk>, byteFormat);
+  }
+  if (isAudioChunk(input)) {
+    return [normalizeChunkToFloat32(input, byteFormat)];
+  }
+  if (Array.isArray(input)) {
+    return input.map((chunk) => normalizeChunkToFloat32(chunk, byteFormat));
+  }
+  if (
+    typeof (input as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
+    "function"
+  ) {
+    const items = Array.from(input as Iterable<unknown>);
+    if (items.length > 0 && items.every(isAudioChunk)) {
+      return items.map((chunk) =>
+        normalizeChunkToFloat32(chunk, byteFormat),
+      );
+    }
+    // Legacy convenience: a plain iterable of numbers is materialized as a
+    // single raw byte chunk.
+    return [
+      normalizeChunkToFloat32(
+        Uint8Array.from(items as number[]),
+        byteFormat,
+      ),
+    ];
+  }
+  throw invalidAudioInput(
+    "Unsupported audio input. Expected stream, TypedArray, or chunk array.",
+  );
 }
