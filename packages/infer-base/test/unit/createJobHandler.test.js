@@ -329,10 +329,7 @@ test('createJobHandler - prepended throwing error listener cannot leave a settle
     throw new Error('error listener boom')
   })
 
-  t.exception(
-    () => response.failed(new Error('job failed')),
-    /error listener boom/
-  )
+  t.exception(() => response.failed(new Error('job failed')), /error listener boom/)
 
   t.is(job.active, null, 'settled response must not stay active')
 })
