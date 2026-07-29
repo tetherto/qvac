@@ -157,9 +157,12 @@ class BatchHandler {
       id,
       output: outputs[index] || ''
     }))
-    if (stats != null) group.response.updateStats(stats)
-    this._drop(jobId, group)
-    group.response.ended(finalResult)
+    try {
+      if (stats != null) group.response.updateStats(stats)
+    } finally {
+      this._drop(jobId, group)
+      group.response.ended(finalResult)
+    }
   }
 
   /** Fail one group; peers keep running. */
@@ -177,7 +180,15 @@ class BatchHandler {
   failAll(error) {
     const groups = [...this._groups.values()]
     this.clear()
-    for (const group of groups) group.response.failed(error)
+    let firstError = null
+    for (const group of groups) {
+      try {
+        group.response.failed(error)
+      } catch (err) {
+        if (firstError === null) firstError = err
+      }
+    }
+    if (firstError !== null) throw firstError
   }
 
   /** Drop every group; called on unload/teardown. */

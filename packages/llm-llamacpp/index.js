@@ -606,8 +606,11 @@ class LlmLlamacpp {
           )
         }
       } else if (sink) {
-        if (this.opts.stats && data != null) sink.updateStats(data)
-        sink.ended()
+        try {
+          if (this.opts.stats && data != null) sink.updateStats(data)
+        } finally {
+          sink.ended()
+        }
       } else {
         this.logger?.warn?.('Dropped JobEnded event with no registered job:', jobId)
       }
