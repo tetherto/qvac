@@ -93,6 +93,12 @@
       "responseSchema": "schema.json#/$defs/getModelInfo.response"
     },
     {
+      "name": "getSystemResources",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/getSystemResources.request",
+      "responseSchema": "schema.json#/$defs/getSystemResources.response"
+    },
+    {
       "name": "heartbeat",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/heartbeat.request",
