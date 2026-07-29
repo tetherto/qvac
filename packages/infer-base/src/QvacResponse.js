@@ -129,11 +129,11 @@ class QvacResponse extends EventEmitter {
     this._status = statuses.ERRORED
     this._error = error
     this._teardownAbort()
+    this._rejectFinish(error)
     const errorListeners = this.listenerCount('error')
     if (errorListeners > 0) {
       this.emit('error', error)
     }
-    this._rejectFinish(error)
   }
 
   /**
@@ -144,8 +144,8 @@ class QvacResponse extends EventEmitter {
     if (this._status !== statuses.RUNNING) return
     this._status = statuses.ENDED
     this._teardownAbort()
-    this.emit('end', result)
     this._resolveFinish(result)
+    this.emit('end', result)
   }
 
   /**
@@ -259,10 +259,10 @@ class QvacResponse extends EventEmitter {
     this._teardownAbort()
 
     queueMicrotask(() => {
+      this._rejectFinish(error)
       if (this.listenerCount('error') > 0) {
         this.emit('error', error)
       }
-      this._rejectFinish(error)
     })
   }
 

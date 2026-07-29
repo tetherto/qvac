@@ -107,13 +107,16 @@ function createJobHandler(opts) {
       if (!active) return
       const ref = active
       active = null
-      if (stats != null) {
-        ref.updateStats(stats)
-      }
-      if (result !== undefined) {
-        ref.ended(result)
-      } else {
-        ref.ended()
+      try {
+        if (stats != null) {
+          ref.updateStats(stats)
+        }
+      } finally {
+        if (result !== undefined) {
+          ref.ended(result)
+        } else {
+          ref.ended()
+        }
       }
     },
 
