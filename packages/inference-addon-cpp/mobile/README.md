@@ -15,11 +15,18 @@ desktop integration test as an on-device test.
 
 ## Layout
 
-- `binding.cpp` / `CMakeLists.txt` — unified Bare module (`add_bare_module`)
-  aggregating **all three** desktop sub-package bindings, plus the header-only
-  library from `../src`. `test_logger.cpp` and `output_callback_lifetime.cpp` are
-  ports of the logger / output-callback-lifetime binding bodies.
-- `index.js` / `binding.js` / `addon.js` — `require.addon()` glue.
+- `CMakeLists.txt` — builds the unified Bare module (`add_bare_module`) from the
+  **generated** native sources plus the header-only library in `../src`.
+- `generated/native/**` — **GENERATED and NOT COMMITTED**. Each desktop suite's
+  `binding.cpp` (and any sibling `.cpp`/`.hpp`) is ported here with two mechanical
+  changes: the `BARE_MODULE(...)` registration is dropped, and an
+  external-linkage bridge is appended so the suite's own exports function is
+  reachable from another TU (two of the three desktop bindings wrap everything in
+  an anonymous namespace). `generated/native/binding.cpp` is the single generated
+  module registration that calls each bridge against one shared `exports` object,
+  and `sources.cmake` is the source list CMake consumes. **No C++ is hand-copied.**
+- `index.js` / `binding.js` / `addon.js` — `require.addon()` glue. `index.js` is a
+  one-liner: each suite installs its own exports natively, so there's no name list.
 - `test/integration/<suite>/**` — **GENERATED and NOT COMMITTED** (see
   `.gitignore`). Mirrors `../tests/integration_js/<suite>/` (tests + their
   `bare-thread` workers). CI regenerates it before building the app; locally run
@@ -40,38 +47,39 @@ desktop integration test as an on-device test.
   `scripts/validate-mobile-tests.js` (re-derives it and fails on any difference).
   `scripts/run-desktop-tests.js` runs every generated entry locally under `bare`.
 
-## No mobile-only tests: the suite is generated from desktop
+## Nothing here is hand-written: it is all generated from desktop
 
-There are **no hand-written mobile tests**. Every on-device test IS a desktop
-test, copied by `npm run test:mobile:generate` from
-`../tests/integration_js/<suite>/` with exactly **two mechanical rewrites**:
+Every on-device test IS a desktop test, and every line of C++ is a ported desktop
+binding. `npm run test:mobile:generate` produces both, applying only mechanical
+rewrites:
 
-1. `require('.')` → `require('../../../index.js')` — the desktop sub-packages each
-   load their own addon; on mobile there is one aggregated addon.
-2. `new Thread('./worker-x.js')` → `new Thread(require.resolve('./worker-x.js'))` —
-   the desktop suite only gets away with a CWD-relative worker path because it
-   runs with cwd set to its own sub-package dir. Anchoring to the module's own
-   directory is correct in any cwd (and on device).
+**JS** — `require('.')` → the unified addon (desktop sub-packages each load their
+own); and `new Thread('./worker-x.js')` → `require.resolve(...)`, because the
+desktop suite only survives a CWD-relative worker path by running with cwd set to
+its own package dir.
 
-The generated tree is **not committed** — CI regenerates it (in `host-test`, and
-again in `build` before the app is packed), so it cannot go stale and no
-regenerate-and-commit step can be forgotten. `npm run test:mobile:validate` still
-re-derives the expected tree and fails on any difference, which is what catches a
-stale *local* generation before you run the tests.
+**C++** — the `BARE_MODULE(...)` registration is dropped (only the generated
+unified module may register), and an external-linkage bridge is appended so each
+suite's exports function is reachable across TUs despite living in an anonymous
+namespace.
 
-The generator also refuses to produce two runners with the same name (e.g. a
-future `logger-teardown/test.js` would collide with `logger/teardown.test.js`) —
-duplicate `async function` declarations are valid JS, so the second would silently
-win and a test would vanish.
+Output is **not committed** — CI regenerates it (`host-test`, then `build` before
+the app is packed), so there is no regenerate-and-commit step to forget and no
+generated noise in diffs. `npm run test:mobile:validate` re-derives everything and
+fails on any difference, which is what catches a stale *local* generation.
 
-Why copy at all? The llamacpp mobile addons share one `test/integration/` between
-desktop and mobile. inference-addon-cpp can't: it's a header-only *library* whose
-desktop suite is three **standalone one-addon-per-package** sub-packages, and the
-harness only bundles files under this addon's own `test/` dir. Generation gives us
-the same single-source-of-truth guarantee without restructuring the desktop suite.
+The generator also refuses two runners with the same name (a future
+`logger-teardown/test.js` would collide with `logger/teardown.test.js`) — duplicate
+`async function` declarations are valid JS, so one test would silently vanish.
 
-> Generated files are excluded from `prettier`/`lunte` (see `.prettierignore`) —
-> reformatting them would register as drift.
+Why port at all? The llamacpp mobile addons share one `test/integration/` between
+desktop and mobile. inference-addon-cpp can't: it is a header-only *library* whose
+desktop suite is standalone one-addon-per-package sub-packages, and the harness
+only bundles files under this addon's own `test/` dir. Generating gives the same
+single-source-of-truth guarantee without restructuring the desktop suite.
+
+> Generated files are excluded from `prettier`/`lunte` — reformatting them would
+> register as drift.
 
 ## Coverage caveats (device vs desktop)
 
@@ -110,10 +118,13 @@ on desktop — worth knowing before treating a green mobile run as equivalent:
 
 ```sh
 npm install
-npm run test:mobile:generate   # REQUIRED FIRST — the suite is not committed
+npm run test:mobile:generate   # REQUIRED FIRST — tests AND native sources are generated
 npm run build                  # bare-make generate && build && install (desktop)
 npm test                       # runs every generated test on desktop
 npm run test:mobile:validate   # optional: confirms your generation is current
+
+# Skipping the generate step is the one sharp edge: CMake then fails fast with
+# "Generated native sources are missing. Run `npm run test:mobile:generate`".
 
 # cross-compile smoke (needs NDK / macOS+Xcode):
 bare-make generate --platform android --arch arm64 -D ANDROID_STL=c++_shared

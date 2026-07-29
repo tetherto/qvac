@@ -5,7 +5,7 @@ prebuilds
 coverage
 package-lock.json
 **/*.auto.cjs
-# Generated from the desktop suite — see .prettierignore for why it must not be
-# reformatted or linted into divergence.
+# Generated — see .prettierignore.
 test/integration
+generated
 *.d.ts

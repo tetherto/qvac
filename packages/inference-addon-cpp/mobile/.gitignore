@@ -3,11 +3,10 @@ build/
 prebuilds/
 dist/
 
-# Generated from the desktop suite by scripts/generate-mobile-integration-tests.js
-# and regenerated in CI before the app is built, so it is deliberately NOT
-# committed: committing it would mean every desktop-test change needs a manual
-# regenerate+commit step that is easy to forget, and it adds noise to diffs.
-# Run `npm run test:mobile:generate` locally before `npm test`.
+# Generated from the desktop suite and regenerated in CI before the app is built,
+# so it is deliberately not committed: no regenerate-and-commit step to forget, and
+# no generated noise in diffs. Run `npm run test:mobile:generate` locally first.
 test/integration/
 test/mobile/integration.auto.cjs
 test/mobile/test-groups.json
+generated/

@@ -1,13 +1,7 @@
-# Exists to SHADOW .gitignore during `npm pack`.
-#
-# npm falls back to .gitignore when no .npmignore is present. Our .gitignore
-# excludes the generated test tree (test/integration/, integration.auto.cjs,
-# test-groups.json) because it must not be committed — but those files DO have to
-# be packed: the mobile harness builds the on-device app from `npm pack` output,
-# so stripping them would ship an app with no tests.
-#
-# The package.json "files" allowlist already decides what gets packed; this file
-# just makes sure .gitignore is not consulted for that decision.
+# Shadows .gitignore for `npm pack`. npm falls back to .gitignore when no
+# .npmignore exists, and .gitignore excludes the generated test tree — but the
+# harness builds the on-device app from pack output, so stripping it would ship an
+# app with no tests. The package.json "files" allowlist decides what is packed.
 node_modules/
 build/
 dist/

@@ -103,16 +103,14 @@ jobs:
   # (same flag the C++ unit-test workflow uses); iOS builds for device (arm64),
   # and setup/ derives the simulator variant.
   #
-  # cost: inference-addon-cpp has no prebuild pipeline, so prebuild-ios runs on
-  # macos-14 ON TOP OF the macos-14 `build` job below — two GitHub-hosted macOS
-  # jobs per run (vs one in the llamacpp mobile workflows), and there is NO reuse
-  # gate yet, so every `synchronize` rebuilds both prebuilds from scratch. This
-  # is acceptable at label-gated phase-1 frequency. FOLLOW-UP (phase-2
-  # prerequisite, before any higher-frequency trigger): add a native-hash reuse
-  # gate mirroring .github/actions/prebuild-artifact-reuse + detect-native-changes
-  # so unchanged native code skips the macOS rebuild. (The prebuild jobs are kept
-  # separate from `build` on purpose — they hold no secrets — so folding them in
-  # to save a runner is not an option.)
+  # cost: with no prebuild pipeline, prebuild-ios runs on macos-14 ON TOP OF the
+  # macos-14 `build` job below — two GitHub-hosted macOS jobs per run (vs one for
+  # the llamacpp addons) — and with no reuse gate every `synchronize` rebuilds both
+  # from scratch. Acceptable at label-gated frequency. FOLLOW-UP before any
+  # higher-frequency trigger: add a native-hash reuse gate mirroring
+  # .github/actions/prebuild-artifact-reuse + detect-native-changes. (The prebuild
+  # jobs stay separate from `build` on purpose — they hold no secrets — so folding
+  # them in to save a runner is not an option.)
   # ---------------------------------------------------------------------------
   prebuild-android:
     name: Prebuild (Android arm64)

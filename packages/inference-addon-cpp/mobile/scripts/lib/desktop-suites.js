@@ -1,20 +1,14 @@
 'use strict'
 
-// Single source of truth for porting the DESKTOP integration suites onto the
-// mobile test addon.
+// Single source of truth for porting the DESKTOP suites (../../tests/integration_js/*)
+// onto the mobile test addon. Nothing here — JS or C++ — is hand-written.
 //
-// The desktop suite lives in ../../tests/integration_js/<suite>/ as standalone
-// Bare addons, each with its own binding and each test doing `require('.')`
-// against its own addon. The mobile harness (qvac-test-addon-mobile) is strictly
-// one-addon-per-app, and only bundles files under the addon's own test/ dir — so
-// the desktop files cannot be referenced in place. Instead they are COPIED into
-// test/integration/<suite>/ with a single mechanical rewrite (`require('.')` ->
-// the unified mobile addon) by generate-mobile-integration-tests.js, and
-// validate-mobile-tests.js re-derives the same output to prove the committed
-// copies have not drifted from the desktop originals.
+// Why port instead of reusing in place: each desktop suite is its own Bare addon
+// whose tests `require('.')` their own binding, but the mobile harness is
+// one-addon-per-app and only bundles files under this addon's own test/ dir.
 //
-// Consequence: never hand-edit anything under test/integration/. Change the
-// desktop test and re-run `npm run test:mobile:generate`.
+// Never hand-edit generated output; change the desktop source and re-run
+// `npm run test:mobile:generate`.
 
 const fs = require('fs')
 const path = require('path')
@@ -25,6 +19,11 @@ const integrationDir = path.join(mobileRoot, 'test', 'integration')
 const mobileDir = path.join(mobileRoot, 'test', 'mobile')
 const autoFile = path.join(mobileDir, 'integration.auto.cjs')
 const groupsFile = path.join(mobileDir, 'test-groups.json')
+
+// Ported desktop bindings + the generated unified module (gitignored).
+const nativeDir = path.join(mobileRoot, 'generated', 'native')
+const nativeBindingFile = path.join(nativeDir, 'binding.cpp')
+const nativeSourcesCmake = path.join(nativeDir, 'sources.cmake')
 
 // Addon glue, not test material: each desktop sub-package has its own
 // binding.js/index.js pointing at its own native module. The mobile addon has
@@ -62,9 +61,8 @@ function listSuiteFiles(suite) {
     .sort()
 }
 
-// A test entry is what the harness invokes as an independent on-device test:
-// `test.js` or `*.test.js`. Worker scripts (worker-*.js) are support files that
-// the tests spawn, so they are copied but never become entries.
+// An entry is what the harness runs as an independent on-device test. worker-*.js
+// are support files the tests spawn — copied, but never entries.
 function isTestEntry(file) {
   return file === 'test.js' || file.endsWith('.test.js')
 }
@@ -185,22 +183,14 @@ function expectedAutoCjs(entries) {
   return `${lines.join('\n')}\n`
 }
 
-// Device Farm shard map: ONE GROUP PER DESKTOP SUITE.
+// Device Farm shard map: one group per suite, because each group is a separate
+// run (fresh app process) and desktop likewise runs each sub-package in its own
+// process. Without it, every entry shares one process and one JsLogger singleton
+// — and logger/worker-set-norelease.js never releases it, so logger state would
+// bleed into the other suites.
 //
-// Why: on desktop each sub-package runs as its own process, so process-global
-// state can't leak between suites. On device the harness runs every entry in ONE
-// app process sharing one JsLogger singleton — and logger/worker-set-norelease.js
-// deliberately never calls releaseLogger, so logger state would bleed into the
-// other suites. Each group becomes a separate Device Farm run (fresh app launch,
-// fresh process), which reproduces desktop's isolation exactly.
-//
-// Generated, not hand-written: a hand-maintained map goes stale the moment a
-// desktop test is added, and in sharded mode anything absent from every group is
-// silently never run.
-//
-// Cost: one Device Farm run per suite per platform instead of a single run.
-// Device Farm bills device-minutes actually used and these suites are seconds of
-// compute, so the extra runs are cheap relative to the isolation they buy.
+// Generated, not hand-written: a stale map silently drops tests, since sharded
+// mode never runs an entry that is absent from every group.
 function expectedTestGroups(entries) {
   const perSuite = {}
   for (const entry of entries) {
@@ -209,6 +199,154 @@ function expectedTestGroups(entries) {
   }
   // Same split on both platforms; the composite reads the platform-lowercased key.
   return `${JSON.stringify({ android: perSuite, ios: perSuite }, null, 2)}\n`
+}
+
+// ---------------------------------------------------------------------------
+// NATIVE side: port the desktop bindings instead of hand-copying them.
+// ---------------------------------------------------------------------------
+
+const NATIVE_EXTS = new Set(['.cpp', '.hpp', '.h', '.cc', '.hh'])
+
+const NATIVE_BANNER = [
+  '// AUTO-GENERATED FROM THE DESKTOP SUITE — DO NOT EDIT.',
+  '//',
+  '// Source: tests/integration_js/%SUITE%/%FILE%',
+  '// Regenerate: npm run test:mobile:generate',
+  '%EXTRA%',
+  ''
+].join('\n')
+
+function suiteIdent(suite) {
+  return suite.replace(/[^a-zA-Z0-9]+/g, '_')
+}
+
+function listSuiteNativeFiles(suite) {
+  return fs
+    .readdirSync(path.join(desktopRoot, suite))
+    .filter((name) => NATIVE_EXTS.has(path.extname(name)))
+    .sort()
+}
+
+// Gives the suite's exports function external linkage under a unique name. Most
+// desktop bindings wrap it in an anonymous namespace, so the unified module can't
+// reach it across TUs; appending a bridge at file scope avoids rewriting
+// namespaces (fragile brace surgery) to achieve the same thing.
+function bridgeName(suite) {
+  return `qvac_mobile_suite_exports_${suiteIdent(suite)}`
+}
+
+function transformNativeSource(suite, file, source) {
+  const isBinding = file === 'binding.cpp'
+  let extra = '// Copied verbatim; the unified binding.cpp owns module registration.'
+  let body = source
+
+  if (isBinding) {
+    // BARE_MODULE(<module>, <exportsFn>) — capture the exports function, then drop
+    // the registration: only the unified module may register itself.
+    const m = source.match(/BARE_MODULE\(\s*[A-Za-z0-9_]+\s*,\s*([A-Za-z0-9_:]+)\s*\)/)
+    if (!m) {
+      throw new Error(
+        `${suite}/${file}: no BARE_MODULE(...) found — cannot determine the ` +
+          "suite's exports function. Did the desktop binding change shape?"
+      )
+    }
+    const exportsFn = m[1]
+    body = source.replace(/BARE_MODULE\(\s*[A-Za-z0-9_]+\s*,\s*[A-Za-z0-9_:]+\s*\)\s*/, '')
+    body =
+      `${body.replace(/\s*$/, '')}\n\n` +
+      `// External-linkage bridge to ${exportsFn} (see desktop-suites.js).\n` +
+      `js_value_t* ${bridgeName(suite)}(js_env_t* env, js_value_t* exports) {\n` +
+      `  return ${exportsFn}(env, exports);\n` +
+      '}\n'
+    extra =
+      '// Mechanical changes: BARE_MODULE(...) dropped (the unified binding.cpp\n' +
+      `// registers the module), and a bridge '${bridgeName(suite)}' appended so the\n` +
+      "// suite's exports function is reachable from another translation unit."
+  }
+
+  const banner = NATIVE_BANNER.replace('%SUITE%', suite)
+    .replace('%FILE%', file)
+    .replace('%EXTRA%', extra)
+  return `${banner}${body}`
+}
+
+// relPath (`<suite>/<file>`) -> contents, mirroring the desktop layout so quoted
+// includes like "test_logger.hpp" keep resolving next to their binding.
+function expectedNativeFiles() {
+  const files = new Map()
+  for (const suite of listSuites()) {
+    for (const file of listSuiteNativeFiles(suite)) {
+      const source = fs.readFileSync(path.join(desktopRoot, suite, file), 'utf8')
+      files.set(`${suite}/${file}`, transformNativeSource(suite, file, source))
+    }
+  }
+  return files
+}
+
+// The one module registration: calls each suite's bridge against the SAME
+// exports object, so every suite's own exports function installs its own names
+// (and any module-init side effects it performs, e.g. output-callback-lifetime
+// recording the JS thread id, happen exactly as they do on desktop).
+function expectedNativeBinding() {
+  const suites = listSuites()
+  const lines = []
+  lines.push('// AUTO-GENERATED — DO NOT EDIT. Run `npm run test:mobile:generate`.')
+  lines.push('//')
+  lines.push('// Unified Bare module for the on-device integration tests. The mobile harness')
+  lines.push('// is one-addon-per-app, so the desktop suites are aggregated into this single')
+  lines.push('// module; each suite installs its own exports via its generated bridge.')
+  lines.push('')
+  lines.push('#include <bare.h>')
+  lines.push('#include <js.h>')
+  lines.push('')
+  for (const suite of suites) {
+    lines.push(`// tests/integration_js/${suite}`)
+    lines.push(`js_value_t* ${bridgeName(suite)}(js_env_t* env, js_value_t* exports);`)
+  }
+  lines.push('')
+  lines.push('static js_value_t* inferenceAddonCppMobileTestsExports(')
+  lines.push('    js_env_t* env,')
+  lines.push('    js_value_t* exports) {')
+  for (const suite of suites) {
+    lines.push(`  if (${bridgeName(suite)}(env, exports) == nullptr) {`)
+    lines.push('    return nullptr;')
+    lines.push('  }')
+  }
+  lines.push('  return exports;')
+  lines.push('}')
+  lines.push('')
+  lines.push('BARE_MODULE(inference_addon_cpp_mobile_tests, inferenceAddonCppMobileTestsExports)')
+  return `${lines.join('\n')}\n`
+}
+
+// CMake can't glob reliably at configure time for files that may not exist yet,
+// so the generator emits the source list it just produced.
+function expectedNativeSourcesCmake() {
+  const rel = ['binding.cpp']
+  for (const key of expectedNativeFiles().keys()) {
+    if (key.endsWith('.cpp') || key.endsWith('.cc')) rel.push(key)
+  }
+  const lines = []
+  lines.push('# AUTO-GENERATED — DO NOT EDIT. Run `npm run test:mobile:generate`.')
+  lines.push('set(QVAC_MOBILE_GENERATED_SOURCES')
+  for (const r of rel) lines.push(`  \${CMAKE_CURRENT_LIST_DIR}/${r}`)
+  lines.push(')')
+  return `${lines.join('\n')}\n`
+}
+
+function listOnDiskNativeFiles() {
+  const found = new Map()
+  if (!fs.existsSync(nativeDir)) return found
+  for (const entry of fs.readdirSync(nativeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    for (const file of fs.readdirSync(path.join(nativeDir, entry.name))) {
+      found.set(
+        `${entry.name}/${file}`,
+        fs.readFileSync(path.join(nativeDir, entry.name, file), 'utf8')
+      )
+    }
+  }
+  return found
 }
 
 function listOnDiskIntegrationFiles() {
@@ -234,6 +372,13 @@ module.exports = {
   mobileDir,
   autoFile,
   groupsFile,
+  nativeDir,
+  nativeBindingFile,
+  nativeSourcesCmake,
+  expectedNativeFiles,
+  expectedNativeBinding,
+  expectedNativeSourcesCmake,
+  listOnDiskNativeFiles,
   listSuites,
   listSuiteFiles,
   isTestEntry,

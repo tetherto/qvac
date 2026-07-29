@@ -5,7 +5,6 @@ prebuilds
 coverage
 package-lock.json
 **/*.auto.cjs
-# Generated from the desktop suite by scripts/generate-mobile-integration-tests.js.
-# Must NOT be reformatted: validate-mobile-tests.js compares these byte-for-byte
-# against the transformed desktop sources, so any reformat would read as drift.
+# Generated: reformatting would register as drift against the desktop source.
 test/integration
+generated
