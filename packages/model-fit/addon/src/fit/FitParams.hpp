@@ -16,6 +16,11 @@ inline constexpr int32_t GPU_LAYERS_AUTO = std::numeric_limits<int32_t>::min();
 struct FitRequest {
   std::string modelPath;
 
+  /// Directory the packaged ggml backends live in. `BACKENDS_SUBDIR` is
+  /// appended to it, mirroring `@qvac/llm-llamacpp`. Empty means "use ggml's
+  /// default search path", which is correct for a statically linked build.
+  std::string backendsDir;
+
   /// Desired context size. 0 => let the fitter pick (down to `nCtxMin`).
   /// A concrete value is treated as a hard requirement to fit around.
   uint32_t nCtx = 0;
@@ -49,7 +54,20 @@ struct FitResult {
   uint32_t nUbatch = 0;
   /// Offload proportions, one entry per device (`llama_max_devices()`).
   std::vector<float> tensorSplit;
+
+  /// Upper bound on addressable devices (`llama_max_devices()`). This is a
+  /// build-time constant, NOT a count of what was detected — do not treat a
+  /// nonzero value as evidence that any device was found.
   size_t maxDevices = 0;
+
+  /// Devices actually registered after backend init (`ggml_backend_dev_count()`).
+  /// Zero means no backend registered at all, which is reported as ERROR: the
+  /// fitter would otherwise "succeed" against a machine it cannot see.
+  size_t nDevices = 0;
+
+  /// Subset of `nDevices` that are accelerators (GPU or integrated GPU). Zero
+  /// means the projection is host-only and carries no GPU offload information.
+  size_t nGpuDevices = 0;
 };
 
 /// Runs `llama_params_fit` for `req`. Never loads weight data — the fitter uses

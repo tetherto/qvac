@@ -26,20 +26,40 @@ const plan = fitParams({
   modelPath: '/abs/path/model.gguf',
   nCtx: 4096,        // 0 => let the fitter choose (down to nCtxMin)
   nCtxMin: 512,      // lower bound when reducing context to save memory
-  marginMiB: 1024    // free headroom to leave on every device
+  marginMiB: 1024,   // free headroom to leave on every device
+  backendsDir: '…'   // where the packaged ggml backends live (see below)
   // nBatch, nUbatch, nGpuLayers are optional
 })
 
 // plan = {
-//   status,       // 0 SUCCESS | 1 FAILURE (won't fit) | 2 ERROR (bad path)
+//   status,       // 0 SUCCESS | 1 FAILURE (won't fit) | 2 ERROR (unknown)
 //   fits,         // status === SUCCESS
 //   nGpuLayers,   // fitted offload layer count
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
-//   maxDevices,   // llama_max_devices()
+//   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
+//   nDevices,     // devices actually registered; 0 => ERROR
+//   nGpuDevices,  // of those, GPU/iGPU; 0 => host-only projection
 //   tensorSplit   // number[] offload proportion per device
 // }
 ```
+
+### Backend registration
+
+`llama_params_fit` does not load backends — it reads ggml's global device
+registry, so whatever is registered when it runs is its entire view of the
+machine. Registering is the caller's job, exactly as in upstream's
+`tools/fit-params`, which relies on `llama_backend_init()`.
+
+This addon owns that lifecycle for the duration of a call. Statically linked
+backends self-register, so `backendsDir` can be omitted; where backends ship as
+separate shared libraries, pass the directory (`BACKENDS_SUBDIR` is appended)
+or the fitter sees nothing.
+
+An empty registry is reported as `ERROR`, never `SUCCESS` — a projection made
+against a machine the fitter cannot see is worse than no projection. Check
+`nDevices`/`nGpuDevices` rather than `maxDevices`, which is a compile-time
+constant and is nonzero even when nothing was detected.
 
 `fitParams` is synchronous and blocking. It never throws for a "won't fit"
 outcome (that is a valid `FAILURE` result) or for a missing model file (`ERROR`);

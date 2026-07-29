@@ -35,6 +35,10 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
         "pointing at the GGUF weights file");
   }
 
+  if (auto v = config.getOptionalProperty<jsu::String>(env, "backendsDir")) {
+    req.backendsDir = v->as<std::string>(env);
+  }
+
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nCtx")) {
     req.nCtx = v->as<uint32_t>(env);
   }
@@ -70,6 +74,14 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
       env,
       "maxDevices",
       jsu::Number::create(env, static_cast<uint32_t>(res.maxDevices)));
+  out.setProperty(
+      env,
+      "nDevices",
+      jsu::Number::create(env, static_cast<uint32_t>(res.nDevices)));
+  out.setProperty(
+      env,
+      "nGpuDevices",
+      jsu::Number::create(env, static_cast<uint32_t>(res.nGpuDevices)));
 
   auto split = jsu::Array::create(env);
   for (size_t i = 0; i < res.tensorSplit.size(); ++i) {

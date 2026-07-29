@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Register ggml backends before fitting. `llama_params_fit` only reads ggml's
+  global device registry and never populates it, so without an explicit
+  `llama_backend_init()` the fitter could project against an empty device list
+  and still report `SUCCESS`. An RAII scope now loads the packaged backends
+  (new optional `backendsDir`, `BACKENDS_SUBDIR` appended) or falls back to
+  ggml's default search path, then initialises and frees the llama backend.
+
+### Added
+
+- `nDevices` and `nGpuDevices` on the result — the device inventory the
+  projection was actually made against. Zero registered devices now returns
+  `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
+  be read as a detection result.
+
 ## [0.1.0] - 2026-07-27
 
 ### Added

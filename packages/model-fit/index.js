@@ -26,8 +26,13 @@ function validateNumber (config, key) {
  * short-lived worklet so that any backend/driver instability during probing
  * stays isolated from the inference worker.
  *
+ * Backends must be registered before the fitter can see any device, so pass
+ * `backendsDir` wherever the packaged ggml backends ship as separate shared
+ * libraries; omit it for a statically linked build, which self-registers.
+ *
  * @param {object} config
  * @param {string} config.modelPath  Absolute path to the GGUF file.
+ * @param {string} [config.backendsDir] Directory holding the packaged backends.
  * @param {number} [config.nCtx]      Desired context. 0 lets the fitter pick.
  * @param {number} [config.nCtxMin]   Lower bound when reducing context.
  * @param {number} [config.nBatch]    Logical batch size (0 = llama default).
@@ -43,6 +48,9 @@ function fitParams (config) {
   }
   if (typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
     throw new TypeError('model-fit: config.modelPath must be a non-empty string')
+  }
+  if (config.backendsDir !== undefined && (typeof config.backendsDir !== 'string' || config.backendsDir.length === 0)) {
+    throw new TypeError('model-fit: config.backendsDir must be a non-empty string when provided')
   }
   for (const key of ['nCtx', 'nCtxMin', 'nBatch', 'nUbatch', 'nGpuLayers', 'marginMiB']) {
     validateNumber(config, key)

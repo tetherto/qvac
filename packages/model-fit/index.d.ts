@@ -1,6 +1,12 @@
 export interface FitConfig {
   /** Absolute path to the GGUF weights file. */
   modelPath: string
+  /**
+   * Directory holding the packaged ggml backends. Required wherever backends
+   * ship as separate shared libraries — without it the fitter sees no devices
+   * and reports ERROR. Omit for a statically linked build.
+   */
+  backendsDir?: string
   /** Desired context size. 0 (default) lets the fitter choose down to nCtxMin. */
   nCtx?: number
   /** Lower bound the fitter may shrink the context to when freeing memory. */
@@ -28,8 +34,15 @@ export interface FitResult {
   nBatch: number
   /** Fitted physical batch size. */
   nUbatch: number
-  /** Number of devices considered (llama_max_devices()). */
+  /**
+   * Upper bound on addressable devices (llama_max_devices()). A build-time
+   * constant, not a detection result — never read it as "a device was found".
+   */
   maxDevices: number
+  /** Devices actually registered (ggml_backend_dev_count()). 0 yields ERROR. */
+  nDevices: number
+  /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
+  nGpuDevices: number
   /** Offload proportions, one entry per device. */
   tensorSplit: number[]
 }

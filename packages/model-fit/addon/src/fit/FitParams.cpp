@@ -1,8 +1,10 @@
 #include "fit/FitParams.hpp"
 
 #include <cstdio>
+#include <filesystem>
 #include <stdexcept>
 
+#include <ggml-backend.h>
 #include <llama.h>
 
 #ifdef _WIN32
@@ -12,6 +14,62 @@
 namespace model_fit {
 
 namespace {
+
+/// Owns the ggml/llama backend lifecycle for one fit call.
+///
+/// `llama_params_fit` does not load backends — it only reads ggml's global
+/// device registry, so whatever is registered when it runs *is* its entire view
+/// of the machine. Registration is the application's job: statically linked
+/// backends self-register when the registry is first constructed, but backends
+/// shipped as separate shared libraries must be loaded explicitly. Upstream's
+/// own `tools/fit-params` relies on `llama_backend_init()` for this.
+///
+/// Skipping it happens to work on a static build and silently produces a
+/// projection against an empty device list on a dynamic one, so do it properly:
+/// load the packaged backends when we were told where they are, otherwise fall
+/// back to ggml's default search path, then hand off to `llama_backend_init()`.
+/// The explicit load keeps this correct regardless of whether the linked llama
+/// build performs its own guarded load.
+class BackendScope {
+public:
+  explicit BackendScope(const std::string& backendsDir) {
+    if (!backendsDir.empty()) {
+      std::filesystem::path backendsPath(backendsDir);
+#ifdef BACKENDS_SUBDIR
+      backendsPath =
+          (backendsPath / std::filesystem::path(BACKENDS_SUBDIR))
+              .lexically_normal();
+#endif
+      ggml_backend_load_all_from_path(backendsPath.string().c_str());
+    } else if (ggml_backend_reg_count() == 0) {
+      ggml_backend_load_all();
+    }
+
+    llama_backend_init();
+  }
+
+  ~BackendScope() { llama_backend_free(); }
+
+  BackendScope(const BackendScope&) = delete;
+  BackendScope& operator=(const BackendScope&) = delete;
+  BackendScope(BackendScope&&) = delete;
+  BackendScope& operator=(BackendScope&&) = delete;
+};
+
+/// Counts registered devices, splitting out accelerators. Integrated GPUs count
+/// as accelerators — on phones and APUs that is the only GPU there is.
+void countDevices(size_t& nDevices, size_t& nGpuDevices) {
+  nDevices = ggml_backend_dev_count();
+  nGpuDevices = 0;
+  for (size_t i = 0; i < nDevices; ++i) {
+    const enum ggml_backend_dev_type type =
+        ggml_backend_dev_type(ggml_backend_dev_get(i));
+    if (type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+        type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      ++nGpuDevices;
+    }
+  }
+}
 
 #ifdef _WIN32
 // On some Windows GPU configurations `llama_params_fit` hits an integer
@@ -66,6 +124,21 @@ FitResult runFit(const FitRequest& req) {
   FitResult out;
   const size_t maxDevices = llama_max_devices();
   out.maxDevices = maxDevices;
+
+  // Register backends before anything queries device memory. Held for the whole
+  // call so the registry cannot be torn down underneath the fitter.
+  const BackendScope backends(req.backendsDir);
+  countDevices(out.nDevices, out.nGpuDevices);
+
+  // No registered device means backend loading failed outright. The fitter
+  // would still return a verdict, computed against a machine it cannot see, so
+  // report the documented unknown outcome instead of a confident wrong answer.
+  if (out.nDevices == 0) {
+    out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
+    out.fits = false;
+    out.tensorSplit.assign(maxDevices, 0.0F);
+    return out;
+  }
 
   // `llama_params_fit` segfaults on a path it cannot open: gguf_init_from_file
   // logs the failure but the fit path then dereferences the null model. Guard
