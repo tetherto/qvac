@@ -54,8 +54,42 @@ function _fileOk (p) {
   }
 }
 
+// Minimum plausible size for an ACE-Step stage GGUF. The smallest stage (VAE) is
+// a few hundred MB, so a 16 MB floor cheaply rejects an empty / grossly-truncated
+// download or an HTML error body. Partial truncations ABOVE the floor are caught
+// by the native GGUF load (see _loadGenWithRetry), the authoritative check.
+const _MIN_GGUF_BYTES = 16 * 1024 * 1024
+
+// First 4 bytes of the file, or null if they can't be read (e.g. the runtime
+// lacks partial reads) so the caller falls back to size + the load check.
+function _ggufMagic (p) {
+  try {
+    const fd = fs.openSync(p, 'r')
+    try {
+      const buf = Buffer.alloc(4)
+      fs.readSync(fd, buf, 0, 4, 0)
+      return buf.toString('latin1')
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch (_e) {
+    return null
+  }
+}
+
+// A file large enough to be a real stage GGUF and starting with the GGUF magic.
+// Catches the "download reported success but the file is empty / truncated at the
+// start / an error page" cases that a bare `size > 0` misses.
+function _ggufOk (p) {
+  let size
+  try { size = fs.statSync(p).size } catch (_e) { return false }
+  if (size < _MIN_GGUF_BYTES) return false
+  const magic = _ggufMagic(p)
+  return magic === null || magic === 'GGUF'
+}
+
 function _hasAllStages (dir) {
-  return _stageFilenames().every((name) => _fileOk(path.join(dir, name)))
+  return _stageFilenames().every((name) => _ggufOk(path.join(dir, name)))
 }
 
 // Candidate dirs that may already hold a side-loaded model set, in order.
@@ -110,16 +144,30 @@ async function _ensureModels () {
     await client.ready()
     for (const entry of entries) {
       const dest = path.join(outDir, entry.name)
-      if (_fileOk(dest)) {
+      if (_ggufOk(dest)) {
         console.log('[audiogen-mobile]   [ok] ' + entry.name + ' (cached)')
         continue
       }
-      const t0 = Date.now()
-      await client.downloadModel(entry.registryPath, REGISTRY_SOURCE, {
-        outputFile: dest,
-        timeout: 1800000
-      })
-      console.log('[audiogen-mobile]   [ok] ' + entry.name + ' (' + (Date.now() - t0) + ' ms)')
+      // Re-download (up to 3x) until the file is a valid GGUF. The registry client
+      // can report "downloaded successfully" for a file that is truncated / corrupt
+      // on a flaky transfer, so validate every download instead of trusting it.
+      let ok = false
+      for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+        try { fs.unlinkSync(dest) } catch (_e) {}
+        const t0 = Date.now()
+        await client.downloadModel(entry.registryPath, REGISTRY_SOURCE, {
+          outputFile: dest,
+          timeout: 1800000
+        })
+        ok = _ggufOk(dest)
+        let size = 0
+        try { size = fs.statSync(dest).size } catch (_e) {}
+        console.log('[audiogen-mobile]   ' + (ok ? '[ok]' : '[bad ' + attempt + '/3]') + ' ' +
+          entry.name + ' (' + size + ' bytes, ' + (Date.now() - t0) + ' ms)')
+      }
+      if (!ok) {
+        throw new Error('failed to download a valid ' + entry.name + ' after 3 attempts')
+      }
     }
   } finally {
     try {
@@ -151,6 +199,39 @@ function _makeGen (modelDir) {
       useGPU: false
     }
   })
+}
+
+// Delete the downloaded stage GGUFs so the next _ensureModels re-fetches them.
+function _clearStages (dir) {
+  for (const name of _stageFilenames()) {
+    try { fs.unlinkSync(path.join(dir, name)) } catch (_e) {}
+  }
+}
+
+// Ensure the models are present AND actually loadable. The native GGUF loader is
+// the authoritative integrity check: a download can pass _ggufOk (right magic,
+// big enough) yet be truncated mid-data, which only surfaces as a load failure
+// ("failed to load VAE GGUF" / "DiT load failed"). On such a failure we wipe the
+// models and re-download once more before giving up, so a flaky transfer doesn't
+// fail the run. Returns the loaded generator + its model dir.
+async function _loadGenWithRetry (maxAttempts = 3) {
+  let lastErr
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const modelDir = await _ensureModels()
+    const gen = _makeGen(modelDir)
+    try {
+      await gen.load()
+      return { gen, modelDir }
+    } catch (e) {
+      lastErr = e
+      console.log('[audiogen-mobile] load attempt ' + attempt + '/' + maxAttempts +
+        ' failed (' + (e && e.message) + '); clearing models for a clean re-download')
+      try { await gen.destroy() } catch (_e) {}
+      _clearStages(modelDir)
+    }
+  }
+  throw new Error('ACE-Step model load failed after ' + maxAttempts +
+    ' attempts (last: ' + (lastErr && lastErr.message) + ')')
 }
 
 // Wrap interleaved Int16 PCM in a canonical 44-byte PCM WAV header. Kept inline
@@ -192,33 +273,27 @@ function _persistWav (modelDir, wav) {
 // Load every stage GGUF and tear down again — cheap smoke to isolate model
 // load (I/O + parse + graph alloc) from full diffusion inference.
 async function testLoadModels () {
-  const modelDir = await _ensureModels()
+  const t0 = Date.now()
+  const { gen, modelDir } = await _loadGenWithRetry()
+  const loadMs = Date.now() - t0
   console.log('[audiogen-mobile] model dir: ' + modelDir)
   console.log('[audiogen-mobile] files: ' + fs.readdirSync(modelDir).join(', '))
-
-  const gen = _makeGen(modelDir)
-  const t0 = Date.now()
-  await gen.load()
-  const loadMs = Date.now() - t0
   await gen.destroy()
 
   return {
     summary: { total: 1, passed: 1, failed: 0 },
-    fullText: 'ACE-Step models loaded + freed in ' + loadMs + ' ms'
+    fullText: 'ACE-Step models ensured + loaded + freed in ' + loadMs + ' ms'
   }
 }
 
 // End-to-end generation of a short turbo clip. Returns interleaved Int16 PCM so
 // the runner can play it back on device.
 async function testGenerateMusic () {
-  const modelDir = await _ensureModels()
+  const { gen, modelDir } = await _loadGenWithRetry()
 
   const chunks = []
   let sampleRate = 48000
   let channels = 2
-
-  const gen = _makeGen(modelDir)
-  await gen.load()
 
   const t0 = Date.now()
   // run() returns a @qvac/infer-base QvacResponse: iterate() streams progress
