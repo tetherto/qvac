@@ -726,6 +726,10 @@ void LlamaModel::llamaLogCallback(
 }
 
 void LlamaModel::cancel() const {
+  const auto finetuneId = currentFinetuneJobId_.load();
+  if (finetuneId != qvac_lib_inference_addon_cpp::kNoJobId) {
+    requestFinetuneCancel(finetuneId);
+  }
   std::shared_lock lock(stateMtx_, std::try_to_lock);
   if (!lock.owns_lock()) {
     // If lock could not be acquired, it means reload
@@ -735,10 +739,6 @@ void LlamaModel::cancel() const {
     return;
   }
   cancelImpl();
-  const auto finetuneId = currentFinetuneJobId_.load();
-  if (finetuneId != qvac_lib_inference_addon_cpp::kNoJobId) {
-    requestFinetuneCancel(finetuneId);
-  }
 }
 
 void LlamaModel::cancelInference() const {
