@@ -6,27 +6,38 @@
 #   - workflow_call: called by on-pr-test-sdk.yml for label/release-branch triggers
 
 name: QVAC Tests (sdk)
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+    && format('SDK e2e · Suite: {0} · Filter: {1}',
+      inputs.suite || 'full',
+      inputs.filter || 'all tests')
+    || github.event.pull_request.title }}
 
 on:
   workflow_dispatch:
     inputs:
-      targets:
-        description: "Which platforms to test"
-        type: choice
-        options:
-          - all
-          - desktop
-          - electron
-          - snap
-          - mobile
-          - electron + desktop
-          - desktop + mobile
-          - electron + mobile
-          - android
-          - ios
-        default: all
+      desktop:
+        description: "Desktop tests"
+        type: boolean
+        default: true
+      electron:
+        description: "Electron tests"
+        type: boolean
+        default: false
+      snap:
+        description: "Snap tests (strict confinement)"
+        type: boolean
+        default: false
+      android:
+        description: "Android tests (Device Farm)"
+        type: boolean
+        default: true
+      ios:
+        description: "iOS tests (Device Farm)"
+        type: boolean
+        default: true
       suite:
-        description: "Suite selection (full = all tests, smoke = smoke suite, custom = use suite-custom value)"
+        description: "Test suite (full = all tests; custom uses Custom suites)"
         type: choice
         options:
           - full
@@ -34,57 +45,57 @@ on:
           - custom
         default: full
       suite-custom:
-        description: "Custom suite value (only used when suite=custom). Comma-separated suite names."
+        description: "Custom suites (comma-separated; used only when suite is custom)"
         type: string
       exclude-suite:
-        description: "Exclude suites (comma-separated, e.g. 'slow,flaky'). Tests tagged with these suites are skipped."
+        description: "Suites to exclude (comma-separated, e.g. slow,flaky)"
         type: string
       filter:
-        description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
+        description: "Test filters (blank = all; comma-separated categories or prefixes)"
         type: string
+      test-version:
+        description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
+        type: string
+      cache-models:
+        description: "Reuse downloaded models for Desktop, Electron, and Snap"
+        type: boolean
+        default: true
       desktop-consumer-timeout:
-        description: "Desktop/Electron consumer timeout (seconds)"
+        description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
       mobile-consumer-timeout:
-        description: "Mobile consumer timeout (seconds)"
+        description: "Mobile connection timeout (seconds)"
         type: number
         default: 1200
       device-farm-timeout:
-        description: "Device Farm session timeout (minutes)"
+        description: "Device Farm run timeout (minutes)"
         type: number
         default: 90
       device-farm-start-timeout:
-        description: "Minutes to wait for a device before failing. Kept short so a busy Device Farm fails fast instead of burning CI minutes."
+        description: "Wait for Device Farm run to start (minutes)"
         type: number
         default: 15
       android-device-pool:
-        description: "Android device pool name to run on (empty = random AWS-available pool from SDK_ANDROID_DEVICE_FARM_POOLS)."
+        description: "Android device pool (blank = random configured pool)"
         type: string
         default: ""
       ios-device-pool:
-        description: "iOS device pool name to run on (empty = random AWS-available pool from SDK_IOS_DEVICE_FARM_POOLS)."
+        description: "iOS device pool (blank = random configured pool)"
         type: string
         default: ""
       desktop-platforms:
-        description: "JSON array of runner labels for desktop tests"
+        description: "Advanced: Desktop runners (JSON array)"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
       electron-platforms:
-        description: "JSON array of runner labels for electron tests"
+        description: "Advanced: Electron runners (JSON array)"
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
       snap-platforms:
-        description: "JSON array of Linux runner labels for strict Snap tests"
+        description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["ubuntu-22.04"]'
-      test-version:
-        description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
-        type: string
-      cache-models:
-        description: "Cache downloaded models between runs"
-        type: boolean
-        default: true
 
   workflow_call:
     inputs:
@@ -142,23 +153,110 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       suite: ${{ steps.resolve.outputs.suite }}
+      run-desktop: ${{ steps.resolve.outputs.run-desktop }}
+      run-electron: ${{ steps.resolve.outputs.run-electron }}
+      run-snap: ${{ steps.resolve.outputs.run-snap }}
+      run-android: ${{ steps.resolve.outputs.run-android }}
+      run-ios: ${{ steps.resolve.outputs.run-ios }}
     steps:
-      - name: Resolve suite
+      - name: Resolve configuration
         id: resolve
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGETS: ${{ inputs.targets }}
+          RUN_DESKTOP: ${{ inputs.desktop }}
+          RUN_ELECTRON: ${{ inputs.electron }}
+          RUN_SNAP: ${{ inputs.snap }}
+          RUN_ANDROID: ${{ inputs.android }}
+          RUN_IOS: ${{ inputs.ios }}
+          SUITE: ${{ inputs.suite }}
+          SUITE_CUSTOM: ${{ inputs.suite-custom }}
         run: |
-          SUITE="${{ inputs.suite }}"
-          if [ "$SUITE" = "full" ] || [ -z "$SUITE" ]; then
-            echo "suite=" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          if [ "$SUITE" = "full" ]; then
+            RESOLVED_SUITE=
+          elif [ -z "$SUITE" ]; then
+            RESOLVED_SUITE=
           elif [ "$SUITE" = "custom" ]; then
-            echo "suite=${{ inputs.suite-custom }}" >> "$GITHUB_OUTPUT"
+            RESOLVED_SUITE="$SUITE_CUSTOM"
           else
-            echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
+            RESOLVED_SUITE="$SUITE"
           fi
+
+          RESOLVED_DESKTOP=false
+          RESOLVED_ELECTRON=false
+          RESOLVED_SNAP=false
+          RESOLVED_ANDROID=false
+          RESOLVED_IOS=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RESOLVED_DESKTOP="$RUN_DESKTOP"
+            RESOLVED_ELECTRON="$RUN_ELECTRON"
+            RESOLVED_SNAP="$RUN_SNAP"
+            RESOLVED_ANDROID="$RUN_ANDROID"
+            RESOLVED_IOS="$RUN_IOS"
+
+            if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
+              echo "::error::Select at least one platform to test."
+              exit 1
+            fi
+          else
+            case "$TARGETS" in
+              all)
+                RESOLVED_DESKTOP=true
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              desktop)
+                RESOLVED_DESKTOP=true
+                ;;
+              electron)
+                ;;
+              snap)
+                ;;
+              mobile)
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              "electron + desktop")
+                RESOLVED_DESKTOP=true
+                ;;
+              "desktop + mobile")
+                RESOLVED_DESKTOP=true
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              "electron + mobile")
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              android)
+                RESOLVED_ANDROID=true
+                ;;
+              ios)
+                RESOLVED_IOS=true
+                ;;
+              *)
+                echo "::error::Unsupported reusable target: $TARGETS"
+                exit 1
+                ;;
+            esac
+          fi
+
+          {
+            echo "suite=$RESOLVED_SUITE"
+            echo "run-desktop=$RESOLVED_DESKTOP"
+            echo "run-electron=$RESOLVED_ELECTRON"
+            echo "run-snap=$RESOLVED_SNAP"
+            echo "run-android=$RESOLVED_ANDROID"
+            echo "run-ios=$RESOLVED_IOS"
+          } >> "$GITHUB_OUTPUT"
 
   desktop-tests:
     needs: resolve
-    if: inputs.targets == 'all' || inputs.targets == 'desktop' || inputs.targets == 'electron + desktop' || inputs.targets == 'desktop + mobile'
+    if: needs.resolve.outputs.run-desktop == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
       consumer: desktop
@@ -175,9 +273,7 @@ jobs:
 
   electron-tests:
     needs: resolve
-    # Electron CI is manual-only for now. `workflow_call` callers such as
-    # on-pr-test-sdk.yml keep their existing desktop + mobile behavior.
-    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'electron' || inputs.targets == 'electron + desktop' || inputs.targets == 'electron + mobile')
+    if: needs.resolve.outputs.run-electron == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
       consumer: electron
@@ -194,9 +290,7 @@ jobs:
 
   snap-tests:
     needs: resolve
-    # Snap CI is manual-only. It is intentionally excluded from workflow_call
-    # consumers such as on-pr-test-sdk.yml.
-    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'snap')
+    if: needs.resolve.outputs.run-snap == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
       consumer: snap
@@ -219,7 +313,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'android' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
+    if: needs.resolve.outputs.run-android == 'true'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
@@ -244,7 +338,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'ios' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
+    if: needs.resolve.outputs.run-ios == 'true'
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
       project-directory: "packages/sdk"

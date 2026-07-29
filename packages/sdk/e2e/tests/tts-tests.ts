@@ -135,6 +135,109 @@ export const ttsSupertonicEnhanced: TestDefinition = {
   }
 }
 
+// Parler exposes description-conditioned speech rather than a fixed speaker
+// ID. The executor first proves identical prompts and emotions are deterministic,
+// then verifies changing only the emotion produces different non-empty PCM.
+export const ttsParlerEmotionConditioning: TestDefinition = {
+  testId: 'tts-parler-emotion-conditioning',
+  params: {
+    text: 'Today is a wonderful day.',
+    voice: 'Laura',
+    firstEmotion: 'happy',
+    secondEmotion: 'sad'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['emotion-conditioning-verified', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 180000 }
+}
+
+// Omitting all description fields exercises the addon's default Parler
+// caption, which is a valid edge case of the public API.
+export const ttsParlerDefaultDescription: TestDefinition = {
+  testId: 'tts-parler-default-description',
+  params: {
+    text: 'Hello from Parler.',
+    stream: false
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 60000 }
+}
+
+export const ttsParlerStreaming: TestDefinition = {
+  testId: 'tts-parler-streaming',
+  params: {
+    text: 'Parler can generate streaming speech.',
+    operation: 'stream',
+    emotion: 'news'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 90000 }
+}
+
+export const ttsParlerSentenceStreaming: TestDefinition = {
+  testId: 'tts-parler-sentence-streaming',
+  params: {
+    text: 'This is the first sentence. This is the second sentence.',
+    operation: 'sentence-stream',
+    emotion: 'narration'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=sentence-stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 120000 }
+}
+
+export const ttsParlerDuplexStreaming: TestDefinition = {
+  testId: 'tts-parler-duplex-streaming',
+  params: {
+    text: 'Parler also supports duplex text streaming.',
+    operation: 'duplex',
+    emotion: 'conversation'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=duplex', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler', estimatedDurationMs: 90000 }
+}
+
+export const ttsParlerIndicMultilingual: TestDefinition = {
+  testId: 'tts-parler-indic-multilingual',
+  params: {
+    text: 'नमस्ते, आज २७ जुलाई है।',
+    operation: 'batch',
+    emotion: 'conversation'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['parler-generated', 'operation=batch', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-parler-indic', estimatedDurationMs: 120000 }
+}
+
+export const ttsParlerInvalidEmotion: TestDefinition = {
+  testId: 'tts-parler-invalid-emotion',
+  params: {
+    text: 'This request must fail validation.',
+    emotion: 'angry',
+    stream: false
+  },
+  expectation: {
+    validation: 'throws-error',
+    errorContains: 'emotion'
+  },
+  metadata: { category: 'tts', dependency: 'none', estimatedDurationMs: 1000 }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -147,5 +250,12 @@ export const ttsTests = [
   ttsSupertonicMultilingualText,
   ttsSupertonicSentenceStream,
   ttsSupertonicOutputSampleRate,
-  ttsSupertonicEnhanced
+  ttsSupertonicEnhanced,
+  ttsParlerEmotionConditioning,
+  ttsParlerDefaultDescription,
+  ttsParlerStreaming,
+  ttsParlerSentenceStreaming,
+  ttsParlerDuplexStreaming,
+  ttsParlerIndicMultilingual,
+  ttsParlerInvalidEmotion
 ]

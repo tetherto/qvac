@@ -1,6 +1,6 @@
 # Agent Integrations
 
-This document is the monorepo reference for QVAC's coding-agent integration stack: `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `qvac serve openai`, QVAC docs, and the external `models.dev` provider metadata.
+This document is the monorepo reference for QVAC's coding-agent integration stack: `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `@qvac/openclaw-plugin`, `qvac serve openai`, QVAC docs, and the external `models.dev` provider metadata.
 
 Use it when implementing, reviewing, or releasing work related to OpenCode, OpenClaw, Cline/Roo/Aider/Continue, Vercel AI SDK consumers, managed `qvac serve`, OpenAI-compatible HTTP behavior, model discovery, or package release choreography.
 
@@ -46,6 +46,7 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/cli`, gene
 | CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve openai`, exposes OpenAI-compatible HTTP routes, owns request/response translation, model alias routing, auth/CORS, cancellation, queueing, and lifecycle for loaded models. |
 | AI SDK provider | `packages/ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider wrapper. Owns `createQvac`, external/managed modes, typed model metadata exports, friendly catalog ids, and managed serve reuse/lifecycle. |
 | OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, injects a `qvac` provider into OpenCode config, selects project model defaults, applies temporary OpenAI-compat shims, and tears down on exit. |
+| OpenClaw plugin | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw provider plugin: managed local `qvac serve` via OpenClaw `localService`, static catalog from `@qvac/ai-sdk-provider/models`. |
 | Public HTTP docs | `docs/website/content/docs/cli/http-server` | QVAC docs | Public setup docs for OpenAI-compatible tools. OpenCode docs should be plugin-first; manual server setup is the advanced/custom-provider path. |
 | Architecture docs | `docs/architecture` | Internal repo docs | Design/reference material for maintainers and agents. |
 | External provider catalog | `providers/qvac` in `anomalyco/models.dev` | `models.dev` entry | External discovery metadata for QVAC provider/models. Not a runtime source of truth. |
@@ -291,13 +292,15 @@ Common examples:
 
 Release lower layers before upper layers when a feature spans packages:
 
-1. `@qvac/sdk` — model constants, inference semantics, parser fixes.
+1. `@qvac/sdk` — model constants, inference semantics, parser fixes (`@qvac/bare-sdk` lockstep via `qv-sdk-bare-sdk-sync`).
 2. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
 3. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
-4. `@qvac/opencode-plugin` — plugin changes that depend on provider/CLI.
+4. `@qvac/opencode-plugin` / `@qvac/openclaw-plugin` — plugin changes that depend on provider/CLI.
 5. Docs/models.dev can land alongside the package that makes the behavior real, but avoid documenting unreleased package behavior as current.
 
 If upper packages use caret ranges that already resolve to a lower-layer patch fix, a new upper release may not be needed. Verify with a fresh install, not just lockfile assumptions.
+
+For cascade planning (which packages need a bump, suggested 0.x versions, draft release + backmerge PRs), use `/qv-agent-stack-sync --plan` then `--prepare-cascade`. Publish stays human-gated.
 
 ### QVAC package releases
 

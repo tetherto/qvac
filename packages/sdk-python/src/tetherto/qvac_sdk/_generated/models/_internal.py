@@ -5291,6 +5291,72 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
+    command = "command"
+    anger = "anger"
+    narration = "narration"
+    conversation = "conversation"
+    disgust = "disgust"
+    fear = "fear"
+    happy = "happy"
+    neutral = "neutral"
+    proper_noun = "proper noun"
+    news = "news"
+    sad = "sad"
+    surprise = "surprise"
+
+
+class MaxFrames(RootModel[int]):
+    root: Annotated[int, Field(ge=10, le=2147483647)]
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[Literal["parler"], Field(alias="ttsEngine")] = "parler"
+    description: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None, Field(alias="voiceDescription", min_length=1)
+    ] = None
+    voice: Annotated[str | None, Field(min_length=1)] = None
+    emotion: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"),
+    ] = None
+    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[str | None, Field(min_length=1)] = None
+    noise: Annotated[str | None, Field(min_length=1)] = None
+    reverb: Annotated[str | None, Field(min_length=1)] = None
+    quality: Annotated[str | None, Field(min_length=1)] = None
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    stream_chunk_tokens: Annotated[
+        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
+    ] = None
+    stream_first_chunk_tokens: Annotated[
+        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    temperature: Annotated[float | None, Field(ge=0.0)] = None
+    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
+    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
+    max_frames: Annotated[Literal[0] | MaxFrames | None, Field(alias="maxFrames")] = (
+        None
+    )
+    min_new_tokens: Annotated[
+        int | None, Field(alias="minNewTokens", ge=-1, le=2147483647)
+    ] = None
+    normalize_numbers: Annotated[bool | None, Field(alias="normalizeNumbers")] = None
+
+
 class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -5315,7 +5381,8 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_type: Annotated[Literal["tts-ggml"], Field(alias="modelType")] = "tts-ggml"
     model_config_: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
-        | LoadModelSrcRequestTtsGgmlModelConfigSupertonic,
+        | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
+        | LoadModelSrcRequestTtsGgmlModelConfigParler,
         Field(alias="modelConfig"),
     ]
 
@@ -7819,6 +7886,21 @@ class SuspendResponse(GeneratedBaseModel):
     type: Literal["suspend"] = "suspend"
 
 
+class TextToSpeechRequestEmotion(Enum):
+    command = "command"
+    anger = "anger"
+    narration = "narration"
+    conversation = "conversation"
+    disgust = "disgust"
+    fear = "fear"
+    happy = "happy"
+    neutral = "neutral"
+    proper_noun = "proper noun"
+    news = "news"
+    sad = "sad"
+    surprise = "surprise"
+
+
 class TextToSpeechRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -7831,6 +7913,20 @@ class TextToSpeechRequest(GeneratedBaseModel):
     sentence_stream_max_chunk_scalars: Annotated[
         float | None, Field(alias="sentenceStreamMaxChunkScalars", gt=0.0)
     ] = None
+    description: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None, Field(alias="voiceDescription", min_length=1)
+    ] = None
+    voice: Annotated[str | None, Field(min_length=1)] = None
+    emotion: Annotated[
+        TextToSpeechRequestEmotion | None, Field(title="TextToSpeechRequestEmotion")
+    ] = None
+    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[str | None, Field(min_length=1)] = None
+    noise: Annotated[str | None, Field(min_length=1)] = None
+    reverb: Annotated[str | None, Field(min_length=1)] = None
+    quality: Annotated[str | None, Field(min_length=1)] = None
     type: Literal["textToSpeech"] = "textToSpeech"
 
 
@@ -7870,6 +7966,21 @@ class TextToSpeechStreamRequestSentenceDelimiterPreset(Enum):
     multilingual = "multilingual"
 
 
+class TextToSpeechStreamRequestEmotion(Enum):
+    command = "command"
+    anger = "anger"
+    narration = "narration"
+    conversation = "conversation"
+    disgust = "disgust"
+    fear = "fear"
+    happy = "happy"
+    neutral = "neutral"
+    proper_noun = "proper noun"
+    news = "news"
+    sad = "sad"
+    surprise = "surprise"
+
+
 class TextToSpeechStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -7887,6 +7998,21 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         float | None, Field(alias="maxBufferScalars", gt=0.0)
     ] = None
     flush_after_ms: Annotated[float | None, Field(alias="flushAfterMs", gt=0.0)] = None
+    description: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None, Field(alias="voiceDescription", min_length=1)
+    ] = None
+    voice: Annotated[str | None, Field(min_length=1)] = None
+    emotion: Annotated[
+        TextToSpeechStreamRequestEmotion | None,
+        Field(title="TextToSpeechStreamRequestEmotion"),
+    ] = None
+    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[str | None, Field(min_length=1)] = None
+    noise: Annotated[str | None, Field(min_length=1)] = None
+    reverb: Annotated[str | None, Field(min_length=1)] = None
+    quality: Annotated[str | None, Field(min_length=1)] = None
     type: Literal["textToSpeechStream"] = "textToSpeechStream"
 
 

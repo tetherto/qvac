@@ -21,24 +21,6 @@ target_compile_features(addon-test PRIVATE cxx_std_20)
 target_compile_options(addon-test PRIVATE -Wall -Wextra -Wfatal-errors -g)
 target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
 
-# @qvac/fabric ships the ggml compute backends as GGML_BACKEND_DL modules on
-# Linux and Android (the CPU micro-arch variants and Vulkan). Compile the model
-# TU with GGML_BACKEND_DL there so it uses the registry API instead of the
-# statically-linked ggml_backend_cpu_init() (which lives inside a backend .so
-# and is not present in the shared runtime). On macOS/Windows the backends are
-# static inside qvac__fabric@0.bare and ggml_backend_cpu_init() links directly.
-if((ANDROID OR UNIX) AND NOT APPLE)
-  target_compile_definitions(addon-test PRIVATE GGML_BACKEND_DL)
-endif()
-
-# backend_env.cpp preloads the ggml DL backend modules from GGML_BACKEND_DIR
-# before any test runs. The staged @qvac/fabric backends are copied next to the
-# test binary (see below), so point the loader at the binary dir. On
-# macOS/Windows the dir has no backend .so files and the static backends inside
-# qvac__fabric@0.bare self-register on load.
-target_compile_definitions(
-  addon-test PRIVATE GGML_BACKEND_DIR="${CMAKE_CURRENT_BINARY_DIR}")
-
 # ClassificationModel.cpp references BACKENDS_SUBDIR on its DL load path. The
 # addon target defines it, but addon-test compiles that TU separately. The test
 # passes an empty backendsDir (backends are preloaded by backend_env), so the
@@ -66,16 +48,9 @@ target_link_libraries(
     GTest::gtest_main
 )
 
-if(WIN32)
-  # The fabric runtime is delay-loaded: the imported prebuilt module target
-  # propagates /DELAYLOAD:qvac__fabric@0.bare but not the delay-load helper.
-  # add_bare_module() attaches that helper (bare_delay_load -> delayimp, which
-  # provides __delayLoadHelper2) to real .bare modules, but this standalone test
-  # executable is a plain add_executable() and never goes through it, so it must
-  # link the helper itself. The parent CMakeLists defines bare_delay_load via its
-  # add_bare_module(classification-ggml) call before this subdirectory is added.
-  target_link_libraries(addon-test PRIVATE bare_delay_load)
-endif()
+# GGML_BACKEND_DL/DIR, copy qvac__fabric@0.bare + backends next to the binary,
+# rpath, and the win32 delay-load helper. See qvac-addon.cmake for the details.
+qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
 if(ENABLE_COVERAGE)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -105,46 +80,6 @@ endif()
 # initializes before the fabric module loads.
 if(NOT WIN32)
   target_link_libraries(addon-test PRIVATE -fsanitize=address)
-endif()
-
-# Copy the shared @qvac/fabric runtime next to the test executable so it
-# resolves at runtime via the $ORIGIN/@loader_path rpath set below.
-add_custom_command(TARGET addon-test POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    $<TARGET_FILE:${qvac_fabric_target}_module>
-    ${CMAKE_CURRENT_BINARY_DIR}/qvac__fabric@0.bare
-  COMMENT "Copying qvac__fabric@0.bare to test directory"
-)
-
-# On Linux and Android @qvac/fabric builds its ggml compute backends as separate
-# shared libraries (GGML_BACKEND_DL): the runtime-dispatched CPU micro-arch
-# variants (and Vulkan) are dlopen'd at runtime via
-# ggml_backend_load_all_from_path(). backend_env.cpp loads them from
-# GGML_BACKEND_DIR (this binary dir), so stage them next to the executable,
-# mirroring the production install in the parent CMakeLists. Without them the
-# ggml backend registry is empty and every model-loading test fails with "no
-# backends are loaded". On macOS/Windows the backends are static inside
-# qvac__fabric@0.bare, so the glob is empty and the CPU backend self-registers
-# when the runtime loads.
-bare_target(host)
-file(GLOB _fabric_test_backends
-  "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${host}/qvac__fabric/*.so")
-if(_fabric_test_backends)
-  add_custom_command(TARGET addon-test POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${_fabric_test_backends}
-      ${CMAKE_CURRENT_BINARY_DIR}/
-    COMMENT "Staging @qvac/fabric ggml backends next to addon-test")
-endif()
-
-# The runtime is named qvac__fabric@0.bare (the module SONAME) only in the copy
-# beside the test binary, so point the executable's rpath at its own directory.
-# Unlike the .bare addon module (which cmake-bare gives an $ORIGIN rpath), this
-# plain test executable gets no such rpath by default.
-if(APPLE)
-  set_target_properties(addon-test PROPERTIES BUILD_RPATH "@loader_path")
-elseif(NOT WIN32)
-  set_target_properties(addon-test PROPERTIES BUILD_RPATH "$ORIGIN")
 endif()
 
 add_test(NAME ClassificationModelTests COMMAND addon-test)
