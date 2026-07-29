@@ -1,4 +1,4 @@
-name: On PR Trigger (Embed)
+name: On PR Trigger (Model Fit)
 
 on:
   pull_request_target:
@@ -13,8 +13,8 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/embed-llamacpp/**"
-      - ".github/workflows/*embed*.yml"
+      - "packages/model-fit/**"
+      - ".github/workflows/*model-fit*.yml"
       - ".github/actions/cache-models/**"
   workflow_dispatch:
 
@@ -99,7 +99,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/embed-llamacpp
+          workdir: packages/model-fit
 
   cpp-lint:
     if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
@@ -111,23 +111,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/embed-llamacpp
-
-  cpp-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
-    needs:
-      - authorize
-      - sanity-checks
-      - label-gate
-    uses: ./.github/workflows/cpp-tests-embed.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      workdir: packages/model-fit
 
   ts-checks:
     needs: authorize
@@ -142,11 +126,11 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: packages/embed-llamacpp
+        working-directory: packages/model-fit
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/embed-llamacpp
+        working-directory: packages/model-fit
         run: npm run test:dts
 
       - name: Run lint and unit tests
@@ -156,7 +140,7 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/embed-llamacpp
+          workdir: packages/model-fit
 
   prebuild:
     permissions:
@@ -169,7 +153,7 @@ jobs:
       - authorize
       - sanity-checks
       - label-gate
-    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    uses: ./.github/workflows/prebuilds-model-fit.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -185,7 +169,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-embed-llamacpp.yml
+    uses: ./.github/workflows/integration-test-model-fit.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -202,14 +186,14 @@ jobs:
       - authorize
       - prebuild
       - label-gate
-    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    uses: ./.github/workflows/integration-mobile-test-model-fit.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
