@@ -37,6 +37,11 @@
   stays true, and the plan rather than the flag is the admission signal. Driven
   by the margin rather than by model size, which keeps it deterministic across
   runners with different VRAM.
+- Coverage for the `FAILURE` verdict, which turns out to require a pinned
+  constraint. Unpinned, the fitter always has the host to fall back on, so it
+  answers even an unsatisfiable margin with `SUCCESS` and zero offload; pinning
+  `nGpuLayers` makes offload a hard requirement and produces a real "won't fit".
+  Documented, because it means `fits` alone is not an admission signal.
 - Documented two crash paths inside `llama_params_fit` that this addon cannot
   contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
   Windows divide-by-zero. Both terminate the process.

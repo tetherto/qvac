@@ -98,6 +98,30 @@ These checks are enforced **in the native binding as well as the JS wrapper**,
 because `./binding.js` is a public export and can be called without passing
 through `index.js`.
 
+## Asking a question that can actually fail
+
+`llama_params_fit` fits to free **device** memory and, per `llama.h`, "assumes
+system memory is unlimited". Nothing stops it moving every layer to the host, so
+with default arguments it answers almost anything with `SUCCESS` — an
+unsatisfiable multi-TiB margin still returns `SUCCESS` with `nGpuLayers: 0`.
+
+**`fits` alone is therefore close to useless as an admission signal.** It means
+"this could run somehow", which for a CPU fallback is nearly always true.
+
+To get a verdict that can fail, pin a constraint the fitter is not allowed to
+relax. Only fields left at their llama default get rewritten, so pinning
+`nGpuLayers` turns offload into a hard requirement:
+
+```js
+// "can this device run the model with at least 20 layers on the GPU?"
+const plan = fitParams({ modelPath, nGpuLayers: 20, marginMiB: 1024 })
+if (plan.status === FIT_STATUS.FAILURE) { /* a real "won't fit" */ }
+```
+
+The useful question is rarely "can this run at all" but "can this run *well
+enough*" — which means asking about offload, context, or both, and reading the
+plan rather than the flag.
+
 ## SDK usage (intended)
 
 The SDK runs this preflight before handing a model to `@qvac/llm-llamacpp`:

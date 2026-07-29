@@ -124,6 +124,35 @@ test('memory pressure moves the plan off the GPU rather than reporting FAILURE',
   t.ok(res.nCtx <= 2048, 'context was reduced, not left at the trained maximum')
 })
 
+test('pinned offload under pressure is the only way to get FAILURE', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // Unpinned, the fitter always has the host to fall back on, so it answers an
+  // unmeetable margin with SUCCESS and zero offload (see the test above).
+  // Pinning nGpuLayers makes offload a hard constraint it cannot relax, so the
+  // margin can no longer be escaped and the verdict is a real FAILURE.
+  //
+  // This is the shape of a meaningful admission question: not "can this run at
+  // all" — on CPU it essentially always can — but "can this run with at least N
+  // layers on the GPU".
+  const res = fitParams({ modelPath, nGpuLayers: 5, marginMiB: 10000000 })
+
+  t.is(res.status, FIT_STATUS.FAILURE, 'a pinned plan that cannot be honoured fails')
+  t.is(res.fits, false)
+  t.is(res.nGpuLayers, 5, 'the pinned layer count is preserved, not reduced')
+})
+
+test('a failed fit preserves the caller hard constraints', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  const res = fitParams({ modelPath, nGpuLayers: 5, nCtx: 8192, marginMiB: 10000000 })
+
+  t.is(res.status, FIT_STATUS.FAILURE)
+  t.is(res.nGpuLayers, 5, 'pinned offload survives a failed fit')
+  t.is(res.nCtx, 8192, 'an explicit context survives a failed fit')
+  t.ok(res.nDevices >= 1, 'a failure still reports the inventory it measured against')
+})
+
 test('an explicit context is not reduced even under memory pressure', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
 
