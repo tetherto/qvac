@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TranslationInterface = void 0;
 const error_1 = require("./lib/error");
+const log_forward_1 = require("./lib/log-forward");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved from package prebuilds.
 const binding = require("./binding");
 /** Extract a human-readable message from an unknown thrown value. */
@@ -32,15 +33,10 @@ class TranslationInterface {
         this._loggerInitialized = false;
         if (transitionCb && typeof transitionCb === "object") {
             binding.setLogger((priority, message) => {
-                // Map C++ priority levels to logger methods
-                // Priority: ERROR=0, WARNING=1, INFO=2, DEBUG=3
-                const levels = ["error", "warn", "info", "debug"];
-                const level = levels[priority] || "info";
                 // Invoke as a method on the logger object — QvacLogger methods rely
-                // on `this` internally, so the call must not be detached.
-                if (typeof transitionCb[level] === "function") {
-                    transitionCb[level](message);
-                }
+                // on `this` internally, so the call must not be detached. See
+                // test/unit/log-forward.test.js for the regression guard.
+                (0, log_forward_1.forwardTransitionLog)(transitionCb, priority, message);
             });
             this._loggerInitialized = true;
         }

@@ -1,4 +1,8 @@
 import { QvacErrorAddonMarian, ERR_CODES } from "./lib/error";
+import {
+  forwardTransitionLog,
+  type TranslationLogger,
+} from "./lib/log-forward";
 
 /** Configuration object handed to the native addon at instance creation. */
 export interface TranslationConfigurationParams {
@@ -20,13 +24,10 @@ export type TranslationOutputCallback = (
   error: unknown,
 ) => void;
 
-/** Optional logger sink used to bridge native C++ log messages into JS. */
-export interface TranslationLogger {
-  error?: (...args: unknown[]) => void;
-  warn?: (...args: unknown[]) => void;
-  info?: (...args: unknown[]) => void;
-  debug?: (...args: unknown[]) => void;
-}
+// The logger sink type and the C++→JS forwarding both live in a native-free
+// module so they can be unit-tested without the addon; re-exported here to keep
+// `marian`'s public type surface unchanged.
+export type { TranslationLogger } from "./lib/log-forward";
 
 type NativeLoggerCallback = (priority: number, message: string) => void;
 
@@ -84,15 +85,10 @@ export class TranslationInterface {
     this._loggerInitialized = false;
     if (transitionCb && typeof transitionCb === "object") {
       binding.setLogger((priority, message) => {
-        // Map C++ priority levels to logger methods
-        // Priority: ERROR=0, WARNING=1, INFO=2, DEBUG=3
-        const levels = ["error", "warn", "info", "debug"] as const;
-        const level = levels[priority] || "info";
         // Invoke as a method on the logger object — QvacLogger methods rely
-        // on `this` internally, so the call must not be detached.
-        if (typeof transitionCb[level] === "function") {
-          transitionCb[level](message);
-        }
+        // on `this` internally, so the call must not be detached. See
+        // test/unit/log-forward.test.js for the regression guard.
+        forwardTransitionLog(transitionCb, priority, message);
       });
       this._loggerInitialized = true;
     }

@@ -98,3 +98,63 @@ async function exercise(): Promise<string[]> {
   return [...out, ...batch];
 }
 void exercise;
+
+// --------------------------------------------------------------------------
+// The published instance type must stay STRUCTURAL.
+//
+// Emitting the implementation class into index.d.ts leaks its `private` fields
+// and makes the type nominal, so consumer-side mocks/test doubles that satisfy
+// the whole public surface stop being assignable. The pre-TypeScript
+// hand-written declarations were public-only; this guards that contract.
+// --------------------------------------------------------------------------
+declare const fakeResponse: ReturnType<TranslationNmtcpp["run"]>;
+
+const mock: TranslationNmtcpp = {
+  getState: () => ({
+    configLoaded: true,
+    weightsLoaded: true,
+    destroyed: false,
+  }),
+  load: () => Promise.resolve(),
+  run: () => fakeResponse,
+  runBatch: (texts: string[]) => Promise.resolve(texts),
+  unload: () => Promise.resolve(),
+  destroy: () => Promise.resolve(),
+  getActiveBackendName: () => "CPU",
+  getActiveBackendDescription: () => "",
+};
+void mock;
+
+// A mock MISSING a public member must still be rejected — otherwise the type
+// has gone structurally empty rather than merely non-nominal.
+// @ts-expect-error - runBatch/getActiveBackendName/getActiveBackendDescription missing
+const incompleteMock: TranslationNmtcpp = {
+  getState: () => ({
+    configLoaded: false,
+    weightsLoaded: false,
+    destroyed: false,
+  }),
+  load: () => Promise.resolve(),
+  run: () => fakeResponse,
+  unload: () => Promise.resolve(),
+  destroy: () => Promise.resolve(),
+};
+void incompleteMock;
+
+// The real instance is of course still assignable to the structural type.
+const realAsStructural: TranslationNmtcpp = model;
+void realAsStructural;
+
+// --------------------------------------------------------------------------
+// `./addonLogging` subpath, CommonJS shape.
+// --------------------------------------------------------------------------
+import addonLogging = require("../../addonLogging");
+
+addonLogging.setLogger((priority: number, message: string) => {
+  void priority;
+  void message;
+});
+addonLogging.releaseLogger();
+
+const loggingSurface: addonLogging.AddonLogging = addonLogging;
+void loggingSurface;

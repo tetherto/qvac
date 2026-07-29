@@ -1,3 +1,4 @@
+import { type TranslationLogger } from "./lib/log-forward";
 /** Configuration object handed to the native addon at instance creation. */
 export interface TranslationConfigurationParams {
     path: string;
@@ -10,13 +11,7 @@ export interface TranslationJob {
 }
 /** Callback invoked for every native inference event. */
 export type TranslationOutputCallback = (addon: unknown, event: string, data: unknown, error: unknown) => void;
-/** Optional logger sink used to bridge native C++ log messages into JS. */
-export interface TranslationLogger {
-    error?: (...args: unknown[]) => void;
-    warn?: (...args: unknown[]) => void;
-    info?: (...args: unknown[]) => void;
-    debug?: (...args: unknown[]) => void;
-}
+export type { TranslationLogger } from "./lib/log-forward";
 type NativeLoggerCallback = (priority: number, message: string) => void;
 /** Native binding surface consumed by {@link TranslationInterface}. */
 export interface TranslationBinding {
@@ -101,4 +96,3 @@ export declare class TranslationInterface {
      */
     destroy(): Promise<void>;
 }
-export {};

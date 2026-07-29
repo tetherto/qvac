@@ -70,14 +70,92 @@ class QvacIndicTransResponse extends QvacResponse<string> {
   }
 }
 
+// Local aliases for the public types declared in the `TranslationNmtcpp`
+// namespace at the bottom of this file. The implementation below is a NAMED
+// CLASS EXPRESSION — its inner `TranslationNmtcpp` binding shadows the outer
+// one inside the class body, so the body cannot spell `TranslationNmtcpp.X`
+// for types. (Value lookups like `TranslationNmtcpp.ModelTypes` resolve to the
+// class's own static and are unaffected.)
+type TranslationNmtcppArgs = TranslationNmtcpp.TranslationNmtcppArgs;
+type TranslationNmtcppConfig = TranslationNmtcpp.TranslationNmtcppConfig;
+type TranslationNmtcppFiles = TranslationNmtcpp.TranslationNmtcppFiles;
+type TranslationNmtcppParams = TranslationNmtcpp.TranslationNmtcppParams;
+type TranslationNmtcppModelTypes = TranslationNmtcpp.TranslationNmtcppModelTypes;
+type InferenceClientState = TranslationNmtcpp.InferenceClientState;
+
 /**
- * TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models
+ * Public instance surface of a translation model.
+ *
+ * This is an INTERFACE, not the implementation class, so the published type is
+ * structural: any object carrying these members is assignable to it. Emitting
+ * the class type instead would leak its `private` fields into index.d.ts and
+ * make the type nominal, breaking consumer-side mocks and test doubles that
+ * the hand-written (pre-TypeScript) declarations accepted.
+ *
+ * Members mirror the pre-migration hand-written index.d.ts exactly.
  */
-class TranslationNmtcpp {
+interface TranslationNmtcpp {
+  /**
+   * Returns the current state of the inference client.
+   */
+  getState(): InferenceClientState;
+  /**
+   * Loads the model. If already loaded, unloads first.
+   */
+  load(): Promise<void>;
+  /**
+   * Runs inference on the given input. Serialized — only one job at a time.
+   */
+  run(input: string): Promise<QvacResponse<string>>;
+  /**
+   * Translates multiple texts in a single batch for better performance.
+   */
+  runBatch(texts: string[]): Promise<string[]>;
+  /**
+   * Unloads the model and frees resources.
+   */
+  unload(): Promise<void>;
+  /**
+   * Destroys the model permanently.
+   */
+  destroy(): Promise<void>;
+  /**
+   * Returns the name of the compute backend that load() actually selected,
+   * or one of the sentinels "Unloaded", "Bergamot-CPU", "CPU". Open-ended
+   * device names like "Vulkan0", "OpenCL", "Metal" are also possible.
+   *
+   * Return-type note: `(string & {})` keeps the literal sentinels
+   * IDE-completable. Plain `'Unloaded' | ... | string` collapses to `string`
+   * via TypeScript's union absorption rule.
+   */
+  getActiveBackendName(): "Unloaded" | "Bergamot-CPU" | "CPU" | (string & {});
+  /**
+   * Returns the human-readable device description for the active GPU backend
+   * (e.g. 'NVIDIA GeForce RTX 5070', 'Intel(R) UHD Graphics').
+   * Returns '' when no GPU backend is loaded or model is unloaded.
+   */
+  getActiveBackendDescription(): string;
+}
+
+/**
+ * Static/constructor surface — what `module.exports` itself provides.
+ */
+interface TranslationNmtcppConstructor {
+  new (args: TranslationNmtcppArgs): TranslationNmtcpp;
   /**
    * Available model types for translation
    */
-  static readonly ModelTypes: TranslationNmtcpp.TranslationNmtcppModelTypes = {
+  readonly ModelTypes: TranslationNmtcppModelTypes;
+}
+
+/**
+ * TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models
+ */
+const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp {
+  /**
+   * Available model types for translation
+   */
+  static readonly ModelTypes: TranslationNmtcppModelTypes = {
     IndicTrans: "IndicTrans",
     Bergamot: "Bergamot",
   };
@@ -85,11 +163,11 @@ class TranslationNmtcpp {
   private readonly opts: { stats?: boolean };
   readonly logger: QvacLogger;
   private addon: TranslationInterface | null;
-  private state: TranslationNmtcpp.InferenceClientState;
+  private state: InferenceClientState;
   private readonly _modelType: string | undefined;
-  private readonly _files: TranslationNmtcpp.TranslationNmtcppFiles;
+  private readonly _files: TranslationNmtcppFiles;
   private readonly _config: Record<string, unknown>;
-  private readonly _params: TranslationNmtcpp.TranslationNmtcppParams;
+  private readonly _params: TranslationNmtcppParams;
   private readonly _pivotConfig: Record<string, unknown>;
   private readonly _job: JobHandler;
   private readonly _run: ReturnType<typeof exclusiveRunQueue>;
@@ -100,10 +178,10 @@ class TranslationNmtcpp {
   constructor({
     files,
     params,
-    config = {} as TranslationNmtcpp.TranslationNmtcppConfig,
+    config = {} as TranslationNmtcppConfig,
     logger = null,
     opts = {},
-  }: TranslationNmtcpp.TranslationNmtcppArgs) {
+  }: TranslationNmtcppArgs) {
     this.opts = opts;
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.addon = null;
@@ -129,14 +207,14 @@ class TranslationNmtcpp {
     this._config = additionalConfig;
     this._params = params;
     this._pivotConfig = pivotConfig || {};
-    this._job = createJobHandler({ cancel: () => this.addon?.cancel() });
+    this._job = createJobHandler({ cancel: () => this.addon!.cancel() });
     this._run = exclusiveRunQueue();
   }
 
   /**
    * Returns the current state of the inference client.
    */
-  getState(): TranslationNmtcpp.InferenceClientState {
+  getState(): InferenceClientState {
     return this.state;
   }
 
@@ -465,11 +543,11 @@ class TranslationNmtcpp {
       this._job.output(data);
     }
   }
-}
+};
 
 /**
- * Declaration merging with the class above models this package's CommonJS
- * export shape — `module.exports` IS the `TranslationNmtcpp` constructor —
+ * Declaration merging with the `TranslationNmtcpp` value above models this
+ * package's CommonJS export shape — `module.exports` IS the constructor —
  * directly in the type system, so a CommonJS consumer
  * (`import TranslationNmtcpp = require('@qvac/translation-nmtcpp')`) gets a
  * real construct signature instead of TS2351. The namespace is types-only:

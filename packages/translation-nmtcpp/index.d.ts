@@ -1,41 +1,35 @@
-import QvacLogger = require("@qvac/logging");
 import { QvacResponse } from "@qvac/infer-base";
+type TranslationNmtcppArgs = TranslationNmtcpp.TranslationNmtcppArgs;
+type TranslationNmtcppModelTypes = TranslationNmtcpp.TranslationNmtcppModelTypes;
+type InferenceClientState = TranslationNmtcpp.InferenceClientState;
 /**
- * TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models
+ * Public instance surface of a translation model.
+ *
+ * This is an INTERFACE, not the implementation class, so the published type is
+ * structural: any object carrying these members is assignable to it. Emitting
+ * the class type instead would leak its `private` fields into index.d.ts and
+ * make the type nominal, breaking consumer-side mocks and test doubles that
+ * the hand-written (pre-TypeScript) declarations accepted.
+ *
+ * Members mirror the pre-migration hand-written index.d.ts exactly.
  */
-declare class TranslationNmtcpp {
-    /**
-     * Available model types for translation
-     */
-    static readonly ModelTypes: TranslationNmtcpp.TranslationNmtcppModelTypes;
-    private readonly opts;
-    readonly logger: QvacLogger;
-    private addon;
-    private state;
-    private readonly _modelType;
-    private readonly _files;
-    private readonly _config;
-    private readonly _params;
-    private readonly _pivotConfig;
-    private readonly _job;
-    private readonly _run;
-    /**
-     * Creates an instance of TranslationNmtcpp.
-     */
-    constructor({ files, params, config, logger, opts, }: TranslationNmtcpp.TranslationNmtcppArgs);
+interface TranslationNmtcpp {
     /**
      * Returns the current state of the inference client.
      */
-    getState(): TranslationNmtcpp.InferenceClientState;
+    getState(): InferenceClientState;
     /**
      * Loads the model. If already loaded, unloads first.
      */
     load(): Promise<void>;
     /**
      * Runs inference on the given input. Serialized — only one job at a time.
-     * @param input - Text to translate
      */
     run(input: string): Promise<QvacResponse<string>>;
+    /**
+     * Translates multiple texts in a single batch for better performance.
+     */
+    runBatch(texts: string[]): Promise<string[]>;
     /**
      * Unloads the model and frees resources.
      */
@@ -45,11 +39,13 @@ declare class TranslationNmtcpp {
      */
     destroy(): Promise<void>;
     /**
-     * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
-     * 'OpenCL', 'Metal'), or a sentinel:
-     *   - 'Unloaded'     — model is not loaded
-     *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
-     *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+     * Returns the name of the compute backend that load() actually selected,
+     * or one of the sentinels "Unloaded", "Bergamot-CPU", "CPU". Open-ended
+     * device names like "Vulkan0", "OpenCL", "Metal" are also possible.
+     *
+     * Return-type note: `(string & {})` keeps the literal sentinels
+     * IDE-completable. Plain `'Unloaded' | ... | string` collapses to `string`
+     * via TypeScript's union absorption rule.
      */
     getActiveBackendName(): "Unloaded" | "Bergamot-CPU" | "CPU" | (string & {});
     /**
@@ -58,44 +54,24 @@ declare class TranslationNmtcpp {
      * Returns '' when no GPU backend is loaded or model is unloaded.
      */
     getActiveBackendDescription(): string;
-    /**
-     * Checks if this is a Bergamot model
-     */
-    private _isBergamotModel;
-    /**
-     * Configures Bergamot-specific parameters
-     */
-    private _configureBergamotModel;
-    private _load;
-    /**
-     * Handles IndicTrans model translation
-     */
-    private _runIndicTrans;
-    /**
-     * Prepares input text with language prefix if needed
-     */
-    private _prepareInputText;
-    /**
-     * Creates a response with output post-processing for language prefixes
-     */
-    private _createStandardResponse;
-    /**
-     * Handles standard model translation (Bergamot)
-     */
-    private _runStandardTranslation;
-    private _runInternal;
-    /**
-     * Translates multiple texts in a single batch for better performance.
-     *
-     * @param texts - Array of texts to translate
-     * @returns Array of translated texts (same order as input)
-     */
-    runBatch(texts: string[]): Promise<string[]>;
-    private _addonOutputCallback;
 }
 /**
- * Declaration merging with the class above models this package's CommonJS
- * export shape — `module.exports` IS the `TranslationNmtcpp` constructor —
+ * Static/constructor surface — what `module.exports` itself provides.
+ */
+interface TranslationNmtcppConstructor {
+    new (args: TranslationNmtcppArgs): TranslationNmtcpp;
+    /**
+     * Available model types for translation
+     */
+    readonly ModelTypes: TranslationNmtcppModelTypes;
+}
+/**
+ * TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models
+ */
+declare const TranslationNmtcpp: TranslationNmtcppConstructor;
+/**
+ * Declaration merging with the `TranslationNmtcpp` value above models this
+ * package's CommonJS export shape — `module.exports` IS the constructor —
  * directly in the type system, so a CommonJS consumer
  * (`import TranslationNmtcpp = require('@qvac/translation-nmtcpp')`) gets a
  * real construct signature instead of TS2351. The namespace is types-only:

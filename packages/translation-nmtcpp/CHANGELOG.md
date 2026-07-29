@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `marian.js`, `addonLogging.js`, `lib/*.js`) and their `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and translation output are unchanged.
+- `marian` catch-blocks now route thrown values through an `errorMessage()` helper. Non-`Error` throwables (strings, plain objects, `null`) previously produced `undefined` in the error `adds` field — or threw a secondary `TypeError` while reading `.message` — and now yield the string itself or `'unknown error'`. Robustness only: error codes and control flow are unchanged, and only the human-readable message text differs.
+- The `TranslationLogger` type and the C++→JS log forwarding moved into `lib/log-forward.js`, which carries no native dependency so the priority→level dispatch is unit-testable. `marian` re-exports `TranslationLogger`, so its public type surface is unchanged.
+
+### Fixed
+
+- `@qvac/translation-nmtcpp/addonLogging` again exposes `setLogger` and `releaseLogger` as ESM **named** imports. The generated CommonJS emit left `cjs-module-lexer` (Node's and Bare's CJS→ESM interop) with an empty named-export surface, so `import { setLogger } from '@qvac/translation-nmtcpp/addonLogging'` failed to link. The default import was unaffected.
 
 ## [8.2.0] - 2026-07-28
 

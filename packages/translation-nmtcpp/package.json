@@ -12,7 +12,7 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy nmtcpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
-    "lint": "npm run lint:js && npm run lint:ts",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
@@ -26,7 +26,7 @@
     "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js",
     "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
+    "test": "npm run lint && npm run test:unit && npm run test:integration",
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
@@ -110,8 +110,18 @@
       "default": "./addonLogging.js"
     },
     "./addonLogging.js": "./addonLogging.js",
-    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js",
-    "./lib/indictrans-model-fetcher": "./lib/indictrans-model-fetcher.js"
+    "./marian": {
+      "types": "./marian.d.ts",
+      "default": "./marian.js"
+    },
+    "./lib/bergamot-model-fetcher": {
+      "types": "./lib/bergamot-model-fetcher.d.ts",
+      "default": "./lib/bergamot-model-fetcher.js"
+    },
+    "./lib/indictrans-model-fetcher": {
+      "types": "./lib/indictrans-model-fetcher.d.ts",
+      "default": "./lib/indictrans-model-fetcher.js"
+    }
   },
   "types": "index.d.ts"
 }

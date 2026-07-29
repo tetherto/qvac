@@ -18,3 +18,25 @@ test('ESM default export resolves to the TranslationNmtcpp class', async (t) => 
   t.ok(ns.default.ModelTypes, 'class statics reachable via default export')
   t.is(ns.default.ModelTypes.Bergamot, 'Bergamot', 'ModelTypes intact')
 })
+
+// Same interop guard for the `./addonLogging` subpath, which the SDK consumes
+// as `import nmtAddonLogging from '@qvac/translation-nmtcpp/addonLogging'`.
+// The NAMED bindings matter independently of the default: cjs-module-lexer has
+// to statically discover `setLogger`/`releaseLogger` for `import { setLogger }`
+// to link at all. A previous emit shape (a bare `module.exports = obj` override
+// with no `exports.X =` statements) left the lexer with an EMPTY named surface,
+// so named imports threw SyntaxError at link time even though the runtime
+// object had both keys.
+test('ESM interop exposes addonLogging default and named bindings', async (t) => {
+  const ns = await import('../../addonLogging.js')
+
+  t.is(typeof ns.default, 'object', 'default export is the addonLogging object')
+  t.is(typeof ns.default.setLogger, 'function', 'default.setLogger is a function')
+  t.is(typeof ns.default.releaseLogger, 'function', 'default.releaseLogger is a function')
+
+  t.is(typeof ns.setLogger, 'function', 'named setLogger binding links')
+  t.is(typeof ns.releaseLogger, 'function', 'named releaseLogger binding links')
+
+  t.is(ns.setLogger, ns.default.setLogger, 'named setLogger === default.setLogger')
+  t.is(ns.releaseLogger, ns.default.releaseLogger, 'named releaseLogger === default.releaseLogger')
+})

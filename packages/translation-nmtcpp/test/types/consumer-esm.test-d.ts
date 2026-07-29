@@ -18,6 +18,16 @@ import TranslationNmtcpp, {
   type TranslationNmtcppConfig,
   type TranslationNmtcppFiles,
 } from "../../index";
+// `nmtAddonLogging` is the SDK's addonLogging import shape:
+//   import nmtAddonLogging from '@qvac/translation-nmtcpp/addonLogging'
+// The named bindings must link too — see
+// test/integration/esm-default-export.test.js for the matching runtime
+// (cjs-module-lexer) guard. Kept in one statement for `import/no-duplicates`.
+import nmtAddonLogging, {
+  setLogger,
+  releaseLogger,
+  type AddonLogging,
+} from "../../addonLogging";
 import type {
   TranslationNmtcppArgs,
   TranslationNmtcppParams,
@@ -80,5 +90,35 @@ const state: InferenceClientState = model.getState();
 void state;
 declare const stats: RuntimeStats;
 void stats.TPS;
+
+// The published instance type must stay structural (see the CJS consumer test
+// for the full rationale) — a mock with the public surface is assignable.
+declare const fakeResponse: ReturnType<TranslationNmtcpp["run"]>;
+const mock: TranslationNmtcpp = {
+  getState: () => ({ configLoaded: true, weightsLoaded: true, destroyed: false }),
+  load: () => Promise.resolve(),
+  run: () => fakeResponse,
+  runBatch: (texts: string[]) => Promise.resolve(texts),
+  unload: () => Promise.resolve(),
+  destroy: () => Promise.resolve(),
+  getActiveBackendName: () => "Vulkan0",
+  getActiveBackendDescription: () => "NVIDIA GeForce RTX 5070",
+};
+void mock;
+
+// addonLogging: default import (SDK shape) and named bindings.
+const logging: AddonLogging = nmtAddonLogging;
+void logging;
+nmtAddonLogging.setLogger((priority: number, message: string) => {
+  void priority;
+  void message;
+});
+nmtAddonLogging.releaseLogger();
+
+setLogger((priority: number, message: string) => {
+  void priority;
+  void message;
+});
+releaseLogger();
 
 export {};

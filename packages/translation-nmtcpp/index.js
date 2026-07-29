@@ -42,7 +42,7 @@ class QvacIndicTransResponse extends infer_base_1.QvacResponse {
 /**
  * TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models
  */
-class TranslationNmtcpp {
+const TranslationNmtcpp = class TranslationNmtcpp {
     /**
      * Available model types for translation
      */
@@ -83,7 +83,7 @@ class TranslationNmtcpp {
         this._config = additionalConfig;
         this._params = params;
         this._pivotConfig = pivotConfig || {};
-        this._job = (0, infer_base_1.createJobHandler)({ cancel: () => this.addon?.cancel() });
+        this._job = (0, infer_base_1.createJobHandler)({ cancel: () => this.addon.cancel() });
         this._run = (0, infer_base_1.exclusiveRunQueue)();
     }
     /**
@@ -345,5 +345,5 @@ class TranslationNmtcpp {
             this._job.output(data);
         }
     }
-}
+};
 module.exports = TranslationNmtcpp;
