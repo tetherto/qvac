@@ -664,18 +664,26 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   return js::JsAsyncTask::run(
       env,
       [addonCppRef, savePauseCheckpoint, liveJobs = std::move(liveJobs)]() {
+        // A snapshotted finetune is cancelled through the same per-id path as
+        // inference: cancelJobs -> cancelById lands on the job's bound
+        // finetune cancel action, which consumes the checkpoint mode armed
+        // here. Querying the finetuner directly ("whichever finetune is
+        // running now") would break the snapshot above — a finetune admitted
+        // after this cancel must never be paused by it.
         auto* llamaModel = tryGetLlamaModel(*addonCppRef);
-        if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
-            llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
-          llamaModel->finetuner().waitUntilFinetuningPauseComplete();
-        } else {
-          // cancelJobs(snapshot), not cancelAllJobs(): the snapshot carries
-          // the real tagged ids under the multi-job scheduler (cancelById
-          // lands on each) and the untagged sentinel under the single-job
-          // one, so "cancel the in-flight work" holds for both — while a job
-          // admitted after the cancel request survives it.
-          addonCppRef->cancelJobs(liveJobs);
+        if (llamaModel != nullptr) {
+          llamaModel->setFinetuneCancelSavesCheckpoint(savePauseCheckpoint);
         }
+        // cancelJobs(snapshot), not cancelAllJobs(): the snapshot carries
+        // the real tagged ids under the multi-job scheduler (cancelById
+        // lands on each) and the untagged sentinel under the single-job
+        // one, so "cancel the in-flight work" holds for both — while a job
+        // admitted after the cancel request survives it. cancelJobs also
+        // returns only after every snapshotted id has left the scheduler
+        // (slot released — for a paused finetune that is after the
+        // post-pause model reload), so a resolved cancel promise means an
+        // immediate follow-up admission is not refused as busy.
+        addonCppRef->cancelJobs(liveJobs);
       });
 }
 JSCATCH

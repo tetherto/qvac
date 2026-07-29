@@ -259,6 +259,15 @@ public:
   LlamaFinetuner& finetuner() { return finetuner_; }
   const LlamaFinetuner& finetuner() const { return finetuner_; }
 
+  /// Arm the checkpoint mode consumed by the next targeted finetune cancel
+  /// (see requestFinetuneCancel): the JS cancel(savePauseCheckpoint) binding
+  /// sets it right before routing its snapshotted job ids through the
+  /// scheduler's per-id cancel, so the mode rides with the targeted cancel
+  /// instead of a direct "pause whichever finetune is running" call.
+  void setFinetuneCancelSavesCheckpoint(bool save) {
+    finetuneCancelSavesCheckpoint_.store(save);
+  }
+
 private:
   friend class LlamaFinetuner;
   // Unit tests reach internals (scheduler, single-prompt context) through this
@@ -289,9 +298,11 @@ private:
       const SeqObserver& onSeqDone = {});
   void cancelImpl() const;
 
-  /// The armed cancel action of a tagged finetune job: pause without a
-  /// checkpoint — the same semantics the JS cancel() binding uses. No-op in
-  /// the standalone test build, where the finetuner is compiled out.
+  /// The armed cancel action of a tagged finetune job: pause, saving a
+  /// checkpoint only when the canceller armed the mode via
+  /// setFinetuneCancelSavesCheckpoint (consumed on read, so unarmed cancels
+  /// pause without a checkpoint). No-op in the standalone test build, where
+  /// the finetuner is compiled out.
   void requestFinetuneCancel();
 
   /// True for a single Prompt that may run on the scheduler concurrently:
@@ -485,11 +496,15 @@ private:
 
   /// Live tagged jobs and each one's cancel action: a concurrent job binds
   /// its scheduler-slot teardown at slot admission (see SeqAssignedObserver),
-  /// a batch group binds one action tearing down all of its live slots, and
-  /// a single-path job (prefill-only, or no scheduler) arms the single-prompt
-  /// context stop on entry. Finetune jobs are never registered — they keep
-  /// the whole-model cancel semantics.
+  /// a batch group binds one action tearing down all of its live slots, a
+  /// single-path job (prefill-only, or no scheduler) arms the single-prompt
+  /// context stop on entry, and a finetune job binds requestFinetuneCancel.
   mutable JobCancelRegistry liveJobs_;
+
+  /// Checkpoint mode for the next targeted finetune cancel, armed by
+  /// setFinetuneCancelSavesCheckpoint and consumed (reset to false) by
+  /// requestFinetuneCancel — see both for the hand-off.
+  std::atomic<bool> finetuneCancelSavesCheckpoint_{false};
 
   /// The complete terminal snapshot a finished concurrent job leaves behind
   /// for consumeJobStats() (see jobTerminalStats). Guarded by

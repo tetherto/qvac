@@ -766,7 +766,11 @@ void LlamaModel::requestFinetuneCancel() {
 #ifndef STANDALONE_TEST_BUILD
   // requestPause is cross-thread safe by design (the JS cancel binding calls
   // it from a detached thread); it no-ops when no finetune is running.
-  finetuner_.requestPause(/*savePauseCheckpoint=*/false);
+  // Consume-on-read: only the cancel that armed the checkpoint mode (the JS
+  // cancel binding, right before it cancels its snapshot) saves a pause
+  // checkpoint; every other entry point (scheduler teardown, whole-model
+  // cancel) keeps the no-checkpoint default.
+  finetuner_.requestPause(finetuneCancelSavesCheckpoint_.exchange(false));
 #endif
 }
 
