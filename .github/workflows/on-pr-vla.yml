@@ -55,6 +55,21 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -97,7 +112,7 @@ jobs:
 
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize]
+    needs: [fork-approval, authorize]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -112,7 +127,7 @@ jobs:
 
   sanity-checks:
     if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, verify-fabric-lockstep, ci-router, label-gate]
+    needs: [authorize, verify-fabric-lockstep, ci-router, label-gate, fork-approval]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -133,7 +148,7 @@ jobs:
     # base. Manual dispatch pointing at a branch lets us validate workflow
     # changes (e.g. the hip-backend ROCm setup) before they land on the base.
     if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')
-    needs: [authorize, ci-router, label-gate]
+    needs: [authorize, ci-router, label-gate, fork-approval]
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -151,7 +166,7 @@ jobs:
       pull-requests: write
       id-token: write # OIDC to pull the GR00T parity model from S3 (cpp-tests-vla)
     if: always() && !cancelled() && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks, ci-router, label-gate]
+    needs: [authorize, sanity-checks, ci-router, label-gate, fork-approval]
     uses: ./.github/workflows/cpp-tests-vla.yml
     secrets: inherit
     with:
@@ -160,7 +175,7 @@ jobs:
 
   ts-checks:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
+    needs: [authorize, fork-approval]
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -191,7 +206,7 @@ jobs:
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, ci-router, label-gate]
+    needs: [authorize, ci-router, label-gate, fork-approval]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -212,7 +227,7 @@ jobs:
 
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
-    needs: [detect-native-changes, sanity-checks, label-gate]
+    needs: [detect-native-changes, sanity-checks, label-gate, fork-approval]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -250,7 +265,7 @@ jobs:
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
-    needs: [authorize, ci-router, sanity-checks, detect-native-changes, prebuild-artifact-reuse, label-gate]
+    needs: [authorize, ci-router, sanity-checks, detect-native-changes, prebuild-artifact-reuse, label-gate, fork-approval]
     uses: ./.github/workflows/prebuilds-vla.yml
     secrets: inherit
     with:
@@ -259,7 +274,7 @@ jobs:
 
   prebuild-artifact-save:
     if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
-    needs: [prebuild, detect-native-changes, label-gate]
+    needs: [prebuild, detect-native-changes, label-gate, fork-approval]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -278,7 +293,7 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   integration-tests:
-    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate]
+    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate, fork-approval]
     if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
@@ -297,7 +312,7 @@ jobs:
       pull-requests: write
       id-token: write
     if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    needs: [authorize, prebuild, prebuild-artifact-reuse, label-gate, ci-router]
+    needs: [authorize, prebuild, prebuild-artifact-reuse, label-gate, ci-router, fork-approval]
     uses: ./.github/workflows/integration-mobile-test-vla.yml
     secrets: inherit
     with:
