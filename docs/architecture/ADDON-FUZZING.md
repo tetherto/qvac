@@ -320,13 +320,26 @@ addons at once.
   dictionaries (PNG/JPEG magic, GGUF magic/version/type tags). Store minimized
   corpora in-repo or in the CI model S3 bucket.
 - **Phase 5 — CI wiring.** Run fuzz targets *bounded* inside the existing
-  `cpp-tests-*` workflows (free per-PR regression coverage). Add a separate
-  scheduled / `workflow_dispatch` fuzzing job with a wall-clock budget per
-  target on a self-hosted `qvac-*` Linux runner, applying the correct
-  `ASAN_OPTIONS` per target (full for non-fabric targets, relaxed for
-  fabric-linked ones) and uploading crash reproducers + updated corpus as
-  artifacts. Keep it off the per-PR critical path and SHA-bound per the fork-CI
-  trust policy.
+  `cpp-tests-*` workflows (free per-PR regression coverage). **Landed for
+  `classification-ggml`:** on **Linux** (matching the `if(NOT WIN32)` ASan gate)
+  `cpp-tests-classification.yml` does a **single** combined configure+build+run
+  — `test:cpp:fuzz:build` then `test:cpp:fuzz:run` — so the CMake configure cost
+  is paid once for both `addon-test` and the bounded fuzz target (sharing
+  FuzzTest's GoogleTest) instead of configuring `build/` and `build-fuzz/`
+  separately. The combined run step sets **no** `ASAN_OPTIONS`: the unit-test
+  runner self-applies the relaxed fabric-boundary options while the fuzz runner
+  keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
+  vcpkg-gtest `test:cpp` path (no fuzzing). It reuses the caller's existing
+  SHA-bound fork gate (no new trust wiring). Still open: FetchContent runs cold
+  each job (Manual Workspace Cleanup wipes `build-fuzz/`), so a future step
+  should cache the pinned FuzzTest sources/build. Then add a separate scheduled
+  / `workflow_dispatch` fuzzing job that builds with `-DFUZZTEST_FUZZING_MODE=ON`
+  and runs `--fuzz_for=<duration>` (coverage-guided, time-boxed) with a
+  wall-clock budget per target on a self-hosted `qvac-*` Linux runner, applying
+  the correct `ASAN_OPTIONS` per target (full for non-fabric targets, relaxed
+  for fabric-linked ones) and uploading crash reproducers + updated corpus as
+  artifacts. Keep continuous fuzzing off the per-PR critical path and SHA-bound
+  per the fork-CI trust policy.
 - **Phase 6 (optional) — OSS-Fuzz onboarding.** Add a `projects/qvac` build
   config (Dockerfile + `build.sh`) so the same targets run continuously with
   automatic regression tracking and bug filing.
@@ -400,6 +413,8 @@ addons at once.
 - `packages/ocr-ggml/addon/src/model-interface/easyocr/gguf_loader.cpp` —
   reference model-file-header target (the kind that may need `LINK_FABRIC`).
 - `.github/workflows/cpp-tests-classification.yml` — reusable per-package C++
-  test workflow (the natural home for the bounded fuzz stage).
+  test workflow; on Linux runs a single combined `test:cpp:fuzz:build` +
+  `test:cpp:fuzz:run` (unit tests + bounded fuzz, one configure), while
+  darwin/win32 keep the `test:cpp` unit-only path.
 - `.cursor/rules/devops/github-actions.mdc` — CI trust policy for fork PRs
   (SHA-bound authorization) that any self-hosted fuzz job must follow.

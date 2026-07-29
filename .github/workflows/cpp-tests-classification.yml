@@ -119,11 +119,16 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install --ignore-scripts
 
+      # Non-Linux: unit tests only (fuzzing is Linux-only — libFuzzer + ASan,
+      # matching the if(NOT WIN32) ASan gate). These use the vcpkg GoogleTest in
+      # the default build/ tree.
       - name: Build C++ tests
+        if: matrix.platform != 'linux'
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:build
 
       - name: Run C++ tests
+        if: matrix.platform != 'linux'
         working-directory: ${{ env.WORKDIR }}
         env:
           # addon-test links AddressSanitizer but dynamically loads the
@@ -136,3 +141,24 @@ jobs:
           # regressions) before spawning the ASan-instrumented addon-test binary.
           ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: npm run test:cpp:run
+
+      # Linux: ONE configure+build of the build-fuzz tree produces both
+      # addon-test and the bounded fuzz target, sharing FuzzTest's GoogleTest, so
+      # we pay the CMake configure cost once instead of configuring build/ +
+      # build-fuzz/ separately. FuzzTest is pulled via CMake FetchContent (pinned
+      # commit), so this needs github.com egress. See docs/architecture/ADDON-FUZZING.md.
+      - name: Build C++ tests + fuzz targets
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:fuzz:build
+
+      # One run step for both. Intentionally NO step-level ASAN_OPTIONS: the
+      # unit-test runner self-applies the relaxed fabric-boundary options for the
+      # fabric-linked addon-test, while the fuzz runner leaves ASan at full
+      # strength (+ LeakSanitizer) for the non-fabric fuzz target. Fuzzing runs
+      # in bounded unit-test mode (each FUZZ_TEST ~1s) for free per-PR coverage;
+      # coverage-guided time-boxed fuzzing (`--fuzz_for`) is a separate scheduled job.
+      - name: Run C++ tests + fuzz targets (bounded)
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:fuzz:run
