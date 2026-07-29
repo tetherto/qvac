@@ -348,7 +348,7 @@ jobs:
 
   merge-guard:
     needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
-    # Always run so the PR still gets a status check even if label-gate is
+    # Always run so the PR still gets a status check even if fork-approval is
     # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
     # ensures this doesn't hold the concurrency group open after a
     # superseding push cancels the run.

@@ -83,9 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     # Fork PR code (checkout + git diff, and downstream npm install / tests)
     # only runs once BOTH gates pass: authorize-pr (draft / same-repo / fork
-    # synchronize safety) AND label-gate (verified applied by a merge/release
-    # team member). Gating on authorize alone let an external org member run
-    # unreviewed fork code without verified — closed here.
+    # synchronize safety) AND fork-approval (fork-ci environment approval).
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}

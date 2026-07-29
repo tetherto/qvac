@@ -226,4 +226,4 @@ Before completing:
 - `.cursor/rules/sdk/commit-and-pr-format.mdc` — title format and `[skiplog]` semantics
 - `.cursor/rules/sdk/sdk-pod-packages.mdc` — packages this skill applies to
 - `docs/gitflow.md` — release flow and "Keep main aligned" rules (still documents fork-first contribution; prefer org-branch heads per this skill until DevOps updates gitflow)
-- Fork CI trust model: `.github/actions/label-gate/README.md` (on default branch / after #3382)
+- Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)

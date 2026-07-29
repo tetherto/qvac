@@ -140,7 +140,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
     # Bounded: prebuild needs the GPR/signing secrets; no repository input, and the
-    # release environment + label-gate keep this to trusted in-repo refs.
+    # release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -293,7 +293,7 @@ jobs:
             groups: '[{"name":"BenchmarkPerf08bQ40F16Bs512","grep":"runBenchmarkPerf08bQ40F16Bs512Test"},{"name":"BenchmarkPerf08bQ40F16Bs1024","grep":"runBenchmarkPerf08bQ40F16Bs1024Test"},{"name":"BenchmarkPerf2bQ40F16Bs512","grep":"runBenchmarkPerf2bQ40F16Bs512Test"},{"name":"BenchmarkPerf2bQ40F16Bs1024","grep":"runBenchmarkPerf2bQ40F16Bs1024Test"}]'
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
-    # the release environment + label-gate keep this to trusted in-repo refs.
+    # the release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}

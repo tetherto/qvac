@@ -231,5 +231,5 @@ Before outputting the PR description, verify:
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - Backmerge skill: `.cursor/skills/qv-sdk-backmerge/SKILL.md`
 - sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
-- GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill (and `label-gate`) until DevOps updates gitflow
-- Fork CI trust model: `.github/actions/label-gate/README.md` (on default branch / after #3382)
+- GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill until DevOps updates gitflow
+- Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)
