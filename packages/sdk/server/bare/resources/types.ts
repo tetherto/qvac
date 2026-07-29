@@ -1,87 +1,21 @@
-export type ResourceScope = 'system' | 'process' | 'device' | 'budget' | 'shared-system'
+import type {
+  GraphicsDriver,
+  SystemResourceCapabilities,
+  SystemResourceSample
+} from '@/schemas/system-resources'
 
-export interface ResourceProvenance {
-  source: string
-  scope?: ResourceScope
-}
-
-export type ResourceMetric<T> =
-  | {
-      status: 'supported'
-      value: T
-      provenance: ResourceProvenance
-    }
-  | {
-      status: 'unavailable' | 'unverified' | 'failed'
-      reason?: string
-    }
-
-export type GraphicsDriver =
-  | 'vulkan'
-  | 'opencl'
-  | 'opengl'
-  | 'webgpu'
-  | 'metal'
-  | 'direct3d11'
-  | 'direct3d12'
-  | 'cuda'
-  | 'levelZero'
-  | 'rocm'
-
-export type GraphicsDriverCapabilities = Record<GraphicsDriver, ResourceMetric<boolean>>
-
-export interface CPUResourceCapabilities {
-  name: ResourceMetric<string>
-  vendor: ResourceMetric<string>
-  architecture: ResourceMetric<number>
-  physicalCores: ResourceMetric<number>
-  logicalCores: ResourceMetric<number>
-  performanceCores: ResourceMetric<number>
-  efficiencyCores: ResourceMetric<number>
-  frequencyHz: ResourceMetric<number>
-  cacheLineBytes: ResourceMetric<number>
-}
-
-export interface GPUResourceCapabilities {
-  id: string
-  name: ResourceMetric<string>
-  vendor: ResourceMetric<string>
-  type: ResourceMetric<number>
-  driverName: ResourceMetric<string>
-  driverVersion: ResourceMetric<string>
-  drivers: GraphicsDriverCapabilities
-  unifiedMemory: ResourceMetric<boolean>
-  memoryTotalBytes: ResourceMetric<number>
-}
-
-export interface SystemResourceCapabilities {
-  cpu: ResourceMetric<CPUResourceCapabilities>
-  memory: {
-    totalBytes: ResourceMetric<number>
-  }
-  gpus: ResourceMetric<GPUResourceCapabilities[]>
-}
-
-export interface GPUResourceSample {
-  id: string
-  compute: ResourceMetric<number>
-  encode: ResourceMetric<number>
-  decode: ResourceMetric<number>
-  memoryUsedBytes: ResourceMetric<number>
-  memoryTotalBytes: ResourceMetric<number>
-  powerWatts: ResourceMetric<number>
-  temperatureCelsius: ResourceMetric<number>
-}
-
-export interface SystemResourceSample {
-  sampledAt: number
-  cpu: ResourceMetric<number>
-  memory: {
-    usedBytes: ResourceMetric<number>
-    totalBytes: ResourceMetric<number>
-  }
-  gpus: ResourceMetric<GPUResourceSample[]>
-}
+export type {
+  CPUResourceCapabilities,
+  GPUResourceCapabilities,
+  GPUResourceSample,
+  GraphicsDriver,
+  GraphicsDriverCapabilities,
+  ResourceMetric,
+  ResourceProvenance,
+  ResourceScope,
+  SystemResourceCapabilities,
+  SystemResourceSample
+} from '@/schemas/system-resources'
 
 export interface NativeCPUCapabilities {
   name: string | null

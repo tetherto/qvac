@@ -65,6 +65,7 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { MobileDownloadResilienceExecutor } from './executors/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/delegated-inference-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -609,6 +610,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
     new PluginExecutor(resources)
