@@ -227,7 +227,7 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
   bool hasTranscriptOutput = false;
 
   for (const auto& output : outputs) {
-    if (const auto* vadState = std::any_cast<VadStateUpdate>(&output);
+    if (const auto* vadState = std::any_cast<VadStateUpdate>(&output.second);
         vadState != nullptr) {
       hasVadState = true;
       EXPECT_FALSE(vadState->speaking);
@@ -235,7 +235,7 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
     }
 
     if (const auto* transcripts =
-            std::any_cast<std::vector<Transcript>>(&output);
+            std::any_cast<std::vector<Transcript>>(&output.second);
         transcripts != nullptr) {
       hasTranscriptOutput = true;
     }
