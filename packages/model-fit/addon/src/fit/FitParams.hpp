@@ -11,11 +11,13 @@ namespace model_fit {
 /// llama default so `llama_params_fit` is free to choose the layer count.
 inline constexpr int32_t GPU_LAYERS_AUTO = std::numeric_limits<int32_t>::min();
 
-/// Floor applied when the caller leaves `nCtxMin` at 0. The fitter reduces the
-/// context only when `nCtx == 0`, and reducing towards a lower bound of zero
-/// would let it return a context no model can run with, so a positive default
-/// is required rather than merely nice to have.
-inline constexpr uint32_t DEFAULT_N_CTX_MIN = 512;
+/// Floor applied when the caller leaves `nCtxMin` at 0. Reducing towards a lower
+/// bound of zero would let the fitter return a context no model can run with.
+///
+/// Matches upstream's `common_params::fit_params_min_ctx` default, so a caller
+/// coming from `llama-fit-params` gets the same behaviour without passing
+/// anything.
+inline constexpr uint32_t DEFAULT_N_CTX_MIN = 4096;
 
 /// Inputs to a single memory-fit preflight. Mirrors the knobs the upstream
 /// `llama-fit-params` CLI exposes, restricted to the fields the SDK needs.

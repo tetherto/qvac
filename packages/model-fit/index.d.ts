@@ -12,7 +12,7 @@ export interface FitConfig {
    * any other value is a hard constraint and is returned unchanged.
    */
   nCtx?: number
-  /** Lower bound when shrinking the context. 0 (default) means 512. */
+  /** Lower bound when shrinking the context. 0 (default) means 4096. */
   nCtxMin?: number
   /** Logical batch size. 0 = llama default. */
   nBatch?: number

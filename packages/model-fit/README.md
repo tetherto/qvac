@@ -25,7 +25,7 @@ const { fitParams, FIT_STATUS } = require('@qvac/model-fit')
 const plan = fitParams({
   modelPath: '/abs/path/model.gguf',
   nCtx: 4096,        // 0 => let the fitter choose (down to nCtxMin)
-  nCtxMin: 512,      // lower bound when reducing context to save memory
+  nCtxMin: 4096,     // lower bound when reducing context to save memory
   marginMiB: 1024,   // free headroom to leave on every device
   backendsDir: '…'   // where the packaged ggml backends live (see below)
   // nBatch, nUbatch, nGpuLayers are optional
@@ -79,7 +79,8 @@ reference counting.
   fitter fits the rest around it; omit it to let the fitter choose.
 - Context is the documented exception: it is reduced **iff** `nCtx == 0`. A
   concrete `nCtx` is treated as a hard requirement and comes back unchanged.
-- `nCtxMin` defaults to **512** when left at 0. Reducing towards a floor of zero
+- `nCtxMin` defaults to **4096** when left at 0, matching upstream's
+  `common_params::fit_params_min_ctx`. Reducing towards a floor of zero
   could otherwise return a context nothing can run with.
 - A `SUCCESS` always reports a concrete `nCtx`. When the fitter needs no
   reduction it leaves the context at the 0 it was handed — llama's encoding for

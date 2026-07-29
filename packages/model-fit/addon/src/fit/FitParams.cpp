@@ -62,6 +62,10 @@ public:
     }
 
     llama_backend_init();
+    // Upstream's tools/fit-params calls this immediately after backend init.
+    // DISABLED is the llama default and keeps NUMA behaviour explicit rather
+    // than inherited.
+    llama_numa_init(GGML_NUMA_STRATEGY_DISABLED);
   }
 
   ~BackendScope() { llama_backend_free(); }
