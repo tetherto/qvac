@@ -9,6 +9,7 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -173,6 +174,16 @@ resources.define('ocr', {
   // and downloaded on-device, making the first OCR test cold-start time out on
   // mobile). Mirrors the whisper VAD companion-download pattern.
   config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
+})
+
+// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
+// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
+// the DBNet detector from the recognizer src. Referencing the detector here
+// would bypass the derivation path under test, so it downloads at loadModel
+// time instead of being pre-cached (both DocTR GGUFs are small).
+resources.define('doctr', {
+  constant: OCR_DOCTR,
+  type: 'ggml-ocr'
 })
 
 resources.define('vla', {

@@ -497,7 +497,7 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
-  _releaseOnStreamEnd (stream, core, blobs, rangeDownload, blockStart, blockEnd) {
+  _releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd) {
     let released = false
 
     // 'close' also covers a destroyed or errored stream; on 'end' alone a
@@ -505,28 +505,33 @@ class QVACRegistryClient extends ReadyResource {
     const release = () => {
       if (released) return
       released = true
-      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
-        .catch(e => this.logger.warn('Error releasing blob resources', { error: e.message }))
+      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd).catch((e) =>
+        this.logger.warn('Error releasing blob resources', { error: e.message })
+      )
     }
 
     stream.once('end', release)
     stream.once('close', release)
   }
 
-  async _releaseDownload (core, blobs, rangeDownload, blockStart, blockEnd) {
+  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
     // Stop replication before clearing to prevent blocks from being refetched.
     if (rangeDownload) rangeDownload.destroy()
 
-    if (core && blockStart != null) {
+    if (core && blockStart !== undefined) {
       await this._clearBlobBlocks(core, blockStart, blockEnd)
     }
     if (blobs) {
-      try { await blobs.close() } catch (e) {
+      try {
+        await blobs.close()
+      } catch (e) {
         this.logger.warn('Error closing blob instance', { error: e.message })
       }
     }
     if (core) {
-      try { await core.close() } catch (e) {
+      try {
+        await core.close()
+      } catch (e) {
         this.logger.warn('Error closing blob core', { error: e.message })
       }
     }
@@ -534,7 +539,7 @@ class QVACRegistryClient extends ReadyResource {
     this.logger.debug('Blob resources released')
   }
 
-  async _clearBlobBlocks (core, start, end) {
+  async _clearBlobBlocks(core, start, end) {
     try {
       const cleared = await core.clear(start, end, { diff: true })
       await core.compact()
