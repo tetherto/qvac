@@ -1,3 +1,4 @@
+#include <any>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -56,6 +57,86 @@ TEST(FinetunePendingPauseTest, PauseBeforeCheckpointStatePublicationIsNotLost) {
   LlamaFinetunerTestPeer::publishCheckpointState(finetuner, laterState);
   EXPECT_FALSE(laterState->pauseRequested.load())
       << "a consumed pending pause must not bleed into a later finetune";
+}
+
+// A cancel that aborts a tagged finetune before it ever enters finetune()
+// (whole-model cancel parked between the scheduler dequeue and bind()) leaves
+// its latched pause behind: every discard of the latch lives inside
+// finetune(), which the early PAUSED return never reaches. The next finetune
+// inherits it at publication and pauses although nobody cancelled it.
+TEST(
+    FinetunePendingPauseTest,
+    PreBindParkedCancelMustNotLeakPauseIntoNextFinetune) {
+  LlamaModel model = makeUnloadedModel();
+  LlamaFinetuner& finetuner = model.finetuner();
+  constexpr qvac_lib_inference_addon_cpp::JobId jobA = 41;
+
+  // Scheduler dequeue announcement: registry entry exists, unarmed.
+  model.jobStarting(jobA);
+  // Whole-model cancel while A sits between dequeue and its engine slot:
+  // parks on the unarmed entry ...
+  model.cancel();
+  // ... and latches the pause in the finetuner (in production the armed
+  // requestFinetuneCancel forwards it inside A's open cancellation window;
+  // the standalone build compiles that forward out, so latch it directly).
+  EXPECT_TRUE(finetuner.requestPause(/*savePauseCheckpoint=*/false));
+
+  LlamaModel::Prompt prompt;
+  prompt.finetuningParams.emplace();
+  const std::any result = model.process(std::any(prompt), jobA);
+  const auto& terminal = std::any_cast<const FinetuneTerminalResult&>(result);
+  EXPECT_EQ(terminal.status, "PAUSED")
+      << "the parked cancel must abort the finetune before training";
+
+  // Uncancelled finetune B publishes its checkpoint state.
+  auto stateB =
+      std::make_shared<llama_finetuning_helpers::TrainingCheckpointState>();
+  LlamaFinetunerTestPeer::publishCheckpointState(finetuner, stateB);
+  EXPECT_FALSE(stateB->pauseRequested.load())
+      << "a pause latched for a finetune that never trained leaked into the "
+         "next finetune";
+}
+
+// Same leak when the job does enter finetune() but setup throws before the
+// try whose catch discards the latch (model validation, cache saving, the
+// initial reload, the null-context check). The standalone finetune stub
+// throws at exactly that depth, standing in for those failures.
+TEST(
+    FinetunePendingPauseTest,
+    SetupFailureBeforeTrainingMustDiscardPendingPause) {
+  LlamaModel model = makeUnloadedModel();
+  LlamaFinetuner& finetuner = model.finetuner();
+  constexpr qvac_lib_inference_addon_cpp::JobId jobA = 42;
+
+  model.jobStarting(jobA);
+  // Cancel latched during A's setup window.
+  EXPECT_TRUE(finetuner.requestPause(/*savePauseCheckpoint=*/false));
+
+  LlamaModel::Prompt prompt;
+  prompt.finetuningParams.emplace();
+  EXPECT_ANY_THROW(model.process(std::any(prompt), jobA));
+
+  auto stateB =
+      std::make_shared<llama_finetuning_helpers::TrainingCheckpointState>();
+  LlamaFinetunerTestPeer::publishCheckpointState(finetuner, stateB);
+  EXPECT_FALSE(stateB->pauseRequested.load())
+      << "a pause latched for a finetune whose setup failed leaked into the "
+         "next finetune";
+}
+
+// The checkpoint-save mode a JS cancel(savePauseCheckpoint) arms has the same
+// ownership problem: armed with no live finetune to consume it, it must not
+// linger for a later unrelated finetune cancellation to inherit.
+TEST(
+    FinetuneCancelCheckpointModeTest,
+    ArmingWithoutLiveFinetuneMustNotPersist) {
+  LlamaModel model = makeUnloadedModel();
+
+  model.setFinetuneCancelSavesCheckpoint(true);
+
+  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "a checkpoint mode armed while no finetune is live has no owner and "
+         "must not outlive the cancel that armed it";
 }
 
 TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {

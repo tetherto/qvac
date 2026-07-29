@@ -60,6 +60,16 @@ public:
     model.beginFinetuneJob(id);
   }
 
+  static void endFinetuneJob(LlamaModel& model) {
+    model.closeFinetuneCancellationWindow();
+  }
+
+  /// Whether a checkpoint-save mode armed by setFinetuneCancelSavesCheckpoint
+  /// is still waiting for a finetune cancel to consume it.
+  static bool finetuneCancelCheckpointModeArmed(const LlamaModel& model) {
+    return model.finetuneCancelSavesCheckpoint_.load();
+  }
+
   static std::shared_mutex& stateMutex(LlamaModel& model) {
     return model.stateMtx_;
   }
