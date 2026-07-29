@@ -684,23 +684,39 @@ class LlmLlamacpp {
       try {
         await this.pause()
       } catch (_) {}
-      if (this._finetuneJob.active) {
-        this._finetuneJob.fail(new Error('Model was unloaded'))
+      // QvacResponse settlement emits to user listeners synchronously before
+      // resolving/rejecting its finish promise, so a throwing listener unwinds
+      // out of failed()/ended(). Isolate each settlement so one bad listener
+      // cannot strand the remaining sinks or abort unload.
+      const settleSafely = (fail) => {
+        try {
+          fail()
+        } catch (err) {
+          this.logger?.warn?.('Response listener threw during unload:', err?.message || err)
+        }
       }
-      /// Settle every in-flight concurrent response before dropping it, or its
-      /// awaiting run() caller would hang forever.
-      for (const sink of this._jobSinks.values()) {
-        sink.failed(new Error('Model was unloaded'))
+      try {
+        if (this._finetuneJob.active) {
+          settleSafely(() => this._finetuneJob.fail(new Error('Model was unloaded')))
+        }
+        /// Settle every in-flight concurrent response before dropping it, or its
+        /// awaiting run() caller would hang forever.
+        for (const sink of this._jobSinks.values()) {
+          settleSafely(() => sink.failed(new Error('Model was unloaded')))
+        }
+        settleSafely(() => this._batchHandler.failAll(new Error('Model was unloaded')))
+      } finally {
+        // Native cleanup is unconditional: whatever settlement does, the
+        // addon must be released and the instance left cleanly unloaded.
+        this._jobSinks.clear()
+        if (this.addon) {
+          await this.addon.unload()
+          // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
+          // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
+          this.addon = null
+        }
+        this.state.configLoaded = false
       }
-      this._jobSinks.clear()
-      this._batchHandler.failAll(new Error('Model was unloaded'))
-      if (this.addon) {
-        await this.addon.unload()
-        // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-        // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
-        this.addon = null
-      }
-      this.state.configLoaded = false
     })
   }
 
