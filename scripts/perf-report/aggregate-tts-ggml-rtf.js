@@ -23,7 +23,10 @@ const fs = require('fs')
 const path = require('path')
 
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
-const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic3']
+const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic2', 'supertonic3']
+const VALID_BACKENDS = ['cpu', 'gpu', 'vulkan', 'metal', 'opencl', 'mobile-accelerated']
+const VALID_VARIANTS = ['q4', 'q4_0', 'q8_0', 'f16', 'f32', 'english', 'mtl']
+const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'pl', 'tr', 'sv', 'da', 'fi', 'no', 'el', 'ms', 'sw', 'ar', 'ko']
 const NOISY_STDDEV_RATIO = 0.15
 const DEFAULT_ENHANCER_VARIANT = 'f16'
 
@@ -139,33 +142,47 @@ function isCanonicalReport (report) {
 }
 
 function parseCanonicalTestLabel (testLabel) {
-  // The benchmark file builds `testLabel` as
-  // `[${ep.toUpperCase()}] ${engine} ${variant} ${backend}` for RTF runs and
-  // the streaming benchmark mirrors that with a `streaming ` prefix. When the
-  // LavaSR axes are on, up to two extra tokens are appended: `lavasr` for the
-  // enhancer and `denoise` for the denoiser (enhancer first). Both trailing
-  // tokens are optional so existing 5-token labels parse unchanged, and the
-  // distinct tokens keep the two axes unambiguous when both are present.
+  // Labels come from both benchmarks and integration smoke tests, so the tail
+  // is semantic rather than positional. Benchmark labels carry variant/backend,
+  // multilingual integration labels may carry variant/language or just
+  // language, and smoke labels carry a run-type token. LavaSR axes can follow
+  // any of those shapes.
   // Example labels observed in mobile CI logs:
   //   `[CPU] chatterbox q4 cpu`
+  //   `[CPU] chatterbox mtl es`
+  //   `[GPU] chatterbox gpu-smoke`
   //   `[CPU] streaming chatterbox q4 cpu`
   //   `[GPU] supertonic q4 vulkan`
   //   `[GPU] supertonic q4 vulkan lavasr`
   //   `[GPU] supertonic q4 vulkan lavasr denoise`
   //   `[GPU] supertonic q4 vulkan denoise`
-  const m = String(testLabel || '').match(
-    /^\[(CPU|GPU)\]\s*(streaming\s+)?(\S+)\s+(\S+)\s+(\S+?)((?:\s+\S+){0,2})$/
+  const m = String(testLabel || '').trim().match(
+    /^\[(CPU|GPU)\]\s+(streaming\s+)?(\S+)(?:\s+(.+))?$/
   )
   if (!m) return null
-  const lavasrTokens = (m[6] || '').trim().split(/\s+/).filter(Boolean)
+
+  const tokens = (m[4] || '').trim().split(/\s+/).filter(Boolean)
+  const takeToken = predicate => {
+    const index = tokens.findIndex(predicate)
+    return index === -1 ? null : tokens.splice(index, 1)[0]
+  }
+  const enhancer = takeToken(token => token === 'lavasr')
+  const denoiser = takeToken(token => token === 'denoise')
+  const smokeTag = takeToken(token => token === 'gpu-smoke' || token === 'cpu-smoke')
+  const backendHint = takeToken(token => VALID_BACKENDS.includes(token.toLowerCase()))
+  const variant = takeToken(token => VALID_VARIANTS.includes(token.toLowerCase()))
+  const language = takeToken(token => VALID_LANGUAGES.includes(token.toLowerCase()))
+
   return {
     useGPU: m[1] === 'GPU',
     streaming: Boolean(m[2]),
     engine: m[3],
-    variant: m[4],
-    backendHint: m[5],
-    enhancer: lavasrTokens.includes('lavasr') ? 'lavasr' : 'none',
-    denoiser: lavasrTokens.includes('denoise') ? 'lavasr' : 'none'
+    variant: variant || tokens.shift() || null,
+    backendHint,
+    language,
+    runType: smokeTag ? 'smoke' : 'benchmark',
+    enhancer: enhancer ? 'lavasr' : 'none',
+    denoiser: denoiser ? 'lavasr' : 'none'
   }
 }
 
@@ -198,7 +215,9 @@ function expandCanonicalReport (report, sourceFile) {
       streaming.push(normalizeStreamingRecord({
         engine: parsed.engine,
         modelType: parsed.engine,
-        variant: parsed.variant,
+        variant: parsed.variant || 'q4',
+        language: parsed.language,
+        runType: parsed.runType,
         enhancer,
         enhancerVariant,
         denoiser,
@@ -221,7 +240,9 @@ function expandCanonicalReport (report, sourceFile) {
       records.push(normalizeMobileRecord({
         engine: parsed.engine,
         modelType: parsed.engine,
-        variant: parsed.variant,
+        variant: parsed.variant || 'q4',
+        language: parsed.language,
+        runType: parsed.runType,
         enhancer,
         enhancerVariant,
         denoiser,
@@ -232,7 +253,11 @@ function expandCanonicalReport (report, sourceFile) {
         runnerLabel: device.runner,
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
-        label: `${platformFamily}-${parsed.variant}`,
+        label: [
+          `${platformFamily}-${parsed.variant || 'q4'}`,
+          parsed.language ? `lang=${parsed.language}` : '',
+          parsed.runType === 'smoke' ? 'smoke' : ''
+        ].filter(Boolean).join(', '),
         gpuModel: device.gpu || null,
         summary: {
           rtf: {
@@ -319,6 +344,8 @@ function normalizeDesktopRecord (report, sourceFile) {
     platformFamily: platformName || 'unknown',
     engine: report.engine || 'unknown',
     variant: (report.model && report.model.variant) || (report.requested && report.requested.variant) || 'q4',
+    language: report.language || (report.requested && report.requested.language) || null,
+    runType: report.runType || 'benchmark',
     enhancer: (report.model && report.model.enhancer) || (report.requested && report.requested.enhancer) || (report.config && report.config.enhancer) || 'none',
     enhancerVariant: (report.model && report.model.enhancerVariant) || (report.requested && report.requested.enhancerVariant) || (report.config && report.config.enhancerVariant) || DEFAULT_ENHANCER_VARIANT,
     denoiser: (report.model && report.model.denoiser) || (report.requested && report.requested.denoiser) || (report.config && report.config.denoiser) || 'none',
@@ -367,6 +394,8 @@ function normalizeMobileRecord (record, sourceFile) {
     platformFamily: platformFamily || 'unknown',
     engine: record.engine || record.modelType || 'unknown',
     variant: record.variant || 'q4',
+    language: record.language || null,
+    runType: record.runType || 'benchmark',
     enhancer: record.enhancer || 'none',
     enhancerVariant: record.enhancerVariant || DEFAULT_ENHANCER_VARIANT,
     denoiser: record.denoiser || 'none',
@@ -408,6 +437,8 @@ function normalizeManualRecord (record, sourceFile) {
     platformFamily: platformFamily || 'unknown',
     engine: record.engine || record.model || 'unknown',
     variant: record.variant || 'q4',
+    language: record.language || null,
+    runType: record.runType || 'benchmark',
     // Read the LavaSR axes from a `model` block first, then top-level, mirroring
     // the desktop reader, so a hand-authored manual file that nests them under
     // `model` (like LAVASR_TEMPLATE.json.example) isn't silently dropped to none.
@@ -462,6 +493,8 @@ function normalizeStreamingRecord (report, sourceFile, source) {
     platformFamily: platformName || 'unknown',
     engine: report.engine || report.modelType || 'unknown',
     variant: (report.model && report.model.variant) || report.variant || 'q4',
+    language: report.language || (report.requested && report.requested.language) || null,
+    runType: report.runType || 'benchmark',
     enhancer: (report.model && report.model.enhancer) || report.enhancer || 'none',
     enhancerVariant: (report.model && report.model.enhancerVariant) || report.enhancerVariant || DEFAULT_ENHANCER_VARIANT,
     denoiser: (report.model && report.model.denoiser) || report.denoiser || 'none',
@@ -567,6 +600,8 @@ function dedupeRecords (records) {
       record.platform,
       record.engine,
       record.variant,
+      record.language || '',
+      record.runType || 'benchmark',
       record.enhancer || 'none',
       record.enhancerVariant || DEFAULT_ENHANCER_VARIANT,
       record.denoiser || 'none',
@@ -647,8 +682,8 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean WER | Mean CER | Quality Model | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------|----------|---------------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | Language | Run Type | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean WER | Mean CER | Quality Model | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|----------|----------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------|----------|---------------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -657,6 +692,8 @@ function renderMarkdown (records, streamingRecords) {
       r.platform,
       r.engine,
       r.variant,
+      r.language || '-',
+      r.runType || 'benchmark',
       formatEnhancerCell(r.enhancer, r.enhancerVariant),
       r.denoiser || 'none',
       r.gpu,
@@ -688,8 +725,8 @@ function renderMarkdown (records, streamingRecords) {
     lines.push('')
     lines.push('`TTFA` = Time-to-First-Audio from `run()` call. `Inter-chunk` = gap between successive `onUpdate` deliveries.')
     lines.push('')
-    lines.push('| Source | Device | Platform | Engine | Variant | Enhancer | Denoiser | GPU | Backend | Label | TTFA Mean (ms) | TTFA P50 | TTFA P95 | Inter-chunk Mean (ms) | Inter-chunk P95 | Chunks/run | Total Wall (ms) | Run |')
-    lines.push('|--------|--------|----------|--------|---------|----------|----------|-----|---------|-------|----------------|----------|----------|-----------------------|-----------------|------------|-----------------|-----|')
+    lines.push('| Source | Device | Platform | Engine | Variant | Language | Run Type | Enhancer | Denoiser | GPU | Backend | Label | TTFA Mean (ms) | TTFA P50 | TTFA P95 | Inter-chunk Mean (ms) | Inter-chunk P95 | Chunks/run | Total Wall (ms) | Run |')
+    lines.push('|--------|--------|----------|--------|---------|----------|----------|----------|----------|-----|---------|-------|----------------|----------|----------|-----------------------|-----------------|------------|-----------------|-----|')
     for (const r of streamingRecords) {
       lines.push('| ' + [
         r.source,
@@ -697,6 +734,8 @@ function renderMarkdown (records, streamingRecords) {
         r.platform,
         r.engine,
         r.variant,
+        r.language || '-',
+        r.runType || 'benchmark',
         formatEnhancerCell(r.enhancer, r.enhancerVariant),
         r.denoiser || 'none',
         r.gpu,
@@ -766,6 +805,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  parseCanonicalTestLabel,
   normalizeDesktopRecord,
   normalizeMobileRecord,
   normalizeManualRecord,

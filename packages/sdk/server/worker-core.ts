@@ -15,6 +15,11 @@ import {
 import { clearAllAddonLoggers, getServerLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from '@/logging'
 import { clearPlugins } from '@/server/plugins'
 import { acquireWorkerLock, releaseWorkerLock } from '@/server/utils/worker-lock'
+import { nativeResourceCollectorDependencies } from '@/server/bare/resources/native'
+import {
+  destroyWorkerResourceCollector,
+  initializeWorkerResourceCollector
+} from '@/server/bare/resources/worker-collector'
 
 let coreInitialized = false
 let rpcInitialized = false
@@ -69,6 +74,7 @@ export function initializeWorkerCore(): { hasRPCConfig: boolean } {
   const { hasRPCConfig } = initEnv()
 
   acquireWorkerLock()
+  initializeWorkerResourceCollector(nativeResourceCollectorDependencies)
   setupShutdownHandlers()
 
   coreInitialized = true
@@ -144,6 +150,7 @@ export type BareDirectShutdownReason =
 async function runCleanup(): Promise<void> {
   if (cleanupRan) return
   cleanupRan = true
+  destroyWorkerResourceCollector()
   clearRegistries()
   await Promise.allSettled([
     destroySwarm(),

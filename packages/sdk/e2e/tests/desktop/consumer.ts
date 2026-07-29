@@ -9,6 +9,7 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -17,6 +18,8 @@ import {
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -173,6 +176,16 @@ resources.define('ocr', {
   config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
 })
 
+// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
+// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
+// the DBNet detector from the recognizer src. Referencing the detector here
+// would bypass the derivation path under test, so it downloads at loadModel
+// time instead of being pre-cached (both DocTR GGUFs are small).
+resources.define('doctr', {
+  constant: OCR_DOCTR,
+  type: 'ggml-ocr'
+})
+
 resources.define('vla', {
   constant: SMOLVLA_LIBERO_VISION_Q8,
   type: 'ggml-vla',
@@ -279,6 +292,33 @@ resources.define('tts-chatterbox', {
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
     referenceAudioSrc: path.resolve(process.cwd(), 'assets/audio', 'transcription-short-wav.wav')
+  }
+})
+
+resources.define('tts-parler', {
+  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
+  }
+})
+
+resources.define('tts-parler-indic', {
+  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    normalizeNumbers: true
   }
 })
 
