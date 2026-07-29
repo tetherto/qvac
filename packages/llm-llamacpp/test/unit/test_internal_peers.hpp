@@ -59,6 +59,10 @@ public:
       LlamaModel& model, qvac_lib_inference_addon_cpp::JobId id) {
     model.beginFinetuneJob(id);
   }
+
+  static std::shared_mutex& stateMutex(LlamaModel& model) {
+    return model.stateMtx_;
+  }
 };
 
 class LlamaFinetunerTestPeer {

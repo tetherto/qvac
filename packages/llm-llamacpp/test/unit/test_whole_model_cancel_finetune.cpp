@@ -1,4 +1,7 @@
+#include <latch>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 
@@ -40,4 +43,28 @@ TEST(
          "its already-armed registry entry, so a running finetune trains to "
          "completion and native teardown blocks on the worker join for the "
          "remaining training duration";
+}
+
+TEST(
+    WholeModelCancelFinetuneTest, WholeModelCancelReachesFinetuneDuringReload) {
+  LlamaModel model = makeUnloadedModel();
+  constexpr qvac_lib_inference_addon_cpp::JobId finetuneId = 1;
+  LlamaModelTestPeer::setActiveFinetuneJob(model, finetuneId);
+  const unsigned before = LlamaModelTestPeer::finetuneCancelRequests(model);
+  std::latch reloadLocked{1};
+  std::latch releaseReload{1};
+  std::thread reload([&] {
+    std::unique_lock lock(LlamaModelTestPeer::stateMutex(model));
+    reloadLocked.count_down();
+    releaseReload.wait();
+  });
+  reloadLocked.wait();
+
+  model.cancel();
+  const unsigned after = LlamaModelTestPeer::finetuneCancelRequests(model);
+
+  releaseReload.count_down();
+  reload.join();
+  EXPECT_GE(after, before + 1U)
+      << "teardown cancellation was dropped while reload owned stateMtx_";
 }
