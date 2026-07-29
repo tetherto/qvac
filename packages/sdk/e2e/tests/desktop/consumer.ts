@@ -79,6 +79,7 @@ import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-i
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
@@ -595,6 +596,7 @@ export const executor = createExecutor({
     new NodeDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),

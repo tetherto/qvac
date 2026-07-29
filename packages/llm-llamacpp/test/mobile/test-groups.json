@@ -1,6 +1,7 @@
 {
   "ios": {
     "finetuning": ["runFinetuningPauseResumeTest"],
+    "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
@@ -37,6 +38,9 @@
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
+    ],
+    "funcShardF": [
+      "runFinetuningArchsTest"
     ],
     "funcShardB": [
       "runToolsCompactTest",
