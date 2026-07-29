@@ -72,6 +72,22 @@ test('createJobHandler - end forwards stats before ending', async (t) => {
   t.alike(response.stats, stats, 'response.stats should be set')
 })
 
+test('createJobHandler - throwing stats listener cannot strand end', async (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.on('stats', () => {
+    throw new Error('stats listener boom')
+  })
+
+  t.exception(() => job.end({ TPS: 42 }), /stats listener boom/)
+  const outcome = await Promise.race([
+    response.await(),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.alike(outcome, [], 'await resolves after stats delivery throws')
+})
+
 test('createJobHandler - end with null stats does not call updateStats', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
