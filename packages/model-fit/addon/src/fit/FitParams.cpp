@@ -29,7 +29,8 @@ namespace {
 /// overlap, which is what makes the unconditional init/free below safe without
 /// the reference counting @qvac/llm-llamacpp needs (it keeps many models alive
 /// concurrently and therefore cannot serialise).
-std::mutex g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+std::mutex
+    g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /// Owns the ggml/llama backend lifecycle for one fit call.
 ///
@@ -52,9 +53,8 @@ public:
     if (!backendsDir.empty()) {
       std::filesystem::path backendsPath(backendsDir);
 #ifdef BACKENDS_SUBDIR
-      backendsPath =
-          (backendsPath / std::filesystem::path(BACKENDS_SUBDIR))
-              .lexically_normal();
+      backendsPath = (backendsPath / std::filesystem::path(BACKENDS_SUBDIR))
+                         .lexically_normal();
 #endif
       ggml_backend_load_all_from_path(backendsPath.string().c_str());
     } else if (ggml_backend_reg_count() == 0) {

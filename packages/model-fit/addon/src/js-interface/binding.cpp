@@ -25,7 +25,8 @@ constexpr double INT32_LIMIT = 2147483647.0;
 constexpr double INT32_MIN_LIMIT = -2147483648.0;
 
 /// Rejects fractions and out-of-range values before they are narrowed to
-/// uint32_t/int32_t, where a fraction truncates and an out-of-range value wraps.
+/// uint32_t/int32_t, where a fraction truncates and an out-of-range value
+/// wraps.
 ///
 /// These checks duplicate `index.js` deliberately: `./binding.js` is a public
 /// export, so a caller can reach `paramsFit` without ever passing through the

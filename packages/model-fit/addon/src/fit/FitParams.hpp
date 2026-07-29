@@ -1,15 +1,14 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <vector>
 
 namespace model_fit {
 
-
-/// Floor applied when the caller leaves `nCtxMin` at 0. Reducing towards a lower
-/// bound of zero would let the fitter return a context no model can run with.
+/// Floor applied when the caller leaves `nCtxMin` at 0. Reducing towards a
+/// lower bound of zero would let the fitter return a context no model can run
+/// with.
 ///
 /// Matches upstream's `common_params::fit_params_min_ctx` default, so a caller
 /// coming from `llama-fit-params` gets the same behaviour without passing
@@ -73,9 +72,10 @@ struct FitResult {
   /// nonzero value as evidence that any device was found.
   size_t maxDevices = 0;
 
-  /// Devices actually registered after backend init (`ggml_backend_dev_count()`).
-  /// Zero means no backend registered at all, which is reported as ERROR: the
-  /// fitter would otherwise "succeed" against a machine it cannot see.
+  /// Devices actually registered after backend init
+  /// (`ggml_backend_dev_count()`). Zero means no backend registered at all,
+  /// which is reported as ERROR: the fitter would otherwise "succeed" against a
+  /// machine it cannot see.
   size_t nDevices = 0;
 
   /// Subset of `nDevices` that are accelerators (GPU or integrated GPU). Zero
