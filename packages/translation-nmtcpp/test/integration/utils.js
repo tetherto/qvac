@@ -508,26 +508,36 @@ function loadConfigFromAssets(filename) {
 // flaky network. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
-function prestagedModelPath(modelName) {
+function readPrestagedModel(modelName) {
   if (platform !== 'android') return null
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return p
+    const src = path.join(PRESTAGED_MODEL_DIR, modelName)
+    const sizePath = `${src}.size`
+    if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
+    const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return null
+    if (fs.statSync(src).size !== expectedSize) return null
+    return { src, expectedSize }
   } catch (_) {}
   return null
 }
 
-// Copy a pre-staged model into the app's writable destPath. Returns true when a
-// valid (>= minBytes) copy landed, so the caller can skip the network download.
+function prestagedModelPath(modelName) {
+  const staged = readPrestagedModel(modelName)
+  return staged ? staged.src : null
+}
+
+// Require the exact host-recorded byte count on both sides of the app copy so
+// truncated staged files fall through to the normal presigned-S3 download.
 function copyPrestagedModel(modelName, destPath, minBytes) {
-  const src = prestagedModelPath(modelName)
-  if (!src) return false
+  const staged = readPrestagedModel(modelName)
+  if (!staged || staged.expectedSize < minBytes) return false
   try {
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(src, destPath)
+    fs.copyFileSync(staged.src, destPath)
     const size = fs.statSync(destPath).size
-    if (size >= minBytes) {
+    if (size === staged.expectedSize) {
       console.log(
         `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB)`
       )
@@ -536,6 +546,9 @@ function copyPrestagedModel(modelName, destPath, minBytes) {
     fs.unlinkSync(destPath)
   } catch (err) {
     console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
   }
   return false
 }

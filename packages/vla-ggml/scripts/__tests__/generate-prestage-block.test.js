@@ -10,16 +10,48 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const childProcess = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { MODEL_SHARDS, buildManifest, buildScript } = require('../generate-prestage-block')
+const {
+  MODEL_SHARDS,
+  buildManifest,
+  buildScript,
+  formatYamlBlock
+} = require('../generate-prestage-block')
 
 function withAssetsDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vla-prestage-'))
   try {
     return fn(dir)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+function runWithStubs(script, { adbExit = 0, curlExit = 0, mkdirExit = null }) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vla-prestage-shell-'))
+  const binDir = path.join(dir, 'bin')
+  const testsDir = path.join(dir, 'tests')
+  fs.mkdirSync(binDir)
+  fs.mkdirSync(testsDir)
+  fs.writeFileSync(path.join(binDir, 'adb'), `#!/bin/sh\nexit ${adbExit}\n`, { mode: 0o755 })
+  fs.writeFileSync(path.join(binDir, 'curl'), `#!/bin/sh\nexit ${curlExit}\n`, { mode: 0o755 })
+  if (mkdirExit !== null) {
+    fs.writeFileSync(path.join(binDir, 'mkdir'), `#!/bin/sh\nexit ${mkdirExit}\n`, { mode: 0o755 })
+  }
+  fs.writeFileSync(
+    path.join(testsDir, 'wdio.config.devicefarm.js'),
+    "exports.config = { mochaOpts: { grep: 'runAddonTest' } }\n"
+  )
+  try {
+    return childProcess.spawnSync('sh', ['-c', script], {
+      cwd: dir,
+      env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` },
+      encoding: 'utf8'
+    })
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -74,5 +106,22 @@ test('buildScript reads the shard grep and stages only matching models via adb',
   assert.match(script, /shard grep/)
   assert.match(script, new RegExp(b64.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')))
   assert.match(script, /adb push/)
+  assert.match(script, /device will use network fallback/)
+  assert.doesNotMatch(script, /FATAL/)
   assert.match(script, /\[prestage\] done/)
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+  const failedDownload = runWithStubs(script, { curlExit: 22 })
+  assert.equal(failedDownload.status, 0, failedDownload.stderr)
+  assert.match(failedDownload.stdout, /device will use network fallback/)
+  const failedAdb = runWithStubs(script, { adbExit: 1 })
+  assert.equal(failedAdb.status, 0, failedAdb.stderr)
+  assert.match(failedAdb.stdout, /adb setup failed/)
+  const failedTempSetup = runWithStubs(script, { mkdirExit: 1 })
+  assert.equal(failedTempSetup.status, 0, failedTempSetup.stderr)
+  assert.match(failedTempSetup.stdout, /host temp setup failed/)
+})
+
+test('formatYamlBlock emits a literal block with every shell line indented', () => {
+  assert.equal(formatYamlBlock('set -e\necho ok'), '|\n  set -e\n  echo ok\n')
 })

@@ -657,34 +657,45 @@ function _loadMobileUrlConfig() {
 // presigned S3. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
-function prestagedModelPath(modelName) {
+function readPrestagedModel(modelName) {
   if (platform !== 'android') return null
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return p
+    const src = path.join(PRESTAGED_MODEL_DIR, modelName)
+    const sizePath = `${src}.size`
+    if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
+    const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return null
+    if (fs.statSync(src).size !== expectedSize) return null
+    return { src, expectedSize }
   } catch (_) {}
   return null
 }
 
-// Returns true when a valid (>= minBytes) copy landed, so the caller can skip
-// the network download. The default 1MB floor guards against a truncated adb
-// push being accepted as a real model: every OCR GGUF is well above 1MB, so a
-// short copy falls through to the presigned-S3 download instead of failing the
-// test on a corrupt file.
+function prestagedModelPath(modelName) {
+  const staged = readPrestagedModel(modelName)
+  return staged ? staged.src : null
+}
+
+// The host pushes an exact byte-count sidecar with each model. Require both the
+// staged source and copied destination to match it so truncated adb/app copies
+// fall through to the network download.
 function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
-  const src = prestagedModelPath(modelName)
-  if (!src) return false
+  const staged = readPrestagedModel(modelName)
+  if (!staged || staged.expectedSize < minBytes) return false
   try {
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(src, destPath)
-    if (fs.statSync(destPath).size >= minBytes) {
+    fs.copyFileSync(staged.src, destPath)
+    if (fs.statSync(destPath).size === staged.expectedSize) {
       console.log(`[prestage] Using pre-staged model ${modelName}`)
       return true
     }
     fs.unlinkSync(destPath)
   } catch (err) {
     console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
   }
   return false
 }

@@ -51,24 +51,70 @@ function buildManifest(assetsDir = DEFAULT_ASSETS_DIR) {
 function buildScript(manifestB64) {
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
-echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
-export GREP
-echo "[prestage] shard grep: '$GREP'"
-node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):[];if(!tests.length)console.error('[prestage] WARN: no shard grep resolved — staging nothing so the device downloads its own models');const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
-adb shell mkdir -p "$PRESTAGE_DIR"
-mkdir -p /tmp/prestage
-while IFS=$(printf '\\t') read -r NAME URL; do
-  [ -z "$NAME" ] && continue
-  echo "[prestage] staging $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 3600 -o "/tmp/prestage/$NAME" "$URL"
-  adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"
-  adb shell test -s "$PRESTAGE_DIR/$NAME" || { echo "[prestage] FATAL: $NAME not present on device after push"; exit 1; }
-  rm -f "/tmp/prestage/$NAME"
-done < /tmp/prestage-list.tsv
+PRESTAGE_TMP=/tmp/prestage
+PRESTAGE_READY=1
+if ! mkdir -p "$PRESTAGE_TMP"; then
+  echo "[prestage] WARN: host temp setup failed; device will use network fallback"
+  PRESTAGE_READY=0
+fi
+GREP=''
+if [ "$PRESTAGE_READY" = "1" ]; then
+  if ! echo "${manifestB64}" | base64 -d > "$PRESTAGE_TMP/model-manifest.json"; then
+    echo "[prestage] WARN: manifest setup failed; device will use network fallback"
+    PRESTAGE_READY=0
+  fi
+fi
+if [ "$PRESTAGE_READY" = "1" ]; then
+  GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
+  export GREP
+  echo "[prestage] shard grep: '$GREP'"
+  if ! node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/prestage/model-manifest.json','utf8'));const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):[];if(!tests.length)console.error('[prestage] WARN: no shard grep resolved — staging nothing so the device downloads its own models');const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}fs.writeFileSync('/tmp/prestage/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"; then
+    echo "[prestage] WARN: shard manifest resolution failed; device will use network fallback"
+    PRESTAGE_READY=0
+  fi
+fi
+if [ "$PRESTAGE_READY" = "1" ]; then
+  if ! adb shell mkdir -p "$PRESTAGE_DIR"; then
+    echo "[prestage] WARN: adb setup failed; device will use network fallback"
+    PRESTAGE_READY=0
+  fi
+fi
+if [ "$PRESTAGE_READY" = "1" ]; then
+  while IFS=$(printf '\\t') read -r NAME URL; do
+    [ -z "$NAME" ] && continue
+    echo "[prestage] staging $NAME"
+    adb shell rm -f "$PRESTAGE_DIR/$NAME" || true
+    if ! curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 3600 -o "$PRESTAGE_TMP/$NAME" "$URL"; then
+      echo "[prestage] WARN: host download failed for $NAME; device will use network fallback"
+      rm -f "$PRESTAGE_TMP/$NAME"
+      continue
+    fi
+    if ! adb push "$PRESTAGE_TMP/$NAME" "$PRESTAGE_DIR/$NAME"; then
+      echo "[prestage] WARN: adb push failed for $NAME; device will use network fallback"
+      adb shell rm -f "$PRESTAGE_DIR/$NAME" || true
+      rm -f "$PRESTAGE_TMP/$NAME"
+      continue
+    fi
+    if ! adb shell test -s "$PRESTAGE_DIR/$NAME"; then
+      echo "[prestage] WARN: staged $NAME is empty; device will use network fallback"
+      adb shell rm -f "$PRESTAGE_DIR/$NAME" || true
+      rm -f "$PRESTAGE_TMP/$NAME"
+      continue
+    fi
+    rm -f "$PRESTAGE_TMP/$NAME"
+  done < "$PRESTAGE_TMP/prestage-list.tsv"
+fi
 echo "[prestage] device contents:"
 adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
+}
+
+function formatYamlBlock(script) {
+  const body = script
+    .split('\n')
+    .map((l) => '  ' + l)
+    .join('\n')
+  return '|\n' + body + '\n'
 }
 
 function main() {
@@ -82,13 +128,9 @@ function main() {
     `[prestage] baked manifest for ${testCount} shard(s): ${Object.keys(manifest).join(', ')}`
   )
   const manifestB64 = Buffer.from(JSON.stringify(manifest)).toString('base64')
-  const body = buildScript(manifestB64)
-    .split('\n')
-    .map((l) => '  ' + l)
-    .join('\n')
-  process.stdout.write('|\n' + body + '\n')
+  process.stdout.write(formatYamlBlock(buildScript(manifestB64)))
 }
 
 if (require.main === module) main()
 
-module.exports = { MODEL_SHARDS, buildManifest, buildScript }
+module.exports = { MODEL_SHARDS, buildManifest, buildScript, formatYamlBlock }
