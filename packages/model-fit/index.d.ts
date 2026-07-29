@@ -10,6 +10,10 @@ export interface FitConfig {
   /**
    * Desired context size. 0 (default) lets the fitter choose down to nCtxMin;
    * any other value is a hard constraint and is returned unchanged.
+   *
+   * Throws if it exceeds the context length the model declares. This addon
+   * exposes no RoPE scaling knobs, so the model's own declared length is the
+   * most any caller can legitimately ask for.
    */
   nCtx?: number
   /** Lower bound when shrinking the context. 0 (default) means 4096. */

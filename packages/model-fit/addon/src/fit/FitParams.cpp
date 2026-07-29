@@ -168,6 +168,32 @@ FitResult runFit(const FitRequest& req) {
     return out;
   }
 
+  // Read once: bounds the request below, and resolves a fitted 0 further down.
+  const uint32_t trainedCtx = readTrainedContext(req.modelPath);
+
+  // Refuse a context the model does not declare it can serve.
+  //
+  // llama.cpp itself only warns here, because a caller can extend the usable
+  // context past training with RoPE scaling. This addon exposes none of those
+  // knobs, so the only extension reachable through it is the model's own — and
+  // a YaRN-extended model already reports the extended figure as
+  // `context_length`, keeping the pre-extension value in
+  // `rope.scaling.original_context_length`. Bounding by `context_length`
+  // therefore allows everything this API can legitimately ask for.
+  //
+  // NOTE: revisit if RoPE scaling parameters are ever exposed — at that point
+  // a caller could legitimately exceed this and the bound becomes wrong.
+  //
+  // This is a guard against nonsense input, not a fix for the abort documented
+  // in the README: that is KV-cache placement failing, which a large model on a
+  // small device can still reach at an entirely ordinary context.
+  if (trainedCtx > 0 && req.nCtx > trainedCtx) {
+    throw std::invalid_argument(
+        "model-fit: nCtx " + std::to_string(req.nCtx) +
+        " exceeds the context length the model declares (" +
+        std::to_string(trainedCtx) + ")");
+  }
+
   llama_model_params mparams = llama_model_default_params();
   llama_context_params cparams = llama_context_default_params();
 
@@ -240,7 +266,7 @@ FitResult runFit(const FitRequest& req) {
   // means "the trained context" to llama but is not a plan a caller can use.
   // Resolve it so every SUCCESS carries a concrete context.
   if (out.fits && out.nCtx == 0) {
-    out.nCtx = readTrainedContext(req.modelPath);
+    out.nCtx = trainedCtx;
   }
 
   return out;

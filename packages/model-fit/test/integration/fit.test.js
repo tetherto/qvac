@@ -64,7 +64,9 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
   t.ok(fs.existsSync(modelPath), `model exists at ${modelPath}`)
 
-  const res = fitParams({ modelPath, nCtx: 4096, nCtxMin: 512, marginMiB: 1024 })
+  // 2048 is what stories260K declares as its context length; asking for more is
+  // now rejected outright, so this is the largest concrete request it accepts.
+  const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
 
   t.ok([FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status), 'status is a known code')
   t.is(typeof res.fits, 'boolean')
@@ -84,11 +86,33 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   t.not(res.status, FIT_STATUS.ERROR, 'a registered device must not yield ERROR on a readable model')
 
   if (res.fits) {
-    t.ok(res.nCtx >= 512 && res.nCtx <= 4096, 'fitted context within [nCtxMin, requested]')
+    t.ok(res.nCtx >= 512 && res.nCtx <= 2048, 'fitted context within [nCtxMin, requested]')
     // The README defines an explicit nCtx as a hard constraint, not a hint:
     // llama only reduces the context when it is 0.
-    t.is(res.nCtx, 4096, 'an explicitly requested context is returned unchanged')
+    t.is(res.nCtx, 2048, 'an explicitly requested context is returned unchanged')
   }
+})
+
+test('a context beyond what the model declares is rejected', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // This addon exposes no RoPE scaling knobs, so the only extension reachable
+  // through it is the model's own — and a YaRN-extended model already reports
+  // the extended figure as context_length. Anything past it is nonsense input,
+  // and rejecting it also keeps the absurd values that abort the fitter out of
+  // llama's hands entirely.
+  await t.exception.all(
+    () => fitParams({ modelPath, nCtx: 100000000 }),
+    /exceeds the context length the model declares/
+  )
+  await t.exception.all(
+    () => fitParams({ modelPath, nCtx: 2049 }),
+    /exceeds the context length the model declares/
+  )
+
+  // The declared length itself must still be accepted.
+  const res = fitParams({ modelPath, nCtx: 2048 })
+  t.not(res.status, FIT_STATUS.ERROR, 'the declared context length is allowed')
 })
 
 test('a successful plan always carries a concrete context', async function (t) {
@@ -191,11 +215,11 @@ test('pinned offload under pressure is the only way to get FAILURE', async funct
 test('a failed fit preserves the caller hard constraints', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
 
-  const res = fitParams({ modelPath, nGpuLayers: 5, nCtx: 8192, marginMiB: 10000000 })
+  const res = fitParams({ modelPath, nGpuLayers: 5, nCtx: 1024, marginMiB: 10000000 })
 
   // Hard constraints must come back untouched whatever the verdict.
   t.is(res.nGpuLayers, 5, 'pinned offload survives the fit')
-  t.is(res.nCtx, 8192, 'an explicit context survives the fit')
+  t.is(res.nCtx, 1024, 'an explicit context survives the fit')
   t.ok(res.nDevices >= 1, 'the inventory it measured against is always reported')
 
   if (res.nGpuDevices > 0) {
@@ -226,7 +250,7 @@ test('an explicit context is not reduced even under memory pressure', async func
 
 test('fitParams reports the device inventory it fitted against', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
-  const res = fitParams({ modelPath, nCtx: 4096, nCtxMin: 512, marginMiB: 1024 })
+  const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
 
   // Guards the regression this addon shipped with: no backend registration at
   // all, which returns a confident verdict measured against an empty device

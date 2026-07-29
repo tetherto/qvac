@@ -37,6 +37,15 @@
   `SUCCESS` never reports `nCtx: 0`. An explicitly requested context remains a
   hard constraint and is now asserted to come back unchanged.
 
+- Reject an `nCtx` above the context length the model declares. llama.cpp only
+  warns, because RoPE scaling lets a caller exceed the trained length — but this
+  addon exposes none of those knobs, so the model's own declared length is the
+  most it can legitimately be asked for, and a YaRN-extended model already
+  reports its extended figure there. This also keeps the values that reproduce
+  the documented abort out of llama's hands, though it is a guard against
+  nonsense input rather than a fix: the fault is KV-cache placement, which a
+  large model on a small device can still hit at an ordinary context.
+
 - Remove the Windows-only `__try/__except` around `llama_params_fit`. It existed
   to contain an integer divide-by-zero on the Windows GPU runner, but the root
   cause was the missing backend registration fixed above: with no device

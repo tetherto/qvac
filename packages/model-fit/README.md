@@ -86,6 +86,14 @@ reference counting.
   other than `-1`.
 - Context is the documented exception: it is reduced **iff** `nCtx == 0`. A
   concrete `nCtx` is treated as a hard requirement and comes back unchanged.
+- `nCtx` is **bounded by the model's declared `context_length`** and throws
+  above it. llama.cpp only warns, because a caller can push past the trained
+  length with RoPE scaling — but this addon exposes none of those knobs, so the
+  only extension reachable through it is the model's own, and a YaRN-extended
+  model already reports the extended figure as `context_length` (keeping the
+  pre-extension value in `rope.scaling.original_context_length`). The bound
+  therefore permits everything this API can legitimately ask for. It would need
+  revisiting if RoPE scaling parameters were ever exposed.
 - `nCtxMin` defaults to **4096** when left at 0, matching upstream's
   `common_params::fit_params_min_ctx`. Reducing towards a floor of zero
   could otherwise return a context nothing can run with.
@@ -197,8 +205,13 @@ turned into a status — the calling worklet dies with the process.
 
 `GGML_ABORT` is not catchable, so this cannot be contained in-process. On mobile
 the Bare worklet shares the app's process, so there is no process boundary to
-absorb it either — the whole app goes down. Until the upstream fix lands, keep
-requested contexts within the range the model can plausibly serve.
+absorb it either — the whole app goes down.
+
+Bounding `nCtx` by the model's declared `context_length` (see above) keeps the
+absurd values that reproduce this out of llama's hands. It is **not** a fix:
+the fault is KV-cache placement, so a large model on a small device can still
+reach it at an entirely ordinary context. Treat it as a guard against nonsense
+input while the upstream fix is pending.
 
 A Windows-only integer divide-by-zero (SEH `0xC0000094`) used to occur here too
 and was contained by a `__try/__except`. That handler has been removed: the
