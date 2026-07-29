@@ -118,9 +118,10 @@ function resolveAliasToRelative(specifier, fromFile, cfg) {
       const candidates = mapped.map((m) => toJsCandidate(distRoot, m, targetExtension))
       const target = candidates.find((c) => fileExists(c)) || candidates[0]
       let rel = path.relative(path.dirname(fromFile), target)
-      // For .d.ts files, remove the .d.ts extension from the relative path
+      // Declaration files use runtime .js specifiers; TypeScript resolves them
+      // back to the sibling .d.ts files under NodeNext resolution.
       if (fromFile.endsWith('.d.ts') && rel.endsWith('.d.ts')) {
-        rel = rel.slice(0, -5) // Remove ".d.ts"
+        rel = `${rel.slice(0, -5)}.js`
       }
       return ensureDotSlash(normalizeToPosix(rel))
     }
@@ -130,9 +131,10 @@ function resolveAliasToRelative(specifier, fromFile, cfg) {
   const stripped = specifier.replace(/^@\//, '')
   const target = toJsCandidate(distRoot, `./${stripped}`, targetExtension)
   let rel = path.relative(path.dirname(fromFile), target)
-  // For .d.ts files, remove the .d.ts extension from the relative path
+  // Declaration files use runtime .js specifiers; TypeScript resolves them
+  // back to the sibling .d.ts files under NodeNext resolution.
   if (fromFile.endsWith('.d.ts') && rel.endsWith('.d.ts')) {
-    rel = rel.slice(0, -5) // Remove ".d.ts"
+    rel = `${rel.slice(0, -5)}.js`
   }
   return ensureDotSlash(normalizeToPosix(rel))
 }
@@ -144,23 +146,21 @@ function fixDirectoryImports(code, filePath, cfg) {
 
   // Fix static imports that don't have .js extension
   let updated = code.replace(
-    /(from\s*["'])(\.\/[^"']*?)(?<!\.js|\.d\.ts)(["'])/g,
+    /(from\s*["'])(\.{1,2}\/[^"']*?)(?<!\.js|\.d\.ts)(["'])/g,
     (match, prefix, importPath, suffix) => {
       const resolvedPath = path.resolve(path.dirname(filePath), importPath)
       const indexFile = targetExtension === '.d.ts' ? 'index.d.ts' : 'index.js'
 
       // Check if this is a directory with an index file
       if (dirExists(resolvedPath) && fileExists(path.join(resolvedPath, indexFile))) {
-        const extension = targetExtension === '.d.ts' ? '' : '.js'
-        return `${prefix}${importPath}/index${extension}${suffix}`
+        return `${prefix}${importPath}/index.js${suffix}`
       }
 
       // Check if this is a file that needs .js extension
       const fileWithJs = `${resolvedPath}.js`
       const fileWithDts = `${resolvedPath}.d.ts`
       if (fileExists(fileWithJs) || fileExists(fileWithDts)) {
-        const extension = targetExtension === '.d.ts' ? '' : '.js'
-        return `${prefix}${importPath}${extension}${suffix}`
+        return `${prefix}${importPath}.js${suffix}`
       }
 
       return match
@@ -179,23 +179,21 @@ function fixDirectoryImports(code, filePath, cfg) {
 
   // Fix dynamic imports that don't have .js extension
   updated = updated.replace(
-    /(import\s*\(\s*["'])(\.\/[^"']*?)(?<!\.js|\.d\.ts)(["']\s*\))/g,
+    /(import\s*\(\s*["'])(\.{1,2}\/[^"']*?)(?<!\.js|\.d\.ts)(["']\s*\))/g,
     (match, prefix, importPath, suffix) => {
       const resolvedPath = path.resolve(path.dirname(filePath), importPath)
       const indexFile = targetExtension === '.d.ts' ? 'index.d.ts' : 'index.js'
 
       // Check if this is a directory with an index file
       if (dirExists(resolvedPath) && fileExists(path.join(resolvedPath, indexFile))) {
-        const extension = targetExtension === '.d.ts' ? '' : '.js'
-        return `${prefix}${importPath}/index${extension}${suffix}`
+        return `${prefix}${importPath}/index.js${suffix}`
       }
 
       // Check if this is a file that needs .js extension
       const fileWithJs = `${resolvedPath}.js`
       const fileWithDts = `${resolvedPath}.d.ts`
       if (fileExists(fileWithJs) || fileExists(fileWithDts)) {
-        const extension = targetExtension === '.d.ts' ? '' : '.js'
-        return `${prefix}${importPath}${extension}${suffix}`
+        return `${prefix}${importPath}.js${suffix}`
       }
 
       return match

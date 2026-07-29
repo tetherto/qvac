@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Consume whisper-cpp 1.9.1#5 — the repo-reorg pin (sources move to the third_party/whisper.cpp git subtree in qvac-ext-lib-whisper.cpp; the registry-side GNUInstallDirs patch is absorbed into the subtree's declared delta). No API or behavior change.
 
 ### Fixed
 

@@ -25,6 +25,15 @@ struct AcestepConfig {
   int   threads;         // 0 = auto
   bool  useGpu;
   int   nGpuLayers;      // GPU layers to offload when useGpu is set
+
+  // Host-provided prebuilds root (e.g. `path.join(__dirname, 'prebuilds')`).
+  // The addon appends the cmake-bare per-target subdir (BACKENDS_SUBDIR) and
+  // forwards it as `EngineOptions::backends_dir` so the engine can dlopen the
+  // ggml backend modules staged next to the `.bare` -- required on arm64, where
+  // the CPU backend ships as per-microarch MODULE .so files. Empty -> the
+  // engine relies on ggml's built-in search path (fine for static desktop /
+  // Apple).
+  std::string backendsDir;
 };
 
 }  // namespace qvac::audiogenggml::acestep
