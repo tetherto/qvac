@@ -18,11 +18,13 @@ const path = require('path')
 const {
   integrationDir,
   autoFile,
+  groupsFile,
   mobileDir,
   listSuites,
   expectedIntegrationFiles,
   expectedEntries,
-  expectedAutoCjs
+  expectedAutoCjs,
+  expectedTestGroups
 } = require('./lib/desktop-suites.js')
 
 function main() {
@@ -48,6 +50,9 @@ function main() {
   }
   fs.mkdirSync(mobileDir, { recursive: true })
   fs.writeFileSync(autoFile, expectedAutoCjs(entries), 'utf8')
+  // One Device Farm group per suite, so each suite gets its own app process (see
+  // expectedTestGroups: the on-device run otherwise shares a JsLogger singleton).
+  fs.writeFileSync(groupsFile, expectedTestGroups(entries), 'utf8')
 
   console.log(`Ported ${files.size} file(s) from ${suites.length} desktop suite(s):`)
   for (const suite of suites) console.log(`  - ${suite}`)
@@ -55,6 +60,9 @@ function main() {
     `Generated ${path.relative(process.cwd(), autoFile)} with ${entries.length} runner(s):`
   )
   for (const entry of entries) console.log(`  - ${entry.fnName}  <-  ${entry.relPath}`)
+  console.log(
+    `Generated ${path.relative(process.cwd(), groupsFile)} with ${suites.length} isolated group(s)`
+  )
 }
 
 if (require.main === module) {

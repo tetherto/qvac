@@ -14,11 +14,15 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # job that holds AWS/OIDC access (see the build/device-farm split below).
 #
 # Test scope: EVERY desktop integration test (tests/integration_js/*) runs on
-# device — no mobile-only tests exist. The mobile suite is generated from the
-# desktop sources and drift-checked by the validate-mobile job below. Advisory
-# (continue-on-error) until on-device flake is characterised. See
-# packages/inference-addon-cpp/mobile/README.md for the two coverage caveats
-# (output-callback-lifetime needs ASan; bare-thread device behaviour unverified).
+# device — no mobile-only tests exist. The suite is GENERATED from the desktop
+# sources (and deliberately not committed), so it cannot drift; generation happens
+# in host-test and again in build, before the app is packed.
+#
+# Blocking vs advisory: host-test and build FAIL the run (deterministic
+# breakage), while device-farm stays continue-on-error until on-device flake is
+# characterised. See packages/inference-addon-cpp/mobile/README.md for the two
+# coverage caveats (output-callback-lifetime needs ASan; bare-thread device
+# behaviour unverified).
 
 on:
   workflow_call:
@@ -53,20 +57,18 @@ env:
   PREBUILD_PREFIX: infer-cpp-
 
 jobs:
-  # Fast, deterministic drift check: the on-device suite is GENERATED from the
-  # desktop tests (tests/integration_js/*), so this re-derives the expected tree
-  # and fails if the committed copies differ — a desktop test changed without
-  # regenerating, a suite added/removed, a hand-edit, or a stale
-  # integration.auto.cjs.
-  # Kept as its OWN job (not a step in build) and NOT continue-on-error, so drift
-  # shows as a clear red job rather than a silent green no-op. It gates the
-  # prebuild/build/device-farm chain, so drift stops the run early — before any
-  # macOS or Device Farm minutes are spent. Runs untrusted fork code but holds NO
-  # secrets, so that's safe.
-  validate-mobile:
-    name: Validate mobile tests in sync
+  # Cheap host gate: generate the suite from the desktop tests, BUILD the unified
+  # addon, and run every test on a linux host. Without this, a broken
+  # mobile/binding.cpp, index.js or generator would only surface at Device Farm,
+  # after two macOS builds and real device minutes have been spent.
+  #
+  # NOT continue-on-error, and it gates the whole chain (prebuilds -> build ->
+  # device-farm), so a genuine breakage stops the run immediately. Runs untrusted
+  # fork code but holds NO secrets, so that is safe.
+  host-test:
+    name: Host build + tests (linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -80,9 +82,19 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-      - name: Validate mobile tests are up-to-date
+      - name: Install Bare tooling
+        run: npm install -g --force bare bare-make
+      - name: Build and test on host
         working-directory: ${{ env.ADDON_WORKDIR }}
-        run: npm run test:mobile:validate
+        run: |
+          npm install
+          # Generated, not committed — see .gitignore. Must run before the tests.
+          npm run test:mobile:generate
+          npm run test:mobile:validate
+          bare-make generate
+          bare-make build
+          bare-make install
+          npm test
 
   # ---------------------------------------------------------------------------
   # Build the mobile test addon's native prebuilds. The header-only library +
@@ -104,7 +116,7 @@ jobs:
   # ---------------------------------------------------------------------------
   prebuild-android:
     name: Prebuild (Android arm64)
-    needs: validate-mobile
+    needs: host-test
     runs-on: qvac-ubuntu2204-x64
     timeout-minutes: 30
     permissions:
@@ -154,7 +166,7 @@ jobs:
 
   prebuild-ios:
     name: Prebuild (iOS arm64)
-    needs: validate-mobile
+    needs: host-test
     runs-on: macos-14
     timeout-minutes: 30
     permissions:
@@ -226,7 +238,9 @@ jobs:
     # Exceeds the 30m default: builds the mobile app (npm install + expo prebuild
     # + Gradle/xcodebuild). No device execution here — that's the device-farm job.
     timeout-minutes: 90
-    continue-on-error: true # advisory until on-device flake is characterised
+    # NOT continue-on-error: an app build failure is deterministic (bad binding,
+    # bad Gradle/Xcode config), not device flake, so it must block the run. Flake
+    # tolerance belongs on device-farm below, where the flake actually lives.
     # No id-token / AWS here: this job runs untrusted fork code and must not be
     # able to mint an OIDC token or assume the AWS role.
     permissions:
@@ -273,6 +287,19 @@ jobs:
           addon-npm-name: 'inference-addon-cpp-mobile-tests'
           prebuild-artifact-prefix: ${{ env.PREBUILD_PREFIX }}
           pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # The on-device suite is generated from tests/integration_js/ and is NOT
+      # committed (see mobile/.gitignore), so it must be produced before
+      # build-mobile-app packs the addon into the app — otherwise the app would
+      # ship with no tests. Runs after `setup` because that provisions Node.
+      # Also emits test/mobile/test-groups.json, which upload-to-devicefarm
+      # auto-detects to shard one Device Farm run per suite (process isolation).
+      - name: Generate mobile integration tests from the desktop suite
+        working-directory: addon/${{ env.ADDON_WORKDIR }}
+        run: |
+          npm run test:mobile:generate
+          test -f test/mobile/integration.auto.cjs
+          test -f test/mobile/test-groups.json
 
       - name: Build mobile app
         id: build
@@ -421,6 +448,10 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # With the generated test-groups.json there is >1 spec, so the composite
+          # auto-selects SHARDED scheduling (one run per suite, against the pool
+          # ARNs above) and this hint is ignored — it only applies to single-spec
+          # runs. Kept so a future single-group config still schedules sanely.
           scheduling-mode: 'single-pool'
           # Cost cap (default is 120 device-min). The full suite is only seconds of
           # compute on desktop; 25 min leaves ample margin for app launch plus the

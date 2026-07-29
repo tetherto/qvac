@@ -20,15 +20,20 @@ desktop integration test as an on-device test.
   library from `../src`. `test_logger.cpp` and `output_callback_lifetime.cpp` are
   ports of the logger / output-callback-lifetime binding bodies.
 - `index.js` / `binding.js` / `addon.js` — `require.addon()` glue.
-- `test/integration/<suite>/**` — **GENERATED**. Mirrors
-  `../tests/integration_js/<suite>/` (tests + their `bare-thread` workers). Never
-  hand-edit; change the desktop test and regenerate.
+- `test/integration/<suite>/**` — **GENERATED and NOT COMMITTED** (see
+  `.gitignore`). Mirrors `../tests/integration_js/<suite>/` (tests + their
+  `bare-thread` workers). CI regenerates it before building the app; locally run
+  `npm run test:mobile:generate` first. Never hand-edit — change the desktop test.
 - `test/mobile/integration-runtime.cjs` — installs Bare
   `unhandledRejection`/`uncaughtException`/`beforeExit` handlers that force a
   non-zero exit on device (so a dlopen/ABI crash fails the Device Farm run
   instead of going false-green) and exposes `runIntegrationModule`.
-- `test/mobile/integration.auto.cjs` — **generated**; one `run<Name>Test` wrapper
-  per desktop test entry. The harness invokes these as on-device tests.
+- `test/mobile/integration.auto.cjs` — **generated, not committed**; one
+  `run<Name>Test` wrapper per desktop test entry. The harness invokes these as
+  on-device tests.
+- `test/mobile/test-groups.json` — **generated, not committed**; one Device Farm
+  group per desktop suite, so each suite runs in its own app process (see
+  "Coverage caveats").
 - `scripts/lib/desktop-suites.js` — the single source of truth for the port
   (which files, and the two mechanical rewrites). Shared by:
   `scripts/generate-mobile-integration-tests.js` (writes the tree) and
@@ -48,11 +53,16 @@ test, copied by `npm run test:mobile:generate` from
    runs with cwd set to its own sub-package dir. Anchoring to the module's own
    directory is correct in any cwd (and on device).
 
-`npm run test:mobile:validate` re-derives the whole expected tree from the desktop
-sources and fails on **any** difference — a desktop test changed without
-regenerating, a suite added/removed, a hand-edit here, or a stale
-`integration.auto.cjs`. That check runs in CI as its own non-advisory job, so
-drift is a hard failure rather than a silent divergence.
+The generated tree is **not committed** — CI regenerates it (in `host-test`, and
+again in `build` before the app is packed), so it cannot go stale and no
+regenerate-and-commit step can be forgotten. `npm run test:mobile:validate` still
+re-derives the expected tree and fails on any difference, which is what catches a
+stale *local* generation before you run the tests.
+
+The generator also refuses to produce two runners with the same name (e.g. a
+future `logger-teardown/test.js` would collide with `logger/teardown.test.js`) —
+duplicate `async function` declarations are valid JS, so the second would silently
+win and a test would vanish.
 
 Why copy at all? The llamacpp mobile addons share one `test/integration/` between
 desktop and mobile. inference-addon-cpp can't: it's a header-only *library* whose
@@ -64,6 +74,22 @@ the same single-source-of-truth guarantee without restructuring the desktop suit
 > reformatting them would register as drift.
 
 ## Coverage caveats (device vs desktop)
+
+**Process isolation.** On desktop each sub-package is its own process, so global
+state can't leak between suites. On device the harness runs every entry in **one**
+app process sharing one `JsLogger` singleton — and `logger/worker-set-norelease.js`
+deliberately never calls `releaseLogger`, so logger state could bleed into the
+other suites. The generated `test-groups.json` therefore puts **each suite in its
+own Device Farm group**, i.e. its own run and its own fresh app process,
+reproducing desktop's isolation. (Cost: one run per suite per platform instead of
+one overall; these suites are seconds of device compute, so it's cheap.)
+
+**`JS_LOGGER` is target-wide.** Desktop enables it only for the logger
+sub-package; here one target means one setting, so `output-callback-lifetime`'s
+internal `QLOG` also routes through `JsLogger`. Per-source scoping would be an ODR
+violation — `QLOG` is called from inline bodies in shared headers — see the comment
+in `CMakeLists.txt`. With no logger installed those calls take the no-owner path,
+and group isolation keeps logger state out of the suite.
 
 All five desktop test entries run on device, but two carry less signal there than
 on desktop — worth knowing before treating a green mobile run as equivalent:
@@ -84,10 +110,10 @@ on desktop — worth knowing before treating a green mobile run as equivalent:
 
 ```sh
 npm install
-npm run build              # bare-make generate && build && install (desktop)
-npm run test:mobile:generate
-npm run test:mobile:validate
-npm test                   # runs the ported tests on desktop
+npm run test:mobile:generate   # REQUIRED FIRST — the suite is not committed
+npm run build                  # bare-make generate && build && install (desktop)
+npm test                       # runs every generated test on desktop
+npm run test:mobile:validate   # optional: confirms your generation is current
 
 # cross-compile smoke (needs NDK / macOS+Xcode):
 bare-make generate --platform android --arch arm64 -D ANDROID_STL=c++_shared

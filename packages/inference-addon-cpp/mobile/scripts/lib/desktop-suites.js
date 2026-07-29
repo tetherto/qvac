@@ -24,6 +24,7 @@ const desktopRoot = path.resolve(mobileRoot, '..', 'tests', 'integration_js')
 const integrationDir = path.join(mobileRoot, 'test', 'integration')
 const mobileDir = path.join(mobileRoot, 'test', 'mobile')
 const autoFile = path.join(mobileDir, 'integration.auto.cjs')
+const groupsFile = path.join(mobileDir, 'test-groups.json')
 
 // Addon glue, not test material: each desktop sub-package has its own
 // binding.js/index.js pointing at its own native module. The mobile addon has
@@ -125,15 +126,27 @@ function expectedIntegrationFiles() {
 
 function expectedEntries() {
   const entries = []
+  // Two different sources can slugify to the same runner name (e.g. a future
+  // `logger-teardown/test.js` collides with `logger/teardown.test.js` — both give
+  // runLoggerTeardownTest). integration.auto.cjs would then declare the same
+  // `async function` twice: valid JS, so the second silently wins and a test
+  // disappears with no error. Fail loudly instead.
+  const seen = new Map()
   for (const suite of listSuites()) {
     for (const file of listSuiteFiles(suite)) {
       if (!isTestEntry(file)) continue
-      entries.push({
-        suite,
-        file,
-        relPath: `${suite}/${file}`,
-        fnName: toFunctionName(suite, file)
-      })
+      const relPath = `${suite}/${file}`
+      const fnName = toFunctionName(suite, file)
+      if (seen.has(fnName)) {
+        throw new Error(
+          `Runner name collision: '${fnName}' is produced by both ` +
+            `'${seen.get(fnName)}' and '${relPath}'. Rename one of the desktop ` +
+            'sources (or adjust toFunctionName) — otherwise one of those tests ' +
+            'would be silently dropped from integration.auto.cjs.'
+        )
+      }
+      seen.set(fnName, relPath)
+      entries.push({ suite, file, relPath, fnName })
     }
   }
   return entries
@@ -172,6 +185,32 @@ function expectedAutoCjs(entries) {
   return `${lines.join('\n')}\n`
 }
 
+// Device Farm shard map: ONE GROUP PER DESKTOP SUITE.
+//
+// Why: on desktop each sub-package runs as its own process, so process-global
+// state can't leak between suites. On device the harness runs every entry in ONE
+// app process sharing one JsLogger singleton — and logger/worker-set-norelease.js
+// deliberately never calls releaseLogger, so logger state would bleed into the
+// other suites. Each group becomes a separate Device Farm run (fresh app launch,
+// fresh process), which reproduces desktop's isolation exactly.
+//
+// Generated, not hand-written: a hand-maintained map goes stale the moment a
+// desktop test is added, and in sharded mode anything absent from every group is
+// silently never run.
+//
+// Cost: one Device Farm run per suite per platform instead of a single run.
+// Device Farm bills device-minutes actually used and these suites are seconds of
+// compute, so the extra runs are cheap relative to the isolation they buy.
+function expectedTestGroups(entries) {
+  const perSuite = {}
+  for (const entry of entries) {
+    if (!perSuite[entry.suite]) perSuite[entry.suite] = []
+    perSuite[entry.suite].push(entry.fnName)
+  }
+  // Same split on both platforms; the composite reads the platform-lowercased key.
+  return `${JSON.stringify({ android: perSuite, ios: perSuite }, null, 2)}\n`
+}
+
 function listOnDiskIntegrationFiles() {
   const found = new Map()
   if (!fs.existsSync(integrationDir)) return found
@@ -194,6 +233,7 @@ module.exports = {
   integrationDir,
   mobileDir,
   autoFile,
+  groupsFile,
   listSuites,
   listSuiteFiles,
   isTestEntry,
@@ -202,5 +242,6 @@ module.exports = {
   expectedIntegrationFiles,
   expectedEntries,
   expectedAutoCjs,
+  expectedTestGroups,
   listOnDiskIntegrationFiles
 }

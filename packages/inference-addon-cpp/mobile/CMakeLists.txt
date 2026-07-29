@@ -31,6 +31,23 @@ target_include_directories(
 
 # Route QLOG/JsLogger to the JS bridge, matching the desktop logger sub-package
 # (tests/integration_js/logger builds with ENABLE_JS_LOGGER=ON → JS_LOGGER).
+#
+# Deliberately TARGET-WIDE, not per-source. Scoping it to test_logger.cpp alone
+# (set_source_files_properties) looks tidier and would mirror desktop more
+# closely, but it is NOT SAFE here: JS_LOGGER switches the QLOG macro definition
+# in Logger.hpp, and QLOG is called from INLINE bodies in shared headers that
+# several translation units include — MultiJobScheduler.hpp (x5),
+# OutputCallbackJs.hpp (x4), OutputQueue.hpp, AddonJs.hpp, InitLoader.hpp,
+# GGUFShards.hpp. Defining it for only one TU would compile those same inline
+# functions with different bodies in different TUs: an ODR violation, where the
+# linker keeps one arbitrarily and behaviour becomes build/platform dependent.
+#
+# Consequence (accepted): unlike desktop — where each sub-package is its own
+# target and only logger enables JS_LOGGER — here output-callback-lifetime's
+# internal QLOG also routes through JsLogger. With no logger installed those
+# calls take JsLogger's no-owner path (the same one the desktop logger suite
+# asserts drops orphaned entries), and the generated test-groups.json runs each
+# suite in its own app process, so logger state cannot leak into it.
 target_compile_definitions(${inference_addon_cpp_mobile_tests} PUBLIC JS_LOGGER)
 
 if(WIN32)
