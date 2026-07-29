@@ -78,6 +78,23 @@ export const modelLoadOcr: TestDefinition = {
   }
 }
 
+// Loads OCR_DOCTR with no explicit pipelineType/detectorModelSrc — the
+// gap that let QVAC-22514 ship: with only OCR_LATIN (EasyOCR) covered, the
+// plugin could assume the EasyOCR pipeline for every recognizer and no e2e
+// test noticed. This exercises the auto pipelineType: "doctr" inference and
+// DBNet detector derivation on the load path.
+export const modelLoadOcrDoctr: TestDefinition = {
+  testId: 'model-load-ocr-doctr',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 90000
+  }
+}
+
 export const modelLoadInvalid: TestDefinition = {
   testId: 'model-load-invalid',
   params: {
@@ -199,6 +216,7 @@ export const tests = [
   modelLoadLlm,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
