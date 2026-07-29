@@ -1361,6 +1361,13 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
             llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
           }
         }
+        // Clear stale llama perf counters (single-prompt leftovers or a
+        // previous batch epoch) here, at the only point that is exclusive
+        // with respect to the scheduler: no batch job is in flight, so the
+        // worker is idle — the same reasoning that makes the KV wipe above
+        // safe. batchRuntimeStatsLocked() deliberately never resets them:
+        // it runs under a shared stateMtx_ while peers may be mid-decode.
+        llama_perf_context_reset(lctx);
       }
     }
   }
@@ -1514,9 +1521,13 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // TTFT comes from the scheduler's prefill-step timer rather than
   // `llama_perf_context().t_p_eval_ms`, which would include the
   // recurrent replay decode run by `compactThinkSpan` in
-  // `onGenerationFinished`. We still reset the live counters so they
-  // can't leak into the next single-prompt run.
-  llama_perf_context_reset(state_->llmContext_->getCtx());
+  // `onGenerationFinished`. No `llama_perf_context_reset` here: this
+  // runs under a shared stateMtx_ concurrently with in-flight batch
+  // jobs, and the scheduler releases its own mutex around llama_decode,
+  // so writing the context's non-atomic perf counters from this path
+  // races a mid-decode peer. The counters are cleared instead at the
+  // batch-entry epoch boundary (processPromptBatchImpl), which is
+  // exclusive with respect to the scheduler.
   return {
       {"TTFT", stats.prefillTimeMs()},
       {"TPS", stats.decodeTokensPerSecond()},

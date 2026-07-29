@@ -329,7 +329,9 @@ private:
 
   /// Build the JS-facing `RuntimeStats` from the scheduler's live stats
   /// (single source of truth across all in-flight / queued batch work).
-  /// Caller must hold `stateMtx_` shared.
+  /// Never reads or resets the llama_context perf counters: it runs
+  /// concurrently with in-flight batch decodes. Caller must hold
+  /// `stateMtx_` shared.
   qvac_lib_inference_addon_cpp::RuntimeStats batchRuntimeStatsLocked() const;
   /// Compose one finished job's complete terminal snapshot from the
   /// scheduler stats its run returned (`BatchResult::stats`, captured under
