@@ -134,7 +134,7 @@ function validateRunInput(
   // surfaced as `hparams.imagePatchElems`. `imageInputMode` is the
   // distinguishing axis (both groot and smolvla are `continuous` state).
   const imagesArePatches =
-    hparams !== null && hparams.imageInputMode === "patches";
+    hparams != null && hparams.imageInputMode === "patches";
   const patchElems = imagesArePatches ? (hparams.imagePatchElems ?? 0) : 0;
   const patchElemsKnown = Number.isInteger(patchElems) && patchElems > 0;
   const expectedPerImage = 3 * imgWidth * imgHeight;
@@ -380,7 +380,11 @@ class VlaModel {
       }
     }
     this._files = files.model;
-    this._config = config;
+    // Normalize here rather than relying on the destructuring default: that
+    // default only fires for `undefined`, so a JS consumer passing
+    // `config: null` (symmetric with the documented `logger: null`) would
+    // otherwise store null and crash the native-logger and load paths.
+    this._config = config ?? {};
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.opts = opts;
     // The cancel hook is wired to the framework's binding.cancel(handle)
@@ -798,3 +802,18 @@ namespace VlaModel {
 }
 
 export = VlaModel;
+
+// The namespace merge above attaches the six members inside an IIFE, which
+// cjs-module-lexer (Node's and Bare's CJS→ESM interop) cannot statically see —
+// an ESM `import { VlaModel } from '@qvac/vla-ggml'` would fail at link time
+// with "Named export not found". These top-level assignments are redundant at
+// runtime (same values the IIFE already attached) but are the exact pattern the
+// lexer detects, keeping named ESM imports working on Node and Bare.
+/* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface; these mirror the typed namespace members above. */
+module.exports.VlaModel = VlaModel;
+module.exports.preprocessImage = addonModule.preprocessImage;
+module.exports.padState = addonModule.padState;
+module.exports.DEFAULT_IMAGE_SIZE = addonModule.DEFAULT_IMAGE_SIZE;
+module.exports.QvacErrorAddonVla = errorModule.QvacErrorAddonVla;
+module.exports.ERR_CODES = errorModule.ERR_CODES;
+/* eslint-enable @typescript-eslint/no-unsafe-member-access */
