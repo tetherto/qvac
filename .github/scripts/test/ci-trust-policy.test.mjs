@@ -692,6 +692,13 @@ test('fork-approval records qvac/fork-verified on external fork PRs', () => {
   const gate = jobBlock(sample, 'fork-approval')
   assert.match(gate, /context=qvac\/fork-verified/)
   assert.match(gate, /secrets\.PAT_TOKEN/)
+  assert.match(gate, /HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/)
+  assert.match(gate, /REPO:\s*\$\{\{\s*github\.repository\s*\}\}/)
+  assert.doesNotMatch(
+    gate,
+    /run:[\s\S]*?\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
+    'fork-approval must not interpolate head.sha directly in run:',
+  )
 })
 
 test('audit-called-out privileged checkouts are pinned to event head SHA', () => {
@@ -879,11 +886,30 @@ test('fork-ci: every pull_request_target verified-surface workflow has the fork-
   }
 })
 
+function jobDependsOnAuthorize(job) {
+  if (job.text.includes('authorize.outputs.allowed')) return true
+  return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
+}
+
+function jobRunsPrivilegedForkSurface(job) {
+  if (/secrets\.(?!GITHUB_TOKEN\b)/.test(job.text)) return true
+  if (/uses:\s*[^@\n]+\n[\s\S]*?secrets:\s*inherit/.test(job.text)) return true
+  if (!/uses:\s*actions\/checkout@/.test(job.text)) return false
+  if (/ref:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}/.test(job.text)) {
+    return false
+  }
+  if (/sparse-checkout/.test(job.text) && /default_branch/.test(job.text)) {
+    return false
+  }
+  return true
+}
+
 test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
       if (FORK_CI_GATE_JOBS.has(job.name)) continue
-      if (!job.text.includes('authorize.outputs.allowed')) continue
+      if (!jobDependsOnAuthorize(job)) continue
+      if (!jobRunsPrivilegedForkSurface(job)) continue
       assert.match(
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,

@@ -60,10 +60,11 @@ jobs:
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          sha="${{ github.event.pull_request.head.sha }}"
-          gh api "repos/${{ github.repository }}/statuses/${sha}" \
+          gh api "repos/${REPO}/statuses/${HEAD_SHA}" \
             -f state=success \
             -f context=qvac/fork-verified \
             -f description="fork-ci environment approved for this commit"
