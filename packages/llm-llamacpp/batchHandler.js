@@ -158,7 +158,7 @@ class BatchHandler {
       output: outputs[index] || ''
     }))
     try {
-      if (stats != null) group.response.updateStats(stats)
+      if (stats !== null) group.response.updateStats(stats)
     } finally {
       this._drop(jobId, group)
       group.response.ended(finalResult)

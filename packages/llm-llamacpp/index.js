@@ -163,7 +163,12 @@ function normalizeFinetuneParams(opts) {
       "Top-level evalDatasetPath is no longer supported. Use validation.path with validation.type set to 'dataset'."
     )
   }
-  if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
+  if (
+    validation === null ||
+    validation === undefined ||
+    typeof validation !== 'object' ||
+    !('type' in validation)
+  ) {
     throw new Error(
       "Finetuning options must include validation: { type: 'none' | 'split' | 'dataset'[, fraction?: number][, path?: string] }. " +
         "Example: validation: { type: 'split', fraction: 0.05 }, validation: { type: 'dataset', path: './eval.jsonl' }, or validation: { type: 'none' }."
@@ -304,7 +309,7 @@ class LlmLlamacpp {
     this.state = { configLoaded: false }
   }
 
-  async load() {
+  load() {
     return this._run(async () => {
       if (this.state.configLoaded) return
       await this._load()
@@ -361,7 +366,7 @@ class LlmLlamacpp {
    * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk)
    * @returns {Promise<QvacResponse>}
    */
-  async run(prompt, runOptions) {
+  run(prompt, runOptions) {
     if (BatchHandler.isBatchInput(prompt)) {
       if (runOptions !== undefined) {
         throw new TypeError('Batch run options must be set per BatchPrompt item')
@@ -453,7 +458,7 @@ class LlmLlamacpp {
     return response
   }
 
-  async finetune(finetuningOptions = undefined) {
+  finetune(finetuningOptions = undefined) {
     if (!finetuningOptions) {
       throw new Error('Finetuning parameters are required.')
     }
@@ -607,7 +612,7 @@ class LlmLlamacpp {
         }
       } else if (sink) {
         try {
-          if (this.opts.stats && data != null) sink.updateStats(data)
+          if (this.opts.stats && data !== null) sink.updateStats(data)
         } finally {
           sink.ended()
         }
@@ -682,7 +687,7 @@ class LlmLlamacpp {
    * are safe; they hit the `!this.addon` guard and throw or no-op.
    * @returns {Promise<void>}
    */
-  async unload() {
+  unload() {
     return this._run(async () => {
       try {
         await this.pause()

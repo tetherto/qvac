@@ -104,15 +104,15 @@ class LlamaInterface {
    * @param {Uint8Array|null} weightsData.chunk
    * @param {Boolean} weightsData.completed
    */
-  async loadWeights(weightsData) {
-    this._binding.loadWeights(this._handle, weightsData)
+  loadWeights(weightsData) {
+    return Promise.resolve(this._binding.loadWeights(this._handle, weightsData))
   }
 
   /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
-  async activate() {
-    this._binding.activate(this._handle)
+  activate() {
+    return Promise.resolve(this._binding.activate(this._handle))
   }
 
   /**
@@ -155,14 +155,14 @@ class LlamaInterface {
   /**
    * Run finetuning when native binding provides support.
    */
-  async finetune(finetuningParams) {
+  finetune(finetuningParams) {
     if (typeof this._binding.finetune !== 'function') {
       throw new Error('Finetuning is not exposed by this native binding')
     }
     if (finetuningParams === undefined) {
       throw new Error('Finetuning parameters are required')
     }
-    return this._binding.finetune(this._handle, finetuningParams)
+    return Promise.resolve(this._binding.finetune(this._handle, finetuningParams))
   }
 
   /**
@@ -174,17 +174,18 @@ class LlamaInterface {
    * @param {Array<{type: string, input?: string, content?: Uint8Array}> | Array<{id?: string, messages: Array<{type: string, input?: string, content?: Uint8Array}>}>} data - messages (text and/or media), or batch items
    * @returns {Promise<{accepted: true, id: number, ids?: string[]} | {accepted: false, ids?: string[]}>} admission result. The scheduler-minted job id (`id`) — the group id for a batch — is present only when `accepted` is true; a batch run additionally reports the per-item `ids` on both the accepted and rejected branches.
    */
-  async runJob(data) {
-    return this._binding.runJob(this._handle, data)
+  runJob(data) {
+    return Promise.resolve(this._binding.runJob(this._handle, data))
   }
 
   /**
    * Unload the model and clear resources (including memory).
    */
-  async unload() {
-    if (!this._handle) return
+  unload() {
+    if (!this._handle) return Promise.resolve()
     this._binding.destroyInstance(this._handle)
     this._handle = null
+    return Promise.resolve()
   }
 }
 
