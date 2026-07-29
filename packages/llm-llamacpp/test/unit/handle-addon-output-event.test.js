@@ -64,6 +64,31 @@ test('two concurrent jobs receive only their own output', async (t) => {
   t.absent(out2.includes('AAA'), 'job 2 must not see job 1 output')
 })
 
+test('a throwing stats listener cannot strand a completed job', async (t) => {
+  const model = new LlmLlamacpp({
+    files: { model: ['/tmp/test.gguf'] },
+    config: { device: 'cpu', ctx_size: '256', parallel: '4' },
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    opts: { stats: true }
+  })
+  model.addon = {
+    runJob: () => ({ accepted: true, id: 1 }),
+    activeJobs: () => 0
+  }
+  const response = await model._runInternal([{ role: 'user', content: 'a' }])
+  response.on('stats', () => {
+    throw new Error('stats listener boom')
+  })
+
+  t.exception(() => endJob(model, 1), /stats listener boom/)
+  const outcome = await Promise.race([
+    response.await(),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.alike(outcome, [], 'the terminal event resolves await after stats delivery throws')
+})
+
 test('an Error routes only to the targeted job; peers are untouched', (t) => {
   const model = createModel()
   const calls1 = []
@@ -186,6 +211,31 @@ test('a tagged batch Error fails only its group; the peer group still completes'
     [{ id: 'eb', output: 'fine' }],
     'peer group is untouched and completes'
   )
+})
+
+test('batch failAll attempts every group when one settlement throws', (t) => {
+  const model = createModel()
+  const attempted = []
+  model._batchHandler._groups.set(31, {
+    ids: ['first'],
+    response: {
+      failed() {
+        attempted.push('first')
+        throw new Error('listener boom')
+      }
+    }
+  })
+  model._batchHandler._groups.set(32, {
+    ids: ['second'],
+    response: {
+      failed() {
+        attempted.push('second')
+      }
+    }
+  })
+
+  t.exception(() => model._batchHandler.failAll(new Error('unloaded')), /listener boom/)
+  t.alike(attempted, ['first', 'second'], 'the throwing group does not skip its peers')
 })
 
 test('events with no registered job are dropped, never reinterpreted', (t) => {
