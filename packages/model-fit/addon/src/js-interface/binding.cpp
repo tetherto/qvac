@@ -22,26 +22,34 @@ namespace {
 
 constexpr double UINT32_LIMIT = 4294967295.0;
 constexpr double INT32_LIMIT = 2147483647.0;
+constexpr double INT32_MIN_LIMIT = -2147483648.0;
 
 /// Rejects fractions and out-of-range values before they are narrowed to
-/// uint32_t/int32_t, where a fraction truncates and a negative wraps.
+/// uint32_t/int32_t, where a fraction truncates and an out-of-range value wraps.
 ///
 /// These checks duplicate `index.js` deliberately: `./binding.js` is a public
 /// export, so a caller can reach `paramsFit` without ever passing through the
 /// JS wrapper, and the native side must not depend on validation it cannot
 /// guarantee ran.
-double requireBoundedInteger(double value, double max, const char* key) {
+double requireBoundedSignedInteger(
+    double value, double min, double max, const char* key) {
   if (!std::isfinite(value) || value != std::trunc(value)) {
     throw StatusError(
         InvalidArgument,
         std::string("model-fit: '") + key + "' must be an integer");
   }
-  if (value < 0.0 || value > max) {
+  if (value < min || value > max) {
     throw StatusError(
         InvalidArgument,
         std::string("model-fit: '") + key + "' is out of range");
   }
   return value;
+}
+
+/// Unsigned fields: everything except nGpuLayers, where a negative would wrap
+/// rather than mean anything.
+double requireBoundedInteger(double value, double max, const char* key) {
+  return requireBoundedSignedInteger(value, 0.0, max, key);
 }
 
 } // namespace
@@ -85,8 +93,11 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
         requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "nUbatch"));
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nGpuLayers")) {
-    req.nGpuLayers = static_cast<int32_t>(
-        requireBoundedInteger(v->as<double>(env), INT32_LIMIT, "nGpuLayers"));
+    // Signed: llama.h documents a negative value as "all layers", so the whole
+    // int32 range is meaningful input.
+    req.nGpuLayers = static_cast<int32_t>(requireBoundedSignedInteger(
+        v->as<double>(env), INT32_MIN_LIMIT, INT32_LIMIT, "nGpuLayers"));
+    req.hasNGpuLayers = true;
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "marginMiB")) {
     req.marginMiB = static_cast<uint32_t>(

@@ -11,27 +11,31 @@ const FIT_STATUS = Object.freeze({
 
 const UINT32_MAX = 4294967295
 const INT32_MAX = 2147483647
+const INT32_MIN = -2147483648
 
 // Every numeric field crosses into C++ as a uint32_t or int32_t. Fractions
-// truncate there and negatives wrap, so `marginMiB: -1` would silently become a
-// ~4 PiB margin that nothing can ever satisfy. Reject at the boundary instead.
+// truncate there and out-of-range values wrap, so `marginMiB: -1` would silently
+// become a ~4 PiB margin that nothing can ever satisfy. Reject at the boundary.
+//
+// nGpuLayers is the one signed field: llama.h documents "a negative value means
+// all layers", so negatives are valid input, not a mistake.
 const NUMERIC_FIELDS = Object.freeze({
-  nCtx: UINT32_MAX,
-  nCtxMin: UINT32_MAX,
-  nBatch: UINT32_MAX,
-  nUbatch: UINT32_MAX,
-  nGpuLayers: INT32_MAX,
-  marginMiB: UINT32_MAX
+  nCtx: { min: 0, max: UINT32_MAX },
+  nCtxMin: { min: 0, max: UINT32_MAX },
+  nBatch: { min: 0, max: UINT32_MAX },
+  nUbatch: { min: 0, max: UINT32_MAX },
+  nGpuLayers: { min: INT32_MIN, max: INT32_MAX },
+  marginMiB: { min: 0, max: UINT32_MAX }
 })
 
-function validateNumber (config, key, max) {
+function validateNumber (config, key, min, max) {
   const value = config[key]
   if (value === undefined) return
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
     throw new TypeError(`model-fit: config.${key} must be a safe integer when provided`)
   }
-  if (value < 0 || value > max) {
-    throw new RangeError(`model-fit: config.${key} must be between 0 and ${max}`)
+  if (value < min || value > max) {
+    throw new RangeError(`model-fit: config.${key} must be between ${min} and ${max}`)
   }
 }
 
@@ -86,8 +90,8 @@ function fitParams (config) {
   if (config.backendsDir !== undefined && (typeof config.backendsDir !== 'string' || config.backendsDir.length === 0)) {
     throw new TypeError('model-fit: config.backendsDir must be a non-empty string when provided')
   }
-  for (const [key, max] of Object.entries(NUMERIC_FIELDS)) {
-    validateNumber(config, key, max)
+  for (const [key, { min, max }] of Object.entries(NUMERIC_FIELDS)) {
+    validateNumber(config, key, min, max)
   }
   validateRelationships(config)
   return binding.paramsFit(config)

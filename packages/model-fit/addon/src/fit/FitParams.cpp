@@ -218,7 +218,7 @@ FitResult runFit(const FitRequest& req) {
 
   // `llama_params_fit` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
-  if (req.nGpuLayers != GPU_LAYERS_AUTO) {
+  if (req.hasNGpuLayers) {
     mparams.n_gpu_layers = req.nGpuLayers;
   }
   // n_ctx is the documented exception: the fitter reduces it iff it is 0.

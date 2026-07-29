@@ -17,12 +17,20 @@
   also keeps two backend scopes from overlapping, which is what allows the
   unconditional init/free above to stay correct without reference counting.
 
-- Validate numeric arguments as non-negative safe integers within the range of
-  the `uint32_t`/`int32_t` they are narrowed to, and check `nUbatch <= nBatch`
+- Validate numeric arguments as safe integers within the range of the
+  `uint32_t`/`int32_t` they are narrowed to, and check `nUbatch <= nBatch`
   and `nCtxMin <= nCtx`. Previously only finiteness was checked, so fractions
   truncated and negatives wrapped — `marginMiB: -1` became a margin nothing
   could satisfy. Enforced in the native binding as well as the JS wrapper,
   since `./binding.js` is a public export that bypasses the wrapper.
+
+- Accept a negative `nGpuLayers`. `llama.h` defines it as "a negative value
+  means all layers" — it is the llama default, and what upstream's fit-params
+  prints back as `-ngl -1` — so rejecting it turned documented input into an
+  error. The internal "not pinned" marker is now a separate flag rather than an
+  `INT32_MIN` sentinel, which also frees that value for real use. The same
+  applies when reading the result: a negative `nGpuLayers` means the fitter
+  never rewrote the field, which is what happens on a host with no accelerator.
 - Default `nCtxMin` to 4096 when unset — upstream's own
   `common_params::fit_params_min_ctx` default — and resolve a fitted context of 0 to the
   model's trained context (read from GGUF KV metadata, no weights loaded), so a

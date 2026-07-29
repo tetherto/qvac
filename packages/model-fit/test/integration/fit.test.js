@@ -27,9 +27,10 @@ test('fitParams rejects values that would truncate or wrap in the binding', asyn
   await t.exception.all(() => fitParams({ ...base, nCtx: NaN }), /nCtx must be a safe integer/)
   await t.exception.all(() => fitParams({ ...base, nCtx: Infinity }), /nCtx must be a safe integer/)
 
-  // Negatives wrap: marginMiB -1 would become a margin nothing can satisfy.
+  // Negatives wrap on unsigned fields: marginMiB -1 would become a margin
+  // nothing can satisfy. nGpuLayers is exempt — see the next test.
   await t.exception.all(() => fitParams({ ...base, marginMiB: -1 }), /marginMiB must be between/)
-  await t.exception.all(() => fitParams({ ...base, nGpuLayers: -1 }), /nGpuLayers must be between/)
+  await t.exception.all(() => fitParams({ ...base, nCtxMin: -1 }), /nCtxMin must be between/)
 
   // Above the width of the target integer type.
   await t.exception.all(() => fitParams({ ...base, nCtx: 4294967296 }), /nCtx must be between/)
@@ -103,6 +104,18 @@ test('a successful plan always carries a concrete context', async function (t) {
   }
 })
 
+test('a negative nGpuLayers is valid input meaning "all layers"', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // llama.h: "number of layers to store in VRAM, a negative value means all
+  // layers". It is the llama default, and what upstream's own fit-params prints
+  // back (`-ngl -1`), so it must not be rejected as out of range.
+  const res = fitParams({ modelPath, nGpuLayers: -1, marginMiB: 1024 })
+
+  t.ok([FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status), 'accepted, not rejected')
+  t.is(res.nGpuLayers, -1, 'a pinned negative is preserved rather than normalised')
+})
+
 test('memory pressure moves the plan off the GPU rather than reporting FAILURE', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
 
@@ -119,9 +132,18 @@ test('memory pressure moves the plan off the GPU rather than reporting FAILURE',
 
   t.is(res.status, FIT_STATUS.SUCCESS, 'host fallback is still reported as a fit')
   t.is(res.fits, true)
-  t.is(res.nGpuLayers, 0, 'an unsatisfiable device margin offloads nothing to GPU')
   t.ok(res.nCtx > 0, 'a fitted plan still carries a concrete context')
   t.ok(res.nCtx <= 2048, 'context was reduced, not left at the trained maximum')
+
+  // Only meaningful where there is a GPU to move layers off. On a CPU-only
+  // runner the fitter has no offload decision to make, so it leaves
+  // n_gpu_layers at the llama default — which is negative, meaning "all
+  // layers", not zero.
+  if (res.nGpuDevices > 0) {
+    t.is(res.nGpuLayers, 0, 'an unsatisfiable device margin offloads nothing to GPU')
+  } else {
+    t.pass('no accelerator present; offload count is not a meaningful assertion')
+  }
 })
 
 test('pinned offload under pressure is the only way to get FAILURE', async function (t) {
@@ -137,9 +159,16 @@ test('pinned offload under pressure is the only way to get FAILURE', async funct
   // layers on the GPU".
   const res = fitParams({ modelPath, nGpuLayers: 5, marginMiB: 10000000 })
 
-  t.is(res.status, FIT_STATUS.FAILURE, 'a pinned plan that cannot be honoured fails')
-  t.is(res.fits, false)
   t.is(res.nGpuLayers, 5, 'the pinned layer count is preserved, not reduced')
+
+  if (res.nGpuDevices > 0) {
+    t.is(res.status, FIT_STATUS.FAILURE, 'a pinned plan that cannot be honoured fails')
+    t.is(res.fits, false)
+  } else {
+    // Nothing to pin layers to, so the margin never becomes unsatisfiable in
+    // the way this test is probing.
+    t.pass(`no accelerator present; got status ${res.status}`)
+  }
 })
 
 test('a failed fit preserves the caller hard constraints', async function (t) {
@@ -147,10 +176,16 @@ test('a failed fit preserves the caller hard constraints', async function (t) {
 
   const res = fitParams({ modelPath, nGpuLayers: 5, nCtx: 8192, marginMiB: 10000000 })
 
-  t.is(res.status, FIT_STATUS.FAILURE)
-  t.is(res.nGpuLayers, 5, 'pinned offload survives a failed fit')
-  t.is(res.nCtx, 8192, 'an explicit context survives a failed fit')
-  t.ok(res.nDevices >= 1, 'a failure still reports the inventory it measured against')
+  // Hard constraints must come back untouched whatever the verdict.
+  t.is(res.nGpuLayers, 5, 'pinned offload survives the fit')
+  t.is(res.nCtx, 8192, 'an explicit context survives the fit')
+  t.ok(res.nDevices >= 1, 'the inventory it measured against is always reported')
+
+  if (res.nGpuDevices > 0) {
+    t.is(res.status, FIT_STATUS.FAILURE, 'unmeetable pinned plan fails on a GPU host')
+  } else {
+    t.pass(`no accelerator present; got status ${res.status}`)
+  }
 })
 
 test('an explicit context is not reduced even under memory pressure', async function (t) {
@@ -162,7 +197,11 @@ test('an explicit context is not reduced even under memory pressure', async func
 
   if (res.fits) {
     t.is(res.nCtx, 2048, 'explicit context is a hard constraint under pressure')
-    t.is(res.nGpuLayers, 0, 'pressure is absorbed by offload, not by context')
+    if (res.nGpuDevices > 0) {
+      t.is(res.nGpuLayers, 0, 'pressure is absorbed by offload, not by context')
+    } else {
+      t.pass('no accelerator present; nothing to absorb the pressure with')
+    }
   } else {
     t.pass(`did not fit on this runner (status ${res.status})`)
   }
@@ -177,8 +216,11 @@ test('fitParams reports the device inventory it fitted against', async function 
   // list. Zero devices is now ERROR, never SUCCESS.
   t.ok(res.nDevices > 0 || res.status === FIT_STATUS.ERROR, 'zero devices can only ever report ERROR')
 
+  // With no accelerator the fitter has nothing to decide, so n_gpu_layers stays
+  // at the llama default rather than being rewritten to 0. Assert only that a
+  // host-only projection never claims a positive offload.
   if (res.nGpuDevices === 0) {
-    t.is(res.nGpuLayers, 0, 'host-only projection offloads no layers')
+    t.ok(res.nGpuLayers <= 0, 'a host-only projection never claims layers on a GPU')
   }
 })
 

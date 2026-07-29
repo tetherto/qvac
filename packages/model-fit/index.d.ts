@@ -18,7 +18,11 @@ export interface FitConfig {
   nBatch?: number
   /** Physical batch size. 0 = llama default. */
   nUbatch?: number
-  /** Pin the GPU offload layer count; omit to let the fitter choose. */
+  /**
+   * Pin the GPU offload layer count; omit to let the fitter choose. Per
+   * llama.h a negative value means "all layers", so negatives are valid.
+   * Pinning makes offload a hard constraint the fitter will not relax.
+   */
   nGpuLayers?: number
   /** Free headroom to leave on every device, in MiB (default 1024). */
   marginMiB?: number
@@ -29,7 +33,12 @@ export interface FitResult {
   status: number
   /** true iff status === SUCCESS. */
   fits: boolean
-  /** Fitted number of layers to offload to GPU. */
+  /**
+   * Fitted number of layers to offload to GPU. Negative means "all layers"
+   * (the llama default), which is what comes back when the fitter had no
+   * offload decision to make — e.g. on a host with no accelerator. Check
+   * `nGpuDevices` before reading this as a plan.
+   */
   nGpuLayers: number
   /** Fitted context size. Always concrete (never 0) when status is SUCCESS. */
   nCtx: number

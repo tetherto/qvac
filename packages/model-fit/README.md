@@ -90,9 +90,16 @@ reference counting.
 ### Argument validation
 
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
-and negatives wrap — `marginMiB: -1` would otherwise become a margin nothing can
-satisfy. All of them must be non-negative safe integers within the range of
-their target type, with `nUbatch <= nBatch` and `nCtxMin <= nCtx`.
+and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
+nothing can satisfy. All must be safe integers within the range of their target
+type, with `nUbatch <= nBatch` and `nCtxMin <= nCtx`.
+
+`nGpuLayers` is the one **signed** field. `llama.h` defines it as "number of
+layers to store in VRAM, a negative value means all layers", so negatives are
+valid input — `-1` is the llama default and what upstream's `llama-fit-params`
+prints back. Read the same care into the *result*: a negative `nGpuLayers`
+means the fitter never rewrote the field, which is what happens on a host with
+no accelerator. Check `nGpuDevices` before treating it as an offload plan.
 
 These checks are enforced **in the native binding as well as the JS wrapper**,
 because `./binding.js` is a public export and can be called without passing

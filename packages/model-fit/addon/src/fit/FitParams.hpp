@@ -7,9 +7,6 @@
 
 namespace model_fit {
 
-/// Sentinel meaning "caller did not pin n_gpu_layers" — leave the field at the
-/// llama default so `llama_params_fit` is free to choose the layer count.
-inline constexpr int32_t GPU_LAYERS_AUTO = std::numeric_limits<int32_t>::min();
 
 /// Floor applied when the caller leaves `nCtxMin` at 0. Reducing towards a lower
 /// bound of zero would let the fitter return a context no model can run with.
@@ -42,10 +39,17 @@ struct FitRequest {
   uint32_t nBatch = 0;
   uint32_t nUbatch = 0;
 
-  /// GPU layers to offload. `GPU_LAYERS_AUTO` leaves it at the llama default so
-  /// the fitter can choose; any other value pins it (the fitter won't touch a
-  /// non-default field).
-  int32_t nGpuLayers = GPU_LAYERS_AUTO;
+  /// GPU layers to offload, honoured only when `hasNGpuLayers` is set.
+  ///
+  /// Per `llama.h`, "a negative value means all layers", so negatives are valid
+  /// input rather than an error. A separate flag rather than a sentinel keeps
+  /// every int32 value — including INT32_MIN — usable.
+  int32_t nGpuLayers = 0;
+
+  /// Whether the caller pinned the layer count. Left unset, the field stays at
+  /// its llama default and the fitter is free to choose; pinning makes it a
+  /// hard constraint, since only default-valued fields get rewritten.
+  bool hasNGpuLayers = false;
 
   /// Free headroom to leave on every device, in MiB. Upstream default is 1024.
   uint32_t marginMiB = 1024;
