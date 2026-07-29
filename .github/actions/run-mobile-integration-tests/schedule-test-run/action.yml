@@ -112,6 +112,39 @@ runs:
           RUN_NAME_BASE="PR-${{ github.event.pull_request.number || github.run_number }}-${PLATFORM}"
         fi
 
+        # Partial-scheduling rollback.
+        #
+        # run_arns is only published to $GITHUB_OUTPUT after ALL runs are created,
+        # so if a later schedule-run fails (sharded loop group 2+, or the second
+        # dual-flagship target) the caller sees no ARNs and cannot cancel the runs
+        # that DID get created — they keep executing on real devices and billing
+        # until their own timeout. Track what we create and stop it on failure.
+        #
+        # `shell: bash` runs with -e, so any failed schedule-run aborts the step and
+        # fires this trap.
+        CREATED_RUN_ARNS=""
+
+        rollback_created_runs() {
+          local status=$?
+          trap - ERR
+          if [ -n "$CREATED_RUN_ARNS" ]; then
+            echo "::warning::Scheduling failed part way — stopping the runs already created to avoid billing them."
+            for arn in $CREATED_RUN_ARNS; do
+              if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
+                echo "  stopped $arn"
+              else
+                echo "  ::warning::could not stop $arn (it may have already finished)"
+              fi
+            done
+          fi
+          exit "$status"
+        }
+        trap rollback_created_runs ERR
+
+        record_created_run() {
+          CREATED_RUN_ARNS="$CREATED_RUN_ARNS $1"
+        }
+
         schedule_run_with_pool() {
           local pool_arn="$1"
           local name="$2"
@@ -163,6 +196,7 @@ runs:
             SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].arn")
             RUN_NAME="${RUN_NAME_BASE}-${GROUP_NAME}"
             RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$SPEC_ARN")
+            record_created_run "$RUN_ARN"
             echo "  $RUN_NAME -> $RUN_ARN"
             RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
           done
@@ -179,6 +213,7 @@ runs:
           fi
           SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
           RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME_BASE" "$SPEC_ARN")
+          record_created_run "$RUN_ARN"
           echo "  $RUN_NAME_BASE -> $RUN_ARN"
           RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
         elif [ "$SCHEDULING_MODE" = "single-device" ]; then
@@ -208,6 +243,7 @@ runs:
           }')
           SAFE_MODEL=$(printf '%s' "$DEVICE_MODEL" | tr -c '[:alnum:]' '_')
           RUN_ARN=$(schedule_run_with_filter "${RUN_NAME_BASE}-${SAFE_MODEL}" "$FILTER" "$SPEC_ARN")
+          record_created_run "$RUN_ARN"
           echo "  ${RUN_NAME_BASE}-${SAFE_MODEL} -> $RUN_ARN"
           RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
         else
@@ -217,7 +253,9 @@ runs:
             SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
             PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
             RUN_ARN_1=$(schedule_run_with_filter "${RUN_NAME_BASE}-Samsung" "$SAMSUNG_FILTER" "$SPEC_ARN")
+            record_created_run "$RUN_ARN_1"
             RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-Pixel"   "$PIXEL_FILTER"   "$SPEC_ARN")
+            record_created_run "$RUN_ARN_2"
           else
             if [ -z "$IOS_POOL_ARN" ]; then
               echo "ERROR: dual-flagship iOS requires ios-device-pool-arn" >&2
@@ -225,7 +263,9 @@ runs:
             fi
             IPHONE17_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}],"maxDevices":1}'
             RUN_ARN_1=$(schedule_run_with_pool   "$IOS_POOL_ARN"     "$RUN_NAME_BASE"           "$SPEC_ARN")
+            record_created_run "$RUN_ARN_1"
             RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-iPhone17" "$IPHONE17_FILTER" "$SPEC_ARN")
+            record_created_run "$RUN_ARN_2"
           fi
           echo "  Run 1: $RUN_ARN_1"
           echo "  Run 2: $RUN_ARN_2"
