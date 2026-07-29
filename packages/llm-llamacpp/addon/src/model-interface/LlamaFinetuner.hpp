@@ -126,6 +126,7 @@ private:
   void setPausedCheckpointStateShared(
       std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
   void clearPausedCheckpointStateShared();
+  void discardPendingPauseRequest();
 
   LlamaModel& model_;
 
@@ -134,4 +135,12 @@ private:
       currentCheckpointState_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
       pausedCheckpointState_;
+  /// Pause/cancel latched while `currentCheckpointState_` is not yet
+  /// published (the finetune setup window: model reload, dataset
+  /// tokenization, adapter/optimizer setup). The value is the requested
+  /// savePauseCheckpoint. Publication transfers it into the state so the
+  /// training loop pauses at its first batch check; job teardown discards a
+  /// leftover so it never bleeds into a later finetune. Guarded by
+  /// `checkpointStateMutex_`.
+  std::optional<bool> pendingPauseSaveCheckpoint_;
 };
