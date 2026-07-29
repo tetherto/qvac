@@ -325,7 +325,7 @@ safeTest(
     t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
 
     const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
-    const addon = await setupModel(t)
+    const addon = await setupModel(t, { 'ignore-eos': '' })
     const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-stress-${Date.now()}.bin`)
     cleanupIntegrationCacheFiles(cachePath)
     t.teardown(() => {
@@ -360,6 +360,11 @@ safeTest(
     t.ok(
       toNumber(first.stats.generatedTokens) > N_DISCARDED,
       `first turn generated enough disposable tokens (${first.stats.generatedTokens})`
+    )
+    t.is(
+      first.stats.stopReason,
+      'predictionLimit',
+      'first turn ignored EOS and reached the deterministic generation limit'
     )
     t.ok(
       toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
