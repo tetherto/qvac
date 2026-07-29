@@ -56,5 +56,9 @@ export const FIT_STATUS: {
 /**
  * Runs a memory-fit preflight for a llama.cpp GGUF model. Synchronous, blocking,
  * and does not load weights (the fitter simulates allocations).
+ *
+ * Calls are serialised process-wide: `llama_params_fit` mutates global llama
+ * logger state and is not thread safe, so concurrent callers block rather than
+ * run together.
  */
 export function fitParams (config: FitConfig): FitResult

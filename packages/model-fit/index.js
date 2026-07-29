@@ -26,6 +26,10 @@ function validateNumber (config, key) {
  * short-lived worklet so that any backend/driver instability during probing
  * stays isolated from the inference worker.
  *
+ * Calls are serialised process-wide: `llama_params_fit` mutates global llama
+ * logger state and is not thread safe, so concurrent callers block instead of
+ * running together.
+ *
  * Backends must be registered before the fitter can see any device, so pass
  * `backendsDir` wherever the packaged ggml backends ship as separate shared
  * libraries; omit it for a statically linked build, which self-registers.

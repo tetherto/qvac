@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <mutex>
 #include <stdexcept>
 
 #include <ggml-backend.h>
@@ -14,6 +15,20 @@
 namespace model_fit {
 
 namespace {
+
+/// Serialises whole fit calls.
+///
+/// `llama.h` states that `llama_params_fit` "is NOT thread safe because it
+/// modifies the global llama logger state", so two concurrent fits are unsafe
+/// no matter how the backend is managed. Bare runs JS single-threaded per
+/// worklet, but this addon's C++ statics are shared across every worklet in the
+/// process, so nothing else prevents two of them calling in at once.
+///
+/// Holding this for the entire call also means two BackendScopes can never
+/// overlap, which is what makes the unconditional init/free below safe without
+/// the reference counting @qvac/llm-llamacpp needs (it keeps many models alive
+/// concurrently and therefore cannot serialise).
+std::mutex g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /// Owns the ggml/llama backend lifecycle for one fit call.
 ///
@@ -117,6 +132,10 @@ bool callLlamaParamsFitGuarded(
 } // namespace
 
 FitResult runFit(const FitRequest& req) {
+  // Held for the whole call — see g_fitMutex. Concurrent callers block rather
+  // than corrupt the global logger state the fitter installs.
+  const std::lock_guard<std::mutex> fitLock(g_fitMutex);
+
   if (req.modelPath.empty()) {
     throw std::invalid_argument("model-fit: modelPath is required");
   }

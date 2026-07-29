@@ -11,6 +11,12 @@
   (new optional `backendsDir`, `BACKENDS_SUBDIR` appended) or falls back to
   ggml's default search path, then initialises and frees the llama backend.
 
+- Serialise fit calls process-wide. `llama.h` documents `llama_params_fit` as
+  not thread safe because it mutates global llama logger state, and this addon's
+  C++ statics are shared across worklets, so concurrent callers now block. This
+  also keeps two backend scopes from overlapping, which is what allows the
+  unconditional init/free above to stay correct without reference counting.
+
 ### Added
 
 - `nDevices` and `nGpuDevices` on the result — the device inventory the

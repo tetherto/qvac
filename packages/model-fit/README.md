@@ -65,6 +65,13 @@ constant and is nonzero even when nothing was detected.
 outcome (that is a valid `FAILURE` result) or for a missing model file (`ERROR`);
 it throws only on invalid arguments.
 
+Calls are **serialised process-wide**. `llama.h` documents `llama_params_fit` as
+not thread safe because it mutates global llama logger state, and this addon's
+C++ statics are shared across every worklet in a process, so concurrent callers
+block rather than corrupt each other. Serialising also guarantees two backend
+scopes never overlap, which is why the backend lifecycle below needs no
+reference counting.
+
 ### Fit semantics (from `llama.h`)
 
 - `llama_params_fit` only rewrites `mparams`/`cparams` fields that still hold
