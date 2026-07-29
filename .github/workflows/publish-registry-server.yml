@@ -55,6 +55,22 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -111,6 +127,7 @@ jobs:
 
   detect-changes:
     needs:
+      - fork-approval
       - authorize
       - label-gate
     runs-on: ubuntu-latest
@@ -177,7 +194,7 @@ jobs:
           fi
 
   publish-logic:
-    needs: [authorize]
+    needs: [fork-approval, authorize]
     runs-on: ubuntu-latest
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
@@ -228,6 +245,7 @@ jobs:
 
   publish-schema-gpr:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
@@ -265,6 +283,7 @@ jobs:
 
   publish-schema-npm:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
@@ -322,7 +341,7 @@ jobs:
 
   publish-schema:
     name: Publish Schema (meta)
-    needs: [authorize, publish-schema-gpr, publish-schema-npm]
+    needs: [fork-approval, authorize, publish-schema-gpr, publish-schema-npm]
     if: |
       needs.authorize.outputs.allowed == 'true' &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
@@ -344,6 +363,7 @@ jobs:
 
   lint-and-test:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - label-gate
@@ -415,6 +435,7 @@ jobs:
 
   publish-client-gpr:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
@@ -455,6 +476,7 @@ jobs:
 
   publish-client-npm:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
