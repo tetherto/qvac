@@ -115,6 +115,22 @@ jobs:
           name: prebuilds
           path: packages/vla-ggml/prebuilds
 
+      # The published root JS + .d.ts entrypoints are generated from the
+      # TypeScript sources under src/. Rebuild them here so the freshly
+      # checked-out (source-only) tree ships the compiled wrapper.
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/vla-ggml
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/vla-ggml
+        run: npm run build:ts
+
       - name: Publish to GitHub Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-gpr
@@ -151,6 +167,22 @@ jobs:
         with:
           name: prebuilds
           path: packages/vla-ggml/prebuilds
+
+      # The published root JS + .d.ts entrypoints are generated from the
+      # TypeScript sources under src/. Rebuild them here so the freshly
+      # checked-out (source-only) tree ships the compiled wrapper.
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/vla-ggml
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/vla-ggml
+        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag

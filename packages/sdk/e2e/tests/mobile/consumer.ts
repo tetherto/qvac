@@ -539,6 +539,10 @@ export const executor = createExecutor({
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
     ),
+    new SkipExecutor(
+      /^(ocr-doctr-|model-load-ocr-doctr$)/,
+      'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile'
+    ),
     ...(Platform.OS === 'android'
       ? [
           skipTests(
