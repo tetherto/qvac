@@ -34,7 +34,9 @@ LlamaModel makeUnloadedModel() {
 // construction itself already issues a whole-model cancel (setInitLoader
 // cancels any prior work), so the counter need not start at zero — what
 // matters is that THIS cancel adds a forward.
-TEST(WholeModelCancelFinetuneTest, WholeModelCancelForwardsFinetuneCancellation) {
+TEST(
+    WholeModelCancelFinetuneTest,
+    WholeModelCancelForwardsFinetuneCancellation) {
   LlamaModel model = makeUnloadedModel();
   const unsigned before = LlamaModelTestPeer::finetuneCancelRequests(model);
 

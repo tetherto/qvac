@@ -81,7 +81,10 @@ safeTest(
     })
     second.onError(() => {})
     first.await().catch(() => {})
-    const secondSettled = second.await().then(() => 'resolved', (err) => err)
+    const secondSettled = second.await().then(
+      () => 'resolved',
+      (err) => err
+    )
 
     let unloadError = null
     try {
