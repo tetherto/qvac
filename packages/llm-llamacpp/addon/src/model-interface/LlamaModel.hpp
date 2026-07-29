@@ -508,6 +508,13 @@ private:
   /// requestFinetuneCancel — see both for the hand-off.
   std::atomic<bool> finetuneCancelSavesCheckpoint_{false};
 
+  /// Count of finetune cancellation requests this model has forwarded to the
+  /// finetuner (requestFinetuneCancel() calls). Bumped in every build so
+  /// tests can observe the cancel→finetuner contract even in the standalone
+  /// test build, where requestFinetuneCancel's finetuner forward is compiled
+  /// out (see LlamaModelTestPeer::finetuneCancelRequests).
+  mutable std::atomic<unsigned> finetuneCancelRequests_{0};
+
   /// The complete terminal snapshot a finished concurrent job leaves behind
   /// for consumeJobStats() (see jobTerminalStats). Guarded by
   /// `jobStatsMtx_`. Bounded by the job lifecycle: written only when the

@@ -42,6 +42,14 @@ public:
   static bool isConcurrentEligible(const LlamaModel::Prompt& prompt) {
     return LlamaModel::isConcurrentEligible(prompt);
   }
+
+  /// How many finetune cancellation requests the model has forwarded to the
+  /// finetuner (requestFinetuneCancel() calls). Counted in every build, so
+  /// the forwarding contract stays observable in the standalone test build,
+  /// where requestFinetuneCancel's finetuner forward is compiled out.
+  static unsigned finetuneCancelRequests(const LlamaModel& model) {
+    return model.finetuneCancelRequests_.load();
+  }
 };
 
 class LlamaFinetunerTestPeer {

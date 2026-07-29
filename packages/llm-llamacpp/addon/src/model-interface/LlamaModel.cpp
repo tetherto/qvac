@@ -763,6 +763,7 @@ void LlamaModel::cancelImpl() const {
 }
 
 void LlamaModel::requestFinetuneCancel() {
+  finetuneCancelRequests_.fetch_add(1);
 #ifndef STANDALONE_TEST_BUILD
   // requestPause is cross-thread safe by design (the JS cancel binding calls
   // it from a detached thread); it no-ops when no finetune is running.

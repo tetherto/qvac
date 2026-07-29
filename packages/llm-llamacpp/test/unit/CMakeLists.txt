@@ -60,6 +60,7 @@ add_executable(
   test_parse_unsigned.cpp
   test_finetune_cancel_action.cpp
   test_finetune_pending_pause.cpp
+  test_whole_model_cancel_finetune.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
