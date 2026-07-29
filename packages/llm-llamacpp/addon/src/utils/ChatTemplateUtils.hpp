@@ -16,6 +16,18 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 bool isQwen3Model(const ::llama_model* model);
+
+/**
+ * @brief Returns true when `architecture` is exactly `qwen3`
+ * (case-insensitive).
+ *
+ * Exact-match predicate that drives fixed-template selection in
+ * `getChatTemplateForModel` (via `isQwen3Model`). Deliberately narrower than
+ * `isQwen3ReasoningFamilyArchitecture`, which also matches `qwen35`/`qwen3moe`:
+ * only exact `qwen3` gets the hardcoded Qwen3 chat template. Exposed for unit
+ * testing without a real ::llama_model.
+ */
+bool isQwen3Architecture(std::string_view architecture);
 bool isHarmonyModel(const ::llama_model* model);
 bool isGemma4Model(const ::llama_model* model);
 llama_token getHarmonyCallToken(::llama_context* lctx);

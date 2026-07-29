@@ -39,6 +39,20 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
+// `isQwen3Architecture` is the exact-match predicate that drives fixed Qwen3
+// chat-template selection (via isQwen3Model -> getChatTemplateForModel). It
+// must stay strictly `qwen3`: `qwen35` and other family members must NOT match
+// (they are covered separately by isQwen3ReasoningFamilyArchitecture for
+// reasoning-tag purposes only).
+TEST_F(ChatTemplateUtilsTest, IsQwen3ArchitectureExactMatch) {
+  EXPECT_TRUE(isQwen3Architecture("qwen3"));
+  EXPECT_TRUE(isQwen3Architecture("Qwen3")); // case-insensitive (normalized)
+  EXPECT_FALSE(isQwen3Architecture("qwen35"));
+  EXPECT_FALSE(isQwen3Architecture("qwen3moe"));
+  EXPECT_FALSE(isQwen3Architecture("llama"));
+  EXPECT_FALSE(isQwen3Architecture(""));
+}
+
 TEST_F(ChatTemplateUtilsTest, IsMedPsyModelWithNullptr) {
   EXPECT_FALSE(isMedPsyModel(nullptr));
 }

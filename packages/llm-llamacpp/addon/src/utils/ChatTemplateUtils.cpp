@@ -39,10 +39,6 @@ std::string normalizeArchitecture(std::string_view architecture) {
   return toLower(architecture);
 }
 
-bool isQwen3Architecture(std::string_view architecture) {
-  return normalizeArchitecture(architecture) == "qwen3";
-}
-
 bool isHarmonyArchitecture(std::string_view architecture) {
   return normalizeArchitecture(architecture) == "gpt-oss";
 }
@@ -95,6 +91,10 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
     return normalizeArchitecture(arch);
   }
   return std::nullopt;
+}
+
+bool isQwen3Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "qwen3";
 }
 
 bool isQwen3Model(const ::llama_model* model) {
