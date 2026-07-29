@@ -2,6 +2,10 @@
   "ios": {
     "finetuning": ["runFinetuningPauseResumeTest"],
     "finetuningArchs": ["runFinetuningArchsTest"],
+    "finetuning": [
+      "runFinetuningPauseResumeTest",
+      "runFinetuningCancelSlotReleaseTest"
+    ],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
@@ -17,7 +21,8 @@
       "runCacheStateMachineTest",
       "runConfigParametersTest",
       "runKvCacheTypeDefaultsTest",
-      "runToolsCompactTest"
+      "runToolsCompactTest",
+      "runUnloadThrowingListenerTest"
     ],
     "lightB": [
       "runGenerationParamsTest",
@@ -35,6 +40,7 @@
     "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
+      "runFinetuningCancelSlotReleaseTest",
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
@@ -45,7 +51,8 @@
     "funcShardB": [
       "runToolsCompactTest",
       "runSlidingContextTest",
-      "runKvCacheTypeDefaultsTest"
+      "runKvCacheTypeDefaultsTest",
+      "runUnloadThrowingListenerTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
