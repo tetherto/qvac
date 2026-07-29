@@ -1,8 +1,8 @@
 'use strict'
 
 /**
- * Unit tests for the duplex streaming API:
- *   - TranscriptionParakeet.runStreaming(audioStream, streamingConfig?)
+ * Unit tests for the parakeet duplex streaming API:
+ *   - ASRGgml.runStreaming(audioStream, streamingConfig?) with engine "parakeet"
  *   - ParakeetInterface.{startStreaming, appendStreamingAudio,
  *                       endStreaming, cancelStreaming}
  *
@@ -15,96 +15,44 @@
  *     buffering the input the way the batched `run()` path does;
  *   - each pushed chunk surfaces one `Output` event through the
  *     wrapper's `onUpdate(...)` channel (incremental, not batched);
- *   - `endStreaming` synthesises a JobEnded event in JS so the
- *     wrapper's response chain (`response.onUpdate(...).await()`)
+ *   - `appendStreamingAudio` resolves the boolean back-pressure signal
+ *     the merged binding returns (false iff zero samples decoded);
+ *   - `endStreaming` returns the { cleaned, audioDurationMs, totalSamples }
+ *     teardown object and the JS layer synthesises a JobEnded from it so
+ *     the wrapper's response chain (`response.onUpdate(...).await()`)
  *     resolves cleanly, which is the contract the live-mic example
- *     depends on (see parakeet.js -> async endStreaming);
+ *     depends on;
+ *   - a concurrent run()/runStreaming() during an open session rejects
+ *     with the structured STREAMING_SESSION_ACTIVE error;
  *   - cancellation tears the session down via the existing
  *     `cancel(handle)` route the streaming-aware C++ shim wraps;
  *   - calling `appendStreamingAudio` without an active session
  *     throws via `ParakeetInterface`.
  *
  * For end-to-end coverage against a real GGUF, see
- * test/integration/duplex-streaming.test.js.
+ * test/integration/parakeet-duplex-streaming.test.js.
  */
 
 const test = require('brittle')
-const TranscriptionParakeet = require('../../index.js')
-const MockedBinding = require('../mocks/MockedBinding.js')
-const { transitionCb, wait } = require('../mocks/utils.js')
-const { ParakeetInterface } = require('../../parakeet')
+const ASRGgml = require('../../index.js')
+const MockedBinding = require('../mocks/ParakeetMockedBinding.js')
+const { wait } = require('../mocks/utils.js')
+const { createParakeetModel, getAddon, getJob, pushable } = require('../mocks/createModel.js')
 
 const process = require('bare-process')
 global.process = process
 
 function createMockedModel({ onOutput = () => {}, binding = undefined, parakeetConfig = {} } = {}) {
-  TranscriptionParakeet.prototype.validateModelFiles = () => undefined
-
-  const model = new TranscriptionParakeet({
-    files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
-    config: {
-      parakeetConfig: {
-        streaming: true,
-        streamingChunkMs: 2000,
-        ...parakeetConfig
-      }
+  const { model } = createParakeetModel({
+    binding: binding || new MockedBinding(),
+    onOutput,
+    parakeetConfig: {
+      streaming: true,
+      streamingChunkMs: 2000,
+      ...parakeetConfig
     }
   })
-
-  const _binding = binding || new MockedBinding()
-
-  model._createAddon = (configurationParams) => {
-    const addon = new ParakeetInterface(
-      _binding,
-      configurationParams,
-      (addon, event, jobId, output, error) => {
-        model._outputCallback(addon, event, jobId, output, error)
-        onOutput(addon, event, jobId, output, error)
-      },
-      transitionCb
-    )
-    return addon
-  }
-
-  model._mockedBinding = _binding
   return model
-}
-
-function pushable() {
-  const queue = []
-  let waiter = null
-  let ended = false
-  return {
-    push(chunk) {
-      if (ended) return
-      queue.push(chunk)
-      if (waiter) {
-        const w = waiter
-        waiter = null
-        w()
-      }
-    },
-    end() {
-      ended = true
-      if (waiter) {
-        const w = waiter
-        waiter = null
-        w()
-      }
-    },
-    async *[Symbol.asyncIterator]() {
-      while (true) {
-        if (queue.length > 0) {
-          yield queue.shift()
-          continue
-        }
-        if (ended) return
-        await new Promise((resolve) => {
-          waiter = resolve
-        })
-      }
-    }
-  }
 }
 
 test('runStreaming before load does not activate a response', async (t) => {
@@ -114,10 +62,10 @@ test('runStreaming before load does not activate a response', async (t) => {
 
   await t.exception(
     () => model.runStreaming(unloadedStream),
-    /Parakeet addon is not loaded/,
+    /not loaded/,
     'Pre-load streaming rejects before starting a response'
   )
-  t.absent(model._job.active, 'No response remains active after rejection')
+  t.absent(getJob(model).active, 'No response remains active after rejection')
 
   await model.load()
   const loadedStream = pushable()
@@ -218,14 +166,80 @@ test('runStreaming forwards per-call streamingConfig overrides to the binding', 
   await model.unload()
 })
 
+test('runStreaming rejects unknown per-call streaming options', async (t) => {
+  const model = createMockedModel()
+  await model.load()
+
+  const audioStream = pushable()
+  audioStream.end()
+  try {
+    await model.runStreaming(audioStream, { emitVadEvents: true })
+    t.fail('Whisper-vocabulary streaming option should be rejected for parakeet')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.INVALID_CONFIG,
+      'Unknown streaming option rejects with INVALID_CONFIG'
+    )
+  }
+
+  await model.unload()
+})
+
+test('appendStreamingAudio resolves the boolean back-pressure signal', async (t) => {
+  const model = createMockedModel()
+  await model.load()
+  const addon = getAddon(model)
+
+  await addon.startStreaming({ chunkMs: 2000 })
+
+  const acceptedNonEmpty = await addon.appendStreamingAudio(new Float32Array(512))
+  t.is(acceptedNonEmpty, true, 'Non-empty chunk resolves true')
+
+  const acceptedEmpty = await addon.appendStreamingAudio(new Float32Array(0))
+  t.is(acceptedEmpty, false, 'Zero-sample chunk resolves false (nothing decoded)')
+
+  await addon.endStreaming()
+  await addon.destroyInstance()
+})
+
+test('concurrent run() during an open streaming session rejects with STREAMING_SESSION_ACTIVE', async (t) => {
+  const model = createMockedModel()
+  await model.load()
+
+  const audioStream = pushable()
+  const response = await model.runStreaming(audioStream)
+
+  try {
+    await model.run(new Float32Array(256))
+    t.fail('run() must not queue behind an open streaming session')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.STREAMING_SESSION_ACTIVE,
+      'run() rejects with the structured STREAMING_SESSION_ACTIVE error'
+    )
+    t.is(
+      error.constructor.name,
+      'QvacErrorAddonASRGgml',
+      'The rejection uses the unified error class'
+    )
+  }
+
+  audioStream.end()
+  await response.await()
+  await model.unload()
+})
+
 test('appendStreamingAudio without an active session throws', async (t) => {
   const model = createMockedModel()
   await model.load()
+  const addon = getAddon(model)
 
   const samples = new Float32Array(512)
 
   await t.exception(
-    () => model.addon.appendStreamingAudio(samples),
+    () => addon.appendStreamingAudio(samples),
     /No active streaming session/,
     'Throws when no startStreaming has been issued yet'
   )
@@ -241,19 +255,20 @@ test('cancel after startStreaming tears down the session at the binding layer', 
   // `addon.startStreaming` / `addon.appendStreamingAudio` directly
   // because the wrapper's cancel goes through the response-chain
   // promise dance (`_onCancelComplete`) which is already covered by
-  // `test/unit/addon.test.js` and would deadlock without a
+  // `test/unit/parakeet-addon.test.js` and would deadlock without a
   // binding-side synthetic Error to unblock it -- noise we don't
   // need for the duplex-cleanup assertion.
   const model = createMockedModel()
   await model.load()
+  const addon = getAddon(model)
 
-  await model.addon.startStreaming({ chunkMs: 2000 })
-  await model.addon.appendStreamingAudio(new Float32Array(1024))
+  await addon.startStreaming({ chunkMs: 2000 })
+  await addon.appendStreamingAudio(new Float32Array(1024))
   await wait()
 
   t.ok(model._mockedBinding._streamingActive, 'Streaming session active before cancel')
 
-  model._mockedBinding.cancel(model.addon._handle)
+  model._mockedBinding.cancel(addon._handle)
 
   const log = model._mockedBinding._streamingLog
   t.is(log.starts, 1, 'startStreaming called once')
@@ -268,20 +283,21 @@ test('cancel after startStreaming tears down the session at the binding layer', 
   // level (without firing a synthetic terminal event); the wrapper's
   // cancel-await dance has nothing to resolve. `destroyInstance` is
   // the framework-level escape hatch for that case.
-  await model.addon.destroyInstance()
+  await addon.destroyInstance()
 })
 
 test('endStreaming on a binding with no active session is a no-op', async (t) => {
   const model = createMockedModel()
   await model.load()
+  const addon = getAddon(model)
 
   // Drive the lower-level entry point directly -- this is what the
   // streaming-aware destroyInstance / cancel paths fall back to.
-  // The C++ wrapper now returns { cleaned, audioDurationMs, totalSamples }
+  // The C++ wrapper returns { cleaned, audioDurationMs, totalSamples }
   // so JS can populate the synthetic JobEnded payload with the audio
-  // duration captured by ParakeetStreamingProcessor; with no active
+  // duration captured by the streaming processor; with no active
   // session, `cleaned` is false and the timing fields are zero.
-  const result = model._mockedBinding.endStreaming(model.addon._handle)
+  const result = model._mockedBinding.endStreaming(addon._handle)
   t.is(
     typeof result,
     'object',
@@ -291,5 +307,37 @@ test('endStreaming on a binding with no active session is a no-op', async (t) =>
   t.is(result.audioDurationMs, 0, 'no session = no audio observed')
   t.is(result.totalSamples, 0, 'no session = no samples observed')
 
-  await model.addon.destroyInstance()
+  await addon.destroyInstance()
+})
+
+test('endStreaming teardown object feeds the synthetic JobEnded payload', async (t) => {
+  const events = []
+  const model = createMockedModel({
+    onOutput: (addon, event, jobId, output, error) => {
+      events.push({ event, jobId, output, error })
+    }
+  })
+  await model.load()
+
+  const audioStream = pushable()
+  const response = await model.runStreaming(audioStream, { chunkMs: 1000 })
+  const updateDone = response.onUpdate(() => {}).await()
+  audioStream.push(new Float32Array(1024))
+  audioStream.push(new Float32Array(1024))
+  audioStream.end()
+  await updateDone
+  await wait()
+
+  const jobEnded = events.find((e) => e.event === 'JobEnded')
+  t.ok(jobEnded, 'JobEnded synthesised on endStreaming')
+  t.ok(
+    typeof jobEnded.output.audioDurationMs === 'number' && jobEnded.output.audioDurationMs > 0,
+    'Synthetic JobEnded carries the teardown audio duration'
+  )
+  t.ok(
+    typeof jobEnded.output.totalSamples === 'number' && jobEnded.output.totalSamples > 0,
+    'Synthetic JobEnded carries the teardown sample count'
+  )
+
+  await model.unload()
 })

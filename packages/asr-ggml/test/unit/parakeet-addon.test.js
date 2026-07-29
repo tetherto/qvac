@@ -1,52 +1,47 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionParakeet = require('../../index.js')
-const MockedBinding = require('../mocks/MockedBinding.js')
-const { transitionCb, wait } = require('../mocks/utils.js')
-const { ERR_CODES, ParakeetInterface, QvacErrorAddonParakeet } = require('../../parakeet')
+const ASRGgml = require('../../index.js')
+const MockedBinding = require('../mocks/ParakeetMockedBinding.js')
+const { wait } = require('../mocks/utils.js')
+const { MODEL_PATH, createParakeetModel, getAddon } = require('../mocks/createModel.js')
+const { ParakeetInterface } = require('../../engines/parakeet/parakeet.js')
+const { QvacErrorAddonASRGgml, ERR_CODES_PARAKEET } = require('../../lib/error.js')
 
 const process = require('bare-process')
 global.process = process
 
 function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
-  TranscriptionParakeet.prototype.validateModelFiles = () => undefined
-
-  const model = new TranscriptionParakeet({
-    files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
-    config: {
-      parakeetConfig: {
-        // modelType is auto-detected from the GGUF metadata by the
-        // binding; the unit-test MockedBinding doesn't read GGUF
-        // bytes so we just rely on its Mock-* output shape here.
-        maxThreads: 4,
-        useGPU: false
-      }
+  const { model } = createParakeetModel({
+    binding: binding || new MockedBinding(),
+    onOutput,
+    parakeetConfig: {
+      // modelType is auto-detected from the GGUF metadata by the
+      // binding; the unit-test MockedBinding doesn't read GGUF
+      // bytes so we just rely on its Mock-* output shape here.
+      maxThreads: 4,
+      useGPU: false
     }
   })
-
-  model._createAddon = (configurationParams) => {
-    const _binding = binding || new MockedBinding()
-    const addon = new ParakeetInterface(
-      _binding,
-      configurationParams,
-      (addon, event, jobId, output, error) => {
-        model._outputCallback(addon, event, jobId, output, error)
-        onOutput(addon, event, jobId, output, error)
-      },
-      transitionCb
-    )
-
-    return addon
-  }
-
   return model
 }
 
-test('QvacErrorAddonParakeet preserves numeric error codes', (t) => {
-  const error = new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)
+const DIRECT_INTERFACE_PARAMS = {
+  engineType: 'parakeet',
+  modelPath: MODEL_PATH,
+  maxThreads: 4,
+  useGPU: false
+}
 
-  t.is(error.code, ERR_CODES.INSTANCE_DESTROYED, 'Numeric constructor input maps to code')
+test('QvacErrorAddonASRGgml preserves parakeet numeric error codes', (t) => {
+  const error = new QvacErrorAddonASRGgml(ERR_CODES_PARAKEET.INSTANCE_DESTROYED)
+
+  t.is(error.code, ERR_CODES_PARAKEET.INSTANCE_DESTROYED, 'Numeric constructor input maps to code')
+  t.is(
+    error.code,
+    ASRGgml.ERR_CODES.INSTANCE_DESTROYED,
+    'Parakeet-only codes keep their historical numbers in the public map'
+  )
 })
 
 /**
@@ -60,14 +55,15 @@ test('Inference returns correct output for audio input', async (t) => {
 
   const model = createMockedModel({ onOutput })
   await model.load()
+  const addon = getAddon(model)
 
   // Simulate sending an audio chunk (Float32Array buffer)
   const sampleAudio = new Float32Array([0.1, 0.2, 0.3, 0.4, 0.5])
-  const jobId1 = await model.addon.append({ type: 'audio', data: sampleAudio.buffer })
+  const jobId1 = await addon.append({ type: 'audio', data: sampleAudio.buffer })
   t.is(jobId1, 1, 'First job ID should be 1')
 
   // Append an end-of-job marker.
-  const jobIdEnd = await model.addon.append({ type: 'end of job' })
+  const jobIdEnd = await addon.append({ type: 'end of job' })
   t.is(jobIdEnd, 1, 'Job ID should remain 1 for end-of-job signal')
 
   await wait()
@@ -85,29 +81,45 @@ test('Inference returns correct output for audio input', async (t) => {
 
 /**
  * Test that the model correctly handles state transitions.
+ *
+ * pause/unpause reject with the structured NOT_SUPPORTED error in the unified
+ * package (no engine supports them); activate/destroy still work.
  */
 test('Model state transitions are handled correctly', async (t) => {
   const model = createMockedModel()
 
   await model.load()
+  const addon = getAddon(model)
 
   const sampleAudio = new Float32Array([0.1, 0.2, 0.3, 0.4, 0.5])
   const response = await model.run(sampleAudio)
-  await response._finishPromise
+  await response.await()
 
   t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
-  await model.pause()
-  t.ok((await model.status()) === 'paused', 'Status: Model should be paused')
+  try {
+    await model.pause()
+    t.fail('Pause should reject with the structured NOT_SUPPORTED error')
+  } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.NOT_SUPPORTED, 'Pause rejects with NOT_SUPPORTED')
+  }
+  t.ok(
+    (await model.status()) === 'listening',
+    'Status: Model should remain listening after unsupported pause'
+  )
 
-  await model.unpause()
-  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
+  try {
+    await model.unpause()
+    t.fail('Unpause should reject with the structured NOT_SUPPORTED error')
+  } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.NOT_SUPPORTED, 'Unpause rejects with NOT_SUPPORTED')
+  }
 
-  await model.addon.activate()
+  await addon.activate()
   t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   // After destroy, the instance is invalid - we verify via transition callback
-  await model.addon.destroyInstance()
+  await addon.destroyInstance()
   // Note: status() cannot be called after destroyInstance() as the handle is invalidated
 })
 
@@ -144,8 +156,6 @@ test('Model emits error events when an error occurs during processing', async (t
     },
     loadWeights: () => {},
     activate: () => {},
-    pause: () => {},
-    stop: () => {},
     cancel: () => {},
     status: () => 'idle',
     destroyInstance: () => {}
@@ -155,14 +165,14 @@ test('Model emits error events when an error occurs during processing', async (t
   await model.load()
 
   try {
-    const response = await model.run('trigger error')
+    const response = await model.run(new Float32Array([0.1, 0.2, 0.3]))
     await response.await()
     t.fail('Should have rejected the response')
   } catch (error) {
-    // The error should be a QvacErrorAddonParakeet
+    // The error should be the unified QvacErrorAddonASRGgml
     t.ok(
-      error.constructor.name === 'QvacErrorAddonParakeet',
-      'Error should be a QvacErrorAddonParakeet'
+      error.constructor.name === 'QvacErrorAddonASRGgml',
+      'Error should be a QvacErrorAddonASRGgml'
     )
     t.ok(
       error.message.includes('Forced error') || typeof error.code === 'number',
@@ -181,16 +191,7 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   }
 
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf',
-      maxThreads: 4,
-      useGPU: false
-    },
-    onOutput,
-    transitionCb
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, onOutput)
 
   let status = await addon.status()
   t.ok(status === 'loading', 'Initial addon status should be "loading"')
@@ -248,13 +249,7 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
 
 test('ParakeetInterface runJob preserves active job when native rejects new job', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 42
   addon._nextJobId = 43
@@ -278,13 +273,7 @@ test('ParakeetInterface runJob preserves active job when native rejects new job'
 
 test('ParakeetInterface cancel clears active job only after cancel resolves', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 7
   addon._setState('processing')
@@ -309,9 +298,7 @@ test('ParakeetInterface cancels buffered job before native run starts', async (t
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(
     binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
+    DIRECT_INTERFACE_PARAMS,
     (handle, event, jobId, output, error) => {
       events.push({ event, jobId, output, error })
     }
@@ -337,13 +324,7 @@ test('ParakeetInterface cancels buffered job before native run starts', async (t
 
 test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 2
   addon._nextJobId = 3
@@ -362,20 +343,18 @@ test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t
 })
 
 test('ParakeetInterface unloadWeights throws unsupported operation error', async (t) => {
-  const addon = new ParakeetInterface(
-    new MockedBinding(),
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(new MockedBinding(), DIRECT_INTERFACE_PARAMS, () => {})
 
   let threw = false
   try {
     await addon.unloadWeights()
   } catch (error) {
     threw = true
-    t.is(error.code, 24007, 'unloadWeights should map to FAILED_TO_RESET')
+    t.is(
+      error.code,
+      ERR_CODES_PARAKEET.FAILED_TO_RESET,
+      'unloadWeights should map to the parakeet-scoped FAILED_TO_RESET (24007)'
+    )
     t.ok(
       String(error.message).includes('unloadWeights is not supported'),
       'Error should explain supported alternatives'
@@ -386,13 +365,7 @@ test('ParakeetInterface unloadWeights throws unsupported operation error', async
 
 test('ParakeetInterface destroyInstance awaits active cancel before teardown', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 9
   addon._setState('processing')
@@ -421,13 +394,7 @@ test('ParakeetInterface destroyInstance awaits active cancel before teardown', a
 
 test('ParakeetInterface destroyInstance skips cancel with no active job', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   let cancelCalls = 0
   binding.cancel = async () => {
@@ -441,13 +408,7 @@ test('ParakeetInterface destroyInstance skips cancel with no active job', async 
 
 test('ParakeetInterface reload preserves wrapper job numbering across native recreation', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(
-    binding,
-    {
-      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-    },
-    () => {}
-  )
+  const addon = new ParakeetInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._nextJobId = 7
   addon._activeJobId = 6
@@ -457,7 +418,8 @@ test('ParakeetInterface reload preserves wrapper job numbering across native rec
     addon._addonOutputCallback(addon, 'Error', null, 'Job cancelled')
   }
   await addon.reload({
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    engineType: 'parakeet',
+    modelPath: MODEL_PATH
   })
 
   t.is(addon._nextJobId, 7, 'reload should preserve JS-owned job numbering')
@@ -468,4 +430,19 @@ test('ParakeetInterface reload preserves wrapper job numbering across native rec
     'loading',
     'reload should leave the addon in loading state until activation'
   )
+})
+
+test('binding-level reload throws ReloadNotSupported for the parakeet engine', (t) => {
+  const binding = new MockedBinding()
+  const handle = binding.createInstance(null, DIRECT_INTERFACE_PARAMS, () => {})
+
+  try {
+    binding.reload(handle, DIRECT_INTERFACE_PARAMS)
+    t.fail('The merged binding reload verb must throw on the parakeet arm')
+  } catch (error) {
+    t.ok(
+      String(error.message).includes('ReloadNotSupported'),
+      'reload surfaces the ReloadNotSupported status error'
+    )
+  }
 })

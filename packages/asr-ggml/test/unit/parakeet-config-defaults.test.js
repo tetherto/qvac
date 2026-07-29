@@ -1,16 +1,15 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionParakeet = require('../../index.js')
-
-TranscriptionParakeet.prototype.validateModelFiles = () => undefined
+const ASRGgml = require('../../index.js')
+const { MODEL_PATH, getDriver } = require('../mocks/createModel.js')
 
 function buildParams(parakeetConfig = {}) {
-  const model = new TranscriptionParakeet({
-    files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
-    config: { parakeetConfig }
+  const model = new ASRGgml({
+    files: { model: MODEL_PATH },
+    config: { engine: 'parakeet', parakeetConfig }
   })
-  return model._buildConfigurationParams()
+  return getDriver(model)._buildConfigurationParams()
 }
 
 test('AOSC numeric fields stay undefined so the native config owns the defaults', (t) => {
@@ -46,4 +45,17 @@ test('streamingSpkCacheEnable defaults to true and coerces to a boolean', (t) =>
     false,
     'explicit false is honoured'
   )
+})
+
+test('unknown parakeetConfig keys are rejected at construction', (t) => {
+  try {
+    buildParams({ notARealKey: 1 })
+    t.fail('Unknown parakeetConfig key should throw INVALID_CONFIG')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.INVALID_CONFIG,
+      'Unknown parakeetConfig key rejects with INVALID_CONFIG'
+    )
+  }
 })

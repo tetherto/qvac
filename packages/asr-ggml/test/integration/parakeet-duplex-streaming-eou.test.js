@@ -3,10 +3,10 @@
 /**
  * Duplex-streaming + EOU integration test.
  *
- * The existing `eou-streaming.test.js` covers `model.run()` (the
+ * The existing `parakeet-eou-streaming.test.js` covers `model.run()` (the
  * offline `runStreamingProcess_` path that calls `asr_session_->
  * finalize()` on every `process()` invocation). The existing
- * `duplex-streaming.test.js` covers `model.runStreaming()` (the
+ * `parakeet-duplex-streaming.test.js` covers `model.runStreaming()` (the
  * `ParakeetStreamingProcessor` duplex path) but only with the TDT
  * model — it does NOT assert `isEndOfTurn`.
  *
@@ -26,11 +26,11 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 
@@ -162,9 +162,10 @@ test(
         return
       }
 
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: modelPath },
         config: {
+          engine: 'parakeet',
           parakeetConfig: {
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,

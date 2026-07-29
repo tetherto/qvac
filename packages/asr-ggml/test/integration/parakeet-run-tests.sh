@@ -1,7 +1,7 @@
 #!/bin/bash
-# Shell wrapper for bare integration tests.
+# Shell wrapper for the parakeet-engine bare integration tests.
 # Bare.exit() hangs when native addon handles keep the event loop alive,
-# so run-with-exit.js writes an .exit-code file when tests finish.
+# so parakeet-run-with-exit.js writes an .exit-code file when tests finish.
 # This script monitors for that file and terminates bare cleanly.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -10,7 +10,7 @@ TIMEOUT=${INTEGRATION_TEST_TIMEOUT:-600}
 
 rm -f "$EXIT_CODE_FILE"
 
-bare "$SCRIPT_DIR/run-with-exit.js" &
+bare "$SCRIPT_DIR/parakeet-run-with-exit.js" &
 BARE_PID=$!
 
 ELAPSED=0

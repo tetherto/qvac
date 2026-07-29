@@ -7,7 +7,7 @@ const proc = require('bare-process')
 const {
   binding,
   ParakeetInterface,
-  TranscriptionParakeet,
+  ASRGgml,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
@@ -17,7 +17,7 @@ const {
   loadGgufOrSkip,
   isMobile,
   recordParakeetStats
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
@@ -108,7 +108,10 @@ for (const modelType of PERF_MODEL_TYPES) {
         }
 
         // Configuration
+        // Low-level ParakeetInterface config: `engineType` is the merged
+        // binding's createInstance dispatch key (JSAdapter::readEngineType).
         const config = {
+          engineType: 'parakeet',
           modelPath: perfModelPath,
           modelType,
           maxThreads: 4,
@@ -355,9 +358,9 @@ test(
       console.log(`--- Instance ${instance}/${NUM_INSTANCES} ---`)
       const instanceStartTime = Date.now()
 
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: stagedGguf },
-        config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+        config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
       })
       try {
         await model.load()

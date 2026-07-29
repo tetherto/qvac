@@ -1,59 +1,54 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const FakeDL = require('../mocks/loader.fake.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
-const { transitionCb, wait } = require('../mocks/utils.js')
-const { WhisperInterface } = require('../../whisper')
+const { wait } = require('../mocks/utils.js')
+const { MODEL_PATH, createWhisperModel, getAddon, getJob } = require('../mocks/createModel.js')
+const { WhisperInterface } = require('../../engines/whisper/whisper.js')
 
 const process = require('bare-process')
 global.process = process
 
 function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
-  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
-
-  const args = {
-    files: {
-      model: 'ggml-tiny.bin',
-      vadModel: 'ggml-silero-v5.1.2.bin'
-    }
-  }
-  const config = {
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 29000,
-      temperature: 0.0,
-      vad_model_path: 'ggml-silero-v5.1.2.bin',
-      vadParams: {
-        threshold: 0.6
-      }
-    },
-    contextParams: {
-      model: 'ggml-tiny.bin'
-    },
-    miscConfig: {
-      caption_enabled: false
-    }
-  }
-  const model = new TranscriptionWhispercpp(args, config)
-
-  model._createAddon = (configurationParams) => {
-    const _binding = binding || new MockedBinding()
-    const addon = new WhisperInterface(
-      _binding,
-      configurationParams,
-      (addon, event, jobId, output, error) => {
-        onOutput(addon, event, jobId, output, error)
-        model._outputCallback(addon, event, jobId, output, error)
+  const { model } = createWhisperModel({
+    binding: binding || new MockedBinding(),
+    onOutput,
+    config: {
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 29000,
+        temperature: 0.0,
+        vad_model_path: MODEL_PATH,
+        vadParams: {
+          threshold: 0.6
+        }
       },
-      transitionCb
-    )
-
-    return addon
-  }
-
+      contextParams: {
+        model: MODEL_PATH
+      },
+      miscConfig: {
+        caption_enabled: false
+      }
+    }
+  })
   return model
+}
+
+const DIRECT_INTERFACE_PARAMS = {
+  engineType: 'whisper',
+  contextParams: {
+    model: MODEL_PATH
+  },
+  whisperConfig: {
+    language: 'en',
+    duration_ms: 0,
+    temperature: 0.0
+  },
+  miscConfig: {
+    caption_enabled: false
+  }
 }
 
 /**
@@ -70,14 +65,15 @@ test('Inference returns correct output for audio input', async (t) => {
 
   const model = createMockedModel({ onOutput })
   await model.load()
+  const addon = getAddon(model)
 
   // Simulate sending an audio chunk
   const sampleChunk = new Uint8Array([10, 20, 30, 40, 50])
-  const jobId1 = await model.addon.append({ type: 'audio', input: sampleChunk })
+  const jobId1 = await addon.append({ type: 'audio', input: sampleChunk })
   t.is(jobId1, 1, 'First job ID should be 1')
 
   // Append an end-of-job marker.
-  const jobIdEnd = await model.addon.append({ type: 'end of job' })
+  const jobIdEnd = await addon.append({ type: 'end of job' })
   t.is(jobIdEnd, 1, 'Job ID should remain 1 for end-of-job signal')
 
   await wait()
@@ -112,9 +108,10 @@ test('Streaming transcript output preserves segment ordering', async (t) => {
 
   const model = createMockedModel({ onOutput, binding })
   await model.load()
+  const addon = getAddon(model)
 
-  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
-  await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
+  await addon.append({ type: 'end of job' })
   await wait()
 
   const outputEvents = events.filter((e) => e.event === 'Output' && e.jobId === 1)
@@ -141,10 +138,11 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
   binding.setJobDelayMs(40)
   const model = createMockedModel({ onOutput, binding })
   await model.load()
+  const addon = getAddon(model)
 
-  await model.addon.append({ type: 'audio', input: new Uint8Array([9, 9, 9]) })
-  await model.addon.append({ type: 'end of job' })
-  await model.addon.cancel()
+  await addon.append({ type: 'audio', input: new Uint8Array([9, 9, 9]) })
+  await addon.append({ type: 'end of job' })
+  await addon.cancel()
   await wait(60)
 
   t.is(
@@ -153,8 +151,8 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
     'Cancelled job should not emit output or completion events'
   )
 
-  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
-  await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
+  await addon.append({ type: 'end of job' })
   await wait(60)
 
   t.ok(
@@ -180,10 +178,11 @@ test('A malformed buffer does not poison the queue for later jobs', async (t) =>
 
   const model = createMockedModel({ onOutput, binding })
   await model.load()
+  const addon = getAddon(model)
 
-  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3]) })
+  await addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3]) })
   try {
-    await model.addon.append({ type: 'end of job' })
+    await addon.append({ type: 'end of job' })
     t.fail('Malformed buffer should fail the end-of-job append')
   } catch (error) {
     t.ok(
@@ -192,11 +191,11 @@ test('A malformed buffer does not poison the queue for later jobs', async (t) =>
     )
   }
 
-  t.is(model.addon._bufferedBytes, 0, 'Failed job should drain the buffered audio')
-  t.is(model.addon._bufferedAudio.length, 0, 'Failed job should leave no buffered chunks')
+  t.is(addon._bufferedBytes, 0, 'Failed job should drain the buffered audio')
+  t.is(addon._bufferedAudio.length, 0, 'Failed job should leave no buffered chunks')
 
-  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
-  const recoveredJobId = await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
+  const recoveredJobId = await addon.append({ type: 'end of job' })
   t.is(recoveredJobId, 1, 'A well-formed job after a failure should start cleanly')
 
   await wait()
@@ -207,33 +206,41 @@ test('A malformed buffer does not poison the queue for later jobs', async (t) =>
   )
 })
 
-test('run recovers on the same model after a malformed buffer fails', async (t) => {
-  const binding = new MockedBinding()
-  const runValidJob = binding.runJob.bind(binding)
-  binding.runJob = (handle, data) => {
-    if (data.input.byteLength % 4 !== 0) {
-      throw new Error('f32le buffer length must be a multiple of 4')
-    }
-    return runValidJob(handle, data)
-  }
-
-  const model = createMockedModel({ binding })
+test('run recovers on the same model after a malformed chunk fails', async (t) => {
+  const model = createMockedModel({ binding: new MockedBinding() })
   await model.load()
 
-  const malformedResponse = await model.run(new Uint8Array([1, 2, 3]))
+  // A 3-byte chunk cannot be interpreted as s16le samples. For an eagerly
+  // normalizable input (a bare chunk / array) the boundary throws from run()
+  // itself, before any job is started or native work happens.
   try {
-    await malformedResponse.await()
-    t.fail('Malformed buffer transcription should reject')
+    await model.run(new Uint8Array([1, 2, 3]))
+    t.fail('A malformed bare chunk should reject run() itself')
   } catch (error) {
-    t.ok(
-      error.message.includes('f32le buffer length must be a multiple of 4'),
-      'Malformed buffer transcription should reject with the native validation error'
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.INVALID_AUDIO_INPUT,
+      'Malformed bare chunk rejects run() with INVALID_AUDIO_INPUT'
     )
+  }
+
+  // Inside an async iterable the chunk is normalized lazily by the pump, so the
+  // failure surfaces on the response instead.
+  const lazyResponse = await model.run(
+    (async function* () {
+      yield new Uint8Array([1, 2, 3])
+    })()
+  )
+  try {
+    await lazyResponse.await()
+    t.fail('A malformed streamed chunk should reject the response')
+  } catch (error) {
+    t.ok(error, 'Malformed streamed chunk fails the response, not the run() call')
   }
 
   const recoveredResponse = await model.run(new Uint8Array([1, 2, 3, 4]))
   const output = await recoveredResponse.await()
-  t.ok(output, 'A well-formed transcription should resolve after a malformed buffer')
+  t.ok(output, 'A well-formed transcription should resolve after a malformed chunk')
   t.is(await model.status(), 'listening', 'Model should return to listening after recovery')
 })
 
@@ -243,10 +250,11 @@ test('A rejected end-of-job append drains the buffered audio', async (t) => {
 
   const model = createMockedModel({ binding })
   await model.load()
+  const addon = getAddon(model)
 
-  await model.addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
+  await addon.append({ type: 'audio', input: new Uint8Array([1, 2, 3, 4]) })
   try {
-    await model.addon.append({ type: 'end of job' })
+    await addon.append({ type: 'end of job' })
     t.fail('A rejected job should fail the end-of-job append')
   } catch (error) {
     t.ok(
@@ -255,29 +263,13 @@ test('A rejected end-of-job append drains the buffered audio', async (t) => {
     )
   }
 
-  t.is(model.addon._bufferedBytes, 0, 'A rejected job should drain the buffered audio')
-  t.is(model.addon._bufferedAudio.length, 0, 'A rejected job should leave no buffered chunks')
+  t.is(addon._bufferedBytes, 0, 'A rejected job should drain the buffered audio')
+  t.is(addon._bufferedAudio.length, 0, 'A rejected job should leave no buffered chunks')
 })
 
 test('WhisperInterface runJob preserves active job when native rejects new job', async (t) => {
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(
-    binding,
-    {
-      contextParams: {
-        model: 'ggml-tiny.bin'
-      },
-      whisperConfig: {
-        language: 'en',
-        duration_ms: 0,
-        temperature: 0.0
-      },
-      miscConfig: {
-        caption_enabled: false
-      }
-    },
-    () => {}
-  )
+  const addon = new WhisperInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 42
   addon._nextJobId = 43
@@ -301,23 +293,7 @@ test('WhisperInterface runJob preserves active job when native rejects new job',
 
 test('WhisperInterface cancel clears active job only after cancel resolves', async (t) => {
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(
-    binding,
-    {
-      contextParams: {
-        model: 'ggml-tiny.bin'
-      },
-      whisperConfig: {
-        language: 'en',
-        duration_ms: 0,
-        temperature: 0.0
-      },
-      miscConfig: {
-        caption_enabled: false
-      }
-    },
-    () => {}
-  )
+  const addon = new WhisperInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 7
   addon._setState('processing')
@@ -341,19 +317,7 @@ test('WhisperInterface cancels buffered job before native run starts', async (t)
   const binding = new MockedBinding()
   const addon = new WhisperInterface(
     binding,
-    {
-      contextParams: {
-        model: 'ggml-tiny.bin'
-      },
-      whisperConfig: {
-        language: 'en',
-        duration_ms: 0,
-        temperature: 0.0
-      },
-      miscConfig: {
-        caption_enabled: false
-      }
-    },
+    DIRECT_INTERFACE_PARAMS,
     (handle, event, jobId, output, error) => {
       events.push({ event, jobId, output, error })
     }
@@ -379,23 +343,7 @@ test('WhisperInterface cancels buffered job before native run starts', async (t)
 
 test('WhisperInterface ignores stale wrapper job ids when cancelling', async (t) => {
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(
-    binding,
-    {
-      contextParams: {
-        model: 'ggml-tiny.bin'
-      },
-      whisperConfig: {
-        language: 'en',
-        duration_ms: 0,
-        temperature: 0.0
-      },
-      miscConfig: {
-        caption_enabled: false
-      }
-    },
-    () => {}
-  )
+  const addon = new WhisperInterface(binding, DIRECT_INTERFACE_PARAMS, () => {})
 
   addon._activeJobId = 2
   addon._nextJobId = 3
@@ -417,10 +365,17 @@ test('Destroy fails active response and clears job mapping', async (t) => {
   const binding = new MockedBinding()
   binding.setJobDelayMs(100)
 
-  const model = createMockedModel({ binding })
+  // exclusiveRun:false is required to observe the interruption: under the
+  // default `exclusiveRun` the lifecycle queue holds destroy() behind the
+  // in-flight run's "onSettle" slot, so the response completes first.
+  const { model } = createWhisperModel({
+    binding,
+    options: { exclusiveRun: false },
+    config: { whisperConfig: { language: 'en' }, vadModelPath: MODEL_PATH }
+  })
   await model.load()
 
-  const response = await model.run(new Uint8Array([1, 2, 3, 4, 5]))
+  const response = await model.run(new Uint8Array([1, 2, 3, 4, 5, 6]))
   await model.destroy()
 
   try {
@@ -433,7 +388,7 @@ test('Destroy fails active response and clears job mapping', async (t) => {
     )
   }
 
-  t.is(model._job.active, null, 'Destroy should clear the single active job handler')
+  t.is(getJob(model).active, null, 'Destroy should clear the single active job handler')
 })
 
 test('Orphan native callbacks are ignored when no active job exists', async (t) => {
@@ -459,26 +414,29 @@ test('Orphan native callbacks are ignored when no active job exists', async (t) 
 /**
  * Test that the model correctly handles state transitions.
  *
- * The test verifies that calling pause, unpause, stop, and activating/destroying the addon
- * causes the model to report the correct state.
+ * pause/unpause always reject with the structured NOT_SUPPORTED error in the
+ * unified package (no engine supports them yet); activate/destroy still drive
+ * the addon state machine.
  */
 test('Model state transitions are handled correctly', async (t) => {
   const model = createMockedModel()
 
   await model.load()
 
-  const response = await model.run(new Uint8Array([10, 19, 30, 40, 50]))
-  await response._finishPromise
+  const response = await model.run(new Uint8Array([10, 19, 30, 40, 50, 60]))
+  await response.await()
 
   t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   try {
     await model.pause()
-    t.fail('Pause should explicitly reject in runJob mode')
+    t.fail('Pause should reject with the structured NOT_SUPPORTED error')
   } catch (error) {
-    t.ok(
-      error.message.includes('pause is not supported in runJob mode'),
-      'Pause should explicitly reject in runJob mode'
+    t.is(error.code, ASRGgml.ERR_CODES.NOT_SUPPORTED, 'Pause rejects with NOT_SUPPORTED')
+    t.is(
+      error.constructor.name,
+      'QvacErrorAddonASRGgml',
+      'Pause rejects with the unified error class'
     )
   }
   t.ok(
@@ -486,13 +444,19 @@ test('Model state transitions are handled correctly', async (t) => {
     'Status: Model should remain listening after unsupported pause'
   )
 
-  await model.unpause()
+  try {
+    await model.unpause()
+    t.fail('Unpause should reject with the structured NOT_SUPPORTED error')
+  } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.NOT_SUPPORTED, 'Unpause rejects with NOT_SUPPORTED')
+  }
   t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
-  await model.addon.activate()
+  const addon = getAddon(model)
+  await addon.activate()
   t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
-  await model.addon.destroyInstance()
+  await addon.destroyInstance()
   t.ok((await model.status()) === 'idle', 'Status: Model should be idle')
 })
 
@@ -520,14 +484,14 @@ test('Model emits error events when an error occurs during processing', async (t
   await model.load()
 
   try {
-    const response = await model.run(new Uint8Array([1, 2, 3]))
+    const response = await model.run(new Uint8Array([1, 2, 3, 4]))
     await response.await()
     t.fail('Should have failed the response')
   } catch (error) {
-    // The error should be a QvacErrorAddonWhisper
+    // The error should be the unified QvacErrorAddonASRGgml
     t.ok(
-      error.constructor.name === 'QvacErrorAddonWhisper',
-      'Error should be a QvacErrorAddonWhisper'
+      error.constructor.name === 'QvacErrorAddonASRGgml',
+      'Error should be a QvacErrorAddonASRGgml'
     )
     // The test is mainly about ensuring errors are caught and wrapped properly
     // The specific error code is less important than the error handling mechanism
@@ -576,24 +540,7 @@ test('AddonInterface full sequence: status, append, and job boundaries', async (
   }
 
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(
-    binding,
-    {
-      contextParams: {
-        model: 'ggml-tiny.bin'
-      },
-      whisperConfig: {
-        language: 'en',
-        duration_ms: 0,
-        temperature: 0.0
-      },
-      miscConfig: {
-        caption_enabled: false
-      }
-    },
-    onOutput,
-    transitionCb
-  )
+  const addon = new WhisperInterface(binding, DIRECT_INTERFACE_PARAMS, onOutput)
 
   let status = await addon.status()
   t.ok(status === 'loading', 'Initial addon status should be "loading"')

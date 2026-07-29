@@ -5,8 +5,8 @@
  *
  * Despite the file name, this suite does NOT exercise the duplex
  * `runStreaming()` API -- for that, see
- * `test/integration/duplex-streaming.test.js`. What it validates is
- * that `TranscriptionParakeet.run(asyncIterable)` accepts arbitrary
+ * `test/integration/parakeet-duplex-streaming.test.js`. What it validates is
+ * that `ASRGgml.run(asyncIterable)` accepts arbitrary
  * chunk sizes / cadences without choking on the chunking itself
  * (the addon framework batches every appended chunk into a single
  * job before invoking the C++ `process()` once -- see
@@ -22,13 +22,13 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip,
   isMobile
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
@@ -164,9 +164,9 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
   console.log(`Audio duration: ${audioDuration.toFixed(2)}s`)
   console.log(`Total samples: ${audioData.length}\n`)
 
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
     files: { model: stagedGguf },
-    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
   })
   try {
     await model.load()
@@ -237,9 +237,9 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
   }
 
   const audioData = loadAudio(samplePath)
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
     files: { model: stagedGguf },
-    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
   })
   try {
     await model.load()
@@ -303,9 +303,9 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
 
   for (const chunkSizeMs of CHUNK_SIZES_MS) {
     console.log(`\n--- Testing ${chunkSizeMs}ms chunks ---`)
-    const model = new TranscriptionParakeet({
+    const model = new ASRGgml({
       files: { model: stagedGguf },
-      config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+      config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
     })
     try {
       await model.load()

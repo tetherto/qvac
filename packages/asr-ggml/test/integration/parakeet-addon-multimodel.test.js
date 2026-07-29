@@ -5,11 +5,11 @@ const path = require('bare-path')
 const test = require('brittle')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 
@@ -38,9 +38,9 @@ async function transcribe(model, audio) {
 }
 
 async function runModelTest(t, modelType, modelPath, audio, expectations) {
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
     files: { model: modelPath },
-    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
   })
   try {
     await model.load()

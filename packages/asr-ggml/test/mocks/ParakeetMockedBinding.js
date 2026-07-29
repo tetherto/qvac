@@ -4,11 +4,16 @@ const state = Object.freeze({
   LOADING: 'loading',
   LISTENING: 'listening',
   PROCESSING: 'processing',
-  IDLE: 'idle',
-  PAUSED: 'paused',
-  STOPPED: 'stopped'
+  IDLE: 'idle'
 })
 
+// Mirrors the parakeet arm of the merged asr-ggml native binding
+// (addon/src/addon/AddonJs.hpp): `createInstance` reads the unified
+// `configurationParams.engineType` dispatch key, `reload` throws
+// (ReloadNotSupported — the parakeet JS layer recreates the instance instead),
+// `appendStreamingAudio` returns the boolean back-pressure signal, and
+// `endStreaming` returns the { cleaned, audioDurationMs, totalSamples }
+// teardown object.
 class MockedBinding {
   constructor() {
     this._handle = null
@@ -16,8 +21,9 @@ class MockedBinding {
     this._busy = false
     this._runToken = 0
     this._interfaceType = null
+    this.engineType = null
     // Duplex streaming session state. Mirrors the C++ side's
-    // g_streamingSessions map: at most one session per addon
+    // streaming-session registry: at most one session per addon
     // instance, opened by `startStreaming` and torn down by
     // `endStreaming` / `cancel`. Each `appendStreamingAudio` call
     // synthesises one Output event so the wrapper's onUpdate fires
@@ -39,7 +45,19 @@ class MockedBinding {
   }
 
   createInstance(interfaceType, configurationParams, outputCb, transitionCb = null) {
-    console.log('Constructing the parakeet addon (ggml backend)')
+    console.log('Constructing the asr-ggml addon (parakeet engine)')
+    // Mirror JSAdapter::readEngineType: an unknown non-empty engineType is a
+    // hard error; absent/empty falls through to inference.
+    const engineType = configurationParams?.engineType
+    if (
+      typeof engineType === 'string' &&
+      engineType.length > 0 &&
+      engineType !== 'whisper' &&
+      engineType !== 'parakeet'
+    ) {
+      throw new Error(`engineType must be 'whisper' or 'parakeet' (got '${engineType}')`)
+    }
+    this.engineType = engineType || 'parakeet'
     this._interfaceType = interfaceType
     this._config = configurationParams
     this.outputCb = outputCb
@@ -89,24 +107,6 @@ class MockedBinding {
     }
   }
 
-  pause(handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Paused the processing')
-    this._state = state.PAUSED
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
-  }
-
-  stop(handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Stopped the processing')
-    this._state = state.STOPPED
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
-  }
-
   cancel(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Cancel job')
@@ -128,9 +128,8 @@ class MockedBinding {
   // `appendStreamingAudio`, `endStreaming`) plus the cancel-with-
   // streaming hook. Each appended chunk synthesises one Output event
   // so the wrapper's `onUpdate(...)` fires at the same cadence the
-  // real binding would; endStreaming is intentionally side-effect-free
-  // because the JS wrapper synthesises its own JobEnded (see
-  // parakeet.js).
+  // real binding would; endStreaming returns the teardown object the
+  // JS wrapper turns into a synthetic JobEnded (see parakeet.ts).
   startStreaming(handle, config = {}) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._streamingActive) {
@@ -185,7 +184,7 @@ class MockedBinding {
       return { cleaned: false, audioDurationMs: 0, totalSamples: 0 }
     }
     const samplesFed =
-      (this._streamingLog.appended *
+      (this._streamingLog.appends *
         (this._streamingConfig?.sampleRate || 16000) *
         (this._streamingConfig?.chunkMs || 1000)) /
       1000
@@ -271,40 +270,15 @@ class MockedBinding {
     return true
   }
 
-  load(handle, configurationParams) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Loaded configuration:', configurationParams)
-    this._state = state.LOADING
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
-  }
-
+  // The merged binding registers `reload` unconditionally but the parakeet
+  // arm throws — the parakeet JS layer recreates the native instance instead
+  // (ParakeetInterface.reload → destroyInstance + createInstance).
   reload(handle, configurationParams) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Reloaded configuration:', configurationParams)
-    this._runToken++
-    this._busy = false
-    this._state = state.LOADING
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
-    // After reload completes, transition back to IDLE to match C++ behavior
-    process.nextTick(() => {
-      this._state = state.IDLE
-      if (this.transitionCb) {
-        this.transitionCb(this, this._state)
-      }
-    })
-  }
-
-  unload(handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Unloaded the addon')
-    this._state = state.IDLE
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
+    void configurationParams
+    throw new Error(
+      '[ Parakeet :: ReloadNotSupported ] reload is not supported for the parakeet engine; destroy and recreate the instance'
+    )
   }
 
   setLogger(callback) {
@@ -313,12 +287,6 @@ class MockedBinding {
 
   releaseLogger() {
     console.log('Released logger')
-  }
-
-  unloadWeights(handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Unloaded weights')
-    return true
   }
 
   destroyInstance(handle) {

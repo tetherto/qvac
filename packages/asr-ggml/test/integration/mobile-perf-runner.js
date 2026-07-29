@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const proc = require('bare-process')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const binding = require('../../binding')
 const {
   detectPlatform,
@@ -122,12 +122,14 @@ async function runMobilePerfCase(t, opts) {
     console.log('   Audio path: ' + samplePath)
     console.log('   Audio duration: ' + audioDurationSec.toFixed(2) + 's\n')
 
+    // enableStats defaults to true in the unified package (the old
+    // whisper-only `opts.stats` opt-in is gone).
     const constructorArgs = {
-      files: { model: modelPath },
-      opts: { stats: true }
+      files: { model: modelPath }
     }
 
     const config = {
+      engine: 'whisper',
       path: modelPath,
       contextParams: {
         use_gpu: useGPU
@@ -141,8 +143,8 @@ async function runMobilePerfCase(t, opts) {
     }
 
     const loadStart = getTimeMs()
-    model = new TranscriptionWhispercpp(constructorArgs, config)
-    await model._load()
+    model = new ASRGgml({ ...constructorArgs, config })
+    await model.load()
     rssAfterLoadBytes = readRssBytes()
     peakRssBytes = rssAfterLoadBytes
     console.log(
@@ -228,7 +230,7 @@ async function runMobilePerfCase(t, opts) {
     // `WhisperModel::captureActiveBackendInfo()` and reported in every
     // stats snapshot — see index.d.ts BackendId.
     //   0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
-    // (kept in lock-step with transcription-parakeet's BackendId).
+    // (shared across both engines; see the BackendId enum in index.d.ts).
     // gpuMemTotalMb / gpuMemFreeMb report -1 when the device does not
     // expose memory accounting (some Vulkan ICDs on Apple silicon).
     const probe = lastStats || {}

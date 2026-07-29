@@ -1,29 +1,20 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
-const { transitionCb } = require('../mocks/utils.js')
-const { WhisperInterface } = require('../../whisper')
+const { MODEL_PATH, createWhisperModel, getAddon } = require('../mocks/createModel.js')
 
 const process = require('bare-process')
 global.process = process
 
-function createModel(whisperConfig) {
-  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
-
-  const args = { files: { model: 'ggml-tiny.bin' } }
-  const model = new TranscriptionWhispercpp(args, { whisperConfig })
-
-  let resolveCaptured
-  const captured = new Promise((resolve) => {
-    resolveCaptured = resolve
+function createModel(whisperConfig, extraConfig = {}) {
+  const { model, capturedConfig } = createWhisperModel({
+    binding: new MockedBinding(),
+    files: { model: MODEL_PATH },
+    config: { whisperConfig, ...extraConfig }
   })
-  model._createAddon = (configurationParams) => {
-    resolveCaptured(configurationParams)
-    return new WhisperInterface(new MockedBinding(), configurationParams, () => {}, transitionCb)
-  }
-  return [model, captured]
+  return [model, capturedConfig]
 }
 
 test('_load strips max_seconds and derives duration_ms', async (t) => {
@@ -36,13 +27,28 @@ test('_load strips max_seconds and derives duration_ms', async (t) => {
   t.is(captured.whisperConfig.duration_ms, 30000, 'duration_ms should be derived from max_seconds')
 })
 
+test('driver pins the wire format to f32le and stamps the engine type', async (t) => {
+  const [model, capturedFut] = createModel({ language: 'en' })
+
+  await model.load()
+  const captured = await capturedFut
+
+  t.is(
+    captured.audio_format,
+    'f32le',
+    'the driver normalizes all input to f32 and pins the native wire format'
+  )
+  t.is(captured.engineType, 'whisper', 'engineType is stamped for the unified createInstance')
+})
+
 test('reload strips max_seconds and derives duration_ms', async (t) => {
   const [model] = createModel({ language: 'en' })
   await model.load()
+  const addon = getAddon(model)
 
   let reloadConfig = null
-  const origReload = model.addon.reload.bind(model.addon)
-  model.addon.reload = (cfg) => {
+  const origReload = addon.reload.bind(addon)
+  addon.reload = (cfg) => {
     reloadConfig = cfg
     return origReload(cfg)
   }
@@ -57,12 +63,19 @@ test('reload strips max_seconds and derives duration_ms', async (t) => {
   )
 })
 
-test('_load rejects detect_language in whisperConfig', async (t) => {
-  const [model] = createModel({ language: 'auto', detect_language: true })
-
+test('constructor rejects detect_language in whisperConfig', (t) => {
+  // Config validation is constructor-time in the unified package (a deliberate
+  // tightening over whisper's old load()-time validation).
   try {
-    await model.load()
-    t.fail('load should reject detect_language')
+    // eslint-disable-next-line no-new
+    new ASRGgml({
+      files: { model: MODEL_PATH },
+      config: {
+        engine: 'whisper',
+        whisperConfig: { language: 'auto', detect_language: true }
+      }
+    })
+    t.fail('constructor should reject detect_language')
   } catch (err) {
     t.ok(
       /detect_language is not a valid parameter/.test(err.message),
@@ -72,22 +85,22 @@ test('_load rejects detect_language in whisperConfig', async (t) => {
 })
 
 test('reload retains instance contextParams and miscConfig', async (t) => {
-  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
-
-  const args = { files: { model: 'ggml-tiny.bin' } }
-  const model = new TranscriptionWhispercpp(args, {
-    whisperConfig: { language: 'en' },
-    contextParams: { gpu_device: 2 },
-    miscConfig: { caption_enabled: true }
+  const { model } = createWhisperModel({
+    binding: new MockedBinding(),
+    files: { model: MODEL_PATH },
+    config: {
+      whisperConfig: { language: 'en' },
+      contextParams: { gpu_device: 2 },
+      miscConfig: { caption_enabled: true }
+    }
   })
-  model._createAddon = (configurationParams) =>
-    new WhisperInterface(new MockedBinding(), configurationParams, () => {}, transitionCb)
 
   await model.load()
+  const addon = getAddon(model)
 
   let reloadConfig = null
-  const origReload = model.addon.reload.bind(model.addon)
-  model.addon.reload = (cfg) => {
+  const origReload = addon.reload.bind(addon)
+  addon.reload = (cfg) => {
     reloadConfig = cfg
     return origReload(cfg)
   }

@@ -12,7 +12,7 @@ const {
   bytesToMb,
   buildMemorySummary,
   summarizeRunMemory
-} = require('../integration/memory-usage.js')
+} = require('../integration/parakeet-memory-usage.js')
 
 test('summarizeSamples returns zeros for empty input', (t) => {
   t.alike(summarizeSamples([]), { count: 0, avgBytes: 0, peakBytes: 0, minBytes: 0 })

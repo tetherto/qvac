@@ -1,38 +1,25 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
-const { wait, transitionCb } = require('../mocks/utils.js')
-const { WhisperInterface } = require('../../whisper')
+const { wait } = require('../mocks/utils.js')
+const { MODEL_PATH, createWhisperModel, getAddon } = require('../mocks/createModel.js')
 
 const process = require('bare-process')
 global.process = process
 
 function createTestModel({ onOutput = () => {}, binding = undefined } = {}) {
-  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
-
-  const args = {
-    files: {
-      model: 'ggml-tiny.bin'
+  const { model, capturedConfig } = createWhisperModel({
+    binding: binding || new MockedBinding(),
+    onOutput,
+    files: { model: MODEL_PATH },
+    config: {
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0
+      }
     }
-  }
-  const config = {
-    whisperConfig: {
-      language: 'en',
-      temperature: 0.0
-    }
-  }
-  const model = new TranscriptionWhispercpp(args, config)
-  let capturedConfigResolve
-  const capturedConfig = new Promise((resolve) => {
-    capturedConfigResolve = resolve
   })
-  model._createAddon = (configurationParams) => {
-    capturedConfigResolve(configurationParams)
-    const _binding = binding || new MockedBinding()
-    return new WhisperInterface(_binding, configurationParams, onOutput, transitionCb)
-  }
   return [model, capturedConfig]
 }
 
@@ -46,10 +33,11 @@ test('Reload method updates configuration without VAD', async (t) => {
 
   await model.load()
   const initialConfig = await capturedConfigFut
+  const addon = getAddon(model)
 
   // Verify initial configuration
   t.ok(initialConfig, 'Initial configuration should be captured')
-  t.is(initialConfig.contextParams.model, 'ggml-tiny.bin', 'Model filename should be correctly set')
+  t.is(initialConfig.contextParams.model, MODEL_PATH, 'Model filename should be correctly set')
   t.is(initialConfig.whisperConfig.language, 'en', 'Language should be set to en')
   t.is(initialConfig.whisperConfig.temperature, 0.0, 'Temperature should be set to 0.0')
   t.is(initialConfig.whisperConfig.vad_model_path, undefined, 'VAD model path should not be set')
@@ -57,7 +45,7 @@ test('Reload method updates configuration without VAD', async (t) => {
   // Test reload with new configuration
   const newConfig = {
     contextParams: {
-      model: 'ggml-tiny.bin'
+      model: MODEL_PATH
     },
     whisperConfig: {
       language: 'es',
@@ -71,14 +59,14 @@ test('Reload method updates configuration without VAD', async (t) => {
 
   let reloadCallCount = 0
   let reloadCallArg = null
-  const origReload = model.addon.reload.bind(model.addon)
-  model.addon.reload = async (...args) => {
+  const origReload = addon.reload.bind(addon)
+  addon.reload = async (...args) => {
     reloadCallCount++
     reloadCallArg = args[0]
     return origReload(...args)
   }
 
-  await model.addon.reload(newConfig)
+  await addon.reload(newConfig)
 
   t.is(reloadCallCount, 1, 'Reload method should be called once')
   t.is(reloadCallArg, newConfig, 'Reload should be called with new configuration')
@@ -93,13 +81,14 @@ test('Reload method handles configuration changes correctly', async (t) => {
   const [model] = createTestModel({ onOutput })
 
   await model.load()
+  const addon = getAddon(model)
 
   // Test processing audio before reload
   const audioChunk1 = new Uint8Array([10, 20, 30, 40, 50])
-  const jobId1 = await model.addon.append({ type: 'audio', input: audioChunk1 })
+  const jobId1 = await addon.append({ type: 'audio', input: audioChunk1 })
   t.is(jobId1, 1, 'First job ID should be 1')
 
-  await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'end of job' })
   await wait()
 
   // Verify initial processing worked
@@ -112,7 +101,7 @@ test('Reload method handles configuration changes correctly', async (t) => {
   // Reload with new configuration
   const newConfig = {
     contextParams: {
-      model: 'ggml-tiny.bin'
+      model: MODEL_PATH
     },
     whisperConfig: {
       language: 'fr',
@@ -124,17 +113,17 @@ test('Reload method handles configuration changes correctly', async (t) => {
     }
   }
 
-  await model.addon.reload(newConfig)
+  await addon.reload(newConfig)
 
   // Activate after reload
-  await model.addon.activate()
+  await addon.activate()
 
   // Test processing audio after reload
   const audioChunk2 = new Uint8Array([60, 70, 80, 90, 100])
-  const jobId2 = await model.addon.append({ type: 'audio', input: audioChunk2 })
+  const jobId2 = await addon.append({ type: 'audio', input: audioChunk2 })
   t.is(jobId2, 2, 'Job ID should increment to 2 after reload')
 
-  await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'end of job' })
   await wait()
 
   // Verify processing still works after reload
@@ -146,6 +135,7 @@ test('Reload method validates configuration parameters', async (t) => {
   const [model] = createTestModel()
 
   await model.load()
+  const addon = getAddon(model)
 
   // Test with invalid configuration (missing required fields)
   const invalidConfig = {
@@ -156,7 +146,7 @@ test('Reload method validates configuration parameters', async (t) => {
   }
 
   try {
-    await model.addon.reload(invalidConfig)
+    await addon.reload(invalidConfig)
     t.fail('Should throw error for invalid configuration')
   } catch (error) {
     t.ok(error, 'Should throw error for invalid configuration')
@@ -167,15 +157,16 @@ test('Reload method maintains addon state correctly', async (t) => {
   const [model] = createTestModel()
 
   await model.load()
+  const addon = getAddon(model)
 
   // Verify initial state
-  let status = await model.addon.status()
+  let status = await addon.status()
   t.ok(status === 'listening', 'Initial status should be listening')
 
   // Reload configuration
   const newConfig = {
     contextParams: {
-      model: 'ggml-tiny.bin'
+      model: MODEL_PATH
     },
     whisperConfig: {
       language: 'de',
@@ -186,15 +177,15 @@ test('Reload method maintains addon state correctly', async (t) => {
     }
   }
 
-  await model.addon.reload(newConfig)
+  await addon.reload(newConfig)
 
   // Verify state after reload
-  status = await model.addon.status()
+  status = await addon.status()
   t.ok(status === 'idle' || status === 'loading', 'Status should be idle or loading after reload')
 
   // Activate after reload
-  await model.addon.activate()
-  status = await model.addon.status()
+  await addon.activate()
+  status = await addon.status()
   t.ok(status === 'listening', 'Status should be listening after activation')
 })
 
@@ -202,41 +193,42 @@ test('Reload method handles multiple reloads correctly', async (t) => {
   const [model] = createTestModel()
 
   await model.load()
+  const addon = getAddon(model)
 
   // First reload
   const config1 = {
-    contextParams: { model: 'ggml-tiny.bin' },
+    contextParams: { model: MODEL_PATH },
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
   }
 
-  await model.addon.reload(config1)
-  let status = await model.addon.status()
+  await addon.reload(config1)
+  let status = await addon.status()
   t.ok(
     status === 'idle' || status === 'loading',
     'Status should be idle or loading after first reload'
   )
 
-  await model.addon.activate()
-  status = await model.addon.status()
+  await addon.activate()
+  status = await addon.status()
   t.ok(status === 'listening', 'Status should be listening after first reload activation')
 
   // Second reload
   const config2 = {
-    contextParams: { model: 'ggml-tiny.bin' },
+    contextParams: { model: MODEL_PATH },
     whisperConfig: { language: 'es', temperature: 0.5 },
     miscConfig: { caption_enabled: false }
   }
 
-  await model.addon.reload(config2)
-  status = await model.addon.status()
+  await addon.reload(config2)
+  status = await addon.status()
   t.ok(
     status === 'idle' || status === 'loading',
     'Status should be idle or loading after second reload'
   )
 
-  await model.addon.activate()
-  status = await model.addon.status()
+  await addon.activate()
+  status = await addon.status()
   t.ok(status === 'listening', 'Status should be listening after second reload activation')
 })
 
@@ -249,39 +241,40 @@ test('Reload method works with different language settings', async (t) => {
   const [model] = createTestModel({ onOutput })
 
   await model.load()
+  const addon = getAddon(model)
 
   // Test with English configuration
   const englishConfig = {
-    contextParams: { model: 'ggml-tiny.bin' },
+    contextParams: { model: MODEL_PATH },
     whisperConfig: { language: 'en', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
   }
 
-  await model.addon.reload(englishConfig)
-  await model.addon.activate()
+  await addon.reload(englishConfig)
+  await addon.activate()
 
   // Process audio with English config
   const audioChunk = new Uint8Array([1, 2, 3, 4, 5])
-  await model.addon.append({ type: 'audio', input: audioChunk })
-  await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'audio', input: audioChunk })
+  await addon.append({ type: 'end of job' })
   await wait()
 
   // Reload with Spanish configuration
   const spanishConfig = {
-    contextParams: { model: 'ggml-tiny.bin' },
+    contextParams: { model: MODEL_PATH },
     whisperConfig: { language: 'es', temperature: 0.0 },
     miscConfig: { caption_enabled: false }
   }
 
-  await model.addon.reload(spanishConfig)
-  await model.addon.activate()
+  await addon.reload(spanishConfig)
+  await addon.activate()
 
   // Process audio with Spanish config
   const audioChunk2 = new Uint8Array([6, 7, 8, 9, 10])
-  const jobId = await model.addon.append({ type: 'audio', input: audioChunk2 })
+  const jobId = await addon.append({ type: 'audio', input: audioChunk2 })
   t.is(jobId, 2, 'Job ID should increment after reload')
 
-  await model.addon.append({ type: 'end of job' })
+  await addon.append({ type: 'end of job' })
   await wait()
 
   // Verify processing works with different language

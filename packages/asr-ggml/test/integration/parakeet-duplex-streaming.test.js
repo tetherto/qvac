@@ -3,7 +3,7 @@
 /**
  * Duplex-streaming integration test (`runStreaming`).
  *
- * Exercises the new high-level `TranscriptionParakeet.runStreaming()`
+ * Exercises the high-level `ASRGgml.runStreaming()`
  * entry point against a real Parakeet GGUF. The duplex API differs
  * from `run()` in that:
  *
@@ -41,11 +41,11 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 
@@ -161,9 +161,10 @@ test(
         return
       }
 
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: modelPath },
         config: {
+          engine: 'parakeet',
           parakeetConfig: {
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,

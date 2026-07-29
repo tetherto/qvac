@@ -23,7 +23,7 @@
  *   2. Streaming session lifecycle. The EOU streaming code path
  *      (asr_session_ + pending_streaming_segments_ + the chunked
  *      `feed_pcm_f32` cadence) only runs when `streaming: true` is
- *      set; the `addon-multimodel` desktop test runs EOU offline, so
+ *      set; the `parakeet-addon-multimodel` desktop test runs EOU offline, so
  *      a streaming-only regression would not surface there.
  *
  *   3. End-of-turn boundary signal. Asserts at least one segment
@@ -40,11 +40,11 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 
@@ -146,9 +146,10 @@ test(
         return
       }
 
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: modelPath },
         config: {
+          engine: 'parakeet',
           parakeetConfig: {
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,

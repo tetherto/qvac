@@ -1,8 +1,8 @@
 'use strict'
 
-// GPU test for transcription-whispercpp.
+// GPU test for the whisper engine of @qvac/asr-ggml.
 //
-// Mirrors transcription-parakeet/test/integration/gpu-smoke.test.js: prove that
+// Mirrors parakeet-gpu-smoke.test.js: prove that
 // the addon really engages a GPU backend on platforms where vcpkg.json wires one
 // in, and prove that use_gpu=false really pins the engine to CPU.
 //
@@ -25,7 +25,7 @@ const os = require('bare-os')
 const process = require('bare-process')
 const test = require('brittle')
 
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const {
   getAssetPath,
   getTestPaths,
@@ -76,6 +76,7 @@ async function ensureTinyModel() {
 
 function buildConfig(useGpu) {
   return {
+    engine: 'whisper',
     contextParams: {
       use_gpu: !!useGpu,
       gpu_device: 0
@@ -91,15 +92,14 @@ function buildConfig(useGpu) {
 
 async function loadAndTranscribe({ modelPath, samplePath, useGpu }) {
   const constructorArgs = {
-    files: { model: modelPath },
-    opts: { stats: true }
+    files: { model: modelPath }
   }
   const config = buildConfig(useGpu)
   config.path = modelPath
 
-  const model = new TranscriptionWhispercpp(constructorArgs, config)
+  const model = new ASRGgml({ ...constructorArgs, config })
   try {
-    await model._load()
+    await model.load()
     const audioStream = createAudioStream(samplePath)
     const response = await model.run(audioStream)
 
@@ -124,7 +124,7 @@ async function loadAndTranscribe({ modelPath, samplePath, useGpu }) {
 }
 
 function assertStatsShape(t, label, stats) {
-  t.ok(stats, `${label}: response.stats must be present (opts.stats=true was set)`)
+  t.ok(stats, `${label}: response.stats must be present (enableStats defaults to true)`)
   if (!stats) return
   t.ok(
     typeof stats.totalTime === 'number' && stats.totalTime >= 0,

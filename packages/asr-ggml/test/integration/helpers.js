@@ -4,7 +4,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
@@ -691,9 +691,9 @@ function getTestPaths(modelsDir = null) {
  * On linux-arm64 and Android the native addon ships ggml with GGML_BACKEND_DL,
  * so it loads its CPU/GPU backends from configurationParams.backendsDir before
  * whisper_init; without it, model activation aborts on a NULL CPU device. The
- * high-level TranscriptionWhispercpp class passes this same directory, so tests
- * that construct WhisperInterface directly must pass it too. Mirrors
- * PREBUILDS_DIR in index.ts.
+ * high-level ASRGgml class passes this same directory, so tests that construct
+ * WhisperInterface directly must pass it too. Mirrors PREBUILDS_DIR in
+ * src/engines/whisper/driver.ts.
  *
  * @returns {string} Absolute path to the package prebuilds directory
  */
@@ -702,7 +702,7 @@ function getBackendsDir() {
 }
 
 /**
- * Run transcription using TranscriptionWhispercpp
+ * Run transcription using the whisper engine of ASRGgml
  * @param {Object} params - Transcription parameters
  * @param {string|Buffer|Uint8Array|Array|Readable} [params.audioInput] - Audio input (optional - if omitted, only tests config validation)
  * @param {string} [params.modelPath] - Path to whisper model file
@@ -739,6 +739,7 @@ async function runTranscription(params, expectation = {}) {
   const whisperConfig = params.whisperConfig || {}
 
   const config = {
+    engine: 'whisper',
     path: modelPath,
     vadModelPath,
     whisperConfig: {
@@ -769,8 +770,8 @@ async function runTranscription(params, expectation = {}) {
 
   let model
   try {
-    model = new TranscriptionWhispercpp(constructorArgs, config)
-    await model._load()
+    model = new ASRGgml({ ...constructorArgs, config })
+    await model.load()
 
     // If no audioInput provided, just test config validation (model loading)
     if (!params.audioInput) {

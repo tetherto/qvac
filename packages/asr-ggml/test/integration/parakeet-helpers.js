@@ -5,7 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
-const { roundTo } = require('./memory-usage.js')
+const { roundTo } = require('./parakeet-memory-usage.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -27,7 +27,7 @@ let _mobileModelManifest = null
 // inject bare-subprocess so performance-reporter.js's _detectGpu()
 // can shell out to nvidia-smi / vulkaninfo / system_profiler on desktop runners
 // and populate device.gpu (the hardware model name). Resolving from this caller
-// file works (it lives next to transcription-parakeet/node_modules); resolving
+// file works (it lives next to asr-ggml/node_modules); resolving
 // from inside scripts/test-utils/ does not, since that directory has no
 // node_modules walk. Mobile leaves device.gpu null — the probes don't apply
 // there and the Device Farm device name is the proxy.
@@ -270,19 +270,17 @@ function recordParakeetStats(label, stats, extra) {
 // Mobile paths use static string literals so bare-pack can trace them into
 // the bundle.  Desktop paths use variables so bare-pack skips them — the
 // relative ../../ paths don't exist in the mobile test-framework layout.
+//
+// `engines/parakeet/parakeet.js` is deliberately NOT a package export (the
+// unified package publishes only ".", "./addonLogging" and "./binding.js"), so
+// the engine-internal interface is always reached through a relative literal —
+// exactly how the whisper suite reaches engines/whisper/whisper.js.
 const _bindingDesktop = '../../binding'
-const _parakeetDesktop = '../../parakeet'
 const _indexDesktop = '../../index.js'
 
-const binding = isMobile
-  ? require('@qvac/transcription-parakeet/binding.js')
-  : require(_bindingDesktop)
-const { ParakeetInterface } = isMobile
-  ? require('@qvac/transcription-parakeet/parakeet.js')
-  : require(_parakeetDesktop)
-const TranscriptionParakeet = isMobile
-  ? require('@qvac/transcription-parakeet')
-  : require(_indexDesktop)
+const binding = isMobile ? require('@qvac/asr-ggml/binding.js') : require(_bindingDesktop)
+const { ParakeetInterface } = require('../../engines/parakeet/parakeet.js')
+const ASRGgml = isMobile ? require('@qvac/asr-ggml') : require(_indexDesktop)
 
 /**
  * Detect current platform
@@ -301,7 +299,7 @@ function detectPlatform() {
  * processing" (LISTENING is the steady post-job state), which is what
  * cleanup callers actually want before tearing the instance down.
  *
- * @param {Object} model - TranscriptionParakeet instance
+ * @param {Object} model - ASRGgml instance
  * @param {number} [maxMs=10000] - Maximum wait time in milliseconds
  * @returns {Promise<boolean>} True if the model left PROCESSING in time
  */
@@ -759,7 +757,7 @@ function* readFileChunked(filePath, chunkSize = 64 * 1024 * 1024) {
 }
 
 /**
- * Run transcription using TranscriptionParakeet
+ * Run transcription using the parakeet engine of ASRGgml
  * @param {Object} params - Transcription parameters
  * @param {Object} [expectation={}] - Expectations for validation
  * @returns {Promise<Object>} Result object with passed, output, and data
@@ -782,7 +780,7 @@ async function runTranscription(params, expectation = {}) {
   )
 
   const modelPath = params.modelPath || defaultModelPath
-  const files = params.files || getNamedPathsConfig(modelType, modelPath)
+  const files = params.files || { model: modelPath }
 
   if (typeof modelPath === 'string' && !fs.existsSync(modelPath)) {
     return {
@@ -794,18 +792,22 @@ async function runTranscription(params, expectation = {}) {
 
   let model
   try {
-    model = new TranscriptionParakeet({
+    // `modelType` is informational for the test harness only — the GGUF
+    // metadata drives detection natively, and the unified driver's
+    // parakeetConfig allow-list rejects unknown keys.
+    const { modelType: _ignoredModelType, ...engineConfig } = parakeetConfig
+    model = new ASRGgml({
       files,
       config: {
+        engine: 'parakeet',
         parakeetConfig: {
-          modelType,
-          maxThreads: parakeetConfig.maxThreads || 4,
-          useGPU: parakeetConfig.useGPU || false,
-          ...parakeetConfig
+          maxThreads: 4,
+          useGPU: false,
+          ...engineConfig
         }
       }
     })
-    await model._load()
+    await model.load()
 
     if (!params.audioInput) {
       return {
@@ -1386,7 +1388,7 @@ function getNamedPathsConfig(_modelType, ggufPath) {
 module.exports = {
   binding,
   ParakeetInterface,
-  TranscriptionParakeet,
+  ASRGgml,
   detectPlatform,
   waitUntilIdle,
   runTranscription,

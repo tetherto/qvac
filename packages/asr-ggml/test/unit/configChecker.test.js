@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const { checkConfig } = require('../../configChecker')
+const { checkConfig } = require('../../engines/whisper/configChecker.js')
 
 function baseConfig(whisperConfig = {}) {
   return {

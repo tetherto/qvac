@@ -1,7 +1,7 @@
 # Integration model manifest
 
-`models.manifest.json` is the single source of truth for the
-transcription-parakeet desktop integration model set. It is consumed by:
+`parakeet-models.manifest.json` is the single source of truth for the
+asr-ggml parakeet-engine desktop integration model set. It is consumed by:
 
 - `scripts/stage-integration-models.mjs`, which stages each model from
   `s3://$MODEL_S3_BUCKET/<s3Path>`.
@@ -25,15 +25,15 @@ object or changing the staged set, stage the complete model set and run:
 npm run generate-model-manifest
 ```
 
-Alternatively, dispatch `integration-test-transcription-parakeet.yml` with
+Alternatively, dispatch `integration-test-asr-ggml.yml` with
 `pin_model_manifest: true`. The dedicated job restores the shared model cache,
 stages the complete S3 set, generates and checks the pins, then uploads the
-manifest as `transcription-parakeet-model-manifest`. Review and commit that
+manifest as `asr-ggml-model-manifest`. Review and commit that
 artifact. Running the generator with `--check` rejects missing or mismatched
 pins for every locally present model.
 
-The S3 date prefixes mirror the registry prefixes in `helpers.js`
+The S3 date prefixes mirror the registry prefixes in `parakeet-helpers.js`
 `MODEL_CONFIGS`. The Sortformer Streaming v2.1 q8_0 model is included so
-`sortformer-aosc-streaming.test.js` resolves it locally instead of downloading
+`parakeet-sortformer-aosc-streaming.test.js` resolves it locally instead of downloading
 it during the test timeout. Mobile q4_0/f16 streaming models are provisioned
 separately by the Device Farm workflow.

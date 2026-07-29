@@ -3,8 +3,8 @@
 /**
  * Real-Time Factor (RTF) Benchmark
  *
- * Captures Whisper runtime stats directly from the high-level response object
- * when `opts.stats=true` is enabled. Results are written to JSON so the
+ * Captures whisper-engine runtime stats directly from the high-level response
+ * object (`enableStats` defaults to true). Results are written to JSON so the
  * desktop integration workflow can upload them as artifacts for comparison
  * across CI runners.
  */
@@ -13,7 +13,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const binding = require('../../binding')
 const {
   detectPlatform,
@@ -284,11 +284,11 @@ test(
       const constructorArgs = {
         files: {
           model: benchmarkSettings.modelPath
-        },
-        opts: { stats: true }
+        }
       }
 
       const config = {
+        engine: 'whisper',
         path: benchmarkSettings.modelPath,
         contextParams: {
           use_gpu: benchmarkSettings.useGPU,
@@ -305,8 +305,8 @@ test(
       console.log('Loading model...')
       const rssBeforeLoad = readRssBytes()
       const loadStart = getTimeMs()
-      model = new TranscriptionWhispercpp(constructorArgs, config)
-      await model._load()
+      model = new ASRGgml({ ...constructorArgs, config })
+      await model.load()
       const loadMs = getTimeMs() - loadStart
       const rssAfterLoad = readRssBytes()
       console.log(`Model loaded in ${loadMs.toFixed(0)}ms (RSS ${bytesToMb(rssAfterLoad, 1)}MB)\n`)

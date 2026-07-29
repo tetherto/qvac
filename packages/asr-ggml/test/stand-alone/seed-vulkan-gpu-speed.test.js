@@ -2,7 +2,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index')
+const ASRGgml = require('../../index')
 const { spawnSync, spawn } = require('bare-subprocess')
 
 const modelsDir = path.resolve(__dirname, '../../models')
@@ -53,6 +53,7 @@ async function checkVulkanAvailable() {
       }
     }
     const testConfig = {
+      engine: 'whisper',
       path: modelPath,
       contextParams: {
         use_gpu: true,
@@ -65,8 +66,8 @@ async function checkVulkanAvailable() {
       },
       miscConfig: {}
     }
-    const testModel = new TranscriptionWhispercpp(args, testConfig)
-    await testModel._load()
+    const testModel = new ASRGgml({ ...args, config: testConfig })
+    await testModel.load()
     await testModel.destroy()
     return true
   } catch (err) {
@@ -190,9 +191,9 @@ async function runTranscription(args, config, description, monitorGPU = false) {
       console.log('  GPU stats before:', gpuStatsBefore)
     }
 
-    model = new TranscriptionWhispercpp(args, config)
+    model = new ASRGgml({ ...args, config })
     console.log(`  Loading ${description} model...`)
-    await model._load()
+    await model.load()
     console.log('  Model loaded, starting transcription...')
 
     const audioStream = fs.createReadStream(spanishAudioPath, {
@@ -305,6 +306,7 @@ test(
     }
 
     const baseConfig = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'es',
@@ -428,6 +430,7 @@ test('Multiple GPU runs with seed for consistency check', { timeout: 120000 }, a
 
   const seed = 9999
   const config = {
+    engine: 'whisper',
     path: modelPath,
     contextParams: {
       use_gpu: true,
@@ -497,6 +500,7 @@ test(
     }
 
     const baseConfig = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'es',
@@ -543,9 +547,9 @@ test(
           gpuMonitor = startGPUMonitoring()
         }
 
-        model = new TranscriptionWhispercpp(args, config)
+        model = new ASRGgml({ ...args, config })
         console.log(`  Loading ${description} model...`)
-        await model._load()
+        await model.load()
 
         const audioStream = fs.createReadStream(spanishAudioShortPath, {
           highWaterMark: 16384

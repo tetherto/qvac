@@ -1,7 +1,7 @@
 'use strict'
 
 const process = require('bare-process')
-const { WhisperInterface } = require('../../whisper')
+const { WhisperInterface } = require('../../engines/whisper/whisper.js')
 const binding = require('../../binding')
 
 const MODEL_PATH_ARG_INDEX = 2

@@ -2,7 +2,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
 
 async function transcribeChunk(model, audioStream, offsetMs, durationMs, audioCtx) {
@@ -85,6 +85,7 @@ test(
     }
 
     const config = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'en',
@@ -96,8 +97,8 @@ test(
 
     let model
     try {
-      model = new TranscriptionWhispercpp(constructorArgs, config)
-      await model._load()
+      model = new ASRGgml({ ...constructorArgs, config })
+      await model.load()
 
       console.log('Reading full audio file into memory...')
       const fullAudioBuffer = fs.readFileSync(audioFile)

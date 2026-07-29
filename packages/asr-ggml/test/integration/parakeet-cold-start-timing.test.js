@@ -17,13 +17,13 @@ const path = require('bare-path')
 const process = require('bare-process')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip,
   isMobile
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
@@ -85,9 +85,9 @@ test(
     const audioData = loadAudio(samplePath)
     console.log(`Audio duration: ${(audioData.length / 16000).toFixed(2)}s\n`)
 
-    const model = new TranscriptionParakeet({
+    const model = new ASRGgml({
       files: { model: stagedGguf },
-      config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+      config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
     })
     const results = []
 
@@ -213,9 +213,9 @@ test(
     for (let instance = 1; instance <= NUM_INSTANCES; instance++) {
       console.log(`--- Instance ${instance}/${NUM_INSTANCES} ---`)
       const instanceStart = getTimeMs()
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: stagedGguf },
-        config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+        config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
       })
       try {
         await model.load()

@@ -1,52 +1,32 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
-const { transitionCb, wait } = require('../mocks/utils.js')
-const { WhisperInterface } = require('../../whisper')
+const { wait, transitionCb } = require('../mocks/utils.js')
+const { MODEL_PATH, createWhisperModel } = require('../mocks/createModel.js')
+const { WhisperInterface } = require('../../engines/whisper/whisper.js')
 
 const process = require('bare-process')
 global.process = process
 
 function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
-  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
-
-  const args = {
-    files: {
-      model: 'ggml-tiny.bin',
-      vadModel: 'ggml-silero-v5.1.2.bin'
-    }
-  }
-  const config = {
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 29000,
-      temperature: 0.0,
-      vad_model_path: 'ggml-silero-v5.1.2.bin',
-      vadParams: { threshold: 0.6 }
-    },
-    contextParams: { model: 'ggml-tiny.bin' },
-    miscConfig: { caption_enabled: false },
-    vadModelPath: '/mock/path/ggml-silero-v5.1.2.bin'
-  }
-  const model = new TranscriptionWhispercpp(args, config)
-
-  model._createAddon = (configurationParams) => {
-    const _binding = binding || new MockedBinding()
-    const addon = new WhisperInterface(
-      _binding,
-      configurationParams,
-      (addon, event, jobId, output, error) => {
-        onOutput(addon, event, jobId, output, error)
-        model._outputCallback(addon, event, jobId, output, error)
+  const { model } = createWhisperModel({
+    binding: binding || new MockedBinding(),
+    onOutput,
+    config: {
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 29000,
+        temperature: 0.0,
+        vad_model_path: MODEL_PATH,
+        vadParams: { threshold: 0.6 }
       },
-      transitionCb
-    )
-
-    return addon
-  }
-
+      contextParams: { model: MODEL_PATH },
+      miscConfig: { caption_enabled: false },
+      vadModelPath: MODEL_PATH
+    }
+  })
   return model
 }
 
@@ -120,6 +100,30 @@ test('runStreaming passes conversation config to native streaming', async (t) =>
   t.is(binding.lastStreamingConfig.vadRunIntervalMs, 125, 'VAD interval should be forwarded')
 })
 
+test('runStreaming rejects unknown per-call streaming options', async (t) => {
+  const model = createMockedModel()
+  await model.load()
+
+  try {
+    await model.runStreaming(makeAudioChunks(1, 16000), {
+      emitVadEvents: true,
+      chunkMs: 2000 // parakeet-vocabulary key: invalid for the whisper engine
+    })
+    t.fail('Unknown streaming option should be rejected')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.INVALID_CONFIG,
+      'Unknown streaming option rejects with INVALID_CONFIG'
+    )
+  }
+
+  // The instance stays usable after the rejected call.
+  const response = await model.runStreaming(makeAudioChunks(1, 16000))
+  await response.await()
+  t.pass('A valid streaming session still runs after the rejected options')
+})
+
 test('runStreaming forwards VAD and end-of-turn events without ending the job', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
@@ -160,17 +164,21 @@ test('runStreaming forwards VAD and end-of-turn events without ending the job', 
     events.find((e) => e.event === 'JobEnded'),
     'JobEnded should still complete the stream'
   )
-  t.ok(
-    updates.find((data) => data?.type === 'vad'),
-    'VAD event should reach response output'
-  )
-  t.ok(
-    updates.find((data) => data?.type === 'endOfTurn'),
-    'EndOfTurn event should reach response output'
-  )
+
+  const vadUpdate = updates.find((data) => data?.type === 'vad')
+  t.ok(vadUpdate, 'VAD event should reach response output')
+  t.is(vadUpdate.source, 'silero', 'VAD event should carry the silero source tag')
+  t.is(typeof vadUpdate.score, 'number', 'VAD probability is renamed to score')
+  t.is(vadUpdate.speaking, true, 'VAD speaking flag passes through')
+
+  const endOfTurnUpdate = updates.find((data) => data?.type === 'endOfTurn')
+  t.ok(endOfTurnUpdate, 'EndOfTurn event should reach response output')
+  t.is(endOfTurnUpdate.source, 'vad-silence', 'EndOfTurn carries the vad-silence source tag')
+  t.is(endOfTurnUpdate.silenceDurationMs, 900, 'EndOfTurn keeps its silence duration')
+
   t.ok(
     updates.find((data) => Array.isArray(data) && data[0]?.text === 'hello world'),
-    'Transcript output should still be delivered'
+    'Transcript output should still be delivered as a bare segment array'
   )
 })
 
@@ -247,9 +255,9 @@ test('Destroy cleans up active streaming session', async (t) => {
 
   const slowStream = {
     async *[Symbol.asyncIterator]() {
-      yield new Uint8Array([10, 20, 30])
+      yield new Uint8Array([10, 20, 30, 40])
       await new Promise((resolve) => setTimeout(resolve, 200))
-      yield new Uint8Array([40, 50, 60])
+      yield new Uint8Array([40, 50, 60, 70])
     }
   }
 
@@ -304,41 +312,65 @@ test('Streaming error propagation surfaces to response', async (t) => {
   t.ok(errorEvents.length > 0, 'Error event should be emitted for failed processing')
 })
 
-test('Second streaming session waits on exclusive queue until first completes', async (t) => {
+test('Concurrent work during an open streaming session is rejected, not queued', async (t) => {
   const binding = new MockedBinding()
   const model = createMockedModel({ binding })
   await model.load()
 
+  let releaseStream
+  const gate = new Promise((resolve) => {
+    releaseStream = resolve
+  })
   const slowStream = {
     async *[Symbol.asyncIterator]() {
-      yield new Uint8Array([1, 2])
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      yield new Uint8Array([3, 4])
+      yield new Uint8Array([1, 2, 3, 4])
+      await gate
     }
   }
 
   const r1 = await model.runStreaming(slowStream)
-  let secondEntered = false
-  const p2 = model.runStreaming([new Uint8Array([9, 9])]).then(async (r) => {
-    secondEntered = true
-    await r.await()
-    return r
-  })
 
-  await wait(20)
-  t.ok(!secondEntered, 'Second run should not start while first job is still active')
+  // The open-session guard fires immediately: a concurrent run()/runStreaming()
+  // never queues behind a potentially minutes-long mic session.
+  try {
+    await model.runStreaming([new Uint8Array([9, 9, 9, 9])])
+    t.fail('Second streaming session should be rejected while one is open')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.STREAMING_SESSION_ACTIVE,
+      'Second session rejects with STREAMING_SESSION_ACTIVE'
+    )
+  }
 
+  try {
+    await model.run([new Uint8Array([9, 9, 9, 9])])
+    t.fail('run() should be rejected while a streaming session is open')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.STREAMING_SESSION_ACTIVE,
+      'run() rejects with STREAMING_SESSION_ACTIVE'
+    )
+  }
+
+  releaseStream()
   await r1.await()
-  await p2
-  t.ok(secondEntered, 'Second run should start after the first job completes')
+  // The open-session flag clears when the session's `done` promise settles,
+  // one microtask after the response itself.
+  await wait()
 
-  await model.cancel()
+  // Once the session settles, new work is accepted again.
+  const r2 = await model.run(new Uint8Array([1, 2, 3, 4]))
+  await r2.await()
+  t.pass('run() succeeds after the streaming session completed')
 })
 
 test('finishStreaming clears the active job and returns to listening', (t) => {
   const configurationParams = {
+    engineType: 'whisper',
     whisperConfig: { language: 'en' },
-    contextParams: { model: 'ggml-tiny.bin' },
+    contextParams: { model: MODEL_PATH },
     miscConfig: { caption_enabled: false }
   }
   const addon = new WhisperInterface(
@@ -348,7 +380,7 @@ test('finishStreaming clears the active job and returns to listening', (t) => {
     transitionCb
   )
 
-  addon.startStreaming({ vadModelPath: 'ggml-silero-v5.1.2.bin' })
+  addon.startStreaming({ vadModelPath: MODEL_PATH })
   t.is(addon._activeJobId, 1, 'startStreaming should reserve an active job id')
   t.is(addon._state, 'processing', 'startStreaming should move to processing')
 

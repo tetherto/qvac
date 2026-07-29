@@ -1,28 +1,28 @@
 'use strict'
 
-// Guards test/integration/models.manifest.json — the single source of truth for
-// the CI-staged parakeet model set AND the cache-models cache key. Kept
-// import-light (reads files only, never requires the native addon) so it runs
-// under brittle-bare without a prebuild.
+// Guards test/integration/parakeet-models.manifest.json — the single source of
+// truth for the CI-staged parakeet model set AND the cache-models cache key.
+// Kept import-light (reads files only, never requires the native addon) so it
+// runs under brittle-bare without a prebuild.
 //
 // It fails loudly if:
 //   - documentation or other non-key metadata is added to the hashed manifest,
 //   - the manifest schema drifts (missing s3Path / malformed sha256 / bytes),
 //   - the staged set no longer matches the expected 13 desktop GGUFs, or
 //   - a manifest filename or its S3 date prefix is not referenced by
-//     test/integration/helpers.js (i.e. the manifest and the runtime model
-//     config have drifted apart).
+//     test/integration/parakeet-helpers.js (i.e. the manifest and the runtime
+//     model config have drifted apart).
 
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 
-const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'models.manifest.json')
-const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'helpers.js')
+const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'parakeet-models.manifest.json')
+const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'parakeet-helpers.js')
 
-// The desktop quant sweep staged by integration-test-transcription-parakeet.yml
+// The desktop quant sweep staged by integration-test-asr-ggml.yml
 // (f16 + q8_0 for all four model types, q4_0 for tdt/ctc/eou/sortformer), plus
-// the Sortformer-Streaming v2.1 q8_0 GGUF that sortformer-aosc-streaming.test.js
+// the Sortformer-Streaming v2.1 q8_0 GGUF that parakeet-sortformer-aosc-streaming.test.js
 // loads via MODEL_CONFIGS.sortformerStreaming.
 const EXPECTED_FILES = [
   'parakeet-tdt-0.6b-v3.f16.gguf',
@@ -96,7 +96,7 @@ test('manifest: every entry has a well-formed s3Path + pinned integrity', (t) =>
   }
 })
 
-test('manifest: filenames + date prefixes are referenced by helpers.js', (t) => {
+test('manifest: filenames + date prefixes are referenced by parakeet-helpers.js', (t) => {
   const manifest = loadManifest()
   const helpers = fs.readFileSync(HELPERS_PATH, 'utf8')
   for (const [name, entry] of Object.entries(manifest.models)) {

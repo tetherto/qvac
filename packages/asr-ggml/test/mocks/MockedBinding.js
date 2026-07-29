@@ -7,6 +7,12 @@ const state = Object.freeze({
   IDLE: 'idle'
 })
 
+// Mirrors the whisper arm of the merged asr-ggml native binding
+// (addon/src/addon/AddonJs.hpp): `createInstance` reads the unified
+// `configurationParams.engineType` dispatch key, `getBackendInfo` returns the
+// six cross-engine keys plus the whisper-only GPU-memory extras, and
+// `endStreaming` returns the parakeet-shaped teardown object
+// ({ cleaned, audioDurationMs, totalSamples }).
 class MockedBinding {
   constructor() {
     this._handle = null
@@ -22,6 +28,7 @@ class MockedBinding {
     this._streamingChunks = []
     this._streamingErrorOnSegment = -1
     this.lastStreamingConfig = null
+    this.engineType = null
   }
 
   enableVadTestMode() {
@@ -41,8 +48,21 @@ class MockedBinding {
   }
 
   createInstance(interfaceType, configurationParams, outputCb, transitionCb = null) {
-    console.log('Constructing the whisper addon')
+    console.log('Constructing the asr-ggml addon (whisper engine)')
+    // Mirror JSAdapter::readEngineType: an unknown non-empty engineType is a
+    // hard error; absent/empty falls through to inference (default whisper).
+    const engineType = configurationParams?.engineType
+    if (
+      typeof engineType === 'string' &&
+      engineType.length > 0 &&
+      engineType !== 'whisper' &&
+      engineType !== 'parakeet'
+    ) {
+      throw new Error(`engineType must be 'whisper' or 'parakeet' (got '${engineType}')`)
+    }
+    this.engineType = engineType || 'whisper'
     this._interfaceType = interfaceType
+    this._configurationParams = configurationParams
     this.outputCb = outputCb
     this.transitionCb = transitionCb
     this._handle = { id: Date.now() } // Create a mock handle
@@ -92,6 +112,23 @@ class MockedBinding {
     this._state = state.LOADING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
+    }
+  }
+
+  // Mirror the whisper arm of the merged getBackendInfo verb: the six
+  // cross-engine keys plus the whisper-only GPU-memory extras (-1 = the
+  // device does not report, matching runtimeStats()).
+  getBackendInfo(handle) {
+    if (handle !== this._handle) throw new Error('Invalid handle')
+    return {
+      backendDevice: 'CPU',
+      backendId: 0,
+      backendName: 'CPU',
+      backendDescription: '',
+      encoderBackend: 'CPU',
+      encoderOnCoreml: false,
+      gpuMemTotalMb: -1,
+      gpuMemFreeMb: -1
     }
   }
 
@@ -176,14 +213,6 @@ class MockedBinding {
     return true
   }
 
-  append(handle, data) {
-    // Legacy API for compatibility in older tests.
-    if (data.type !== 'audio') {
-      return 1
-    }
-    return this.runJob(handle, data) ? 1 : 0
-  }
-
   setLogger(handle, logger) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Set logger:', logger)
@@ -198,7 +227,7 @@ class MockedBinding {
 
   startStreaming(handle, config) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    if (this._streaming) throw new Error('Streaming session already active')
+    if (this._streaming) throw new Error('Streaming session already active for this instance')
     this.lastStreamingConfig = config
     // Match WhisperInterface.startStreaming: reserve the logical job slot before
     // native work begins so JS-owned ids stay aligned in tests.
@@ -212,20 +241,33 @@ class MockedBinding {
     if (this.transitionCb) this.transitionCb(this, this._state)
   }
 
+  // Unified merged-binding return: boolean back-pressure signal — `false` iff
+  // the decoded sample count was 0, else `true`; throws with no session.
   appendStreamingAudio(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    if (!this._streaming) throw new Error('No active streaming session')
+    if (!this._streaming) throw new Error('No active streaming session for this instance')
+    if (!data?.input || data.input.length === 0) return false
     this._streamingChunks.push(data)
+    return true
   }
 
+  // Unified merged-binding return: the parakeet-shaped teardown object.
+  // Result events (Output/JobEnded/Error) still arrive through the output
+  // callback, exactly like the native whisper StreamingProcessor.
   endStreaming(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    if (!this._streaming) return false
+    if (!this._streaming) {
+      return { cleaned: false, audioDurationMs: 0, totalSamples: 0 }
+    }
     this._streaming = false
     this._busy = false
 
     const chunks = this._streamingChunks
     this._streamingChunks = []
+
+    const totalBytes = chunks.reduce((sum, c) => sum + (c.input?.length || 0), 0)
+    // The whisper driver pins the wire format to f32le: four bytes per sample.
+    const totalSamples = Math.floor(totalBytes / 4)
 
     const emitStreamResults = () => {
       const hasError =
@@ -247,13 +289,12 @@ class MockedBinding {
           new Error('One or more segments failed during processing')
         )
       } else {
-        const totalSamples = chunks.reduce((sum, c) => sum + (c.input?.length || 0), 0)
         this._callCallbacks(
           'JobEnded',
           {
             totalTime: 0.01 * Math.max(1, chunks.length),
-            audioDurationMs: totalSamples,
-            totalSamples,
+            audioDurationMs: totalBytes,
+            totalSamples: totalBytes,
             processCalls: chunks.length
           },
           null
@@ -266,7 +307,11 @@ class MockedBinding {
     }
 
     process.nextTick(emitStreamResults)
-    return true
+    return {
+      cleaned: true,
+      audioDurationMs: (totalSamples / 16000) * 1000,
+      totalSamples
+    }
   }
 
   destroyInstance(handle) {

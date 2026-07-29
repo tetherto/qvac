@@ -1,14 +1,7 @@
 'use strict'
 
-// A helper function to wait a short time (to allow setImmediate callbacks to fire).
-const wait = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Transition callback to log state changes.
-const transitionCb = (instance, newState) => {
-  console.log(`Transitioned to: ${newState}`)
-}
-
-module.exports = {
-  wait,
-  transitionCb
-}
+// The parakeet suite's mock helpers turned out identical to the whisper ones
+// after the merge, so this is a plain alias: `{ wait, transitionCb }`. Kept as
+// a file (rather than deleted) so parakeet-prefixed tests and any external
+// snippets that import it keep working.
+module.exports = require('./utils.js')

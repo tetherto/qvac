@@ -23,7 +23,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const binding = require('../../binding')
-const TranscriptionParakeet = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const {
   detectPlatform,
   setupJsLogger,
@@ -31,14 +31,14 @@ const {
   ensureGgufForType,
   quantFromGgufName,
   isMobile
-} = require('../integration/helpers.js')
+} = require('../integration/parakeet-helpers.js')
 const {
   readRssBytes,
   createMemorySampler,
   bytesToMb,
   summarizeRunMemory,
   RECLAIM_SETTLE_MS
-} = require('../integration/memory-usage.js')
+} = require('../integration/parakeet-memory-usage.js')
 
 const platform = detectPlatform()
 const { samplesDir } = getTestPaths()
@@ -57,7 +57,7 @@ const RESULT_MARKER = 'QVAC_RTF_REPORT::'
 // dynamically (path.join keeps bare-pack from statically resolving it during
 // mobile bundling) and guard with try/catch — on mobile it's absent and the GPU
 // stays null (the Device Farm device name is the proxy there). Mirrors the
-// wiring already in test/integration/helpers.js. Probed once at
+// wiring already in test/integration/parakeet-helpers.js. Probed once at
 // module load.
 let _hwDevice = null
 try {
@@ -156,7 +156,7 @@ function getUpperBound(benchmarkSettings) {
   return null
 }
 
-// parakeet.cpp (ggml) GPU backend cascade, per test/integration/gpu-smoke.test.js:
+// parakeet.cpp (ggml) GPU backend cascade, per test/integration/parakeet-gpu-smoke.test.js:
 //   - darwin / ios:   Metal
 //   - linux / win32:  Vulkan
 //   - android:        Vulkan (Adreno: OpenCL fallback)
@@ -333,9 +333,10 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
   const allResults = []
   let observedBackendId = null
-  let model = new TranscriptionParakeet({
+  let model = new ASRGgml({
     files: { model: modelPath },
     config: {
+      engine: 'parakeet',
       parakeetConfig: {
         maxThreads: benchmarkSettings.maxThreads,
         useGPU: benchmarkSettings.useGPU,

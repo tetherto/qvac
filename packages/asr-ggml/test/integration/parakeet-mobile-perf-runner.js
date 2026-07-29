@@ -14,20 +14,20 @@ const {
   isMobile,
   recordParakeetStats,
   quantFromGgufName
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 const {
   readRssBytes,
   createMemorySampler,
   bytesToMb,
   buildMemorySummary,
   RECLAIM_SETTLE_MS
-} = require('./memory-usage.js')
+} = require('./parakeet-memory-usage.js')
 
 const platform = detectPlatform()
 const { samplesDir } = getTestPaths()
 const NUM_TRANSCRIPTIONS = 3
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
-// Same escape hatch as gpu-smoke.test.js: downgrade a GPU-engagement failure
+// Same escape hatch as parakeet-gpu-smoke.test.js: downgrade a GPU-engagement failure
 // to a warning instead of failing the run.
 const RELAX = proc.env && proc.env.QVAC_PARAKEET_GPU_SMOKE_RELAX === '1'
 
@@ -51,7 +51,7 @@ function backendIdToName(id) {
 }
 
 // Assert the backend the engine actually resolved to for a perf run, instead
-// of asserting nothing (the previous behaviour). Mirrors gpu-smoke.test.js's
+// of asserting nothing (the previous behaviour). Mirrors parakeet-gpu-smoke.test.js's
 // assertGpuBackend contract so the perf-GPU runner is no longer blind to a
 // silent CPU fallback:
 //   - useGPU=true  -> must engage GPU (backendDevice=1); on Android a GPU the
@@ -208,7 +208,10 @@ async function runMobilePerfCase(t, opts) {
     }
     console.log(`   Audio duration: ${(audioData.length / 16000).toFixed(2)}s\n`)
 
+    // Low-level ParakeetInterface config: `engineType` is the merged
+    // binding's createInstance dispatch key (JSAdapter::readEngineType).
     const config = {
+      engineType: 'parakeet',
       modelPath,
       modelType,
       maxThreads: 4,

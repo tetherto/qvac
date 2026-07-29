@@ -4,7 +4,7 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const { binding, TranscriptionParakeet, setupJsLogger, isMobile } = require('./helpers.js')
+const { binding, ASRGgml, setupJsLogger, isMobile } = require('./parakeet-helpers.js')
 
 function makeTempDir(label) {
   const root = isMobile
@@ -33,9 +33,9 @@ async function expectLoadError(t, ggufPath) {
   const loggerBinding = setupJsLogger(binding)
   let threw = false
   let errorMessage = ''
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
     files: { model: ggufPath },
-    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
   })
   try {
     await model.load()

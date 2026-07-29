@@ -5,7 +5,7 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const { Readable } = require('bare-stream')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const { setupJsLogger, ensureWhisperModel, isMobile } = require('./helpers.js')
 
 /**
@@ -20,8 +20,8 @@ async function testCorruptedModelFile(t, { corruptedFilePath, constructorArgs, c
   let exceptionThrown = false
 
   try {
-    model = new TranscriptionWhispercpp(constructorArgs, config)
-    await model._load()
+    model = new ASRGgml({ ...constructorArgs, config })
+    await model.load()
 
     const audioData = new Uint8Array(1600)
     const audioStream = new Readable({
@@ -99,6 +99,7 @@ test('Corrupted model file should throw exception to JavaScript', { timeout: 300
       }
     },
     config: {
+      engine: 'whisper',
       whisperConfig: { language: 'en' },
       contextParams: { model: corruptedModelPath },
       miscConfig: { caption_enabled: false }
@@ -150,6 +151,7 @@ test(
         }
       },
       config: {
+        engine: 'whisper',
         whisperConfig: {
           language: 'en',
           vad_model_path: corruptedVadPath

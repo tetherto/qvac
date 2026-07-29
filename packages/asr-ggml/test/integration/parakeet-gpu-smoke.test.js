@@ -28,14 +28,14 @@
 // without a Vulkan-capable GPU / Vulkan SDK).
 //
 // Caveats / known limitations:
-//   1. CTC is intentionally not bundled on mobile (helpers.js
+//   1. CTC is intentionally not bundled on mobile (parakeet-helpers.js
 //      MODEL_CONFIGS comment); `loadGgufOrSkip` returns null with a
 //      `t.pass` on mobile-CTC, so the CTC test is effectively a no-op
 //      on Android/iOS.
 //   2. The "GPU is expected here" decision is platform-driven (see
 //      `expectsGpu()` below). All four supported platforms (darwin,
 //      ios, linux, win32, android) wire a GPU backend by default in
-//      transcription-parakeet/vcpkg.json, so a CPU result on those
+//      the package's vcpkg.json, so a CPU result on those
 //      platforms is treated as a regression -- unless the engine flags
 //      stats.gpuUnsupported (a vendor/tier it declines by policy), or
 //      QVAC_PARAKEET_GPU_SMOKE_RELAX is set.
@@ -46,12 +46,12 @@ const process = require('bare-process')
 const test = require('brittle')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip,
   platform
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 
@@ -85,7 +85,7 @@ function backendIdToName(id) {
   }
 }
 
-// Which platforms wire up a GPU backend in transcription-parakeet's
+// Which platforms wire up a GPU backend in the asr-ggml package's
 // vcpkg.json today (see the `parakeet-cpp` feature dependencies).
 //   - darwin / ios:        metal              (default)
 //   - linux / win32:       vulkan             (default)
@@ -190,9 +190,9 @@ function assertGpuBackend(t, modelType, stats) {
 }
 
 async function runGpuModelTest(t, modelType, modelPath, audio, expectations) {
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
     files: { model: modelPath },
-    config: { parakeetConfig: { modelType, maxThreads: 4, useGPU: true } }
+    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: true } }
   })
   try {
     await model.load()

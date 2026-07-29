@@ -8,7 +8,7 @@
 // the v2.1 GGUF. Every other consumer is an integration test that skips when no
 // GGUF is staged, so without this the alias path could break unnoticed.
 //
-// Lives under test/integration (not test/unit) because it imports helpers.js,
+// Lives under test/integration (not test/unit) because it imports parakeet-helpers.js,
 // which eagerly loads the native addon via binding.js (`require.addon()`); the
 // unit-test job runs without a prebuild. The GGUF itself is faked with a small
 // sentinel file wired through the QVAC_TEST_GGUF_<TYPE> override, so this test
@@ -25,7 +25,7 @@ const {
   MODEL_CONFIGS,
   MODEL_TYPE_ALIASES,
   getTestPaths
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const ALIAS = 'sortformer-streaming'
 const CANONICAL = 'sortformerStreaming'

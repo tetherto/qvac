@@ -5,7 +5,7 @@ const path = require('bare-path')
 const test = require('brittle')
 const { Readable } = require('streamx')
 
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const {
   ensureWhisperModel,
   ensureVADModel,
@@ -69,6 +69,7 @@ test(
     }
 
     const config = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'en',
@@ -83,8 +84,8 @@ test(
 
     let model
     try {
-      model = new TranscriptionWhispercpp(constructorArgs, config)
-      await model._load()
+      model = new ASRGgml({ ...constructorArgs, config })
+      await model.load()
 
       const liveReadable = createLiveReadable()
 
@@ -181,6 +182,7 @@ test(
     }
 
     const config = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'en',
@@ -192,8 +194,8 @@ test(
 
     let model
     try {
-      model = new TranscriptionWhispercpp(constructorArgs, config)
-      await model._load()
+      model = new ASRGgml({ ...constructorArgs, config })
+      await model.load()
 
       // 3-second chunks (s16le@16kHz → 96000 bytes per chunk)
       const chunkBytes = 96000
@@ -281,6 +283,7 @@ test(
     }
 
     const config = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'en',
@@ -301,8 +304,8 @@ test(
 
     let model
     try {
-      model = new TranscriptionWhispercpp(constructorArgs, config)
-      await model._load()
+      model = new ASRGgml({ ...constructorArgs, config })
+      await model.load()
 
       const response = await model.runStreaming(createAudioStream(audioPath), {
         emitVadEvents: true,

@@ -1,10 +1,17 @@
 'use strict'
 require('./integration-runtime.cjs')
 
+// AUTO-GENERATED FILE. Run `npm run test:mobile:generate` to update.
+// Each function mirrors a single file under test/integration/.
+
 /* global runIntegrationModule */
 
 async function runAccuracyMultilangTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/accuracy-multilang.test.js', options)
+}
+
+async function runAddonTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/addon.test.js', options)
 }
 
 async function runAudioCtxChunkingTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -27,19 +34,16 @@ async function runLiveStreamSimulationTest (options = {}) { // eslint-disable-li
   return runIntegrationModule('../integration/live-stream-simulation.test.js', options)
 }
 
-async function runLongEsTest (options = {}) { // eslint-disable-line no-unused-vars
+async function runLongESTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/longES.test.js', options)
+}
+
+async function runMobilePerfSweepCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sweep-cpu.test.js', options)
 }
 
 async function runMobilePerfTinyCpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/mobile-perf-tiny-cpu.test.js', options)
-}
-
-// CPU quantization sweep (base/small × q5_1/q8_0). Declared among the CPU cases
-// so it runs before any GPU case — see mobile-perf-sweep-gpu.test.js for the
-// GPU-teardown crash-isolation rationale.
-async function runMobilePerfSweepCpuTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/mobile-perf-sweep-cpu.test.js', options)
 }
 
 async function runModelFileValidationTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -50,34 +54,149 @@ async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-
   return runIntegrationModule('../integration/multiple-transcriptions.test.js', options)
 }
 
-// GPU quantization sweep (base/small × q5_1/q8_0). Declared after every CPU
-// case and immediately before the known-crasher tiny-GPU case below, so the CPU
-// sweep's coverage is protected from any GPU-teardown crash.
+async function runParakeetAccuracyMultilangTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-accuracy-multilang.test.js', options)
+}
+
+async function runParakeetAddonMultimodelTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-addon-multimodel.test.js', options)
+}
+
+async function runParakeetColdStartTimingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-cold-start-timing.test.js', options)
+}
+
+async function runParakeetCorruptedModelTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-corrupted-model.test.js', options)
+}
+
+async function runParakeetDuplexStreamingEouTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-duplex-streaming-eou.test.js', options)
+}
+
+async function runParakeetDuplexStreamingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-duplex-streaming.test.js', options)
+}
+
+async function runParakeetEouStreamingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-eou-streaming.test.js', options)
+}
+
+async function runParakeetGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-gpu-smoke.test.js', options)
+}
+
+async function runParakeetLiveStreamSimulationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-live-stream-simulation.test.js', options)
+}
+
+async function runParakeetMobilePerfCtcCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-ctc-cpu.test.js', options)
+}
+
+async function runParakeetMobilePerfCtcGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-ctc-gpu.test.js', options)
+}
+
+async function runParakeetMobilePerfEouCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-eou-cpu.test.js', options)
+}
+
+async function runParakeetMobilePerfEouGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-eou-gpu.test.js', options)
+}
+
+async function runParakeetMobilePerfSortformerCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-sortformer-cpu.test.js', options)
+}
+
+async function runParakeetMobilePerfSortformerGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-sortformer-gpu.test.js', options)
+}
+
+async function runParakeetMobilePerfSortformerStreamingCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-sortformer-streaming-cpu.test.js', options)
+}
+
+async function runParakeetMobilePerfSortformerStreamingGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-sortformer-streaming-gpu.test.js', options)
+}
+
+async function runParakeetMobilePerfTdtCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-tdt-cpu.test.js', options)
+}
+
+async function runParakeetMobilePerfTdtGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-mobile-perf-tdt-gpu.test.js', options)
+}
+
+async function runParakeetModelFileValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-model-file-validation.test.js', options)
+}
+
+async function runParakeetMultipleTranscriptionsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-multiple-transcriptions.test.js', options)
+}
+
+async function runParakeetSortformerAoscStreamingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-sortformer-aosc-streaming.test.js', options)
+}
+
+async function runParakeetSortformerStreamingAliasTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parakeet-sortformer-streaming-alias.test.js', options)
+}
+
+// Intentionally appended AFTER the alphabetical block that
+// `npm run test:mobile:generate` emits: whisper's GPU teardown can crash the
+// bare app on some Adreno devices at process/context shutdown
+// (whisper.cpp#2373). Keeping these two cases last ensures such a crash cannot
+// drop coverage of any earlier case on that device. The CPU sweep runs before
+// them for the same reason. See test/integration/mobile-perf-tiny-gpu.test.js
+// for the full rationale; re-apply this ordering if the file is regenerated.
 async function runMobilePerfSweepGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/mobile-perf-sweep-gpu.test.js', options)
 }
 
-// Intentionally ordered LAST (not alphabetically): the GPU teardown can crash
-// the bare app on some Adreno devices at process/context shutdown
-// (whisper.cpp#2373). Keeping it as the final case ensures such a crash cannot
-// drop coverage of any earlier test on that device. See
-// test/integration/mobile-perf-tiny-gpu.test.js for the full rationale.
 async function runMobilePerfTinyGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/mobile-perf-tiny-gpu.test.js', options)
 }
 
 module.exports = {
   runAccuracyMultilangTest,
+  runAddonTest,
   runAudioCtxChunkingTest,
   runColdStartTimingTest,
   runCorruptedModelTest,
   runGpuTest,
   runLiveStreamSimulationTest,
-  runLongEsTest,
-  runMobilePerfTinyCpuTest,
+  runLongESTest,
   runMobilePerfSweepCpuTest,
-  runMobilePerfSweepGpuTest,
-  runMobilePerfTinyGpuTest,
+  runMobilePerfTinyCpuTest,
   runModelFileValidationTest,
-  runMultipleTranscriptionsTest
+  runMultipleTranscriptionsTest,
+  runParakeetAccuracyMultilangTest,
+  runParakeetAddonMultimodelTest,
+  runParakeetColdStartTimingTest,
+  runParakeetCorruptedModelTest,
+  runParakeetDuplexStreamingEouTest,
+  runParakeetDuplexStreamingTest,
+  runParakeetEouStreamingTest,
+  runParakeetGpuSmokeTest,
+  runParakeetLiveStreamSimulationTest,
+  runParakeetMobilePerfCtcCpuTest,
+  runParakeetMobilePerfCtcGpuTest,
+  runParakeetMobilePerfEouCpuTest,
+  runParakeetMobilePerfEouGpuTest,
+  runParakeetMobilePerfSortformerCpuTest,
+  runParakeetMobilePerfSortformerGpuTest,
+  runParakeetMobilePerfSortformerStreamingCpuTest,
+  runParakeetMobilePerfSortformerStreamingGpuTest,
+  runParakeetMobilePerfTdtCpuTest,
+  runParakeetMobilePerfTdtGpuTest,
+  runParakeetModelFileValidationTest,
+  runParakeetMultipleTranscriptionsTest,
+  runParakeetSortformerAoscStreamingTest,
+  runParakeetSortformerStreamingAliasTest,
+  runMobilePerfSweepGpuTest,
+  runMobilePerfTinyGpuTest
 }

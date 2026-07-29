@@ -4,7 +4,7 @@ const path = require('bare-path')
 const test = require('brittle')
 const process = require('bare-process')
 const { spawnSync } = require('bare-subprocess')
-const { WhisperInterface } = require('../../whisper')
+const { WhisperInterface } = require('../../engines/whisper/whisper.js')
 const binding = require('../../binding')
 const {
   detectPlatform,
@@ -311,11 +311,12 @@ test('Real addon with downloaded models - success case', { timeout: 120000 }, as
   }
 })
 
-test('Runtime stats are populated when opts.stats=true', { timeout: 120000 }, async (t) => {
+test('Runtime stats are populated by default (enableStats)', { timeout: 120000 }, async (t) => {
   await ensureWhisperModel(modelPath)
   generateTestAudio(audioPath)
 
   const config = {
+    engine: 'whisper',
     path: modelPath,
     whisperConfig: {
       language: 'en',
@@ -327,14 +328,14 @@ test('Runtime stats are populated when opts.stats=true', { timeout: 120000 }, as
   const constructorArgs = {
     files: {
       model: modelPath
-    },
-    opts: { stats: true }
+    }
   }
 
-  const model = new (require('../../index'))(constructorArgs, config)
+  const ASRGgml = require('../../index')
+  const model = new ASRGgml({ ...constructorArgs, config })
 
   try {
-    await model._load()
+    await model.load()
     const audioStream = require('./helpers.js').createAudioStream(audioPath)
     const response = await model.run(audioStream)
     await response.await()
@@ -480,7 +481,7 @@ test('Real addon error handling - failure cases', { timeout: 120000 }, async (t)
         // No audioInput - we're just testing config validation
       })
 
-      // Config validation should fail during _load() via checkConfig()
+      // Config validation should fail during load() via checkConfig()
       if (result.passed) {
         t.fail(`${testCase.name} should have been rejected but passed`)
       } else {

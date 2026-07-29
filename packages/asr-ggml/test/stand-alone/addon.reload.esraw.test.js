@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
-const { WhisperInterface } = require('../../whisper')
+const { WhisperInterface } = require('../../engines/whisper/whisper.js')
 const binding = require('../../binding')
 
 const modelsDir = path.resolve(__dirname, '../../models')

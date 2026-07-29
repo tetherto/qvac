@@ -34,11 +34,11 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
 
@@ -148,9 +148,10 @@ test(
         return
       }
 
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: modelPath },
         config: {
+          engine: 'parakeet',
           parakeetConfig: {
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,
@@ -212,9 +213,10 @@ test(
         return
       }
 
-      const model = new TranscriptionParakeet({
+      const model = new ASRGgml({
         files: { model: modelPath },
         config: {
+          engine: 'parakeet',
           parakeetConfig: {
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,

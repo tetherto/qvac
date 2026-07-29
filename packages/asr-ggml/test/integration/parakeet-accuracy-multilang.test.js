@@ -17,14 +17,14 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  TranscriptionParakeet,
+  ASRGgml,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   validateAccuracy,
   loadGgufOrSkip,
   isMobile
-} = require('./helpers.js')
+} = require('./parakeet-helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
@@ -104,9 +104,9 @@ async function runLanguageTest(t, langConfig, loggerBinding, stagedGguf) {
 
   console.log(`   Audio duration: ${(audioData.length / sampleRate).toFixed(2)}s`)
 
-  const model = new TranscriptionParakeet({
+  const model = new ASRGgml({
     files: { model: stagedGguf },
-    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
   })
 
   const transcriptions = []
@@ -354,7 +354,7 @@ test('Transcription test - Croatian (non-primary language)', { timeout: 300000 }
  * the TDT-default English test alone.
  *
  * Skipped on mobile (CTC GGUF intentionally not bundled into the
- * mobile test app -- see helpers.js MODEL_CONFIGS comments).
+ * mobile test app -- see parakeet-helpers.js MODEL_CONFIGS comments).
  */
 test('Accuracy test - English (CTC head)', { timeout: 300000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)

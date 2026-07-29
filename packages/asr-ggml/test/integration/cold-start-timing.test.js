@@ -17,7 +17,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const { ensureWhisperModel, ensureVADModel, getAssetPath, isMobile } = require('./helpers.js')
 
 async function getModelPaths() {
@@ -129,6 +129,7 @@ test(
     }
 
     const config = {
+      engine: 'whisper',
       path: paths.modelPath,
       vadModelPath: paths.vadModelPath,
       whisperConfig: {
@@ -158,16 +159,11 @@ test(
       if (paths.vadModelPath) {
         ctorFiles.vadModel = paths.vadModelPath
       }
-      model = new TranscriptionWhispercpp(
-        {
-          files: ctorFiles
-        },
-        config
-      )
+      model = new ASRGgml({ files: ctorFiles, config })
 
       // Load model (this should trigger warmup)
       console.log('🔄 Loading model (with warmup)...')
-      await model._load()
+      await model.load()
 
       const loadEndTime = getTimeMs()
       console.log(`✅ Model loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms\n`)
@@ -265,6 +261,7 @@ test('Cold start: fresh model instance per transcription', { timeout: 300000 }, 
     console.log(`--- Instance ${i + 1}/${NUM_RUNS} ---`)
 
     const config = {
+      engine: 'whisper',
       path: paths.modelPath,
       vadModelPath: paths.vadModelPath,
       whisperConfig: {
@@ -286,14 +283,9 @@ test('Cold start: fresh model instance per transcription', { timeout: 300000 }, 
       if (paths.vadModelPath) {
         ctorFiles.vadModel = paths.vadModelPath
       }
-      model = new TranscriptionWhispercpp(
-        {
-          files: ctorFiles
-        },
-        config
-      )
+      model = new ASRGgml({ files: ctorFiles, config })
 
-      await model._load()
+      await model.load()
 
       const loadTime = getTimeMs() - instanceStartTime
 

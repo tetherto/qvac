@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const TranscriptionWhispercpp = require('../../index.js')
+const ASRGgml = require('../../index.js')
 const path = require('bare-path')
 const os = require('bare-os')
 const { ensureWhisperModel, ensureVADModel, isMobile } = require('./helpers.js')
@@ -27,6 +27,7 @@ async function ensureModelsDownloaded() {
 test('Should throw error when files.model is not provided', { timeout: 60000 }, async (t) => {
   const args = {}
   const config = {
+    engine: 'whisper',
     whisperConfig: {
       language: 'en'
     },
@@ -39,9 +40,10 @@ test('Should throw error when files.model is not provided', { timeout: 60000 }, 
   }
 
   try {
-    new TranscriptionWhispercpp(args, config) // eslint-disable-line no-new
+    new ASRGgml({ ...args, config }) // eslint-disable-line no-new
     t.fail('Should have thrown an error for missing files.model')
   } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.MODEL_REQUIRED, 'Throws MODEL_REQUIRED')
     t.ok(error.message.includes('files.model'), 'Error message should mention files.model')
   }
 })
@@ -58,6 +60,7 @@ test('Should throw error when model file does not exist', { timeout: 60000 }, as
     }
   }
   const config = {
+    engine: 'whisper',
     whisperConfig: {
       language: 'en'
     },
@@ -70,11 +73,12 @@ test('Should throw error when model file does not exist', { timeout: 60000 }, as
   }
 
   try {
-    new TranscriptionWhispercpp(args, config) // eslint-disable-line no-new
+    new ASRGgml({ ...args, config }) // eslint-disable-line no-new
     t.fail('Should have thrown an error for non-existent model file')
   } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.MODEL_NOT_FOUND, 'Throws MODEL_NOT_FOUND')
     t.ok(
-      error.message.includes("Model file doesn't exist"),
+      error.message.includes('Model not found at path'),
       "Error message should mention model file doesn't exist"
     )
     t.ok(
@@ -98,6 +102,7 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
     }
   }
   const config = {
+    engine: 'whisper',
     whisperConfig: {
       language: 'en',
       vad_model_path: 'non-existent-vad-model.bin' // Non-existent VAD model
@@ -111,9 +116,10 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
   }
 
   try {
-    new TranscriptionWhispercpp(args, config) // eslint-disable-line no-new
+    new ASRGgml({ ...args, config }) // eslint-disable-line no-new
     t.fail('Should have thrown an error for non-existent VAD model file')
   } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.VAD_MODEL_NOT_FOUND, 'Throws VAD_MODEL_NOT_FOUND')
     t.ok(
       error.message.includes('VAD model file not found'),
       "Error message should mention VAD model file doesn't exist"
@@ -142,6 +148,7 @@ test(
       }
     }
     const config = {
+      engine: 'whisper',
       whisperConfig: {
         language: 'en'
         // No vad_model_path specified
@@ -155,7 +162,7 @@ test(
     }
 
     try {
-      const model = new TranscriptionWhispercpp(args, config)
+      const model = new ASRGgml({ ...args, config })
       t.ok(model, 'Model should be created successfully')
       t.pass('No exception thrown when model file exists and VAD is not specified')
     } catch (error) {
@@ -182,6 +189,7 @@ test(
       }
     }
     const config = {
+      engine: 'whisper',
       whisperConfig: {
         language: 'en',
         vad_model_path: testVadPath
@@ -195,7 +203,7 @@ test(
     }
 
     try {
-      const model = new TranscriptionWhispercpp(args, config)
+      const model = new ASRGgml({ ...args, config })
       t.ok(model, 'Model should be created successfully')
       t.pass('No exception thrown when both model and VAD model files exist')
     } catch (error) {

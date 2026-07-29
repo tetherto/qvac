@@ -4,7 +4,7 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const TranscriptionWhispercpp = require('../../index')
+const ASRGgml = require('../../index')
 const { ensureWhisperModel, getAssetPath, createAudioStream, isMobile } = require('./helpers.js')
 
 // On mobile, runs fewer transcriptions to avoid memory pressure
@@ -58,6 +58,7 @@ test(
     }
 
     const config = {
+      engine: 'whisper',
       path: modelPath,
       whisperConfig: {
         language: 'en'
@@ -66,7 +67,7 @@ test(
 
     let model
     try {
-      model = new TranscriptionWhispercpp(args, config)
+      model = new ASRGgml({ ...args, config })
       await model.load()
 
       console.log(
