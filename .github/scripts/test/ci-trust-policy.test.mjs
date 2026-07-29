@@ -915,3 +915,16 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
     })
   assert.deepEqual(offenders, [])
 })
+
+// Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
+// privileged context), so it deliberately carries no label-gate/authorize and
+// needs no SHA-bound fork coverage. Lock in that it is NOT a pull_request_target
+// workflow, so a future edit can't quietly reintroduce a secret-bearing
+// untrusted-checkout surface.
+test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {
+  const entry = read('.github/workflows/on-pr-shared-ci-infra.yml')
+  assert.match(entry, /^on:\n\s*pull_request:/m)
+  assert.doesNotMatch(entry, /pull_request_target/)
+  assert.doesNotMatch(entry, /secrets:\s*inherit/)
+  assert.doesNotMatch(entry, /HF_TOKEN/)
+})
