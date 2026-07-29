@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include <ggml-backend.h>
+#include <gguf.h>
 #include <llama.h>
 
 #ifdef _WIN32
@@ -70,6 +71,42 @@ public:
   BackendScope(BackendScope&&) = delete;
   BackendScope& operator=(BackendScope&&) = delete;
 };
+
+/// Reads the model's trained context length straight from GGUF metadata.
+///
+/// When the caller passes `nCtx == 0` the fitter is free to choose, and llama
+/// encodes "use the trained context" as a context of 0 — so a successful plan
+/// can come back holding 0, which is not a context any caller can act on. Read
+/// the real value so a SUCCESS always carries a concrete number.
+///
+/// `kv_only` stops parsing after the KV block, so no tensor data is read and
+/// the addon's no-weights-loaded promise still holds. Returns 0 when the file
+/// or the key cannot be read, leaving the caller no worse off than before.
+uint32_t readTrainedContext(const std::string& modelPath) {
+  gguf_init_params params = {};
+  params.no_alloc = true;
+  params.ctx = nullptr;
+  params.kv_only = true;
+
+  gguf_context* ctx = gguf_init_from_file(modelPath.c_str(), params);
+  if (ctx == nullptr) {
+    return 0;
+  }
+
+  uint32_t trained = 0;
+  const int64_t archId = gguf_find_key(ctx, "general.architecture");
+  if (archId >= 0 && gguf_get_kv_type(ctx, archId) == GGUF_TYPE_STRING) {
+    const std::string ctxKey =
+        std::string(gguf_get_val_str(ctx, archId)) + ".context_length";
+    const int64_t ctxId = gguf_find_key(ctx, ctxKey.c_str());
+    if (ctxId >= 0 && gguf_get_kv_type(ctx, ctxId) == GGUF_TYPE_UINT32) {
+      trained = gguf_get_val_u32(ctx, ctxId);
+    }
+  }
+
+  gguf_free(ctx);
+  return trained;
+}
 
 /// Counts registered devices, splitting out accelerators. Integrated GPUs count
 /// as accelerators — on phones and APUs that is the only GPU there is.
@@ -190,6 +227,10 @@ FitResult runFit(const FitRequest& req) {
     cparams.n_ubatch = req.nUbatch;
   }
 
+  // Reducing towards a floor of zero could hand back a context nothing can run
+  // with, so substitute a positive default when the caller left it unset.
+  const uint32_t nCtxMin = req.nCtxMin != 0 ? req.nCtxMin : DEFAULT_N_CTX_MIN;
+
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
   // library, not the caller.
   std::vector<float> tensorSplit(maxDevices, 0.0F);
@@ -208,7 +249,7 @@ FitResult runFit(const FitRequest& req) {
           tensorSplit.data(),
           buftOverrides.data(),
           margins.data(),
-          req.nCtxMin,
+          nCtxMin,
           &status)) {
     // A fatal native trap was contained: report ERROR (projection unavailable).
     out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
@@ -224,7 +265,7 @@ FitResult runFit(const FitRequest& req) {
       tensorSplit.data(),
       buftOverrides.data(),
       margins.data(),
-      req.nCtxMin,
+      nCtxMin,
       GGML_LOG_LEVEL_INFO);
 #endif
 
@@ -235,6 +276,14 @@ FitResult runFit(const FitRequest& req) {
   out.nBatch = cparams.n_batch;
   out.nUbatch = cparams.n_ubatch;
   out.tensorSplit.assign(tensorSplit.begin(), tensorSplit.end());
+
+  // A fit that needed no reduction leaves n_ctx at the 0 it was handed, which
+  // means "the trained context" to llama but is not a plan a caller can use.
+  // Resolve it so every SUCCESS carries a concrete context.
+  if (out.fits && out.nCtx == 0) {
+    out.nCtx = readTrainedContext(req.modelPath);
+  }
+
   return out;
 }
 

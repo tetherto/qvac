@@ -78,7 +78,24 @@ reference counting.
   their **default** value. Pinning `nGpuLayers` therefore *fixes* it and the
   fitter fits the rest around it; omit it to let the fitter choose.
 - Context is the documented exception: it is reduced **iff** `nCtx == 0`. A
-  concrete `nCtx` is treated as a hard requirement.
+  concrete `nCtx` is treated as a hard requirement and comes back unchanged.
+- `nCtxMin` defaults to **512** when left at 0. Reducing towards a floor of zero
+  could otherwise return a context nothing can run with.
+- A `SUCCESS` always reports a concrete `nCtx`. When the fitter needs no
+  reduction it leaves the context at the 0 it was handed — llama's encoding for
+  "use the trained context" — so the trained value is read from GGUF metadata
+  (KV block only, still no weights) and returned instead.
+
+### Argument validation
+
+Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
+and negatives wrap — `marginMiB: -1` would otherwise become a margin nothing can
+satisfy. All of them must be non-negative safe integers within the range of
+their target type, with `nUbatch <= nBatch` and `nCtxMin <= nCtx`.
+
+These checks are enforced **in the native binding as well as the JS wrapper**,
+because `./binding.js` is a public export and can be called without passing
+through `index.js`.
 
 ## SDK usage (intended)
 

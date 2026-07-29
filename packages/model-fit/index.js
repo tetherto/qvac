@@ -9,11 +9,41 @@ const FIT_STATUS = Object.freeze({
   ERROR: 2 // hard error, e.g. no model at the given path
 })
 
-function validateNumber (config, key) {
+const UINT32_MAX = 4294967295
+const INT32_MAX = 2147483647
+
+// Every numeric field crosses into C++ as a uint32_t or int32_t. Fractions
+// truncate there and negatives wrap, so `marginMiB: -1` would silently become a
+// ~4 PiB margin that nothing can ever satisfy. Reject at the boundary instead.
+const NUMERIC_FIELDS = Object.freeze({
+  nCtx: UINT32_MAX,
+  nCtxMin: UINT32_MAX,
+  nBatch: UINT32_MAX,
+  nUbatch: UINT32_MAX,
+  nGpuLayers: INT32_MAX,
+  marginMiB: UINT32_MAX
+})
+
+function validateNumber (config, key, max) {
   const value = config[key]
   if (value === undefined) return
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new TypeError(`model-fit: config.${key} must be a finite number when provided`)
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw new TypeError(`model-fit: config.${key} must be a safe integer when provided`)
+  }
+  if (value < 0 || value > max) {
+    throw new RangeError(`model-fit: config.${key} must be between 0 and ${max}`)
+  }
+}
+
+// Relationships the native side would otherwise accept and the fitter would
+// then either reject obscurely or silently reinterpret.
+function validateRelationships (config) {
+  const { nBatch, nUbatch, nCtx, nCtxMin } = config
+  if (nBatch > 0 && nUbatch > 0 && nUbatch > nBatch) {
+    throw new RangeError('model-fit: config.nUbatch must not exceed config.nBatch')
+  }
+  if (nCtx > 0 && nCtxMin > 0 && nCtxMin > nCtx) {
+    throw new RangeError('model-fit: config.nCtxMin must not exceed config.nCtx')
   }
 }
 
@@ -56,9 +86,10 @@ function fitParams (config) {
   if (config.backendsDir !== undefined && (typeof config.backendsDir !== 'string' || config.backendsDir.length === 0)) {
     throw new TypeError('model-fit: config.backendsDir must be a non-empty string when provided')
   }
-  for (const key of ['nCtx', 'nCtxMin', 'nBatch', 'nUbatch', 'nGpuLayers', 'marginMiB']) {
-    validateNumber(config, key)
+  for (const [key, max] of Object.entries(NUMERIC_FIELDS)) {
+    validateNumber(config, key, max)
   }
+  validateRelationships(config)
   return binding.paramsFit(config)
 }
 

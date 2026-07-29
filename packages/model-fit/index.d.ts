@@ -7,9 +7,12 @@ export interface FitConfig {
    * and reports ERROR. Omit for a statically linked build.
    */
   backendsDir?: string
-  /** Desired context size. 0 (default) lets the fitter choose down to nCtxMin. */
+  /**
+   * Desired context size. 0 (default) lets the fitter choose down to nCtxMin;
+   * any other value is a hard constraint and is returned unchanged.
+   */
   nCtx?: number
-  /** Lower bound the fitter may shrink the context to when freeing memory. */
+  /** Lower bound when shrinking the context. 0 (default) means 512. */
   nCtxMin?: number
   /** Logical batch size. 0 = llama default. */
   nBatch?: number
@@ -28,7 +31,7 @@ export interface FitResult {
   fits: boolean
   /** Fitted number of layers to offload to GPU. */
   nGpuLayers: number
-  /** Fitted context size. */
+  /** Fitted context size. Always concrete (never 0) when status is SUCCESS. */
   nCtx: number
   /** Fitted logical batch size. */
   nBatch: number

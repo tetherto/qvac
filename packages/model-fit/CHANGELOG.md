@@ -17,6 +17,17 @@
   also keeps two backend scopes from overlapping, which is what allows the
   unconditional init/free above to stay correct without reference counting.
 
+- Validate numeric arguments as non-negative safe integers within the range of
+  the `uint32_t`/`int32_t` they are narrowed to, and check `nUbatch <= nBatch`
+  and `nCtxMin <= nCtx`. Previously only finiteness was checked, so fractions
+  truncated and negatives wrapped — `marginMiB: -1` became a margin nothing
+  could satisfy. Enforced in the native binding as well as the JS wrapper,
+  since `./binding.js` is a public export that bypasses the wrapper.
+- Default `nCtxMin` to 512 when unset, and resolve a fitted context of 0 to the
+  model's trained context (read from GGUF KV metadata, no weights loaded), so a
+  `SUCCESS` never reports `nCtx: 0`. An explicitly requested context remains a
+  hard constraint and is now asserted to come back unchanged.
+
 ### Added
 
 - `nDevices` and `nGpuDevices` on the result — the device inventory the

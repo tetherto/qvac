@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -16,6 +17,34 @@ namespace jsu = qvac_lib_inference_addon_cpp::js;
 
 using qvac_errors::StatusError;
 using qvac_errors::general_error::InvalidArgument;
+
+namespace {
+
+constexpr double UINT32_LIMIT = 4294967295.0;
+constexpr double INT32_LIMIT = 2147483647.0;
+
+/// Rejects fractions and out-of-range values before they are narrowed to
+/// uint32_t/int32_t, where a fraction truncates and a negative wraps.
+///
+/// These checks duplicate `index.js` deliberately: `./binding.js` is a public
+/// export, so a caller can reach `paramsFit` without ever passing through the
+/// JS wrapper, and the native side must not depend on validation it cannot
+/// guarantee ran.
+double requireBoundedInteger(double value, double max, const char* key) {
+  if (!std::isfinite(value) || value != std::trunc(value)) {
+    throw StatusError(
+        InvalidArgument,
+        std::string("model-fit: '") + key + "' must be an integer");
+  }
+  if (value < 0.0 || value > max) {
+    throw StatusError(
+        InvalidArgument,
+        std::string("model-fit: '") + key + "' is out of range");
+  }
+  return value;
+}
+
+} // namespace
 
 /// `paramsFit(config)` — synchronous memory-fit preflight. Reads a plain config
 /// object, runs `llama_params_fit` (no weights are loaded), and returns the
@@ -40,22 +69,37 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   }
 
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nCtx")) {
-    req.nCtx = v->as<uint32_t>(env);
+    req.nCtx = static_cast<uint32_t>(
+        requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "nCtx"));
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nCtxMin")) {
-    req.nCtxMin = v->as<uint32_t>(env);
+    req.nCtxMin = static_cast<uint32_t>(
+        requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "nCtxMin"));
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nBatch")) {
-    req.nBatch = v->as<uint32_t>(env);
+    req.nBatch = static_cast<uint32_t>(
+        requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "nBatch"));
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nUbatch")) {
-    req.nUbatch = v->as<uint32_t>(env);
+    req.nUbatch = static_cast<uint32_t>(
+        requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "nUbatch"));
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "nGpuLayers")) {
-    req.nGpuLayers = v->as<int32_t>(env);
+    req.nGpuLayers = static_cast<int32_t>(
+        requireBoundedInteger(v->as<double>(env), INT32_LIMIT, "nGpuLayers"));
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "marginMiB")) {
-    req.marginMiB = v->as<uint32_t>(env);
+    req.marginMiB = static_cast<uint32_t>(
+        requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "marginMiB"));
+  }
+
+  if (req.nBatch > 0 && req.nUbatch > 0 && req.nUbatch > req.nBatch) {
+    throw StatusError(
+        InvalidArgument, "model-fit: 'nUbatch' must not exceed 'nBatch'");
+  }
+  if (req.nCtx > 0 && req.nCtxMin > 0 && req.nCtxMin > req.nCtx) {
+    throw StatusError(
+        InvalidArgument, "model-fit: 'nCtxMin' must not exceed 'nCtx'");
   }
 
   const FitResult res = runFit(req);
