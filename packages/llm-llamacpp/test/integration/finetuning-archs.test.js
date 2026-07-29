@@ -43,8 +43,8 @@ const FINETUNE_TIMEOUT_MS = 3600_000
 // name+url pairs from this file to (re)generate the mobile prestage manifest, and
 // Qwen3.5-0.8B IS prestaged for this shard — dropping it would make a regen
 // silently lose it. GEMMA4_MODEL deliberately OMITS `url`: it is desktop-only and
-// opt-in (QVAC_RUN_ARCHS_GEMMA4) and must NEVER be mobile-prestaged, so it must
-// not be scraped into the mobile manifest (same rationale as finetuning-moe.test.js).
+// must NEVER be mobile-prestaged, so it must not be scraped into the mobile
+// manifest (same rationale as finetuning-moe.test.js).
 const QWEN35_MODEL = {
   id: 'qwen3.5-0.8b-q4_0',
   name: 'Qwen3.5-0.8B-Q4_0.gguf',
@@ -56,12 +56,12 @@ const GEMMA4_MODEL = {
   name: 'google_gemma-4-E2B-it-Q4_0.gguf'
 }
 
-// Gemma-4 (~3.3 GB) is the expensive leg and desktop-only. Keep it opt-in so the
-// default desktop CI run only pulls/finetunes the small Qwen3.5-0.8B; set
-// QVAC_RUN_ARCHS_GEMMA4=true to include it. Mobile always runs Qwen3.5 only (and
-// Qwen3.5-0.8B is the single model prestaged for this shard).
-const archsGemma4OptIn = !!(proc.env && proc.env.QVAC_RUN_ARCHS_GEMMA4 === 'true')
-const DESKTOP_MODELS = archsGemma4OptIn ? [QWEN35_MODEL, GEMMA4_MODEL] : [QWEN35_MODEL]
+// Desktop finetunes both the small Qwen3.5-0.8B and Gemma-4 E2B: the Q4_0 build is
+// only ~3.38 GB, well within the desktop CI runners, so Gemma-4 finetuning gets
+// routine coverage rather than being gated behind an opt-in flag. Mobile always
+// runs Qwen3.5 only (Gemma-4 is too heavy for the shared mobile shard, and
+// Qwen3.5-0.8B is the single model prestaged for it).
+const DESKTOP_MODELS = [QWEN35_MODEL, GEMMA4_MODEL]
 const FINETUNE_MODELS = isMobile ? [QWEN35_MODEL] : DESKTOP_MODELS
 
 // Dense FFN gate + down; gradients flow through the gated-delta-net / attn mixers.
