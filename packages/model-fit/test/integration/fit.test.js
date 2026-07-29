@@ -110,9 +110,32 @@ test('a context beyond what the model declares is rejected', async function (t) 
     /exceeds the context length the model declares/
   )
 
-  // The declared length itself must still be accepted.
+  // The declared length itself must still be accepted, and one below it.
   const res = fitParams({ modelPath, nCtx: 2048 })
   t.not(res.status, FIT_STATUS.ERROR, 'the declared context length is allowed')
+
+  const below = fitParams({ modelPath, nCtx: 2047 })
+  t.not(below.status, FIT_STATUS.ERROR, 'below the declared length is allowed')
+
+  // 0 means "let the fitter choose" and must not be caught by the bound.
+  const auto = fitParams({ modelPath, nCtx: 0 })
+  t.not(auto.status, FIT_STATUS.ERROR, 'nCtx 0 is unaffected by the bound')
+
+  // The bound lives in native code, and ./binding.js is a public export that
+  // bypasses the JS wrapper entirely — so it has to hold there too.
+  const binding = require('../../binding.js')
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath, nCtx: 100000000 }),
+    /exceeds the context length the model declares/
+  )
+
+  // The value that reproduces the upstream abort (ggml-org/llama.cpp#26268) is
+  // now refused before llama sees it. Regression guard: if the bound is ever
+  // removed, this call takes the whole process down rather than failing.
+  await t.exception.all(
+    () => fitParams({ modelPath, nCtx: 75000000 }),
+    /exceeds the context length the model declares/
+  )
 })
 
 test('a successful plan always carries a concrete context', async function (t) {
