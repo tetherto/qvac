@@ -113,4 +113,74 @@ TEST(JsUtilsTest, NumberAsUint64TruncatesWithoutValidation) {
     EXPECT_EQ(number.as<uint64_t>(&env), 42U);
 }
 
+// JsAsyncTask must be environment-scoped, mirroring OutputCallBackJs: its
+// blocking worker — e.g. a cancel waiting for the scheduler to release a
+// slot — can outlive the JS environment when a Bare worklet is terminated
+// without the promise being awaited. run() must register a deferred env
+// teardown callback so a dying env stays alive until the worker finishes,
+// completion must skip every promise/JS operation once teardown has begun,
+// and the uv close callback must finish the deferred teardown so env
+// teardown can complete. Without this, completion opens a handle scope and
+// settles the deferred against a destroyed env: a native use-after-free.
+TEST(JsUtilsTest, JsAsyncTaskEnvTeardownDuringBlockedWorker) {
+  js_env_t env;
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool release = false;
+
+  mock_js::lastCreatedDeferred = nullptr;
+  mock_js::lastDeferredTeardownCb = nullptr;
+  mock_js::lastDeferredTeardownData = nullptr;
+  mock_js::lastDeferredTeardownHandle = nullptr;
+
+  js_value_t* promise =
+      js::JsAsyncTask::run(&env, [&mtx, &cv, &release]() {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&release]() { return release; });
+      });
+  EXPECT_NE(promise, nullptr);
+
+  // Both recordings happen synchronously inside run() on this thread.
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  ASSERT_NE(deferred, nullptr);
+  js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  const bool registered = mock_js::lastDeferredTeardownCb != nullptr;
+
+  // Simulate the env starting teardown while the worker is still blocked.
+  if (registered) {
+    mock_js::lastDeferredTeardownCb(
+        teardown, mock_js::lastDeferredTeardownData);
+  }
+
+  // Unblock the worker; the mocked uv_async_send dispatches completion (and
+  // the uv close callback) synchronously on the worker thread.
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    release = true;
+  }
+  cv.notify_one();
+
+  // Wait for the completion chain to run before asserting, so the detached
+  // worker is done with this test's stack whichever way the test ends. With
+  // the fix the chain ends by finishing the deferred teardown; without it,
+  // the only end-of-chain signal is the (illegal) promise settlement.
+  auto chainDone = [&]() {
+    return registered ? teardown->finished.load() : deferred->settled.load();
+  };
+  for (int i = 0; i != 1000 && !chainDone(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_TRUE(chainDone()) << "async task completion chain never ran";
+
+  ASSERT_TRUE(registered)
+      << "JsAsyncTask::run must register a deferred env teardown callback; "
+         "without one a terminated env is torn down under the still-running "
+         "worker and completion uses freed JS state";
+  EXPECT_TRUE(teardown->finished.load())
+      << "completion must finish the deferred teardown so env teardown ends";
+  EXPECT_FALSE(deferred->settled.load())
+      << "no promise/JS operation may run once env teardown has begun";
+}
+
 } // namespace qvac_lib_inference_addon_cpp::js_utils
