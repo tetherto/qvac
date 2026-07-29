@@ -125,32 +125,43 @@ TEST(
 }
 
 // The checkpoint-save mode a JS cancel(savePauseCheckpoint) arms has the same
-// ownership problem: armed with no live finetune to consume it, it must not
-// linger for a later unrelated finetune cancellation to inherit.
+// ownership problem: armed with no finetune in the snapshot to consume it,
+// it must not linger for a later unrelated finetune cancellation to inherit.
+// The canceller discards its own snapshot's leftovers after dispatch, exactly
+// as the JS binding does after cancelJobs() returns.
 TEST(
     FinetuneCancelCheckpointModeTest, ArmingWithoutLiveFinetuneMustNotPersist) {
   LlamaModel model = makeUnloadedModel();
 
   model.setFinetuneCancelSavesCheckpoint(
       true, {qvac_lib_inference_addon_cpp::kNoJobId});
+  model.discardFinetuneCancelSaveModes(
+      {qvac_lib_inference_addon_cpp::kNoJobId});
 
   EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
-      << "a checkpoint mode armed while no finetune is live has no owner and "
-         "must not outlive the cancel that armed it";
+      << "a checkpoint mode no finetune cancel consumed must not outlive the "
+         "cancel that armed it";
 }
 
-// The armed mode is owned by the snapshotted live finetune: never armed for
-// a finetune outside the canceller's snapshot, consumed by that job's own
-// cancel, discarded when the job's cancellation window closes.
+// Each armed mode belongs to the job id it was snapshotted under: a cancel
+// dispatched to a different live finetune must not consume it, the
+// canceller's post-dispatch discard removes it, and a job's own window
+// teardown drops an entry its cancel never took.
 TEST(
     FinetuneCancelCheckpointModeTest, ModeBelongsToTheSnapshottedLiveFinetune) {
   LlamaModel model = makeUnloadedModel();
   constexpr qvac_lib_inference_addon_cpp::JobId finetuneId = 7;
   LlamaModelTestPeer::setActiveFinetuneJob(model, finetuneId);
 
+  // Snapshot missed the live finetune: its cancel finds no entry of its own
+  // (defaults to no-checkpoint) and must leave the foreign entry alone until
+  // the canceller's own discard.
   model.setFinetuneCancelSavesCheckpoint(true, {finetuneId + 1});
-  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
-      << "a snapshot that does not cover the live finetune must not arm it";
+  model.cancel();
+  EXPECT_TRUE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model))
+      << "a cancel must consume only its own id's mode";
+  model.discardFinetuneCancelSaveModes({finetuneId + 1});
+  EXPECT_FALSE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model));
 
   model.setFinetuneCancelSavesCheckpoint(true, {finetuneId});
   EXPECT_TRUE(LlamaModelTestPeer::finetuneCancelCheckpointModeArmed(model));

@@ -685,6 +685,12 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
         // post-pause model reload), so a resolved cancel promise means an
         // immediate follow-up admission is not refused as busy.
         addonCppRef->cancelJobs(liveJobs);
+        // The dispatch consumed the modes for whatever finetunes it reached;
+        // entries left behind (inference ids, jobs that finished first) must
+        // not outlive this cancel.
+        if (llamaModel != nullptr) {
+          llamaModel->discardFinetuneCancelSaveModes(liveJobs);
+        }
       });
 }
 JSCATCH

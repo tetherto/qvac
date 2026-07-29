@@ -259,18 +259,26 @@ public:
   LlamaFinetuner& finetuner() { return finetuner_; }
   const LlamaFinetuner& finetuner() const { return finetuner_; }
 
-  /// Arm the checkpoint mode a targeted cancel of the live finetune consumes
-  /// (see requestFinetuneCancel): the JS cancel(savePauseCheckpoint) binding
-  /// sets it right before routing its snapshotted job ids through the
-  /// scheduler's per-id cancel, so the mode rides with the targeted cancel
-  /// instead of a direct "pause whichever finetune is running" call. Armed
-  /// only for the finetune live right now AND covered by @p cancelledJobs
-  /// (the canceller's snapshot; kNoJobId is the single-job scheduler's
-  /// whole-model sentinel) — a cancel that targets no live finetune must not
-  /// leave a save/no-save choice behind for a later unrelated cancellation
-  /// to inherit.
+  /// Record the checkpoint mode a cancel(savePauseCheckpoint) wants for every
+  /// job id in its snapshot: the JS binding arms this right before routing
+  /// the snapshotted ids through the scheduler's per-id cancel, so the mode
+  /// rides with the targeted cancel instead of a direct "pause whichever
+  /// finetune is running" call. Keyed by the snapshot ids themselves — never
+  /// by the model's current-finetune marker — so a mode armed while its
+  /// finetune is still between the scheduler queue and beginFinetuneJob()
+  /// survives until the dispatch reaches the job after it binds.
+  /// requestFinetuneCancel consumes exactly its own id's entry;
+  /// discardFinetuneCancelSaveModes removes what the dispatch never consumed.
   void setFinetuneCancelSavesCheckpoint(
       bool save,
+      const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
+
+  /// Drop the recorded checkpoint modes for @p cancelledJobs — the
+  /// canceller's own snapshot — once its per-id dispatch has returned.
+  /// Entries for inference ids, queued jobs that never started, or jobs that
+  /// finished first were never consumed and must not outlive the cancel that
+  /// armed them.
+  void discardFinetuneCancelSaveModes(
       const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
 
 private:
@@ -514,17 +522,18 @@ private:
       currentFinetuneJobId_{qvac_lib_inference_addon_cpp::kNoJobId};
   mutable std::mutex finetuneCancelMtx_;
 
-  /// Checkpoint mode for a targeted cancel of the live finetune job, owned
-  /// by that job: armed by setFinetuneCancelSavesCheckpoint for the finetune
-  /// live at arm time (when the canceller's snapshot covers it), consumed by
-  /// that job's requestFinetuneCancel, discarded when the job's cancellation
-  /// window closes — so an unconsumed mode can never carry a stale
-  /// save/no-save choice into a later finetune's cancellation. Guarded by
+  /// Checkpoint mode per snapshotted job id for an in-flight
+  /// cancel(savePauseCheckpoint): armed for every id in the canceller's
+  /// snapshot (independent of whether the finetune has opened its
+  /// cancellation window yet), consumed one-shot by that id's
+  /// requestFinetuneCancel, leftovers discarded by the canceller after its
+  /// dispatch returns and by the job's own window teardown — so an
+  /// unconsumed mode can never carry a stale save/no-save choice into a
+  /// later finetune's cancellation. Bounded by the snapshot size. Guarded by
   /// finetuneCancelMtx_; mutable like liveJobs_: the const cancel paths
   /// consume it.
-  mutable qvac_lib_inference_addon_cpp::JobId finetuneCancelSaveOwner_{
-      qvac_lib_inference_addon_cpp::kNoJobId};
-  mutable bool finetuneCancelSavesCheckpoint_{false};
+  mutable std::unordered_map<qvac_lib_inference_addon_cpp::JobId, bool>
+      finetuneCancelSaveModes_;
 
   /// Count of finetune cancellation requests this model has forwarded to the
   /// finetuner (requestFinetuneCancel() calls). Bumped in every build so
