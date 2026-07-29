@@ -59,12 +59,14 @@ add_executable(
   test_reasoning_block_compactor.cpp
   test_parse_unsigned.cpp
   test_finetune_cancel_action.cpp
+  test_finetune_pending_pause.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp

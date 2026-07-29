@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <utility>
 
 #include "model-interface/ContinuousBatchScheduler.hpp"
+#include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
 
 // Friend test peers grant unit tests direct access to internals that are not
@@ -39,6 +41,19 @@ public:
   /// The multi-job routing predicate (private static on the model).
   static bool isConcurrentEligible(const LlamaModel::Prompt& prompt) {
     return LlamaModel::isConcurrentEligible(prompt);
+  }
+};
+
+class LlamaFinetunerTestPeer {
+public:
+  /// Publish the training checkpoint state exactly as finetune() does at the
+  /// end of its setup stretch, so tests can drive the setup-window ->
+  /// publication seam without a real model reload/dataset/optimizer setup.
+  static void publishCheckpointState(
+      LlamaFinetuner& finetuner,
+      std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+          state) {
+    finetuner.setCurrentCheckpointStateShared(std::move(state));
   }
 };
 

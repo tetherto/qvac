@@ -14,6 +14,12 @@
 
 class LlamaModel;
 
+/// Defined in test/unit/test_internal_peers.hpp (tests only); befriended below
+/// so unit tests can drive the checkpoint-state publication seam directly.
+/// Never defined in production builds, where it is only ever named as a
+/// friend.
+class LlamaFinetunerTestPeer;
+
 struct FinetuneTerminalResult {
   struct Stats {
     double trainLoss = 0.0;
@@ -64,6 +70,11 @@ public:
   void waitUntilFinetuningPauseComplete();
 
 private:
+  // Unit tests reach the private checkpoint-state publication through this
+  // peer instead of public `*ForTesting()` accessors. See
+  // test_internal_peers.hpp.
+  friend class ::LlamaFinetunerTestPeer;
+
   void validateModelForFinetuning();
   void validateFinetuningParams(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);

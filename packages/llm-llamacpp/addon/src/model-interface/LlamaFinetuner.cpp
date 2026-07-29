@@ -1,16 +1,17 @@
 #include "LlamaFinetuner.hpp"
 
+#include <chrono>
+#include <memory>
+#include <mutex>
+
 #ifndef STANDALONE_TEST_BUILD
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
-#include <memory>
-#include <mutex>
 #include <numeric>
 #include <shared_mutex>
 #include <sstream>
@@ -946,6 +947,13 @@ void LlamaFinetuner::saveLoraAdapter(
   }
 }
 
+#endif // STANDALONE_TEST_BUILD
+
+// The checkpoint-state/pause machinery below is compiled in standalone test
+// builds too: it is pure synchronization state (mutex + shared_ptr + atomics)
+// with no llama runtime dependency, and unit tests drive the setup-window ->
+// publication seam through it.
+
 std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
 LlamaFinetuner::getCurrentCheckpointStateShared() const {
   std::scoped_lock lock(checkpointStateMutex_);
@@ -1009,6 +1017,8 @@ void LlamaFinetuner::waitUntilFinetuningPauseComplete() {
            state->isIdle.load(std::memory_order_acquire);
   });
 }
+
+#ifndef STANDALONE_TEST_BUILD
 
 void LlamaFinetuner::clearPauseRequest() {
   clearPausedCheckpointStateShared();
