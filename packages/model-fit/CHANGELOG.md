@@ -37,7 +37,28 @@
   `SUCCESS` never reports `nCtx: 0`. An explicitly requested context remains a
   hard constraint and is now asserted to come back unchanged.
 
+- Remove the Windows-only `__try/__except` around `llama_params_fit`. It existed
+  to contain an integer divide-by-zero on the Windows GPU runner, but the root
+  cause was the missing backend registration fixed above: with no device
+  registered, a count reached a division as zero. With `llama_backend_init()` in
+  place, win32 CI returns a real projection and the SEH filter never fires.
+  Removing it also resolves the objection that resuming after a structured
+  exception leaves llama's global logger pointing at a dead stack frame.
+
 ### Added
+
+- `reason` on the result — `fits`, `does-not-fit`, `model-unreadable` or
+  `no-backend-device`. `status` alone could not separate "this hardware cannot
+  run it" from "the model could not be read", which left the documented
+  proceed-on-unknown path impossible to diagnose.
+- `buftOverrides` on the result: the tensor placement the fitter selected. These
+  were previously discarded, so a `SUCCESS` could depend on placement the real
+  load would not reproduce.
+- `FitResult` is now a discriminated union on `status`, with the plan valid only
+  on `SUCCESS`, plus a consumer type test (`test/types/`) that checks branch
+  narrowing and exhaustiveness — the dts check previously only compiled the
+  declaration itself.
+- `NOTICE` and `LICENSE`, which `package.json` already listed in `files`.
 
 - Coverage for what the fitter does under memory pressure. `llama_params_fit`
   assumes host memory is unlimited, so an unsatisfiable device margin is met by

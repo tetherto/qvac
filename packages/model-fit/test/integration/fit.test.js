@@ -76,6 +76,8 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   // maxDevices is llama_max_devices(), a build-time bound, so it proves nothing
   // about detection. nDevices is the real inventory: backends registered, the
   // fitter had a machine to measure, and the projection means something.
+  t.ok(Array.isArray(res.buftOverrides), 'placement the projection depended on is reported')
+  t.ok(['fits', 'does-not-fit', 'model-unreadable', 'no-backend-device'].includes(res.reason), 'reason is a known code')
   t.ok(res.nDevices >= 1, 'at least one backend device was actually registered')
   t.ok(res.nDevices <= res.maxDevices, 'detected devices within addressable bound')
   t.ok(res.nGpuDevices <= res.nDevices, 'accelerator count is a subset of all devices')
@@ -178,6 +180,7 @@ test('pinned offload under pressure is the only way to get FAILURE', async funct
   if (res.nGpuDevices > 0) {
     t.is(res.status, FIT_STATUS.FAILURE, 'a pinned plan that cannot be honoured fails')
     t.is(res.fits, false)
+    t.is(res.reason, 'does-not-fit', 'a real failure is distinguishable from an error')
   } else {
     // Nothing to pin layers to, so the margin never becomes unsatisfiable in
     // the way this test is probing.
@@ -253,4 +256,8 @@ test('fitParams on a missing file reports ERROR (does not throw)', function (t) 
   const res = fitParams({ modelPath: '/nonexistent/does-not-exist.gguf' })
   t.is(res.status, FIT_STATUS.ERROR, 'missing model yields ERROR status')
   t.is(res.fits, false)
+
+  // status alone cannot separate an unreadable model from a machine with no
+  // usable backend; the SDK needs to tell "retry later" from "never will work".
+  t.is(res.reason, 'model-unreadable', 'the ERROR cause is distinguishable')
 })

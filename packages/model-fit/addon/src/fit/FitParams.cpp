@@ -9,10 +9,6 @@
 #include <gguf.h>
 #include <llama.h>
 
-#ifdef _WIN32
-#include <excpt.h> // __try/__except, GetExceptionCode, EXCEPTION_EXECUTE_HANDLER
-#endif
-
 namespace model_fit {
 
 namespace {
@@ -127,49 +123,6 @@ void countDevices(size_t& nDevices, size_t& nGpuDevices) {
   }
 }
 
-#ifdef _WIN32
-// On some Windows GPU configurations `llama_params_fit` hits an integer
-// divide-by-zero (SEH 0xC0000094) deep in the fit math — an upstream llama.cpp
-// bug where a device/layer count comes back 0 on Windows but not elsewhere. It
-// is a *hardware* trap, so the library's own C++ try/catch (which turns error
-// paths into FAILURE/ERROR) cannot catch it and the process dies. Run the call
-// in a leaf frame with no unwindable C++ objects so we can SEH-catch the trap
-// and report the documented ERROR outcome ("unknown → proceed advisory-only")
-// instead of crashing the worklet. Normal SUCCESS/FAILURE/ERROR results still
-// come back through llama_params_fit's own return value; only a fatal trap
-// takes the __except path.
-int fitSehFilter(unsigned long code) {
-  std::fprintf(
-      stderr,
-      "model-fit: llama_params_fit raised a fatal native exception 0x%08lx; "
-      "reporting ERROR (projection unavailable on this platform)\n",
-      code);
-  std::fflush(stderr);
-  return EXCEPTION_EXECUTE_HANDLER;
-}
-
-bool callLlamaParamsFitGuarded(
-    const char* pathModel, llama_model_params* mparams,
-    llama_context_params* cparams, float* tensorSplit,
-    llama_model_tensor_buft_override* buftOverrides, size_t* margins,
-    uint32_t nCtxMin, llama_params_fit_status* outStatus) {
-  __try {
-    *outStatus = llama_params_fit(
-        pathModel,
-        mparams,
-        cparams,
-        tensorSplit,
-        buftOverrides,
-        margins,
-        nCtxMin,
-        GGML_LOG_LEVEL_INFO);
-    return true;
-  } __except (fitSehFilter(GetExceptionCode())) {
-    return false;
-  }
-}
-#endif
-
 } // namespace
 
 FitResult runFit(const FitRequest& req) {
@@ -196,6 +149,7 @@ FitResult runFit(const FitRequest& req) {
   if (out.nDevices == 0) {
     out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
     out.fits = false;
+    out.reason = FitReason::NoBackendDevice;
     out.tensorSplit.assign(maxDevices, 0.0F);
     return out;
   }
@@ -209,6 +163,7 @@ FitResult runFit(const FitRequest& req) {
   } else {
     out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
     out.fits = false;
+    out.reason = FitReason::ModelUnreadable;
     out.tensorSplit.assign(maxDevices, 0.0F);
     return out;
   }
@@ -243,26 +198,7 @@ FitResult runFit(const FitRequest& req) {
   std::vector<size_t> margins(
       maxDevices, static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
 
-  llama_params_fit_status status = LLAMA_PARAMS_FIT_STATUS_ERROR;
-
-#ifdef _WIN32
-  if (!callLlamaParamsFitGuarded(
-          req.modelPath.c_str(),
-          &mparams,
-          &cparams,
-          tensorSplit.data(),
-          buftOverrides.data(),
-          margins.data(),
-          nCtxMin,
-          &status)) {
-    // A fatal native trap was contained: report ERROR (projection unavailable).
-    out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
-    out.fits = false;
-    out.tensorSplit.assign(tensorSplit.begin(), tensorSplit.end());
-    return out;
-  }
-#else
-  status = llama_params_fit(
+  const llama_params_fit_status status = llama_params_fit(
       req.modelPath.c_str(),
       &mparams,
       &cparams,
@@ -271,15 +207,34 @@ FitResult runFit(const FitRequest& req) {
       margins.data(),
       nCtxMin,
       GGML_LOG_LEVEL_INFO);
-#endif
 
   out.status = static_cast<int>(status);
   out.fits = (status == LLAMA_PARAMS_FIT_STATUS_SUCCESS);
+  out.reason = out.fits
+                   ? FitReason::Fits
+                   : (status == LLAMA_PARAMS_FIT_STATUS_FAILURE
+                          ? FitReason::DoesNotFit
+                          // The fitter ran but reported a hard error of its
+                          // own. Nothing narrower is available from the C API.
+                          : FitReason::ModelUnreadable);
   out.nGpuLayers = mparams.n_gpu_layers;
   out.nCtx = cparams.n_ctx;
   out.nBatch = cparams.n_batch;
   out.nUbatch = cparams.n_ubatch;
   out.tensorSplit.assign(tensorSplit.begin(), tensorSplit.end());
+
+  // Surface the placement the projection depended on. The array is terminated
+  // by a null pattern; anything before that is an override the real load has to
+  // apply for the plan to mean what it says.
+  for (const auto& override : buftOverrides) {
+    if (override.pattern == nullptr) {
+      break;
+    }
+    out.buftOverrides.push_back(
+        {override.pattern,
+         override.buft != nullptr ? ggml_backend_buft_name(override.buft)
+                                  : ""});
+  }
 
   // A fit that needed no reduction leaves n_ctx at the 0 it was handed, which
   // means "the trained context" to llama but is not a plan a caller can use.

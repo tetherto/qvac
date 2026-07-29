@@ -34,6 +34,8 @@ const plan = fitParams({
 // plan = {
 //   status,       // 0 SUCCESS | 1 FAILURE (won't fit) | 2 ERROR (unknown)
 //   fits,         // status === SUCCESS
+//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' | 'no-backend-device'
+//   buftOverrides,// placement the projection depended on, [] when none
 //   nGpuLayers,   // fitted offload layer count
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
@@ -164,6 +166,20 @@ npm test                       # validation + enum tests (no model needed)
 FIT_MODEL_PATH=/abs/model.gguf npm test   # also runs the real fit projection
 ```
 
+### Reading the outcome
+
+`FitResult` is a TypeScript discriminated union on `status`, so narrowing tells
+the compiler which fields carry meaning — the plan is valid only on `SUCCESS`.
+
+`reason` gives a stable, machine-readable cause that `status` cannot express:
+`does-not-fit` (ran to completion, nothing fits) is a different signal from
+`model-unreadable` or `no-backend-device`, and an SDK needs to tell "this
+hardware can't do it" from "try again once the model is downloaded".
+
+`buftOverrides` reports the tensor placement the projection depended on. A
+`SUCCESS` carrying overrides is only reproducible if the real load applies the
+same placement — treat a non-empty array as part of the plan, not decoration.
+
 ## Known crash paths
 
 `llama_params_fit` can terminate the process on inputs this addon accepts. These
@@ -171,17 +187,24 @@ are aborts inside the fitter, not exceptions, so they cannot be caught and
 turned into a status — the calling worklet dies with the process.
 
 - **A large `nCtx` aborts.** `ggml_abort()` fires in
-  `llama_context::graph_reserve` while sizing the worst-case compute graph,
-  reached from `llama_get_device_memory_data`. Reproduced on linux-x64 with
-  `nCtx: 100000000`, which is a perfectly valid `uint32_t`. The threshold is
-  model-dependent and not discoverable from outside.
-- **Windows GPU runners hit an integer divide-by-zero** (SEH `0xC0000094`)
-  inside the fit math. Currently contained by a Windows-only `__try/__except`
-  that reports `ERROR`; see the discussion on the trade-off in #3493.
+  `ggml_backend_sched_backend_id_from_cur` — "pre-allocated tensor (cache_k_l0)
+  in a buffer (Vulkan0) that cannot run the operation (NONE)" — reached while
+  the fitter builds a `no_alloc` context to measure memory. Reported upstream as
+  [ggml-org/llama.cpp#26268](https://github.com/ggml-org/llama.cpp/issues/26268),
+  where it reproduces in llama.cpp's own `llama-fit-params`. The threshold is
+  hardware-dependent; on one machine the fitter reduced offload correctly at
+  `-c 50000000` and aborted at `-c 75000000`.
 
-This is the argument for running the preflight in a **disposable** worklet and
-treating abnormal termination as `ERROR` in the parent: in-process containment
-cannot cover `abort()`, only the SEH case.
+`GGML_ABORT` is not catchable, so this cannot be contained in-process. On mobile
+the Bare worklet shares the app's process, so there is no process boundary to
+absorb it either — the whole app goes down. Until the upstream fix lands, keep
+requested contexts within the range the model can plausibly serve.
+
+A Windows-only integer divide-by-zero (SEH `0xC0000094`) used to occur here too
+and was contained by a `__try/__except`. That handler has been removed: the
+trap's root cause was the missing `llama_backend_init()` documented above —
+with no registered device, a count reached a division as zero. Windows now
+returns a real projection rather than `ERROR`.
 
 ## Limitations (v1)
 

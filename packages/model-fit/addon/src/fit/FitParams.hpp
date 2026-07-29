@@ -54,12 +54,40 @@ struct FitRequest {
   uint32_t marginMiB = 1024;
 };
 
+/// Why a fit ended the way it did. `status` alone cannot distinguish an
+/// unreadable model from a machine with no usable backend, which leaves the SDK
+/// unable to tell "ask again later" from "never going to work".
+enum class FitReason {
+  /// Projected to fit; the plan is usable.
+  Fits,
+  /// Ran to completion and could not find a configuration that fits.
+  DoesNotFit,
+  /// The model path could not be opened.
+  ModelUnreadable,
+  /// No ggml backend registered, so there was no machine to measure.
+  NoBackendDevice,
+};
+
+/// A tensor buffer-type override the fitter selected. The projection may depend
+/// on this placement, so a caller reproducing the plan has to apply it too.
+struct BuftOverride {
+  std::string pattern;
+  std::string bufferType;
+};
+
 /// Result of `runFit`. `status` mirrors `enum llama_params_fit_status`
 /// (0 SUCCESS, 1 FAILURE, 2 ERROR). The remaining fields carry the fitted
 /// "load plan" the SDK can hand to the LLM addon.
 struct FitResult {
   int status = 2;
   bool fits = false;
+
+  /// Narrows `status` into something the caller can branch on.
+  FitReason reason = FitReason::NoBackendDevice;
+
+  /// Placement the fitter chose. Empty when it needed none. A `SUCCESS` that
+  /// carries overrides is only reproducible if the real load applies them too.
+  std::vector<BuftOverride> buftOverrides;
   int32_t nGpuLayers = 0;
   uint32_t nCtx = 0;
   uint32_t nBatch = 0;

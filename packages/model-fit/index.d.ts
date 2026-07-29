@@ -32,24 +32,16 @@ export interface FitConfig {
   marginMiB?: number
 }
 
-export interface FitResult {
-  /** 0 SUCCESS, 1 FAILURE (won't fit), 2 ERROR — mirrors llama_params_fit_status. */
-  status: number
-  /** true iff status === SUCCESS. */
-  fits: boolean
-  /**
-   * Fitted number of layers to offload to GPU. Negative means "all layers"
-   * (the llama default), which is what comes back when the fitter had no
-   * offload decision to make — e.g. on a host with no accelerator. Check
-   * `nGpuDevices` before reading this as a plan.
-   */
-  nGpuLayers: number
-  /** Fitted context size. Always concrete (never 0) when status is SUCCESS. */
-  nCtx: number
-  /** Fitted logical batch size. */
-  nBatch: number
-  /** Fitted physical batch size. */
-  nUbatch: number
+/** A tensor buffer-type override the fitter selected. */
+export interface FitBuftOverride {
+  /** Tensor-name pattern the override applies to. */
+  pattern: string
+  /** ggml buffer type the matching tensors were placed in. */
+  bufferType: string
+}
+
+/** What the fitter measured against. Present on every outcome. */
+export interface FitDeviceInventory {
   /**
    * Upper bound on addressable devices (llama_max_devices()). A build-time
    * constant, not a detection result — never read it as "a device was found".
@@ -59,9 +51,47 @@ export interface FitResult {
   nDevices: number
   /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
   nGpuDevices: number
+}
+
+/** The fitted load plan. Only meaningful on a SUCCESS. */
+export interface FitPlan {
+  /**
+   * Fitted number of layers to offload to GPU. Negative means "all layers"
+   * (the llama default), which is what comes back when the fitter had no
+   * offload decision to make — e.g. on a host with no accelerator. Check
+   * `nGpuDevices` before reading this as a plan.
+   */
+  nGpuLayers: number
+  /** Fitted context size. Always concrete, never 0. */
+  nCtx: number
+  /** Fitted logical batch size. */
+  nBatch: number
+  /** Fitted physical batch size. */
+  nUbatch: number
   /** Offload proportions, one entry per device. */
   tensorSplit: number[]
+  /**
+   * Placement the fitter chose. Empty when it needed none. A plan carrying
+   * overrides is only reproducible if the real load applies them too.
+   */
+  buftOverrides: FitBuftOverride[]
 }
+
+/**
+ * Outcome of a fit, discriminated on `status`.
+ *
+ * Narrowing on `status` (or `fits`) tells the compiler which fields carry
+ * meaning: the plan is only valid on SUCCESS, and every non-success branch
+ * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
+ * apart from "could not read the model" or "no backend registered".
+ */
+export type FitResult =
+  | ({ status: 0, fits: true, reason: 'fits' } & FitPlan & FitDeviceInventory)
+  | ({ status: 1, fits: false, reason: 'does-not-fit' } & Partial<FitPlan> & FitDeviceInventory)
+  | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' } & Partial<FitPlan> & FitDeviceInventory)
+
+/** Stable, machine-readable explanation of a fit outcome. */
+export type FitReason = FitResult['reason']
 
 export const FIT_STATUS: {
   readonly SUCCESS: 0

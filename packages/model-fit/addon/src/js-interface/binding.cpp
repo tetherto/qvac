@@ -53,6 +53,22 @@ double requireBoundedInteger(double value, double max, const char* key) {
   return requireBoundedSignedInteger(value, 0.0, max, key);
 }
 
+/// Stable strings, not the enum's numeric values — these cross into JS as part
+/// of the public result and must not shift if the enum is reordered.
+const char* reasonName(FitReason reason) {
+  switch (reason) {
+  case FitReason::Fits:
+    return "fits";
+  case FitReason::DoesNotFit:
+    return "does-not-fit";
+  case FitReason::ModelUnreadable:
+    return "model-unreadable";
+  case FitReason::NoBackendDevice:
+    return "no-backend-device";
+  }
+  return "model-unreadable";
+}
+
 } // namespace
 
 /// `paramsFit(config)` — synchronous memory-fit preflight. Reads a plain config
@@ -122,6 +138,8 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
       "status",
       jsu::Number::create(env, static_cast<int32_t>(res.status)));
   out.setProperty(env, "fits", jsu::Boolean::create(env, res.fits));
+  out.setProperty(
+      env, "reason", jsu::String::create(env, reasonName(res.reason)));
   out.setProperty(env, "nGpuLayers", jsu::Number::create(env, res.nGpuLayers));
   out.setProperty(env, "nCtx", jsu::Number::create(env, res.nCtx));
   out.setProperty(env, "nBatch", jsu::Number::create(env, res.nBatch));
@@ -147,6 +165,21 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
         jsu::Number::create(env, static_cast<double>(res.tensorSplit[i])));
   }
   out.setProperty(env, "tensorSplit", split);
+
+  auto overrides = jsu::Array::create(env);
+  for (size_t i = 0; i < res.buftOverrides.size(); ++i) {
+    auto entry = jsu::Object::create(env);
+    entry.setProperty(
+        env,
+        "pattern",
+        jsu::String::create(env, res.buftOverrides[i].pattern.c_str()));
+    entry.setProperty(
+        env,
+        "bufferType",
+        jsu::String::create(env, res.buftOverrides[i].bufferType.c_str()));
+    overrides.set(env, i, entry);
+  }
+  out.setProperty(env, "buftOverrides", overrides);
 
   return out;
 }

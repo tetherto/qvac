@@ -10,6 +10,7 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "index.d.ts"
+    "index.d.ts",
+    "test/types/**/*.ts"
   ]
 }
