@@ -42,8 +42,8 @@ public:
     float maxSpeechDurationS = K_DEFAULT_MAX_SPEECH_DURATION_S;
     int speechPadMs = 30;
     float samplesOverlap = 0.1F;
-    int maxBufferSamples =
-        static_cast<int>(K_DEFAULT_MAX_SPEECH_DURATION_S) * K_DEFAULT_SAMPLE_RATE;
+    int maxBufferSamples = static_cast<int>(K_DEFAULT_MAX_SPEECH_DURATION_S) *
+                           K_DEFAULT_SAMPLE_RATE;
     int vadRunIntervalSamples =
         static_cast<int>(K_VAD_RUN_INTERVAL_S * K_DEFAULT_SAMPLE_RATE);
     bool emitVadEvents = false;
