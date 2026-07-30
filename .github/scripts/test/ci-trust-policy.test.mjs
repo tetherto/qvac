@@ -96,6 +96,7 @@ const falseRoute = {
   run_cpp_tests: 'false',
   run_desktop: 'false',
   run_mobile: 'false',
+  run_coload: 'false',
 }
 
 const baselineRoute = {
@@ -127,6 +128,7 @@ test('ci-router: trusted non-PR events enable every stage', () => {
       run_cpp_tests: 'true',
       run_desktop: 'true',
       run_mobile: 'true',
+      run_coload: 'true',
     },
   )
 })
@@ -170,6 +172,30 @@ test('ci-router: internal granular labels select only requested stages', () => {
       run_prebuilds: 'true',
       run_mobile: 'true',
     },
+  )
+})
+
+test('ci-router: run-coload-tests selects the co-load stage and its prebuild', () => {
+  // The co-load overlays the PR's freshly-built prebuild, so the label pulls in
+  // run_prebuilds too. The Device Farm leg keys off run_mobile, so the co-load
+  // label alone is the cheap desktop co-load.
+  assert.deepEqual(
+    route({ PR_LABELS_JSON: '["run-coload-tests"]' }),
+    {
+      ...baselineRoute,
+      run_prebuilds: 'true',
+      run_coload: 'true',
+    },
+  )
+})
+
+test('ci-router: external fork cannot use the co-load label without verified', () => {
+  assert.deepEqual(
+    route({
+      HEAD_REPO: 'outsider/qvac',
+      PR_LABELS_JSON: '["run-coload-tests"]',
+    }),
+    falseRoute,
   )
 })
 
@@ -718,7 +744,6 @@ test('special workflows subscribe to ready and label events', () => {
   for (const relativePath of [
     '.github/workflows/pr-test-inference-addon-cpp.yml',
     '.github/workflows/pr-test-inference-addon-cpp-js.yml',
-    '.github/workflows/coload-smoke-mobile-ggml.yml',
     '.github/workflows/check-approvals.yml',
   ]) {
     const source = read(relativePath)
@@ -733,14 +758,46 @@ test('check-approvals no longer depends on verified and skips drafts', () => {
   assert.match(source, /!github\.event\.pull_request\.draft/)
 })
 
-test('coload smoke is same-repo, non-draft, and mobile-label gated', () => {
-  const source = read('.github/workflows/coload-smoke-mobile-ggml.yml')
-  assert.match(source, /run-mobile-addon-tests/)
-  assert.match(source, /!github\.event\.pull_request\.draft/)
+test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation gated', () => {
+  // The standalone coload-smoke-mobile-ggml.yml is replaced by a reusable
+  // workflow wired into each addon's on-pr pipeline. The expensive Device Farm
+  // leg stays opt-in: it requires the co-load label AND the mobile label, and
+  // authorisation (ci-router already enforces same-repo/non-draft for internal
+  // PRs and verified for forks). The reusable itself must not carry a raw
+  // pull_request trigger that could bypass that gating.
+  const reusable = read('.github/workflows/coload-smoke-mobile.yml')
+  assert.match(reusable, /on:\s*\n\s*workflow_call:/)
   assert.match(
-    source,
-    /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/,
+    reusable,
+    /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
   )
+  for (const path of [
+    '.github/workflows/on-pr-tts-ggml.yml',
+    '.github/workflows/on-pr-transcription-parakeet.yml',
+    '.github/workflows/on-pr-transcription-whispercpp.yml',
+  ]) {
+    const block = jobBlock(read(path), 'coload-smoke-mobile')
+    assert.match(
+      block,
+      /uses:\s*\.\/\.github\/workflows\/coload-smoke-mobile\.yml/,
+      `${path} runs the reusable mobile co-load`,
+    )
+    assert.match(
+      block,
+      /needs\.ci-router\.outputs\.run_coload == 'true'/,
+      `${path} Device Farm co-load requires the co-load label`,
+    )
+    assert.match(
+      block,
+      /needs\.ci-router\.outputs\.run_mobile == 'true'/,
+      `${path} Device Farm co-load requires the mobile label`,
+    )
+    assert.match(
+      block,
+      /needs\.label-gate\.outputs\.authorised == 'true'/,
+      `${path} Device Farm co-load requires authorisation`,
+    )
+  }
 })
 
 test('npm integration uses a dedicated run label, not verified', () => {
@@ -857,4 +914,108 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
       )
     })
   assert.deepEqual(offenders, [])
+})
+
+// --- fork-ci environment gating (QVAC-22799) --------------------------------
+// Every pull_request_target workflow that gates any job on the fork-trust
+// surface — label-gate.outputs.authorised OR authorize.outputs.allowed — must
+// ALSO carry the fork-ci environment gate: a `fork-approval` job bound to the
+// fork-ci environment (PR-from-fork conditional), and every trust-gated job must
+// depend on it. This runs the environment approval alongside the SHA-bound
+// label-gate / authorize-pr. Derived (not a hardcoded list) so a newly-added
+// privileged pull_request_target workflow is automatically required to carry the
+// gate — including a job gated on authorize alone (no label-gate reference).
+
+const FORK_CI_ENV_RE =
+  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
+const FORK_CI_GATE_JOBS = new Set([
+  'label-gate',
+  'authorize',
+  'ci-router',
+  'fork-approval',
+])
+
+function eachJob(source) {
+  const jobsIdx = source.search(/^jobs:\s*$/m)
+  if (jobsIdx === -1) return []
+  const lines = source.slice(jobsIdx).split('\n')
+  const jobs = []
+  let cur = null
+  for (const line of lines) {
+    const m = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/)
+    if (m) {
+      if (cur) jobs.push(cur)
+      cur = { name: m[1], text: '' }
+      continue
+    }
+    if (/^\S/.test(line) && cur) {
+      jobs.push(cur)
+      cur = null
+    }
+    if (cur) cur.text += line + '\n'
+  }
+  if (cur) jobs.push(cur)
+  return jobs
+}
+
+function forkCiTargets() {
+  const dir = join(root, '.github/workflows')
+  return readdirSync(dir)
+    .filter((n) => /\.ya?ml$/.test(n))
+    .map((n) => `.github/workflows/${n}`)
+    .filter((p) => {
+      const src = read(p)
+      const onIdx = src.search(/^on:\s*$/m)
+      const head = onIdx === -1 ? '' : src.slice(onIdx, onIdx + 1200)
+      return (
+        /pull_request_target:/.test(head) &&
+        (src.includes('label-gate.outputs.authorised') ||
+          src.includes('authorize.outputs.allowed'))
+      )
+    })
+}
+
+test('fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job', () => {
+  const targets = forkCiTargets()
+  assert.ok(targets.length >= 20, `found ${targets.length} fork-ci target workflows`)
+  for (const path of targets) {
+    const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
+    assert.ok(gate, `${path}: must define a fork-approval gate job`)
+    assert.match(
+      gate.text,
+      FORK_CI_ENV_RE,
+      `${path}: fork-approval must gate on the fork-ci environment (fork-only conditional)`,
+    )
+  }
+})
+
+test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
+  for (const path of forkCiTargets()) {
+    for (const job of eachJob(read(path))) {
+      if (FORK_CI_GATE_JOBS.has(job.name)) continue
+      if (
+        !job.text.includes('label-gate.outputs.authorised') &&
+        !job.text.includes('authorize.outputs.allowed')
+      )
+        continue
+      assert.match(
+        job.text,
+        /needs:[\s\S]*?\bfork-approval\b/,
+        `${path}: job '${job.name}' gates on the fork-trust surface (label-gate or authorize) but does not depend on fork-approval (fail-open)`,
+      )
+    }
+  }
+})
+
+// Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
+// privileged context), so it deliberately carries no label-gate/authorize and
+// needs no SHA-bound fork coverage. Lock in that it is NOT a pull_request_target
+// workflow, so a future edit can't quietly reintroduce a secret-bearing
+// untrusted-checkout surface.
+test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {
+  const entry = read('.github/workflows/on-pr-shared-ci-infra.yml')
+  assert.match(entry, /^on:\n\s*pull_request:/m)
+  assert.doesNotMatch(entry, /pull_request_target/)
+  assert.doesNotMatch(entry, /secrets:\s*inherit/)
+  assert.doesNotMatch(entry, /HF_TOKEN/)
 })

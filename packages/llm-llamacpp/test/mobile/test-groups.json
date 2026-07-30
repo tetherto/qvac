@@ -1,6 +1,7 @@
 {
   "ios": {
     "finetuning": ["runFinetuningPauseResumeTest"],
+    "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
@@ -38,6 +39,9 @@
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
     ],
+    "funcShardF": [
+      "runFinetuningArchsTest"
+    ],
     "funcShardB": [
       "runToolsCompactTest",
       "runSlidingContextTest",
@@ -70,6 +74,7 @@
   "androidWeekly": {
     "ocr": [
       "runOcrLightonTest",
+      "runOcrUnlimitedTest",
       "runOcrPaddleTest"
     ],
     "imageHeavy": [
@@ -80,6 +85,9 @@
       "runGemma4ImageElephantPerfTest",
       "runGemma4ImageFruitPlatePerfTest",
       "runGemma4ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfUnlimitedOcr": [
+      "runUnlimitedOcrPerfTest"
     ],
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
@@ -91,6 +99,7 @@
   "iosWeekly": {
     "ocr": [
       "runOcrLightonTest",
+      "runOcrUnlimitedTest",
       "runOcrPaddleTest"
     ],
     "imageHeavy": [
@@ -101,6 +110,9 @@
       "runGemma4ImageElephantPerfTest",
       "runGemma4ImageFruitPlatePerfTest",
       "runGemma4ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfUnlimitedOcr": [
+      "runUnlimitedOcrPerfTest"
     ],
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",

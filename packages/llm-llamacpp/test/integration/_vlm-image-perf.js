@@ -161,7 +161,9 @@ async function runVlmImagePerf(t, modelDef, imageCase) {
   async function runImageInference(imageBytes) {
     const messages = [
       { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'Describe the image briefly in one sentence.' }
+      // Most VLMs answer a generic caption prompt; OCR models (e.g. Unlimited-OCR)
+      // need their own task prompt, so a case can override it.
+      { role: 'user', content: imageCase.prompt || 'Describe the image briefly in one sentence.' }
     ]
     const startTime = Date.now()
     const response = await inference.run(messages)

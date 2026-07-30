@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.1]
+
+Release Date: 2026-07-27
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/opencode-plugin/v/0.1.1
+
+This patch moves the OpenCode plugin onto `@qvac/ai-sdk-provider` 0.4 and `@qvac/cli` 0.9 so managed local serves pick up the AI SDK 7 provider and the latest CLI / SDK fixes.
+
+### Requirements
+
+- [`@qvac/ai-sdk-provider@^0.4.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for managed mode (AI SDK 7).
+- [`@qvac/cli@^0.9.0`](https://www.npmjs.com/package/@qvac/cli) so the host can run `qvac serve` (SDK 0.16 runtime).
+- `@ai-sdk/openai-compatible@^3.0.0` and `ai@^7.0.0`.
+- Node.js 22 or newer.
+
 ## [0.1.0]
 
 Release Date: 2026-06-16
