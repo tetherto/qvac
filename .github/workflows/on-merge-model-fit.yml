@@ -237,5 +237,5 @@ jobs:
       contents: write
     uses: ./.github/workflows/create-release-tag.yml
     with:
-      repo_name: "llamacpp-fit"
+      repo_name: "model-fit"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
