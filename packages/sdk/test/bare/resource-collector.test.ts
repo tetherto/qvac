@@ -9,6 +9,8 @@ import {
 import { registerPlugin } from '@/server/plugins'
 import { cleanupForTerminate } from '@/server/worker-core'
 import type { QvacPlugin } from '@/schemas/plugin'
+import { getSystemResourcesResponseSchema } from '@/schemas/system-resources'
+import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
 
 test('collects CPU and system memory in Bare', (t) => {
   destroyWorkerResourceCollector()
@@ -22,6 +24,26 @@ test('collects CPU and system memory in Bare', (t) => {
   t.is(sample.cpu.status, 'supported')
   t.is(sample.memory.usedBytes.status, 'supported')
   t.is(sample.memory.totalBytes.status, 'supported')
+
+  destroyWorkerResourceCollector()
+})
+
+test('serves system resources through the local RPC handler in Bare', (t) => {
+  destroyWorkerResourceCollector()
+  initializeWorkerResourceCollector(nativeResourceCollectorDependencies)
+
+  const capabilitiesOnly = handleGetSystemResources({
+    type: 'getSystemResources'
+  })
+  const withSample = handleGetSystemResources({
+    type: 'getSystemResources',
+    sample: true
+  })
+
+  t.absent(capabilitiesOnly.sample)
+  t.ok(withSample.sample)
+  t.execution(() => getSystemResourcesResponseSchema.parse(capabilitiesOnly))
+  t.execution(() => getSystemResourcesResponseSchema.parse(withSample))
 
   destroyWorkerResourceCollector()
 })

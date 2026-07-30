@@ -72,6 +72,22 @@ test('createJobHandler - end forwards stats before ending', async (t) => {
   t.alike(response.stats, stats, 'response.stats should be set')
 })
 
+test('createJobHandler - throwing stats listener cannot strand end', async (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.on('stats', () => {
+    throw new Error('stats listener boom')
+  })
+
+  t.exception(() => job.end({ TPS: 42 }), /stats listener boom/)
+  const outcome = await Promise.race([
+    response.await(),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.alike(outcome, [], 'await resolves after stats delivery throws')
+})
+
 test('createJobHandler - end with null stats does not call updateStats', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
@@ -290,6 +306,32 @@ test('createJobHandler - already-aborted signal clears active once settled', asy
   }
 
   t.is(job.active, null, 'active should be cleared once the already-aborted response settles')
+})
+
+test('createJobHandler - prepended throwing end listener cannot leave a settled job active', (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.prependListener('end', () => {
+    throw new Error('end listener boom')
+  })
+
+  t.exception(() => response.ended('done'), /end listener boom/)
+
+  t.is(job.active, null, 'settled response must not stay active')
+  job.output('late')
+  t.alike(response.output, [], 'late output must not reach the settled response')
+})
+
+test('createJobHandler - prepended throwing error listener cannot leave a settled job active', (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.prependListener('error', () => {
+    throw new Error('error listener boom')
+  })
+
+  t.exception(() => response.failed(new Error('job failed')), /error listener boom/)
+
+  t.is(job.active, null, 'settled response must not stay active')
 })
 
 test('createJobHandler - is exported from package root', (t) => {
