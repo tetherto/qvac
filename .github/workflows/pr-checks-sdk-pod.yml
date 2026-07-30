@@ -331,6 +331,7 @@ jobs:
               # a clear "contract:check failed" instead of being buried inside the
               # test:unit run above.
               run "contract:check" npm run --if-present contract:check
+              run "resource collector packaging" npm run --if-present check:resource-collectors
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else

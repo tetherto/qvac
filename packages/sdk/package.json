@@ -170,7 +170,8 @@
     "!**/pnpm-lock.yaml",
     "!**/bun.lock",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "docs/system-resources-support-matrix.md"
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",
@@ -196,6 +197,7 @@
     "bare:example": "bare ./scripts/bare-bootstrap.js",
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
+    "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
     "update-models": "tsx ./models/update-models/index.ts && bun run contract:export",
