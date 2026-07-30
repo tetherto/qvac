@@ -3,7 +3,7 @@
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
-// Recurrent / hybrid compaction restores an end-of-prefill snapshot and
+// Reasoning compaction restores an end-of-prefill snapshot and
 // replays the post-reasoning tail. `thinkingForcedOpen` is retained as an
 // input for call-site symmetry only. Force-open templates already have the
 // opener in the restored prefix; generated-opener templates seed every
@@ -16,56 +16,50 @@ namespace utils {
 //     `updateReasoningBuffer`; a multi-piece close would leave the SSM
 //     with an unbalanced `<think>` opener followed by only the tail piece.
 //
-// When `remove_thinking_from_context` is enabled for recurrent / hybrid
-// memory and reasoning is active, unsupported templates must hard-fail
+// When `remove_thinking_from_context` is enabled and reasoning is active,
+// unsupported templates must hard-fail
 // instead of silently preserving reasoning in cache. `Disabled` means the
-// policy is irrelevant for this request (pure attention, feature off, or no
-// active reasoning channel); the `Unsupported*` state means callers
+// policy is irrelevant for this request (feature off or no active reasoning
+// channel); the `Unsupported*` state means callers
 // should surface a StatusError after any required rollback.
-enum class RecurrentReasoningBoundaryDecision {
+enum class ReasoningBoundaryDecision {
   Disabled,
   Capture,
   UnsupportedMultiTokenClose,
 };
 
-[[nodiscard]] inline RecurrentReasoningBoundaryDecision
-recurrentReasoningBoundaryDecision(
-    bool needsRecurrentSnapshot, bool removeThinkingFromContext,
-    bool reasoningEnabled, bool /*thinkingForcedOpen*/,
-    bool closeMarkerSingleToken) noexcept {
-  if (!needsRecurrentSnapshot || !removeThinkingFromContext ||
-      !reasoningEnabled) {
-    return RecurrentReasoningBoundaryDecision::Disabled;
+[[nodiscard]] inline ReasoningBoundaryDecision reasoningBoundaryDecision(
+    bool removeThinkingFromContext, bool reasoningEnabled,
+    bool /*thinkingForcedOpen*/, bool closeMarkerSingleToken) noexcept {
+  if (!removeThinkingFromContext || !reasoningEnabled) {
+    return ReasoningBoundaryDecision::Disabled;
   }
   if (!closeMarkerSingleToken) {
-    return RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose;
+    return ReasoningBoundaryDecision::UnsupportedMultiTokenClose;
   }
-  return RecurrentReasoningBoundaryDecision::Capture;
+  return ReasoningBoundaryDecision::Capture;
 }
 
-[[nodiscard]] inline const char* recurrentReasoningBoundaryFailureReason(
-    RecurrentReasoningBoundaryDecision decision) noexcept {
+[[nodiscard]] inline const char*
+reasoningBoundaryFailureReason(ReasoningBoundaryDecision decision) noexcept {
   switch (decision) {
-  case RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose:
+  case ReasoningBoundaryDecision::UnsupportedMultiTokenClose:
     return "the reasoning close marker is not a single token";
-  case RecurrentReasoningBoundaryDecision::Disabled:
-  case RecurrentReasoningBoundaryDecision::Capture:
+  case ReasoningBoundaryDecision::Disabled:
+  case ReasoningBoundaryDecision::Capture:
     return "";
   }
   return "";
 }
 
-[[nodiscard]] inline bool shouldCaptureRecurrentReasoningBoundary(
-    bool needsRecurrentSnapshot, bool removeThinkingFromContext,
-    bool reasoningEnabled, bool thinkingForcedOpen,
-    bool closeMarkerSingleToken) noexcept {
-  return recurrentReasoningBoundaryDecision(
-             needsRecurrentSnapshot,
+[[nodiscard]] inline bool shouldCaptureReasoningBoundary(
+    bool removeThinkingFromContext, bool reasoningEnabled,
+    bool thinkingForcedOpen, bool closeMarkerSingleToken) noexcept {
+  return reasoningBoundaryDecision(
              removeThinkingFromContext,
              reasoningEnabled,
              thinkingForcedOpen,
-             closeMarkerSingleToken) ==
-         RecurrentReasoningBoundaryDecision::Capture;
+             closeMarkerSingleToken) == ReasoningBoundaryDecision::Capture;
 }
 
 } // namespace utils

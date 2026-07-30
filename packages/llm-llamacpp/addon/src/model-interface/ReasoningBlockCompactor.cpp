@@ -150,7 +150,7 @@ void ReasoningBlockCompactor::snapshotAtPrefillBoundary(
             labelTag,
             pos,
             seqId));
-    // Without the boundary snapshot the recurrent path cannot compact
+    // Without the boundary snapshot the replay path cannot compact
     // safely at end-of-generation. Live memory is untouched at this
     // point (the capture is read-only on failure), so no seq wipe is
     // needed here — the caller unwinds via its pre-request rollback
@@ -337,7 +337,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
             pos,
             seqId));
     // Live memory is untouched at this defensive point, but we still
-    // report `FailedKvWiped` because the recurrent path's caller
+    // report `FailedKvWiped` because the replay path's caller
     // recovery is a full reset onto pos=0 — there is no coherent
     // pre-request cursor to unwind to on a recurrent driver. Wipe the
     // sequence so live memory matches that reset.

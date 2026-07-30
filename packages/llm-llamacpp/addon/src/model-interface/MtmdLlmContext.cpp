@@ -167,10 +167,6 @@ void MtmdLlmContext::initializeCommonState() {
           isHarmonyModel_,
           harmonyCallToken_));
 
-  // Reasoning removal always restores the pre-generation state and replays
-  // retained output, regardless of model architecture or memory capability.
-  needsRecurrentSnapshot_ = true;
-
   // EOS-inside-reasoning recovery is a Qwen3-specific workaround;
   // gate it on the explicit Qwen3-family predicate so non-Qwen
   // reasoning families (e.g. Gemma 4) don't inherit it. See
@@ -550,15 +546,13 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
   }
 
-  // Snapshot the sequence state at prefill entry on recurrent / hybrid
-  // memory so a mid-prefill cancellation can roll back to the exact
-  // pre-prefill cache. Captures both attention KV and the recurrent
-  // hidden state, restored in one shot on cancel. Required because
+  // Capture a rollback anchor only when reasoning removal is requested.
+  // It is restored in one shot on cancel. This is required because
   // `llama_memory_seq_pos_max` does not report image-chunk extended
   // metadata (Qwen3VL M-RoPE x/y), so a metadata-only resync cannot
   // recover the exact pre-cancel position between mtmd chunks.
   const ContextUsage prefillEntryUsage = current_;
-  if (needsRecurrentSnapshot_) {
+  if (removeThinkingFromContext_) {
     if (!rollbackState_.capturePrefillEntry(
             modelCtx_.lctx, seqId_, current_.pos)) {
       // Capture failed: cancel will fall back to the no-op
@@ -620,7 +614,8 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         const llama_pos totalDelta = nPastLocal - current_.pos;
         current_.pos = nPastLocal;
         removeLastNTokens(totalDelta);
-        if (needsRecurrentSnapshot_ && current_.pos > prefillEntryUsage.pos) {
+        if (removeThinkingFromContext_ &&
+            current_.pos > prefillEntryUsage.pos) {
           current_ = prefillEntryUsage;
           rollbackOk = false;
         }
@@ -729,30 +724,30 @@ bool MtmdLlmContext::cancelGenerationCleanup(
       .labelTag = "[MtmdLlm]",
       .ctx = modelCtx_.lctx,
       .seqId = seqId_,
-      .needsRecurrentSnapshot = needsRecurrentSnapshot_,
+      .reasoningRemovalEnabled = removeThinkingFromContext_,
       .currentPos = current_.pos,
       .preRequestPos = preRequestUsage_.pos,
       .rollback = rollbackState_,
-      .onRecurrentRestored =
+      .onSnapshotRestored =
           [this](llama_pos restoredPos) {
             current_ = preRequestUsage_;
             current_.pos = restoredPos;
             refreshCurrentCacheTokensFromMemory();
           },
-      .onRecurrentRestoreFailed =
+      .onSnapshotRestoreFailed =
           [this](llama_pos restoredPos) {
             current_ = preRequestUsage_;
             current_.pos = restoredPos;
             current_.cacheTokens = restoredPos;
           },
-      .onRecurrentMissingSnapshotAdvanced =
+      .onMissingSnapshotAdvanced =
           [this]() {
             current_ = preRequestUsage_;
             current_.cacheTokens = preRequestUsage_.pos;
           },
       .removeLastNTokens =
           [this](llama_pos delta) { removeLastNTokens(delta); },
-      .onPureAttentionRolledBack =
+      .onTokensRolledBack =
           [this]() {
             current_ = preRequestUsage_;
             refreshCurrentCacheTokensFromMemory();
@@ -1222,15 +1217,14 @@ void MtmdLlmContext::configureReasoningTags(
     reasoningEnabled_ = true;
     compactor_.setReasoningEnabled(true);
     const bool reasoningCompactionActive = params_.reasoning_budget != 0;
-    if (needsRecurrentSnapshot_ && removeThinkingFromContext_ &&
-        reasoningCompactionActive && !isPrefillOnlyRequest_ &&
-        !reasoningState_.close_is_single_token) {
+    if (removeThinkingFromContext_ && reasoningCompactionActive &&
+        !isPrefillOnlyRequest_ && !reasoningState_.close_is_single_token) {
       QLOG_IF(
           Priority::WARNING,
           string_format(
-              "[MtmdLlm] recurrent reasoning compaction will hard-fail if "
+              "[MtmdLlm] reasoning compaction will hard-fail if "
               "this request emits reasoning: remove_thinking_from_context is "
-              "enabled on a hybrid/recurrent model, but close marker '%s' "
+              "enabled, but close marker '%s' "
               "must tokenise to one token\n",
               reasoningTags->close.c_str()));
     }
@@ -1259,13 +1253,12 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   if (isPrefillOnlyRequest_) {
     return;
   }
-  const auto decision = recurrentReasoningBoundaryDecision(
-      needsRecurrentSnapshot_,
+  const auto decision = reasoningBoundaryDecision(
       removeThinkingFromContext_,
       reasoningEnabled_ && params_.reasoning_budget != 0,
       thinkingForcedOpen_,
       reasoningState_.close_is_single_token);
-  if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
+  if (decision == ReasoningBoundaryDecision::Disabled) {
     return;
   }
   // Multimodal prefill decodes chunks (images + text) one at a time
@@ -1277,8 +1270,8 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   // marker and visible tail, so the restored recurrent state still
   // sees a balanced compacted reasoning block.
   try {
-    if (decision != RecurrentReasoningBoundaryDecision::Capture) {
-      throwUnsupportedRecurrentReasoningCompaction("[MtmdLlm]", decision);
+    if (decision != ReasoningBoundaryDecision::Capture) {
+      throwUnsupportedReasoningCompaction("[MtmdLlm]", decision);
     }
     compactor_.snapshotAtPrefillBoundary(
         modelCtx_.lctx, seqId_, current_.pos, "[MtmdLlm]");
@@ -1325,13 +1318,11 @@ void MtmdLlmContext::recordPostReasoningTokenIfActive(llama_token tokenId) {
 
 void MtmdLlmContext::compactThinkSpan() {
   // Freeze the user-visible perf counters before the compactor's
-  // recurrent path runs `restore + llama_decode` to replay the post-
+  // replay path runs `restore + llama_decode` to replay the post-
   // reasoning tail. Those replay decodes accumulate into `n_p_eval` /
   // `t_p_eval_ms` and would otherwise inflate prompt / TTFT / ppTPS.
-  // Capture only when the recurrent replay path can actually fire;
-  // pure-attention compaction has no extra `llama_decode`.
-  if (needsRecurrentSnapshot_ && compactor_.hasOpenSpan() &&
-      !userVisiblePerf_.has_value()) {
+  // Capture only when replay can actually fire.
+  if (compactor_.hasOpenSpan() && !userVisiblePerf_.has_value()) {
     userVisiblePerf_ = llama_perf_context(modelCtx_.lctx);
   }
   const ReasoningBlockCompactor::Outcome outcome =
@@ -1518,15 +1509,6 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   llama_pos tokensToRemove = std::min(count, current_.pos);
 
   if (tokensToRemove == 0) {
-    return 0;
-  }
-
-  if (needsRecurrentSnapshot_) {
-    // TODO: Re-enable tail-token removal for recurrent / hybrid SSM models
-    // once QVAC supports llama.cpp sequence checkpoint save + restore. Until
-    // then, partial `llama_memory_seq_rm` can fail because recurrent state
-    // does not keep full per-token history (for example Qwen3.5 with
-    // n_rs_seq=0).
     return 0;
   }
 
@@ -1935,8 +1917,7 @@ bool MtmdLlmContext::shouldRollbackKnownReasoningCutoff() const {
   const bool knownTruncation =
       generationStopReason_ == GenerationStopReason::PredictionLimit ||
       generationStopReason_ == GenerationStopReason::SequenceLimit;
-  return knownTruncation && needsRecurrentSnapshot_ &&
-         removeThinkingFromContext_ && reasoningEnabled_ &&
+  return knownTruncation && removeThinkingFromContext_ && reasoningEnabled_ &&
          reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
          !compactor_.hasCapturedCloseSpan();
 }
@@ -2139,7 +2120,7 @@ void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {
   // path takes its own capture after tokenize/slide in
   // `evalMessageWithTools` — this hook exists so the batch path, which
   // never runs that site, has an equivalent rollback anchor.
-  if (!needsRecurrentSnapshot_) {
+  if (!removeThinkingFromContext_) {
     return;
   }
   if (!rollbackState_.capturePrefillEntry(

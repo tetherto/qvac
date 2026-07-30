@@ -40,7 +40,7 @@ public:
   //
   // Captures the full sequence state at `nPast` so a mid-prefill cancel
   // can restore the pre-prefill cursor in one call. Caller should
-  // gate on `needsRecurrentSnapshot` first.
+  // gate on the active reasoning-removal request first.
   bool capturePrefillEntry(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos nPast);
   // No-op when no snapshot is held. Returns false only when a held

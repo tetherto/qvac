@@ -639,17 +639,10 @@ TEST_F(
 // User-visible perf snapshot lifecycle on `TextLlmContext`
 // ============================================================================
 //
-// `compactThinkSpan` freezes the perf counters just before any recurrent
+// `compactThinkSpan` freezes the perf counters just before any
 // replay decode runs, so `runtimeStats()` can report the pre-replay
 // (user-visible) values rather than counters inflated by internal cache
-// maintenance. The capture is gated on
-// `needsRecurrentSnapshot_ && compactor_.hasOpenSpan()` because:
-//   * pure-attention compaction does not replay (no inflation to freeze
-//     against — the live read is already correct), and
-//   * capturing for pure-attention races against lazy GPU-side decode
-//     telemetry (the snapshot can lag the live counters by one token
-//     because the final `llama_synchronize()` happens later in
-//     `resetState`).
+// maintenance. The capture is gated on `compactor_.hasOpenSpan()`.
 // The base `LlmContext::takeUserVisiblePerfSnapshot` returns `nullopt`
 // by default; `TextLlmContext` overrides it to consume the captured
 // snapshot. Hybrid coverage (snapshot actually populated and consumed)
@@ -675,19 +668,11 @@ TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
       << "Newly constructed driver must report no user-visible perf snapshot";
 }
 
-// Pure-attention models do not need (and do not capture) a user-visible
-// perf snapshot in `compactThinkSpan`: the only purpose of the
-// snapshot is to freeze `n_p_eval` / `t_p_eval_ms` BEFORE the recurrent
-// replay decode inflates them, and pure-attention compaction is a pure
-// cache-edit (`seq_rm + seq_add`) with no replay. Capturing for pure-
-// attention also opens a one-token race against lazy GPU-side decode
-// telemetry, so the capture is now gated on
-// `needsRecurrentSnapshot_ && compactor_.hasOpenSpan()`. This test
-// pins the contract: a pure-attention inference must leave the
-// snapshot empty so `runtimeStats()` falls back to the live read.
+// Without a tracked reasoning span there is no replay decode, so no
+// user-visible perf snapshot should be captured.
 TEST_F(
     TextLlmContextCancelTest,
-    CompactThinkSpanLeavesPerfSnapshotEmptyForPureAttention) {
+    CompactThinkSpanLeavesPerfSnapshotEmptyWithoutReasoningSpan) {
   auto model = loadTextModel(qwen3PureAttentionModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -707,9 +692,7 @@ TEST_F(
   ASSERT_TRUE(driver.generateResponse([](const std::string&) {}).ok);
 
   EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "Pure-attention compactThinkSpan must NOT capture a snapshot — "
-         "the live read in runtimeStats is already correct and capturing "
-         "early races against lazy GPU perf telemetry";
+      << "compactThinkSpan must not capture perf without a reasoning span";
 }
 
 // ============================================================================

@@ -8,16 +8,19 @@
 
 #include "model-interface/ContextSlider.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
+#include "model-interface/ReasoningRecoveryHelpers.hpp"
 #include "model-interface/ToolsCompactController.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::reasoning_recovery::CancelRecoveryHooks;
+using qvac_lib_inference_addon_llama::reasoning_recovery::
+    rollbackCancelledRequest;
+using qvac_lib_inference_addon_llama::utils::reasoningBoundaryDecision;
+using qvac_lib_inference_addon_llama::utils::ReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
-using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
-using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
-using qvac_lib_inference_addon_llama::utils::
-    shouldCaptureRecurrentReasoningBoundary;
+using qvac_lib_inference_addon_llama::utils::shouldCaptureReasoningBoundary;
 
 // Unit coverage for the hybrid / recurrent reasoning replay seam.
 //
@@ -36,20 +39,18 @@ using qvac_lib_inference_addon_llama::utils::
 //   3. the success path against a seeded boundary snapshot.
 
 TEST(ReasoningSnapshotPolicy, CapturesOnlyForForcedOpenRecurrentReasoning) {
-  EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
+  EXPECT_TRUE(shouldCaptureReasoningBoundary(
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
       /*thinkingForcedOpen=*/true,
       /*closeMarkerSingleToken=*/true));
   EXPECT_EQ(
-      recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
+      reasoningBoundaryDecision(
           /*removeThinkingFromContext=*/true,
           /*reasoningEnabled=*/true,
           /*thinkingForcedOpen=*/true,
           /*closeMarkerSingleToken=*/true),
-      RecurrentReasoningBoundaryDecision::Capture);
+      ReasoningBoundaryDecision::Capture);
 }
 
 TEST(ReasoningSnapshotPolicy, CapturesGeneratedOpenRecurrentReasoning) {
@@ -59,37 +60,27 @@ TEST(ReasoningSnapshotPolicy, CapturesGeneratedOpenRecurrentReasoning) {
   // restored end-of-prefill prefix no longer needs to contain
   // `<think>`. The policy must return `Capture` so the boundary
   // snapshot is taken and the seed-and-replay path can fire.
-  EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
+  EXPECT_TRUE(shouldCaptureReasoningBoundary(
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
       /*thinkingForcedOpen=*/false,
       /*closeMarkerSingleToken=*/true));
   EXPECT_EQ(
-      recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
+      reasoningBoundaryDecision(
           /*removeThinkingFromContext=*/true,
           /*reasoningEnabled=*/true,
           /*thinkingForcedOpen=*/false,
           /*closeMarkerSingleToken=*/true),
-      RecurrentReasoningBoundaryDecision::Capture);
+      ReasoningBoundaryDecision::Capture);
 }
 
 TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/false,
-      /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
+  EXPECT_FALSE(shouldCaptureReasoningBoundary(
       /*removeThinkingFromContext=*/false,
       /*reasoningEnabled=*/true,
       /*thinkingForcedOpen=*/true,
       /*closeMarkerSingleToken=*/true));
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
+  EXPECT_FALSE(shouldCaptureReasoningBoundary(
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/false,
       /*thinkingForcedOpen=*/true,
@@ -104,20 +95,68 @@ TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
 // case so `remove_thinking_from_context` hard-fails instead of leaving
 // reasoning tokens in cache or silently corrupting recurrent state.
 TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
+  EXPECT_FALSE(shouldCaptureReasoningBoundary(
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
       /*thinkingForcedOpen=*/true,
       /*closeMarkerSingleToken=*/false));
   EXPECT_EQ(
-      recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
+      reasoningBoundaryDecision(
           /*removeThinkingFromContext=*/true,
           /*reasoningEnabled=*/true,
           /*thinkingForcedOpen=*/true,
           /*closeMarkerSingleToken=*/false),
-      RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose);
+      ReasoningBoundaryDecision::UnsupportedMultiTokenClose);
+}
+
+TEST(
+    ReasoningSnapshotRecovery,
+    DisabledRemovalUsesTokenRollbackWithoutSnapshot) {
+  ReasoningRollbackState rollback;
+  llama_pos removed = 0;
+  bool tokenRollbackCompleted = false;
+  const bool ok = rollbackCancelledRequest({
+      .labelTag = "[Test]",
+      .ctx = nullptr,
+      .seqId = 0,
+      .reasoningRemovalEnabled = false,
+      .currentPos = 10,
+      .preRequestPos = 5,
+      .rollback = rollback,
+      .onSnapshotRestored = [](llama_pos) {},
+      .onSnapshotRestoreFailed = [](llama_pos) {},
+      .onMissingSnapshotAdvanced = []() {},
+      .removeLastNTokens = [&](llama_pos delta) { removed = delta; },
+      .onTokensRolledBack = [&]() { tokenRollbackCompleted = true; },
+  });
+
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(removed, 5);
+  EXPECT_TRUE(tokenRollbackCompleted);
+}
+
+TEST(ReasoningSnapshotRecovery, EnabledRemovalMissingSnapshotFailsSafely) {
+  ReasoningRollbackState rollback;
+  bool missingSnapshotReported = false;
+  bool tokenRollbackAttempted = false;
+  const bool ok = rollbackCancelledRequest({
+      .labelTag = "[Test]",
+      .ctx = nullptr,
+      .seqId = 0,
+      .reasoningRemovalEnabled = true,
+      .currentPos = 10,
+      .preRequestPos = 5,
+      .rollback = rollback,
+      .onSnapshotRestored = [](llama_pos) {},
+      .onSnapshotRestoreFailed = [](llama_pos) {},
+      .onMissingSnapshotAdvanced = [&]() { missingSnapshotReported = true; },
+      .removeLastNTokens = [&](llama_pos) { tokenRollbackAttempted = true; },
+      .onTokensRolledBack = []() {},
+  });
+
+  EXPECT_FALSE(ok);
+  EXPECT_TRUE(missingSnapshotReported);
+  EXPECT_FALSE(tokenRollbackAttempted);
 }
 
 TEST(ReasoningRollbackStateAppend, AppendsRegardlessOfCaptureFlag) {

@@ -425,11 +425,6 @@ private:
   // the multimodal path until a Qwen3-family vision model ships.
   bool isQwen3ReasoningFamily_ = false;
 
-  // True when this context's model is recurrent or hybrid
-  // Drives universal snapshot + replay reasoning compaction and the
-  // cancellation paths that share those snapshots.
-  bool needsRecurrentSnapshot_ = true;
-
   // Tracks whether the currently-prepared prefill is a cache-warm
   // (prefill-only) request. Captured from `preparePrefill` on the
   // batch path and `evalMessageWithTools` on the single-prompt path,
@@ -446,15 +441,13 @@ private:
   // `applyGenerationParams`. Applies uniformly to every model.
   bool removeThinkingFromContext_ = true;
 
-  // Shared rollback state for recurrent / hybrid SSM models. Owns the
+  // Shared rollback state for reasoning removal. Owns the
   // prefill-entry snapshot (cancel during prefill), the end-of-prefill
   // snapshot (compaction + cancel during generation), and the
-  // post-reasoning token replay buffer. Inactive on pure-attention
-  // models.
+  // post-reasoning token replay buffer.
   qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
   // Reasoning-block tracker + compactor: owns the `<think>...</think>`
-  // span, close-capture flag, and the pure-attention + recurrent
-  // compaction paths plus their stats counters.
+  // span, close-capture flag, replay path, and stats counter.
   qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
   // Context-window slider: owns `nDiscarded`, `nSlides`, and clears
   // post-slide-invalidated state on the compactor and rollback owners.

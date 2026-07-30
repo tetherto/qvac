@@ -401,16 +401,6 @@ private:
   // `applyGenerationParams`. Applies uniformly to every model.
   bool removeThinkingFromContext_ = true;
 
-  // True when this context's model is recurrent or hybrid
-  // (`llama_model_is_recurrent || llama_model_is_hybrid`) — Mamba /
-  // RWKV pure-recurrent and hybrid SSM + attention families (Qwen3.5,
-  // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
-  // For these we use the snapshot + replay path: snapshot the full
-  // sequence state at end-of-prefill, restore at end-of-generation,
-  // then batched-replay the captured post-reasoning tokens. The legacy
-  // member name is retained because cancellation uses the same snapshots.
-  bool needsRecurrentSnapshot_ = true;
-
   // Tracks whether the currently-prepared prefill is a cache-warm
   // (prefill-only) request. Captured in `preparePrefill` from the
   // scheduler / single-prompt caller and consulted by the recurrent
@@ -421,16 +411,13 @@ private:
   // would only fail at generation time.
   bool isPrefillOnlyRequest_ = false;
 
-  // Shared rollback state for recurrent / hybrid SSM models. Owns the
+  // Shared rollback state for reasoning removal. Owns the
   // prefill-entry snapshot (cancel during prefill), the end-of-prefill
   // snapshot (compaction + cancel during generation), and the
-  // post-reasoning token replay buffer. Always empty / inactive on
-  // pure-attention models, where compaction is just `seq_rm + seq_add`
-  // on the attention KV.
+  // post-reasoning token replay buffer.
   qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
   // Reasoning-block tracker + compactor: owns the `<think>...</think>`
-  // span, close-capture flag, and the pure-attention + recurrent
-  // compaction paths plus their stats counters.
+  // span, close-capture flag, replay path, and stats counter.
   qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
   // Context-window slider: owns `nDiscarded`, `nSlides`, and clears
   // post-slide-invalidated state on the compactor and rollback owners.
