@@ -149,6 +149,23 @@ safeTest(
       stats.draftAccepted > 0,
       `target accepted MTP draft tokens (draftAccepted=${stats.draftAccepted})`
     )
+    // Acceptance RATE, not just "> 0". draftAccepted > 0 passes even if the
+    // drafter is mostly wrong, which is the failure mode that silently erases
+    // MTP's benefit: every rejected draft costs a wasted draft forward pass, so
+    // a drafter accepted ~10% of the time is slower than not speculating at
+    // all. This is the deterministic, hardware-independent signal that MTP is
+    // doing its job (temp=0 + fixed seed), so it is the right thing to gate on
+    // — unlike throughput, which is far too runner-dependent to assert here.
+    // Floor is deliberately well under what this model/prompt actually
+    // achieves (observed 5/6 ~= 0.83 on linux-arm64) to leave room for
+    // backend-to-backend numerical variation; raise it once there is data
+    // across all platforms.
+    const acceptRate = stats.draftAccepted / stats.draftTotal
+    console.log(`  acceptance rate=${acceptRate.toFixed(2)}`)
+    t.ok(
+      acceptRate >= 0.25,
+      `MTP acceptance rate is high enough to be a win (${stats.draftAccepted}/${stats.draftTotal} = ${acceptRate.toFixed(2)}, floor 0.25)`
+    )
   }
 )
 
@@ -162,6 +179,64 @@ safeTest('Qwen3.5-0.8B without spec-type', { timeout: 600_000 }, async (t) => {
   t.ok(/paris/i.test(output), 'non-spec output names the capital (Paris) in the reply')
   t.is(stats.draftAccepted, 0, 'non-spec run performs no speculative drafting (draftAccepted=0)')
 })
+
+safeTest(
+  'Qwen3.5-0.8B MTP output matches the non-speculative output token-for-token',
+  { timeout: 600_000 },
+  async (t) => {
+    // The defining guarantee of speculative decoding: the target verifies every
+    // drafted token, so with greedy sampling (temp=0, fixed seed) enabling
+    // spec-type must not change a single character of the answer. It is purely
+    // a speed optimisation.
+    //
+    // This is the assertion the rest of the suite was missing. The spec/non-spec
+    // tests above each only check their own output matches /paris/i, so an
+    // accept-loop bug — committing the wrong token, an off-by-one in the
+    // accepted prefix, a mis-rolled-back rejected tail — would still emit
+    // fluent text containing "Paris" and pass everything. Only a direct
+    // comparison catches that class.
+    //
+    // Both configs also run here in ONE test, giving the `draftTotal === 0`
+    // negative check a positive control in the same test body: if `spec-type`
+    // silently stopped being read (a config-key regression), the zero would no
+    // longer look like correct gating because the paired run would be zero too.
+    //
+    // KNOWN CAVEAT: llama.cpp logits are not bit-identical across different
+    // batch shapes (the verify batch decodes N+1 positions at once, the
+    // non-spec path decodes one at a time), so an exact greedy tie could in
+    // principle break the tie differently and diverge. PROMPT is a short,
+    // high-confidence factual answer chosen to make that vanishingly unlikely.
+    // If this ever flakes, that is the reason — and the fix is a lower-variance
+    // prompt, NOT deleting the assertion.
+    const specAddon = await loadAddon(t, { withSpec: true })
+    const specResp = await specAddon.run(PROMPT)
+    const specOutput = await collectResponse(specResp)
+
+    const plainAddon = await loadAddon(t, { withSpec: false })
+    const plainResp = await plainAddon.run(PROMPT)
+    const plainOutput = await collectResponse(plainResp)
+
+    console.log(`  spec    : "${specOutput}"`)
+    console.log(`  non-spec: "${plainOutput}"`)
+    console.log(
+      `  spec drafted ${specResp.stats.draftAccepted}/${specResp.stats.draftTotal}, non-spec drafted ${plainResp.stats.draftTotal}`
+    )
+
+    t.ok(specOutput.length > 0, 'speculative run produced output')
+    t.is(
+      specOutput,
+      plainOutput,
+      'MTP produces byte-identical output to non-speculative decoding at temp=0'
+    )
+    // Positive + negative control, same test: speculation demonstrably ran on
+    // one side and demonstrably did not on the other.
+    t.ok(
+      specResp.stats.draftTotal > 0,
+      `speculative run really did draft (draftTotal=${specResp.stats.draftTotal})`
+    )
+    t.is(plainResp.stats.draftTotal, 0, 'non-speculative run drafted nothing (draftTotal=0)')
+  }
+)
 
 safeTest(
   'Gemma-4 E2B with spec-type=draft-mtp stays inert (no bundled MTP head)',
