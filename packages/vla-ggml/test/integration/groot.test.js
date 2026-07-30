@@ -307,15 +307,18 @@ async function _ensureMobileModel() {
   return destPath
 }
 
-// 40 min: on mobile this test downloads the q5 GGUF (~2.7GB, larger than
+// 55 min: on mobile this test downloads the q5 GGUF (~2.7GB, larger than
 // smolvla's ~2GB at 1800000) before any inference, and a slow Device Farm S3
 // link can stretch that well past 20 min (observed: a run stuck at 61% at the
-// old 1200000 cap). Stays under the 60-min host WDIO/mocha cap the mobile CI
-// sets via android-per-test-timeout-minutes (that extension does NOT reach this
-// brittle timer — see run-mobile-integration-tests/build-mobile-app).
+// old 1200000 cap; then at the 2400000 cap an S26 Ultra lease running ~1MB/s
+// against ~3.5MB/s on the two devices that passed reached only 86% before
+// firing, so inference never ran). 55 min covers that lease and stays under
+// the 60-min host WDIO/mocha cap the mobile CI sets via
+// android-per-test-timeout-minutes (that extension does NOT reach this brittle
+// timer — see run-mobile-integration-tests/build-mobile-app).
 test(
   'groot integration: VlaModel.run() produces finite, correctly-shaped actions',
-  { timeout: 2400000 },
+  { timeout: 3300000 },
   async (t) => {
     let inputs
     if (_isMobile) {

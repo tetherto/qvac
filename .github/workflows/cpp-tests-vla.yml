@@ -18,10 +18,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test; defaults to the ref used to launch the workflow"
         type: string
         required: false
-        default: "main"
       workdir:
         description: "Working directory"
         type: string
@@ -252,11 +251,21 @@ jobs:
           set -euo pipefail
           mkdir -p model/vla/groot test/groot-oracle
           S3_ROOT="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla"
-          # Multi-embodiment GGUF family + sweep oracle live under
-          # groot-n1.7-3b-multi/2026-07-23; the v4 oracle is unchanged, so it
-          # stays reused from the original groot-n1.7-3b-libero/2026-07-14.
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/groot-q8_vf16.gguf"            model/vla/groot/groot-q8_vf16.gguf
+          # TWO GGUFs on purpose, each paired with the oracle dumped from the
+          # SAME checkpoint. Pointing the milestone tests (M4.1-M4.7,
+          # infer-parity) at the multi GGUF while they still read the libero v4
+          # oracle compares one converted checkpoint's weights against another's
+          # recorded activations; that aborted GrootM4_2 inside ggml_mul_mat
+          # (GGML_ASSERT(ggml_can_mul_mat)), and because GGML_ASSERT calls
+          # abort() it took the whole binary down with it, so every test after
+          # M4_2 silently never ran and no results XML was written.
+          #   groot-q8_vf16.gguf       (libero) <-> activations_v4
+          #   groot-multi-q8_vf16.gguf (multi)  <-> activations_sweep
+          # Multi-embodiment parity is the sweep test's job and it has its own
+          # matching oracle, so nothing is lost by keeping the two separate.
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
           aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"   test/groot-oracle/activations_v4.safetensors
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/groot-q8_vf16.gguf"            model/vla/groot/groot-multi-q8_vf16.gguf
           aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/activations_sweep.safetensors" test/groot-oracle/activations_sweep.safetensors
           ls -la model/vla/groot/ test/groot-oracle/
 
@@ -268,10 +277,12 @@ jobs:
           GROOT_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
           # Per-embodiment sweep parity (all 17 stored rows). Reads embodiment.*
-          # + groot.embodiment.* out of the same multi q8_vf16 GGUF (embodiment.*
-          # ships F16, untouched by quantization), gated on the same non-intel-mac
-          # condition. GrootEmbodimentSweep skips cleanly when unset.
-          GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
+          # + groot.embodiment.* out of the MULTI q8_vf16 GGUF (embodiment.*
+          # ships F16, untouched by quantization) — a different file from
+          # GROOT_TEST_GGUF above, since this is the only oracle dumped from the
+          # multi checkpoint. Gated on the same non-intel-mac condition;
+          # GrootEmbodimentSweep skips cleanly when unset.
+          GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set -euo pipefail

@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 #include <ggml.h>
@@ -73,6 +74,16 @@ inline struct ggml_tensor* embodimentRow(
   struct ggml_tensor* dst =
       baseNdims == 2 ? ggml_new_tensor_2d(ctx, t->type, t->ne[0], t->ne[1])
                      : ggml_new_tensor_1d(ctx, t->type, t->ne[0]);
+  // Callers pass their own compute context as the slice arena (M4.2 reuses its
+  // 128 MiB pool), and ggml_new_tensor returns NULL on an exhausted arena once
+  // GGML_ASSERT is compiled out. Report that rather than memcpy through NULL.
+  if (dst == nullptr) {
+    std::fprintf(
+        stderr,
+        "[embodimentRow] slice alloc failed for %s — arena exhausted\n",
+        ggml_get_name(t));
+    return nullptr;
+  }
   const size_t block = ggml_nbytes(dst);
   std::memcpy(
       dst->data,

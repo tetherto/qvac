@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -178,7 +179,21 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   const float dt = 1.0f / static_cast<float>(N_STEPS);
 
   for (int step = 0; step < N_STEPS; ++step) {
-    const size_t mem = 2048u * 1024u * 1024u;
+    // 4 GiB, and explicitly size_t like the M4.6 pools rather than the
+    // unsigned-int product this used to be. This is the ONLY groot parity test
+    // that builds the action encoder, the concat, all 32 DiT blocks, the
+    // decoder and the cont into a SINGLE arena — M4.6 spreads the same work
+    // over one context per phase — so it sat closest to its pool ceiling at the
+    // old 2 GiB. That ceiling is a hard failure rather than a slow path: every
+    // tensor here is data-backed (no_alloc=false), the cgraph is allocated
+    // LAST, after all of them, and ggml_new_object returns NULL instead of
+    // aborting once GGML_ASSERT is compiled out, which is the Release config
+    // Windows CI builds. ggml_build_forward_expand(NULL, ...) is then an access
+    // violation with no stack trace, which is exactly the SEH 0xc0000005 seen
+    // on qvac-win25-x64-runner4. M4.6 already allocates 8 GiB on that same
+    // runner, so the headroom is available. The used/total line below is what
+    // turns a recurrence into a number instead of a guess.
+    const size_t mem = size_t(4) * 1024u * 1024u * 1024u;
     std::vector<uint8_t> buf(mem);
     struct ggml_init_params ip{mem, buf.data(), false};
     struct ggml_context* c = ggml_init(ip);
@@ -271,9 +286,21 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
         ggml_view_2d(c, pred, ACT_DIM, N_ACT, pred->nb[1], pred->nb[1]);
     vel = ggml_cont(c, vel);
 
+    // Allocated last, so this is the first thing to come back NULL if the arena
+    // is short — and dereferencing it is an access violation, not a diagnosable
+    // failure. Report the arena occupancy either way: on a pool that is merely
+    // tight rather than exhausted, this line is the warning that the next graph
+    // addition will not fit.
     struct ggml_cgraph* gf = ggml_new_graph_custom(c, 8192, false);
+    std::cerr << "[M4.4] step " << step << " arena: used "
+              << (ggml_used_mem(c) / (1024 * 1024)) << " MiB of "
+              << (mem / (1024 * 1024)) << " MiB\n";
+    ASSERT_NE(gf, nullptr)
+        << "cgraph alloc returned NULL — arena exhausted at step " << step
+        << " (used " << ggml_used_mem(c) << " of " << mem << " bytes)";
     ggml_build_forward_expand(gf, vel);
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
+    ASSERT_NE(vel->data, nullptr) << "step " << step;
 
     // Euler update: actions += dt · velocity.
     const float* velp = static_cast<const float*>(vel->data);
