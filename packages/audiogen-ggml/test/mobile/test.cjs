@@ -105,6 +105,13 @@ function _candidateDirs () {
   return candidates
 }
 
+// The dir _ensureModels downloads into. Distinct from a user-supplied side-load
+// ($AUDIOGEN_MODEL_DIR / dirPath), so the retry logic never deletes hand-staged files.
+function _downloadDir () {
+  const base = (global.testDir || (typeof dirPath === 'string' && dirPath)) || '.'
+  return path.join(base, 'models')
+}
+
 // Resolve the model dir: use a complete side-loaded set if present, otherwise
 // download the turbo-q4 GGUFs from the registry into `<testDir>/models`.
 async function _ensureModels () {
@@ -115,8 +122,7 @@ async function _ensureModels () {
     }
   }
 
-  const base = (global.testDir || (typeof dirPath === 'string' && dirPath)) || '.'
-  const outDir = path.join(base, 'models')
+  const outDir = _downloadDir()
   fs.mkdirSync(outDir, { recursive: true })
 
   let QVACRegistryClient
@@ -224,10 +230,17 @@ async function _loadGenWithRetry (maxAttempts = 3) {
       return { gen, modelDir }
     } catch (e) {
       lastErr = e
-      console.log('[audiogen-mobile] load attempt ' + attempt + '/' + maxAttempts +
-        ' failed (' + (e && e.message) + '); clearing models for a clean re-download')
       try { await gen.destroy() } catch (_e) {}
-      _clearStages(modelDir)
+      // Only wipe + re-download the dir WE downloaded into — never a user's
+      // side-loaded set ($AUDIOGEN_MODEL_DIR / dirPath), which we must not delete.
+      if (modelDir === _downloadDir()) {
+        console.log('[audiogen-mobile] load attempt ' + attempt + '/' + maxAttempts +
+          ' failed (' + (e && e.message) + '); clearing models for a clean re-download')
+        _clearStages(modelDir)
+      } else {
+        console.log('[audiogen-mobile] load attempt ' + attempt + '/' + maxAttempts +
+          ' failed (' + (e && e.message) + ') on a side-loaded dir; not clearing it')
+      }
     }
   }
   throw new Error('ACE-Step model load failed after ' + maxAttempts +

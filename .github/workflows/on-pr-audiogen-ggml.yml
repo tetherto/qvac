@@ -384,6 +384,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - context
       - prebuild
       - prebuild-artifact-reuse

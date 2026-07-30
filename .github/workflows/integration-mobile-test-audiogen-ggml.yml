@@ -75,9 +75,17 @@ jobs:
           - platform: Android
             os: ubuntu-24.04
             runner: qvac-ubuntu2404-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+          # iOS is intentionally omitted for now. The turbo-q4 ACE-Step stack loads
+          # + generates fine on 8 GB+ iOS hardware (verified on-device, iPad Pro M2,
+          # entitlement-free), but the shared AWS Device Farm iPhones fail at DiT
+          # load and 6 GB devices jetsam-OOM during the ~3 GB load peak — small-device
+          # iOS needs sequential stage load/free in the engine, not just the
+          # increased-memory-limit entitlement. Tracked in QVAC-22838 (iOS
+          # re-enablement). Restore by re-adding the iOS/macos-14 row + the `ios`
+          # group in test-groups.json.
+          # - platform: iOS
+          #   os: macos-14
+          #   runner: macos-14
 
     steps:
       - name: Checkout composite action source
@@ -104,8 +112,9 @@ jobs:
           addon-npm-name: '@qvac/audiogen-ggml'
           prebuild-artifact-prefix: 'audiogen-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # workflow_call passes prebuild_package; workflow_dispatch passes package_spec.
+          package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
+          force-npm-prebuild: ${{ (inputs.prebuild_package || inputs.package_spec) != '' && 'true' || 'false' }}
 
       - name: Build mobile app
         id: build
