@@ -31,6 +31,8 @@ concurrency:
 
 jobs:
   fork-approval:
+    permissions:
+      statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
     secrets: inherit
   resolve-config:

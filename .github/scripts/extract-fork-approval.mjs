@@ -14,6 +14,8 @@ const INLINE_BLOCK_RE =
   /  fork-approval:\n    name: Fork approval gate\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    permissions: \{\}\n    environment: \$\{\{ github\.event_name == 'pull_request_target' && github\.event\.pull_request\.head\.repo\.full_name != github\.repository && 'fork-ci' \|\| '' \}\}\n    steps:\n      - name: Record fork-ci approval on head SHA\n        if: github\.event_name == 'pull_request_target' && github\.event\.pull_request\.head\.repo\.full_name != github\.repository\n        env:\n          GH_TOKEN: \$\{\{ secrets\.PAT_TOKEN \}\}\n          HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \}\}\n          REPO: \$\{\{ github\.repository \}\}\n        run: \|\n          set -euo pipefail\n          gh api "repos\/\$\{REPO\}\/statuses\/\$\{HEAD_SHA\}" \\\n            -f state=success \\\n            -f context=qvac\/fork-verified \\\n            -f description="fork-ci environment approved for this commit"\n      - name: Approved\n        run: echo "fork PR authorised to run privileged jobs"\n/g
 
 const REPLACEMENT = `  fork-approval:
+    permissions:
+      statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
     secrets: inherit
 `
