@@ -1,6 +1,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -43,6 +44,34 @@ TEST(LlamaFinetuningHelpers, ParseLoraModules_WithWhitespace) {
 TEST(LlamaFinetuningHelpers, ParseLoraModules_All) {
   uint32_t result = llama_finetuning_helpers::parseLoraModules("all");
   EXPECT_EQ(result, LLAMA_LORA_TARGET_ALL);
+}
+
+TEST(LlamaFinetuningHelpers, ParseLoraModules_DenseFfnAndOutput) {
+  uint32_t result = llama_finetuning_helpers::parseLoraModules(
+      "ffn_gate,ffn_up,ffn_down,output");
+  EXPECT_EQ(
+      result,
+      (LLAMA_LORA_TARGET_FFN_GATE | LLAMA_LORA_TARGET_FFN_UP |
+       LLAMA_LORA_TARGET_FFN_DOWN | LLAMA_LORA_TARGET_OUTPUT));
+}
+
+// MoE expert LoRA targets added by this PR (bits 8-11). ffn_gate_up_exps (bit
+// 11) is otherwise exercised nowhere; this locks the string->enum mapping so a
+// future map edit that drops or mis-wires one fails here, not only in an
+// on-device run.
+TEST(LlamaFinetuningHelpers, ParseLoraModules_ExpertModules) {
+  uint32_t result = llama_finetuning_helpers::parseLoraModules(
+      "ffn_gate_exps,ffn_up_exps,ffn_down_exps,ffn_gate_up_exps");
+  EXPECT_EQ(
+      result,
+      (LLAMA_LORA_TARGET_FFN_GATE_EXPS | LLAMA_LORA_TARGET_FFN_UP_EXPS |
+       LLAMA_LORA_TARGET_FFN_DOWN_EXPS | LLAMA_LORA_TARGET_FFN_GATE_UP_EXPS));
+}
+
+TEST(LlamaFinetuningHelpers, ParseLoraModules_UnknownThrows) {
+  EXPECT_THROW(
+      llama_finetuning_helpers::parseLoraModules("not_a_real_module"),
+      std::runtime_error);
 }
 
 TEST(LlamaFinetuningHelpers, ParseLrScheduler_Constant) {
