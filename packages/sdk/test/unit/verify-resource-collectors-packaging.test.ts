@@ -6,6 +6,7 @@ import { describe, it } from 'node:test'
 import {
   acceptResourceCollectorPackaging,
   formatResourceCollectorAcceptanceReport,
+  measureTarget,
   RESOURCE_COLLECTOR_SIZE_BUDGETS,
   type ResourceCollectorAcceptanceOptions
 } from '@/commands/verify/resource-collectors'
@@ -233,7 +234,7 @@ describe('acceptResourceCollectorPackaging', () => {
     })
   })
 
-  it('measures only both collectors files for the requested host', async () => {
+  it('measures files from both collectors for the requested host', async () => {
     await withTempDir(async (dir) => {
       const fixture = createFixture(dir, {
         prebuilds: [
@@ -332,6 +333,31 @@ describe('acceptResourceCollectorPackaging', () => {
       assert.equal(issue?.package, packageName)
       assert.equal(issue?.host, 'linux-x64')
     })
+  })
+
+  it('rejects promptly when an archive entry fails', async () => {
+    const failure = new Error('archive entry failed')
+    const measurement = measureTarget(
+      'linux-x64',
+      [
+        {
+          package: 'bare-cpu-info',
+          relativePath: 'prebuilds/linux-x64/collector.bare',
+          bytes: 3,
+          contents: Buffer.from('cpu')
+        }
+      ],
+      {
+        writeArchiveEntry: async () => {
+          throw failure
+        }
+      }
+    )
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('measurement remained pending')), 250)
+    })
+
+    await assert.rejects(Promise.race([measurement, timeout]), failure)
   })
 
   it('passes at the exact uncompressed limit', async () => {

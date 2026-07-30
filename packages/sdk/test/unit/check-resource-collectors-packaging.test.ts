@@ -8,6 +8,7 @@ import type {
 import {
   parseResourceCollectorCheckArgs,
   resolveDesktopHost,
+  runResourceCollectorPackagingCli,
   runResourceCollectorPackagingCheck,
   type ResourceCollectorCheckDependencies
 } from '@/scripts/check-resource-collectors-packaging'
@@ -225,6 +226,123 @@ describe('runResourceCollectorPackagingCheck', () => {
     )
     assert.deepEqual(removed, ['/tmp/project'])
   })
+
+  it('removes the temporary project when acceptance throws', async () => {
+    const removed: string[] = []
+    const failure = new RequestValidationFailedError('acceptance failed')
+    const dependencies = createDependencies({
+      acceptResourceCollectorPackaging: async () => {
+        throw failure
+      },
+      removeTemporaryProject: async (projectRoot) => {
+        removed.push(projectRoot)
+      }
+    })
+
+    await assert.rejects(
+      runResourceCollectorPackagingCheck(
+        {
+          sdkPackageRoot: '/repo/packages/sdk',
+          hosts: ['linux-x64'],
+          json: false
+        },
+        dependencies
+      ),
+      failure
+    )
+    assert.deepEqual(removed, ['/tmp/project'])
+  })
+})
+
+describe('runResourceCollectorPackagingCli', () => {
+  it('reports argument failures without rejecting', async () => {
+    const errors: string[] = []
+    const exitCodes: number[] = []
+    const dependencies = createDependencies({
+      writeError: (output) => errors.push(output),
+      setExitCode: (exitCode) => exitCodes.push(exitCode)
+    })
+
+    await runResourceCollectorPackagingCli(['--unknown'], {
+      sdkPackageRoot: '/repo/packages/sdk',
+      dependencies
+    })
+
+    assert.deepEqual(errors, [
+      'Resource collector packaging check failed: Unknown argument: --unknown'
+    ])
+    assert.deepEqual(exitCodes, [1])
+  })
+
+  it('reports bundle failures and preserves temporary-project cleanup', async () => {
+    const errors: string[] = []
+    const exitCodes: number[] = []
+    const removed: string[] = []
+    const dependencies = createDependencies({
+      bundleSdk: async () => {
+        throw new RequestValidationFailedError('bundle failed')
+      },
+      removeTemporaryProject: async (projectRoot) => {
+        removed.push(projectRoot)
+      },
+      writeError: (output) => errors.push(output),
+      setExitCode: (exitCode) => exitCodes.push(exitCode)
+    })
+
+    await runResourceCollectorPackagingCli(['--host', 'linux-x64'], {
+      sdkPackageRoot: '/repo/packages/sdk',
+      dependencies
+    })
+
+    assert.deepEqual(errors, ['Resource collector packaging check failed: bundle failed'])
+    assert.deepEqual(exitCodes, [1])
+    assert.deepEqual(removed, ['/tmp/project'])
+  })
+
+  it('reports acceptance failures and preserves temporary-project cleanup', async () => {
+    const errors: string[] = []
+    const exitCodes: number[] = []
+    const removed: string[] = []
+    const dependencies = createDependencies({
+      acceptResourceCollectorPackaging: async () => {
+        throw new RequestValidationFailedError('acceptance failed')
+      },
+      removeTemporaryProject: async (projectRoot) => {
+        removed.push(projectRoot)
+      },
+      writeError: (output) => errors.push(output),
+      setExitCode: (exitCode) => exitCodes.push(exitCode)
+    })
+
+    await runResourceCollectorPackagingCli(['--host', 'linux-x64'], {
+      sdkPackageRoot: '/repo/packages/sdk',
+      dependencies
+    })
+
+    assert.deepEqual(errors, ['Resource collector packaging check failed: acceptance failed'])
+    assert.deepEqual(exitCodes, [1])
+    assert.deepEqual(removed, ['/tmp/project'])
+  })
+
+  it('reports temporary-project cleanup failures without rejecting', async () => {
+    const errors: string[] = []
+    const exitCodes: number[] = []
+    const dependencies = createDependencies({
+      removeTemporaryProject: async () => {
+        throw new RequestValidationFailedError('cleanup failed')
+      },
+      writeError: (output) => errors.push(output),
+      setExitCode: (exitCode) => exitCodes.push(exitCode)
+    })
+
+    await runResourceCollectorPackagingCli(['--host', 'linux-x64'], {
+      sdkPackageRoot: '/repo/packages/sdk',
+      dependencies
+    })
+
+    assert.deepEqual(errors, ['Resource collector packaging check failed: cleanup failed'])
+    assert.deepEqual(exitCodes, [1])
+  })
 })
 
 function createDependencies(
@@ -237,6 +355,7 @@ function createDependencies(
     acceptResourceCollectorPackaging: async () => REPORT,
     formatResourceCollectorAcceptanceReport: () => 'formatted report',
     writeOutput: () => {},
+    writeError: () => {},
     setExitCode: () => {},
     ...overrides
   }

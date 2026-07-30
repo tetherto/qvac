@@ -23,6 +23,7 @@ Packaging and runtime evidence are separate:
 The desktop packaging gate verified that both collector addons were in the
 linked worker graph and addon manifest, that each listed desktop target had
 prebuilds, and that their packaged size stayed within the configured budgets.
+The 2 MiB compressed and 5 MiB uncompressed budgets are release ceilings for catching accidental packaging expansion, not fine-grained size regression thresholds.
 Prebuild presence is compile and packaging evidence only; it does not prove that
 a metric works on target hardware.
 

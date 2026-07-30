@@ -1,7 +1,7 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { createGzip } from 'node:zlib'
-import tarStream from 'tar-stream'
+import tarStream, { type Pack } from 'tar-stream'
 import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
 import { listBarePrebuildFiles } from '@/commands/verify/prebuilds'
 
@@ -98,6 +98,14 @@ interface MeasurementEntry {
   contents: Buffer
 }
 
+interface ResourceCollectorMeasurementDependencies {
+  writeArchiveEntry: (pack: Pack, entry: MeasurementEntry) => Promise<void>
+}
+
+const DEFAULT_MEASUREMENT_DEPENDENCIES: ResourceCollectorMeasurementDependencies = {
+  writeArchiveEntry
+}
+
 export async function acceptResourceCollectorPackaging(
   options: ResourceCollectorAcceptanceOptions
 ): Promise<ResourceCollectorAcceptanceReport> {
@@ -160,7 +168,6 @@ export async function acceptResourceCollectorPackaging(
 
       for (const file of files) {
         try {
-          await fsp.stat(file)
           const contents = await fsp.readFile(file)
           entriesByHost.get(host)?.push({
             package: packageName,
@@ -243,30 +250,27 @@ function compareMeasurementEntries(left: MeasurementEntry, right: MeasurementEnt
   return 0
 }
 
-async function measureTarget(host: string, entries: MeasurementEntry[]) {
+export async function measureTarget(
+  host: string,
+  entries: MeasurementEntry[],
+  dependencies: ResourceCollectorMeasurementDependencies = DEFAULT_MEASUREMENT_DEPENDENCIES
+) {
   const pack = tarStream.pack()
   const gzip = createGzip({ level: 9 })
   const compressedBytesPromise = countStreamBytes(gzip)
   pack.pipe(gzip)
 
-  for (const entry of entries) {
-    await new Promise<void>((resolve, reject) => {
-      pack.entry(
-        {
-          name: `${entry.package}/${entry.relativePath}`,
-          mode: 0o644,
-          size: entry.bytes,
-          mtime: new Date(0)
-        },
-        entry.contents,
-        (error) => {
-          if (error === null || error === undefined) resolve()
-          else reject(error)
-        }
-      )
-    })
+  try {
+    for (const entry of entries) {
+      await dependencies.writeArchiveEntry(pack, entry)
+    }
+    pack.finalize()
+  } catch (error) {
+    pack.destroy()
+    gzip.destroy()
+    await compressedBytesPromise.catch(() => {})
+    throw error
   }
-  pack.finalize()
 
   return {
     host,
@@ -278,6 +282,24 @@ async function measureTarget(host: string, entries: MeasurementEntry[]) {
     compressedBytes: await compressedBytesPromise,
     uncompressedBytes: entries.reduce((total, entry) => total + entry.bytes, 0)
   }
+}
+
+async function writeArchiveEntry(pack: Pack, entry: MeasurementEntry) {
+  await new Promise<void>((resolve, reject) => {
+    pack.entry(
+      {
+        name: `${entry.package}/${entry.relativePath}`,
+        mode: 0o644,
+        size: entry.bytes,
+        mtime: new Date(0)
+      },
+      entry.contents,
+      (error) => {
+        if (error === null || error === undefined) resolve()
+        else reject(error)
+      }
+    )
+  })
 }
 
 async function countStreamBytes(stream: NodeJS.ReadableStream) {

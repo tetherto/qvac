@@ -42,7 +42,13 @@ export interface ResourceCollectorCheckDependencies {
   ) => Promise<ResourceCollectorAcceptanceReport>
   formatResourceCollectorAcceptanceReport: (report: ResourceCollectorAcceptanceReport) => string
   writeOutput: (output: string) => void
+  writeError: (output: string) => void
   setExitCode: (exitCode: number) => void
+}
+
+export interface ResourceCollectorCliOptions {
+  sdkPackageRoot?: string
+  dependencies?: ResourceCollectorCheckDependencies
 }
 
 const DEFAULT_DEPENDENCIES: ResourceCollectorCheckDependencies = {
@@ -53,6 +59,9 @@ const DEFAULT_DEPENDENCIES: ResourceCollectorCheckDependencies = {
   formatResourceCollectorAcceptanceReport,
   writeOutput(output) {
     console.log(output)
+  },
+  writeError(output) {
+    console.error(output)
   },
   setExitCode(exitCode) {
     process.exitCode = exitCode
@@ -126,6 +135,27 @@ export async function runResourceCollectorPackagingCheck(
   }
 }
 
+export async function runResourceCollectorPackagingCli(
+  args: string[],
+  options: ResourceCollectorCliOptions = {}
+) {
+  const dependencies = options.dependencies ?? DEFAULT_DEPENDENCIES
+  try {
+    await runResourceCollectorPackagingCheck(
+      {
+        sdkPackageRoot: options.sdkPackageRoot ?? resolveSdkPackageRoot(),
+        ...parseResourceCollectorCheckArgs(args)
+      },
+      dependencies
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const reason = message.split('\n').filter(Boolean).at(-1) ?? message
+    dependencies.writeError(`Resource collector packaging check failed: ${reason}`)
+    dependencies.setExitCode(1)
+  }
+}
+
 function validateDesktopHost(host: string): DesktopHost {
   const desktopHost = DESKTOP_HOSTS.find((candidate) => candidate === host)
   if (desktopHost === undefined) {
@@ -167,9 +197,5 @@ function isMainModule() {
 }
 
 if (isMainModule()) {
-  const args = parseResourceCollectorCheckArgs(process.argv.slice(2))
-  await runResourceCollectorPackagingCheck({
-    sdkPackageRoot: resolveSdkPackageRoot(),
-    ...args
-  })
+  await runResourceCollectorPackagingCli(process.argv.slice(2))
 }
