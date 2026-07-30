@@ -70,10 +70,16 @@ node scripts/validate-mobile-manifest.js         # check
 node scripts/validate-mobile-manifest.js --fix   # repin urls from models.manifest.json
 ```
 
-It also checks that every model a grouped test names in its own source is
-staged by every shard that runs it. When a model is referenced but must
-deliberately *not* be pre-staged (desktop-only, opt-in behind an env flag, too
-large for a phone), say so at the declaration:
+It also checks that every model a grouped test names in its own source appears
+in **that test's own entry** — never merely somewhere in its shard. A sibling
+test staging the same file would satisfy a shard-wide check by coincidence, and
+the coincidence disappears the moment either test is moved to another group, so
+entries must stand on their own. Expect some duplication between entries; that
+is the point.
+
+When a model is referenced but must deliberately *not* be pre-staged
+(desktop-only, opt-in behind an env flag, too large for a phone), say so at the
+declaration:
 
 ```js
 // prestage-ignore: gemma-4-26B-A4B-it-Q8_0.gguf — desktop opt-in only (~27 GB)

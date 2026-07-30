@@ -17,11 +17,14 @@
 //      single source of truth for url + sha256 + bytes
 //   4. every manifest url is byte-identical to that pinned, commit-hashed url.
 //      `/resolve/main/` is a moving target and must never appear here.
-//   5. every model a grouped test names literally in its OWN source is staged by
-//      every shard that runs it, unless the test opts out with a marker:
+//   5. every model a grouped test names literally in its OWN source appears in
+//      its OWN manifest entry, unless the test opts out with a marker:
 //        // prestage-ignore: <model.gguf> — <why it must not be pre-staged>
-//      (Models a test reaches only through a shared helper are not inferable
-//      statically — those live in the manifest entry and rule 1 covers them.)
+//      Per-test, never the shard-wide union: a sibling entry staging the same
+//      file satisfies a union check by coincidence and stops doing so the
+//      moment either test is rescheduled. (Models a test reaches only through a
+//      shared helper are not inferable statically — those live in the manifest
+//      entry and rule 1 covers them.)
 //
 // Usage:
 //   node scripts/validate-mobile-manifest.js          # check, exit 1 on failure
@@ -139,30 +142,33 @@ function validate({ mobileManifest, testGroups, integrationManifest, sources }) 
     }
   }
 
-  // Rule 5 — models a grouped test names in its own source are staged for it.
-  for (const [platform, groups] of Object.entries(testGroups)) {
-    for (const [group, tests] of Object.entries(groups)) {
-      const staged = new Set()
-      for (const test of tests) {
-        for (const model of mobileManifest[test] || []) staged.add(model.name)
-      }
-      for (const test of tests) {
-        const file = known.get(test)
-        if (!file) continue
-        const src = sources[file]
-        const ignored = prestageIgnores(src, test, errors)
-        for (const name of modelNamesInSource(src)) {
-          // Names absent from models.manifest.json are not downloadable models
-          // (LoRA adapters and other artifacts the test writes itself), so
-          // there is nothing to pre-stage.
-          if (!pinnedUrlFor(integrationManifest, name)) continue
-          if (ignored.has(name) || staged.has(name)) continue
-          errors.push(
-            `${platform}/${group}: ${test} references ${name} but no test in the shard ` +
-              'pre-stages it (add it to the manifest entry, or add a `// prestage-ignore:` marker)'
-          )
-        }
-      }
+  // Rule 5 — models a grouped test names in its own source are declared in ITS
+  // OWN entry. Deliberately not the shard-wide union: a sibling test staging
+  // the same file would satisfy this check by coincidence, and the coincidence
+  // evaporates the moment either test is moved to another shard — which is
+  // exactly how three of the gaps this validator was written for stayed
+  // invisible on main. Per-test is the only form that survives a rebalance.
+  const grouped = new Set()
+  for (const groups of Object.values(testGroups)) {
+    for (const tests of Object.values(groups)) tests.forEach((t) => grouped.add(t))
+  }
+  for (const test of grouped) {
+    const file = known.get(test)
+    if (!file) continue
+    const src = sources[file]
+    const ignored = prestageIgnores(src, test, errors)
+    const staged = new Set((mobileManifest[test] || []).map((m) => m.name))
+    for (const name of modelNamesInSource(src)) {
+      // Names absent from models.manifest.json are not downloadable models
+      // (LoRA adapters and other artifacts the test writes itself), so there is
+      // nothing to pre-stage.
+      if (!pinnedUrlFor(integrationManifest, name)) continue
+      if (ignored.has(name) || staged.has(name)) continue
+      errors.push(
+        `${test} references ${name} but its own manifest entry does not stage it ` +
+          '(add it to the entry, or add a `// prestage-ignore:` marker). A sibling test in the ' +
+          'same shard staging it does not count — that breaks as soon as either test moves.'
+      )
     }
   }
 

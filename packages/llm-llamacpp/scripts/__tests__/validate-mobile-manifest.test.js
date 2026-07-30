@@ -27,6 +27,8 @@ function realSources() {
 }
 
 const PINNED = 'https://huggingface.co/o/r/resolve/0123456789012345678901234567890123456789/m.gguf'
+const OTHER_PINNED =
+  'https://huggingface.co/o/r/resolve/0123456789012345678901234567890123456789/other.gguf'
 const stubManifest = { models: { 'm.gguf': { urls: [PINNED] } } }
 
 test('the committed mobile manifest is a valid pre-stage map', () => {
@@ -86,14 +88,66 @@ test('an unpinned url is reported', () => {
   assert.match(errors[0], /url is not the pinned models.manifest.json url/)
 })
 
-test('a model the test names but the shard does not stage is reported', () => {
+test('a model the test names but its own entry omits is reported', () => {
   const errors = validate({
     mobileManifest: { runGrammarTest: [] },
     testGroups: { android: { shardA: ['runGrammarTest'] } },
     integrationManifest: stubManifest,
     sources: { 'grammar.test.js': "const MODEL = { modelName: 'm.gguf' }" }
   })
-  assert.ok(errors.some((e) => /references m\.gguf but no test in the shard pre-stages it/.test(e)))
+  assert.ok(
+    errors.some((e) => /references m\.gguf but its own manifest entry does not stage it/.test(e))
+  )
+})
+
+test('a sibling test in the same shard does NOT satisfy coverage', () => {
+  // The regression this rule exists for: grammar references m.gguf, but only
+  // reasoning declares it. A shard-wide union would pass this and the gap would
+  // reappear the moment either test is moved to another shard — which is how
+  // three of the real gaps stayed invisible on main.
+  const errors = validate({
+    mobileManifest: {
+      runGrammarTest: [{ name: 'other.gguf', url: OTHER_PINNED }],
+      runReasoningTest: [{ name: 'm.gguf', url: PINNED }]
+    },
+    testGroups: { android: { shardA: ['runGrammarTest', 'runReasoningTest'] } },
+    integrationManifest: {
+      models: { 'm.gguf': { urls: [PINNED] }, 'other.gguf': { urls: [OTHER_PINNED] } }
+    },
+    sources: {
+      'grammar.test.js': "const MODEL = { modelName: 'm.gguf' }",
+      'reasoning.test.js': "const MODEL = { modelName: 'm.gguf' }"
+    }
+  })
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /^runGrammarTest references m\.gguf but its own manifest entry/)
+})
+
+test('splitting a shard cannot regress coverage that already passed', () => {
+  // Same manifest, two shard layouts: a valid manifest must stay valid when the
+  // scheduler moves tests around.
+  const mobileManifest = {
+    runGrammarTest: [{ name: 'm.gguf', url: PINNED }],
+    runReasoningTest: [{ name: 'm.gguf', url: PINNED }]
+  }
+  const sources = {
+    'grammar.test.js': "const MODEL = { modelName: 'm.gguf' }",
+    'reasoning.test.js': "const MODEL = { modelName: 'm.gguf' }"
+  }
+  const together = validate({
+    mobileManifest,
+    testGroups: { android: { shardA: ['runGrammarTest', 'runReasoningTest'] } },
+    integrationManifest: stubManifest,
+    sources
+  })
+  const split = validate({
+    mobileManifest,
+    testGroups: { android: { shardA: ['runGrammarTest'], shardB: ['runReasoningTest'] } },
+    integrationManifest: stubManifest,
+    sources
+  })
+  assert.deepEqual(together, [])
+  assert.deepEqual(split, [])
 })
 
 test('a prestage-ignore marker suppresses the shard-coverage error', () => {
