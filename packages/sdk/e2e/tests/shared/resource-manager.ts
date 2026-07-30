@@ -327,11 +327,11 @@ export class ResourceManager {
         if (this.unloadSettleMs > 0) {
           await new Promise<void>((resolve) => setTimeout(resolve, this.unloadSettleMs))
         }
+        this.models.delete(dep)
       } catch (error) {
         console.warn(`Error unloading model ${dep}: ${error}`)
+        throw error
       }
-
-      this.models.delete(dep)
     }
   }
 
