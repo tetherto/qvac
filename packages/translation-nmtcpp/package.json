@@ -7,23 +7,32 @@
     "bare": ">=1.19.0"
   },
   "scripts": {
-    "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy nmtcpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
-    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js",
     "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test": "npm run lint && npm run test:unit && npm run test:integration",
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
-    "test:dts": "tsc -p tsconfig.dts.json",
+    "test:dts": "npm run test:types",
+    "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
+    "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D USE_BERGAMOT=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -40,6 +49,7 @@
     "binding.js",
     "index.js",
     "marian.js",
+    "marian.d.ts",
     "prebuilds",
     "third-party",
     "lib",
@@ -74,10 +84,14 @@
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
@@ -87,14 +101,27 @@
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
     "./addonLogging.js": "./addonLogging.js",
-    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js",
-    "./lib/indictrans-model-fetcher": "./lib/indictrans-model-fetcher.js"
+    "./marian": {
+      "types": "./marian.d.ts",
+      "default": "./marian.js"
+    },
+    "./lib/bergamot-model-fetcher": {
+      "types": "./lib/bergamot-model-fetcher.d.ts",
+      "default": "./lib/bergamot-model-fetcher.js"
+    },
+    "./lib/indictrans-model-fetcher": {
+      "types": "./lib/indictrans-model-fetcher.d.ts",
+      "default": "./lib/indictrans-model-fetcher.js"
+    }
   },
   "types": "index.d.ts"
 }

@@ -64,7 +64,7 @@ function validateRunInput(input, hparams) {
     // here. The length is fixed per model (imgWidth is pinned to visionImageSize),
     // surfaced as `hparams.imagePatchElems`. `imageInputMode` is the
     // distinguishing axis (both groot and smolvla are `continuous` state).
-    const imagesArePatches = hparams !== null && hparams.imageInputMode === "patches";
+    const imagesArePatches = hparams != null && hparams.imageInputMode === "patches";
     const patchElems = imagesArePatches ? (hparams.imagePatchElems ?? 0) : 0;
     const patchElemsKnown = Number.isInteger(patchElems) && patchElems > 0;
     const expectedPerImage = 3 * imgWidth * imgHeight;
@@ -271,7 +271,8 @@ class VlaModel {
             }
         }
         this._files = files.model;
-        this._config = config;
+        // `??` needed: the destructuring default only covers `undefined`, not `config: null`.
+        this._config = config ?? {};
         this.logger = new QvacLogger(logger);
         this.opts = opts;
         // The cancel hook is wired to the framework's binding.cancel(handle)
@@ -578,4 +579,14 @@ var VlaModelClass = VlaModel;
     VlaModel.QvacErrorAddonVla = errorModule.QvacErrorAddonVla;
     VlaModel.ERR_CODES = errorModule.ERR_CODES;
 })(VlaModel || (VlaModel = {}));
+// Runtime-redundant, but required: cjs-module-lexer only detects top-level
+// `module.exports.X =` assignments, so ESM named imports break without these.
+/* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface; these mirror the typed namespace members above. */
+module.exports.VlaModel = VlaModel;
+module.exports.preprocessImage = addonModule.preprocessImage;
+module.exports.padState = addonModule.padState;
+module.exports.DEFAULT_IMAGE_SIZE = addonModule.DEFAULT_IMAGE_SIZE;
+module.exports.QvacErrorAddonVla = errorModule.QvacErrorAddonVla;
+module.exports.ERR_CODES = errorModule.ERR_CODES;
 module.exports = VlaModel;
+/* eslint-enable @typescript-eslint/no-unsafe-member-access */
