@@ -1,4 +1,4 @@
-name: On PR Trigger (Embed)
+name: On PR Trigger (Model Fit)
 
 on:
   pull_request_target:
@@ -14,8 +14,8 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/embed-llamacpp/**"
-      - ".github/workflows/*embed*.yml"
+      - "packages/model-fit/**"
+      - ".github/workflows/*model-fit*.yml"
   workflow_dispatch:
 
 permissions:
@@ -65,6 +65,7 @@ jobs:
     steps:
       - name: Approved
         run: echo "fork PR authorised to run privileged jobs"
+
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -141,7 +142,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/embed-llamacpp
+          workdir: packages/model-fit
 
   cpp-lint:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -155,25 +156,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/embed-llamacpp
-
-  cpp-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs:
-      - fork-approval
-      - authorize
-      - sanity-checks
-      - ci-router
-      - label-gate
-    uses: ./.github/workflows/cpp-tests-embed.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/model-fit
 
   ts-checks:
     needs: authorize
@@ -188,11 +171,11 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: packages/embed-llamacpp
+        working-directory: packages/model-fit
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/embed-llamacpp
+        working-directory: packages/model-fit
         run: npm run test:dts
 
       - name: Run lint and unit tests
@@ -202,7 +185,7 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/embed-llamacpp
+          workdir: packages/model-fit
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -227,7 +210,7 @@ jobs:
         id: detect
         uses: ./.github/actions/detect-native-changes
         with:
-          workdir: packages/embed-llamacpp
+          workdir: packages/model-fit
 
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
@@ -255,7 +238,7 @@ jobs:
         uses: ./.github/actions/prebuild-artifact-reuse
         with:
           github-token: ${{ github.token }}
-          workflow-file: on-pr-embed-llamacpp.yml
+          workflow-file: on-pr-model-fit.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
 
@@ -280,7 +263,7 @@ jobs:
       - detect-native-changes
       - prebuild-artifact-reuse
       - label-gate
-    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    uses: ./.github/workflows/prebuilds-model-fit.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -323,7 +306,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-embed-llamacpp.yml
+    uses: ./.github/workflows/integration-test-model-fit.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -343,14 +326,14 @@ jobs:
       - prebuild-artifact-reuse
       - label-gate
       - ci-router
-    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    uses: ./.github/workflows/integration-mobile-test-model-fit.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.sha }}
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, integration-tests, run-mobile-integration-tests, ts-checks, ci-router, label-gate]
+    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, integration-tests, run-mobile-integration-tests, ts-checks, ci-router, label-gate]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
