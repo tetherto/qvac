@@ -10,30 +10,29 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const workflowsDir = join(root, '.github/workflows')
 
-function eachJob(source) {
-  const jobsIdx = source.search(/^jobs:\s*$/m)
-  if (jobsIdx === -1) return []
-  const lines = source.slice(jobsIdx).split('\n')
-  const jobs = []
-  let cur = null
-  for (const line of lines) {
-    const m = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/)
-    if (m) {
-      if (cur) jobs.push(cur)
-      cur = { name: m[1], text: '' }
-      continue
-    }
-    if (/^\S/.test(line) && cur) {
-      jobs.push(cur)
-      cur = null
-    }
-    if (cur) cur.text += line + '\n'
+function appendStatusesReadToPermissions(block) {
+  const headerMatch = block.match(/^(\s+permissions:\s*\n)/m)
+  if (!headerMatch) {
+    return null
   }
-  if (cur) jobs.push(cur)
-  return jobs
+
+  const bodyStart = headerMatch.index + headerMatch[0].length
+  const tail = block.slice(bodyStart)
+  const nextSection = tail.search(/^\s+(?:outputs:|steps:|runs-on:)/m)
+  if (nextSection === -1) {
+    return null
+  }
+
+  const permSection = block.slice(headerMatch.index, bodyStart + nextSection)
+  if (/statuses:\s*read/.test(permSection)) {
+    return block
+  }
+
+  const insertAt = bodyStart + nextSection
+  return `${block.slice(0, insertAt)}      statuses: read\n${block.slice(insertAt)}`
 }
 
-function patchJobBlock(block, jobName) {
+function patchJobBlock(block) {
   if (!block.includes('./.github/actions/authorize-pr')) {
     return block
   }
@@ -42,16 +41,9 @@ function patchJobBlock(block, jobName) {
     return block
   }
 
-  if (/^\s+permissions:\s*\n/m.test(block)) {
-    return block.replace(
-      /(^\s+permissions:\s*\n(?:\s+[^\n]+\n)+?)(\s+outputs:|\s+steps:)/m,
-      (match, perms, next) => {
-        if (/statuses:\s*read/.test(perms)) {
-          return match
-        }
-        return `${perms}      statuses: read\n${next}`
-      },
-    )
+  const withPermissions = appendStatusesReadToPermissions(block)
+  if (withPermissions !== null) {
+    return withPermissions
   }
 
   return block.replace(
@@ -65,7 +57,7 @@ $2`,
 }
 
 function processFile(path) {
-  let source = readFileSync(path, 'utf8')
+  const source = readFileSync(path, 'utf8')
   if (!source.includes('./.github/actions/authorize-pr')) {
     return false
   }
@@ -90,7 +82,7 @@ function processFile(path) {
     const nextJob = after.search(/\n  [A-Za-z0-9_-]+:\n/)
     const end = nextJob === -1 ? body.length : start + marker.length - 1 + nextJob
     const block = body.slice(start, end)
-    const patched = patchJobBlock(block, jobName)
+    const patched = patchJobBlock(block)
     if (patched !== block) {
       body = body.slice(0, start) + patched + body.slice(end)
       changed = true
@@ -101,10 +93,11 @@ function processFile(path) {
     return false
   }
 
-  if (!source.endsWith('\n')) {
-    source = `${source}\n`
+  let output = header + body
+  if (!output.endsWith('\n')) {
+    output += '\n'
   }
-  writeFileSync(path, header + body)
+  writeFileSync(path, output)
   return true
 }
 

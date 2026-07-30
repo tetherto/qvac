@@ -37,10 +37,12 @@ function patchAuthorizeJobBlock(block) {
     )
   }
 
-  next = next.replace(
-    /      - name: Checkout(?: code| authorize-pr \(default branch\))?\n        uses: actions\/checkout@[^\n]+\n(?:        with:\n(?:          [^\n]+\n)+)?/,
-    `${TRUSTED_CHECKOUT}\n`,
-  )
+  if (!next.includes('sparse-checkout: .github/actions/authorize-pr')) {
+    next = next.replace(
+      /      - name: Checkout(?: code| authorize-pr \(default branch\))?\n        uses: actions\/checkout@[^\n]+\n(?:        with:\n(?:          [^\n]+\n)+)?/,
+      TRUSTED_CHECKOUT,
+    )
+  }
 
   return next
 }
@@ -87,10 +89,11 @@ function processFile(path) {
     return false
   }
 
-  if (!source.endsWith('\n')) {
-    source = `${source}\n`
+  let output = header + body
+  if (!output.endsWith('\n')) {
+    output += '\n'
   }
-  writeFileSync(path, header + body)
+  writeFileSync(path, output)
   return true
 }
 
