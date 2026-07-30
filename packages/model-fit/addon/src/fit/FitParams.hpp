@@ -172,7 +172,8 @@ struct FitResult {
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - an empty `modelPath`;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
-///  - a `mainGpu` past the registered GPU devices;
+///  - a pinned `splitMode` of NONE on a host with no GPU device, or with a
+///    `mainGpu` past the registered ones;
 ///  - an `nCtx` above the context length the model declares.
 FitResult runFit(const FitRequest& req);
 

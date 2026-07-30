@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const { fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
@@ -9,6 +10,12 @@ const { ensureModelPath } = require('./utils')
 // Deliberately never created. Argument validation must reject configs using it
 // before any file is opened, so these cases never reach the fitter.
 const UNREACHABLE_MODEL = '/model-fit-validation-only/never-created.gguf'
+
+// Absolute on every platform, and never created. Built from cwd rather than
+// written as '/…' because win32 treats a rootless '/foo' as *relative* (no
+// drive letter), which would trip the absoluteness check instead of the
+// existence check the test is aiming at.
+const UNREACHABLE_BACKENDS_DIR = path.join(process.cwd(), 'model-fit-no-such-backends-dir')
 
 test('fitParams rejects invalid config', async function (t) {
   await t.exception.all(() => fitParams(), /config object is required/)
@@ -73,7 +80,18 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   //
   // LLAMA_SPLIT_MODE_NONE (0) is a non-default value (the default is LAYER, 1),
   // so it genuinely pins rather than being indistinguishable from omission.
-  const res = fitParams({ modelPath, nCtx: 2048, marginMiB: 1024, splitMode: 0, mainGpu: 0 })
+  const config = { modelPath, nCtx: 2048, marginMiB: 1024, splitMode: 0, mainGpu: 0 }
+
+  // NONE says "the whole model goes on one GPU". On a host with none, llama
+  // rejects every device index — including the default 0 — so the placement is
+  // unsatisfiable and is reported as such rather than being run and returned as
+  // an opaque ERROR the caller cannot distinguish from a real fit failure.
+  if (fitParams({ modelPath }).nGpuDevices === 0) {
+    await t.exception.all(() => fitParams(config), /no GPU device is registered/)
+    return
+  }
+
+  const res = fitParams(config)
 
   t.not(res.status, FIT_STATUS.ERROR, 'a pinned placement is accepted, not rejected')
   t.is(res.splitMode, 0, 'the pinned split mode survives the fit')
@@ -381,25 +399,36 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
     /backendsDir must be an absolute path/
   )
   await t.exception.all(
-    () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: '/model-fit-no-such-backends-dir' }),
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: UNREACHABLE_BACKENDS_DIR }),
     /backendsDir is not an existing directory/
   )
 })
 
-// The fitter ignores main_gpu entirely, so an out-of-range index used to project
-// as SUCCESS and only fail later at load — the one outcome a preflight exists to
-// prevent. Only meaningful where there is a GPU to index past.
-test('fitParams rejects a mainGpu past the registered GPUs', async function (t) {
+// The fitter ignores main_gpu entirely, so a bad placement used to surface only
+// as llama failing the internal load — a bare ERROR indistinguishable from a
+// genuine "does not fit". Both rejections below are scoped to SPLIT_MODE_NONE,
+// the only mode under which llama reads the field.
+test('an unsatisfiable SPLIT_MODE_NONE placement is rejected', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
-  const probe = fitParams({ modelPath })
-  if (probe.nGpuDevices === 0) {
-    t.pass('host-only machine: mainGpu is inert and 0 stays valid')
-    return
+  const nGpuDevices = fitParams({ modelPath }).nGpuDevices
+
+  if (nGpuDevices === 0) {
+    // No GPU at all: NONE cannot be satisfied by any index, the default included.
+    await t.exception.all(
+      () => fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: 0 }),
+      /no GPU device is registered/
+    )
+  } else {
+    await t.exception.all(
+      () => fitParams({ modelPath: UNREACHABLE_MODEL, splitMode: 0, mainGpu: nGpuDevices }),
+      /mainGpu \d+ is out of range/
+    )
   }
-  await t.exception.all(
-    () => fitParams({ modelPath: UNREACHABLE_MODEL, mainGpu: probe.nGpuDevices }),
-    /mainGpu \d+ is out of range/
-  )
+
+  // Outside NONE the field is inert, so the same index must not be rejected —
+  // the guard has to stay scoped rather than becoming a blanket bound.
+  const res = fitParams({ modelPath, splitMode: 1, mainGpu: nGpuDevices })
+  t.not(res.status, FIT_STATUS.ERROR, 'mainGpu is not policed outside SPLIT_MODE_NONE')
 })
 
 test('fitParams on a missing file reports ERROR (does not throw)', function (t) {

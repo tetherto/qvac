@@ -25,11 +25,16 @@
   rather than an alias. Documented as application-controlled input in
   `index.d.ts` and the README.
 
-- Reject a `mainGpu` past the registered GPU devices. The fitter never reads
-  `main_gpu`, so an out-of-range index projected as `SUCCESS` and then failed at
-  load, where llama rejects it against its own device list — the one outcome a
-  preflight exists to prevent. The bound is checked in `runFit` rather than the
-  binding because the valid range is unknown until backends are registered.
+- Reject an unsatisfiable `LLAMA_SPLIT_MODE_NONE` placement. NONE puts the whole
+  model on one GPU, and llama then requires `mainGpu` to index its device list;
+  with no GPU registered it rejects every index, the default 0 included. The
+  fitter performs that load internally, so the whole call came back as a bare
+  `ERROR`/"failed to load model" — indistinguishable from a genuine "does not
+  fit" and impossible for a caller to act on. A pinned NONE is now rejected up
+  front when no GPU is registered, or when `mainGpu` is past the ones that are.
+  Only NONE is checked, since it is the only mode under which llama reads
+  `mainGpu`; the checks live in `runFit` rather than the binding because the
+  valid range is unknown until backends are registered.
 
 - Serialise fit calls process-wide. `llama.h` documents `llama_params_fit` as
   not thread safe because it mutates global llama logger state, and this addon's

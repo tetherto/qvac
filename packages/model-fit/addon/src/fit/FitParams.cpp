@@ -193,33 +193,47 @@ FitResult runFit(const FitRequest& req) {
     return out;
   }
 
-  // Bound mainGpu now that there is a machine to bound it against.
+  // Validate the placement now that there is a machine to validate it against.
   //
-  // The fitter itself never reads main_gpu, so an out-of-range index costs
-  // nothing here — it costs the caller later. llama consults it only at load,
-  // where it rejects an index past its own device list ("invalid value for
-  // main_gpu") and returns no model. A preflight that answers SUCCESS for a
-  // configuration that cannot load is worse than no preflight, so reject it
-  // while it is still a question about arguments. binding.cpp cannot: the valid
-  // range is not known until the backends are registered.
+  // Neither field is read by the fitter itself, so a bad placement costs
+  // nothing here — it costs the caller later. llama consults them only at load,
+  // and only under LLAMA_SPLIT_MODE_NONE, where it requires main_gpu to index
+  // its own device list and returns no model otherwise ("invalid value for
+  // main_gpu"). llama_params_fit performs that load internally, so the whole
+  // fit comes back as a bare ERROR/"failed to load model" — a verdict the
+  // caller cannot act on and cannot distinguish from a real fit failure.
+  // Rejecting here turns it back into what it is: a statement about arguments.
+  // binding.cpp cannot do it, since the valid range is unknown until the
+  // backends are registered.
   //
-  // The bound is deliberately loose. llama indexes a list it builds itself —
-  // RPC servers and discrete GPUs, falling back to integrated ones only when
-  // that list would otherwise be empty — which is never longer than the
-  // GPU-class devices ggml has registered. Bounding by that count therefore
-  // rejects only what llama could not accept under any split mode, and leaves
-  // the narrower judgement to llama, which knows its own list.
-  //
-  // A host with no accelerator is exempt. There is no device to index, 0 is the
-  // llama default, and the fitter has no GPU placement to make either way, so
-  // rejecting it there would turn the default value into an error on every
-  // CPU-only machine rather than catching a mistake.
-  if (req.hasMainGpu && out.nGpuDevices > 0 &&
-      static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
-    throw std::invalid_argument(
-        "model-fit: mainGpu " + std::to_string(req.mainGpu) +
-        " is out of range (" + std::to_string(out.nGpuDevices) +
-        " GPU device(s) registered)");
+  // Only SPLIT_MODE_NONE is checked because it is the only mode under which
+  // llama reads main_gpu at all. An unpinned split mode is left alone: it goes
+  // in at llama's default, which is precisely the condition under which the
+  // fitter is free to rewrite it, and a fitter that chooses NONE picks a
+  // placement to match.
+  if (req.hasSplitMode && req.splitMode == LLAMA_SPLIT_MODE_NONE) {
+    // NONE means "put the whole model on one GPU". With no GPU registered
+    // there is no such device, and llama rejects every index including the
+    // default 0 — so the mode itself is unsatisfiable here, whether or not the
+    // caller named a device.
+    if (out.nGpuDevices == 0) {
+      throw std::invalid_argument(
+          "model-fit: splitMode NONE places the whole model on one GPU, but no "
+          "GPU device is registered");
+    }
+
+    // The bound is deliberately loose. llama indexes a list it builds itself —
+    // RPC servers and discrete GPUs, falling back to integrated ones only when
+    // that list would otherwise be empty — which is never longer than the
+    // GPU-class devices ggml registered. Bounding by that count rejects only
+    // what llama could not accept, and leaves the narrower judgement to llama,
+    // which knows its own list.
+    if (req.hasMainGpu && static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
+      throw std::invalid_argument(
+          "model-fit: mainGpu " + std::to_string(req.mainGpu) +
+          " is out of range (" + std::to_string(out.nGpuDevices) +
+          " GPU device(s) registered)");
+    }
   }
 
   // `llama_params_fit` segfaults on a path it cannot open: gguf_init_from_file
