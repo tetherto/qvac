@@ -1,5 +1,5 @@
-# Build-only workflow. Publishing is handled by on-merge-transcription-parakeet.yml
-name: "Prebuilds (Parakeet)"
+# Build-only workflow. Publishing is handled by on-merge-asr-ggml.yml
+name: "Prebuilds (ASR GGML)"
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         description: "Working directory for the package"
         type: string
         required: false
-        default: "packages/transcription-parakeet"
+        default: "packages/asr-ggml"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,7 @@ on:
         description: "Working directory for the package"
         type: string
         required: false
-        default: "packages/transcription-parakeet"
+        default: "packages/asr-ggml"
 
 permissions:
   contents: read
@@ -38,8 +38,10 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: parakeet-
-      linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
+      artifact-name-prefix: asr-ggml-
+      # Union of whisper's BLAS/FFTW set and parakeet/tts's x11/pkg-config set:
+      # the merged addon links both engine libraries.
+      linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev
       setup-python-on-windows: true
       include-vulkan-sdk: true
     secrets: inherit

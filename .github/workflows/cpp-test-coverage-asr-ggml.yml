@@ -1,4 +1,9 @@
-name: CPP Tests (Whispercpp)
+name: CPP Tests (ASR GGML)
+
+# Merged whisper + parakeet C++ unit-test/coverage lane. One gtest binary
+# (asr_ggml_tests) covers both engines; the whisper suite needs the tiny +
+# silero-vad models (HuggingFace), the parakeet suite needs one GGUF pointed
+# at by QVAC_TEST_GGUF (sortformer q4_0 is the smallest at ~75 MiB).
 
 on:
   workflow_call:
@@ -9,16 +14,16 @@ on:
       repository:
         type: string
       workdir:
-        description: 'Package working directory in monorepo (e.g., packages/transcription-whispercpp)'
+        description: 'Package working directory in monorepo (e.g., packages/asr-ggml)'
         required: false
-        default: 'packages/transcription-whispercpp'
+        default: 'packages/asr-ggml'
         type: string
   workflow_dispatch:
     inputs:
       workdir:
-        description: 'Package working directory in monorepo (e.g., packages/transcription-whispercpp)'
+        description: 'Package working directory in monorepo (e.g., packages/asr-ggml)'
         required: false
-        default: 'packages/transcription-whispercpp'
+        default: 'packages/asr-ggml'
         type: string
 
 env:
@@ -61,6 +66,21 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           lfs: true
 
+      - name: Setup ccache
+        if: matrix.platform == 'linux'
+        run: |
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - name: Get ccache cache
+        if: matrix.platform == 'linux'
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-cpp-coverage-asr-ggml-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/asr-ggml/vcpkg.json') }}
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-coverage-asr-ggml-${{ matrix.platform }}-${{ matrix.arch }}-
+
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -95,42 +115,87 @@ jobs:
         run: |
           npm run coverage:cpp:build
 
-      - name: Cache C++ test models
+      # Whisper suite models (HuggingFace downloads, cached).
+      - name: Cache C++ test models (whisper)
         id: model-cache
         if: startsWith(matrix.runner, 'qvac-')
         uses: ./.github/actions/cache-models
         with:
-          package: transcription-whispercpp
-          paths: packages/transcription-whispercpp/models
-          hash-files-glob: .github/workflows/cpp-test-coverage-transcription-whispercpp.yml
+          package: asr-ggml
+          cache-key-suffix: cpp-tests
+          paths: packages/asr-ggml/models
+          hash-files-glob: .github/workflows/cpp-test-coverage-asr-ggml.yml
 
-      - name: Download test models
+      - name: Download whisper test models
         if: steps.model-cache.outputs.cache-hit != 'true'
         working-directory: ${{ env.WORKDIR }}
         run: |
           mkdir -p models
-          
+
           echo "Downloading ggml-tiny.bin..."
           curl -L -o models/ggml-tiny.bin \
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
-          
+
           echo "Downloading ggml-silero VAD model..."
           curl -L -o models/ggml-silero-v5.1.2.bin \
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
-          
+
           echo "Downloaded models:"
           ls -lha models/
+
+      # The parakeet half of the suite only needs ONE GGUF pointed at by
+      # QVAC_TEST_GGUF. Engine identity does not matter; sortformer q4_0 is
+      # the smallest at ~75 MiB and the cheapest payload to pull.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Cache Parakeet sortformer q4 GGUF
+        id: cache-parakeet-models
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: |
+            ${{ env.WORKDIR }}/models/sortformer-4spk-v1.q4_0.gguf
+          key: asr-ggml-cpp-q4-sortformer-v1-${{ hashFiles('.github/workflows/cpp-test-coverage-asr-ggml.yml') }}
+          restore-keys: |
+            asr-ggml-cpp-q4-sortformer-v1-
+
+      - name: Download sortformer q4_0 GGUF from QVAC registry (cache miss)
+        if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf models/
+          ls -lh models/sortformer-4spk-v1.q4_0.gguf
+
+      - name: Verify GGUF for C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s models/sortformer-4spk-v1.q4_0.gguf ]; then
+            echo "ERROR: missing or empty models/sortformer-4spk-v1.q4_0.gguf -- cache may be corrupt" >&2
+            ls -la models/ || true
+            exit 1
+          fi
+          echo "QVAC_TEST_GGUF -> $(pwd)/models/sortformer-4spk-v1.q4_0.gguf"
 
       - name: Run C++ Unit Tests
         id: cpp-tests
         working-directory: ${{ env.WORKDIR }}
+        env:
+          QVAC_TEST_GGUF: ${{ github.workspace }}/packages/asr-ggml/models/sortformer-4spk-v1.q4_0.gguf
         run: |
           echo "=== Debug: Checking model files before running tests ==="
           ls -la models/ || echo "models/ not found"
           pwd
-          echo "=== Running tests from: $(pwd) ==="
+          echo "=== Running merged ASR GGML C++ tests from: $(pwd) ==="
           npm run test:cpp:run
         continue-on-error: true
 
@@ -150,6 +215,10 @@ jobs:
           COVERAGE=$(grep 'TOTAL' build/addon/tests/coverage-summary.txt | awk '{print $10}')
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
           echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
+
+      - name: Show ccache statistics
+        if: matrix.platform == 'linux'
+        run: ccache -s
 
       - name: Archive Coverage Results
         if: matrix.coverage
@@ -180,16 +249,15 @@ jobs:
         with:
           files: ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
           comment_mode: off
-          check_name: "C++ Comprehensive Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+          check_name: "C++ Test Results (ASR GGML ${{ matrix.platform }}-${{ matrix.arch }})"
 
       - name: Coverage Summary
         if: matrix.coverage
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "## 🎯 Coverage Summary (Comprehensive)" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 Coverage Summary (ASR GGML)" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
           echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Foundation:** Professional clean test structure" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f build/addon/tests/coverage-summary.txt ]; then
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -212,10 +280,9 @@ jobs:
 
       - name: Combine Coverage Reports
         run: |
-          echo "## 📊 C++ Comprehensive Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 C++ Code Coverage Summary (ASR GGML)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Built on:** Professional test foundation" >> $GITHUB_STEP_SUMMARY
-          echo "**Test Suite:** WhisperModel comprehensive test cases" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** merged Whisper + Parakeet C++ tests" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           for report in coverage-reports/*/coverage-summary.txt; do
             if [ -f "$report" ]; then

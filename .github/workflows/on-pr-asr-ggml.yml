@@ -1,12 +1,12 @@
-name: On PR Trigger (Whispercpp)
+name: On PR Trigger (ASR GGML)
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - "packages/transcription-whispercpp/**"
-      - ".github/workflows/*whispercpp*.yml"
+      - "packages/asr-ggml/**"
+      - ".github/workflows/*asr-ggml*.yml"
 
   workflow_dispatch:
     inputs:
@@ -27,7 +27,7 @@ on:
         description: "Package working directory in monorepo."
         required: false
         type: string
-        default: "packages/transcription-whispercpp"
+        default: "packages/asr-ggml"
 
   workflow_call:
     inputs:
@@ -44,7 +44,7 @@ on:
       workdir:
         required: false
         type: string
-        default: "packages/transcription-whispercpp"
+        default: "packages/asr-ggml"
 
 permissions:
   contents: read
@@ -166,14 +166,14 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
-            workdir="${INPUT_WORKDIR:-packages/transcription-whispercpp}"
+            workdir="${INPUT_WORKDIR:-packages/asr-ggml}"
             repo="${INPUT_REPO:-$REPO}"
             ref="${INPUT_REF:-$REF_NAME}"
             run_verify="$INPUT_VERIFY"
             base_sha="$SHA"
             head_sha="$SHA"
           else
-            workdir="packages/transcription-whispercpp"
+            workdir="packages/asr-ggml"
             repo="$HEAD_REPO"
             ref="$HEAD_SHA"
             run_verify="true"
@@ -249,11 +249,12 @@ jobs:
       - ci-router
       - label-gate
     if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/cpp-test-coverage-transcription-whispercpp.yml
+    uses: ./.github/workflows/cpp-test-coverage-asr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
@@ -278,7 +279,7 @@ jobs:
         id: detect
         uses: ./.github/actions/detect-native-changes
         with:
-          workdir: packages/transcription-whispercpp
+          workdir: packages/asr-ggml
 
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
@@ -306,7 +307,7 @@ jobs:
         uses: ./.github/actions/prebuild-artifact-reuse
         with:
           github-token: ${{ github.token }}
-          workflow-file: on-pr-transcription-whispercpp.yml
+          workflow-file: on-pr-asr-ggml.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
 
@@ -331,7 +332,7 @@ jobs:
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
-    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-asr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -375,7 +376,7 @@ jobs:
       - ci-router
       - label-gate
     if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
+    uses: ./.github/workflows/integration-test-asr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -397,12 +398,37 @@ jobs:
       - ci-router
       - label-gate
     if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
+    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
+  # ---------------------------------------------------------------------------
+  # Co-load smoke: HARD-DISABLED until the first npm release of @qvac/asr-ggml.
+  #
+  # Both legs resolve their co-resident addon set from
+  # packages/ggml-coload-smoke/addons.js, which is keyed to PUBLISHED npm
+  # packages. The QIP deliberately defers adding the `asr-ggml` entry to the
+  # release step (docs/QIP-asr-ggml.md, "co-load"), because the smoke harness
+  # installs published packages. With no entry, `addon: asr-ggml` does NOT fail
+  # cleanly — it misreports:
+  #   * desktop: coload-combinations.mjs `--changed asr-ggml` filters the
+  #     unknown name out, falls back to fullMatrix() over the OLD published
+  #     addon set, and the overlay's `mkdir -p node_modules/@qvac/asr-ggml/...`
+  #     creates an orphan directory no combo loads => GREEN without ever
+  #     loading this PR's addon.
+  #   * mobile: test-android-sdk.yml's overlay step `find`s no installed
+  #     @qvac/asr-ggml and exits 1 => hard failure after a full app build.
+  # A green-but-vacuous gate is worse than no gate, so the `false &&` below
+  # keeps both jobs skipped. The job blocks themselves must stay (the
+  # ci-trust-policy test asserts the coload-smoke-mobile shape and its label
+  # gating in this file), and `skipped` is a pass for merge-guard.
+  #
+  # TO RE-ENABLE (at the npm release step): add the `asr-ggml` entry to
+  # packages/ggml-coload-smoke/addons.js, then delete the `false &&` from both
+  # `if:` expressions below.
+  # ---------------------------------------------------------------------------
   coload-smoke:
     permissions:
       contents: read
@@ -416,11 +442,11 @@ jobs:
       - prebuild-artifact-reuse
       - ci-router
       - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: false && always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/coload-smoke.yml
     secrets: inherit
     with:
-      addon: transcription-whispercpp
+      addon: asr-ggml
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
@@ -439,11 +465,11 @@ jobs:
       - prebuild-artifact-reuse
       - ci-router
       - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: false && always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/coload-smoke-mobile.yml
     secrets: inherit
     with:
-      addon: transcription-whispercpp
+      addon: asr-ggml
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
@@ -472,7 +498,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: rtf-results-*
+          pattern: rtf-results-asr-ggml-*
           path: benchmark-artifacts/desktop
           merge-multiple: false
 
@@ -480,31 +506,31 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: perf-report-whispercpp-*
+          pattern: perf-report-asr-ggml-*
           path: benchmark-artifacts/mobile
           merge-multiple: false
 
-      - name: Generate unified Whisper performance report
+      - name: Generate unified ASR GGML performance report
         run: |
-          node scripts/perf-report/aggregate-whisper-rtf.js \
+          node scripts/perf-report/aggregate-asr-ggml-rtf.js \
             --dir benchmark-artifacts \
-            --manual-dir packages/transcription-whispercpp/benchmarks/manual-results \
-            --output benchmark-artifacts/whisper-unified-performance-report.md \
-            --output-json benchmark-artifacts/whisper-unified-performance-report.json \
-            --output-html benchmark-artifacts/whisper-unified-performance-report.html
+            --manual-dir packages/asr-ggml/benchmarks/manual-results \
+            --output benchmark-artifacts/asr-ggml-unified-performance-report.md \
+            --output-json benchmark-artifacts/asr-ggml-unified-performance-report.json \
+            --output-html benchmark-artifacts/asr-ggml-unified-performance-report.html
 
       - name: Add unified performance summary
         run: |
-          node -e "process.stdout.write(require('fs').readFileSync('benchmark-artifacts/whisper-unified-performance-report.md', 'utf8'))" >> "$GITHUB_STEP_SUMMARY"
+          node -e "process.stdout.write(require('fs').readFileSync('benchmark-artifacts/asr-ggml-unified-performance-report.md', 'utf8'))" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload unified Whisper performance report
+      - name: Upload unified ASR GGML performance report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: whisper-unified-performance-report
+          name: asr-ggml-unified-performance-report
           path: |
-            benchmark-artifacts/whisper-unified-performance-report.md
-            benchmark-artifacts/whisper-unified-performance-report.json
-            benchmark-artifacts/whisper-unified-performance-report.html
+            benchmark-artifacts/asr-ggml-unified-performance-report.md
+            benchmark-artifacts/asr-ggml-unified-performance-report.json
+            benchmark-artifacts/asr-ggml-unified-performance-report.html
           retention-days: 30
 
   merge-guard:
