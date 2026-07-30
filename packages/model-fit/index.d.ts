@@ -79,6 +79,25 @@ export interface FitPlan {
    * overrides is only reproducible if the real load applies them too.
    */
   buftOverrides: FitBuftOverride[]
+  /**
+   * `enum llama_split_mode` — how the model is split across multiple GPUs.
+   *
+   * This and the four fields below go into the fitter at their llama defaults,
+   * which is the exact condition under which it may rewrite them ("only
+   * parameters that have the same value as in llama_default_model_params are
+   * modified"). They are part of the plan for that reason: loading with your
+   * own defaults instead of these can produce different placement than the one
+   * projected to fit.
+   */
+  splitMode: number
+  /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  mainGpu: number
+  /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
+  typeK: number
+  /** `enum ggml_type` for the V cache. Changes KV memory, so it changes the fit. */
+  typeV: number
+  /** `enum llama_flash_attn_type` — alters KV/compute memory, so it is load-bearing. */
+  flashAttnType: number
 }
 
 /**

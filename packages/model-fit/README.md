@@ -39,6 +39,10 @@ const plan = fitParams({
 //   nGpuLayers,   // fitted offload layer count
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
+//   splitMode,    // llama_split_mode — how the model splits across GPUs
+//   mainGpu,      // device holding the model when splitMode is NONE
+//   typeK, typeV, // ggml_type of the K/V cache — changes KV memory
+//   flashAttnType,// llama_flash_attn_type — changes KV/compute memory
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
 //   nDevices,     // devices actually registered; 0 => ERROR
 //   nGpuDevices,  // of those, GPU/iGPU; 0 => host-only projection
@@ -187,6 +191,22 @@ hardware can't do it" from "try again once the model is downloaded".
 `buftOverrides` reports the tensor placement the projection depended on. A
 `SUCCESS` carrying overrides is only reproducible if the real load applies the
 same placement — treat a non-empty array as part of the plan, not decoration.
+
+### Reproducing a plan
+
+The same caution applies to the whole plan, not just the overrides. `llama.h`
+states that `llama_params_fit` modifies "only parameters that have the same
+value as in `llama_default_model_params`", and this addon hands it defaults for
+everything the caller did not pin. So `splitMode`, `mainGpu`, `typeK`, `typeV`
+and `flashAttnType` are all fields the fitter may have chosen, and they are
+reported for that reason.
+
+A load that reproduces the projection has to apply **every** plan field. Loading
+with your own defaults for the ones you did not ask about is how a `SUCCESS`
+turns into an out-of-memory at real load time: the projection was measured
+against placement you then did not use. This is also why the plan is only
+readable after narrowing to `SUCCESS` — on any other branch these fields carry
+no decision.
 
 ## Known crash paths
 

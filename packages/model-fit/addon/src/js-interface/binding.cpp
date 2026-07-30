@@ -144,6 +144,12 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   out.setProperty(env, "nCtx", jsu::Number::create(env, res.nCtx));
   out.setProperty(env, "nBatch", jsu::Number::create(env, res.nBatch));
   out.setProperty(env, "nUbatch", jsu::Number::create(env, res.nUbatch));
+  out.setProperty(env, "splitMode", jsu::Number::create(env, res.splitMode));
+  out.setProperty(env, "mainGpu", jsu::Number::create(env, res.mainGpu));
+  out.setProperty(env, "typeK", jsu::Number::create(env, res.typeK));
+  out.setProperty(env, "typeV", jsu::Number::create(env, res.typeV));
+  out.setProperty(
+      env, "flashAttnType", jsu::Number::create(env, res.flashAttnType));
   out.setProperty(
       env,
       "maxDevices",

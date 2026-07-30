@@ -28,6 +28,21 @@ if (result.status === FIT_STATUS.SUCCESS) {
   void split
   void overrides
 
+  // The placement parameters the fitter may rewrite are part of the plan, so a
+  // consumer reproducing the load can read them without narrowing further. If
+  // one of these is ever dropped from `FitPlan`, this stops compiling — the
+  // type-level counterpart to the runtime guard in fit.test.js.
+  const splitMode: number = result.splitMode
+  const mainGpu: number = result.mainGpu
+  const typeK: number = result.typeK
+  const typeV: number = result.typeV
+  const flashAttnType: number = result.flashAttnType
+  void splitMode
+  void mainGpu
+  void typeK
+  void typeV
+  void flashAttnType
+
   // `fits` is tied to the branch, not independent state.
   const fits: true = result.fits
   void fits

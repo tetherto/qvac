@@ -95,6 +95,25 @@ struct FitResult {
   /// Offload proportions, one entry per device (`llama_max_devices()`).
   std::vector<float> tensorSplit;
 
+  // The remaining plan fields are handed to the fitter at their llama defaults,
+  // which is precisely the condition under which it may rewrite them
+  // ("only parameters that have the same value as in llama_default_model_params
+  // are modified", llama.h). They are therefore part of the plan whether or not
+  // a given upstream revision happens to touch them: a caller reproducing the
+  // projection has to load with these values, not with its own defaults.
+
+  /// `enum llama_split_mode` — how the model is split across multiple GPUs.
+  int32_t splitMode = 0;
+  /// GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE.
+  int32_t mainGpu = 0;
+  /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit.
+  int32_t typeK = 0;
+  /// `enum ggml_type` for the V cache. Changes KV memory, so it changes the fit.
+  int32_t typeV = 0;
+  /// `enum llama_flash_attn_type` — alters KV/compute memory, so it too is
+  /// load-bearing for the projection.
+  int32_t flashAttnType = 0;
+
   /// Upper bound on addressable devices (`llama_max_devices()`). This is a
   /// build-time constant, NOT a count of what was detected — do not treat a
   /// nonzero value as evidence that any device was found.

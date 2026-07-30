@@ -93,6 +93,41 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   }
 })
 
+test('the plan carries every parameter the fitter is free to rewrite', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
+
+  // llama.h: "only parameters that have the same value as in
+  // llama_default_model_params are modified". This addon hands the fitter
+  // defaults for everything the caller did not pin, so every one of these is
+  // eligible to come back rewritten. A field the fitter changes but the result
+  // drops is the exact defect this guards: the caller would then load with its
+  // own default, get different placement than the one projected to fit, and
+  // have no way to tell. Assert presence field-by-field so that adding a new
+  // mutable parameter without serialising it fails here rather than silently
+  // shipping an unreproducible plan.
+  for (const field of ['nGpuLayers', 'nCtx', 'nBatch', 'nUbatch', 'splitMode', 'mainGpu', 'typeK', 'typeV', 'flashAttnType']) {
+    t.is(typeof res[field], 'number', `${field} is serialised onto the plan`)
+    t.ok(Number.isInteger(res[field]), `${field} is a concrete integer, not a placeholder`)
+  }
+
+  // Domains from llama.h, so a garbage readback (uninitialised memory, wrong
+  // cast width) is caught rather than passing as "a number".
+  t.ok(res.splitMode >= 0 && res.splitMode <= 3, 'splitMode is a known llama_split_mode')
+  t.ok(res.mainGpu >= 0, 'mainGpu is a device index')
+  t.ok(res.mainGpu < Math.max(res.nDevices, 1), 'mainGpu points at a device that exists')
+  t.ok(res.typeK >= 0, 'typeK is a ggml_type')
+  t.ok(res.typeV >= 0, 'typeV is a ggml_type')
+  t.ok([-1, 0, 1].includes(res.flashAttnType), 'flashAttnType is a known llama_flash_attn_type')
+
+  // On a host-only projection there is nothing to split across, so the fitter
+  // has no reason to move off the single-GPU/first-device placement. This is
+  // what makes the plan reproducible on the machine it was measured on.
+  if (res.nGpuDevices === 0) {
+    t.is(res.mainGpu, 0, 'host-only projection stays on the first device')
+  }
+})
+
 test('a context beyond what the model declares is rejected', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
 
