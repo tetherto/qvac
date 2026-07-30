@@ -64,6 +64,9 @@ struct SdVidGenConfig {
   int sampleSteps = 30;
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
+  // LTX-2 needs its own shift-based sigma schedule (LTX2_SCHEDULER); the Wan
+  // default above is only applied when the caller did not ask for a scheduler.
+  bool schedulerExplicit = false;
   float cfgScale = 6.0f;                              // guidance.txt_cfg
   // Image-conditioning guidance for img2vid. Mirrors the image
   // path's SdGenConfig::imgCfgScale exactly:

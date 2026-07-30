@@ -1150,7 +1150,12 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
 
   // Low-noise / only-expert sample params
   vidParams.sample_params.sample_method = vid.sampleMethod;
-  vidParams.sample_params.scheduler = vid.scheduler;
+  // SdVidGenConfig defaults to the Wan-recommended SIMPLE scheduler. LTX-2 is
+  // trained against its own shift-based schedule, and forcing SIMPLE on it
+  // denoises along the wrong sigma trajectory, so fall back to LTX2 unless the
+  // caller named a scheduler explicitly.
+  vidParams.sample_params.scheduler =
+      (isLtxModel_ && !vid.schedulerExplicit) ? LTX2_SCHEDULER : vid.scheduler;
   vidParams.sample_params.sample_steps = vid.sampleSteps;
   vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
   int stgBlock = vid.stgBlock;

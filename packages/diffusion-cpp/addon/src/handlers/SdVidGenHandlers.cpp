@@ -147,6 +147,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"scheduler",
      [](SdVidGenConfig& c, const picojson::value& v) {
        c.scheduler = parseScheduler(requireStr(v, "scheduler"));
+       c.schedulerExplicit = true;
      }},
 
     {"cfg_scale",

@@ -82,6 +82,7 @@ export type ScheduleType =
   | 'smoothstep'
   | 'kl_optimal'
   | 'bong_tangent'
+  | 'ltx2'
 
 export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
 
