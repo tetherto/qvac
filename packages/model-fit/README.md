@@ -1,7 +1,7 @@
 # @qvac/model-fit
 
 Memory-fit **preflight** addon for QVAC. It wraps llama.cpp's public
-`llama_params_fit` C API (the library behind the upstream `llama-fit-params`
+`common_fit_params` C API (the library behind the upstream `llama-fit-params`
 tool) to project — **without loading any weights** — whether a GGUF model fits
 the available device memory, and if so with what offload plan.
 
@@ -52,7 +52,7 @@ const plan = fitParams({
 
 ### Backend registration
 
-`llama_params_fit` does not load backends — it reads ggml's global device
+`common_fit_params` does not load backends — it reads ggml's global device
 registry, so whatever is registered when it runs is its entire view of the
 machine. Registering is the caller's job, exactly as in upstream's
 `tools/fit-params`, which relies on `llama_backend_init()`.
@@ -80,16 +80,16 @@ constant and is nonzero even when nothing was detected.
 outcome (that is a valid `FAILURE` result) or for a missing model file (`ERROR`);
 it throws only on invalid arguments.
 
-Calls are **serialised process-wide**. `llama.h` documents `llama_params_fit` as
+Calls are **serialised process-wide**. `common/fit.h` documents `common_fit_params` as
 not thread safe because it mutates global llama logger state, and this addon's
 C++ statics are shared across every worklet in a process, so concurrent callers
 block rather than corrupt each other. Serialising also guarantees two backend
 registrations never overlap, which is why the backend setup above needs no
 reference counting.
 
-### Fit semantics (from `llama.h`)
+### Fit semantics (from `common/fit.h`)
 
-- `llama_params_fit` only rewrites `mparams`/`cparams` fields that still hold
+- `common_fit_params` only rewrites `mparams`/`cparams` fields that still hold
   their **default** value. Pinning `nGpuLayers` therefore *fixes* it and the
   fitter fits the rest around it; omit it to let the fitter choose.
 - One consequence worth knowing: `-1` **is** the llama default for
@@ -135,13 +135,21 @@ through `index.js`.
 
 ## Asking a question that can actually fail
 
-`llama_params_fit` fits to free **device** memory and, per `llama.h`, "assumes
-system memory is unlimited". Nothing stops it moving every layer to the host, so
-with default arguments it answers almost anything with `SUCCESS` — an
-unsatisfiable multi-TiB margin still returns `SUCCESS` with `nGpuLayers: 0`.
+`common_fit_params` fits to free **device** memory and, per `common/fit.h`, "assumes
+system memory is unlimited". Where a GPU is present, nothing stops it moving
+every layer to the host, so with default arguments it answers almost anything
+with `SUCCESS` — an unsatisfiable multi-TiB margin still returns `SUCCESS` with
+`nGpuLayers: 0`.
+
+(On a **host-only** machine that fallback does not exist: the host is the only
+device, the margin applies to it, and there is nowhere to move anything, so the
+same call returns `FAILURE`. Do not read a host-only `FAILURE` as "this hardware
+is too small" without checking `nGpuDevices` — it may just be an unmeetable
+margin.)
 
 **`fits` alone is therefore close to useless as an admission signal.** It means
-"this could run somehow", which for a CPU fallback is nearly always true.
+"this could run somehow", which wherever a CPU fallback exists is nearly always
+true.
 
 To get a verdict that can fail, pin a constraint the fitter is not allowed to
 relax. Only fields left at their llama default get rewritten, so pinning
@@ -204,7 +212,7 @@ same placement — treat a non-empty array as part of the plan, not decoration.
 ### Reproducing a plan
 
 The same caution applies to the whole plan, not just the overrides. `llama.h`
-states that `llama_params_fit` modifies "only parameters that have the same
+states that `common_fit_params` modifies "only parameters that have the same
 value as in `llama_default_model_params`", and this addon hands it defaults for
 everything the caller did not pin. So `splitMode`, `mainGpu`, `typeK`, `typeV`
 and `flashAttnType` are all fields the fitter may have chosen, and they are
@@ -248,7 +256,7 @@ is the failure this section exists to prevent.
 
 ## Known crash paths
 
-`llama_params_fit` can terminate the process on inputs this addon accepts. These
+`common_fit_params` can terminate the process on inputs this addon accepts. These
 are aborts inside the fitter, not exceptions, so they cannot be caught and
 turned into a status — the calling worklet dies with the process.
 

@@ -51,7 +51,7 @@ struct FitRequest {
   bool hasNGpuLayers = false;
 
   // The remaining fields complete the upstream contract on the input side.
-  // `llama_params_fit` takes mparams/cparams as in/out and rewrites only what
+  // `common_fit_params` takes mparams/cparams as in/out and rewrites only what
   // is still default-valued, so a caller states its intended load by pinning
   // what it has already decided and leaving the rest for the fitter. Each is
   // paired with a `has*` flag rather than a sentinel because every value in the
@@ -106,7 +106,7 @@ struct BuftOverride {
   std::string bufferType;
 };
 
-/// Result of `runFit`. `status` mirrors `enum llama_params_fit_status`
+/// Result of `runFit`. `status` mirrors `enum common_params_fit_status`
 /// (0 SUCCESS, 1 FAILURE, 2 ERROR). The remaining fields carry the fitted
 /// "load plan" the SDK can hand to the LLM addon.
 struct FitResult {
@@ -129,9 +129,10 @@ struct FitResult {
   // The remaining plan fields are handed to the fitter at their llama defaults,
   // which is precisely the condition under which it may rewrite them
   // ("only parameters that have the same value as in llama_default_model_params
-  // are modified", llama.h). They are therefore part of the plan whether or not
-  // a given upstream revision happens to touch them: a caller reproducing the
-  // projection has to load with these values, not with its own defaults.
+  // are modified", common/fit.h). They are therefore part of the plan whether
+  // or not a given upstream revision happens to touch them: a caller
+  // reproducing the projection has to load with these values, not with its own
+  // defaults.
 
   /// `enum llama_split_mode` — how the model is split across multiple GPUs.
   int32_t splitMode = 0;
@@ -163,8 +164,8 @@ struct FitResult {
   size_t nGpuDevices = 0;
 };
 
-/// Runs `llama_params_fit` for `req`. Never loads weight data — the fitter uses
-/// its internal no-alloc simulation, so this is safe to call before a real
+/// Runs `common_fit_params` for `req`. Never loads weight data — the fitter
+/// uses its internal no-alloc simulation, so this is safe to call before a real
 /// model load. Does not throw for a "won't fit" (FAILURE) outcome; that is a
 /// valid, reported result, as are an unreadable model and an empty device
 /// registry (both ERROR).

@@ -285,20 +285,23 @@ test('memory pressure moves the plan off the GPU rather than reporting FAILURE',
   // stays true under extreme pressure, so the plan is the signal, not the flag.
   const res = fitParams({ modelPath, nCtx: 0, marginMiB: 10000000 })
 
+  // The fallback is "off the GPU and onto the host", so it only exists where
+  // there is a GPU. On a host-only machine the host *is* the only device, the
+  // margin applies to it, and nothing can be moved anywhere — so FAILURE is the
+  // correct verdict rather than a fit nobody could honour. qvac-fabric 9840
+  // reports it that way; 8828 returned SUCCESS here.
+  if (res.nGpuDevices === 0) {
+    t.is(res.status, FIT_STATUS.FAILURE, 'host-only: an unmeetable margin has no fallback')
+    t.is(res.fits, false)
+    t.is(res.reason, 'does-not-fit', 'and it is a fit verdict, not an error')
+    return
+  }
+
   t.is(res.status, FIT_STATUS.SUCCESS, 'host fallback is still reported as a fit')
   t.is(res.fits, true)
   t.ok(res.nCtx > 0, 'a fitted plan still carries a concrete context')
   t.ok(res.nCtx <= 2048, 'context was reduced, not left at the trained maximum')
-
-  // Only meaningful where there is a GPU to move layers off. On a CPU-only
-  // runner the fitter has no offload decision to make, so it leaves
-  // n_gpu_layers at the llama default — which is negative, meaning "all
-  // layers", not zero.
-  if (res.nGpuDevices > 0) {
-    t.is(res.nGpuLayers, 0, 'an unsatisfiable device margin offloads nothing to GPU')
-  } else {
-    t.pass('no accelerator present; offload count is not a meaningful assertion')
-  }
+  t.is(res.nGpuLayers, 0, 'an unsatisfiable device margin offloads nothing to GPU')
 })
 
 test('pinned offload under pressure is the only way to get FAILURE', async function (t) {

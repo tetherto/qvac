@@ -5,6 +5,7 @@
 #include <mutex>
 #include <stdexcept>
 
+#include <common/fit.h>
 #include <ggml-backend.h>
 #include <gguf.h>
 #include <llama.h>
@@ -15,11 +16,11 @@ namespace {
 
 /// Serialises whole fit calls.
 ///
-/// `llama.h` states that `llama_params_fit` "is NOT thread safe because it
-/// modifies the global llama logger state", so two concurrent fits are unsafe
-/// no matter how the backend is managed. Bare runs JS single-threaded per
-/// worklet, but this addon's C++ statics are shared across every worklet in the
-/// process, so nothing else prevents two of them calling in at once.
+/// `common/fit.h` states that `common_fit_params` "is NOT thread safe because
+/// it modifies the global llama logger state", so two concurrent fits are
+/// unsafe no matter how the backend is managed. Bare runs JS single-threaded
+/// per worklet, but this addon's C++ statics are shared across every worklet in
+/// the process, so nothing else prevents two of them calling in at once.
 ///
 /// Holding this for the entire call also means two registrations can never
 /// overlap, which is what lets the backend setup below stay unconditional
@@ -72,7 +73,7 @@ std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
 
 /// Registers the ggml/llama backends this fit will be projected against.
 ///
-/// `llama_params_fit` does not load backends — it only reads ggml's global
+/// `common_fit_params` does not load backends — it only reads ggml's global
 /// device registry, so whatever is registered when it runs *is* its entire view
 /// of the machine. Registration is the application's job: statically linked
 /// backends self-register when the registry is first constructed, but backends
@@ -186,7 +187,7 @@ FitResult runFit(const FitRequest& req) {
   // would still return a verdict, computed against a machine it cannot see, so
   // report the documented unknown outcome instead of a confident wrong answer.
   if (out.nDevices == 0) {
-    out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
+    out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
     out.fits = false;
     out.reason = FitReason::NoBackendDevice;
     out.tensorSplit.assign(maxDevices, 0.0F);
@@ -199,7 +200,7 @@ FitResult runFit(const FitRequest& req) {
   // nothing here — it costs the caller later. llama consults them only at load,
   // and only under LLAMA_SPLIT_MODE_NONE, where it requires main_gpu to index
   // its own device list and returns no model otherwise ("invalid value for
-  // main_gpu"). llama_params_fit performs that load internally, so the whole
+  // main_gpu"). common_fit_params performs that load internally, so the whole
   // fit comes back as a bare ERROR/"failed to load model" — a verdict the
   // caller cannot act on and cannot distinguish from a real fit failure.
   // Rejecting here turns it back into what it is: a statement about arguments.
@@ -236,14 +237,14 @@ FitResult runFit(const FitRequest& req) {
     }
   }
 
-  // `llama_params_fit` segfaults on a path it cannot open: gguf_init_from_file
+  // `common_fit_params` segfaults on a path it cannot open: gguf_init_from_file
   // logs the failure but the fit path then dereferences the null model. Guard
   // it here so an unreadable/missing model is reported as a clean ERROR (the
   // documented outcome) instead of crashing the worklet.
   if (std::FILE* f = std::fopen(req.modelPath.c_str(), "rb")) {
     std::fclose(f);
   } else {
-    out.status = static_cast<int>(LLAMA_PARAMS_FIT_STATUS_ERROR);
+    out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
     out.fits = false;
     out.reason = FitReason::ModelUnreadable;
     out.tensorSplit.assign(maxDevices, 0.0F);
@@ -279,7 +280,7 @@ FitResult runFit(const FitRequest& req) {
   llama_model_params mparams = llama_model_default_params();
   llama_context_params cparams = llama_context_default_params();
 
-  // `llama_params_fit` only rewrites fields that still hold their default
+  // `common_fit_params` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
   if (req.hasNGpuLayers) {
     mparams.n_gpu_layers = req.nGpuLayers;
@@ -327,7 +328,7 @@ FitResult runFit(const FitRequest& req) {
   std::vector<size_t> margins(
       maxDevices, static_cast<size_t>(req.marginMiB) * 1024ULL * 1024ULL);
 
-  const llama_params_fit_status status = llama_params_fit(
+  const common_params_fit_status status = common_fit_params(
       req.modelPath.c_str(),
       &mparams,
       &cparams,
@@ -338,13 +339,13 @@ FitResult runFit(const FitRequest& req) {
       GGML_LOG_LEVEL_INFO);
 
   out.status = static_cast<int>(status);
-  out.fits = (status == LLAMA_PARAMS_FIT_STATUS_SUCCESS);
+  out.fits = (status == COMMON_PARAMS_FIT_STATUS_SUCCESS);
   out.reason = out.fits
                    ? FitReason::Fits
-                   : (status == LLAMA_PARAMS_FIT_STATUS_FAILURE
+                   : (status == COMMON_PARAMS_FIT_STATUS_FAILURE
                           ? FitReason::DoesNotFit
                           // The fitter ran but reported a hard error of its
-                          // own. Nothing narrower is available from the C API.
+                          // own. Nothing narrower is available from the API.
                           : FitReason::ModelUnreadable);
   out.nGpuLayers = mparams.n_gpu_layers;
   out.nCtx = cparams.n_ctx;
@@ -354,10 +355,10 @@ FitResult runFit(const FitRequest& req) {
 
   // Every remaining field the fitter was free to rewrite. These went in at
   // their llama defaults, which is exactly the condition under which
-  // `llama_params_fit` modifies a parameter, so reading them back is what makes
-  // the plan reproducible: a caller that loads with its own defaults instead of
-  // these can silently get different placement than the one that was projected
-  // to fit.
+  // `common_fit_params` modifies a parameter, so reading them back is what
+  // makes the plan reproducible: a caller that loads with its own defaults
+  // instead of these can silently get different placement than the one that was
+  // projected to fit.
   out.splitMode = static_cast<int32_t>(mparams.split_mode);
   out.mainGpu = mparams.main_gpu;
   out.typeK = static_cast<int32_t>(cparams.type_k);

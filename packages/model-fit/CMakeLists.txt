@@ -40,7 +40,7 @@ bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building model-fit with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-# Install the ggml backend shared libs next to the prebuild. `llama_params_fit`
+# Install the ggml backend shared libs next to the prebuild. `common_fit_params`
 # needs the backends loaded to query per-device free memory.
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
@@ -73,6 +73,11 @@ target_link_libraries(
   ${model-fit}
   PRIVATE
     llama::llama
+    # The fitter lives in libcommon, not the core llama ABI: upstream moved it
+    # there in ggml-org/llama.cpp#22171, renaming llama_params_fit to
+    # common_fit_params. llama.h no longer declares it, so linking llama alone
+    # resolves nothing.
+    llama::llama-common
 )
 
 target_compile_definitions(${model-fit} PUBLIC JS_LOGGER)

@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `qvac-fabric` to 9840.1.1, in lockstep with the rest of the monorepo, and
+  port to the API the fitter now lives behind. Upstream moved it out of the core
+  llama ABI into libcommon (ggml-org/llama.cpp#22171, "move fit params
+  implementation to libcommon"): `llama_params_fit` in `llama.h` became
+  `common_fit_params` in `common/fit.h`, and `llama_params_fit_status` became
+  `common_params_fit_status`. The parameter list and the 0/1/2 status values are
+  unchanged, so this is a rename plus linking `llama::llama-common`. Worth
+  knowing: fabric's `llama.h` still carries the old declaration, so the previous
+  version compiled and linked and failed only at `dlopen` with
+  `undefined symbol: llama_params_fit`.
+
+- Default `backendsDir` to this package's own `prebuilds` directory when the
+  caller does not pass one, mirroring `@qvac/llm-llamacpp`'s addon.js. Since
+  9840 the ggml backends ship as separate shared libraries rather than static
+  archives, and ggml's default search path (executable directory, cwd) does not
+  cover an npm package's prebuilds — so the CPU backend never loaded and every
+  fit failed with "no CPU backend found". An explicitly passed `backendsDir`
+  still wins, including a bad one, so a caller's stated intent fails loudly
+  rather than being silently replaced.
+
+- `model-fit` is now covered by the `verify-qvac-fabric-lockstep` action, which
+  checks a hardcoded file list that did not include it. The gate was passing
+  vacuously while this package sat on 8828.1.2. (`ocr-ggml`, `vla-ggml` and
+  `fabric` are still absent from that list.)
+
 ### Fixed
 
 - Register ggml backends before fitting. `llama_params_fit` only reads ggml's

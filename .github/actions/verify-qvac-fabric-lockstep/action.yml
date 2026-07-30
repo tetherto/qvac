@@ -18,6 +18,7 @@ runs:
           "packages/llm-llamacpp/vcpkg.json"
           "packages/embed-llamacpp/vcpkg.json"
           "packages/translation-nmtcpp/vcpkg.json"
+          "packages/model-fit/vcpkg.json"
         )
 
         versions=()

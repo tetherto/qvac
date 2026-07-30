@@ -42,7 +42,7 @@ export interface FitConfig {
   /** Free headroom to leave on every device, in MiB (default 1024). */
   marginMiB?: number
   /**
-   * The fields below state the load you intend to perform. `llama_params_fit`
+   * The fields below state the load you intend to perform. `common_fit_params`
    * rewrites only parameters still holding their llama default, so setting one
    * makes it a hard constraint the projection fits *around*, and omitting one
    * leaves the fitter free to choose it and report the choice back on the plan.
@@ -154,7 +154,7 @@ export const FIT_STATUS: {
  * Runs a memory-fit preflight for a llama.cpp GGUF model. Synchronous, blocking,
  * and does not load weights (the fitter simulates allocations).
  *
- * Calls are serialised process-wide: `llama_params_fit` mutates global llama
+ * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block rather than
  * run together.
  */

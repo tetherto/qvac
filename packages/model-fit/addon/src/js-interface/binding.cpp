@@ -76,7 +76,7 @@ const char* reasonName(FitReason reason) {
 } // namespace
 
 /// `paramsFit(config)` — synchronous memory-fit preflight. Reads a plain config
-/// object, runs `llama_params_fit` (no weights are loaded), and returns the
+/// object, runs `common_fit_params` (no weights are loaded), and returns the
 /// fitted "load plan" as a JS object. Throwing goes through `JSCATCH`, which
 /// converts C++ exceptions into JS errors.
 inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {

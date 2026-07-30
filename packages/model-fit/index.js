@@ -1,8 +1,30 @@
 'use strict'
 
+const fs = require('bare-fs')
+const path = require('bare-path')
 const binding = require('./binding')
 
-// Mirrors `enum llama_params_fit_status` in llama.h.
+// Where this package's own ggml backends are installed, mirroring
+// @qvac/llm-llamacpp's addon.js. `BACKENDS_SUBDIR` (<target>/<module>) is
+// appended natively, so this is the `prebuilds` root rather than the leaf.
+//
+// Since qvac-fabric 9840 the ggml backends ship as separate shared libraries
+// rather than static archives, and ggml's default search path (executable
+// directory, cwd) does not cover an npm package's prebuilds. Without this the
+// CPU backend never loads and every fit fails with "no CPU backend found".
+// Resolved once, and only when it exists, so a statically linked build still
+// falls back to ggml's own search.
+const PACKAGED_BACKENDS_DIR = path.join(__dirname, 'prebuilds')
+
+function defaultBackendsDir () {
+  try {
+    return fs.statSync(PACKAGED_BACKENDS_DIR).isDirectory() ? PACKAGED_BACKENDS_DIR : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// Mirrors `enum common_params_fit_status` in llama.cpp's common/fit.h.
 const FIT_STATUS = Object.freeze({
   SUCCESS: 0, // projected to fit
   FAILURE: 1, // could not find a config that fits device memory
@@ -63,7 +85,7 @@ function validateRelationships (config) {
 }
 
 /**
- * Memory-fit preflight for a llama.cpp GGUF model. Runs `llama_params_fit`,
+ * Memory-fit preflight for a llama.cpp GGUF model. Runs `common_fit_params`,
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
@@ -71,7 +93,7 @@ function validateRelationships (config) {
  * short-lived worklet so that any backend/driver instability during probing
  * stays isolated from the inference worker.
  *
- * Calls are serialised process-wide: `llama_params_fit` mutates global llama
+ * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of
  * running together.
  *
@@ -112,6 +134,17 @@ function fitParams (config) {
     validateNumber(config, key, min, max)
   }
   validateRelationships(config)
+
+  // An explicit backendsDir always wins, including a bad one — it is the
+  // caller's statement of intent and has to fail loudly rather than be
+  // silently replaced by ours.
+  if (config.backendsDir === undefined) {
+    const packaged = defaultBackendsDir()
+    if (packaged !== undefined) {
+      config = { ...config, backendsDir: packaged }
+    }
+  }
+
   return binding.paramsFit(config)
 }
 
