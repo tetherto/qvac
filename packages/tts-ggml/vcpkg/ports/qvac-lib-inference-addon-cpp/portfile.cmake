@@ -1,16 +1,17 @@
-# Dev overlay: build qvac-lib-inference-addon-cpp 1.3.2 from the main
-# snapshot (tetherto/qvac @ 47eccb47f, the squash-merge of PR #3525) instead
-# of the published registry version, to verify this addon builds unchanged
-# against the 1.3.2 multi-job scheduler + JsAsyncTask teardown fix
-# (backwards-compatibility check; same REF/SHA512 across every consumer
-# addon on this branch). Bump REF/SHA512 (and the overlay port-version) when
-# retargeting. To fall back to the registry version, remove this port
-# directory and the "overlay-ports" entry in vcpkg-configuration.json.
+# Dev overlay: build qvac-lib-inference-addon-cpp 1.3.3 from branch
+# fix/addon-cpp-1.3.3-empty-cancel-retention (tetherto/qvac @ 38643638)
+# instead of the published registry version, to verify this addon builds and
+# passes against the 1.3.3 empty-cancel-snapshot retention fix (the iOS
+# jetsam OOM found on this PR; see PR #3548 discussion). Backwards-
+# compatibility check; same REF/SHA512 across every consumer addon on this
+# branch. Bump REF/SHA512 (and the overlay port-version) when retargeting.
+# To fall back to the registry version, remove this port directory and the
+# "overlay-ports" entry in vcpkg-configuration.json.
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac
-  REF 47eccb47f36d20c7aba4cd8e5892f7fd9eae5718
-  SHA512 794e7ffaf4e46a3fa9c8bd331669c386c1ffc40349086a9a281ea38d5d2ddf9cb876e0d313b4708729c42cda70b9827170a185058d783f2074113bec237bec31
+  REF 386436380a5e74446754b4692112cee32cf76d17
+  SHA512 1f47fb7475083bf61d01e914857dfa01d9f9181be0e68b0cf9dda2ef25f174463915435db157309bce324fa05f88bfa1cba6683f524c5017ee285df9e7254653
   HEAD_REF main
 )
 
