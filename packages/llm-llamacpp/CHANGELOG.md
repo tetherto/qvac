@@ -4,9 +4,9 @@
 
 ### Fixed
 
-- DeepSeek V4 reasoning-block compaction now restores the pre-generation
-  state and replays retained answer tokens when its memory cannot shift,
-  avoiding unsupported bounded cache removal and preserving subsequent turns.
+- Reasoning-block removal now always restores the pre-generation state and
+  replays retained answer tokens for every model, avoiding in-place cache
+  sliding and preserving coherent state for subsequent turns.
 
 ## [0.39.2] - 2026-07-30
 

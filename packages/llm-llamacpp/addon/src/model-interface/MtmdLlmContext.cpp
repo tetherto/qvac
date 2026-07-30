@@ -167,12 +167,9 @@ void MtmdLlmContext::initializeCommonState() {
           isHarmonyModel_,
           harmonyCallToken_));
 
-  // Snapshot-required detection mirrors TextLlmContext: recurrent / hybrid
-  // models and non-shiftable memory use full-state restore + replay.
-  const auto* const model = modelCtx_.model;
-  needsRecurrentSnapshot_ =
-      reasoningCompactionRequiresReplay(model, modelCtx_.lctx);
-  compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
+  // Reasoning removal always restores the pre-generation state and replays
+  // retained output, regardless of model architecture or memory capability.
+  needsRecurrentSnapshot_ = true;
 
   // EOS-inside-reasoning recovery is a Qwen3-specific workaround;
   // gate it on the explicit Qwen3-family predicate so non-Qwen

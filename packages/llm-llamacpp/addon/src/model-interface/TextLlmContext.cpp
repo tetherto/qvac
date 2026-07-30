@@ -88,13 +88,9 @@ void TextLlmContext::initializeCommonState() {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
 
-  // Recurrent / hybrid models always use snapshot + replay. Other models
-  // use it when their active memory cannot shift, including DeepSeek V4's
-  // DSV4 cache. Only ordinary shift-capable attention uses seq_rm + seq_add.
-  const auto* const model = modelCtx_.model;
-  needsRecurrentSnapshot_ =
-      reasoningCompactionRequiresReplay(model, modelCtx_.lctx);
-  compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
+  // Reasoning removal always restores the pre-generation state and replays
+  // retained output, regardless of model architecture or memory capability.
+  needsRecurrentSnapshot_ = true;
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the
   // explicit Qwen3-family predicate so the policy is documented at the
@@ -1278,7 +1274,6 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
   // structural shape (`preamble + <think> + </think> + answer`) without
   // replaying the reasoning body.
   //
-  // Pure-attention models keep the existing `seq_rm` path, unaffected.
   const llama_pos boundary = prefillLen;
   // Degenerate templates whose entire prefill IS the forced opener
   // give a boundary of 0; snapshotting at nPast_ == 0 is a valid

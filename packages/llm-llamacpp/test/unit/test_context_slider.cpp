@@ -349,7 +349,7 @@ TEST_F(
   shifter.setDiscardBudget(20);
   compactor.setRemoveThinkingFromContext(true);
   compactor.setReasoningEnabled(true);
-  compactor.setNeedsRecurrentSnapshot(false);
+  rollback.seedReasoningBoundaryForTesting(/*nPast=*/60);
   compactor.setOpenSpan(/*start=*/80);
   ASSERT_TRUE(compactor.hasOpenSpan());
 
@@ -395,7 +395,6 @@ TEST_F(
   shifter.setDiscardBudget(20);
   compactor.setRemoveThinkingFromContext(true);
   compactor.setReasoningEnabled(true);
-  compactor.setNeedsRecurrentSnapshot(true);
   rollback.seedReasoningBoundaryForTesting(/*nPast=*/60);
   ASSERT_TRUE(rollback.hasReasoningBoundary());
 
@@ -440,7 +439,6 @@ TEST_F(
   shifter.setDiscardBudget(20);
   compactor.setRemoveThinkingFromContext(true);
   compactor.setReasoningEnabled(true);
-  compactor.setNeedsRecurrentSnapshot(true);
   rollback.seedReasoningBoundaryForTesting(/*nPast=*/60);
 
   const auto slide = shifter.applyGenerationDiscard(

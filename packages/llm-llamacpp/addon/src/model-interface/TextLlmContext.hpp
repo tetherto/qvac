@@ -398,10 +398,7 @@ private:
   // Per-request toggle for the post-generation thinking-block KV
   // cache compaction. Default-on (opt-out via `generationParams` with
   // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
+  // `applyGenerationParams`. Applies uniformly to every model.
   bool removeThinkingFromContext_ = true;
 
   // True when this context's model is recurrent or hybrid
@@ -410,10 +407,9 @@ private:
   // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
   // For these we use the snapshot + replay path: snapshot the full
   // sequence state at end-of-prefill, restore at end-of-generation,
-  // then batched-replay the captured post-reasoning tokens.
-  // Pure-attention models keep the existing
-  // `seq_rm + seq_add` path untouched.
-  bool needsRecurrentSnapshot_ = false;
+  // then batched-replay the captured post-reasoning tokens. The legacy
+  // member name is retained because cancellation uses the same snapshots.
+  bool needsRecurrentSnapshot_ = true;
 
   // Tracks whether the currently-prepared prefill is a cache-warm
   // (prefill-only) request. Captured in `preparePrefill` from the

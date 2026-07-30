@@ -426,10 +426,9 @@ private:
   bool isQwen3ReasoningFamily_ = false;
 
   // True when this context's model is recurrent or hybrid
-  // (`llama_model_is_recurrent || llama_model_is_hybrid`). Drives the
-  // snapshot + replay path in `compactThinkSpan`. See
-  // `TextLlmContext::needsRecurrentSnapshot_` for the full rationale.
-  bool needsRecurrentSnapshot_ = false;
+  // Drives universal snapshot + replay reasoning compaction and the
+  // cancellation paths that share those snapshots.
+  bool needsRecurrentSnapshot_ = true;
 
   // Tracks whether the currently-prepared prefill is a cache-warm
   // (prefill-only) request. Captured from `preparePrefill` on the
@@ -444,10 +443,7 @@ private:
   // Per-request toggle for the post-generation thinking-block KV
   // cache compaction. Default-on (opt-out via `generationParams` with
   // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
+  // `applyGenerationParams`. Applies uniformly to every model.
   bool removeThinkingFromContext_ = true;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -13,34 +14,22 @@
 
 namespace qvac_lib_inference_addon_llama {
 
-// In-place range removal is safe only when the model has no recurrent state
-// and the active memory implementation supports shifting. The architecture
-// checks intentionally win over memory capability so recurrent / hybrid
-// models keep the full-state restore + replay path.
-[[nodiscard]] bool reasoningCompactionRequiresReplay(
-    bool isRecurrent, bool isHybrid, bool memoryCanShift) noexcept;
-[[nodiscard]] bool reasoningCompactionRequiresReplay(
-    const llama_model* model, llama_context* ctx) noexcept;
-
 // Per-inference reasoning-block compaction lifecycle, shared between
 // `TextLlmContext` and `MtmdLlmContext`. Owns:
 //
 //   * the open/close span (`<think>...</think>`) tracking,
 //   * the end-of-prefill snapshot capture (delegated to
 //     `ReasoningRollbackState` after a feature-gate check),
-//   * the pure-attention `seq_rm + seq_add` compaction path and the
-//     recurrent / hybrid full-state restore + replay path,
+//   * the full-state restore + retained-token replay path,
 //   * the `thinkingBlockDiscards` runtime stats counter.
 //
 // Failure contract (uniform across paths, per PR #2813 review):
 // when `remove_thinking_from_context` is enabled/defaulted-on,
 // ANY inability to remove the reasoning span from cache is a hard
 // failure. `snapshotAtPrefillBoundary` throws on capture underflow;
-// `compact()` returns `Outcome::Kind::FailedKvIntact` on pure-
-// attention `seq_rm + seq_add` rejection (live KV was left untouched)
-// and `Outcome::Kind::FailedKvWiped` on hybrid restore underflow,
-// hybrid replay rejection, recurrent partial-resident spans, recurrent
-// open spans without a captured close marker, generation slides that
+// `compact()` returns `Outcome::Kind::FailedKvWiped` on restore underflow,
+// replay rejection, partial-resident spans, open spans without a captured
+// close marker, generation slides that
 // invalidate tracked reasoning state, or the defensive no-boundary branch
 // (sequence memory was best-effort cleared).
 // Callers must run the live-KV recovery documented on the outcome kind
@@ -51,10 +40,7 @@ namespace qvac_lib_inference_addon_llama {
 //
 // State is per-inference. Call `reset()` at the start of each
 // `evalMessageWithTools`. Feature flags (`removeThinkingFromContext`,
-// `reasoningEnabled`, `needsRecurrentSnapshot`) are set by the owning
-// context — they are configured externally because their lifecycles
-// (per-request, per-load, per-model) differ and the compactor stays
-// agnostic to those.
+// `reasoningEnabled`) are set by the owning context.
 //
 // Position-specific bookkeeping (`nPast_` for text vs `current_.pos /
 // .cacheTokens` and `protectedPrefix_` for multimodal) is applied by
@@ -74,13 +60,6 @@ public:
     return removeThinkingFromContext_;
   }
   void setReasoningEnabled(bool v) noexcept { reasoningEnabled_ = v; }
-  void setNeedsRecurrentSnapshot(bool v) noexcept {
-    needsRecurrentSnapshot_ = v;
-  }
-  [[nodiscard]] bool needsRecurrentSnapshot() const noexcept {
-    return needsRecurrentSnapshot_;
-  }
-
   // ---- Span tracking ----
   //
   // Single-block policy: only the first `<think>...</think>` of an
@@ -124,8 +103,8 @@ public:
   // observes the close marker but the marker token has not yet been
   // committed to the cache. `onCloseCommitted(pos)` is called once the
   // marker has been committed (so `pos` is the cache position after
-  // commit); it finalises `thinkSpan_->second` and, on recurrent /
-  // hybrid memory, starts post-reasoning token capture for replay.
+  // commit); it finalises `thinkSpan_->second` and starts retained-token
+  // capture for replay.
   void requestCloseCapture() noexcept { pendingThinkCloseCapture_ = true; }
   [[nodiscard]] bool hasPendingCloseCapture() const noexcept {
     return pendingThinkCloseCapture_;
@@ -144,8 +123,7 @@ public:
   // `capturePendingThinkClose()` / `onCloseCommitted()` flip capture on,
   // so the close marker lands at the head of the replay sequence ahead
   // of any subsequent tokens recorded through `recordPostReasoningToken`.
-  // Gated on the recurrent-snapshot feature and an existing boundary
-  // snapshot — pure-attention models neither restore nor replay.
+  // Gated on an existing boundary snapshot.
   // Without this, the restored SSM state would contain either the
   // force-opened opener or the replayed generated opener with no
   // matching close marker before the answer tail, which is an
@@ -170,7 +148,7 @@ public:
   // reasoning open marker fired (either template preamble that the
   // model emits before `<think>`, or one of the tokens that make up
   // the opener itself). Called for every sampled token while reasoning
-  // is not yet open, so on the recurrent / hybrid path the restored
+  // is not yet open, so the restored
   // end-of-prefill snapshot can replay `[pre-reasoning tokens...,
   // close token, captured tail...]` and land in a balanced
   // `<think>...</think>` state without ever advancing the SSM through
@@ -195,8 +173,8 @@ public:
   // ---- End-of-prefill snapshot ----
   //
   // Captures the full sequence state at `pos` when the feature gates
-  // pass (recurrent memory + remove-thinking on + reasoning channel
-  // recognised). Throws `qvac_errors::StatusError` on capture
+  // pass (remove-thinking on + reasoning channel recognised). Throws
+  // `qvac_errors::StatusError` on capture
   // underflow (see the class-level "Failure contract" comment).
   // `labelTag` is "[TextLlm]" / "[MtmdLlm]" for logs.
   void snapshotAtPrefillBoundary(
@@ -217,17 +195,9 @@ public:
   // can't leave stale state behind.
   //
   // Failure contract:
-  //   * Pure-attention `seq_rm + seq_add` rejection: `compact()`
-  //     returns `Outcome::Kind::FailedKvIntact`. The primitive is
-  //     documented all-or-nothing on rejection, so live KV still
-  //     matches the caller's cursor; no seq wipe is performed. The
-  //     caller MUST roll back the live cache to its pre-request
-  //     cursor (e.g. via `removeLastNTokens(nPast - preRequestNPast)`)
-  //     before rethrowing so both driver metadata and live KV stay
-  //     coherent for the next request on the same driver.
-  //   * Hybrid `restoreReasoningBoundary` / `replayPostReasoning`
-  //     failure, a defensive missing-boundary hit, a recurrent
-  //     partial-resident reasoning span left after a tail trim, a recurrent
+  //   * `restoreReasoningBoundary` / `replayPostReasoning` failure,
+  //     a defensive missing-boundary hit, a partial-resident reasoning
+  //     span left after a tail trim,
   //     open reasoning span with no captured close marker, or a generation
   //     slide that invalidated tracked reasoning state:
   //     `compact()` best-effort clears the sequence memory (attention
@@ -253,8 +223,6 @@ public:
       NoOp,
       CompactedAttention,
       CompactedRecurrent,
-      // Compaction failed but live KV was left untouched; caller must
-      // roll back `[preRequestCursor, currentCursor)` before rethrowing.
       FailedKvIntact,
       // Compaction failed and live KV was best-effort wiped; caller
       // must reset positional accounting to zero before rethrowing.
@@ -265,20 +233,15 @@ public:
     // for the two `Failed*` outcomes (the caller derives the recovery
     // cursor from its own `preRequestCursor` / zero, respectively).
     llama_pos newPos = 0;
-    // Tokens dropped from the cache. `pos - newPos` for the attention
-    // path; `pos - newPos` minus the residue for the recurrent path
-    // (caller doesn't need to compute this).
+    // Tokens dropped from the cache.
     llama_pos discarded = 0;
     // Original span boundaries (for logging or caller-side guards).
     llama_pos spanStart = 0;
     llama_pos spanEnd = 0;
     // First cache position the caller should treat as the new
-    // protected-prefix end. Equals `spanStart` for the attention path
-    // (the slice is removed and the tail shifts left); equals the
-    // restored boundary `nPast` for the recurrent path (the prefix
-    // before the boundary is kept verbatim).
+    // protected-prefix end. Equals the restored boundary `nPast`.
     llama_pos keptPrefixEnd = 0;
-    // Post-reasoning tokens replayed (recurrent path only).
+    // Retained tokens replayed after restoring the boundary.
     size_t replayedTokens = 0;
     // Populated on the `Failed*` outcomes: the message the caller
     // should attach when rethrowing so operators see the same
@@ -288,17 +251,6 @@ public:
   [[nodiscard]] Outcome compact(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);
-
-  // Testing seam: install a non-owning `IContextSliderOps` override
-  // that replaces the default singleton (real `llama_memory_seq_rm` /
-  // `llama_memory_seq_add`) inside `compact()`. Set to `nullptr` to
-  // clear. Persists across `reset()` because it is a test wiring
-  // concern, not per-inference state. Production code MUST NOT call
-  // this — the override lets unit and driver-level tests exercise
-  // the `FailedKvIntact` branch without a real `llama_context`.
-  void setContextSliderOpsForTesting(const IContextSliderOps* ops) noexcept {
-    sliderOpsOverride_ = ops;
-  }
 
   // Access to the underlying tools-compact controller. Exposed so
   // `ContextShifter` can route slide notifications to the same
@@ -343,16 +295,7 @@ private:
   // only matters at construction time before the first request.
   bool removeThinkingFromContext_ = true;
   bool reasoningEnabled_ = false;
-  bool needsRecurrentSnapshot_ = false;
-
   int32_t thinkingBlockDiscards_ = 0;
-
-  // Non-owning override for the KV primitives used by `compact()`.
-  // Null in production (falls back to `defaultContextSliderOps()`);
-  // tests install a fake via `setContextSliderOpsForTesting` so the
-  // `FailedKvIntact` branch can be triggered without a real
-  // `llama_context`.
-  const IContextSliderOps* sliderOpsOverride_ = nullptr;
 };
 
 } // namespace qvac_lib_inference_addon_llama
