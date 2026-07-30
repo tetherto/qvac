@@ -1,8 +1,10 @@
 # Dev overlay: build qvac-lib-inference-addon-cpp 1.3.3 from branch
-# fix/addon-cpp-1.3.3-empty-cancel-retention (tetherto/qvac @ 38643638)
+# fix/addon-cpp-1.3.3-empty-cancel-retention (tetherto/qvac @ 2dcaa2e9)
 # instead of the published registry version, to verify this addon builds and
-# passes against the 1.3.3 empty-cancel-snapshot retention fix (the iOS
-# jetsam OOM found on this PR; see PR #3548 discussion). Backwards-
+# passes against the 1.3.3 cancel-retention fixes: the empty-snapshot skip
+# plus releasing a JsAsyncTask's captures before its promise settles, which is
+# what the real-cancel path needed (the iOS jetsam OOM found on this PR; see
+# PR #3548 discussion). Backwards-
 # compatibility check; same REF/SHA512 across every consumer addon on this
 # branch. Bump REF/SHA512 (and the overlay port-version) when retargeting.
 # To fall back to the registry version, remove this port directory and the
@@ -10,8 +12,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac
-  REF 386436380a5e74446754b4692112cee32cf76d17
-  SHA512 1f47fb7475083bf61d01e914857dfa01d9f9181be0e68b0cf9dda2ef25f174463915435db157309bce324fa05f88bfa1cba6683f524c5017ee285df9e7254653
+  REF 2dcaa2e935796f1f31ab5182e2d514e0ecf701d6
+  SHA512 ba27166042dc9c00ccae81d516630a3b35cb2bdb89c000604a56b6bb452abfe61221bbcb8b10d243a66dcdce42f9848083fce6f260d1c29905bcf00ccb05c7aa
   HEAD_REF main
 )
 
