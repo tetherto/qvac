@@ -10,6 +10,9 @@ const {
   verifyFinalStatus,
   cleanupCheckpoints,
   cleanupIntegrationCacheFiles,
+  assertFiniteMetricIfPresent,
+  waitForProgress,
+  runLoraInference,
   safeTest
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -42,35 +45,6 @@ const FINETUNE_MODELS = [
   }
 ]
 
-function waitForProgress(handle, minSteps = 2, timeoutMs = 600_000) {
-  return new Promise((resolve, reject) => {
-    let count = 0
-    const timer = setTimeout(() => {
-      handle.removeListener('stats', onStats)
-      reject(
-        new Error(
-          `waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`
-        )
-      )
-    }, timeoutMs)
-    const onStats = () => {
-      if (++count >= minSteps) {
-        clearTimeout(timer)
-        handle.removeListener('stats', onStats)
-        resolve()
-      }
-    }
-    handle.on('stats', onStats)
-  })
-}
-
-function assertFiniteMetricIfPresent(t, stats, key, modelId) {
-  const value = stats?.[key]
-  if (value == null || (typeof value === 'number' && isNaN(value))) return
-  t.is(typeof value, 'number', `[${modelId}] ${key} should be a number when present`)
-  t.ok(Number.isFinite(value), `[${modelId}] ${key} should be finite (not Inf), got: ${value}`)
-}
-
 function assertLossAndAccuracyAreFinite(t, result, modelId) {
   const stats = result?.stats
   if (!stats || typeof stats !== 'object') return
@@ -82,45 +56,6 @@ function assertLossAndAccuracyAreFinite(t, result, modelId) {
   assertFiniteMetricIfPresent(t, stats, 'train_accuracy_uncertainty', modelId)
   assertFiniteMetricIfPresent(t, stats, 'val_accuracy', modelId)
   assertFiniteMetricIfPresent(t, stats, 'val_accuracy_uncertainty', modelId)
-}
-
-async function runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath) {
-  t.comment(`[${modelVariant.id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
-
-  const inferModelPath = path.join(modelDir, modelName)
-  const inferConfig = {
-    gpu_layers: '999',
-    ctx_size: '512',
-    device: forceCpuDevice ? 'cpu' : 'gpu',
-    predict: '32',
-    lora: loraAdapterPath
-  }
-
-  const inferModel = new LlmLlamacpp({
-    files: { model: [inferModelPath] },
-    config: inferConfig,
-    logger: console,
-    opts: { stats: true }
-  })
-
-  try {
-    await inferModel.load()
-    const prompt = [{ role: 'user', content: 'Hello' }]
-    const response = await inferModel.run(prompt)
-    let generated = ''
-    await response
-      .onUpdate((token) => {
-        generated += token
-      })
-      .await()
-    t.ok(generated.length > 0, `[${modelVariant.id}] LoRA inference should produce output`)
-    t.comment(
-      `[${modelVariant.id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
-    )
-    t.comment(`[${modelVariant.id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
-  } finally {
-    await inferModel.unload().catch(() => {})
-  }
 }
 
 safeTest(
@@ -247,7 +182,13 @@ safeTest(
             finetuneConfig.outputParametersDir,
             'trained-lora-adapter.gguf'
           )
-          await runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath)
+          await runLoraInference(t, {
+            id: modelVariant.id,
+            modelPath: path.join(modelDir, modelName),
+            loraAdapterPath,
+            forceCpuDevice,
+            logStats: true
+          })
           t.pass(`[${modelVariant.id}] finetuning (early) + LoRA inference completed`)
           continue
         }
@@ -351,7 +292,13 @@ safeTest(
           finetuneConfig.outputParametersDir,
           'trained-lora-adapter.gguf'
         )
-        await runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath)
+        await runLoraInference(t, {
+          id: modelVariant.id,
+          modelPath: path.join(modelDir, modelName),
+          loraAdapterPath,
+          forceCpuDevice,
+          logStats: true
+        })
         t.pass(`[${modelVariant.id}] finetuning + LoRA inference completed`)
       } finally {
         loggerHandle.release()
