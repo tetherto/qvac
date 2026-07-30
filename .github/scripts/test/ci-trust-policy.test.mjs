@@ -687,15 +687,26 @@ test('npm reusable pins PR checkout and keeps user input out of run scripts', ()
   assert.doesNotMatch(echoScript, /\$\{\{\s*(github\.event|inputs\.)/)
 })
 
-test('fork-approval records qvac/fork-verified on external fork PRs', () => {
-  const sample = read('.github/workflows/on-pr-llm-llamacpp.yml')
-  const gate = jobBlock(sample, 'fork-approval')
-  assert.match(gate, /context=qvac\/fork-verified/)
-  assert.match(gate, /secrets\.PAT_TOKEN/)
-  assert.match(gate, /HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/)
-  assert.match(gate, /REPO:\s*\$\{\{\s*github\.repository\s*\}\}/)
+const FORK_CI_ENV_RE =
+  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
+
+test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording', () => {
+  const source = read('.github/workflows/reusable-fork-approval.yml')
+  assert.match(
+    source,
+    FORK_CI_ENV_RE,
+    'reusable-fork-approval must gate on the fork-ci environment (fork-only conditional)',
+  )
+  assert.match(source, /step-security\/harden-runner@/)
+  assert.match(source, /context=qvac\/fork-verified/)
+  assert.match(source, /secrets\.PAT_TOKEN/)
+  assert.match(
+    source,
+    /HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
+  )
+  assert.match(source, /REPO:\s*\$\{\{\s*github\.repository\s*\}\}/)
   assert.doesNotMatch(
-    gate,
+    source,
     /run:[\s\S]*?\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
     'fork-approval must not interpolate head.sha directly in run:',
   )
@@ -825,12 +836,8 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
 
 // --- fork-ci environment gating (QVAC-22799) --------------------------------
 // Every pull_request_target workflow that gates any job on authorize.outputs.allowed
-// must carry the fork-ci environment gate: a `fork-approval` job bound to the
-// fork-ci environment (PR-from-fork conditional), and every trust-gated job must
-// depend on it.
+// must call reusable-fork-approval.yml, and every trust-gated job must depend on it.
 
-const FORK_CI_ENV_RE =
-  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
 const FORK_CI_GATE_JOBS = new Set(['authorize', 'ci-router', 'fork-approval'])
 
 function eachJob(source) {
@@ -880,8 +887,13 @@ test('fork-ci: every pull_request_target verified-surface workflow has the fork-
     assert.ok(gate, `${path}: must define a fork-approval gate job`)
     assert.match(
       gate.text,
-      FORK_CI_ENV_RE,
-      `${path}: fork-approval must gate on the fork-ci environment (fork-only conditional)`,
+      /uses:\s*\.\/\.github\/workflows\/reusable-fork-approval\.yml/,
+      `${path}: fork-approval must call reusable-fork-approval.yml`,
+    )
+    assert.match(
+      gate.text,
+      /secrets:\s*inherit/,
+      `${path}: fork-approval must inherit secrets for PAT_TOKEN`,
     )
   }
 })

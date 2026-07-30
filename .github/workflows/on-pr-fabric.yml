@@ -32,26 +32,8 @@ concurrency:
 
 jobs:
   fork-approval:
-    name: Fork approval gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
-    steps:
-      - name: Record fork-ci approval on head SHA
-        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          gh api "repos/${REPO}/statuses/${HEAD_SHA}" \
-            -f state=success \
-            -f context=qvac/fork-verified \
-            -f description="fork-ci environment approved for this commit"
-      - name: Approved
-        run: echo "fork PR authorised to run privileged jobs"
+    uses: ./.github/workflows/reusable-fork-approval.yml
+    secrets: inherit
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
