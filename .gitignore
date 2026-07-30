@@ -66,4 +66,4 @@ graphify-out/
 .nx/cache
 .nx/workspace-data
 .nx/migrate-runs
-.pnpm-store/
+# .pnpm-store/
