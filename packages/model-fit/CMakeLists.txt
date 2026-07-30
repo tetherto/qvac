@@ -78,6 +78,9 @@ target_link_libraries(
 target_compile_definitions(${model-fit} PUBLIC JS_LOGGER)
 target_compile_definitions(${model-fit} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
-if(WIN32)
-  target_link_libraries(${model-fit} PRIVATE msvcrt.lib)
-endif()
+# NOTE: do not link msvcrt.lib here. It is the *dynamic* CRT import library, and
+# the monorepo ships Windows addons against the static runtime (QVAC-21100) so a
+# prebuild carries no vcruntime140/ucrtbase dependency. The CRT comes from the
+# vcpkg triplet (vcpkg-overlays/triplets/x64-windows.cmake, VCPKG_CRT_LINKAGE
+# static) and the bare-make toolchain; naming it explicitly here overrode both.
+# reusable-prebuilds.yml fails the win32 prebuild if those imports reappear.
