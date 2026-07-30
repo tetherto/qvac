@@ -30,12 +30,14 @@ function createJobHandler(opts) {
   // Clears `active` whenever the response settles (end / fail / abort), not
   // only on explicit end()/fail(). Identity-guarded against stale-replace
   // races so a late settle on a stale response can't clobber a newer active.
+  // Registered as a settlement hook, not as 'end'/'error' listeners: hooks
+  // run before public listeners, so a prepended listener that throws cannot
+  // abort the emit loop ahead of this cleanup and leave a settled response
+  // active.
   const bindCleanup = (response) => {
-    const clearIfCurrent = () => {
+    response._onSettled(() => {
       if (active === response) active = null
-    }
-    response.onFinish(clearIfCurrent)
-    response.onError(clearIfCurrent)
+    })
   }
 
   return {
@@ -107,13 +109,16 @@ function createJobHandler(opts) {
       if (!active) return
       const ref = active
       active = null
-      if (stats != null) {
-        ref.updateStats(stats)
-      }
-      if (result !== undefined) {
-        ref.ended(result)
-      } else {
-        ref.ended()
+      try {
+        if (stats != null) {
+          ref.updateStats(stats)
+        }
+      } finally {
+        if (result !== undefined) {
+          ref.ended(result)
+        } else {
+          ref.ended()
+        }
       }
     },
 
