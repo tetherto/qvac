@@ -1,8 +1,10 @@
 # SDK Tests
 
 SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
-A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
-(packaged Electron main process), strict Snap, or mobile (Bare + React Native).
+A producer filters the test catalog and delivers the ordered queue in the MQTT registration acknowledgment;
+the consumer then executes it locally on desktop (Node), Electron (packaged Electron main process), strict
+Snap, or mobile (Bare + React Native), while reporting lifecycle, profiling, and memory events. Registration
+acknowledgments can be replayed after reconnects.
 
 ## Running locally
 

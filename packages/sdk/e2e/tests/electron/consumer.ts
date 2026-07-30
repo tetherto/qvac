@@ -560,7 +560,7 @@ export async function startElectronConsumer() {
     mqttConfig.brokerUrl = mqttBrokerOverride
   }
 
-  const consumerId = `consumer-${platform}-${os.hostname()}-${Date.now()}`
+  const consumerId = `consumer-${platform}-${os.hostname()}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   const mqttOptions = buildMqttOptions(mqttConfig, configDir)
   mqttOptions.clientId = consumerId
   mqttOptions.clean = false
@@ -573,11 +573,7 @@ export async function startElectronConsumer() {
     console.log('📈 Profiling enabled')
   }
 
-  const memoryPoller = startNodeMemoryPoller({ client, runId, consumerId, platform })
-  if (memoryPoller) {
-    console.log('📈 Memory poller enabled (publishing rss to qvac/app-memory)')
-  }
-
+  let memoryPoller: ReturnType<typeof startNodeMemoryPoller>
   const consumer = new ConsumerBase(
     client,
     consumerId,
@@ -592,6 +588,17 @@ export async function startElectronConsumer() {
     },
     testDefinitions
   )
+
+  memoryPoller = startNodeMemoryPoller({
+    client,
+    runId,
+    consumerId,
+    sessionId: consumer.getSessionId(),
+    platform
+  })
+  if (memoryPoller) {
+    console.log('📈 Memory poller enabled (publishing rss to qvac/app-memory)')
+  }
 
   consumer.setupMqttHandlers()
   client.connect()
