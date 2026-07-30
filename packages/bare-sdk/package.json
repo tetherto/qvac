@@ -166,6 +166,7 @@
     "@qvac/rag": "workspace:^0.6.4",
     "@qvac/registry-client": "workspace:^0.6.1",
     "bare-abort-controller": "^1.0.0",
+    "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.15.0",
     "bare-env": "^3.0.0",
     "bare-fetch": "^3.0.1",

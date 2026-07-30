@@ -6,6 +6,10 @@ settings:
 
 overrides:
   hyper-instrument>bare-v8: ^1.0.1
+  '@qvac/sdk>@qvac/infer-base': ^0.4.0
+  '@qvac/dl-hyperdrive>@qvac/infer-base': ^0.1.0
+  '@qvac/translation-nmtcpp>@qvac/infer-base': ^0.4.0
+  '@qvac/llm-llamacpp>@qvac/infer-base': ^0.4.0
 
 importers:
 
@@ -145,6 +149,9 @@ importers:
       bare-abort-controller:
         specifier: ^1.0.0
         version: 1.1.2
+      bare-buffer:
+        specifier: ^3.4.2
+        version: 3.6.2
       bare-crypto:
         specifier: ^1.15.0
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -632,8 +639,8 @@ importers:
         specifier: workspace:^0.1.0
         version: link:../error
       '@qvac/infer-base':
-        specifier: workspace:^0.1.0
-        version: link:../infer-base
+        specifier: ^0.1.0
+        version: 0.1.1(@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       bare-fs:
         specifier: ^4.0.2
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -875,8 +882,8 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/infer-base':
-        specifier: workspace:^0.4.0
-        version: link:../infer-base
+        specifier: ^0.4.0
+        version: 0.4.2(bare-abort-controller@1.1.2)
       '@qvac/logging':
         specifier: workspace:^0.1.0
         version: link:../logging
@@ -1420,9 +1427,6 @@ importers:
       '@qvac/error':
         specifier: workspace:^0.1.1
         version: link:../error
-      '@qvac/infer-base':
-        specifier: workspace:^0.4.0
-        version: link:../infer-base
       '@qvac/langdetect-text':
         specifier: workspace:^0.1.2
         version: link:../langdetect-text
@@ -1477,9 +1481,6 @@ importers:
       bare-link:
         specifier: '>=3.0.0'
         version: 3.3.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-module:
-        specifier: ^6.2.0
-        version: 6.4.0(bare-buffer@3.6.2)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1516,6 +1517,9 @@ importers:
       expo-build-properties:
         specifier: '>=0.12.0'
         version: 57.0.7(expo@54.0.36(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)(typescript@5.9.3))
+      expo-modules-core:
+        specifier: '>=3.0.0'
+        version: 3.0.30(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       fast-safe-stringify:
         specifier: 2.1.1
         version: 2.1.1
@@ -1550,6 +1554,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.29.0(supports-color@8.1.1)(zod@4.4.3)
+      '@qvac/infer-base':
+        specifier: ^0.4.0
+        version: 0.4.2(bare-abort-controller@1.1.2)
       '@sqliteai/sqlite-wasm':
         specifier: 3.50.4-sync.0.8.30-vector.0.9.23
         version: 3.50.4-sync.0.8.30-vector.0.9.23
@@ -1568,6 +1575,12 @@ importers:
       ajv:
         specifier: 8.20.0
         version: 8.20.0
+      apache-arrow:
+        specifier: ^18.1.0
+        version: 18.1.0
+      bare-module:
+        specifier: ^6.2.0
+        version: 6.4.0(bare-buffer@3.6.2)
       bare-process:
         specifier: ^4.4.1
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1823,8 +1836,8 @@ importers:
         specifier: workspace:^0.1.0
         version: link:../error
       '@qvac/infer-base':
-        specifier: workspace:^0.4.0
-        version: link:../infer-base
+        specifier: ^0.4.0
+        version: 0.4.2(bare-abort-controller@1.1.2)
       '@qvac/logging':
         specifier: workspace:^0.1.0
         version: link:../logging
@@ -3385,12 +3398,25 @@ packages:
     resolution: {integrity: sha512-QiROnbtDR81it52F9y6WKVdCoccl/fnVod9t47BMBdifUyzhnZzZlLpeoI6Zy4zLHucWUbxlJBBR22npknCcIQ==}
     engines: {bare: '>=1.24.0'}
 
+  '@qvac/dl-base@0.1.1':
+    resolution: {integrity: sha512-AacmpwhUrgWQGO8dqlBNk8SLaxjWZlwBdnoj26cTVHA/L5zHAh9PisxuVbsSrXpigv342t2+PwmJv5ZH9GN97Q==}
+    deprecated: 'Deprecated: no longer maintained; removed from the QVAC monorepo.'
+
+  '@qvac/dl-hyperdrive@0.1.1':
+    resolution: {integrity: sha512-jTrtxgjSr43uHHs5UoIMQZ4ztaH92d4xVwWSB/GC/FgD424S6BK0C0NUo3TJ5p07kjdYXvnYzu1HazxQ0IJa5Q==}
+    deprecated: 'Deprecated: no longer maintained; removed from the QVAC monorepo.'
+
   '@qvac/embed-llamacpp@0.28.0':
     resolution: {integrity: sha512-UbPzhMmu/SsQorJWwSwquxOSzWOhR5AB5U0KZ4uaiIiwAnxhYMjBmDMWh9dLeDwOAIrJVjfi3sYEDby+d8Xpbw==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
+
+  '@qvac/infer-base@0.1.1':
+    resolution: {integrity: sha512-rrW0ftceRoPmn4fLoQH8V+2BHJjbuWWpJuzR0UKLJOebMzWx0JunO12/lbunQ65w67IksuTzJAb064clPHfqeQ==}
+    peerDependencies:
+      '@qvac/dl-hyperdrive': ^0.1.0
 
   '@qvac/infer-base@0.4.2':
     resolution: {integrity: sha512-Vm5V/3a0oMBdxjfUpZxXrV+xRMLHeXrnKjKwOJSh+y85nRi7Ux+8Iakj4QAsfbrsERWkSTxUQM34KlE9Rb4PdA==}
@@ -3421,6 +3447,9 @@ packages:
 
   '@qvac/registry-schema@0.3.0':
     resolution: {integrity: sha512-U5+oNXh34ngCnyTRCf1cjSjZcoacM3xixsPTwXv7jTQQUdvtEownb3mb+nClb7nEc/SlJDffPEy5kFj5D2Zxjg==}
+
+  '@qvac/response@0.1.2':
+    resolution: {integrity: sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA==}
 
   '@qvac/sdk@0.16.0':
     resolution: {integrity: sha512-5Ha3b/XS+haJR93QaAgyauULCzXk55ZgkQsFwwlHmJQCLwPS74KRWSa09BdTOfJBx52BmiXUueDJl/Tggz+2kA==}
@@ -4274,6 +4303,9 @@ packages:
 
   bare-env@3.0.1:
     resolution: {integrity: sha512-BdoLvnzaWR0YyyJreEx4zG2Od0AC/s9JSZ+EXyMZKunpn8zEgR/dGv37hdFUaY1bjDkcRKvcKkFyJIwlJ0CaYA==}
+
+  bare-events@2.4.2:
+    resolution: {integrity: sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q==}
 
   bare-events@2.9.1:
     resolution: {integrity: sha512-Z0oHEHAFDZkffN8Qc39zNZjQlMDkPJRyyyZieU1VH7u8c5S+qHZ2S8ixdKIAxEjfHO7FJxXmJWgteOghVanIsg==}
@@ -10997,6 +11029,31 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
 
+  '@qvac/dl-base@0.1.1(bare-abort-controller@1.1.2)':
+    dependencies:
+      '@qvac/logging': 0.1.1
+      ready-resource: 1.2.0(bare-abort-controller@1.1.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+
+  '@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/dl-base': 0.1.1(bare-abort-controller@1.1.2)
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.1.1(@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      corestore: 7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      hypercore-id-encoding: 1.3.0
+      hyperdrive: 13.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      test-tmp: 1.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      z32: 1.1.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+      - sodium-javascript
+
   '@qvac/embed-llamacpp@0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/infer-base': 0.4.2(bare-abort-controller@1.1.2)
@@ -11009,6 +11066,15 @@ snapshots:
       - react-native-b4a
 
   '@qvac/error@0.1.1': {}
+
+  '@qvac/infer-base@0.1.1(@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
+    dependencies:
+      '@qvac/dl-hyperdrive': 0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      '@qvac/error': 0.1.1
+      '@qvac/logging': 0.1.1
+      '@qvac/response': 0.1.2
+      bare-os: 3.9.3
+      bare-path: 3.1.1
 
   '@qvac/infer-base@0.4.2(bare-abort-controller@1.1.2)':
     dependencies:
@@ -11113,6 +11179,10 @@ snapshots:
       - bare-url
       - react-native-b4a
       - sodium-javascript
+
+  '@qvac/response@0.1.2':
+    dependencies:
+      bare-events: 2.4.2
 
   '@qvac/sdk@0.16.0(10b7125d3dd08d0daf978bf63dba8d79)':
     dependencies:
@@ -12312,6 +12382,8 @@ snapshots:
   bare-env@3.0.1:
     dependencies:
       bare-os: 3.9.3
+
+  bare-events@2.4.2: {}
 
   bare-events@2.9.1(bare-abort-controller@1.1.2):
     optionalDependencies:
