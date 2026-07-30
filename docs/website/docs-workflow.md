@@ -353,7 +353,8 @@ never by merging a PR into `docs-production`. The workflow advances
 `docs-production` to the current `main` commit using **fast-forward-only**
 semantics: if the branches have diverged it fails instead of creating a
 merge commit, so `docs-production` stays a pure pointer into `main`'s
-history.
+history. A `docs-production` environment required-reviewer gate pauses the
+job until a `qvac-internal-release` member approves.
 
 The person promoting is responsible for confirming staging is healthy and
 that the docs PR Checks have passed on `main` before running the workflow.

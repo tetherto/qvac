@@ -22,6 +22,7 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -78,6 +79,7 @@ import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
@@ -170,6 +172,14 @@ resources.define('ocr', {
   // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time).
   // Mirrors desktop so Electron covers the same OCR model/plugin path.
   config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
+})
+
+// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
+// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
+// the DBNet detector from the recognizer src. Mirrors desktop.
+resources.define('doctr', {
+  constant: OCR_DOCTR,
+  type: 'ggml-ocr'
 })
 
 // Classification ships bundled weights inside @qvac/classification-ggml,
@@ -518,6 +528,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),

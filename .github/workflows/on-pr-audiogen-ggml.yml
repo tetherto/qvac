@@ -7,8 +7,6 @@ on:
     paths:
       - "packages/audiogen-ggml/**"
       - ".github/workflows/*audiogen-ggml*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/**"
 
   workflow_dispatch:
     inputs:
@@ -72,6 +70,21 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -113,7 +126,7 @@ jobs:
           github-token: ${{ github.token }}
 
   context:
-    needs: authorize
+    needs: [authorize, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
@@ -170,6 +183,7 @@ jobs:
   sanity-checks:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
@@ -191,6 +205,7 @@ jobs:
 
   cpp-lint:
     needs:
+      - fork-approval
       - context
       - ci-router
       - label-gate
@@ -217,6 +232,7 @@ jobs:
       id-token: write
       actions: read
     needs:
+      - fork-approval
       - context
       - ci-router
       - label-gate
@@ -230,6 +246,7 @@ jobs:
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - label-gate
@@ -254,6 +271,7 @@ jobs:
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
+      - fork-approval
       - detect-native-changes
       - context
       - label-gate
@@ -287,6 +305,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - context
       - ci-router
       - detect-native-changes
@@ -307,6 +326,7 @@ jobs:
   prebuild-artifact-save:
     if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
       - label-gate
@@ -339,6 +359,7 @@ jobs:
       packages: read
       id-token: write
     needs:
+      - fork-approval
       - context
       - prebuild
       - prebuild-artifact-reuse
@@ -351,19 +372,39 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
-  # NOTE (incremental CI): the MOBILE integration lane is intentionally not
-  # wired yet for audiogen-ggml — it needs the on-device test:mobile harness
-  # (mirror of integration-mobile-test-tts-ggml.yml), which is not ready. Add a
-  # run-mobile-integration-tests job (gated on run_mobile) once that lands.
+  # Mobile integration lane: on-device (AWS Device Farm) load + generate smoke.
+  # Like the desktop lane it needs the mobile prebuild artifacts (android-arm64 /
+  # ios-arm64), so it is gated on run_mobile AND a successful prebuild (or reuse
+  # hit). The on-device test.cjs downloads the turbo-q4 GGUFs from the registry
+  # at runtime (no host-side prestage). See integration-mobile-test-audiogen-ggml.yml.
+  run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    needs:
+      - fork-approval
+      - context
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - label-gate
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
 
   merge-guard:
-    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
+    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      # Desktop integration wired (full end-to-end generation matrix,
-      # non-blocking via continue-on-error). Mobile lane still deferred (see
-      # NOTE above).
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
+      # Desktop + mobile integration wired (full end-to-end generation), both
+      # non-blocking via continue-on-error (merge-guard treats success||skipped
+      # as pass), matching tts-ggml / parakeet's early-days posture.
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.2] - 2026-07-29
+
+### Fixed
+- `JsAsyncTask` now defers environment teardown until queued completions finish, preventing background work from touching disposed JavaScript state.
+
 ## [1.3.1] - 2026-07-24
 
 ### Fixed

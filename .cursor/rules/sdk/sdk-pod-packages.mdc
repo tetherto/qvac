@@ -52,4 +52,4 @@ globs:
 
 ## Skill Naming Convention
 
-SDK pod skills use the `qv-sdk-` prefix (`qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`, `qv-sdk-e2e-create`, `qv-sdk-pr-status`). Agent-stack orchestration is `qv-agent-stack-sync`.
+SDK pod skills use the `qv-sdk-` prefix (`qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`, `qv-sdk-e2e-create`, `qv-sdk-pr-status`, `qv-sdk-update-models`). Agent-stack orchestration is `qv-agent-stack-sync`.
