@@ -115,20 +115,28 @@ runs:
         # Partial-scheduling rollback.
         #
         # run_arns is only published to $GITHUB_OUTPUT after ALL runs are created,
-        # so if a later schedule-run fails (sharded loop group 2+, or the second
-        # dual-flagship target) the caller sees no ARNs and cannot cancel the runs
-        # that DID get created — they keep executing on real devices and billing
-        # until their own timeout. Track what we create and stop it on failure.
+        # so if scheduling stops part way — a failed schedule-run (sharded group 2+,
+        # or the second dual-flagship target) OR the workflow being cancelled
+        # mid-loop, which these workflows do routinely via cancel-in-progress — the
+        # caller sees no ARNs and cannot cancel the runs that DID get created. They
+        # keep executing on real devices, billing until their own jobTimeoutMinutes.
         #
-        # `shell: bash` runs with -e, so any failed schedule-run aborts the step and
-        # fires this trap.
+        # Trapped on ERR *and* the signals GitHub uses to cancel, *and* EXIT: an ERR
+        # trap alone never fires on cancellation. The trap is disarmed only once the
+        # outputs are published, after which the caller owns cleanup; that ordering
+        # is what makes the EXIT trap safe on the success path.
+        #
+        # LIMITATION: SIGKILL cannot be trapped, so a hard kill (GitHub escalates to
+        # it after a grace period) can still orphan runs. Closing that needs an
+        # out-of-band sweep of runs whose names match the run-name base with no live
+        # workflow — deliberately out of scope here.
         CREATED_RUN_ARNS=""
 
         rollback_created_runs() {
           local status=$?
-          trap - ERR
+          trap - ERR INT TERM EXIT
           if [ -n "$CREATED_RUN_ARNS" ]; then
-            echo "::warning::Scheduling failed part way — stopping the runs already created to avoid billing them."
+            echo "::warning::Scheduling stopped part way (status $status) — stopping the runs already created to avoid billing them."
             for arn in $CREATED_RUN_ARNS; do
               if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
                 echo "  stopped $arn"
@@ -139,7 +147,7 @@ runs:
           fi
           exit "$status"
         }
-        trap rollback_created_runs ERR
+        trap rollback_created_runs ERR INT TERM EXIT
 
         record_created_run() {
           CREATED_RUN_ARNS="$CREATED_RUN_ARNS $1"
@@ -279,3 +287,8 @@ runs:
 
         echo "run_arns=$(echo "$RUN_ARNS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
         echo "run_count=$RUN_COUNT" >> "$GITHUB_OUTPUT"
+
+        # Outputs are published: the caller now has the ARNs and owns cleanup (its
+        # cancel step covers cancellation and failure from here). Disarm so the EXIT
+        # trap does not roll back a successfully scheduled run.
+        trap - ERR INT TERM EXIT
