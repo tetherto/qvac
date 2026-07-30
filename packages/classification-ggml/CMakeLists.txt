@@ -65,13 +65,6 @@ if(BUILD_TESTING OR BUILD_FUZZING)
 endif()
 
 if(BUILD_TESTING)
-  # In the combined build, FuzzTest provides the single shared GoogleTest; make
-  # it available BEFORE test/unit so the unit tests link that same GTest::gtest
-  # (no vcpkg-vs-FetchContent collision). A plain test build resolves the vcpkg
-  # gtest inside test/unit instead.
-  if(BUILD_FUZZING)
-    qvac_addon_enable_fuzztest()
-  endif()
   include(GoogleTest)
   add_subdirectory(test/unit)
 endif()

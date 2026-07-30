@@ -143,10 +143,12 @@ jobs:
         run: npm run test:cpp:run
 
       # Linux: ONE configure+build of the build-fuzz tree produces both
-      # addon-test and the bounded fuzz target, sharing FuzzTest's GoogleTest, so
+      # addon-test and the bounded fuzz target, sharing the vcpkg GoogleTest, so
       # we pay the CMake configure cost once instead of configuring build/ +
-      # build-fuzz/ separately. FuzzTest is pulled via CMake FetchContent (pinned
-      # commit), so this needs github.com egress. See docs/architecture/ADDON-FUZZING.md.
+      # build-fuzz/ separately. FuzzTest plus its Abseil/RE2 are pulled via CMake
+      # FetchContent (pinned commits), so this needs github.com egress; the rest
+      # of its dependency stack comes from the vcpkg binary cache configured by
+      # setup-vcpkg above. See docs/architecture/ADDON-FUZZING.md.
       - name: Build C++ tests + fuzz targets
         if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}

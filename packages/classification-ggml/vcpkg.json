@@ -16,6 +16,13 @@
       "dependencies": [
         "gtest"
       ]
+    },
+    "fuzz": {
+      "description": "Build fuzz targets (Google FuzzTest dependencies)",
+      "dependencies": [
+        "antlr4",
+        "gtest"
+      ]
     }
   }
 }

@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 
-# Fuzz targets for classification-ggml. Built only under -DBUILD_FUZZING=ON, as
-# a configure separate from test/unit: FuzzTest brings its own GoogleTest via
-# FetchContent, whose GTest::gtest targets would collide with the vcpkg gtest
-# the unit tests link. See docs/architecture/ADDON-FUZZING.md and
-# cmake/qvac-addon/qvac-addon.cmake (qvac_addon_add_fuzz_target).
+# Fuzz targets for classification-ggml. Built only under -DBUILD_FUZZING=ON.
+# See docs/architecture/ADDON-FUZZING.md and cmake/qvac-addon/qvac-addon.cmake
+# (qvac_addon_add_fuzz_target).
 
 # preprocessToTensor() is the classification addon's untrusted-input front door:
 # arbitrary image bytes flow into magic-byte detection and the stb_image decode
