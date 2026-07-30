@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.39.2] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+- Qwen3.5-VL cache-stress coverage now creates deterministic cache pressure
+  with measured, bounded prefill chunks while preserving normal EOS behavior.
+
 ## [0.39.1] - 2026-07-29
 
 Extends LoRA finetuning to the b9840 model families: Qwen3.5/3.6 and Gemma-4, dense and
