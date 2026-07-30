@@ -28,6 +28,35 @@
  * umt5-xxl-enc-f16.gguf / wan2.2_vae_f16.gguf in ABOT_MODELS_DIR), writes it
  * to ABOT_SCENE, then loads the walk session with it. Optional ABOT_WIDTH /
  * ABOT_HEIGHT (multiples of 32; default 832x480).
+ *
+ * Endpoints: GET / (page), /state (telemetry), /stream (paced MJPEG push),
+ * /frame?i=N (single frame + X-Frame-Ts/-Block headers); POST /keys, /walk,
+ * /reset (full session reload -> block 0), /create-world?prompt= (body =
+ * image bytes -> native scene pack -> session swap).
+ *
+ * Latency/smoothness design notes (measured on the RTX 5090 round):
+ * - Frames MUST be pushed, not polled: per-frame HTTP fetch costs one tunnel
+ *   round-trip each; whenever playback rate <= production rate (12 frames
+ *   per ~1.5 s block = 8 fps), the client backlog grows without bound and the
+ *   viewer watches ever-older video (observed 9 s key->photon; ~2.3 s is the
+ *   generation-bound floor).
+ * - Frames arrive as 12-frame BURSTS per block; the /stream pacer re-spaces
+ *   them at the measured production rate (pace by time-since-last-emit - the
+ *   queue drains between pushes, so queue length cannot pace). First frame of
+ *   a fresh block is never delayed, so pacing adds no key latency.
+ * - Client backpressure: drop frames for a slow client (writableNeedDrain via
+ *   write() return + 'drain'), never queue them.
+ * - bare-http1 quirks (cost a debug round each): res.write(data, callback)
+ *   never invokes the callback, and a GET's REQUEST stream emits 'close'
+ *   immediately after its empty body - track connection lifetime on the
+ *   RESPONSE stream only.
+ * - World restart is a full session reload (~15 s): the C API has no
+ *   lightweight reset; a native sd_abot_session_reset (clear history + KV
+ *   cache + RNG, keep weights) would make it near-instant. Engine wishlist.
+ * - Image input: stb decode (magic bytes, extension ignored; JPEG/PNG only -
+ *   no WebP/AVIF/HEIC), EXIF rotation not honored, cover-crop to 832x480; an
+ *   image is REQUIRED - the distilled ci2v checkpoint cannot bootstrap a
+ *   world from text alone (validated: degenerate output).
  */
 
 const http = require('bare-http1')
@@ -69,42 +98,164 @@ const TAEHV_PATH = resolveModelFile('ABOT_TAEHV', ['taew2_2_f16.gguf'])
 const SCENE_PATH =
   process.env.ABOT_SCENE ||
   path.join(process.env.ABOT_MODELS_DIR || '.', 'scene.safetensors')
+// Scene-creation encoders (also used by the /create-world upload workflow)
+const T5_PATH = process.env.ABOT_T5 || resolveModelFile('ABOT_T5', ['umt5-xxl-enc-f16.gguf'])
+const VAE_PATH = process.env.ABOT_VAE || resolveModelFile('ABOT_VAE', ['wan2.2_vae_f16.gguf'])
+// The active scene can be swapped at runtime by /create-world
+let currentScenePath = SCENE_PATH
 
-const world = new WorldStableDiffusion({
-  files: { model: DIT_PATH, taehv: TAEHV_PATH, scene: SCENE_PATH },
-  config: {
-    threads: process.env.ABOT_THREADS || undefined,
-    seed: process.env.ABOT_SEED || undefined,
-    backend: process.env.ABOT_BACKEND || undefined,
-    // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
-    // smaller frames, so remote/tunneled browsers stream far less data).
-    frameJpegQuality: process.env.ABOT_JPEG_QUALITY || undefined
-  },
-  opts: { stats: true }
-})
+function makeWorld() {
+  return new WorldStableDiffusion({
+    files: { model: DIT_PATH, taehv: TAEHV_PATH, scene: currentScenePath },
+    config: {
+      threads: process.env.ABOT_THREADS || undefined,
+      seed: process.env.ABOT_SEED || undefined,
+      backend: process.env.ABOT_BACKEND || undefined,
+      // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
+      // smaller frames, so remote/tunneled browsers stream far less data).
+      frameJpegQuality: process.env.ABOT_JPEG_QUALITY || undefined
+    },
+    opts: { stats: true }
+  })
+}
+
+let world = makeWorld()
 
 // ── walk state ───────────────────────────────────────────────────────────────
 const state = {
   loaded: false,
   running: false,
   generating: false,
+  resetting: false,
+  creating: false,
   block: 0,
   lastStepMs: 0,
   error: null,
   keys: { W: false, A: false, S: false, D: false, I: false, J: false, K: false, L: false }
 }
-const frames = [] // ring of { index, png:Buffer }
+const frames = [] // ring of { index, png:Buffer, ts, block }
 let nextFrameIndex = 0
 
+// MJPEG push stream: one persistent connection per viewer, always fed the
+// NEWEST frame; when the client socket is backed up the frame is dropped for
+// that client (inherently live - the backlog can never grow).
+const streamClients = new Set()
+const STREAM_BOUNDARY = 'abotframe'
+
+function broadcastFrame(entry) {
+  if (streamClients.size === 0) return
+  const head = Buffer.from(
+    `--${STREAM_BOUNDARY}\r\n` +
+      `Content-Type: image/jpeg\r\n` +
+      `Content-Length: ${entry.png.length}\r\n` +
+      `X-Frame-Index: ${entry.index}\r\n` +
+      `X-Frame-Block: ${entry.block}\r\n\r\n`
+  )
+  for (const res of streamClients) {
+    try {
+      if (res.destroyed) {
+        streamClients.delete(res)
+        continue
+      }
+      // drop-on-backpressure: while the client's socket buffer is full, skip
+      // frames for it (it stays live instead of accumulating a backlog)
+      if (res._abotWaitDrain) continue
+      const okHead = res.write(head)
+      const okBody = res.write(entry.png)
+      const okTail = res.write('\r\n')
+      if (!(okHead && okBody && okTail)) {
+        res._abotWaitDrain = true
+        res.once('drain', () => { res._abotWaitDrain = false })
+      }
+    } catch (_) {
+      streamClients.delete(res)
+    }
+  }
+}
+
+// Stream pacer: blocks arrive as 12-frame bursts every ~1.5 s; broadcasting
+// them raw makes playback jerky (fast-forward burst, then freeze). Release
+// frames evenly at the measured production rate instead - the first frame of
+// a fresh block still goes out immediately (no added key latency); only the
+// tail of each burst waits. A cap keeps the stream live if a client or the
+// generator stalls.
+const pacedQueue = []
+const PACED_QUEUE_CAP = 18 // ~1.5 blocks; beyond this, drop oldest (stay live)
+let pacerRunning = false
+
+function paceInterval() {
+  const avg = blockMsLog.length
+    ? blockMsLog.reduce((a, b) => a + b, 0) / blockMsLog.length
+    : 1500
+  return Math.min(Math.max(avg / 12, 60), 200)
+}
+
+let lastEmitTs = 0
+
+function startPacer() {
+  if (pacerRunning) return
+  pacerRunning = true
+  const tick = () => {
+    if (pacedQueue.length === 0) {
+      pacerRunning = false
+      return
+    }
+    // pace by TIME since the last emitted frame (the queue often drains to
+    // empty between pushes, so queue length alone cannot pace a burst)
+    const now = Date.now()
+    const interval = paceInterval()
+    const waitMs = lastEmitTs + interval - now
+    if (waitMs > 5) {
+      setTimeout(tick, waitMs)
+      return
+    }
+    lastEmitTs = now
+    broadcastFrame(pacedQueue.shift())
+    setTimeout(tick, interval)
+  }
+  tick()
+}
+
 function pushFrame(png) {
-  frames.push({ index: nextFrameIndex++, png })
+  const entry = { index: nextFrameIndex++, png, ts: Date.now(), block: state.block }
+  frames.push(entry)
   while (frames.length > FRAME_RING_SIZE) frames.shift()
+  pacedQueue.push(entry)
+  if (pacedQueue.length > PACED_QUEUE_CAP) {
+    pacedQueue.splice(0, pacedQueue.length - PACED_QUEUE_CAP)
+  }
+  startPacer()
+}
+
+// ── latency telemetry ────────────────────────────────────────────────────────
+// blockMsLog: recent per-block generation times; keyApply: when a key change
+// was actually consumed by a block (server-side share of key->photon latency).
+const blockMsLog = []
+let lastKeyChangeTs = 0
+let prevBlockMask = -1
+const telemetry = { keyApply: null }
+
+function currentMask() {
+  let m = 0
+  const order = ['W', 'A', 'S', 'D', 'I', 'J', 'K', 'L']
+  for (let b = 0; b < order.length; b++) if (state.keys[order[b]]) m |= 1 << b
+  return m
 }
 
 async function walkLoop() {
   while (state.running) {
     state.generating = true
     const t0 = Date.now()
+    const mask = currentMask()
+    if (mask !== prevBlockMask) {
+      telemetry.keyApply = {
+        block: state.block,                       // first block generated with the new keys
+        keyTs: lastKeyChangeTs || t0,
+        applyTs: t0,
+        waitMs: lastKeyChangeTs ? t0 - lastKeyChangeTs : 0
+      }
+      prevBlockMask = mask
+    }
     try {
       const response = await world.step({ ...state.keys })
       await response
@@ -114,6 +265,8 @@ async function walkLoop() {
         .await()
       state.block++
       state.lastStepMs = Date.now() - t0
+      blockMsLog.push(state.lastStepMs)
+      if (blockMsLog.length > 20) blockMsLog.shift()
     } catch (err) {
       state.error = String(err?.message || err)
       state.running = false
@@ -124,13 +277,13 @@ async function walkLoop() {
 }
 
 // ── HTTP plumbing ────────────────────────────────────────────────────────────
-function readBody(req) {
+function readBody(req, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     const chunks = []
     let total = 0
     req.on('data', (c) => {
       total += c.length
-      if (total > MAX_BODY_BYTES) {
+      if (total > maxBytes) {
         req.destroy()
         reject(new Error('request body too large'))
         return
@@ -167,17 +320,46 @@ async function handle(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/state') {
+    const avgBlockMs = blockMsLog.length
+      ? blockMsLog.reduce((a, b) => a + b, 0) / blockMsLog.length
+      : 0
     sendJson(res, 200, {
       loaded: state.loaded,
       running: state.running,
       generating: state.generating,
+      resetting: state.resetting,
+      creating: state.creating,
       block: state.block,
       lastStepMs: state.lastStepMs,
       error: state.error,
       keys: state.keys,
       newestFrame: nextFrameIndex - 1,
-      oldestFrame: frames.length > 0 ? frames[0].index : -1
+      oldestFrame: frames.length > 0 ? frames[0].index : -1,
+      // latency telemetry
+      serverNow: Date.now(),
+      avgBlockMs,
+      genFps: avgBlockMs > 0 ? 12000 / avgBlockMs : 0,
+      keyApply: telemetry.keyApply,
+      streamBuffer: pacedQueue.length,
+      streamPaceMs: paceInterval()
     })
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/stream') {
+    res.writeHead(200, {
+      'Content-Type': `multipart/x-mixed-replace; boundary=${STREAM_BOUNDARY}`,
+      'Cache-Control': 'no-store',
+      Connection: 'keep-alive'
+    })
+    streamClients.add(res)
+    // NOTE: no req.on('close') here - in bare-http1 the REQUEST stream closes
+    // as soon as its (empty GET) body is consumed, which would evict the
+    // client immediately. The response stream tracks the connection lifetime.
+    res.on('close', () => streamClients.delete(res))
+    res.on('error', () => streamClients.delete(res))
+    // send the newest frame immediately so the viewer isn't blank
+    if (frames.length > 0) broadcastFrame(frames[frames.length - 1])
     return
   }
 
@@ -192,7 +374,9 @@ async function handle(req, res) {
     const isJpeg = frame.png.length > 1 && frame.png[0] === 0xff && frame.png[1] === 0xd8
     res.writeHead(200, {
       'Content-Type': isJpeg ? 'image/jpeg' : 'image/png',
-      'Content-Length': frame.png.length
+      'Content-Length': frame.png.length,
+      'X-Frame-Ts': String(frame.ts),      // server time the frame became available
+      'X-Frame-Block': String(frame.block) // walk block that produced it
     })
     res.end(frame.png)
     return
@@ -201,10 +385,119 @@ async function handle(req, res) {
   if (req.method === 'POST' && url.pathname === '/keys') {
     const body = await readBody(req)
     const parsed = JSON.parse(body.toString('utf8') || '{}')
+    const before = currentMask()
     for (const key of Object.keys(state.keys)) {
       if (typeof parsed[key] === 'boolean') state.keys[key] = parsed[key]
     }
-    sendJson(res, 200, { keys: state.keys })
+    if (currentMask() !== before) lastKeyChangeTs = Date.now()
+    sendJson(res, 200, { keys: state.keys, ts: lastKeyChangeTs })
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/create-world') {
+    // World generation from an image: body = raw image bytes (PNG/JPEG),
+    // optional ?prompt= query (defaults to the reference's minimal
+    // "| unknown |"). Creates the scene pack natively (umT5 + Wan2.2 VAE),
+    // swaps the session onto it and starts fresh at block 0.
+    if (state.resetting || state.creating) {
+      sendJson(res, 409, { error: 'busy: world restart/creation in progress' })
+      return
+    }
+    const image = await readBody(req, 25 * 1024 * 1024)
+    if (image.length < 100) {
+      sendJson(res, 400, { error: 'body must be the image bytes (PNG or JPEG)' })
+      return
+    }
+    let prompt = url.searchParams.get('prompt') || ''
+    prompt = prompt.trim() || '| unknown |'
+    if (!prompt.startsWith('| unknown |')) prompt = '| unknown | ' + prompt
+    state.creating = true
+    state.running = false
+    state.loaded = false
+    try {
+      while (state.generating) {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      try {
+        await world.unload()
+      } catch (_) {}
+      const scenePath = path.join(
+        path.dirname(currentScenePath),
+        `scene_upload_${Date.now()}.safetensors`
+      )
+      console.log(`world-walk-server: creating world from uploaded image (${image.length} bytes), prompt "${prompt.slice(0, 60)}"`)
+      const t0 = Date.now()
+      currentScenePath = scenePath
+      world = makeWorld()
+      const response = await world.createScene({
+        prompt,
+        image: new Uint8Array(image),
+        t5: T5_PATH,
+        vae: VAE_PATH,
+        output: scenePath,
+        width: Number(process.env.ABOT_WIDTH || 832),
+        height: Number(process.env.ABOT_HEIGHT || 480)
+      })
+      await response.onUpdate(() => {}).await()
+      console.log(`world-walk-server: scene written to ${scenePath} in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+      await world.load()
+      state.block = 0
+      state.lastStepMs = 0
+      state.error = null
+      blockMsLog.length = 0
+      telemetry.keyApply = null
+      prevBlockMask = -1
+      lastKeyChangeTs = 0
+      pacedQueue.length = 0
+      state.loaded = true
+      console.log('world-walk-server: new world ready (block 0)')
+      sendJson(res, 200, { ok: true, scene: scenePath, prompt })
+    } catch (err) {
+      state.error = String(err?.message || err)
+      sendJson(res, 500, { error: state.error })
+    } finally {
+      state.creating = false
+    }
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/reset') {
+    // full world restart: reload the session on the original scene (block 0).
+    // Heavy (~15 s, reloads DiT + taehv + scene); a native lightweight session
+    // reset in the engine would make this instant - future improvement.
+    if (state.resetting) {
+      sendJson(res, 409, { error: 'already restarting' })
+      return
+    }
+    state.resetting = true
+    state.running = false
+    state.loaded = false
+    try {
+      while (state.generating) {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      try {
+        await world.unload()
+      } catch (_) {}
+      world = makeWorld()
+      await world.load()
+      state.block = 0
+      state.lastStepMs = 0
+      state.error = null
+      blockMsLog.length = 0
+      telemetry.keyApply = null
+      prevBlockMask = -1
+      lastKeyChangeTs = 0
+      pacedQueue.length = 0
+      state.loaded = true
+      console.log('world-walk-server: world restarted (fresh session, block 0)')
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      state.error = String(err?.message || err)
+      sendJson(res, 500, { error: state.error })
+    } finally {
+      state.resetting = false
+    }
     return
   }
 
@@ -239,9 +532,12 @@ const PAGE_HTML = /* html */ `<!doctype html>
   body { margin: 0; background: #101418; color: #e8e8e8; font: 14px/1.45 system-ui, sans-serif; }
   .wrap { max-width: 900px; margin: 24px auto; padding: 0 16px; }
   h1 { font-size: 18px; font-weight: 600; }
+  .card { background: #141a20; border: 1px solid #26313c; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .cardtitle { font-weight: 600; color: #cfe0ee; margin-bottom: 4px; }
   .stage { position: relative; background: #000; border-radius: 8px; overflow: hidden; }
   .stage img { display: block; width: 100%; }
-  .placeholder { aspect-ratio: 832 / 480; display: flex; align-items: center; justify-content: center; color: #8aa; }
+  .placeholder { padding: 18px 0; display: flex; align-items: center; justify-content: center; color: #8aa; }
+  .placeholder[hidden] { display: none !important; }
   .hud { position: absolute; left: 12px; bottom: 12px; background: rgba(10,14,18,.75); border-radius: 8px; padding: 10px 12px; }
   .hud table { border-collapse: collapse; }
   .hud td { padding: 2px 6px; }
@@ -257,30 +553,53 @@ const PAGE_HTML = /* html */ `<!doctype html>
 </head>
 <body>
 <div class="wrap">
-  <h1>ABot-World interactive walk</h1>
-  <div class="stage">
-    <img id="frame" hidden alt="walk frame">
-    <div id="placeholder" class="placeholder">loading model…</div>
-    <div class="hud">
-      <table>
-        <tr>
-          <td>move</td>
-          <td><span class="key" id="k-W">W</span><span class="key" id="k-A">A</span><span class="key" id="k-S">S</span><span class="key" id="k-D">D</span></td>
-        </tr>
-        <tr>
-          <td>look</td>
-          <td><span class="key" id="k-I">I</span><span class="key" id="k-J">J</span><span class="key" id="k-K">K</span><span class="key" id="k-L">L</span></td>
-        </tr>
-      </table>
+  <h1>ABot-World — generate a world and walk it</h1>
+
+  <div class="card">
+    <div class="cardtitle">1 · Generate a world</div>
+    <p class="status" style="margin:4px 0 10px">
+      The world is built from a <b>starting image</b> (required — this model cannot
+      imagine a world from text alone) plus an optional short <b>text description</b>
+      that steers the style and content. Generation runs on this machine in
+      ~20&nbsp;seconds. Skip this step to walk the world that is already loaded.
+    </p>
+    <div class="bar" style="margin:0">
+      <input type="file" id="worldimage" accept="image/png,image/jpeg" class="status">
+      <input type="text" id="worldprompt" placeholder="optional: describe the scene (e.g. rainy neon street)" size="40"
+             style="background:#1c242c;border:1px solid #4a5a68;border-radius:6px;color:#e8e8e8;padding:7px 10px;">
+      <button id="createworld" disabled>Generate world</button>
     </div>
   </div>
-  <div class="bar">
-    <button id="toggle" disabled>Start walk</button>
-    <span class="status" id="status">connecting…</span>
+
+  <div class="card">
+    <div class="cardtitle">2 · Walk it</div>
+    <div class="stage">
+      <img id="frame" hidden alt="walk frame">
+      <div id="placeholder" class="placeholder">loading model…</div>
+      <div class="hud">
+        <table>
+          <tr>
+            <td>move</td>
+            <td><span class="key" id="k-W">W</span><span class="key" id="k-A">A</span><span class="key" id="k-S">S</span><span class="key" id="k-D">D</span></td>
+          </tr>
+          <tr>
+            <td>look</td>
+            <td><span class="key" id="k-I">I</span><span class="key" id="k-J">J</span><span class="key" id="k-K">K</span><span class="key" id="k-L">L</span></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div class="bar">
+      <button id="toggle" disabled>Start walk</button>
+      <button id="reset" disabled>Restart world</button>
+      <label class="status" title="uncheck for per-frame fetch with full latency telemetry"><input type="checkbox" id="streammode" checked> live stream</label>
+      <span class="status" id="status">connecting…</span>
+    </div>
+    <div class="bar status" id="stats" style="margin:4px 0 0">stats: waiting for walk…</div>
+    <p class="status" style="margin-top:10px">Hold <b>W/A/S/D</b> to move, <b>I/J/K/L</b> to look around. Keys apply to the
+    <i>next generated block</i> (~1.5&nbsp;s), so reactions take a moment. Click the page first so it
+    receives key events. If the world degrades after long walks, press <b>Restart world</b>.</p>
   </div>
-  <p class="status">Hold <b>W/A/S/D</b> to move, <b>I/J/K/L</b> to look around. Keys apply to the
-  <i>next generated block</i>; each block is a short burst of frames, so input latency equals block
-  generation time (shown above). Click the page first so it receives key events.</p>
 </div>
 <script>
   const WALK_KEYS = ['W','A','S','D','I','J','K','L']
@@ -290,30 +609,94 @@ const PAGE_HTML = /* html */ `<!doctype html>
   const pending = []
   let playing = false
 
+  // latency telemetry (client side)
+  let clockOffset = 0            // serverNow - Date.now(), refreshed each poll
+  let genFps = 0
+  let lastBlockMs = 0
+  let newestKnown = -1
+  let lastFetchMs = 0
+  const paintTimes = []          // rolling timestamps of painted frames -> play fps
+  let shownBlock = -1
+  let shownAgeMs = 0
+  let keyWaitMs = -1             // server: key change -> consumed by next block
+  let streamBuffer = 0
+  let streamPaceMs = 0
+  // measured key->photon (measure mode): tied to a specific key press
+  let press = null               // { t: performance.now(), clientTs: Date.now() }
+  let pressApplyBlock = -1       // block that consumed THIS press (from server)
+  let keyPhotonMs = 0
+
   function paintKeys(keys) {
     for (const k of WALK_KEYS) {
       document.getElementById('k-' + k).classList.toggle('held', !!keys[k])
     }
   }
 
-  async function postKeys() {
+  async function postKeys(isPress) {
     paintKeys(held)
+    if (isPress) {
+      press = { t: performance.now(), clientTs: Date.now() }
+      pressApplyBlock = -1
+    }
     await fetch('/keys', { method: 'POST', body: JSON.stringify(held) }).catch(() => {})
+  }
+
+  function fmtStats() {
+    const streaming = document.getElementById('streammode').checked
+    const playFps = paintTimes.length > 1
+      ? ((paintTimes.length - 1) * 1000 / (paintTimes[paintTimes.length - 1] - paintTimes[0]))
+      : 0
+    let out = 'gen ' + genFps.toFixed(1) + ' fps · block ' + (lastBlockMs / 1000).toFixed(2) + 's'
+    if (streaming) {
+      out += ' · mode: paced stream (' + streamPaceMs.toFixed(0) + 'ms/frame, buf ' + streamBuffer + ')'
+      if (keyWaitMs >= 0) {
+        out += ' · key→block wait ' + (keyWaitMs / 1000).toFixed(2) + 's' +
+               ' · est key→photon ~' + ((keyWaitMs + lastBlockMs) / 1000 + 0.2).toFixed(1) + 's'
+      }
+    } else {
+      const lag = Math.max(newestKnown - shownFrame, 0)
+      out += ' · play ' + playFps.toFixed(1) + ' fps · lag ' + lag + ' frames' +
+        ' · frame age ' + (shownAgeMs / 1000).toFixed(1) + 's' +
+        ' · fetch ' + lastFetchMs.toFixed(0) + 'ms' +
+        (keyPhotonMs > 0 ? ' · key→photon ' + (keyPhotonMs / 1000).toFixed(1) + 's' : '')
+    }
+    return out
   }
 
   window.addEventListener('keydown', (e) => {
     const k = e.key.toUpperCase()
-    if (WALK_KEYS.includes(k) && !held[k]) { held[k] = true; postKeys() }
+    if (WALK_KEYS.includes(k) && !held[k]) { held[k] = true; postKeys(true) }
   })
   window.addEventListener('keyup', (e) => {
     const k = e.key.toUpperCase()
-    if (WALK_KEYS.includes(k) && held[k]) { held[k] = false; postKeys() }
+    if (WALK_KEYS.includes(k) && held[k]) { held[k] = false; postKeys(false) }
   })
   window.addEventListener('blur', () => {
     let changed = false
     for (const k of WALK_KEYS) { if (held[k]) { held[k] = false; changed = true } }
-    if (changed) postKeys()
+    if (changed) postKeys(false)
   })
+
+  // ── display modes ──────────────────────────────────────────────────────────
+  // stream mode: the <img> is fed by the server's MJPEG push stream; no
+  // per-frame round trips, the server drops frames if the pipe is behind.
+  // measure mode: per-frame fetch player with full client-side telemetry.
+  function applyMode() {
+    const img = document.getElementById('frame')
+    const streaming = document.getElementById('streammode').checked
+    if (streaming) {
+      pending.length = 0
+      if (img.dataset.url) { URL.revokeObjectURL(img.dataset.url); delete img.dataset.url }
+      img.src = '/stream'
+      img.hidden = false
+      document.getElementById('placeholder').hidden = true
+    } else {
+      img.src = ''
+      shownFrame = Math.max(newestKnown - 1, -1) // start near live
+    }
+  }
+  document.getElementById('streammode').addEventListener('change', applyMode)
+  window.addEventListener('load', applyMode)
 
   document.getElementById('toggle').addEventListener('click', async () => {
     running = !running
@@ -321,16 +704,58 @@ const PAGE_HTML = /* html */ `<!doctype html>
     document.getElementById('toggle').textContent = running ? 'Stop walk' : 'Start walk'
   })
 
+  document.getElementById('reset').addEventListener('click', async () => {
+    const btn = document.getElementById('reset')
+    btn.disabled = true
+    btn.textContent = 'Restarting…'
+    document.getElementById('status').textContent = 'restarting world (reloads the session, ~15s)…'
+    try {
+      await fetch('/reset', { method: 'POST', body: '{}' })
+    } catch (_) {}
+    btn.textContent = 'Restart world'
+  })
+
+  document.getElementById('worldimage').addEventListener('change', () => {
+    const f = document.getElementById('worldimage').files[0]
+    document.getElementById('createworld').disabled = !f
+  })
+
+  document.getElementById('createworld').addEventListener('click', async () => {
+    const file = document.getElementById('worldimage').files[0]
+    if (!file) return
+    const btn = document.getElementById('createworld')
+    btn.disabled = true
+    btn.textContent = 'Generating…'
+    document.getElementById('status').textContent = 'generating world from image (~20s)…'
+    try {
+      const prompt = document.getElementById('worldprompt').value || ''
+      const r = await fetch('/create-world?prompt=' + encodeURIComponent(prompt), {
+        method: 'POST',
+        body: file
+      })
+      const out = await r.json()
+      document.getElementById('status').textContent = out.error
+        ? 'error: ' + out.error
+        : 'world ready — press Start walk'
+    } catch (_) {}
+    btn.textContent = 'Generate world'
+  })
+
   async function playPending() {
     if (playing) return
+    if (document.getElementById('streammode').checked) return // stream mode: <img> is server-fed
     playing = true
     const img = document.getElementById('frame')
     const placeholder = document.getElementById('placeholder')
-    while (pending.length > 0) {
+    while (pending.length > 0 && !document.getElementById('streammode').checked) {
       const i = pending.shift()
       try {
+        const t0 = performance.now()
         const r = await fetch('/frame?i=' + i)
+        lastFetchMs = performance.now() - t0
         if (!r.ok) continue
+        const frameTs = Number(r.headers.get('X-Frame-Ts') || 0)
+        const frameBlock = Number(r.headers.get('X-Frame-Block') || -1)
         const blob = await r.blob()
         const nextUrl = URL.createObjectURL(blob)
         if (img.dataset.url) URL.revokeObjectURL(img.dataset.url)
@@ -338,8 +763,25 @@ const PAGE_HTML = /* html */ `<!doctype html>
         img.dataset.url = nextUrl
         img.hidden = false
         placeholder.hidden = true
+        shownFrame = i
+        shownBlock = frameBlock
+        shownAgeMs = frameTs > 0 ? (Date.now() + clockOffset) - frameTs : 0
+        const now = performance.now()
+        paintTimes.push(now)
+        while (paintTimes.length > 36) paintTimes.shift()
+        // measured key->photon: first painted frame of the block that consumed
+        // THIS key press (pressApplyBlock is validated against the press time)
+        if (press !== null && pressApplyBlock >= 0 && frameBlock >= pressApplyBlock) {
+          keyPhotonMs = now - press.t
+          press = null
+          pressApplyBlock = -1
+        }
+        document.getElementById('stats').textContent = fmtStats()
       } catch (_) {}
-      await new Promise((r) => setTimeout(r, 1000 / 12)) // present at ~12 fps
+      // pace presentation only when caught up; drain any backlog at full speed
+      if (pending.length <= 2) {
+        await new Promise((r) => setTimeout(r, 1000 / 12)) // present at ~12 fps
+      }
     }
     playing = false
   }
@@ -349,25 +791,52 @@ const PAGE_HTML = /* html */ `<!doctype html>
       const s = await (await fetch('/state')).json()
       const btn = document.getElementById('toggle')
       btn.disabled = !s.loaded
+      document.getElementById('reset').disabled = !s.loaded || s.resetting
       running = s.running
       btn.textContent = running ? 'Stop walk' : 'Start walk'
       const status = document.getElementById('status')
       if (s.error) {
         status.textContent = 'error: ' + s.error
         status.className = 'err'
+      } else if (s.creating) {
+        status.textContent = 'creating world from image…'
+      } else if (s.resetting) {
+        status.textContent = 'restarting world (fresh session)…'
       } else if (!s.loaded) {
         status.textContent = 'loading model…'
+      } else if (s.running) {
+        status.textContent = 'walking — block ' + s.block +
+          (s.lastStepMs ? ' (' + (s.lastStepMs / 1000).toFixed(1) + 's/block)' : '')
       } else {
-        status.textContent =
-          (s.generating ? 'generating block ' + s.block + '… ' : 'idle. ') +
-          (s.lastStepMs ? 'last block: ' + (s.lastStepMs / 1000).toFixed(1) + 's' : '')
-        document.getElementById('placeholder').textContent = 'press Start walk'
+        status.textContent = s.block === 0
+          ? 'world ready — press Start walk'
+          : 'paused at block ' + s.block + ' — press Start walk to continue'
+        document.getElementById('placeholder').textContent = 'world ready — press Start walk'
       }
-      for (let i = Math.max(shownFrame + 1, s.oldestFrame); i <= s.newestFrame; i++) {
-        pending.push(i)
-        shownFrame = i
+      const cw = document.getElementById('createworld')
+      cw.disabled = s.creating || s.resetting || !document.getElementById('worldimage').files[0]
+      clockOffset = (s.serverNow || Date.now()) - Date.now()
+      genFps = s.genFps || 0
+      lastBlockMs = s.lastStepMs || 0
+      streamBuffer = s.streamBuffer || 0
+      streamPaceMs = s.streamPaceMs || 0
+      newestKnown = s.newestFrame
+      if (s.keyApply) {
+        keyWaitMs = s.keyApply.waitMs
+        // bind the server's key-consumption record to OUR outstanding press:
+        // accept it only if the server saw the key change at/after our press
+        if (press !== null && s.keyApply.keyTs >= press.clientTs + clockOffset - 1500) {
+          pressApplyBlock = s.keyApply.block
+        }
       }
-      playPending()
+      if (!document.getElementById('streammode').checked) {
+        const enqueueFrom = Math.max(shownFrame + 1, s.oldestFrame)
+        for (let i = enqueueFrom; i <= s.newestFrame; i++) {
+          if (!pending.includes(i)) pending.push(i)
+        }
+        playPending()
+      }
+      document.getElementById('stats').textContent = fmtStats()
     } catch (_) {}
     setTimeout(poll, 500)
   }
