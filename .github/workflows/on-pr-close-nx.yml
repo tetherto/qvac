@@ -1,12 +1,6 @@
 name: On PR Close (nx)
-# G1 pilot: parallel -nx duplicate consolidating the 15 on-pr-close-<pkg>.yml
-# clones. Legacy files untouched - additive only.
-#
-# SCOPE = mechanism only. on-pr-close is a forced-dry-run no-op today, so this
-# proves the -nx consolidation + nx-graph package selection + act plumbing, NOT
-# cleanup correctness. The `changed`-job selector is PROVISIONAL (directly-
-# changed via nx graph roots) and gets locked to match on-merge's publish
-# selector at G6. dry-run stays true - zero possibility of a real deletion.
+# Additive nx-affected replacement for the 15 on-pr-close-<pkg>.yml clones.
+# Selector is provisional (directly-changed); dry-run stays true.
 
 on:
   pull_request:

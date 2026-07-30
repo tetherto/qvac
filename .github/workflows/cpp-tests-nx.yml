@@ -1,25 +1,7 @@
 name: CPP Tests (nx)
-# nx-affected-driven dispatcher collapsing the 5 cpp-tests-<pkg>.yml files
-# into one: classification-ggml, diffusion-cpp, embed-llamacpp, llm-llamacpp,
-# vla-ggml. Confirmed gate-adjacent - each is called from its own
-# on-pr-<pkg>.yml (on-pr-classification-ggml.yml, on-pr-diffusion-cpp.yml,
-# on-pr-embed-llamacpp.yml, on-pr-llm-llamacpp.yml, on-pr-vla.yml).
-#
-# Additive only - none of the 5 legacy files touched or deleted. Each has
-# bespoke self-hosted-runner/build logic reused UNCHANGED via `uses:`. GHA
-# does not support a dynamic `uses:` path (can't parameterize a reusable
-# workflow call with a matrix variable), so the fan-out is 5 static jobs,
-# each gated by `if: contains(affected, '<pkg>')` off one shared `affected`
-# job.
-#
-# Selector: `nx affected` (transitive) - all 5 packages here are real
-# `inference-addon-cpp` vcpkg-overlay consumers, so a change to that shared
-# native lib marks all 5 affected even though none of their own files
-# changed - this is the case that actually exercises transitivity, distinct
-# from on-pr-close-nx.yml's directly-changed selector.
-#
-# Standalone/additive for now (workflow_dispatch only) - NOT wired into the
-# real on-pr-<pkg>.yml files yet. That wiring is a later, explicit step.
+# Additive dispatcher collapsing the 5 cpp-tests-<pkg>.yml files. GHA has no
+# dynamic `uses:`, so this is 5 static conditional jobs off one nx-affected
+# job, not a matrix. Not yet wired into on-pr-<pkg>.yml.
 
 on:
   workflow_dispatch:

@@ -1,20 +1,7 @@
-# Real consolidation of the 15 prebuilds-<pkg>.yml files (all of which are
-# thin wrappers around reusable-prebuilds.yml with only `with:` data
-# differing - see QVAC-17422/#1806). Since every legacy file calls the SAME
-# reusable workflow, GHA's static-`uses:` limit does not block a genuine
-# matrix consolidation here (unlike cpp-tests/cpp-test-coverage, where each
-# package calls a DIFFERENT reusable workflow file).
-#
-# The matrix is pre-filtered to nx-affected packages INSIDE the `affected`
-# job (not via a job-level `if: contains(..., matrix.package)`) - a job that
-# calls a reusable workflow (`uses:`) cannot reference the `matrix` context
-# in its own `if:` condition (real GHA constraint, confirmed via `act`).
-#
-# Config table is real YAML (env.PREBUILDS_CONFIG), not a JSON string - `yq`
-# (pre-installed on GitHub-hosted runners) converts it to JSON only at the
-# point of use, so the config stays human-readable/editable.
-#
-# Additive only - none of the 15 legacy files touched or deleted.
+# Consolidates the 15 prebuilds-<pkg>.yml files (all thin wrappers around
+# reusable-prebuilds.yml, differing only in `with:` data). Matrix is
+# pre-filtered to nx-affected packages before the job runs - a job calling a
+# reusable workflow can't reference `matrix` in its own `if:`. Additive only.
 name: "Prebuilds (nx)"
 
 on:
@@ -57,8 +44,6 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       any: ${{ steps.matrix.outputs.any }}
     env:
-      # Real YAML, human-readable/editable - converted to JSON via `yq` at
-      # the point of use, not hand-written as a JSON string.
       PREBUILDS_CONFIG: |
         - package: audiogen-ggml
           workdir: packages/audiogen-ggml
