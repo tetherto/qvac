@@ -279,7 +279,7 @@ const _bindingDesktop = '../../binding'
 const _indexDesktop = '../../index.js'
 
 const binding = isMobile ? require('@qvac/asr-ggml/binding.js') : require(_bindingDesktop)
-const { ParakeetInterface } = require('../../engines/parakeet/parakeet.js')
+const { ParakeetInterface } = require('../../test-support.js')
 const ASRGgml = isMobile ? require('@qvac/asr-ggml') : require(_indexDesktop)
 
 /**

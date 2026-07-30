@@ -4,7 +4,7 @@ const path = require('bare-path')
 const test = require('brittle')
 const process = require('bare-process')
 const { spawnSync } = require('bare-subprocess')
-const { WhisperInterface } = require('../../engines/whisper/whisper.js')
+const { WhisperInterface } = require('../../test-support.js')
 const binding = require('../../binding')
 const {
   detectPlatform,
