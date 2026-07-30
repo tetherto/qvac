@@ -1,17 +1,15 @@
-# Dev overlay: build qvac-lib-inference-addon-cpp 1.3.2 from the main
-# snapshot (tetherto/qvac @ 47eccb47f, the squash-merge of PR #3525) instead
-# of the published registry version, to verify this addon builds unchanged
-# against the 1.3.2 multi-job scheduler + JsAsyncTask teardown fix
-# (backwards-compatibility check; same REF/SHA512 across every consumer
-# addon on this branch). Bump REF/SHA512 (and the overlay port-version) when
-# retargeting. To fall back to the registry version, remove this port
-# directory and the "overlay-ports" entry in vcpkg-configuration.json.
+# Dev overlay: build qvac-lib-inference-addon-cpp 1.3.2 from PR #3564
+# (gianni-cor/qvac @ fe64ee07) instead of the published registry version.
+# This validates the JsAsyncTask release-before-settlement fix across every
+# consumer addon. Same REF/SHA512 across every consumer on this branch.
+# To fall back to the registry version, remove this port directory and the
+# "overlay-ports" entry in vcpkg-configuration.json.
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO tetherto/qvac
-  REF 47eccb47f36d20c7aba4cd8e5892f7fd9eae5718
-  SHA512 794e7ffaf4e46a3fa9c8bd331669c386c1ffc40349086a9a281ea38d5d2ddf9cb876e0d313b4708729c42cda70b9827170a185058d783f2074113bec237bec31
-  HEAD_REF main
+  REPO gianni-cor/qvac
+  REF fe64ee074d002c907092816df6cdff2945bd9097
+  SHA512 de0ff119c8509c75f5623eca1ef43bb6c513e11e6bc9941c8eccc73a1ff3dc12dd6c97737adc977e4635dea5c39f958b56bf75801b03227f69f498dbef2f78dc
+  HEAD_REF fix/js-async-task-release-before-settle-clean
 )
 
 vcpkg_check_features(
