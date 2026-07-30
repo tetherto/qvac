@@ -6,8 +6,8 @@ const test = require('brittle')
 // able to statically discover the attached members of `module.exports` so ESM
 // consumers (like the SDK's `import { VlaModel } from '@qvac/vla-ggml'`) link.
 // A type-level test cannot catch this — the declarations can be correct while
-// the lexer sees nothing (see the 0.16.0 → 0.16.1 regression) — so this test
-// exercises the real runtime import machinery via dynamic import.
+// the lexer sees nothing — so this test exercises the real runtime import
+// machinery via dynamic import.
 test('ESM named exports are statically discoverable', async (t) => {
   const ns = await import('../../index.js')
 
