@@ -12,7 +12,7 @@ export const systemResourcesCapabilities = {
     dependency: 'none',
     estimatedDurationMs: 5_000
   }
-} satisfies TestDefinition
+} as const satisfies TestDefinition
 
 export const systemResourcesSample = {
   testId: 'system-resources-sample',
@@ -26,7 +26,7 @@ export const systemResourcesSample = {
     dependency: 'none',
     estimatedDurationMs: 5_000
   }
-} satisfies TestDefinition
+} as const satisfies TestDefinition
 
 export const systemResourcesInvalidInput = {
   testId: 'system-resources-invalid-input',
@@ -40,7 +40,7 @@ export const systemResourcesInvalidInput = {
     dependency: 'none',
     estimatedDurationMs: 5_000
   }
-} satisfies TestDefinition
+} as const satisfies TestDefinition
 
 export const systemResourcesTests = [
   systemResourcesCapabilities,
