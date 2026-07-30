@@ -654,6 +654,38 @@ protected:
     return specPos() + needed <= specCtxCeiling();
   }
 
+  // Single success-exit for runSpeculativeGeneration. Consumes a stop that
+  // landed too late for the entry / loop-top checks — during the final round's
+  // body, in the pre-loop first-token window, or once the budget was exhausted.
+  // Without this, that stop is dropped AND stays set, so the NEXT generation's
+  // entry check cancels a request the caller never cancelled and rolls back
+  // its fresh prefill. Mirrors the post-loop cancel in the non-speculative
+  // generateResponse paths. Every `ok=true` return in the speculative loop
+  // MUST go through here — an earlier version had the check only after the
+  // while loop, and the two pre-loop first-token exits silently bypassed it.
+  GenerateResponseResult specFinishRespectingStop(
+      const std::function<void(const std::string&)>& outputCallback) {
+    if (stopGeneration_.load()) {
+      stopGeneration_.store(false);
+      return specCancel(outputCallback);
+    }
+    return specFinish(outputCallback, /*ok=*/true);
+  }
+
+  // Failure exit for runSpeculativeGeneration (context overflow / recovery
+  // headroom exhausted). The request is over — LlamaModel responds to
+  // ok=false with resetState() + throw — so consume any pending stop here:
+  // it targeted this request, which has already failed. resetState() itself
+  // deliberately does NOT clear the flag (it also runs at request START on
+  // the stateless-mode path, where clearing would swallow a legitimate
+  // cancel), so without this a stop racing the failure would leak into the
+  // next request as a spurious cancellation.
+  GenerateResponseResult
+  specFail(const std::function<void(const std::string&)>& outputCallback) {
+    stopGeneration_.store(false);
+    return specFinish(outputCallback, /*ok=*/false);
+  }
+
   // MTP speculative-decoding generation loop: draft from the MTP head, verify
   // the draft against the target in one batch, accept the longest matching
   // prefix, and feed each accepted token through specProcessToken.
@@ -737,7 +769,7 @@ protected:
       }
       // Same inline-decode headroom requirement as the in-loop recovery below.
       if (!specEnsureRecoveryHeadroom()) {
-        return specFinish(outputCallback, /*ok=*/false);
+        return specFail(outputCallback);
       }
       specRecoverReasoning(idLast, specBatch, outputCallback);
       const llama_token next = specSampleAndAccept(-1);
@@ -745,7 +777,7 @@ protected:
           next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
       idLast = step.token;
       if (step.finished) {
-        return specFinish(outputCallback, /*ok=*/true);
+        return specFinishRespectingStop(outputCallback);
       }
     } else {
       // NOTE: the first token is not decoded here — it is decoded as id_last in
@@ -758,7 +790,7 @@ protected:
           idLast, sampled, ++generated, outputCallback, nullptr);
       idLast = step.token;
       if (step.finished) {
-        return specFinish(outputCallback, /*ok=*/true);
+        return specFinishRespectingStop(outputCallback);
       }
     }
 
@@ -781,7 +813,7 @@ protected:
         // riskier than the benign lag fabric's begin() already handles.
         specApplyContextDiscard();
         if (specPos() + 1 > specCtxCeiling()) {
-          return specFinish(outputCallback, /*ok=*/false);
+          return specFail(outputCallback);
         }
       }
 
@@ -883,7 +915,7 @@ protected:
           // Recovery decodes inline (outside the clamped verify batch), so make
           // room for it or stop gracefully instead of hitting FailedToDecode.
           if (!specEnsureRecoveryHeadroom()) {
-            return specFinish(outputCallback, /*ok=*/false);
+            return specFail(outputCallback);
           }
           specRecoverReasoning(tok, specBatch, outputCallback);
           const llama_token next = specSampleAndAccept(-1);
@@ -931,19 +963,7 @@ protected:
       }
     }
 
-    // Unified post-loop cancel, mirroring the non-speculative paths
-    // (TextLlmContext::generateResponse / MtmdLlmContext::generateResponse).
-    // The loop-top check only sees a stop that arrives before the NEXT round;
-    // a stop landing during the final round's body (or once `finished` breaks
-    // out / the budget is exhausted) would otherwise be dropped here AND leave
-    // `stopGeneration_` set, so the next generation's entry check would cancel
-    // a request the caller never cancelled and roll back its fresh prefill.
-    if (stopGeneration_.load()) {
-      stopGeneration_.store(false);
-      return specCancel(outputCallback);
-    }
-
-    return specFinish(outputCallback, /*ok=*/true);
+    return specFinishRespectingStop(outputCallback);
   }
 
   // Context-specific pieces of the MTP loop. The cursor is `nPast_` on

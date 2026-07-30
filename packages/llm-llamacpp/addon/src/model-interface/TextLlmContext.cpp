@@ -191,7 +191,23 @@ void TextLlmContext::initializeCommonState() {
         "[TextLlm] spec-type=draft-mtp is ignored under continuous batching "
         "(n_parallel > 1); running non-speculatively\n");
   }
-  const bool wantMtpDraft = specTypeIsMtp && params_.n_parallel <= 1;
+  // The verify batch holds id_last + the draft tokens, so a validated batch
+  // capacity of 1 leaves room for zero draft tokens: every round would still
+  // pay fabric's draft forward passes (its drafter ignores the per-round
+  // dp.n_max hint) only for runSpeculativeGeneration to discard the result —
+  // strictly worse than plain decoding. Gate construction like the
+  // continuous-batching case above. llama_n_batch is the VALIDATED capacity,
+  // not the raw config value.
+  const int specBatchCap = static_cast<int>(llama_n_batch(modelCtx_.lctx));
+  if (specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap <= 1) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[TextLlm] spec-type=draft-mtp is ignored with batch capacity <= 1 "
+        "(no room for draft tokens in the verify batch); running "
+        "non-speculatively\n");
+  }
+  const bool wantMtpDraft =
+      specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap > 1;
   if (wantMtpDraft) {
     try {
       auto cparamsMtp = common_context_params_to_llama(params_);

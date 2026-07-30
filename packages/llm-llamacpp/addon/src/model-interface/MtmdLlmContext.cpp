@@ -120,7 +120,20 @@ void MtmdLlmContext::initializeCommonState() {
         "[MtmdLlm] spec-type=draft-mtp is ignored under continuous batching "
         "(n_parallel > 1); running non-speculatively\n");
   }
-  const bool wantMtpDraft = specTypeIsMtp && params_.n_parallel <= 1;
+  // Batch capacity 1 leaves no room for draft tokens in the verify batch
+  // (id_last + drafts): every round would pay fabric's draft forward passes
+  // only to discard the result. Gate construction — see the matching comment
+  // in TextLlmContext.
+  const int specBatchCap = static_cast<int>(llama_n_batch(modelCtx_.lctx));
+  if (specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap <= 1) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] spec-type=draft-mtp is ignored with batch capacity <= 1 "
+        "(no room for draft tokens in the verify batch); running "
+        "non-speculatively\n");
+  }
+  const bool wantMtpDraft =
+      specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap > 1;
   if (wantMtpDraft) {
     try {
       auto cparamsMtp = common_context_params_to_llama(params_);

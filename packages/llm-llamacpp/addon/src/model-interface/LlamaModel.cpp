@@ -1223,8 +1223,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       // Draft counters for the most recent generation. The context resets them
-      // in specBeginGeneration, which a prefill-only request never reaches, so
-      // guard on wasPrefill the same way stopReason / generatedTokens do —
+      // at generateResponse entry, which a prefill-only request never reaches,
+      // so guard on wasPrefill the same way stopReason / generatedTokens do —
       // otherwise a prefill-only run echoes the previous generation's counters
       // and contradicts the index.d.ts contract ("counters for the last
       // request").
@@ -1691,11 +1691,13 @@ void LlamaModel::commonParamsParse(
       // common_speculative_types_from_names throws a bare
       // std::invalid_argument on an unrecognised name. Every other invalid
       // config value in this function surfaces as a StatusError, so translate
-      // rather than letting an unstructured exception escape.
+      // rather than letting an unstructured exception escape. Deliberately
+      // narrow: anything else (e.g. bad_alloc) is NOT an unrecognised type and
+      // must propagate as-is rather than be mislabelled.
       std::vector<common_speculative_type> types;
       try {
         types = common_speculative_types_from_names(split(iter->second, ','));
-      } catch (const std::exception& e) {
+      } catch (const std::invalid_argument& e) {
         throw qvac_errors::StatusError(
             qvac_errors::general_error::InvalidArgument,
             string_format(

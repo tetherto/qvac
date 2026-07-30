@@ -415,7 +415,7 @@ safeTest(
     const prefillResp = await addon.run(PROMPT, { prefill: true })
     const prefillOutput = await collectResponse(prefillResp)
     t.is(prefillOutput.length, 0, 'prefill-only request emits no generated text')
-    t.is(Number(prefillResp.stats.generatedTokens), 0, 'prefill-only request generates no tokens')
+    t.is(prefillResp.stats.generatedTokens, 0, 'prefill-only request generates no tokens')
 
     const response = await addon.run(PROMPT)
     const output = await collectResponse(response)
@@ -435,11 +435,12 @@ safeTest(
   'Qwen3.5-0.8B MTP draft counters do not echo the previous generation on prefill',
   { timeout: 600_000 },
   async (t) => {
-    // The context resets draftAccepted/draftTotal in specBeginGeneration, which
-    // a prefill-only request never reaches — so without an explicit wasPrefill
-    // guard in singleRuntimeStatsLocked the prefill turn reports the PREVIOUS
-    // generation's counters, contradicting the index.d.ts contract. Generate
-    // first so the counters are non-zero, then prefill and require zeros.
+    // The context resets draftAccepted/draftTotal at generateResponse entry,
+    // which a prefill-only request never reaches — so without an explicit
+    // wasPrefill guard in singleRuntimeStatsLocked the prefill turn reports the
+    // PREVIOUS generation's counters, contradicting the index.d.ts contract.
+    // Generate first so the counters are non-zero, then prefill and require
+    // zeros.
     const addon = await loadAddon(t, { withSpec: true })
 
     const genResp = await addon.run(PROMPT)
@@ -452,90 +453,111 @@ safeTest(
     const prefillResp = await addon.run(PROMPT, { prefill: true })
     await collectResponse(prefillResp)
     t.is(
-      Number(prefillResp.stats.draftAccepted),
+      prefillResp.stats.draftAccepted,
       0,
       'prefill-only request reports draftAccepted=0, not the previous generation value'
     )
     t.is(
-      Number(prefillResp.stats.draftTotal),
+      prefillResp.stats.draftTotal,
       0,
       'prefill-only request reports draftTotal=0, not the previous generation value'
     )
   }
 )
 
+// Distinguish a cancellation surfaced as an error from a real failure — same
+// helper as cache-state-machine.test.js / qwen3-5-multimodal-cache-stress.test.js.
+function isCancellationError(err) {
+  if (!err) return false
+  return /cancel|aborted|stopp?ed/i.test(err.message || String(err))
+}
+
+// Start a run, cancel it once generation is demonstrably under way (2nd
+// chunk), and swallow the resulting cancellation error. Returns the number of
+// chunks streamed before the cancel landed.
+async function runAndCancelMidGeneration(addon) {
+  const response = await addon.run(PROMPT)
+  let chunkCount = 0
+  const ticker = setInterval(() => {}, 50)
+  try {
+    await response
+      .onUpdate(() => {
+        chunkCount++
+        if (chunkCount === 2) addon.cancel().catch(() => {})
+      })
+      .await()
+  } catch (err) {
+    if (!isCancellationError(err)) throw err
+  } finally {
+    clearInterval(ticker)
+  }
+  return chunkCount
+}
+
 safeTest(
-  'Qwen3.5-0.8B cancelling mid-speculation does not leak into the next request',
+  'Qwen3.5-0.8B repeated cancels mid-speculation do not leak into later requests',
   { timeout: 600_000 },
   async (t) => {
     // Regression guard for two cancel-path defects on the speculative loop:
     //
-    //  1. runSpeculativeGeneration checked `stopGeneration_` only at entry and
-    //     at loop top, never after the loop. A stop landing during the final
-    //     round was dropped AND left the flag set, so the NEXT generation hit
-    //     the entry check and returned a cancelled/empty result for a request
-    //     the caller never cancelled (rolling back its fresh prefill).
-    //  2. cancelGenerationCleanup did not mirror the rollback onto the MTP
-    //     draft context on the recurrent/hybrid branch — and Qwen3.5-*-MTP is
-    //     hybrid — so orphaned draft-cache positions accumulated until
+    //  1. `stopGeneration_` leak: exits of runSpeculativeGeneration that skip
+    //     the stop check drop the cancel AND leave the flag set, so the NEXT
+    //     generation returns a cancelled/empty result for a request the caller
+    //     never cancelled (rolling back its fresh prefill). Fixed by routing
+    //     every exit through specFinishRespectingStop / specFail.
+    //  2. Cancel cleanup did not mirror the rollback onto the MTP draft context
+    //     on the recurrent/hybrid branch — and Qwen3.5-*-MTP is hybrid — so
+    //     orphaned draft-cache positions accumulated across cancels until
     //     llama_decode(ctx_dft) failed and MTP silently switched itself off for
     //     the rest of the session.
     //
-    // Both surface the same way: the request AFTER a cancel misbehaves. So the
-    // load-bearing assertions are on the follow-up turn, not the cancelled one.
-    // A long n_predict keeps the generation running long enough that the cancel
-    // lands mid-loop rather than after it.
+    // Both surface on requests AFTER a cancel, so the load-bearing assertions
+    // are on the follow-up turns. Cancels are repeated across several cycles:
+    // defect 2 is cumulative (one orphaned prompt's worth of cells is not
+    // enough to break a 2048-cell draft cache, several are observable as
+    // drafting degrading to zero), and each extra cycle is another chance for
+    // a stop to land in an exit window for defect 1. The exact
+    // stop-races-the-final-round timing is not deterministically reachable
+    // from JS — the structural guarantee is the single-exit helper in
+    // LlmContext.hpp; this test makes a reintroduced leak likely, not certain,
+    // to surface.
+    const CYCLES = 8
     const addon = await loadAddon(t, {
       withSpec: true,
-      overrides: { n_predict: '256', ctx_size: '2048' }
+      overrides: { n_predict: '48', ctx_size: '2048' }
     })
 
-    const cancelResp = await addon.run(PROMPT)
-    let chunkCount = 0
-    let sawCancelError = false
-    const ticker = setInterval(() => {}, 50)
-    try {
-      await cancelResp
-        .onUpdate(() => {
-          chunkCount++
-          // Cancel as soon as generation is demonstrably under way, so the stop
-          // arrives while the draft/verify/accept loop is mid-flight.
-          if (chunkCount === 2) addon.cancel().catch(() => {})
-        })
-        .await()
-    } catch (err) {
-      sawCancelError = /cancel|aborted|stopp?ed/i.test(err?.message || String(err))
-      if (!sawCancelError) throw err
-    } finally {
-      clearInterval(ticker)
-    }
-    t.ok(chunkCount > 0, `cancelled turn streamed before the cancel (${chunkCount} chunks)`)
-    console.log(`  cancelled turn: chunks=${chunkCount} cancelError=${sawCancelError}`)
+    for (let cycle = 1; cycle <= CYCLES; cycle++) {
+      const chunkCount = await runAndCancelMidGeneration(addon)
+      t.ok(
+        chunkCount > 0,
+        `cycle ${cycle}: cancelled turn streamed before the cancel (${chunkCount} chunks)`
+      )
 
-    // The follow-up turn must behave as if the cancel never happened.
-    const followUp = await addon.run(PROMPT)
-    const output = await collectResponse(followUp)
-    const stats = followUp.stats
-    console.log(
-      `  after cancel: chars=${output.length} draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`
-    )
-    t.ok(
-      output.length > 0,
-      `request after a cancel produces real output, not a stale-flag cancellation (${output.length} chars)`
-    )
-    t.ok(
-      Number(stats.generatedTokens) > 0,
-      `request after a cancel generates tokens (generatedTokens=${stats.generatedTokens})`
-    )
-    // Defect 2: if the draft context was left divergent, MTP degrades or
-    // disables itself and drafting stops entirely.
-    t.ok(
-      stats.draftTotal > 0,
-      `MTP still drafts after a cancel — draft context stayed aligned (draftTotal=${stats.draftTotal})`
-    )
-    t.ok(
-      stats.draftAccepted > 0,
-      `MTP still accepts drafts after a cancel (draftAccepted=${stats.draftAccepted})`
-    )
+      // The follow-up turn must behave as if the cancel never happened.
+      const followUp = await addon.run(PROMPT)
+      const output = await collectResponse(followUp)
+      const stats = followUp.stats
+      console.log(
+        `  cycle ${cycle}: chars=${output.length} generatedTokens=${stats.generatedTokens} draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`
+      )
+      t.ok(
+        output.length > 0,
+        `cycle ${cycle}: request after a cancel produces real output, not a stale-flag cancellation`
+      )
+      t.ok(
+        stats.generatedTokens > 0,
+        `cycle ${cycle}: request after a cancel generates tokens (generatedTokens=${stats.generatedTokens})`
+      )
+      // Defect 2: a divergent draft context degrades MTP toward inert.
+      t.ok(
+        stats.draftTotal > 0,
+        `cycle ${cycle}: MTP still drafts after ${cycle} cancel(s) (draftTotal=${stats.draftTotal})`
+      )
+      t.ok(
+        stats.draftAccepted > 0,
+        `cycle ${cycle}: MTP still accepts drafts after ${cycle} cancel(s) (draftAccepted=${stats.draftAccepted})`
+      )
+    }
   }
 )
