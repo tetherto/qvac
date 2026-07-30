@@ -3,6 +3,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { DESKTOP_ONLY } = require('./lib/mobile-test-policy.js')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -115,6 +116,7 @@ function getIntegrationTestFiles () {
 
   return fs.readdirSync(integrationDir)
     .filter(f => f.endsWith('.test.js'))
+    .filter(f => !DESKTOP_ONLY.has(f))
     .sort()
 }
 

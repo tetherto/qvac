@@ -10,10 +10,6 @@ async function runAccuracyMultilangTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/accuracy-multilang.test.js', options)
 }
 
-async function runAddonTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/addon.test.js', options)
-}
-
 async function runAudioCtxChunkingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/audio-ctx-chunking.test.js', options)
 }
@@ -146,13 +142,6 @@ async function runParakeetSortformerStreamingAliasTest (options = {}) { // eslin
   return runIntegrationModule('../integration/parakeet-sortformer-streaming-alias.test.js', options)
 }
 
-// Intentionally appended AFTER the alphabetical block that
-// `npm run test:mobile:generate` emits: whisper's GPU teardown can crash the
-// bare app on some Adreno devices at process/context shutdown
-// (whisper.cpp#2373). Keeping these two cases last ensures such a crash cannot
-// drop coverage of any earlier case on that device. The CPU sweep runs before
-// them for the same reason. See test/integration/mobile-perf-tiny-gpu.test.js
-// for the full rationale; re-apply this ordering if the file is regenerated.
 async function runMobilePerfSweepGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/mobile-perf-sweep-gpu.test.js', options)
 }
@@ -163,7 +152,6 @@ async function runMobilePerfTinyGpuTest (options = {}) { // eslint-disable-line 
 
 module.exports = {
   runAccuracyMultilangTest,
-  runAddonTest,
   runAudioCtxChunkingTest,
   runColdStartTimingTest,
   runCorruptedModelTest,

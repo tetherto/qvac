@@ -3,6 +3,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { DESKTOP_ONLY, orderIntegrationFiles } = require('./lib/mobile-test-policy.js')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -14,9 +15,11 @@ function getIntegrationFiles () {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
+  const files = fs.readdirSync(integrationDir)
     .filter(entry => entry.endsWith('.test.js'))
-    .sort()
+    .filter(entry => !DESKTOP_ONLY.has(entry))
+
+  return orderIntegrationFiles(files)
 }
 
 function toFunctionName (fileName) {
