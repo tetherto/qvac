@@ -1,11 +1,10 @@
 {
   "ios": {
-    "finetuning": ["runFinetuningPauseResumeTest"],
-    "finetuningArchs": ["runFinetuningArchsTest"],
     "finetuning": [
       "runFinetuningPauseResumeTest",
       "runFinetuningCancelSlotReleaseTest"
     ],
+    "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],

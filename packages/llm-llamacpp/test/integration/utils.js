@@ -933,7 +933,7 @@ function verifyFinalStatus(t, model, result = null) {
 // early-return on it as an earlier version did (which hid regressions).
 function assertFiniteMetricIfPresent(t, stats, key, id) {
   const v = stats?.[key]
-  if (v == null) return
+  if (v === null || v === undefined) return
   t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
   t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not NaN/Inf), got: ${v}`)
 }

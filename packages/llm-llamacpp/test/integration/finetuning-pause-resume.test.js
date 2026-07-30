@@ -45,35 +45,6 @@ const FINETUNE_MODELS = [
   }
 ]
 
-function waitForProgress(handle, minSteps = 2, timeoutMs = 600_000) {
-  return new Promise((resolve, reject) => {
-    let count = 0
-    const timer = setTimeout(() => {
-      handle.removeListener('stats', onStats)
-      reject(
-        new Error(
-          `waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`
-        )
-      )
-    }, timeoutMs)
-    const onStats = () => {
-      if (++count >= minSteps) {
-        clearTimeout(timer)
-        handle.removeListener('stats', onStats)
-        resolve()
-      }
-    }
-    handle.on('stats', onStats)
-  })
-}
-
-function assertFiniteMetricIfPresent(t, stats, key, modelId) {
-  const value = stats?.[key]
-  if (value === null || value === undefined || (typeof value === 'number' && isNaN(value))) return
-  t.is(typeof value, 'number', `[${modelId}] ${key} should be a number when present`)
-  t.ok(Number.isFinite(value), `[${modelId}] ${key} should be finite (not Inf), got: ${value}`)
-}
-
 function assertLossAndAccuracyAreFinite(t, result, modelId) {
   const stats = result?.stats
   if (!stats || typeof stats !== 'object') return
