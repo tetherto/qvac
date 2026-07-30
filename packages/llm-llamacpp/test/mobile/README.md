@@ -8,6 +8,8 @@ This directory contains the mobile test entrypoint for the `@qvac/llm-llamacpp` 
 
 - `integration-runtime.cjs` — Bare-runtime helper that exposes a global `runIntegrationModule()` so each generated test entry can dynamically import a single file under `../integration/`.
 - `integration.auto.cjs` — **Auto-generated** by `npm run test:mobile:generate`. Each function in this file mirrors one `.test.js` under `test/integration/` and invokes it through the runtime helper. Do not edit by hand; regenerate after adding or renaming integration tests.
+- `model-manifest.json` — **Hand-maintained** Android pre-stage map (see below).
+- `test-groups.json` — Device Farm shard definitions (see below).
 - `testAssets/` — Directory for model files and test data referenced by the integration tests.
 
 ## What the Mobile Tests Do
@@ -38,6 +40,47 @@ To move a test between the per-PR and weekend cadence, just move its entry
 between the `android`/`ios` and `androidWeekly`/`iosWeekly` sections — no
 workflow edits required. The weekend run posts a pass/fail report to a
 `weekly-mobile-report`-labelled GitHub issue and to the run's Summary page.
+
+## Model Pre-Staging (`model-manifest.json`)
+
+Android Device Farm runs never let the phone download weights. The host
+`pre_test` phase — where the network is reliable — fetches exactly the models
+the shard needs and `adb push`es them to `/data/local/tmp/prestaged-models`;
+`ensureModel()` in `test/integration/utils.js` picks them up from there.
+
+`model-manifest.json` maps **mobile test function name → the models that test
+needs**, and `scripts/generate-prestage-block.js` unions the entries for the
+tests in the shard's grep to build that download list.
+
+Two things are easy to get wrong, and neither fails loudly:
+
+- **A test in `test-groups.json` with no manifest entry** does not error — the
+  phone just downloads its models mid-test over the Device Farm's flaky
+  network, which is the exact failure mode pre-staging exists to remove.
+- **URLs here are informational.** The pre-stage resolves every download from
+  the commit-pinned `test/integration/models.manifest.json` by `name`. Keep
+  them identical anyway so the file cannot mislead the next reader.
+
+Both are enforced by `scripts/validate-mobile-manifest.js`, which runs as part
+of `npm run test:mobile:validate` (hard-fails the mobile workflow) and as unit
+tests under `npm run test:prestage`:
+
+```bash
+node scripts/validate-mobile-manifest.js         # check
+node scripts/validate-mobile-manifest.js --fix   # repin urls from models.manifest.json
+```
+
+It also checks that every model a grouped test names in its own source is
+staged by every shard that runs it. When a model is referenced but must
+deliberately *not* be pre-staged (desktop-only, opt-in behind an env flag, too
+large for a phone), say so at the declaration:
+
+```js
+// prestage-ignore: gemma-4-26B-A4B-it-Q8_0.gguf — desktop opt-in only (~27 GB)
+```
+
+The reason is required. Adding a model to a test therefore means adding it to
+the manifest entry — or explaining, in the test, why not.
 
 ## Setup
 
