@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.3] - 2026-07-30
+
+### Fixed
+- `cancelJob()` with no id and no live jobs now returns an already-resolved promise instead of spawning a `JsAsyncTask` with an empty snapshot. Since 1.3.2 that task's work closure — which captures a `shared_ptr` to the addon and therefore the loaded model — is destroyed in the libuv close callback, i.e. after the cancel promise's JS continuation has already run. An `unload()` that awaits `cancel()` and whose caller immediately loads the next model could then briefly hold two models' memory at once; on iOS this crossed the per-process jetsam limit (`ActiveHard`, e.g. 3376 MB) and the OS killed the app mid-test (observed in diffusion-cpp and vla-ggml Device Farm E2E runs on PR #3548). Real cancellations (non-empty snapshot, or an explicit id) keep the 1.3.2 environment-scoped teardown behavior unchanged.
+
 ## [1.3.2] - 2026-07-29
 
 ### Fixed

@@ -83,6 +83,8 @@ public:
    *        the slot's next occupant, unless the model itself pins cancels to
    *        the run they were aimed at (as llm-llamacpp does).
    * @return JavaScript Promise that resolves when cancellation completes
+   *         (already resolved when the snapshot is empty — nothing to cancel
+   *         means cancellation is complete now)
    * @note This is a non-blocking operation that returns a future/promise
    */
   js_value_t* cancelJob(std::optional<JobId> id = std::nullopt) {
@@ -92,6 +94,20 @@ public:
       });
     }
     std::vector<JobId> snapshot = addonCpp->liveJobIds();
+    if (snapshot.empty()) {
+      // No JsAsyncTask for an empty snapshot: its work closure would pin
+      // addonCpp — and the model it owns — until the loop's close phase,
+      // which runs after the caller's continuation. An unload() that awaits
+      // this cancel and then starts the next load would briefly hold two
+      // models at once, enough to trip the iOS per-process memory limit.
+      js_deferred_t* deferred;
+      js_value_t* promise;
+      JS(js_create_promise(env_, &deferred, &promise));
+      js_value_t* undefined;
+      JS(js_get_undefined(env_, &undefined));
+      JS(js_resolve_deferred(env_, deferred, undefined));
+      return promise;
+    }
     return js::JsAsyncTask::run(
         env_, [addonCppRef = addonCpp, snapshot = std::move(snapshot)]() {
           addonCppRef->cancelJobs(snapshot);
