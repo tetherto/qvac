@@ -35,6 +35,10 @@ jobs:
     secrets: inherit
   resolve-config:
     needs: [fork-approval]
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
