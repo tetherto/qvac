@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Parler no longer fails on iOS with `parler: DAC decode failed`.** The DAC
+  decoder's compute arena grew with the output length (~13.6 + 1.957 MiB per
+  frame, unbounded), and streaming re-decoded the whole code prefix on every
+  chunk, so a streamed utterance walked ~10 growing allocations up to 837 MiB.
+  That is fatal on iOS, where Metal buffers are backed by `posix_memalign`, and
+  invisible on macOS, which uses `vm_allocate`. Decoding is now windowed, so
+  peak DAC memory is constant in output length and streaming is 2.2–2.5×
+  faster. Audio is unchanged.
+
+### Changed
+
+- **Parler always samples.** `topK: 1` selects argmax decoding, which this model
+  family cannot terminate — it collapses into a silence attractor after the
+  first word, and end-of-sequence is gated on the first codebook emitting EOS as
+  its argmax, so generation runs to `maxFrames` and yields a truncated utterance
+  followed by silence. Such requests are now repaired to the model's sampled
+  defaults (temperature 1.0, `topK` 50) with a warning on stderr. Use `seed` for
+  reproducible output — a fixed seed is bit-reproducible.
+
 ## [0.6.0] - 2026-07-24
 
 ### Added
