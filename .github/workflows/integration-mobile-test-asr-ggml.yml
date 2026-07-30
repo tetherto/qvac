@@ -127,30 +127,42 @@ jobs:
       # change its device coverage) and are an out-of-repo infra prerequisite —
       # see docs/QIP-asr-ggml.md.
       #
-      # These two secrets reuse the retiring transcription-parakeet Device Farm
-      # project and iOS device pool (same ARN values, new names) rather than a
-      # freshly provisioned project: after the parakeet workflows retire that
-      # project has no other tenant, so no AWS-side work is required. The
-      # whispercpp pair is deliberately not reused -- bci-whispercpp still runs
-      # against it. One caveat to confirm on the first iOS run: a device pool is
-      # scoped to its project, so the whisper legs now run on parakeet's pool.
-      # If its device list does not cover what the whisper legs need, add a union
-      # pool inside the same project (a pool is a child resource -- no new
-      # project or IAM required).
+      # Device Farm identity: this lane resolves the ASR_GGML secret names when
+      # they exist and otherwise falls back to the retiring
+      # transcription-parakeet project + iOS device pool. Secrets are not scoped
+      # to a package, so reusing parakeet's costs nothing and needs no new
+      # provisioning; the `||` keeps that a migration rather than a permanent
+      # coupling -- add AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML /
+      # IOS_DEVICE_POOL_ARN_ASR_GGML later and they win automatically, with no
+      # workflow change.
+      #
+      # Consequence to respect when retiring parakeet: DO NOT delete
+      # AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET / IOS_DEVICE_POOL_ARN_PARAKEET until
+      # the ASR_GGML pair exists, or this lane loses its Device Farm identity.
+      #
+      # The whispercpp pair is deliberately not the fallback: bci-whispercpp still
+      # runs against that project, so we would be sharing its concurrency.
+      #
+      # A device pool is scoped to its project, so the whisper legs now run on
+      # parakeet's iOS pool. The collected Device Farm logs name the device that
+      # ran, so a coverage mismatch shows up on the first iOS run; the fix is a
+      # union pool inside the same project (a child resource -- no new project or
+      # IAM). Android is unaffected: it schedules by device-selection filter from
+      # this workflow's own inputs, not by pool.
       - name: Verify Device Farm secrets are provisioned
         shell: bash
         env:
-          DEVICE_FARM_PROJECT_ARN: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML }}
-          IOS_DEVICE_POOL_ARN: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML }}
+          DEVICE_FARM_PROJECT_ARN: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
+          IOS_DEVICE_POOL_ARN: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML || secrets.IOS_DEVICE_POOL_ARN_PARAKEET }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           missing=""
-          [ -z "$DEVICE_FARM_PROJECT_ARN" ] && missing="$missing AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML"
+          [ -z "$DEVICE_FARM_PROJECT_ARN" ] && missing="$missing AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML (or _PARAKEET)"
           if [ "$PLATFORM" = "iOS" ] && [ -z "$IOS_DEVICE_POOL_ARN" ]; then
-            missing="$missing IOS_DEVICE_POOL_ARN_ASR_GGML"
+            missing="$missing IOS_DEVICE_POOL_ARN_ASR_GGML (or _PARAKEET)"
           fi
           if [ -n "$missing" ]; then
-            echo "::error::Missing repository secret(s):$missing. Set them in the 'release' environment, reusing the retiring transcription-parakeet project: copy AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET and IOS_DEVICE_POOL_ARN_PARAKEET into these ASR_GGML names. That project has no other tenant once its workflows retire. Do NOT reuse the WHISPERCPP pair: bci-whispercpp still runs against it, so we would inherit a co-tenant and its Device Farm concurrency."
+            echo "::error::Missing Device Farm secret(s):$missing. This lane reads the ASR_GGML names if present and otherwise falls back to the retiring transcription-parakeet pair, so it needs no new secrets while those still exist. If both are gone, add the ASR_GGML pair to the 'release' environment with the parakeet project + iOS pool ARNs."
             exit 1
           fi
           echo "Device Farm secrets present."
@@ -327,7 +339,7 @@ jobs:
           # the parakeet (or whisper/BCI-shared) project: repointing another
           # family's project would silently change its device coverage. The
           # secret pair is a hard pre-merge infra dependency.
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
           # Empty on normal runs => action auto-detects test-groups.json
           # (functional tests). Set on benchmark runs => only the benchmarks.
           test-groups: ${{ steps.perf_groups.outputs.groups }}
@@ -348,8 +360,8 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
         with:
           platform: ${{ matrix.platform }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML }}
-          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML || secrets.IOS_DEVICE_POOL_ARN_PARAKEET }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
