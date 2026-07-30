@@ -16,6 +16,11 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runEsmNamedExportsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runEsmNamedExportsTest')) return __FILTERED
+  return runIntegrationModule('../integration/esm-named-exports.test.js', options)
+}
+
 async function runGrootTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGrootTest')) return __FILTERED
   return runIntegrationModule('../integration/groot.test.js', options)
