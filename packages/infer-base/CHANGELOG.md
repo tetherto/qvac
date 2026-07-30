@@ -1,3 +1,11 @@
+## [0.6.2] - 2026-07-29
+
+fix: settle a `QvacResponse` before invoking its listener callbacks, so a listener that throws can no longer strand the response promise. `_end` resolves before emitting `end`, and both failure paths (`_fail` and the abort path) reject before emitting `error`. Previously a throwing `end` / `error` listener left the promise neither resolved nor rejected, hanging every caller awaiting it.
+
+`createJobHandler` now runs `updateStats` under a `try`/`finally` so a failure there still ends the job instead of leaking an active handler.
+
+Listener exceptions still propagate unchanged, and no public API changed — only the order of settling versus emitting.
+
 ## [0.6.1] - 2026-06-12
 
 chore: replace the exact `bare-events` pin (`2.4.2`) with caret `^2.9.1` so it resolves to the latest 2.x at install. No public API change — only the dependency version range is widened. `bare-os` is left untouched (`^3.2.0`).
