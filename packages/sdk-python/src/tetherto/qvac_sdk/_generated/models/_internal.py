@@ -9461,7 +9461,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         | None,
         Field(
             alias="highNoiseDiffusionModelSrc",
-            description="High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
+            description="High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the high_noise_* / moe_boundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
         ),
     ] = None
     uncond_model_src: Annotated[
@@ -11889,7 +11889,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     width: Annotated[
         int | None,
         Field(
-            description="Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+            description="Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
             gt=0,
             le=9007199254740991,
             multiple_of=16,
@@ -11898,7 +11898,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     height: Annotated[
         int | None,
         Field(
-            description="Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+            description="Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
             gt=0,
             le=9007199254740991,
             multiple_of=16,
@@ -11960,7 +11960,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_steps: Annotated[
         int | None,
         Field(
-            description="Wan 2.2 high-noise expert step count.",
+            description="Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moe_boundary.",
             gt=0,
             le=9007199254740991,
         ),
@@ -11968,28 +11968,35 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_sampler: Annotated[
         VideoStreamRequestHighNoiseSampler | None,
         Field(
-            description="Wan 2.2 high-noise expert sampler.",
+            description="Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             title="VideoStreamRequestHighNoiseSampler",
         ),
     ] = None
     high_noise_scheduler: Annotated[
         VideoStreamRequestHighNoiseScheduler | None,
         Field(
-            description="Wan 2.2 high-noise expert scheduler.",
+            description="Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             title="VideoStreamRequestHighNoiseScheduler",
         ),
     ] = None
     high_noise_cfg_scale: Annotated[
-        float | None, Field(description="Wan 2.2 high-noise expert CFG scale.")
+        float | None,
+        Field(
+            description="Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise."
+        ),
     ] = None
     high_noise_flow_shift: Annotated[
         float | None,
-        Field(description="Wan 2.2 high-noise expert flow shift override."),
+        Field(
+            description="Wan 2.2 A14B high-noise expert flow shift override. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise."
+        ),
     ] = None
     moe_boundary: Annotated[
         float | None,
         Field(
-            description="Wan 2.2 mixture-of-experts boundary in [0, 1].", ge=0.0, le=1.0
+            description="Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
+            ge=0.0,
+            le=1.0,
         ),
     ] = None
     vace_strength: Annotated[
