@@ -47,17 +47,21 @@ std::mutex
 ///    of silently projecting against an empty device list.
 ///
 /// Throws `std::invalid_argument` when any of those does not hold.
+///
+/// Only the directory the caller named is validated. `BACKENDS_SUBDIR` is
+/// appended afterwards and is deliberately *not* required to exist: it is where
+/// this package installs dynamic backends on the platforms that have them, and
+/// on Apple and Windows the ggml backends are linked statically and the subdir
+/// is never created (see the `(ANDROID OR UNIX) AND NOT APPLE` guard in
+/// CMakeLists.txt). Demanding it would turn "nothing to load here" into a hard
+/// error on exactly the platforms that need no loading.
 std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
-  std::filesystem::path backendsPath(backendsDir);
+  const std::filesystem::path backendsPath(backendsDir);
   if (!backendsPath.is_absolute()) {
     throw std::invalid_argument(
         "model-fit: backendsDir must be an absolute path, got '" + backendsDir +
         "'");
   }
-
-#ifdef BACKENDS_SUBDIR
-  backendsPath /= std::filesystem::path(BACKENDS_SUBDIR);
-#endif
 
   std::error_code ec;
   const std::filesystem::path resolved =
@@ -98,10 +102,27 @@ std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
 /// inference. Leaving the backends registered costs nothing: ggml's registry
 /// de-duplicates by reg pointer, and every fit needs the same inventory anyway.
 void registerBackends(const std::string& backendsDir) {
+  bool loadedFromPath = false;
+
   if (!backendsDir.empty()) {
-    const std::filesystem::path backendsPath = resolveBackendsPath(backendsDir);
-    ggml_backend_load_all_from_path(backendsPath.string().c_str());
-  } else if (ggml_backend_reg_count() == 0) {
+    std::filesystem::path backendsPath = resolveBackendsPath(backendsDir);
+#ifdef BACKENDS_SUBDIR
+    backendsPath = (backendsPath / std::filesystem::path(BACKENDS_SUBDIR))
+                       .lexically_normal();
+#endif
+    // Absent on platforms that link the backends statically — see
+    // resolveBackendsPath. Nothing to load there, so fall through rather than
+    // scanning a directory that does not exist.
+    std::error_code ec;
+    if (std::filesystem::is_directory(backendsPath, ec)) {
+      ggml_backend_load_all_from_path(backendsPath.string().c_str());
+      loadedFromPath = true;
+    }
+  }
+
+  // Statically linked backends self-register when the registry is first
+  // constructed, so a non-empty registry here means there is nothing to find.
+  if (!loadedFromPath && ggml_backend_reg_count() == 0) {
     ggml_backend_load_all();
   }
 
