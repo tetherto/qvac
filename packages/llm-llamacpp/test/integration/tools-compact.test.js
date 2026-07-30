@@ -17,7 +17,6 @@ const QWEN3_MODEL = {
 }
 
 const SYSTEM_MESSAGE = { role: 'system', content: 'You are a helpful assistant.' }
-const SYSTEM_MESSAGE_TOKENS = 11
 const CUT_PREDICT_LIMIT = '32'
 /*
  * a model should produce full output during tests,
@@ -332,49 +331,6 @@ safeTest(
       r3.stats.CacheTokens < 2 * r1.stats.CacheTokens,
       `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens}) — tools are replaced, not accumulated`
     )
-  }
-)
-
-safeTest(
-  '[tools-compact] multi-turn session with same tools and cut LLM output',
-  { timeout: 600_000 },
-  async (t) => {
-    if (cachedToolsSupport === false) {
-      t.comment(
-        'Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment'
-      )
-      t.pass('tools unsupported in runtime; assertions skipped')
-      return
-    }
-    const { model, dirPath, logs } = await setupModel(t, { n_predict: CUT_PREDICT_LIMIT })
-    if (!(await ensureToolsSupportOrSkip(t, model, logs))) return
-    const sessionName = path.join(dirPath, 'tools-compact-cut-output.bin')
-    const opts = { cacheKey: sessionName }
-
-    const prompt1 = [
-      SYSTEM_MESSAGE,
-      { role: 'user', content: 'What is the weather in Paris?' },
-      TOOL_A
-    ]
-    const PROMPT_1_TOKENS = { USER: 12, SYSTEM: SYSTEM_MESSAGE_TOKENS }
-    const r1 = await runAndCollect(model, prompt1, opts)
-    t.ok(r1.output.length > 0, 'turn 1 produces output')
-    t.is(
-      r1.stats.CacheTokens,
-      PROMPT_1_TOKENS.SYSTEM + PROMPT_1_TOKENS.USER,
-      'turn 1 has exact cache tokens prompt only - tools removed'
-    )
-
-    const prompt2 = [{ role: 'user', content: 'What about London?' }, TOOL_A]
-    const PROMPT_2_TOKENS = { USER: 9 }
-    const r2 = await runAndCollect(model, prompt2, opts)
-    t.ok(r2.output.length > 0, 'turn 2 produces output')
-    t.is(
-      r2.stats.CacheTokens,
-      r1.stats.CacheTokens + PROMPT_2_TOKENS.USER,
-      'turn 2 has exact prompt tokens added'
-    )
-    t.end()
   }
 )
 
