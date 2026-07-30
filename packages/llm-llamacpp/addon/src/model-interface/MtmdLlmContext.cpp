@@ -894,6 +894,12 @@ bool MtmdLlmContext::cancelGenerationCleanup(
           },
   });
 
+  // Mirror the rollback onto the MTP draft context — see the matching comment
+  // in TextLlmContext::rollbackCurrentRequest. The recurrent/hybrid branch of
+  // rollbackCancelledRequest restores the target only, and that is the branch
+  // Qwen3.5-*-MTP takes. No-op when MTP is inactive.
+  rollbackDraftContext();
+
   protectedPrefix_ = preRequestProtectedPrefix_;
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();

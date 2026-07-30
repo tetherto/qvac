@@ -550,9 +550,17 @@ protected:
   // stay aligned. `startPos` is the first position to drop (matching the
   // target's seq_rm); -1 clears the whole draft sequence. No-op when MTP is
   // inactive (ctxDraft_ null). Best-effort and non-throwing: a failed partial
-  // seq_rm on a recurrent draft cache is not fatal — common_speculative_begin()
-  // detects the lag on the next generation and degrades drafts gracefully.
-  // Skipping this after cancel / resetState / loadCache is exactly what lets
+  // seq_rm on a recurrent draft cache is not immediately fatal.
+  //
+  // Do NOT assume fabric re-syncs for us. `common_speculative_begin()` is the
+  // obvious candidate, but we call it with an empty prompt and the v9840
+  // draft_mtp impl returns immediately on `N <= 0` (common/speculative.cpp);
+  // even with a prompt it only warns and never resets drafter state
+  // (pending_h / i_last / chain_h / verify_h) or clears draft KV. Fabric only
+  // issues its own draft-side seq_rm on the `chain_heads` path
+  // (n_mtp_layers > 1), which a single-nextn-layer model never takes. This
+  // function is therefore the ONLY draft/target alignment mechanism.
+  // Skipping it after cancel / resetState / loadCache is exactly what lets
   // the draft and target contexts diverge (orphaned draft KV -> degraded
   // drafts, or MTP silently disabling itself mid-session).
   void rollbackDraftContext(llama_pos startPos = -1) noexcept {
@@ -680,20 +688,33 @@ protected:
       nMax = MAX_SPEC_DRAFT;
     }
     // Keep the whole verify batch (id_last + nMax drafts = nMax + 1 tokens)
-    // within the decode batch: cap at n_batch - 1 when n_batch is sane.
+    // within the decode batch: cap at n_batch - 1. `batchCap >= 1` (not > 1)
+    // deliberately: `batch-size: 1` is an ordinary config value, not a bogus
+    // one, and a `> 1` guard skipped the clamp entirely for it — leaving nMax
+    // at MAX_SPEC_DRAFT and building a 129-token verify batch for a context
+    // whose n_batch is 1. batchCap == 1 now clamps nMax to 0 (draft-less
+    // rounds), which is the correct degenerate behaviour. A wrapped/garbage
+    // n_batch still lands <= 0 and is left to MAX_SPEC_DRAFT above.
     if (const int batchCap = static_cast<int>(llama_n_batch(getCtx()));
-        batchCap > 1 && nMax > batchCap - 1) {
+        batchCap >= 1 && nMax > batchCap - 1) {
       nMax = batchCap - 1;
     }
     if (ctxTgtSeqRmType_ == COMMON_CONTEXT_SEQ_RM_TYPE_RS) {
-      const int cap = static_cast<int>(llama_n_rs_seq(getCtx()));
-      if (cap > 0 && nMax > cap) {
+      // Same boundary reasoning: cap == 0 must clamp, not skip.
+      if (const int cap = static_cast<int>(llama_n_rs_seq(getCtx()));
+          cap >= 0 && nMax > cap) {
         nMax = cap;
       }
     }
     LlamaBatch specBatch(nMax + 1, 0, 1);
 
-    // Reset the speculative draft state at the start of each generation.
+    // Signal a new generation to the drafter. NOTE this does NOT reset drafter
+    // state: with an empty prompt the v9840 draft_mtp `begin` returns at once
+    // on `N <= 0`, and even with a prompt it only warns. `pending_h` therefore
+    // carries over from the previous generation, so the first draft row after
+    // a resetState / loadCache / cancel may use a stale predecessor hidden
+    // state (harmless — the target verifies every draft token — but it is not
+    // the clean slate the call looks like). See rollbackDraftContext().
     common_speculative_begin(spec_.get(), seqId_, {});
 
     unsigned generated = 0;
@@ -908,6 +929,18 @@ protected:
       if (finished) {
         break;
       }
+    }
+
+    // Unified post-loop cancel, mirroring the non-speculative paths
+    // (TextLlmContext::generateResponse / MtmdLlmContext::generateResponse).
+    // The loop-top check only sees a stop that arrives before the NEXT round;
+    // a stop landing during the final round's body (or once `finished` breaks
+    // out / the budget is exhausted) would otherwise be dropped here AND leave
+    // `stopGeneration_` set, so the next generation's entry check would cancel
+    // a request the caller never cancelled and roll back its fresh prefill.
+    if (stopGeneration_.load()) {
+      stopGeneration_.store(false);
+      return specCancel(outputCallback);
     }
 
     return specFinish(outputCallback, /*ok=*/true);

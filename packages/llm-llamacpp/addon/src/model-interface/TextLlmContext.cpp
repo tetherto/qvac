@@ -1296,6 +1296,19 @@ bool TextLlmContext::rollbackCurrentRequest(
       .onPureAttentionRolledBack = [this]() { nPast_ = preRequestNPast_; },
   });
 
+  // Mirror the rollback onto the MTP draft context. `removeLastNTokens`
+  // already mirrors, so the pure-attention branch above is covered — but the
+  // recurrent/hybrid branch restores a target-side snapshot and never touches
+  // the draft cache, and Qwen3.5-*-MTP (the only family that enables MTP) is
+  // hybrid, so that is precisely the branch that matters here. Clear the whole
+  // draft sequence rather than a partial seq_rm: fabric only issues its own
+  // draft-side seq_rm on the `chain_heads` path (n_mtp_layers > 1), so for a
+  // single-nextn-layer model nothing else reconciles it and orphaned positions
+  // accumulate across cancels until llama_decode(ctx_dft) fails and MTP
+  // silently disables itself for the rest of the session. No-op when MTP is
+  // inactive.
+  rollbackDraftContext();
+
   firstMsgTokens_ = preRequestFirstMsgTokens_;
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();

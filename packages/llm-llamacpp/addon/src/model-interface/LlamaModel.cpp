@@ -1152,6 +1152,11 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      // Always 0 under continuous batching: MTP self-speculation is gated on
+      // n_parallel <= 1, so no draft context exists on this path (the derived
+      // contexts warn at init when spec-type is set with n_parallel > 1). The
+      // fields are still emitted so the RuntimeStats shape matches
+      // singleRuntimeStatsLocked.
       {"draftAccepted", static_cast<int64_t>(0)},
       {"draftTotal", static_cast<int64_t>(0)},
       {"backendDevice", runtimeBackendDevice_}};
@@ -1217,8 +1222,18 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"visionEncodeTiles",
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
-      {"draftAccepted", state_->llmContext_->getDraftAccepted()},
-      {"draftTotal", state_->llmContext_->getDraftTotal()},
+      // Draft counters for the most recent generation. The context resets them
+      // in specBeginGeneration, which a prefill-only request never reaches, so
+      // guard on wasPrefill the same way stopReason / generatedTokens do —
+      // otherwise a prefill-only run echoes the previous generation's counters
+      // and contradicts the index.d.ts contract ("counters for the last
+      // request").
+      {"draftAccepted",
+       wasPrefill ? static_cast<int64_t>(0)
+                  : state_->llmContext_->getDraftAccepted()},
+      {"draftTotal",
+       wasPrefill ? static_cast<int64_t>(0)
+                  : state_->llmContext_->getDraftTotal()},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
@@ -1673,8 +1688,23 @@ void LlamaModel::commonParamsParse(
 
   for (const std::string& key : {"spec-type", "spec_type"}) {
     if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
-      auto types =
-          common_speculative_types_from_names(split(iter->second, ','));
+      // common_speculative_types_from_names throws a bare
+      // std::invalid_argument on an unrecognised name. Every other invalid
+      // config value in this function surfaces as a StatusError, so translate
+      // rather than letting an unstructured exception escape.
+      std::vector<common_speculative_type> types;
+      try {
+        types = common_speculative_types_from_names(split(iter->second, ','));
+      } catch (const std::exception& e) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "[LlamaModel] %s=%s is not a recognised speculative type "
+                "(supported: 'draft-mtp'): %s\n",
+                key.c_str(),
+                iter->second.c_str(),
+                e.what()));
+      }
       // Only `draft-mtp` self-speculation is wired in this addon. `spec-type`
       // accepts a comma list, so warn (don't fail) on any other parsed type so
       // a silently-inert drafter is visible in the logs instead of appearing to
