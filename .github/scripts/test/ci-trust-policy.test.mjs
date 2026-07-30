@@ -715,6 +715,7 @@ test('public-pr: trusted non-PR calls do not require verified', () => {
 test('all ci-router callers re-run when a draft becomes ready', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const workflowNames = [
+    'on-pr-asr-ggml.yml',
     'on-pr-bci-whispercpp.yml',
     'on-pr-classification-ggml.yml',
     'on-pr-decoder-audio.yml',
@@ -772,6 +773,7 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
     /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
   )
   for (const path of [
+    '.github/workflows/on-pr-asr-ggml.yml',
     '.github/workflows/on-pr-tts-ggml.yml',
     '.github/workflows/on-pr-transcription-parakeet.yml',
     '.github/workflows/on-pr-transcription-whispercpp.yml',

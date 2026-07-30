@@ -98,6 +98,9 @@ jobs:
             pkg-any:
               - "packages/**"
               - ".github/workflows/prebuilds-*.yml"
+            asr-ggml:
+              - "packages/asr-ggml/**"
+              - ".github/workflows/prebuilds-asr-ggml.yml"
             bci-whispercpp:
               - "packages/bci-whispercpp/**"
               - ".github/workflows/prebuilds-bci-whispercpp.yml"

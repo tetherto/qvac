@@ -27,6 +27,22 @@ permissions:
   contents: read
 
 jobs:
+  asr-ggml-build:
+    if: contains(fromJSON(inputs.changed-packages), 'asr-ggml')
+    concurrency:
+      group: prebuilds-asr-ggml-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
   bci-whispercpp-build:
     if: contains(fromJSON(inputs.changed-packages), 'bci-whispercpp')
     concurrency:
