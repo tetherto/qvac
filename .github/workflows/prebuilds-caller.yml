@@ -171,38 +171,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
-  transcription-parakeet-build:
-    if: contains(fromJSON(inputs.changed-packages), 'transcription-parakeet')
-    concurrency:
-      group: prebuilds-transcription-parakeet-${{ github.event.pull_request.head.sha || inputs.ref }}
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-
-  transcription-whispercpp-build:
-    if: contains(fromJSON(inputs.changed-packages), 'transcription-whispercpp')
-    concurrency:
-      group: prebuilds-transcription-whispercpp-${{ github.event.pull_request.head.sha || inputs.ref }}
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-
   translation-nmtcpp-build:
     if: contains(fromJSON(inputs.changed-packages), 'translation-nmtcpp')
     concurrency:

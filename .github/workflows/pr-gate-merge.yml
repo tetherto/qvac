@@ -127,12 +127,6 @@ jobs:
             onnx:
               - "packages/onnx/**"
               - ".github/workflows/prebuilds-onnx.yml"
-            transcription-parakeet:
-              - "packages/transcription-parakeet/**"
-              - ".github/workflows/prebuilds-transcription-parakeet.yml"
-            transcription-whispercpp:
-              - "packages/transcription-whispercpp/**"
-              - ".github/workflows/prebuilds-transcription-whispercpp.yml"
             translation-nmtcpp:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/prebuilds-translation-nmtcpp.yml"

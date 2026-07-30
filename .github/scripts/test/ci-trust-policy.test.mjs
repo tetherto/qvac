@@ -726,8 +726,6 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-ocr-ggml.yml',
     'on-pr-ocr-onnx.yml',
     'on-pr-onnx.yml',
-    'on-pr-transcription-parakeet.yml',
-    'on-pr-transcription-whispercpp.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
     'on-pr-vla.yml',
@@ -775,8 +773,6 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
   for (const path of [
     '.github/workflows/on-pr-asr-ggml.yml',
     '.github/workflows/on-pr-tts-ggml.yml',
-    '.github/workflows/on-pr-transcription-parakeet.yml',
-    '.github/workflows/on-pr-transcription-whispercpp.yml',
   ]) {
     const block = jobBlock(read(path), 'coload-smoke-mobile')
     assert.match(
