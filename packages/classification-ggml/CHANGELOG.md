@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-07-28
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.2.0` → `^0.3.0`, which carries `qvac-fabric`
+  `9840.0.0` → `9840.0.1` (training weight-repack disable, Metal `acc`/`set`
+  threadgroup dispatch fix, and MoE/hybrid training loss scaling). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so the
+  range bump is what picks up the new fabric. No API change for this package.
+
 ## [0.14.0] - 2026-07-23
 
 This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. ggml is now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.

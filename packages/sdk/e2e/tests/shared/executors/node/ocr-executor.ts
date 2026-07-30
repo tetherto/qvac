@@ -8,6 +8,8 @@ interface OcrParams {
   imageFileName: string
   paragraph?: boolean
   streaming?: boolean
+  /** ResourceManager dep to OCR with. Defaults to the EasyOCR `ocr` resource. */
+  resource?: string
 }
 
 export class OcrExecutor extends AbstractModelExecutor<typeof ocrTests> {
@@ -23,7 +25,7 @@ export class OcrExecutor extends AbstractModelExecutor<typeof ocrTests> {
   ) as never
 
   private async runOcr(p: OcrParams) {
-    const ocrModelId = await this.resources.ensureLoaded('ocr')
+    const ocrModelId = await this.resources.ensureLoaded(p.resource ?? 'ocr')
     const imagePath = path.resolve(process.cwd(), 'assets/images', p.imageFileName)
 
     const { blocks, blockStream, stats } = ocr({

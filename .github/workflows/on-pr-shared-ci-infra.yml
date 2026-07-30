@@ -1,0 +1,66 @@
+name: On PR Trigger (Shared CI Infra)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - ".github/workflows/on-pr-shared-ci-infra.yml"
+      - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  action-unit-tests:
+    name: cache-models action unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Run cache-models action unit tests
+        run: node --test .github/actions/cache-models/test/*.test.mjs
+
+  model-availability:
+    name: Model availability (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [diffusion-cpp, llm-llamacpp, embed-llamacpp]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Verify pinned models are reachable and unchanged
+        run: |
+          node .github/actions/cache-models/check-manifest-availability.mjs \
+            --package ${{ matrix.package }} \
+            --root "$GITHUB_WORKSPACE"
+
+  fabric-lockstep:
+    name: qvac-fabric version lockstep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Verify qvac-fabric versions are lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep

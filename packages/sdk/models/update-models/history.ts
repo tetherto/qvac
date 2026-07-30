@@ -20,14 +20,14 @@ export function loadCurrentModels(outputFile: string): CurrentModel[] {
     const currentModels: CurrentModel[] = []
 
     const modelRegex =
-      /\{[^}]+name:\s*"([^"]+)"[^}]+(?:registryPath|hyperbeeKey):\s*"([^"]+)"[^}]+\}/g
+      /\{[^}]+name:\s*(['"`])([^'"`]+)\1[^}]+(?:registryPath|hyperbeeKey):\s*(['"`])([^'"`]+)\3[^}]+\}/g
     let match
 
     while ((match = modelRegex.exec(modelsArrayContent)) !== null) {
-      if (match[1] && match[2]) {
+      if (match[2] && match[4]) {
         currentModels.push({
-          name: match[1],
-          registryPath: match[2]
+          name: match[2],
+          registryPath: match[4]
         })
       }
     }
