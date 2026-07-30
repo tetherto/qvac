@@ -129,8 +129,8 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   // of the int they are narrowed to: an out-of-range split mode or attention
   // type would otherwise reach llama as a garbage enum value.
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "splitMode")) {
-    req.splitMode = static_cast<int32_t>(requireBoundedSignedInteger(
-        v->as<double>(env), 0.0, 3.0, "splitMode"));
+    req.splitMode = static_cast<int32_t>(
+        requireBoundedSignedInteger(v->as<double>(env), 0.0, 3.0, "splitMode"));
     req.hasSplitMode = true;
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "mainGpu")) {

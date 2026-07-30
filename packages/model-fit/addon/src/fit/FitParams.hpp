@@ -137,9 +137,11 @@ struct FitResult {
   int32_t splitMode = 0;
   /// GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE.
   int32_t mainGpu = 0;
-  /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit.
+  /// `enum ggml_type` for the K cache. Changes KV memory, so it changes the
+  /// fit.
   int32_t typeK = 0;
-  /// `enum ggml_type` for the V cache. Changes KV memory, so it changes the fit.
+  /// `enum ggml_type` for the V cache. Changes KV memory, so it changes the
+  /// fit.
   int32_t typeV = 0;
   /// `enum llama_flash_attn_type` — alters KV/compute memory, so it too is
   /// load-bearing for the projection.
@@ -169,7 +171,7 @@ struct FitResult {
 ///
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
 ///  - an empty `modelPath`;
-///  - a `backendsDir` that is relative, escapes itself, or is not a directory;
+///  - a `backendsDir` that is relative or does not resolve to a directory;
 ///  - a `mainGpu` past the registered GPU devices;
 ///  - an `nCtx` above the context length the model declares.
 FitResult runFit(const FitRequest& req);

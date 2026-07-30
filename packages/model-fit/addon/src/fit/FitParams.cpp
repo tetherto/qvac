@@ -338,11 +338,12 @@ FitResult runFit(const FitRequest& req) {
   out.nUbatch = cparams.n_ubatch;
   out.tensorSplit.assign(tensorSplit.begin(), tensorSplit.end());
 
-  // Every remaining field the fitter was free to rewrite. These went in at their
-  // llama defaults, which is exactly the condition under which `llama_params_fit`
-  // modifies a parameter, so reading them back is what makes the plan
-  // reproducible: a caller that loads with its own defaults instead of these can
-  // silently get different placement than the one that was projected to fit.
+  // Every remaining field the fitter was free to rewrite. These went in at
+  // their llama defaults, which is exactly the condition under which
+  // `llama_params_fit` modifies a parameter, so reading them back is what makes
+  // the plan reproducible: a caller that loads with its own defaults instead of
+  // these can silently get different placement than the one that was projected
+  // to fit.
   out.splitMode = static_cast<int32_t>(mparams.split_mode);
   out.mainGpu = mparams.main_gpu;
   out.typeK = static_cast<int32_t>(cparams.type_k);
