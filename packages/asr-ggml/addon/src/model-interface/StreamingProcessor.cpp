@@ -43,7 +43,20 @@ StreamingProcessor::StreamingProcessor(
       "StreamingProcessor: VAD context initialized from " +
           config_.vadModelPath);
 
-  thread_ = std::thread([this]() { processLoop(); });
+  // The spawn is deliberately the ctor's last statement, so nothing can throw
+  // once the worker is running. It can throw itself (std::system_error under
+  // thread exhaustion), and a throwing ctor means ~StreamingProcessor never
+  // runs -- so free the VAD context here instead of leaking it. Pre-merge
+  // whisper had the same raw-handle shape; combined with the registry's
+  // validate-then-construct factory (StreamingSessionRegistry.hpp), a failed
+  // start now leaves neither a registry entry nor a native handle behind.
+  try {
+    thread_ = std::thread([this]() { processLoop(); });
+  } catch (...) {
+    whisper_vad_free(vadCtx_);
+    vadCtx_ = nullptr;
+    throw;
+  }
 }
 
 StreamingProcessor::~StreamingProcessor() {

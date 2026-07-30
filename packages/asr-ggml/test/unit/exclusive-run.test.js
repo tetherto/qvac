@@ -1,14 +1,18 @@
 'use strict'
 
-// Unified exclusiveRun semantics (one queue, per-call release policy):
+// Unified exclusiveRun semantics (two independent queues, per-call release
+// policy):
 //   - run(): serialized TO COMPLETION for both engines (whisper's semantics;
 //     a deliberate behavior change for parakeet).
 //   - runStreaming(): the slot is held for session SETUP only — the queue is
 //     released at session-open, never for the (potentially minutes-long)
 //     session itself.
+//   - reload()/unload()/destroy() run on a SEPARATE lifecycle queue: they
+//     serialize against each other but pre-empt an in-flight run instead of
+//     queueing behind it (both pre-merge packages behaved this way).
 //   - open-session guard: run()/runStreaming() during an open streaming
 //     session reject with STREAMING_SESSION_ACTIVE instead of queuing.
-//   - exclusiveRun: false bypasses the queue entirely.
+//   - exclusiveRun: false bypasses the inference queue entirely.
 
 const test = require('brittle')
 const ASRGgml = require('../../index.js')
@@ -170,6 +174,84 @@ test('exclusiveRun: false bypasses the queue', async (t) => {
   t.is(settled[1].status, 'rejected', 'Overlapping runs are not serialized for the caller')
 
   await model.destroy()
+})
+
+test('destroy() pre-empts an in-flight batch run', async (t) => {
+  // Teardown must NOT queue behind the running job: the whole point of the
+  // `if (this._job.active) this._job.fail(...)` in destroy() is to abort it.
+  const binding = new WhisperMockedBinding()
+  const { model } = createWhisperModel({ binding })
+  await model.load()
+
+  // A gated stream keeps the batch job open for the duration of the test.
+  const stream = pushable()
+  stream.push(new Uint8Array([1, 2, 3, 4]))
+  const response = await model.run(stream)
+
+  await wait(10)
+  const settled = response.await().then(
+    () => 'resolved',
+    (error) => String(error)
+  )
+
+  await model.destroy()
+  t.ok(model.getState().destroyed, 'destroy() completes while the run is still in flight')
+  t.ok(/destroyed/.test(await settled), 'the in-flight response is failed by destroy()')
+
+  stream.end()
+})
+
+test('unload() pre-empts an in-flight batch run', async (t) => {
+  const { model } = createWhisperModel()
+  await model.load()
+
+  const stream = pushable()
+  stream.push(new Uint8Array([1, 2, 3, 4]))
+  const response = await model.run(stream)
+  await wait(10)
+  const settled = response.await().then(
+    () => 'resolved',
+    (error) => String(error)
+  )
+
+  await model.unload()
+  t.is(model.getState().weightsLoaded, false, 'unload() completes while the run is in flight')
+  t.ok(/unloaded/.test(await settled), 'the in-flight response is failed by unload()')
+
+  stream.end()
+  await model.destroy()
+})
+
+test('teardown does not deadlock on a non-terminating audio iterable', async (t) => {
+  // A live mic (or a stalled socket) fed into run() never appends
+  // END_OF_INPUT, so the job never settles. With one shared queue, destroy()
+  // waited on that settlement and hung forever.
+  for (const engine of ['whisper', 'parakeet']) {
+    const { model } = engine === 'whisper' ? createWhisperModel() : createParakeetModel()
+    await model.load()
+
+    let stalledForever = true
+    const neverEnding = {
+      async *[Symbol.asyncIterator]() {
+        yield engine === 'whisper' ? new Uint8Array([1, 2, 3, 4]) : new Float32Array(64)
+        // Never resolves: no further chunks, no completion.
+        await new Promise(() => {})
+        stalledForever = false
+      }
+    }
+
+    const response = await model.run(neverEnding)
+    const settled = response.await().then(
+      () => 'resolved',
+      (error) => String(error)
+    )
+    await wait(10)
+
+    await model.destroy()
+    t.ok(model.getState().destroyed, `${engine}: destroy() resolves despite the stalled iterable`)
+    t.ok(/destroyed/.test(await settled), `${engine}: the stalled job is failed, not left hanging`)
+    t.ok(stalledForever, `${engine}: the iterable really never completed`)
+  }
 })
 
 test('lifecycle calls stay queued regardless of exclusiveRun', async (t) => {

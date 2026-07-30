@@ -10,6 +10,53 @@ const driver_1 = require("./engines/whisper/driver");
 const driver_2 = require("./engines/parakeet/driver");
 const GGUF_MAGIC = [0x47, 0x47, 0x55, 0x46]; // ASCII "GGUF"
 /**
+ * Creates one serialized queue lane. `"onReturn"` releases the slot when
+ * `fn()` settles; `"onSettle"` requires `fn()` to resolve with a
+ * `QvacResponse` and holds the slot until that response settles.
+ *
+ * There are deliberately TWO lanes per instance (see `ASRGgml`): inference
+ * and lifecycle. They must stay independent — a single shared lane would
+ * make `unload()`/`destroy()`/`reload()` queue behind an in-flight `run()`,
+ * which both pre-merge packages allowed to be pre-empted, and would deadlock
+ * teardown forever on a `run()` whose input iterable never terminates.
+ */
+function createQueueLane() {
+    let tail = Promise.resolve();
+    return {
+        async run(fn, policy) {
+            const prev = tail;
+            let releaseSlot = () => { };
+            tail = new Promise((resolve) => {
+                releaseSlot = resolve;
+            });
+            await prev;
+            if (policy === "onReturn") {
+                try {
+                    return await fn();
+                }
+                finally {
+                    releaseSlot();
+                }
+            }
+            let result;
+            try {
+                result = await fn();
+            }
+            catch (err) {
+                releaseSlot();
+                throw err;
+            }
+            void result
+                .await()
+                .finally(() => {
+                releaseSlot();
+            })
+                .catch(() => { });
+            return result;
+        },
+    };
+}
+/**
  * Best-effort engine sniffing from the model file's magic bytes: GGUF →
  * parakeet, anything else → whisper (legacy GGML `.bin`). Docs and the SDK
  * plugins always pass `engine` explicitly; this is a convenience fallback.
@@ -44,6 +91,26 @@ function isKnownEngine(value) {
     return value === "whisper" || value === "parakeet";
 }
 /**
+ * The model file the driver will actually open. Whisper's
+ * `contextParams`-adjacent `config.path` overrides `files.model` (a
+ * long-standing whisper escape hatch), so constructor validation and engine
+ * sniffing must target the same expression the driver loads —
+ * `WhisperDriver._buildConfigurationParams()`. Parakeet only ever loads
+ * `files.model`.
+ *
+ * `engine === null` means the engine still has to be sniffed, which can only
+ * happen when no `config` was supplied at all — and therefore no `path`.
+ */
+function resolveModelPath(files, config, engine) {
+    if (engine === "whisper") {
+        const configuredPath = config?.path;
+        if (typeof configuredPath === "string" && configuredPath.length > 0) {
+            return configuredPath;
+        }
+    }
+    return files.model;
+}
+/**
  * Unified multi-engine ASR client for the whisper and parakeet GGML
  * engines. The engine is selected per instance (`config.engine`, `engine`,
  * or model-file sniffing); the public method surface is engine-agnostic
@@ -67,7 +134,14 @@ class ASRGgml {
     _engineType;
     _driver;
     _job;
-    _queueTail;
+    /** Serializes `run()` / `runStreaming()` against each other. */
+    _inferenceQueue;
+    /**
+     * Serializes `reload()` / `unload()` / `destroy()` against each other,
+     * independently of `_inferenceQueue`, so teardown can pre-empt an in-flight
+     * run (as both pre-merge packages did) and can never deadlock behind one.
+     */
+    _lifecycleQueue;
     _openSession;
     constructor(options) {
         const { files, config, engine, enableStats = true, logger = null, exclusiveRun = true, } = options || {};
@@ -86,17 +160,25 @@ class ASRGgml {
             weightsLoaded: false,
             destroyed: false,
         };
-        this._queueTail = Promise.resolve();
+        this._inferenceQueue = createQueueLane();
+        this._lifecycleQueue = createQueueLane();
         this._openSession = null;
-        // 2. Resolve the engine: config.engine ?? engine ?? sniff.
-        this._engineType = this._resolveEngine(files, config, engine);
-        // 3. Strict file validation for both engines.
-        if (!fs.existsSync(files.model)) {
+        // 2. Resolve the declared engine (config.engine ?? engine). `null` means
+        //    nothing was declared and the engine has to be sniffed — which needs
+        //    a readable model file, so it happens after step 3.
+        const declaredEngine = this._resolveDeclaredEngine(config, engine);
+        // 3. Strict file validation, on the path the driver will actually open
+        //    (whisper honours `config.path` over `files.model`). This runs before
+        //    sniffing so a missing model reports MODEL_NOT_FOUND rather than
+        //    INVALID_ENGINE from the failed magic-byte read.
+        const modelPath = resolveModelPath(files, config, declaredEngine);
+        if (!fs.existsSync(modelPath)) {
             throw new error_1.QvacErrorAddonASRGgml({
                 code: error_1.ERR_CODES.MODEL_NOT_FOUND,
-                adds: files.model,
+                adds: modelPath,
             });
         }
+        this._engineType = declaredEngine ?? sniffEngine(modelPath);
         if (this._engineType === "whisper") {
             this._validateWhisperVadModel(files, config);
         }
@@ -117,7 +199,7 @@ class ASRGgml {
         }
         this.logger.debug("ASRGgml constructor called", {
             engine: this._engineType,
-            modelPath: files.model,
+            modelPath,
             config,
         });
         // 5. Constructor-time config validation.
@@ -131,6 +213,22 @@ class ASRGgml {
     }
     getBackendInfo() {
         return this._driver.getBackendInfo();
+    }
+    /**
+     * The native interface owned by the engine driver, or `undefined` before
+     * `load()`. As in both pre-merge packages it is NOT cleared by `unload()` —
+     * the interface object outlives its native instance and reports `IDLE`.
+     *
+     * This is the escape hatch the SDK's model-wide hard cancel uses
+     * (`packages/sdk/server/bare/ops/transcribe.ts` reads `model.addon` and
+     * calls `addon.cancel()`): unlike `ASRGgml.cancel()`, it stops the native
+     * decode WITHOUT failing the active job, so the op's `for await` loop can
+     * end normally instead of throwing. Both pre-merge packages exposed `addon`
+     * on the instance; keep it exposed. Not otherwise part of the supported
+     * surface — drive the engine through `ASRGgml`.
+     */
+    get addon() {
+        return this._driver.addon;
     }
     async load() {
         if (this.state.destroyed) {
@@ -147,7 +245,7 @@ class ASRGgml {
         this.state.weightsLoaded = true;
     }
     async unload() {
-        return await this._enqueue(async () => {
+        return await this._lifecycleQueue.run(async () => {
             if (this._job.active) {
                 this._job.fail(new Error("Model was unloaded"));
             }
@@ -158,7 +256,7 @@ class ASRGgml {
         }, "onReturn");
     }
     async destroy() {
-        return await this._enqueue(async () => {
+        return await this._lifecycleQueue.run(async () => {
             if (this._job.active) {
                 this._job.fail(new Error("Model was destroyed"));
             }
@@ -170,7 +268,13 @@ class ASRGgml {
         }, "onReturn");
     }
     async reload(newConfig = {}) {
-        return await this._enqueue(() => this._driver.reload(newConfig), "onReturn");
+        if (!this._driver.supportsReload) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES.NOT_SUPPORTED,
+                adds: `reload on the ${this._engineType} engine`,
+            });
+        }
+        return await this._lifecycleQueue.run(() => this._driver.reload(newConfig), "onReturn");
     }
     async cancel(jobId) {
         await this._driver.cancelActive(jobId);
@@ -194,7 +298,7 @@ class ASRGgml {
         this._assertNoOpenSession("concurrent run() during an open streaming session");
         const runFn = () => this._driver.run(this._driver.normalizeAudio(audio));
         if (this.exclusiveRun) {
-            return await this._enqueue(runFn, "onSettle");
+            return await this._inferenceQueue.run(runFn, "onSettle");
         }
         return await runFn();
     }
@@ -212,11 +316,16 @@ class ASRGgml {
         if (this.exclusiveRun) {
             // The slot is held for session setup only, never for the
             // (potentially minutes-long) session itself.
-            return await this._enqueue(startFn, "onReturn");
+            return await this._inferenceQueue.run(startFn, "onReturn");
         }
         return await startFn();
     }
-    _resolveEngine(files, config, engine) {
+    /**
+     * Resolves the engine declared by the caller, or `null` when neither
+     * `config.engine` nor `engine` was given and the engine must be sniffed
+     * from the model file.
+     */
+    _resolveDeclaredEngine(config, engine) {
         if (config) {
             const configEngine = config.engine;
             if (configEngine === undefined) {
@@ -242,7 +351,7 @@ class ASRGgml {
             }
             return engine;
         }
-        return sniffEngine(files.model);
+        return null;
     }
     _validateWhisperVadModel(files, config) {
         const vadModelPath = config?.vadModelPath ||
@@ -265,43 +374,6 @@ class ASRGgml {
                 adds,
             });
         }
-    }
-    /**
-     * Single serialized queue for run/reload/unload/destroy. `"onReturn"`
-     * releases the slot when `fn()` settles; `"onSettle"` requires `fn()` to
-     * resolve with a `QvacResponse` and holds the slot until that response
-     * settles.
-     */
-    async _enqueue(fn, policy) {
-        const prev = this._queueTail;
-        let releaseSlot = () => { };
-        this._queueTail = new Promise((resolve) => {
-            releaseSlot = resolve;
-        });
-        await prev;
-        if (policy === "onReturn") {
-            try {
-                return await fn();
-            }
-            finally {
-                releaseSlot();
-            }
-        }
-        let result;
-        try {
-            result = await fn();
-        }
-        catch (err) {
-            releaseSlot();
-            throw err;
-        }
-        void result
-            .await()
-            .finally(() => {
-            releaseSlot();
-        })
-            .catch(() => { });
-        return result;
     }
 }
 // The namespace merge preserves the package's established `export =` API and

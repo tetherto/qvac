@@ -130,6 +130,96 @@ test('nonexistent model file throws MODEL_NOT_FOUND for both engines', (t) => {
   }
 })
 
+test('a missing model with no declared engine reports MODEL_NOT_FOUND, not INVALID_ENGINE', (t) => {
+  // Existence is checked BEFORE the magic-byte sniff; sniffing a missing file
+  // used to rewrap the ENOENT as INVALID_ENGINE (6021), telling the caller the
+  // engine was undetectable rather than that the file was absent.
+  try {
+    // eslint-disable-next-line no-new
+    new ASRGgml({ files: { model: '/definitely/not/a/real/model.bin' } })
+    t.fail('nonexistent model should throw')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.MODEL_NOT_FOUND,
+      'MODEL_NOT_FOUND (24009) wins over the sniff'
+    )
+    t.ok(/not\/a\/real\/model\.bin/.test(error.message), 'the message names the missing path')
+  }
+})
+
+test('whisper validates and sniffs config.path, the file the driver actually opens', (t) => {
+  // config.path is whisper's long-standing override for files.model, applied
+  // in _buildConfigurationParams(). Validation must target the same file.
+  const model = new ASRGgml({
+    files: { model: '/definitely/not/a/real/placeholder.bin' },
+    config: { engine: 'whisper', path: MODEL_PATH }
+  })
+  t.is(
+    model.getEngineType(),
+    'whisper',
+    'a real config.path with a placeholder files.model constructs'
+  )
+  t.is(
+    model._driver._buildConfigurationParams().contextParams.model,
+    MODEL_PATH,
+    'the driver loads config.path, which is what was validated'
+  )
+
+  try {
+    // eslint-disable-next-line no-new
+    new ASRGgml({
+      files: { model: MODEL_PATH },
+      config: { engine: 'whisper', path: '/definitely/not/a/real/override.bin' }
+    })
+    t.fail('a nonexistent config.path should throw')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.MODEL_NOT_FOUND,
+      'a missing config.path is caught in the constructor'
+    )
+    t.ok(
+      /override\.bin/.test(error.message),
+      'the message names the overriding path, not files.model'
+    )
+  }
+})
+
+test('addon exposes the native interface, as both pre-merge packages did', async (t) => {
+  // The SDK's model-wide hard cancel reads model.addon and calls
+  // addon.cancel() to stop the decode WITHOUT failing the job.
+  for (const create of [createWhisperModel, createParakeetModel]) {
+    const { model } = create()
+    t.is(model.addon, undefined, 'undefined before load()')
+
+    await model.load()
+    const addon = model.addon
+    t.ok(addon, 'defined after load()')
+    t.is(typeof addon.cancel, 'function', 'the native cancel verb is reachable')
+    t.is(typeof addon.status, 'function', 'the native status verb is reachable')
+
+    await model.destroy()
+  }
+})
+
+test('reload() rejects with NOT_SUPPORTED when the driver declares no reload', async (t) => {
+  const { model } = createWhisperModel()
+  await model.load()
+  // Stand in for a third engine whose native side has no reload verb.
+  Object.defineProperty(model._driver, 'supportsReload', { value: false })
+
+  try {
+    await model.reload({})
+    t.fail('reload() must not dispatch into a driver that cannot honour it')
+  } catch (error) {
+    t.is(error.code, ASRGgml.ERR_CODES.NOT_SUPPORTED, 'rejects with NOT_SUPPORTED (6019)')
+    t.ok(/whisper/.test(error.message), 'the message names the engine')
+  }
+
+  await model.destroy()
+})
+
 test('nonexistent whisper VAD model throws VAD_MODEL_NOT_FOUND', (t) => {
   try {
     // eslint-disable-next-line no-new

@@ -48,17 +48,47 @@ inline std::unordered_map<
     std::unique_ptr<IStreamingSession>>
     g_streamingSessions;
 
-// Registers `session` for `instance`; throws when a session is already
-// active (double-start).
-inline void insertStreamingSession(
-    qvac_lib_inference_addon_cpp::AddonJs* instance,
-    std::unique_ptr<IStreamingSession> session) {
+// Registers a session for `instance`, CONSTRUCTING it only after the
+// double-start check has passed. `factory` is invoked with the registry lock
+// held, so the check and the construction are one atomic step -- exactly the
+// ordering both pre-merge bindings had (whisper: `if (count(&instance) != 0)
+// throw; ... = make_unique<StreamingProcessor>(...)`; parakeet: identical).
+//
+// Passing an already-built session instead would mean a duplicate
+// startStreaming() spins up a second processor -- and its worker thread --
+// against the shared model before the throw: whisper's worker calls
+// prepareForStreaming() -> WhisperModel::reset() as its first statement,
+// zeroing the live session's counters and clearing the unsynchronized
+// output_ vector session #1 is pushing into; parakeet's ctor calls
+// stream_start() a second time on an Engine whose graph allocator is
+// single-session state. Hence the factory seam: there is no overload that
+// takes a constructed session.
+//
+// The lock is held across construction (VAD-model load / stream_start() plus
+// the std::thread spawn), as it was pre-merge, so `factory` must not call
+// back into the registry. Both throw paths leave the registry exactly as it
+// was: a throwing (or null-returning) factory has its reserved node erased,
+// and the session it may have built is destroyed by the returned
+// unique_ptr's destructor, which joins the worker thread.
+template <typename Factory>
+inline void emplaceStreamingSession(
+    qvac_lib_inference_addon_cpp::AddonJs* instance, Factory&& factory) {
   std::lock_guard<std::mutex> lock(g_streamingMtx);
-  auto [it, inserted] =
-      g_streamingSessions.try_emplace(instance, std::move(session));
+  // Reserve the node first: nothing after the factory call may allocate, so a
+  // successfully constructed session can never be dropped on the floor.
+  auto [it, inserted] = g_streamingSessions.try_emplace(instance);
   if (!inserted) {
     throw std::runtime_error(
         "Streaming session already active for this instance");
+  }
+  try {
+    it->second = std::forward<Factory>(factory)();
+    if (!it->second) {
+      throw std::runtime_error("Failed to create the streaming session");
+    }
+  } catch (...) {
+    g_streamingSessions.erase(it);
+    throw;
   }
 }
 

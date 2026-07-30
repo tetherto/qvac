@@ -15,8 +15,16 @@ Parakeet engines), built with the `bare` runtime.
 ## Prerequisites
 
 - `bare` runtime
-- The `@qvac/asr-ggml` addon (installed from npm or `npm install ../../`
-  against a local prebuild)
+- The `@qvac/asr-ggml` addon, installed from the in-repo package with
+  `npm install ../../` (against a local prebuild)
+
+`@qvac/asr-ggml` is deliberately NOT listed in `dependencies`. The unified
+package has not had its first npm release yet — the registry carries only a
+`0.0.0` placeholder — so a registry range such as `^0.1.0` makes a plain
+`npm install` fail with `ETARGET` and takes the whole accuracy-benchmark lane
+down before the server ever starts. The addon is therefore installed from the
+local source tree, which is the shape the parakeet benchmark server used.
+Add a registry dependency back only once `@qvac/asr-ggml` is published.
 
 ## Installation
 
@@ -25,8 +33,9 @@ Parakeet engines), built with the `bare` runtime.
 git clone https://github.com/tetherto/qvac.git
 cd qvac/packages/asr-ggml/benchmarks/server
 
-# Install dependencies
+# Install dependencies, then the addon from the local package
 npm install
+npm install ../../
 ```
 
 ## Usage

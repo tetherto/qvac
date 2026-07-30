@@ -2,7 +2,7 @@ import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { QvacErrorAddonASRGgml } from "./lib/error";
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
-import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, EngineType } from "./engines/types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
 import { type ParakeetConfig, type ParakeetEngineConfig, type ParakeetStreamingRunConfig } from "./engines/parakeet/driver";
 type ASRGgmlConfig = WhisperEngineConfig | ParakeetEngineConfig;
@@ -66,12 +66,33 @@ declare class ASRGgml {
     private readonly _engineType;
     private readonly _driver;
     private readonly _job;
-    private _queueTail;
+    /** Serializes `run()` / `runStreaming()` against each other. */
+    private readonly _inferenceQueue;
+    /**
+     * Serializes `reload()` / `unload()` / `destroy()` against each other,
+     * independently of `_inferenceQueue`, so teardown can pre-empt an in-flight
+     * run (as both pre-merge packages did) and can never deadlock behind one.
+     */
+    private readonly _lifecycleQueue;
     private _openSession;
     constructor(options: ASRGgmlOptions);
     getState(): InferenceClientState;
     getEngineType(): EngineType;
     getBackendInfo(): BackendInfo | null;
+    /**
+     * The native interface owned by the engine driver, or `undefined` before
+     * `load()`. As in both pre-merge packages it is NOT cleared by `unload()` —
+     * the interface object outlives its native instance and reports `IDLE`.
+     *
+     * This is the escape hatch the SDK's model-wide hard cancel uses
+     * (`packages/sdk/server/bare/ops/transcribe.ts` reads `model.addon` and
+     * calls `addon.cancel()`): unlike `ASRGgml.cancel()`, it stops the native
+     * decode WITHOUT failing the active job, so the op's `for await` loop can
+     * end normally instead of throwing. Both pre-merge packages exposed `addon`
+     * on the instance; keep it exposed. Not otherwise part of the supported
+     * surface — drive the engine through `ASRGgml`.
+     */
+    get addon(): AsrNativeInterface | undefined;
     load(): Promise<void>;
     unload(): Promise<void>;
     destroy(): Promise<void>;
@@ -82,16 +103,14 @@ declare class ASRGgml {
     unpause(): Promise<never>;
     run(audio: AudioInput): Promise<QvacResponse<ASRRunOutput>>;
     runStreaming(audio: AudioInput, opts?: ASRStreamingOptions): Promise<QvacResponse<ASRStreamOutput>>;
-    private _resolveEngine;
+    /**
+     * Resolves the engine declared by the caller, or `null` when neither
+     * `config.engine` nor `engine` was given and the engine must be sniffed
+     * from the model file.
+     */
+    private _resolveDeclaredEngine;
     private _validateWhisperVadModel;
     private _assertNoOpenSession;
-    /**
-     * Single serialized queue for run/reload/unload/destroy. `"onReturn"`
-     * releases the slot when `fn()` settles; `"onSettle"` requires `fn()` to
-     * resolve with a `QvacResponse` and holds the slot until that response
-     * settles.
-     */
-    private _enqueue;
 }
 type EngineTypeShape = EngineType;
 type ASRGgmlOptionsShape = ASRGgmlOptions;

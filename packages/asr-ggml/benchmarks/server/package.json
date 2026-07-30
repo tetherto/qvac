@@ -19,7 +19,6 @@
     "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
-    "@qvac/asr-ggml": "^0.1.0",
     "bare-buffer": "^3.1.0",
     "bare-fs": "^4.1.5",
     "bare-http1": "^4.0.2",

@@ -192,11 +192,20 @@ class ParakeetDriver {
         const addon = this._requireAddon();
         this.ctx.logger.debug("Start handling audio stream");
         for await (const chunk of audio) {
+            // Teardown (cancel/unload/destroy/reload) runs on its own queue and can
+            // pre-empt an in-flight run: once the job is gone there is nothing to
+            // append to, and appending would hit a destroyed native instance.
+            if (!this.ctx.job.active) {
+                this.ctx.logger.debug("Job is no longer active; stopping audio pump");
+                return;
+            }
             this.ctx.logger.debug("Appending audio chunk", {
                 chunkLength: chunk.length,
             });
             await addon.append({ type: "audio", data: chunkBuffer(chunk) });
         }
+        if (!this.ctx.job.active)
+            return;
         this.ctx.logger.debug("Sending end-of-input signal");
         await addon.append({ type: constants_1.END_OF_INPUT });
     }

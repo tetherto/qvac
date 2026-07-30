@@ -74,6 +74,14 @@ export declare class WhisperDriver implements AsrDriver {
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
     _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void>;
     _resolveVadModelPath(): string | null;
+    /**
+     * Maps the public `audio_format` config value onto the byte interpretation
+     * applied to raw `Uint8Array` input. Unrecognized values are rejected here
+     * rather than coerced: the wire format sent to native is pinned to f32le,
+     * so the native `UnsupportedAudioFormat` check can no longer see the user's
+     * string, and silently decoding (say) `'s16be'` as little-endian produces a
+     * garbage transcript with no error at all.
+     */
     _resolveByteFormat(overrideAudioFormat?: string): ByteFormat;
     _buildConfigurationParams(overrides?: WhisperReloadConfig): WhisperConfigurationParams;
     _buildWhisperConfig(overrideWhisperConfig: Partial<WhisperConfig>): WhisperConfig;

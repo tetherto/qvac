@@ -1,4 +1,5 @@
 import { type WhisperConfigurationParams } from "./configChecker";
+import { type ByteFormat } from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
 declare const state: Readonly<{
     LOADING: "loading";
@@ -60,9 +61,23 @@ export declare class WhisperInterface {
     _bufferedBytes: number;
     _state: AddonState;
     _audioFormat: string;
+    /** Byte format the *caller* supplies; see `setSourceByteFormat`. */
+    _sourceByteFormat: ByteFormat;
     _handle: NativeHandle | null;
     _pendingStreamTeardown: StreamingTeardown | null;
     constructor(binding: WhisperBinding, configurationParams: WhisperConfigurationParams, outputCb: WhisperOutputCallback | null, transitionCb?: TransitionCallback | null);
+    /**
+     * Declares how the *caller* supplies audio bytes, which is what
+     * `MAX_BUFFERED_BYTES` is denominated in. `append()` receives f32 samples
+     * (the driver normalizes everything before the wire), so the byte budget it
+     * enforces is the source budget scaled by the source→wire expansion factor:
+     * `s16le` input may buffer 2x `MAX_BUFFERED_BYTES` of f32 wire bytes, which
+     * is the same 500 MB — the same ~4.55 h of 16 kHz mono — the pre-merge
+     * whisper package accepted before it moved the s16→f32 conversion into JS.
+     */
+    setSourceByteFormat(byteFormat: ByteFormat): void;
+    /** `MAX_BUFFERED_BYTES` expressed in buffered (f32) wire bytes. */
+    _maxBufferedWireBytes(): number;
     _setState(newState: AddonState): void;
     _addonOutputCallback(addon: unknown, event: unknown, data: unknown, error: unknown): void;
     _mergeStreamTeardown(data: unknown): unknown;

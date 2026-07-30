@@ -105,6 +105,9 @@ class WhisperDriver {
         const configurationParams = this._buildConfigurationParams();
         (0, configChecker_1.checkConfig)(configurationParams);
         this.addon = this._createAddon(configurationParams);
+        // The batch-buffer cap is denominated in caller-supplied bytes, not in
+        // the f32 wire bytes the driver appends. See MAX_BUFFERED_BYTES.
+        this.addon.setSourceByteFormat(this._byteFormat);
         await this.addon.activate();
         this.ctx.logger.debug("Addon activated");
     }
@@ -131,6 +134,7 @@ class WhisperDriver {
         await this.cancelActive();
         const addon = this._requiredAddon();
         await addon.reload(configurationParams);
+        addon.setSourceByteFormat(this._byteFormat);
         await addon.activate();
         this.ctx.logger.debug("Addon reloaded and activated successfully");
     }
@@ -215,11 +219,20 @@ class WhisperDriver {
         });
         const addon = this._requiredAddon();
         for await (const chunk of audio) {
+            // Teardown (cancel/unload/destroy/reload) runs on its own queue and can
+            // pre-empt an in-flight run: once the job is gone there is nothing to
+            // append to, and appending would hit a destroyed native instance.
+            if (!this.ctx.job.active) {
+                this.ctx.logger.debug("Job is no longer active; stopping audio pump");
+                return;
+            }
             this.ctx.logger.debug("Appending audio chunk", {
                 chunkLength: chunk.length,
             });
             await addon.append({ type: "audio", input: bytesOf(chunk) });
         }
+        if (!this.ctx.job.active)
+            return;
         this.ctx.logger.debug("Sending end-of-input signal");
         await addon.append({ type: constants_1.END_OF_INPUT });
     }
@@ -242,14 +255,27 @@ class WhisperDriver {
         }
         return null;
     }
+    /**
+     * Maps the public `audio_format` config value onto the byte interpretation
+     * applied to raw `Uint8Array` input. Unrecognized values are rejected here
+     * rather than coerced: the wire format sent to native is pinned to f32le,
+     * so the native `UnsupportedAudioFormat` check can no longer see the user's
+     * string, and silently decoding (say) `'s16be'` as little-endian produces a
+     * garbage transcript with no error at all.
+     */
     _resolveByteFormat(overrideAudioFormat) {
         const format = overrideAudioFormat ||
             this._config.audio_format ||
             this.params.audio_format ||
             DEFAULT_BYTE_FORMAT;
-        return format === "f32le" || format === "decoded"
-            ? "f32le"
-            : DEFAULT_BYTE_FORMAT;
+        if (format === "f32le" || format === "decoded")
+            return "f32le";
+        if (format === "s16le")
+            return "s16le";
+        throw new error_1.QvacErrorAddonASRGgml({
+            code: error_1.ERR_CODES.INVALID_AUDIO_FORMAT,
+            adds: `${String(format)} — supported values are "s16le", "f32le" and "decoded"`,
+        });
     }
     _buildConfigurationParams(overrides = {}) {
         this._byteFormat = this._resolveByteFormat(overrides.audio_format);

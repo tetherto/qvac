@@ -60,4 +60,34 @@ export declare const ERR_CODES_PARAKEET: Readonly<{
     INSTANCE_DESTROYED: 24018;
     JOB_CANCELLED: 24019;
 }>;
+/**
+ * Registers this package's codes, tolerating the one collision the merge
+ * created.
+ *
+ * 6001–6018 used to be owned by `@qvac/transcription-whispercpp` and
+ * 24001–24019 by `@qvac/transcription-parakeet`. `@qvac/error`'s duplicate
+ * guard is keyed on the *owning package name*, so the rename alone is enough
+ * to collide: any process that loads a pre-merge ASR package **and**
+ * `@qvac/asr-ggml` against one hoisted `@qvac/error` would throw
+ * ERROR_CODE_ALREADY_EXISTS at module scope, i.e. `require('@qvac/asr-ggml')`
+ * would crash. That happens during the release-step flip (the co-load smoke
+ * addon list transiently carries old and new names) and for any consumer that
+ * upgrades one ASR dependency at a time.
+ *
+ * The happy path is unchanged — a single `addCodes` with package info, so the
+ * same-package version-upgrade behavior in `@qvac/error` still applies. Only
+ * when that throws do we re-register the subset nobody owns yet. Codes
+ * already claimed keep the other package's definition, whose `name` and
+ * `message` text is the text this package ships: both historical tables were
+ * ported verbatim. `addCodes` registers codes in map order and throws on the
+ * first conflict, so the codes it accepted before throwing are already in
+ * place with this package's definitions; the retry only has to cover the rest.
+ *
+ * Exported (with an injectable `pkg`) so the unit suite can exercise the
+ * collision path without a second ASR package installed.
+ */
+export declare function registerCodes(codes: QvacError.ErrorCodesMap, pkg?: {
+    name: string;
+    version: string;
+}): void;
 export {};

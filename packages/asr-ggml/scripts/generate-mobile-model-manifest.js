@@ -29,27 +29,42 @@ const MODELS = {
   sortformerStreamingQ8: model('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf', REGISTRY_PREFIX_STREAMING)
 }
 
+// Keyed by the mobile RUNNER FUNCTION NAME exported from
+// test/mobile/integration.auto.cjs — scripts/generate-prestage-block.js looks
+// each shard's Mocha grep up in this manifest, so a key that does not match an
+// exported runner stages ZERO models for that shard and the test silently falls
+// back to a 600 MB-class on-device download.
+//
+// All parakeet test files carry a `parakeet-` filename prefix in the unified
+// package (whisper's kept the unprefixed names), so every runner here is
+// `runParakeet…`. Do not drop the prefix when porting entries from the retired
+// transcription-parakeet package. scripts/validate-mobile-tests.js enforces
+// that every key below is an exported runner.
+//
+// Whisper models are deliberately absent: whisper's mobile tests resolve
+// ggml-tiny + silero-vad on-device via test/integration/helpers.js, as in the
+// whisper parent lane.
 const TEST_MODELS = {
-  runAccuracyMultilangTest: [MODELS.tdtQ4],
-  runAddonMultimodelTest: [MODELS.ctcQ4, MODELS.eouQ4, MODELS.sortformerQ4],
-  runColdStartTimingTest: [MODELS.tdtQ4],
-  runDuplexStreamingEouTest: [MODELS.eouQ4],
-  runDuplexStreamingTest: [MODELS.tdtQ4],
-  runEouStreamingTest: [MODELS.eouQ4],
-  runGpuSmokeTest: [MODELS.tdtQ4],
-  runLiveStreamSimulationTest: [MODELS.tdtQ4],
-  runMobilePerfCtcCpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
-  runMobilePerfCtcGpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
-  runMobilePerfEouCpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
-  runMobilePerfEouGpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
-  runMobilePerfSortformerCpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
-  runMobilePerfSortformerGpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
-  runMobilePerfSortformerStreamingCpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
-  runMobilePerfSortformerStreamingGpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
-  runMobilePerfTdtCpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
-  runMobilePerfTdtGpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
-  runMultipleTranscriptionsTest: [MODELS.tdtQ4],
-  runSortformerAoscStreamingTest: [MODELS.sortformerStreamingQ4]
+  runParakeetAccuracyMultilangTest: [MODELS.tdtQ4],
+  runParakeetAddonMultimodelTest: [MODELS.ctcQ4, MODELS.eouQ4, MODELS.sortformerQ4],
+  runParakeetColdStartTimingTest: [MODELS.tdtQ4],
+  runParakeetDuplexStreamingEouTest: [MODELS.eouQ4],
+  runParakeetDuplexStreamingTest: [MODELS.tdtQ4],
+  runParakeetEouStreamingTest: [MODELS.eouQ4],
+  runParakeetGpuSmokeTest: [MODELS.tdtQ4],
+  runParakeetLiveStreamSimulationTest: [MODELS.tdtQ4],
+  runParakeetMobilePerfCtcCpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
+  runParakeetMobilePerfCtcGpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
+  runParakeetMobilePerfEouCpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
+  runParakeetMobilePerfEouGpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
+  runParakeetMobilePerfSortformerCpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
+  runParakeetMobilePerfSortformerGpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
+  runParakeetMobilePerfSortformerStreamingCpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
+  runParakeetMobilePerfSortformerStreamingGpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
+  runParakeetMobilePerfTdtCpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
+  runParakeetMobilePerfTdtGpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
+  runParakeetMultipleTranscriptionsTest: [MODELS.tdtQ4],
+  runParakeetSortformerAoscStreamingTest: [MODELS.sortformerStreamingQ4]
 }
 
 function model (name, prefix) {

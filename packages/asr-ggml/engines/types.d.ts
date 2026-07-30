@@ -32,16 +32,41 @@ export interface StreamingSession {
     done: Promise<void>;
 }
 /**
- * Internal per-engine driver contract. One instance per `ASRGgml` instance;
- * drivers own the native-interface object, all engine-specific event
- * mapping, and the entire streaming lifecycle (precondition checks, pump,
- * back-pressure, teardown). The orchestrator owns options parsing, engine
- * resolution, the state machine, the exclusive queue, the open-session
- * flag, and `pause`/`unpause` rejection.
+ * The minimum shape of the native interface a driver owns
+ * (`WhisperInterface` / `ParakeetInterface`). Exposed through
+ * `ASRGgml.addon` only so the SDK can issue a native hard cancel that does
+ * not fail the active job; everything else goes through `ASRGgml`.
+ */
+export interface AsrNativeInterface {
+    cancel(jobId?: number): Promise<void>;
+    status(): Promise<string>;
+    getBackendInfo?(): BackendInfo | null;
+}
+/**
+ * Internal per-engine driver contract — this interface, in full, is what a
+ * third engine has to implement. Drivers own the native-interface object,
+ * all engine-specific event mapping, and the entire streaming lifecycle
+ * (precondition checks, pump, back-pressure, teardown). The orchestrator owns
+ * options parsing, engine resolution, the state machine, the two serialized
+ * queues (inference and lifecycle), the open-session flag, and
+ * `pause`/`unpause` rejection.
+ *
+ * Native-config building and native-event mapping are deliberately NOT on
+ * the contract: they are per-driver private methods
+ * (`_buildConfigurationParams`, `_buildStreamingConfig`, `_outputCallback`)
+ * because their inputs and outputs are engine-specific. Nothing outside a
+ * driver calls them.
  */
 export interface AsrDriver {
     readonly engineType: EngineType;
+    /**
+     * Whether `reload()` is implemented natively. `ASRGgml.reload()` consults
+     * this and rejects with `NOT_SUPPORTED` when it is false, so a driver
+     * without native reload does not have to fake one.
+     */
     readonly supportsReload: boolean;
+    /** The live native interface; `undefined` before `load()`. */
+    readonly addon?: AsrNativeInterface;
     /** Throws `QvacErrorAddonASRGgml` on unknown/invalid config keys. */
     validateConfig(): void;
     /** Normalizes any public audio input shape; throws INVALID_AUDIO_INPUT. */

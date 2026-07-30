@@ -388,3 +388,43 @@ test('finishStreaming clears the active job and returns to listening', (t) => {
   t.is(addon._activeJobId, null, 'finishStreaming should clear the active job id')
   t.is(addon._state, 'listening', 'finishStreaming should return to listening')
 })
+
+test('a refused double startStreaming leaves the live session untouched', (t) => {
+  // The interface used to claim the new job id and move to PROCESSING BEFORE
+  // calling native, and its catch reset the job id to null / the state to
+  // LISTENING — so the native double-start refusal clobbered the bookkeeping
+  // of the session that was still running. ParakeetInterface guards up front;
+  // so does this one now.
+  const addon = new WhisperInterface(
+    new MockedBinding(),
+    {
+      engineType: 'whisper',
+      whisperConfig: { language: 'en' },
+      contextParams: { model: MODEL_PATH },
+      miscConfig: { caption_enabled: false }
+    },
+    () => {},
+    transitionCb
+  )
+
+  addon.startStreaming({ vadModelPath: MODEL_PATH })
+  const liveJobId = addon._activeJobId
+  t.ok(liveJobId !== null, 'session #1 owns a job id')
+
+  try {
+    addon.startStreaming({ vadModelPath: MODEL_PATH })
+    t.fail('a second startStreaming must be refused')
+  } catch (error) {
+    t.is(
+      error.code,
+      ASRGgml.ERR_CODES.FAILED_TO_START_STREAMING,
+      'refused with FAILED_TO_START_STREAMING (6012)'
+    )
+    t.ok(/already active/.test(error.message), 'the message says why')
+  }
+
+  t.is(addon._activeJobId, liveJobId, "the live session's job id survives the refusal")
+  t.is(addon._state, 'processing', 'and so does its state')
+
+  addon.finishStreaming()
+})

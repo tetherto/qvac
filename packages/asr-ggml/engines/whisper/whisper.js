@@ -5,6 +5,7 @@ exports.WhisperInterface = void 0;
 const configChecker_1 = require("./configChecker");
 const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
+const audio_1 = require("../../lib/audio");
 const state = Object.freeze({
     LOADING: "loading",
     LISTENING: "listening",
@@ -79,6 +80,8 @@ class WhisperInterface {
     _bufferedBytes;
     _state;
     _audioFormat;
+    /** Byte format the *caller* supplies; see `setSourceByteFormat`. */
+    _sourceByteFormat;
     _handle;
     _pendingStreamTeardown;
     constructor(binding, configurationParams, outputCb, transitionCb = null) {
@@ -91,9 +94,30 @@ class WhisperInterface {
         this._bufferedBytes = 0;
         this._state = state.LOADING;
         this._audioFormat = configurationParams?.audio_format || "s16le";
+        // Conservative default: assume the caller's bytes are already f32, i.e.
+        // no expansion, i.e. exactly MAX_BUFFERED_BYTES of buffer budget. The
+        // driver calls setSourceByteFormat() with the real input format.
+        this._sourceByteFormat = "f32le";
         this._pendingStreamTeardown = null;
         (0, configChecker_1.checkConfig)(configurationParams);
         this._handle = this._binding.createInstance(this, configurationParams, this._addonOutputCallback.bind(this), transitionCb);
+    }
+    /**
+     * Declares how the *caller* supplies audio bytes, which is what
+     * `MAX_BUFFERED_BYTES` is denominated in. `append()` receives f32 samples
+     * (the driver normalizes everything before the wire), so the byte budget it
+     * enforces is the source budget scaled by the source→wire expansion factor:
+     * `s16le` input may buffer 2x `MAX_BUFFERED_BYTES` of f32 wire bytes, which
+     * is the same 500 MB — the same ~4.55 h of 16 kHz mono — the pre-merge
+     * whisper package accepted before it moved the s16→f32 conversion into JS.
+     */
+    setSourceByteFormat(byteFormat) {
+        this._sourceByteFormat = byteFormat;
+    }
+    /** `MAX_BUFFERED_BYTES` expressed in buffered (f32) wire bytes. */
+    _maxBufferedWireBytes() {
+        return ((constants_1.MAX_BUFFERED_BYTES * audio_1.WIRE_BYTES_PER_SAMPLE) /
+            audio_1.BYTES_PER_SAMPLE[this._sourceByteFormat]);
     }
     _setState(newState) {
         this._state = newState;
@@ -297,10 +321,10 @@ class WhisperInterface {
                     throw new Error("Audio input must be Uint8Array");
                 }
                 if (this._bufferedBytes + data.input.byteLength >
-                    constants_1.MAX_BUFFERED_BYTES) {
+                    this._maxBufferedWireBytes()) {
                     throw new error_1.QvacErrorAddonASRGgml({
                         code: error_1.ERR_CODES.BUFFER_LIMIT_EXCEEDED,
-                        adds: `${constants_1.MAX_BUFFERED_BYTES} bytes`,
+                        adds: `${constants_1.MAX_BUFFERED_BYTES} bytes of ${this._sourceByteFormat} audio`,
                     });
                 }
                 this._bufferedAudio.push(data.input);
@@ -384,6 +408,20 @@ class WhisperInterface {
         }
     }
     startStreaming(config = {}) {
+        // Refuse a double start BEFORE touching any per-session state. The native
+        // registry also rejects it, but by then the bookkeeping below would have
+        // overwritten the LIVE session's job id, and the catch below would reset
+        // `_activeJobId`/state on a session that is still running — leaving every
+        // subsequent append and the terminal JobEnded unattributable.
+        // `ParakeetInterface.startStreaming` guards the same way.
+        if (this._activeJobId !== null) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES.FAILED_TO_START_STREAMING,
+                adds: "a job is already active; call endStreaming() or cancel() first",
+            });
+        }
+        const previousTeardown = this._pendingStreamTeardown;
+        const previousState = this._state;
         try {
             this._pendingStreamTeardown = null;
             this._activeJobId = this._nextJobId;
@@ -396,7 +434,8 @@ class WhisperInterface {
         }
         catch (err) {
             this._activeJobId = null;
-            this._setState(state.LISTENING);
+            this._pendingStreamTeardown = previousTeardown;
+            this._setState(previousState);
             throw new error_1.QvacErrorAddonASRGgml({
                 code: error_1.ERR_CODES.FAILED_TO_START_STREAMING,
                 adds: errorMessage(err),

@@ -11,6 +11,11 @@ import {
   END_OF_INPUT,
   MAX_BUFFERED_BYTES,
 } from "../../lib/constants";
+import {
+  BYTES_PER_SAMPLE,
+  WIRE_BYTES_PER_SAMPLE,
+  type ByteFormat,
+} from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
 
 const state = Object.freeze({
@@ -175,6 +180,8 @@ export class WhisperInterface {
   _bufferedBytes: number;
   _state: AddonState;
   _audioFormat: string;
+  /** Byte format the *caller* supplies; see `setSourceByteFormat`. */
+  _sourceByteFormat: ByteFormat;
   _handle: NativeHandle | null;
   _pendingStreamTeardown: StreamingTeardown | null;
 
@@ -193,6 +200,10 @@ export class WhisperInterface {
     this._bufferedBytes = 0;
     this._state = state.LOADING;
     this._audioFormat = configurationParams?.audio_format || "s16le";
+    // Conservative default: assume the caller's bytes are already f32, i.e.
+    // no expansion, i.e. exactly MAX_BUFFERED_BYTES of buffer budget. The
+    // driver calls setSourceByteFormat() with the real input format.
+    this._sourceByteFormat = "f32le";
     this._pendingStreamTeardown = null;
 
     checkConfig(configurationParams);
@@ -201,6 +212,27 @@ export class WhisperInterface {
       configurationParams,
       this._addonOutputCallback.bind(this),
       transitionCb,
+    );
+  }
+
+  /**
+   * Declares how the *caller* supplies audio bytes, which is what
+   * `MAX_BUFFERED_BYTES` is denominated in. `append()` receives f32 samples
+   * (the driver normalizes everything before the wire), so the byte budget it
+   * enforces is the source budget scaled by the source→wire expansion factor:
+   * `s16le` input may buffer 2x `MAX_BUFFERED_BYTES` of f32 wire bytes, which
+   * is the same 500 MB — the same ~4.55 h of 16 kHz mono — the pre-merge
+   * whisper package accepted before it moved the s16→f32 conversion into JS.
+   */
+  setSourceByteFormat(byteFormat: ByteFormat): void {
+    this._sourceByteFormat = byteFormat;
+  }
+
+  /** `MAX_BUFFERED_BYTES` expressed in buffered (f32) wire bytes. */
+  _maxBufferedWireBytes(): number {
+    return (
+      (MAX_BUFFERED_BYTES * WIRE_BYTES_PER_SAMPLE) /
+      BYTES_PER_SAMPLE[this._sourceByteFormat]
     );
   }
 
@@ -446,11 +478,11 @@ export class WhisperInterface {
         }
         if (
           this._bufferedBytes + data.input.byteLength >
-          MAX_BUFFERED_BYTES
+          this._maxBufferedWireBytes()
         ) {
           throw new QvacErrorAddonASRGgml({
             code: ERR_CODES.BUFFER_LIMIT_EXCEEDED,
-            adds: `${MAX_BUFFERED_BYTES} bytes`,
+            adds: `${MAX_BUFFERED_BYTES} bytes of ${this._sourceByteFormat} audio`,
           });
         }
         this._bufferedAudio.push(data.input);
@@ -534,6 +566,20 @@ export class WhisperInterface {
   }
 
   startStreaming(config: StreamingConfig = {}): void {
+    // Refuse a double start BEFORE touching any per-session state. The native
+    // registry also rejects it, but by then the bookkeeping below would have
+    // overwritten the LIVE session's job id, and the catch below would reset
+    // `_activeJobId`/state on a session that is still running — leaving every
+    // subsequent append and the terminal JobEnded unattributable.
+    // `ParakeetInterface.startStreaming` guards the same way.
+    if (this._activeJobId !== null) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES.FAILED_TO_START_STREAMING,
+        adds: "a job is already active; call endStreaming() or cancel() first",
+      });
+    }
+    const previousTeardown = this._pendingStreamTeardown;
+    const previousState = this._state;
     try {
       this._pendingStreamTeardown = null;
       this._activeJobId = this._nextJobId;
@@ -545,7 +591,8 @@ export class WhisperInterface {
       });
     } catch (err) {
       this._activeJobId = null;
-      this._setState(state.LISTENING);
+      this._pendingStreamTeardown = previousTeardown;
+      this._setState(previousState);
       throw new QvacErrorAddonASRGgml({
         code: ERR_CODES.FAILED_TO_START_STREAMING,
         adds: errorMessage(err),

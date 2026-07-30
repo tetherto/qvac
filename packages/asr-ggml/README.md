@@ -229,10 +229,13 @@ await model.unload()
 ```
 
 > **Buffer cap (`run()` only):** every chunk of one `run()` call is normalized
-> to Float32 and batched into a single native `process()` call, capped at
-> 500 MiB (≈2.7 h at 16 kHz mono). Exceeding it raises
-> `BUFFER_LIMIT_EXCEEDED`. For longer captures use `runStreaming()`, which
-> feeds the engine as audio arrives, or split into sequential `run()` calls.
+> to Float32 and batched into a single native `process()` call. The cap is
+> 500 MiB of **caller-supplied** audio — ≈4.55 h of 16 kHz mono `s16le` (the
+> default byte format) or ≈2.27 h of 16 kHz mono `f32le`, which needs no
+> expansion on the way to native. Exceeding it raises `BUFFER_LIMIT_EXCEEDED`
+> (6015), whose message names the source format the budget is denominated in.
+> For longer captures use `runStreaming()`, which feeds the engine as audio
+> arrives, or split into sequential `run()` calls.
 
 ### Parakeet — duplex streaming `runStreaming()`
 
@@ -278,8 +281,13 @@ strict precedence order:
 **Sniffing is a convenience for scripts, not an integration path.** It opens
 the model file synchronously inside the constructor, it cannot distinguish a
 GGUF whisper build from a GGUF parakeet build, and it throws `INVALID_ENGINE`
-if the file cannot be read at all. Library and SDK callers should always pass
+if the file exists but cannot be read (a missing file is reported first, as
+`MODEL_NOT_FOUND` (24009)). Library and SDK callers should always pass
 `config.engine` explicitly.
+
+Validation and sniffing both target the file the driver actually opens: for
+whisper that is `config.path` when set, otherwise `files.model`; parakeet only
+ever loads `files.model`.
 
 `getEngineType()` reports the resolved engine; `ASRGgml.ENGINE_WHISPER` and
 `ASRGgml.ENGINE_PARAKEET` are available as statics.
@@ -294,9 +302,10 @@ Every verb has one signature and one meaning regardless of engine.
 | `load()` | Creates the native instance and activates the model. Calling it on a loaded instance unloads first. Throws `INSTANCE_DESTROYED` after `destroy()`. |
 | `run(audio)` | Batch transcription. Returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). |
 | `runStreaming(audio, opts?)` | Duplex/VAD-segmented streaming. Resolves once the native session is open; `opts` is the engine's streaming vocabulary. |
-| `reload(newConfig?)` | Applies an engine-scoped partial config in place where possible. |
-| `cancel(jobId?)` | Cancels the active job. The native verb takes no id; `jobId` is accepted for source compatibility only. |
-| `status()` | Native state string. |
+| `reload(newConfig?)` | Applies an engine-scoped partial config in place where possible. Rejects with `NOT_SUPPORTED` (6019) on an engine whose driver has no native reload. |
+| `cancel(jobId?)` | Cancels the active job **and fails it**, so a draining `iterate()` throws. The native verb takes no id; `jobId` is accepted for source compatibility only. |
+| `status()` | Native state string. Rejects with `FAILED_TO_GET_STATUS` (24004) before `load()`. |
+| `addon` | The native interface, or `undefined` before `load()` (not cleared by `unload()`, as in both pre-merge packages). Escape hatch for a native hard cancel that stops the decode *without* failing the job (what the SDK's model-wide `cancel` uses). Not otherwise part of the supported surface. |
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
 | `getEngineType()` | `'whisper'` \| `'parakeet'`. |
@@ -313,7 +322,7 @@ Constructor options:
 | `engine` | — | Alias for `config.engine`, used when `config` is omitted. |
 | `enableStats` | `true` | Attach `RuntimeStats` to the job-end payload. |
 | `logger` | `null` | A `@qvac/logging` `LoggerInterface`. |
-| `exclusiveRun` | `true` | Serialize `run()` calls to completion. `runStreaming`/`reload`/`unload`/`destroy` release the slot on return. |
+| `exclusiveRun` | `true` | Serialize `run()` calls to completion on the inference lane; `runStreaming()` holds that lane for session setup only. `reload`/`unload`/`destroy` serialize on a **separate** lifecycle lane, so teardown pre-empts an in-flight `run()` instead of queueing behind it. |
 
 `run()` / `runStreaming()` output payloads are:
 
@@ -441,9 +450,16 @@ decides how it is interpreted:
 | `Int16Array` | s16 samples |
 | `Uint8Array` | raw bytes, decoded as `s16le` by default; whisper's `whisperConfig.audio_format: 'f32le'` switches the byte interpretation |
 
+`audio_format` accepts `'s16le'`, `'f32le'` and `'decoded'` (an alias for
+`'f32le'`); anything else throws `INVALID_AUDIO_FORMAT` (24010) rather than
+being decoded as little-endian s16. It only ever describes raw `Uint8Array`
+bytes — it never reinterprets a typed array.
+
 A byte length that is not a whole number of samples raises
-`INVALID_AUDIO_INPUT` (6011). `audio_format` only ever describes raw
-`Uint8Array` bytes — it never reinterprets a typed array.
+`INVALID_AUDIO_INPUT` (6011). In a **stream** of byte chunks the check is
+applied in aggregate, so a sample split across a chunk boundary (arbitrary
+socket/pipe read sizes) is carried over into the next chunk; only a stream
+that ends mid-sample is rejected.
 
 ## Backends and GPU Acceleration
 

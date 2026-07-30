@@ -6,6 +6,18 @@ export const PCM_S16_SCALE = 32768;
 /** Interpretation applied to raw `Uint8Array` bytes ("decoded" → "f32le"). */
 export type ByteFormat = "s16le" | "f32le";
 
+/** Bytes per sample of each supported byte interpretation. */
+export const BYTES_PER_SAMPLE: Readonly<Record<ByteFormat, number>> =
+  Object.freeze({ s16le: 2, f32le: 4 });
+
+/**
+ * Bytes per sample on the wire: every driver normalizes its input to f32
+ * samples before handing it to the native interface.
+ */
+export const WIRE_BYTES_PER_SAMPLE = BYTES_PER_SAMPLE.f32le;
+
+const EMPTY_SAMPLES = new Float32Array(0);
+
 export function pcmS16ToFloat32(int16Samples: Int16Array): Float32Array {
   const audio = new Float32Array(int16Samples.length);
   for (let i = 0; i < int16Samples.length; i++) {
@@ -107,6 +119,64 @@ export function normalizeChunkToFloat32(
   );
 }
 
+/**
+ * Stateful per-stream chunk normalizer.
+ *
+ * Byte chunks arriving from a socket, pipe or file read have arbitrary
+ * lengths, so a single PCM sample can straddle a chunk boundary. The
+ * pre-merge whisper package concatenated every chunk of a batch and validated
+ * the byte length only once, in aggregate, in the native decoder — an odd
+ * 1023/1025-byte split was harmless. Normalization is now per chunk, so the
+ * trailing partial sample is carried over and joined with the next chunk;
+ * only a stream that *ends* mid-sample is rejected, which is exactly the
+ * aggregate check the native decoder used to perform.
+ */
+export function createChunkNormalizer(byteFormat: ByteFormat): {
+  push(chunk: AudioChunk): Float32Array;
+  flush(): void;
+} {
+  const sampleBytes = BYTES_PER_SAMPLE[byteFormat];
+  let pending: Uint8Array | null = null;
+
+  return {
+    push(chunk: AudioChunk): Float32Array {
+      if (!(chunk instanceof Uint8Array)) {
+        if (pending) {
+          throw invalidAudioInput(
+            `${pending.byteLength} trailing ${byteFormat} byte(s) cannot be completed by a ${chunk.constructor.name} chunk`,
+          );
+        }
+        return normalizeChunkToFloat32(chunk, byteFormat);
+      }
+
+      let bytes = chunk;
+      if (pending) {
+        const joined = new Uint8Array(pending.byteLength + chunk.byteLength);
+        joined.set(pending, 0);
+        joined.set(chunk, pending.byteLength);
+        bytes = joined;
+        pending = null;
+      }
+
+      const whole = bytes.byteLength - (bytes.byteLength % sampleBytes);
+      if (whole < bytes.byteLength) {
+        // Copy: the caller may reuse (or detach) its own buffer after append.
+        pending = new Uint8Array(bytes.subarray(whole));
+      }
+      if (whole === 0) return EMPTY_SAMPLES;
+      return normalizeChunkToFloat32(bytes.subarray(0, whole), byteFormat);
+    },
+
+    flush(): void {
+      if (pending) {
+        throw invalidAudioInput(
+          `${byteFormat} byte stream ends mid-sample: ${pending.byteLength} trailing byte(s), expected a multiple of ${sampleBytes}`,
+        );
+      }
+    },
+  };
+}
+
 function isAudioChunk(value: unknown): value is AudioChunk {
   return (
     value instanceof Float32Array ||
@@ -119,9 +189,29 @@ async function* mapAsyncChunks(
   source: AsyncIterable<AudioChunk>,
   byteFormat: ByteFormat,
 ): AsyncIterable<Float32Array> {
+  const normalizer = createChunkNormalizer(byteFormat);
   for await (const chunk of source) {
-    yield normalizeChunkToFloat32(chunk, byteFormat);
+    const samples = normalizer.push(chunk);
+    // A chunk that carried only a partial sample yields nothing; the bytes
+    // are held until the next chunk completes them.
+    if (samples.length > 0) yield samples;
   }
+  normalizer.flush();
+}
+
+/** Normalizes an already-materialized list of chunks, in aggregate. */
+function mapChunkList(
+  chunks: readonly AudioChunk[],
+  byteFormat: ByteFormat,
+): Float32Array[] {
+  const normalizer = createChunkNormalizer(byteFormat);
+  const out: Float32Array[] = [];
+  for (const chunk of chunks) {
+    const samples = normalizer.push(chunk);
+    if (samples.length > 0) out.push(samples);
+  }
+  normalizer.flush();
+  return out;
 }
 
 /**
@@ -144,10 +234,10 @@ export function normalizeAudioStream(
     return mapAsyncChunks(input as AsyncIterable<AudioChunk>, byteFormat);
   }
   if (isAudioChunk(input)) {
-    return [normalizeChunkToFloat32(input, byteFormat)];
+    return mapChunkList([input], byteFormat);
   }
   if (Array.isArray(input)) {
-    return input.map((chunk) => normalizeChunkToFloat32(chunk, byteFormat));
+    return mapChunkList(input, byteFormat);
   }
   if (
     typeof (input as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
@@ -155,18 +245,14 @@ export function normalizeAudioStream(
   ) {
     const items = Array.from(input as Iterable<unknown>);
     if (items.length > 0 && items.every(isAudioChunk)) {
-      return items.map((chunk) =>
-        normalizeChunkToFloat32(chunk, byteFormat),
-      );
+      return mapChunkList(items, byteFormat);
     }
     // Legacy convenience: a plain iterable of numbers is materialized as a
     // single raw byte chunk.
-    return [
-      normalizeChunkToFloat32(
-        Uint8Array.from(items as number[]),
-        byteFormat,
-      ),
-    ];
+    return mapChunkList(
+      [Uint8Array.from(items as number[])],
+      byteFormat,
+    );
   }
   throw invalidAudioInput(
     "Unsupported audio input. Expected stream, TypedArray, or chunk array.",

@@ -30,6 +30,7 @@ import type {
   ASRGgmlReloadConfig,
   ASRStreamingOptions,
   AsrDriver,
+  AsrNativeInterface,
   DriverContext,
   EngineType,
   StreamingSession,
@@ -66,6 +67,59 @@ interface ASRGgmlOptions {
 
 type ReleasePolicy = "onSettle" | "onReturn";
 
+/** One serialized lane. See {@link createQueueLane}. */
+interface QueueLane {
+  run<T>(fn: () => Promise<T>, policy: ReleasePolicy): Promise<T>;
+}
+
+/**
+ * Creates one serialized queue lane. `"onReturn"` releases the slot when
+ * `fn()` settles; `"onSettle"` requires `fn()` to resolve with a
+ * `QvacResponse` and holds the slot until that response settles.
+ *
+ * There are deliberately TWO lanes per instance (see `ASRGgml`): inference
+ * and lifecycle. They must stay independent — a single shared lane would
+ * make `unload()`/`destroy()`/`reload()` queue behind an in-flight `run()`,
+ * which both pre-merge packages allowed to be pre-empted, and would deadlock
+ * teardown forever on a `run()` whose input iterable never terminates.
+ */
+function createQueueLane(): QueueLane {
+  let tail: Promise<void> = Promise.resolve();
+  return {
+    async run<T>(fn: () => Promise<T>, policy: ReleasePolicy): Promise<T> {
+      const prev = tail;
+      let releaseSlot: () => void = () => {};
+      tail = new Promise<void>((resolve) => {
+        releaseSlot = resolve;
+      });
+      await prev;
+
+      if (policy === "onReturn") {
+        try {
+          return await fn();
+        } finally {
+          releaseSlot();
+        }
+      }
+
+      let result: T;
+      try {
+        result = await fn();
+      } catch (err) {
+        releaseSlot();
+        throw err;
+      }
+      void (result as unknown as QvacResponse<unknown>)
+        .await()
+        .finally(() => {
+          releaseSlot();
+        })
+        .catch(() => {});
+      return result;
+    },
+  };
+}
+
 /**
  * Best-effort engine sniffing from the model file's magic bytes: GGUF →
  * parakeet, anything else → whisper (legacy GGML `.bin`). Docs and the SDK
@@ -101,6 +155,31 @@ function isKnownEngine(value: unknown): value is EngineType {
 }
 
 /**
+ * The model file the driver will actually open. Whisper's
+ * `contextParams`-adjacent `config.path` overrides `files.model` (a
+ * long-standing whisper escape hatch), so constructor validation and engine
+ * sniffing must target the same expression the driver loads —
+ * `WhisperDriver._buildConfigurationParams()`. Parakeet only ever loads
+ * `files.model`.
+ *
+ * `engine === null` means the engine still has to be sniffed, which can only
+ * happen when no `config` was supplied at all — and therefore no `path`.
+ */
+function resolveModelPath(
+  files: ASRGgmlFiles,
+  config: ASRGgmlConfig | undefined,
+  engine: EngineType | null,
+): string {
+  if (engine === "whisper") {
+    const configuredPath = (config as WhisperEngineConfig | undefined)?.path;
+    if (typeof configuredPath === "string" && configuredPath.length > 0) {
+      return configuredPath;
+    }
+  }
+  return files.model;
+}
+
+/**
  * Unified multi-engine ASR client for the whisper and parakeet GGML
  * engines. The engine is selected per instance (`config.engine`, `engine`,
  * or model-file sniffing); the public method surface is engine-agnostic
@@ -129,7 +208,14 @@ class ASRGgml {
   private readonly _engineType: EngineType;
   private readonly _driver: AsrDriver;
   private readonly _job: JobHandler;
-  private _queueTail: Promise<void>;
+  /** Serializes `run()` / `runStreaming()` against each other. */
+  private readonly _inferenceQueue: QueueLane;
+  /**
+   * Serializes `reload()` / `unload()` / `destroy()` against each other,
+   * independently of `_inferenceQueue`, so teardown can pre-empt an in-flight
+   * run (as both pre-merge packages did) and can never deadlock behind one.
+   */
+  private readonly _lifecycleQueue: QueueLane;
   private _openSession: StreamingSession | null;
 
   constructor(options: ASRGgmlOptions) {
@@ -160,19 +246,27 @@ class ASRGgml {
       weightsLoaded: false,
       destroyed: false,
     };
-    this._queueTail = Promise.resolve();
+    this._inferenceQueue = createQueueLane();
+    this._lifecycleQueue = createQueueLane();
     this._openSession = null;
 
-    // 2. Resolve the engine: config.engine ?? engine ?? sniff.
-    this._engineType = this._resolveEngine(files, config, engine);
+    // 2. Resolve the declared engine (config.engine ?? engine). `null` means
+    //    nothing was declared and the engine has to be sniffed — which needs
+    //    a readable model file, so it happens after step 3.
+    const declaredEngine = this._resolveDeclaredEngine(config, engine);
 
-    // 3. Strict file validation for both engines.
-    if (!fs.existsSync(files.model)) {
+    // 3. Strict file validation, on the path the driver will actually open
+    //    (whisper honours `config.path` over `files.model`). This runs before
+    //    sniffing so a missing model reports MODEL_NOT_FOUND rather than
+    //    INVALID_ENGINE from the failed magic-byte read.
+    const modelPath = resolveModelPath(files, config, declaredEngine);
+    if (!fs.existsSync(modelPath)) {
       throw new QvacErrorAddonASRGgml({
         code: ERR_CODES.MODEL_NOT_FOUND,
-        adds: files.model,
+        adds: modelPath,
       });
     }
+    this._engineType = declaredEngine ?? sniffEngine(modelPath);
     if (this._engineType === "whisper") {
       this._validateWhisperVadModel(
         files,
@@ -205,7 +299,7 @@ class ASRGgml {
 
     this.logger.debug("ASRGgml constructor called", {
       engine: this._engineType,
-      modelPath: files.model,
+      modelPath,
       config,
     });
 
@@ -225,6 +319,23 @@ class ASRGgml {
     return this._driver.getBackendInfo();
   }
 
+  /**
+   * The native interface owned by the engine driver, or `undefined` before
+   * `load()`. As in both pre-merge packages it is NOT cleared by `unload()` —
+   * the interface object outlives its native instance and reports `IDLE`.
+   *
+   * This is the escape hatch the SDK's model-wide hard cancel uses
+   * (`packages/sdk/server/bare/ops/transcribe.ts` reads `model.addon` and
+   * calls `addon.cancel()`): unlike `ASRGgml.cancel()`, it stops the native
+   * decode WITHOUT failing the active job, so the op's `for await` loop can
+   * end normally instead of throwing. Both pre-merge packages exposed `addon`
+   * on the instance; keep it exposed. Not otherwise part of the supported
+   * surface — drive the engine through `ASRGgml`.
+   */
+  get addon(): AsrNativeInterface | undefined {
+    return this._driver.addon;
+  }
+
   async load(): Promise<void> {
     if (this.state.destroyed) {
       throw new QvacErrorAddonASRGgml({
@@ -241,7 +352,7 @@ class ASRGgml {
   }
 
   async unload(): Promise<void> {
-    return await this._enqueue(async () => {
+    return await this._lifecycleQueue.run(async () => {
       if (this._job.active) {
         this._job.fail(new Error("Model was unloaded"));
       }
@@ -253,7 +364,7 @@ class ASRGgml {
   }
 
   async destroy(): Promise<void> {
-    return await this._enqueue(async () => {
+    return await this._lifecycleQueue.run(async () => {
       if (this._job.active) {
         this._job.fail(new Error("Model was destroyed"));
       }
@@ -266,7 +377,13 @@ class ASRGgml {
   }
 
   async reload(newConfig: ASRGgmlReloadConfig = {}): Promise<void> {
-    return await this._enqueue(
+    if (!this._driver.supportsReload) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES.NOT_SUPPORTED,
+        adds: `reload on the ${this._engineType} engine`,
+      });
+    }
+    return await this._lifecycleQueue.run(
       () => this._driver.reload(newConfig),
       "onReturn",
     );
@@ -305,7 +422,7 @@ class ASRGgml {
     const runFn = (): Promise<QvacResponse<ASRRunOutput>> =>
       this._driver.run(this._driver.normalizeAudio(audio));
     if (this.exclusiveRun) {
-      return await this._enqueue(runFn, "onSettle");
+      return await this._inferenceQueue.run(runFn, "onSettle");
     }
     return await runFn();
   }
@@ -331,16 +448,20 @@ class ASRGgml {
     if (this.exclusiveRun) {
       // The slot is held for session setup only, never for the
       // (potentially minutes-long) session itself.
-      return await this._enqueue(startFn, "onReturn");
+      return await this._inferenceQueue.run(startFn, "onReturn");
     }
     return await startFn();
   }
 
-  private _resolveEngine(
-    files: ASRGgmlFiles,
+  /**
+   * Resolves the engine declared by the caller, or `null` when neither
+   * `config.engine` nor `engine` was given and the engine must be sniffed
+   * from the model file.
+   */
+  private _resolveDeclaredEngine(
     config: ASRGgmlConfig | undefined,
     engine: EngineType | undefined,
-  ): EngineType {
+  ): EngineType | null {
     if (config) {
       const configEngine = (config as { engine?: unknown }).engine;
       if (configEngine === undefined) {
@@ -366,7 +487,7 @@ class ASRGgml {
       }
       return engine;
     }
-    return sniffEngine(files.model);
+    return null;
   }
 
   private _validateWhisperVadModel(
@@ -397,46 +518,6 @@ class ASRGgml {
     }
   }
 
-  /**
-   * Single serialized queue for run/reload/unload/destroy. `"onReturn"`
-   * releases the slot when `fn()` settles; `"onSettle"` requires `fn()` to
-   * resolve with a `QvacResponse` and holds the slot until that response
-   * settles.
-   */
-  private async _enqueue<T>(
-    fn: () => Promise<T>,
-    policy: ReleasePolicy,
-  ): Promise<T> {
-    const prev = this._queueTail;
-    let releaseSlot: () => void = () => {};
-    this._queueTail = new Promise<void>((resolve) => {
-      releaseSlot = resolve;
-    });
-    await prev;
-
-    if (policy === "onReturn") {
-      try {
-        return await fn();
-      } finally {
-        releaseSlot();
-      }
-    }
-
-    let result: T;
-    try {
-      result = await fn();
-    } catch (err) {
-      releaseSlot();
-      throw err;
-    }
-    void (result as unknown as QvacResponse<unknown>)
-      .await()
-      .finally(() => {
-        releaseSlot();
-      })
-      .catch(() => {});
-    return result;
-  }
 }
 
 type EngineTypeShape = EngineType;

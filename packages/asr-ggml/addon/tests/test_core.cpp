@@ -1392,17 +1392,30 @@ qvac_lib_inference_addon_cpp::AddonJs* fakeInstanceKey(int& slot) {
   return reinterpret_cast<qvac_lib_inference_addon_cpp::AddonJs*>(&slot);
 }
 
+// Mirrors what startStreaming() hands to the registry: a factory that builds
+// the engine session. Nothing must call it on the double-start path, so the
+// build count is observable.
+auto fakeSessionFactory(
+    bool* cancelledFlag = nullptr, int* buildCount = nullptr) {
+  return [cancelledFlag,
+          buildCount]() -> std::unique_ptr<qvac::asrggml::IStreamingSession> {
+    if (buildCount != nullptr) {
+      ++(*buildCount);
+    }
+    return std::make_unique<FakeStreamingSession>(cancelledFlag);
+  };
+}
+
 } // namespace
 
-TEST(StreamingSessionRegistry, InsertFindTakeRoundTrip) {
+TEST(StreamingSessionRegistry, EmplaceFindTakeRoundTrip) {
   int slot = 0;
   auto* key = fakeInstanceKey(slot);
 
   EXPECT_EQ(qvac::asrggml::findStreamingSession(key), nullptr);
   EXPECT_EQ(qvac::asrggml::takeStreamingSession(key), nullptr);
 
-  qvac::asrggml::insertStreamingSession(
-      key, std::make_unique<FakeStreamingSession>());
+  qvac::asrggml::emplaceStreamingSession(key, fakeSessionFactory());
   EXPECT_NE(qvac::asrggml::findStreamingSession(key), nullptr);
 
   auto taken = qvac::asrggml::takeStreamingSession(key);
@@ -1411,18 +1424,101 @@ TEST(StreamingSessionRegistry, InsertFindTakeRoundTrip) {
   EXPECT_EQ(qvac::asrggml::takeStreamingSession(key), nullptr);
 }
 
-TEST(StreamingSessionRegistry, DuplicateInsertThrows) {
+// The double-start regression this pins: the session must be constructed only
+// after the duplicate check passes, so a second startStreaming() never spins
+// up a second processor (and worker thread) against the shared model.
+TEST(StreamingSessionRegistry, DoubleStartThrowsWithoutBuildingASecondSession) {
   int slot = 0;
   auto* key = fakeInstanceKey(slot);
 
-  qvac::asrggml::insertStreamingSession(
-      key, std::make_unique<FakeStreamingSession>());
-  EXPECT_THROW(
-      qvac::asrggml::insertStreamingSession(
-          key, std::make_unique<FakeStreamingSession>()),
-      std::runtime_error);
+  int builds = 0;
+  bool firstCancelled = false;
+  qvac::asrggml::emplaceStreamingSession(
+      key, fakeSessionFactory(&firstCancelled, &builds));
+  ASSERT_EQ(builds, 1);
+  auto* first = qvac::asrggml::findStreamingSession(key);
+  ASSERT_NE(first, nullptr);
+
+  try {
+    qvac::asrggml::emplaceStreamingSession(
+        key, fakeSessionFactory(nullptr, &builds));
+    FAIL() << "expected a double-start throw";
+  } catch (const std::runtime_error& err) {
+    // Byte-for-byte the message both parents threw, and the one the JS mocks
+    // reproduce (test/mocks/MockedBinding.js:230,
+    // test/mocks/ParakeetMockedBinding.js:136). whisper.ts/parakeet.ts wrap it
+    // into FAILED_TO_START_STREAMING / FAILED_TO_APPEND with the text in
+    // `adds`, so the exact string is part of the JS-visible contract.
+    EXPECT_EQ(
+        std::string(err.what()),
+        "Streaming session already active for this instance");
+  }
+
+  // No second session was constructed, and the live one is untouched: still
+  // registered, same object, not cancelled or ended by the failed start.
+  EXPECT_EQ(builds, 1);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(key), first);
+  EXPECT_FALSE(firstCancelled);
+  EXPECT_FALSE(static_cast<FakeStreamingSession*>(first)->ended());
 
   // Cleanup so later tests (and the atexit handler) see an empty registry.
+  EXPECT_NE(qvac::asrggml::takeStreamingSession(key), nullptr);
+}
+
+// The double-start guard is per AddonJs instance, not process-wide: two
+// separate instances (each with its own model) must both be able to stream.
+TEST(StreamingSessionRegistry, DoubleStartIsPerInstance) {
+  int slotA = 0;
+  int slotB = 0;
+
+  int builds = 0;
+  qvac::asrggml::emplaceStreamingSession(
+      fakeInstanceKey(slotA), fakeSessionFactory(nullptr, &builds));
+  qvac::asrggml::emplaceStreamingSession(
+      fakeInstanceKey(slotB), fakeSessionFactory(nullptr, &builds));
+  EXPECT_EQ(builds, 2);
+
+  EXPECT_NE(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)), nullptr);
+  EXPECT_NE(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)), nullptr);
+  EXPECT_NE(
+      qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)),
+      qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)));
+
+  EXPECT_NE(qvac::asrggml::takeStreamingSession(fakeInstanceKey(slotA)), nullptr);
+  EXPECT_NE(qvac::asrggml::takeStreamingSession(fakeInstanceKey(slotB)), nullptr);
+}
+
+// A failing engine ctor (e.g. whisper's "failed to initialize VAD context")
+// must not leave a registry entry behind, otherwise the next startStreaming()
+// would wrongly report a double-start.
+TEST(StreamingSessionRegistry, FailedFactoryLeavesNoEntry) {
+  int slot = 0;
+  auto* key = fakeInstanceKey(slot);
+
+  EXPECT_THROW(
+      qvac::asrggml::emplaceStreamingSession(
+          key,
+          []() -> std::unique_ptr<qvac::asrggml::IStreamingSession> {
+            throw std::runtime_error("failed to initialize VAD context");
+          }),
+      std::runtime_error);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(key), nullptr);
+
+  // A null session is rejected too, and also leaves nothing behind.
+  EXPECT_THROW(
+      qvac::asrggml::emplaceStreamingSession(
+          key,
+          []() -> std::unique_ptr<qvac::asrggml::IStreamingSession> {
+            return nullptr;
+          }),
+      std::runtime_error);
+  EXPECT_EQ(qvac::asrggml::findStreamingSession(key), nullptr);
+
+  // The slot is reusable: the failures did not poison it.
+  int builds = 0;
+  qvac::asrggml::emplaceStreamingSession(
+      key, fakeSessionFactory(nullptr, &builds));
+  EXPECT_EQ(builds, 1);
   EXPECT_NE(qvac::asrggml::takeStreamingSession(key), nullptr);
 }
 
@@ -1432,10 +1528,10 @@ TEST(StreamingSessionRegistry, ClearAllCancelsEverySurvivingSession) {
   bool cancelledA = false;
   bool cancelledB = false;
 
-  qvac::asrggml::insertStreamingSession(
-      fakeInstanceKey(slotA), std::make_unique<FakeStreamingSession>(&cancelledA));
-  qvac::asrggml::insertStreamingSession(
-      fakeInstanceKey(slotB), std::make_unique<FakeStreamingSession>(&cancelledB));
+  qvac::asrggml::emplaceStreamingSession(
+      fakeInstanceKey(slotA), fakeSessionFactory(&cancelledA));
+  qvac::asrggml::emplaceStreamingSession(
+      fakeInstanceKey(slotB), fakeSessionFactory(&cancelledB));
 
   qvac::asrggml::clearAllStreamingSessions();
 
@@ -1449,8 +1545,7 @@ TEST(StreamingSessionRegistry, TakeSharedTransfersOwnership) {
   int slot = 0;
   auto* key = fakeInstanceKey(slot);
 
-  qvac::asrggml::insertStreamingSession(
-      key, std::make_unique<FakeStreamingSession>());
+  qvac::asrggml::emplaceStreamingSession(key, fakeSessionFactory());
   std::shared_ptr<qvac::asrggml::IStreamingSession> shared =
       qvac::asrggml::takeStreamingSessionShared(key);
   ASSERT_NE(shared, nullptr);

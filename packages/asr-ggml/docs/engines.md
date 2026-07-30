@@ -87,7 +87,7 @@ is the whole seam:
 | Member | Responsibility |
 | --- | --- |
 | `engineType` | `"whisper"` \| `"parakeet"` |
-| `supportsReload` | Whether `reload()` can be honoured in place |
+| `supportsReload` | Whether `reload()` can be honoured in place; `false` makes `reload()` reject with `NOT_SUPPORTED` (6019) |
 | `validateConfig()` | Throws on unknown/invalid engine config keys (called from the constructor) |
 | `normalizeAudio(input)` | Maps any public `AudioInput` shape onto an f32 chunk stream |
 | `load()` / `unload()` / `reload()` | Native instance lifecycle |
@@ -177,8 +177,10 @@ strict precedence order:
 
 Sniffing is a convenience for scripts, not a supported integration path: it
 opens the model file synchronously in the constructor, cannot distinguish a
-GGUF whisper build from a GGUF parakeet build, and raises `INVALID_ENGINE`
-if the file cannot be read. Library and SDK callers should always pass
+GGUF whisper build from a GGUF parakeet build. A model file that is absent is
+reported as `MODEL_NOT_FOUND` (24009) before sniffing runs; `INVALID_ENGINE`
+(6021) is reserved for a file that exists but cannot be read. Library and SDK
+callers should always pass
 `config.engine`.
 
 ## Error codes across engines

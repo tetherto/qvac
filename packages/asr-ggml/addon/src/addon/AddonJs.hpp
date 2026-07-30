@@ -443,8 +443,10 @@ JSCATCH
 //
 // The two config vocabularies stay disjoint by design (QIP amendment 2):
 // whisper requires `vadModelPath` + `jobId` and takes VAD tuning knobs;
-// parakeet takes model-default overrides. Both arms insert into the one
-// registry, throwing on double-start, and return `true`.
+// parakeet takes model-default overrides. Both arms construct their session
+// through the one registry's validate-then-construct seam
+// (emplaceStreamingSession), so a double-start throws before any processor
+// exists, and both return `true`.
 
 namespace detail {
 
@@ -623,25 +625,35 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto configObj = args.getJsObject(1, "config");
 
-  std::unique_ptr<IStreamingSession> session;
+  // Order matters, and it is the pre-merge order: parse/validate the config,
+  // then let the registry run the double-start check and the construction as
+  // one atomic step. The engine session is therefore never built on the
+  // duplicate path -- building it first would start a second worker thread
+  // against the shared model (whisper: processLoop's first statement resets
+  // the live session's stats and clears its output_ vector; parakeet: a
+  // second stream_start() on a single-session Engine) before the throw.
+  // `factory` runs under the registry lock, so it must not touch the registry.
   if (auto* parakeetModel = dynamic_cast<parakeet::ParakeetModel*>(
           &instance.addonCpp->model.get())) {
     parakeet::ParakeetStreamingProcessor::Config config =
         detail::streamingConfigFromModel(*parakeetModel);
     detail::applyStreamingOverrides(env, configObj, config);
-    session = std::make_unique<parakeet::ParakeetStreamingProcessor>(
-        *parakeetModel, instance.addonCpp->outputQueue, config);
+    emplaceStreamingSession(
+        &instance, [&]() -> std::unique_ptr<IStreamingSession> {
+          return std::make_unique<parakeet::ParakeetStreamingProcessor>(
+              *parakeetModel, instance.addonCpp->outputQueue, config);
+        });
   } else {
     whisper::StreamingProcessor::Config config =
         detail::parseWhisperStreamingConfig(env, configObj);
     auto& whisperModel =
         dynamic_cast<whisper::WhisperModel&>(instance.addonCpp->model.get());
-    session = std::make_unique<whisper::StreamingProcessor>(
-        whisperModel, instance.addonCpp->outputQueue, config);
+    emplaceStreamingSession(
+        &instance, [&]() -> std::unique_ptr<IStreamingSession> {
+          return std::make_unique<whisper::StreamingProcessor>(
+              whisperModel, instance.addonCpp->outputQueue, config);
+        });
   }
-
-  // Throws on double-start ("Streaming session already active ...").
-  insertStreamingSession(&instance, std::move(session));
 
   // Informational only; the JS drivers synthesise their own jobIds.
   return js::Boolean::create(env, true);
@@ -747,6 +759,15 @@ JSCATCH
 // One implementation for both engines, on whisper's async shape: the
 // session cancel (worker-thread join) and the framework job cancel both run
 // inside JsAsyncTask, off the JS event loop.
+//
+// The session leaves the registry synchronously but is cancelled/joined only
+// when the async task runs, so between the two a startStreaming() would find
+// an empty registry while the old worker is still touching the shared model.
+// Callers must therefore await the returned promise before starting a new
+// stream -- both JS drivers do (`await this.addon.cancel(...)` in
+// WhisperDriver/ParakeetDriver.cancelActive). This is whisper's pre-merge
+// shape; parakeet's pre-merge cancel joined the worker synchronously on the
+// JS thread, so the await is what preserves its ordering guarantee.
 
 inline js_value_t*
 cancelWithStreaming(js_env_t* env, js_callback_info_t* info) try {
