@@ -5,8 +5,6 @@
 // even when no model is present (skipping the few "load + transcribe"
 // scenarios that genuinely need it).
 
-#include <gtest/gtest.h>
-
 #include <any>
 #include <chrono>
 #include <cstdlib>
@@ -19,6 +17,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "addon/AsrErrors.hpp"
 #include "model-interface/ParakeetTypes.hpp"
@@ -33,31 +33,39 @@ using namespace qvac::asrggml::parakeet;
 
 namespace {
 
-std::string findStatStr(const qvac_lib_inference_addon_cpp::RuntimeStats & stats,
-                        const std::string & key) {
-    for (const auto & [k, v] : stats) {
-        if (k != key) continue;
-        if (std::holds_alternative<int64_t>(v))
-            return std::to_string(std::get<int64_t>(v));
-        return std::to_string(std::get<double>(v));
-    }
-    return "";
+std::string findStatStr(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& [k, v] : stats) {
+    if (k != key)
+      continue;
+    if (std::holds_alternative<int64_t>(v))
+      return std::to_string(std::get<int64_t>(v));
+    return std::to_string(std::get<double>(v));
+  }
+  return "";
 }
 
-int64_t findStatInt(const qvac_lib_inference_addon_cpp::RuntimeStats & stats,
-                    const std::string & key) {
-    for (const auto & [k, v] : stats) {
-        if (k != key) continue;
-        if (std::holds_alternative<int64_t>(v)) return std::get<int64_t>(v);
-        return static_cast<int64_t>(std::get<double>(v));
-    }
-    return 0;
+int64_t findStatInt(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& [k, v] : stats) {
+    if (k != key)
+      continue;
+    if (std::holds_alternative<int64_t>(v))
+      return std::get<int64_t>(v);
+    return static_cast<int64_t>(std::get<double>(v));
+  }
+  return 0;
 }
 
-bool hasStatKey(const qvac_lib_inference_addon_cpp::RuntimeStats & stats,
-                const std::string & key) {
-    for (const auto & [k, v] : stats) if (k == key) return true;
-    return false;
+bool hasStatKey(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& [k, v] : stats)
+    if (k == key)
+      return true;
+  return false;
 }
 
 // Path to a GGUF that is "small enough" for unit tests (any of the
@@ -65,66 +73,69 @@ bool hasStatKey(const qvac_lib_inference_addon_cpp::RuntimeStats & stats,
 // care which engine is loaded). Falls back to an empty string so the
 // guarded tests can skip cleanly when no model is available.
 std::string gguf_test_path() {
-    if (const char * env = std::getenv("QVAC_TEST_GGUF")) return env;
-    return "";
+  if (const char* env = std::getenv("QVAC_TEST_GGUF"))
+    return env;
+  return "";
 }
 
 // Read a file into a vector<uint8_t>. Used to exercise the
 // setWeightsForFile() byte-buffer path with real GGUF bytes.
-std::vector<uint8_t> read_file_bytes(const std::filesystem::path & p) {
-    std::ifstream f(p, std::ios::binary);
-    if (!f) return {};
-    f.seekg(0, std::ios::end);
-    const auto n = static_cast<std::streamoff>(f.tellg());
-    f.seekg(0, std::ios::beg);
-    std::vector<uint8_t> out(n > 0 ? static_cast<size_t>(n) : 0);
-    if (n > 0) f.read(reinterpret_cast<char *>(out.data()), n);
-    return out;
+std::vector<uint8_t> read_file_bytes(const std::filesystem::path& p) {
+  std::ifstream f(p, std::ios::binary);
+  if (!f)
+    return {};
+  f.seekg(0, std::ios::end);
+  const auto n = static_cast<std::streamoff>(f.tellg());
+  f.seekg(0, std::ios::beg);
+  std::vector<uint8_t> out(n > 0 ? static_cast<size_t>(n) : 0);
+  if (n > 0)
+    f.read(reinterpret_cast<char*>(out.data()), n);
+  return out;
 }
 
 class TestStreamBuf : public std::basic_streambuf<char> {
 public:
-    explicit TestStreamBuf(std::vector<uint8_t> buf) : buf_(std::move(buf)) {
-        char * b = reinterpret_cast<char *>(buf_.data());
-        setg(b, b, b + buf_.size());
-    }
+  explicit TestStreamBuf(std::vector<uint8_t> buf) : buf_(std::move(buf)) {
+    char* b = reinterpret_cast<char*>(buf_.data());
+    setg(b, b, b + buf_.size());
+  }
 
 private:
-    std::vector<uint8_t> buf_;
+  std::vector<uint8_t> buf_;
 };
 
 class ParakeetModelTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        cfg.modelType  = ModelType::TDT;
-        cfg.maxThreads = 2;
-        cfg.useGPU     = false;
-        cfg.sampleRate = 16000;
-        cfg.channels   = 1;
-    }
-    ParakeetConfig cfg;
+  void SetUp() override {
+    cfg.modelType = ModelType::TDT;
+    cfg.maxThreads = 2;
+    cfg.useGPU = false;
+    cfg.sampleRate = 16000;
+    cfg.channels = 1;
+  }
+  ParakeetConfig cfg;
 };
 
-}  // namespace
+} // namespace
 
 // ─────────────────────────────────────────────────────────────────────
 //  Construction + config
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, ConstructorDoesNotThrow) {
-    EXPECT_NO_THROW({ ParakeetModel m(cfg); });
+  EXPECT_NO_THROW({ ParakeetModel m(cfg); });
 }
 
 TEST_F(ParakeetModelTest, GetNameMentionsGgmlBackend) {
-    ParakeetModel m(cfg);
-    const std::string name = m.getName();
-    EXPECT_NE(name.find("parakeet"), std::string::npos);
-    EXPECT_NE(name.find("ggml"),     std::string::npos);
+  ParakeetModel m(cfg);
+  const std::string name = m.getName();
+  EXPECT_NE(name.find("parakeet"), std::string::npos);
+  EXPECT_NE(name.find("ggml"), std::string::npos);
 }
 
 TEST_F(ParakeetModelTest, GetDisplayNameEqualsGetName) {
-    ParakeetModel m(cfg);
-    EXPECT_EQ(m.getDisplayName(), m.getName());
+  ParakeetModel m(cfg);
+  EXPECT_EQ(m.getDisplayName(), m.getName());
 }
 
 TEST_F(ParakeetModelTest, EncoderBackendMirrorsBackendNamePreLoad) {
@@ -137,27 +148,27 @@ TEST_F(ParakeetModelTest, EncoderBackendMirrorsBackendNamePreLoad) {
 }
 
 TEST_F(ParakeetModelTest, ConfigEquality) {
-    ParakeetConfig a;
-    ParakeetConfig b;
-    EXPECT_EQ(a, b);
+  ParakeetConfig a;
+  ParakeetConfig b;
+  EXPECT_EQ(a, b);
 
-    b.modelPath = "x.gguf";
-    EXPECT_NE(a, b);
+  b.modelPath = "x.gguf";
+  EXPECT_NE(a, b);
 }
 
 TEST_F(ParakeetModelTest, SetConfigUpdatesConfiguration) {
-    ParakeetModel m(cfg);
-    ParakeetConfig newCfg = cfg;
-    newCfg.modelType  = ModelType::EOU;
-    newCfg.maxThreads = 4;
-    EXPECT_NO_THROW(m.setConfig(newCfg));
+  ParakeetModel m(cfg);
+  ParakeetConfig newCfg = cfg;
+  newCfg.modelType = ModelType::EOU;
+  newCfg.maxThreads = 4;
+  EXPECT_NO_THROW(m.setConfig(newCfg));
 }
 
 TEST_F(ParakeetModelTest, SaveLoadParamsAcceptsConfigButIgnoresOthers) {
-    ParakeetModel m(cfg);
-    m.saveLoadParams(cfg);
-    m.saveLoadParams(42);              // template overload, no-op
-    m.saveLoadParams(std::string{});    // template overload, no-op
+  ParakeetModel m(cfg);
+  m.saveLoadParams(cfg);
+  m.saveLoadParams(42);            // template overload, no-op
+  m.saveLoadParams(std::string{}); // template overload, no-op
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -165,41 +176,41 @@ TEST_F(ParakeetModelTest, SaveLoadParamsAcceptsConfigButIgnoresOthers) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, IsLoadedStartsFalse) {
-    ParakeetModel m(cfg);
-    EXPECT_FALSE(m.isLoaded());
+  ParakeetModel m(cfg);
+  EXPECT_FALSE(m.isLoaded());
 }
 
 TEST_F(ParakeetModelTest, EndOfStreamFlagsState) {
-    ParakeetModel m(cfg);
-    EXPECT_FALSE(m.isStreamEnded());
-    m.endOfStream();
-    EXPECT_TRUE(m.isStreamEnded());
+  ParakeetModel m(cfg);
+  EXPECT_FALSE(m.isStreamEnded());
+  m.endOfStream();
+  EXPECT_TRUE(m.isStreamEnded());
 }
 
 TEST_F(ParakeetModelTest, ResetClearsStreamEndedAndDoesNotThrow) {
-    ParakeetModel m(cfg);
-    m.endOfStream();
-    EXPECT_TRUE(m.isStreamEnded());
-    EXPECT_NO_THROW(m.reset());
-    EXPECT_FALSE(m.isStreamEnded());
+  ParakeetModel m(cfg);
+  m.endOfStream();
+  EXPECT_TRUE(m.isStreamEnded());
+  EXPECT_NO_THROW(m.reset());
+  EXPECT_FALSE(m.isStreamEnded());
 }
 
 TEST_F(ParakeetModelTest, UnloadOnUnloadedModelIsHarmless) {
-    ParakeetModel m(cfg);
-    EXPECT_NO_THROW(m.unload());
-    EXPECT_NO_THROW(m.unloadWeights());
-    EXPECT_FALSE(m.isLoaded());
+  ParakeetModel m(cfg);
+  EXPECT_NO_THROW(m.unload());
+  EXPECT_NO_THROW(m.unloadWeights());
+  EXPECT_FALSE(m.isLoaded());
 }
 
 TEST_F(ParakeetModelTest, InitializeBackendDoesNotThrow) {
-    ParakeetModel m(cfg);
-    EXPECT_NO_THROW(m.initializeBackend());
+  ParakeetModel m(cfg);
+  EXPECT_NO_THROW(m.initializeBackend());
 }
 
 TEST_F(ParakeetModelTest, LoadWithoutWeightsThrows) {
-    ParakeetModel m(cfg);
-    EXPECT_THROW(m.load(), std::exception);
-    EXPECT_FALSE(m.isLoaded());
+  ParakeetModel m(cfg);
+  EXPECT_THROW(m.load(), std::exception);
+  EXPECT_FALSE(m.isLoaded());
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -207,39 +218,42 @@ TEST_F(ParakeetModelTest, LoadWithoutWeightsThrows) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, SetWeightsForFileIgnoresNonGgufFilename) {
-    ParakeetModel m(cfg);
-    const std::vector<uint8_t> bogus(1024, 0xAB);
-    m.set_weights_for_file("vocab.txt",
-                           std::span<const uint8_t>(bogus.data(), bogus.size()),
-                           /*completed=*/true);
-    // Loading still throws because no GGUF was provided.
-    EXPECT_THROW(m.load(), std::exception);
+  ParakeetModel m(cfg);
+  const std::vector<uint8_t> bogus(1024, 0xAB);
+  m.set_weights_for_file(
+      "vocab.txt",
+      std::span<const uint8_t>(bogus.data(), bogus.size()),
+      /*completed=*/true);
+  // Loading still throws because no GGUF was provided.
+  EXPECT_THROW(m.load(), std::exception);
 }
 
 TEST_F(ParakeetModelTest, SetWeightsForFileIgnoresIncompleteFlag) {
-    ParakeetModel m(cfg);
-    const std::vector<uint8_t> bogus(64, 0x42);
-    m.set_weights_for_file("model.gguf",
-                           std::span<const uint8_t>(bogus.data(), bogus.size()),
-                           /*completed=*/false);
-    // No `completed=true` means no load attempt yet -- load() should
-    // throw because the GGUF buffer is "in flight".
-    EXPECT_THROW(m.load(), std::exception);
+  ParakeetModel m(cfg);
+  const std::vector<uint8_t> bogus(64, 0x42);
+  m.set_weights_for_file(
+      "model.gguf",
+      std::span<const uint8_t>(bogus.data(), bogus.size()),
+      /*completed=*/false);
+  // No `completed=true` means no load attempt yet -- load() should
+  // throw because the GGUF buffer is "in flight".
+  EXPECT_THROW(m.load(), std::exception);
 }
 
 TEST_F(ParakeetModelTest, SetWeightsForFileWithEmptyChunk) {
-    ParakeetModel m(cfg);
-    m.set_weights_for_file("model.gguf",
-                           std::span<const uint8_t>(),
-                           /*completed=*/true);
-    // Even with `completed=true`, an empty buffer is invalid GGUF.
-    EXPECT_THROW(m.load(), std::exception);
+  ParakeetModel m(cfg);
+  m.set_weights_for_file(
+      "model.gguf",
+      std::span<const uint8_t>(),
+      /*completed=*/true);
+  // Even with `completed=true`, an empty buffer is invalid GGUF.
+  EXPECT_THROW(m.load(), std::exception);
 }
 
 TEST_F(ParakeetModelTest, SetWeightsForFileTemplateOverloadIsHarmless) {
-    ParakeetModel m(cfg);
-    EXPECT_NO_THROW(m.set_weights_for_file("model.gguf", 1234));
-    EXPECT_NO_THROW(m.set_weights_for_file("model.gguf", std::string{"abc"}));
+  ParakeetModel m(cfg);
+  EXPECT_NO_THROW(m.set_weights_for_file("model.gguf", 1234));
+  EXPECT_NO_THROW(m.set_weights_for_file("model.gguf", std::string{"abc"}));
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -247,67 +261,67 @@ TEST_F(ParakeetModelTest, SetWeightsForFileTemplateOverloadIsHarmless) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, ProcessEmptyAudioDoesNotCrashOrEmitOutput) {
-    ParakeetModel m(cfg);
-    ParakeetModel::Input empty;
-    EXPECT_NO_THROW(m.process(empty));
+  ParakeetModel m(cfg);
+  ParakeetModel::Input empty;
+  EXPECT_NO_THROW(m.process(empty));
 }
 
 TEST_F(ParakeetModelTest, ProcessAnyAcceptsAudioInput) {
-    ParakeetModel m(cfg);
-    ParakeetModel::Input audio(16000, 0.0f);
-    auto result = m.process(std::any(audio));
-    ASSERT_TRUE(result.has_value());
-    auto out = std::any_cast<ParakeetModel::Output>(result);
-    // Without a loaded GGUF the model emits a "[Model not loaded]"
-    // sentinel transcript -- still a valid Output.
-    ASSERT_FALSE(out.empty());
-    EXPECT_FALSE(out.front().text.empty());
+  ParakeetModel m(cfg);
+  ParakeetModel::Input audio(16000, 0.0f);
+  auto result = m.process(std::any(audio));
+  ASSERT_TRUE(result.has_value());
+  auto out = std::any_cast<ParakeetModel::Output>(result);
+  // Without a loaded GGUF the model emits a "[Model not loaded]"
+  // sentinel transcript -- still a valid Output.
+  ASSERT_FALSE(out.empty());
+  EXPECT_FALSE(out.front().text.empty());
 }
 
 TEST_F(ParakeetModelTest, ProcessAnyAcceptsAnyInputWrapper) {
-    ParakeetModel m(cfg);
-    ParakeetModel::AnyInput wrap{ParakeetModel::Input(8000, 0.0f)};
-    EXPECT_NO_THROW(m.process(std::any(wrap)));
+  ParakeetModel m(cfg);
+  ParakeetModel::AnyInput wrap{ParakeetModel::Input(8000, 0.0f)};
+  EXPECT_NO_THROW(m.process(std::any(wrap)));
 }
 
 TEST_F(ParakeetModelTest, ProcessAnyRejectsUnsupportedInputType) {
-    ParakeetModel m(cfg);
-    EXPECT_THROW(m.process(std::any(std::string("not audio"))),
-                 std::invalid_argument);
+  ParakeetModel m(cfg);
+  EXPECT_THROW(
+      m.process(std::any(std::string("not audio"))), std::invalid_argument);
 }
 
 TEST_F(ParakeetModelTest, ProcessWithCallbackReturnsOutput) {
-    ParakeetModel m(cfg);
-    ParakeetModel::Input audio(8000, 0.0f);
-    bool called = false;
-    auto out = m.process(audio, [&](const ParakeetModel::Output & o) {
-        called = true;
-        EXPECT_FALSE(o.empty());
-    });
-    EXPECT_TRUE(called);
-    EXPECT_FALSE(out.empty());
+  ParakeetModel m(cfg);
+  ParakeetModel::Input audio(8000, 0.0f);
+  bool called = false;
+  auto out = m.process(audio, [&](const ParakeetModel::Output& o) {
+    called = true;
+    EXPECT_FALSE(o.empty());
+  });
+  EXPECT_TRUE(called);
+  EXPECT_FALSE(out.empty());
 }
 
 TEST_F(ParakeetModelTest, SetOnSegmentCallbackFiresPerProcessCall) {
-    ParakeetModel m(cfg);
-    int hits = 0;
-    m.setOnSegmentCallback([&](const Transcript &) { ++hits; });
-    m.process(ParakeetModel::Input(4000, 0.0f));
-    EXPECT_EQ(hits, 1);
-    m.process(ParakeetModel::Input(4000, 0.0f));
-    EXPECT_EQ(hits, 2);
+  ParakeetModel m(cfg);
+  int hits = 0;
+  m.setOnSegmentCallback([&](const Transcript&) { ++hits; });
+  m.process(ParakeetModel::Input(4000, 0.0f));
+  EXPECT_EQ(hits, 1);
+  m.process(ParakeetModel::Input(4000, 0.0f));
+  EXPECT_EQ(hits, 2);
 }
 
 TEST_F(ParakeetModelTest, AddTranscriptionAppendsToOutput) {
-    ParakeetModel m(cfg);
-    Transcript t;
-    t.text = "hello";
-    m.addTranscription(t);
-    auto out = m.process(ParakeetModel::Input(1000, 0.0f),
-                         [](const ParakeetModel::Output &) {});
-    // The custom transcription survives + the new one is appended.
-    ASSERT_GE(out.size(), 2u);
-    EXPECT_EQ(out.front().text, "hello");
+  ParakeetModel m(cfg);
+  Transcript t;
+  t.text = "hello";
+  m.addTranscription(t);
+  auto out = m.process(
+      ParakeetModel::Input(1000, 0.0f), [](const ParakeetModel::Output&) {});
+  // The custom transcription survives + the new one is appended.
+  ASSERT_GE(out.size(), 2u);
+  EXPECT_EQ(out.front().text, "hello");
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -315,16 +329,16 @@ TEST_F(ParakeetModelTest, AddTranscriptionAppendsToOutput) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, CancelBeforeProcessDoesNotPoisonNextRun) {
-    ParakeetModel m(cfg);
-    m.cancel();  // generation 0 cancel
-    EXPECT_NO_THROW(m.process(ParakeetModel::Input(4000, 0.0f)));
+  ParakeetModel m(cfg);
+  m.cancel(); // generation 0 cancel
+  EXPECT_NO_THROW(m.process(ParakeetModel::Input(4000, 0.0f)));
 }
 
 TEST_F(ParakeetModelTest, CancelBeforeProcessAnyDoesNotPoisonNextRun) {
-    ParakeetModel m(cfg);
-    m.cancel();
-    auto result = m.process(std::any(ParakeetModel::Input(4000, 0.0f)));
-    EXPECT_TRUE(result.has_value());
+  ParakeetModel m(cfg);
+  m.cancel();
+  auto result = m.process(std::any(ParakeetModel::Input(4000, 0.0f)));
+  EXPECT_TRUE(result.has_value());
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -332,35 +346,35 @@ TEST_F(ParakeetModelTest, CancelBeforeProcessAnyDoesNotPoisonNextRun) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, RuntimeStatsExposeExpectedKeys) {
-    ParakeetModel m(cfg);
-    auto stats = m.runtimeStats();
-    EXPECT_TRUE(hasStatKey(stats, "processCalls"));
-    EXPECT_TRUE(hasStatKey(stats, "totalSamples"));
-    EXPECT_TRUE(hasStatKey(stats, "totalTokens"));
-    EXPECT_TRUE(hasStatKey(stats, "totalTranscriptions"));
-    EXPECT_TRUE(hasStatKey(stats, "totalWallMs"));
-    EXPECT_TRUE(hasStatKey(stats, "modelLoadMs"));
-    EXPECT_TRUE(hasStatKey(stats, "backendDevice"));
-    EXPECT_TRUE(hasStatKey(stats, "backendId"));
-    EXPECT_TRUE(hasStatKey(stats, "encoderOnCoreml"));
-    // Pre-load defaults: model never opened the engine -> CPU / id=0, and the
-    // Core ML encoder sidecar is inactive (0), so the encoder stays on ggml.
-    EXPECT_EQ(findStatInt(stats, "backendDevice"), 0);
-    EXPECT_EQ(findStatInt(stats, "backendId"),     0);
-    EXPECT_EQ(findStatInt(stats, "encoderOnCoreml"), 0);
+  ParakeetModel m(cfg);
+  auto stats = m.runtimeStats();
+  EXPECT_TRUE(hasStatKey(stats, "processCalls"));
+  EXPECT_TRUE(hasStatKey(stats, "totalSamples"));
+  EXPECT_TRUE(hasStatKey(stats, "totalTokens"));
+  EXPECT_TRUE(hasStatKey(stats, "totalTranscriptions"));
+  EXPECT_TRUE(hasStatKey(stats, "totalWallMs"));
+  EXPECT_TRUE(hasStatKey(stats, "modelLoadMs"));
+  EXPECT_TRUE(hasStatKey(stats, "backendDevice"));
+  EXPECT_TRUE(hasStatKey(stats, "backendId"));
+  EXPECT_TRUE(hasStatKey(stats, "encoderOnCoreml"));
+  // Pre-load defaults: model never opened the engine -> CPU / id=0, and the
+  // Core ML encoder sidecar is inactive (0), so the encoder stays on ggml.
+  EXPECT_EQ(findStatInt(stats, "backendDevice"), 0);
+  EXPECT_EQ(findStatInt(stats, "backendId"), 0);
+  EXPECT_EQ(findStatInt(stats, "encoderOnCoreml"), 0);
 }
 
 TEST_F(ParakeetModelTest, RuntimeStatsAccumulateAcrossCalls) {
-    ParakeetModel m(cfg);
-    EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 0);
+  ParakeetModel m(cfg);
+  EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 0);
 
-    m.process(ParakeetModel::Input(8000, 0.0f));
-    EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 1);
-    EXPECT_EQ(findStatInt(m.runtimeStats(), "totalSamples"), 8000);
+  m.process(ParakeetModel::Input(8000, 0.0f));
+  EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 1);
+  EXPECT_EQ(findStatInt(m.runtimeStats(), "totalSamples"), 8000);
 
-    m.process(ParakeetModel::Input(8000, 0.0f));
-    EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 2);
-    EXPECT_EQ(findStatInt(m.runtimeStats(), "totalSamples"), 16000);
+  m.process(ParakeetModel::Input(8000, 0.0f));
+  EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 2);
+  EXPECT_EQ(findStatInt(m.runtimeStats(), "totalSamples"), 16000);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -368,18 +382,18 @@ TEST_F(ParakeetModelTest, RuntimeStatsAccumulateAcrossCalls) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST(ParakeetStaticHelpers, PreprocessAudioDataS16LeNormalises) {
-    // Two int16_t samples: 16384 → 0.5, -16384 → -0.5
-    std::vector<uint8_t> raw = {0x00, 0x40, 0x00, 0xC0};
-    auto out = ParakeetModel::preprocessAudioData(raw, "s16le");
-    ASSERT_EQ(out.size(), 2u);
-    EXPECT_NEAR(out[0],  0.5f, 1e-6f);
-    EXPECT_NEAR(out[1], -0.5f, 1e-6f);
+  // Two int16_t samples: 16384 → 0.5, -16384 → -0.5
+  std::vector<uint8_t> raw = {0x00, 0x40, 0x00, 0xC0};
+  auto out = ParakeetModel::preprocessAudioData(raw, "s16le");
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_NEAR(out[0], 0.5f, 1e-6f);
+  EXPECT_NEAR(out[1], -0.5f, 1e-6f);
 }
 
 TEST(ParakeetStaticHelpers, PreprocessAudioDataRejectsUnknownFormat) {
-    std::vector<uint8_t> raw(8, 0);
-    EXPECT_THROW(ParakeetModel::preprocessAudioData(raw, "f32le"),
-                 std::exception);
+  std::vector<uint8_t> raw(8, 0);
+  EXPECT_THROW(
+      ParakeetModel::preprocessAudioData(raw, "f32le"), std::exception);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -389,42 +403,43 @@ TEST(ParakeetStaticHelpers, PreprocessAudioDataRejectsUnknownFormat) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST_F(ParakeetModelTest, GgufLoadAndProcessRealAudioIfAvailable) {
-    const auto path = gguf_test_path();
-    if (path.empty() || !std::filesystem::exists(path)) {
-        GTEST_SKIP() << "Set QVAC_TEST_GGUF to a parakeet GGUF to enable.";
-    }
-    ParakeetModel m(cfg);
-    auto bytes = read_file_bytes(path);
-    ASSERT_FALSE(bytes.empty());
+  const auto path = gguf_test_path();
+  if (path.empty() || !std::filesystem::exists(path)) {
+    GTEST_SKIP() << "Set QVAC_TEST_GGUF to a parakeet GGUF to enable.";
+  }
+  ParakeetModel m(cfg);
+  auto bytes = read_file_bytes(path);
+  ASSERT_FALSE(bytes.empty());
 
-    m.set_weights_for_file("model.gguf",
-                           std::span<const uint8_t>(bytes.data(), bytes.size()),
-                           /*completed=*/true);
-    EXPECT_NO_THROW(m.load());
-    EXPECT_TRUE(m.isLoaded());
-    EXPECT_GT(findStatInt(m.runtimeStats(), "modelLoadMs"), 0);
+  m.set_weights_for_file(
+      "model.gguf",
+      std::span<const uint8_t>(bytes.data(), bytes.size()),
+      /*completed=*/true);
+  EXPECT_NO_THROW(m.load());
+  EXPECT_TRUE(m.isLoaded());
+  EXPECT_GT(findStatInt(m.runtimeStats(), "modelLoadMs"), 0);
 
-    // Silent input still produces an Output; we just want a no-crash.
-    auto out = m.process(ParakeetModel::Input(16000, 0.0f),
-                         [](const ParakeetModel::Output &) {});
-    EXPECT_FALSE(out.empty());
-    EXPECT_NO_THROW(m.unload());
-    EXPECT_FALSE(m.isLoaded());
+  // Silent input still produces an Output; we just want a no-crash.
+  auto out = m.process(
+      ParakeetModel::Input(16000, 0.0f), [](const ParakeetModel::Output&) {});
+  EXPECT_FALSE(out.empty());
+  EXPECT_NO_THROW(m.unload());
+  EXPECT_FALSE(m.isLoaded());
 }
 
 TEST_F(ParakeetModelTest, GgufStreambufOverloadIfAvailable) {
-    const auto path = gguf_test_path();
-    if (path.empty() || !std::filesystem::exists(path)) {
-        GTEST_SKIP() << "Set QVAC_TEST_GGUF to a parakeet GGUF to enable.";
-    }
-    ParakeetModel m(cfg);
-    auto bytes = read_file_bytes(path);
-    ASSERT_FALSE(bytes.empty());
+  const auto path = gguf_test_path();
+  if (path.empty() || !std::filesystem::exists(path)) {
+    GTEST_SKIP() << "Set QVAC_TEST_GGUF to a parakeet GGUF to enable.";
+  }
+  ParakeetModel m(cfg);
+  auto bytes = read_file_bytes(path);
+  ASSERT_FALSE(bytes.empty());
 
-    auto sb = std::make_unique<TestStreamBuf>(std::move(bytes));
-    m.setWeightsForFile("model.gguf", std::move(sb));
-    EXPECT_NO_THROW(m.load());
-    EXPECT_TRUE(m.isLoaded());
+  auto sb = std::make_unique<TestStreamBuf>(std::move(bytes));
+  m.setWeightsForFile("model.gguf", std::move(sb));
+  EXPECT_NO_THROW(m.load());
+  EXPECT_TRUE(m.isLoaded());
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -432,20 +447,21 @@ TEST_F(ParakeetModelTest, GgufStreambufOverloadIfAvailable) {
 // ─────────────────────────────────────────────────────────────────────
 
 TEST(ParakeetErrors, ReloadNotSupportedStatus) {
-    using namespace qvac::asrggml::errors::parakeet;
-    auto status = makeStatus(
-        Code::ReloadNotSupported,
-        "reload is not supported for the parakeet engine");
-    EXPECT_EQ(status.codeString(), "[ Parakeet :: ReloadNotSupported ]");
-    EXPECT_EQ(std::string(status.what()),
-              "reload is not supported for the parakeet engine");
+  using namespace qvac::asrggml::errors::parakeet;
+  auto status = makeStatus(
+      Code::ReloadNotSupported,
+      "reload is not supported for the parakeet engine");
+  EXPECT_EQ(status.codeString(), "[ Parakeet :: ReloadNotSupported ]");
+  EXPECT_EQ(
+      std::string(status.what()),
+      "reload is not supported for the parakeet engine");
 }
 
 TEST(ParakeetErrors, ToStringCoversEveryCode) {
-    using namespace qvac::asrggml::errors::parakeet;
-    EXPECT_EQ(toString(Code::EncoderNotLoaded),   "EncoderNotLoaded");
-    EXPECT_EQ(toString(Code::InferenceFailed),    "InferenceFailed");
-    EXPECT_EQ(toString(Code::ModelNotReady),      "ModelNotReady");
-    EXPECT_EQ(toString(Code::ReloadNotSupported), "ReloadNotSupported");
-    EXPECT_EQ(toString(static_cast<Code>(255)),   "UnknownError");
+  using namespace qvac::asrggml::errors::parakeet;
+  EXPECT_EQ(toString(Code::EncoderNotLoaded), "EncoderNotLoaded");
+  EXPECT_EQ(toString(Code::InferenceFailed), "InferenceFailed");
+  EXPECT_EQ(toString(Code::ModelNotReady), "ModelNotReady");
+  EXPECT_EQ(toString(Code::ReloadNotSupported), "ReloadNotSupported");
+  EXPECT_EQ(toString(static_cast<Code>(255)), "UnknownError");
 }

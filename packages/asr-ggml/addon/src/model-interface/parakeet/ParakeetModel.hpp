@@ -31,13 +31,13 @@
 #include <type_traits>
 #include <vector>
 
+#include <parakeet/diarization.h>
+#include <parakeet/streaming.h>
+
 #include "ParakeetConfig.hpp"
-#include "model-interface/ParakeetTypes.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
-
-#include <parakeet/streaming.h>
-#include <parakeet/diarization.h>
+#include "model-interface/ParakeetTypes.hpp"
 
 namespace parakeet {
 class Engine;
@@ -50,9 +50,10 @@ namespace qvac::asrggml::parakeet {
 // referenced through the `pkt` alias.
 namespace pkt = ::parakeet;
 
-class ParakeetModel : public qvac_lib_inference_addon_cpp::model::IModel,
-                      public qvac_lib_inference_addon_cpp::model::IModelCancel,
-                      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
+class ParakeetModel
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
@@ -109,19 +110,17 @@ public:
   // synchronously inside feed_pcm_f32 / finalize whenever the engine
   // emits a segment. Throws if the engine isn't loaded.
   std::unique_ptr<pkt::StreamSession> createDuplexAsrSession(
-      const pkt::StreamingOptions& opts,
-      pkt::StreamingCallback onSegment);
+      const pkt::StreamingOptions& opts, pkt::StreamingCallback onSegment);
 
   // Same idea for Sortformer-flavoured GGUFs.
-  std::unique_ptr<pkt::SortformerStreamSession>
-  createDuplexDiarizationSession(
+  std::unique_ptr<pkt::SortformerStreamSession> createDuplexDiarizationSession(
       const pkt::SortformerStreamingOptions& opts,
       pkt::SortformerSegmentCallback onSegment);
 
   // Cheap accessors used by the duplex processor (and unit tests) to
   // build session opts from cfg_ when the JS caller doesn't override
   // them. Reads only; safe without holding engine_mutex_.
-  int                 getSampleRate() const { return sample_rate_; }
+  int getSampleRate() const { return sample_rate_; }
 
   // Active backend identity captured at load(); surfaced to JS via the addon's
   // getBackendInfo(). getBackendId() codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan
@@ -138,28 +137,22 @@ public:
   // runtimeStats() and getBackendInfo().
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
-  int                 getStreamingChunkMs() const {
+  int getStreamingChunkMs() const {
     return cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 1000;
   }
-  int                 getStreamingHistoryMs() const {
+  int getStreamingHistoryMs() const {
     return cfg_.streamingHistoryMs > 0
                ? cfg_.streamingHistoryMs
                : ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
   }
   // <0 = "not set; keep parakeet's own defaults". Returned verbatim so
   // callers treat the negative value as "skip the override".
-  int                 getStreamingLeftContextMs() const {
-    return cfg_.streamingLeftContextMs;
-  }
-  int                 getStreamingRightLookaheadMs() const {
+  int getStreamingLeftContextMs() const { return cfg_.streamingLeftContextMs; }
+  int getStreamingRightLookaheadMs() const {
     return cfg_.streamingRightLookaheadMs;
   }
-  bool                getStreamingEmitPartials() const {
-    return cfg_.streamingEmitPartials;
-  }
-  bool                getStreamingEnergyVad() const {
-    return cfg_.streamingEnergyVad;
-  }
+  bool getStreamingEmitPartials() const { return cfg_.streamingEmitPartials; }
+  bool getStreamingEnergyVad() const { return cfg_.streamingEnergyVad; }
   // AOSC accessors (v2.1+ Sortformer only). Forwarded verbatim from
   // ParakeetConfig; parakeet-cpp ignores them for non-Sortformer engines
   // and for v1/v2 Sortformer GGUFs.
@@ -177,13 +170,9 @@ public:
   int getStreamingSpkCacheUpdatePeriod() const {
     return cfg_.streamingSpkCacheUpdatePeriod;
   }
-  bool                isSortformer() const {
-    return cfg_.modelType == ModelType::SORTFORMER;
-  }
-  float               getDiarOnsetThreshold() const { return diarConfig_.onset; }
-  float               getDiarMinDurationOn() const {
-    return diarConfig_.minDurationOn;
-  }
+  bool isSortformer() const { return cfg_.modelType == ModelType::SORTFORMER; }
+  float getDiarOnsetThreshold() const { return diarConfig_.onset; }
+  float getDiarMinDurationOn() const { return diarConfig_.minDurationOn; }
 
   // ── Configuration ──────────────────────────────────────────────────────
   void setConfig(const ParakeetConfig& config) { cfg_ = config; }
@@ -260,56 +249,56 @@ private:
   // We accumulate them into `gguf_buffer_` keyed by the (single) GGUF
   // filename; on load() we materialise the buffer into a temp file and
   // hand the path to pkt::Engine.
-  std::string                          gguf_filename_;
-  std::vector<uint8_t>                 gguf_buffer_;
-  std::filesystem::path                gguf_temp_path_;
-  bool                                 gguf_completed_ = false;
+  std::string gguf_filename_;
+  std::vector<uint8_t> gguf_buffer_;
+  std::filesystem::path gguf_temp_path_;
+  bool gguf_completed_ = false;
 
   std::filesystem::path writeBufferToTempFile();
   void cleanupTempFile();
 
   // ── State ──────────────────────────────────────────────────────────────
-  ParakeetConfig                       cfg_;
-  OutputCallback                       on_segment_;
-  Output                               output_;
+  ParakeetConfig cfg_;
+  OutputCallback on_segment_;
+  Output output_;
 
-  bool                                 stream_ended_ = false;
-  bool                                 is_loaded_    = false;
-  bool                                 is_warmed_up_ = false;
+  bool stream_ended_ = false;
+  bool is_loaded_ = false;
+  bool is_warmed_up_ = false;
 
   // The Engine itself (pimpl-owned via unique_ptr to keep the
   // qvac-parakeet headers out of the binding's public include surface).
   std::unique_ptr<pkt::Engine> engine_;
-  mutable std::mutex                     engine_mutex_;
+  mutable std::mutex engine_mutex_;
 
   // Only one session is open at a time (model_type decides which).
   // session_mutex_ guards the unique_ptrs against the race between cancel()
   // (callable from any thread) and the open/close/unload lifecycle.
-  mutable std::mutex                                 session_mutex_;
-  std::unique_ptr<pkt::StreamSession>           asr_session_;
+  mutable std::mutex session_mutex_;
+  std::unique_ptr<pkt::StreamSession> asr_session_;
   std::unique_ptr<pkt::SortformerStreamSession> diar_session_;
 
   // Wall-clock seconds of audio fed to the streaming sessions so far,
   // used to translate per-session relative segment timestamps into a
   // monotonically growing wall-clock-style timeline that mirrors what
   // the offline path emits in `process(input)`.
-  double                              streaming_audio_seconds_ = 0.0;
-  bool                                streaming_finalized_     = false;
+  double streaming_audio_seconds_ = 0.0;
+  bool streaming_finalized_ = false;
 
   // Sample rate in Hz; copied from cfg_.sampleRate at load time. The
   // ggml engine does not currently support non-16 kHz models, so anything
   // other than 16 000 throws on load.
-  int                                  sample_rate_ = 16000;
+  int sample_rate_ = 16000;
 
   // Active backend, captured once at load(). backend_device_ is the
   // post-fallback truth (0 = CPU, 1 = GPU): a GPU init failure leaves it at
   // CPU even when cfg_.useGPU was true. backend_id_ codes are mirrored on
   // the JS side: 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL,
   // 99 = other.
-  int                                  backend_device_ = 0;
-  int                                  backend_id_     = 0;
+  int backend_device_ = 0;
+  int backend_id_ = 0;
   int backend_gpu_unsupported_ = 0;
-  std::string                          backend_name_   = "CPU";
+  std::string backend_name_ = "CPU";
   // Human-readable GPU device name recovered from the ggml device registry
   // at load(); empty on CPU. Surfaced to JS via getBackendInfo().
   std::string backend_description_;
@@ -321,16 +310,16 @@ private:
   int encoder_on_coreml_ = 0;
 
   // ── Token / sentinel constants ─────────────────────────────────────────
-  // The engine itself uses different vocab IDs internally; we surface only 
-  // the "[No speech detected]" / "[Audio too short]" / ... text sentinels 
+  // The engine itself uses different vocab IDs internally; we surface only
+  // the "[No speech detected]" / "[Audio too short]" / ... text sentinels
   // through Transcript::text.
-  static constexpr const char* ERR_NO_SPEECH        = "[No speech detected]";
-  static constexpr const char* ERR_AUDIO_SHORT      = "[Audio too short]";
-  static constexpr const char* ERR_MODEL_NOT_READY  = "[Model not ready]";
+  static constexpr const char* ERR_NO_SPEECH = "[No speech detected]";
+  static constexpr const char* ERR_AUDIO_SHORT = "[Audio too short]";
+  static constexpr const char* ERR_MODEL_NOT_READY = "[Model not ready]";
   static constexpr const char* ERR_MODEL_NOT_LOADED = "[Model not loaded]";
-  static constexpr const char* ERR_INFERENCE       = "[Inference error]";
-  static constexpr const char* ERR_NO_SPEAKERS     = "[No speakers detected]";
-  static constexpr const char* ERR_JOB_CANCELLED   = "Job cancelled";
+  static constexpr const char* ERR_INFERENCE = "[Inference error]";
+  static constexpr const char* ERR_NO_SPEAKERS = "[No speakers detected]";
+  static constexpr const char* ERR_JOB_CANCELLED = "Job cancelled";
 
   static bool isSentinel(const std::string& text) {
     return text == ERR_NO_SPEECH || text == ERR_AUDIO_SHORT ||
@@ -342,10 +331,10 @@ private:
   // The Engine handles its own mel-spectrogram internally; these are
   // here only so JS-facing logging / metric reporting keeps the same
   // numbers as the old binding.
-  static constexpr int   HOP_LENGTH  = 160;
+  static constexpr int HOP_LENGTH = 160;
   static constexpr float SAMPLE_RATE = 16000.0f;
 
-  DiarizationConfig                    diarConfig_;
+  DiarizationConfig diarConfig_;
 
   // ── Sortformer head dispatch ───────────────────────────────────────────
   std::string runSortformerProcess(const Input& input);
@@ -371,8 +360,8 @@ private:
   // Streaming-session callbacks fire mid-feed (and from a different thread
   // on finalize()), so segments are stashed here under streaming_mutex_ and
   // flushed into output_ at the end of each process() call.
-  std::mutex                          streaming_mutex_;
-  std::vector<Transcript>             pending_streaming_segments_;
+  std::mutex streaming_mutex_;
+  std::vector<Transcript> pending_streaming_segments_;
 
   // Feeds a cfg_.streaming chunk and returns the concatenated text of the
   // segments fired during the call. Sentinel strings are applied when the
@@ -381,21 +370,21 @@ private:
 
   // ── Runtime stats (subset of legacy fields; we now derive most numbers
   //     from the Engine's own per-call timings) ────────────────────────
-  float                                processed_time_       = 0.0f;
-  int64_t                              totalSamples_         = 0;
-  int64_t                              totalTokens_          = 0;
-  int64_t                              totalTranscriptions_  = 0;
-  int64_t                              processCalls_         = 0;
-  int64_t                              totalWallMs_          = 0;
-  int64_t                              modelLoadMs_          = 0;
-  int64_t                              melSpecMs_            = 0;
-  int64_t                              encoderMs_            = 0;
-  int64_t                              decoderMs_            = 0;
-  int64_t                              totalEncodedFrames_   = 0;
+  float processed_time_ = 0.0f;
+  int64_t totalSamples_ = 0;
+  int64_t totalTokens_ = 0;
+  int64_t totalTranscriptions_ = 0;
+  int64_t processCalls_ = 0;
+  int64_t totalWallMs_ = 0;
+  int64_t modelLoadMs_ = 0;
+  int64_t melSpecMs_ = 0;
+  int64_t encoderMs_ = 0;
+  int64_t decoderMs_ = 0;
+  int64_t totalEncodedFrames_ = 0;
 
-  mutable std::atomic_uint64_t         nextGeneration_   = 1;
-  mutable std::atomic_uint64_t         activeGeneration_ = 0;
-  mutable std::atomic_uint64_t         cancelGeneration_ = 0;
+  mutable std::atomic_uint64_t nextGeneration_ = 1;
+  mutable std::atomic_uint64_t activeGeneration_ = 0;
+  mutable std::atomic_uint64_t cancelGeneration_ = 0;
 };
 
 } // namespace qvac::asrggml::parakeet

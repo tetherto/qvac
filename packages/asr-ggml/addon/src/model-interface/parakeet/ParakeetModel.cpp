@@ -140,20 +140,19 @@ std::string captureBackendDescription(int backendId, int backendDevice) {
 
 // HH:MM:SS.fff for Sortformer speaker-segment formatting
 std::string formatSeconds(float seconds) {
-  if (seconds < 0.0f) seconds = 0.0f;
-  const int    hours = static_cast<int>(seconds) / 3600;
-  const int    mins  = (static_cast<int>(seconds) / 60) % 60;
-  const float  secs  = seconds - (hours * 3600 + mins * 60);
+  if (seconds < 0.0f)
+    seconds = 0.0f;
+  const int hours = static_cast<int>(seconds) / 3600;
+  const int mins = (static_cast<int>(seconds) / 60) % 60;
+  const float secs = seconds - (hours * 3600 + mins * 60);
   std::ostringstream os;
-  os << std::setfill('0') << std::setw(2) << hours << ":"
-     << std::setfill('0') << std::setw(2) << mins  << ":"
-     << std::fixed << std::setprecision(3)
+  os << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0')
+     << std::setw(2) << mins << ":" << std::fixed << std::setprecision(3)
      << std::setfill('0') << std::setw(6) << secs;
   return os.str();
 }
 
-template <typename Fn>
-int64_t measureMs(Fn&& fn) {
+template <typename Fn> int64_t measureMs(Fn&& fn) {
   const auto t0 = std::chrono::steady_clock::now();
   fn();
   const auto t1 = std::chrono::steady_clock::now();
@@ -356,8 +355,9 @@ std::filesystem::path ParakeetModel::writeBufferToTempFile() {
         std::string("ParakeetModel::load: cannot open temp GGUF file ") +
             out.string());
   }
-  f.write(reinterpret_cast<const char*>(gguf_buffer_.data()),
-          static_cast<std::streamsize>(gguf_buffer_.size()));
+  f.write(
+      reinterpret_cast<const char*>(gguf_buffer_.data()),
+      static_cast<std::streamsize>(gguf_buffer_.size()));
   if (!f) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InternalError,
@@ -467,11 +467,13 @@ void ParakeetModel::warnOnSampleRateMismatch() const {
 }
 
 void ParakeetModel::load() {
-  if (is_loaded_) return;
+  if (is_loaded_)
+    return;
 
-  QLOG(logger::Priority::INFO,
-       "Loading Parakeet GGUF (modelType hint: " +
-           std::to_string(static_cast<int>(cfg_.modelType)) + ")");
+  QLOG(
+      logger::Priority::INFO,
+      "Loading Parakeet GGUF (modelType hint: " +
+          std::to_string(static_cast<int>(cfg_.modelType)) + ")");
 
   modelLoadMs_ = measureMs([&] {
     const fs::path ggufPath = resolveGgufPath();
@@ -494,8 +496,9 @@ void ParakeetModel::load() {
   gguf_buffer_.clear();
   gguf_buffer_.shrink_to_fit();
 
-  QLOG(logger::Priority::INFO,
-       "Parakeet engine loaded in " + std::to_string(modelLoadMs_) + "ms");
+  QLOG(
+      logger::Priority::INFO,
+      "Parakeet engine loaded in " + std::to_string(modelLoadMs_) + "ms");
 }
 
 void ParakeetModel::unload() {
@@ -504,8 +507,8 @@ void ParakeetModel::unload() {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine_.reset();
   }
-  is_loaded_     = false;
-  is_warmed_up_  = false;
+  is_loaded_ = false;
+  is_warmed_up_ = false;
   cleanupTempFile();
 }
 
@@ -524,20 +527,24 @@ void ParakeetModel::reload() {
 
 void ParakeetModel::endOfStream() {
   stream_ended_ = true;
-  if (!cfg_.streaming || streaming_finalized_) return;
-  pkt::StreamSession*           asr  = nullptr;
+  if (!cfg_.streaming || streaming_finalized_)
+    return;
+  pkt::StreamSession* asr = nullptr;
   pkt::SortformerStreamSession* diar = nullptr;
   {
     std::lock_guard<std::mutex> lk(session_mutex_);
-    asr  = asr_session_.get();
+    asr = asr_session_.get();
     diar = diar_session_.get();
   }
   try {
-    if (asr)  asr->finalize();
-    if (diar) diar->finalize();
+    if (asr)
+      asr->finalize();
+    if (diar)
+      diar->finalize();
   } catch (const std::exception& e) {
-    QLOG(logger::Priority::WARNING,
-         std::string("Streaming session finalize failed: ") + e.what());
+    QLOG(
+        logger::Priority::WARNING,
+        std::string("Streaming session finalize failed: ") + e.what());
   }
   streaming_finalized_ = true;
 
@@ -548,14 +555,15 @@ void ParakeetModel::endOfStream() {
 
 void ParakeetModel::reset() {
   output_.clear();
-  stream_ended_   = false;
+  stream_ended_ = false;
   processed_time_ = 0.0f;
   cancelGeneration_.store(0, std::memory_order_relaxed);
   activeGeneration_.store(0, std::memory_order_relaxed);
 }
 
 void ParakeetModel::warmup() {
-  if (is_warmed_up_ || !is_loaded_) return;
+  if (is_warmed_up_ || !is_loaded_)
+    return;
   Input silence(static_cast<size_t>(SAMPLE_RATE), 0.0f);
   try {
     runAsrProcess(silence);
@@ -587,20 +595,30 @@ void ParakeetModel::cancel() const {
   // cancel() may race with the open/close/unload lifecycle, so snapshot the
   // session pointers under session_mutex_ and invoke the engine's own
   // (thread-safe) cancel() outside the lock.
-  pkt::StreamSession*           asr  = nullptr;
+  pkt::StreamSession* asr = nullptr;
   pkt::SortformerStreamSession* diar = nullptr;
   {
     std::lock_guard<std::mutex> lk(session_mutex_);
-    asr  = asr_session_.get();
+    asr = asr_session_.get();
     diar = diar_session_.get();
   }
-  if (asr)  { try { asr->cancel();  } catch (...) {} }
-  if (diar) { try { diar->cancel(); } catch (...) {} }
+  if (asr) {
+    try {
+      asr->cancel();
+    } catch (...) {
+    }
+  }
+  if (diar) {
+    try {
+      diar->cancel();
+    } catch (...) {
+    }
+  }
 }
 
-void ParakeetModel::set_weights_for_file(const std::string& filename,
-                                         std::span<const uint8_t> contents,
-                                         bool completed) {
+void ParakeetModel::set_weights_for_file(
+    const std::string& filename, std::span<const uint8_t> contents,
+    bool completed) {
   // Only a single GGUF is accepted; other extensions are rejected.
   const std::string lower = [&] {
     std::string s = filename;
@@ -610,9 +628,12 @@ void ParakeetModel::set_weights_for_file(const std::string& filename,
   const bool isGguf =
       lower.size() >= 5 && lower.compare(lower.size() - 5, 5, ".gguf") == 0;
   if (!isGguf) {
-    QLOG(logger::Priority::WARNING,
-         "Parakeet ggml backend ignores non-GGUF weight file '" + filename + "'");
-    if (completed) gguf_completed_ = true;
+    QLOG(
+        logger::Priority::WARNING,
+        "Parakeet ggml backend ignores non-GGUF weight file '" + filename +
+            "'");
+    if (completed)
+      gguf_completed_ = true;
     return;
   }
 
@@ -623,28 +644,34 @@ void ParakeetModel::set_weights_for_file(const std::string& filename,
   if (!contents.empty()) {
     gguf_buffer_.insert(gguf_buffer_.end(), contents.begin(), contents.end());
   }
-  if (completed) gguf_completed_ = true;
+  if (completed)
+    gguf_completed_ = true;
 }
 
 void ParakeetModel::set_weights_for_file(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>> streambuf) {
-  if (!streambuf) return;
+  if (!streambuf)
+    return;
   // Drain via sgetn in fixed chunks (not all streambufs support seekg/tellg).
   std::vector<uint8_t> buf;
   std::array<char, 64 * 1024> tmp{};
   while (true) {
-    const std::streamsize got = streambuf->sgetn(tmp.data(),
-                                                 static_cast<std::streamsize>(tmp.size()));
-    if (got <= 0) break;
-    buf.insert(buf.end(),
-               reinterpret_cast<const uint8_t *>(tmp.data()),
-               reinterpret_cast<const uint8_t *>(tmp.data()) + got);
-    if (got < static_cast<std::streamsize>(tmp.size())) break;
+    const std::streamsize got =
+        streambuf->sgetn(tmp.data(), static_cast<std::streamsize>(tmp.size()));
+    if (got <= 0)
+      break;
+    buf.insert(
+        buf.end(),
+        reinterpret_cast<const uint8_t*>(tmp.data()),
+        reinterpret_cast<const uint8_t*>(tmp.data()) + got);
+    if (got < static_cast<std::streamsize>(tmp.size()))
+      break;
   }
-  set_weights_for_file(filename,
-                       std::span<const uint8_t>(buf.data(), buf.size()),
-                       /*completed=*/true);
+  set_weights_for_file(
+      filename,
+      std::span<const uint8_t>(buf.data(), buf.size()),
+      /*completed=*/true);
 }
 
 void ParakeetModel::setWeightsForFile(
@@ -653,9 +680,8 @@ void ParakeetModel::setWeightsForFile(
   set_weights_for_file(filename, std::move(streambuf));
 }
 
-std::vector<float>
-ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
-                                   const std::string& audioFormat) {
+std::vector<float> ParakeetModel::preprocessAudioData(
+    const std::vector<uint8_t>& audioData, const std::string& audioFormat) {
   if (audioFormat != "s16le") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -665,60 +691,62 @@ ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
 }
 
 std::string ParakeetModel::runAsrProcess(const Input& input) {
-  if (input.empty()) return ERR_AUDIO_SHORT;
+  if (input.empty())
+    return ERR_AUDIO_SHORT;
 
   pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
   }
-  if (!engine) return ERR_MODEL_NOT_LOADED;
+  if (!engine)
+    return ERR_MODEL_NOT_LOADED;
 
-  pkt::EngineResult result =
-      engine->transcribe_samples(input.data(),
-                                 static_cast<int>(input.size()),
-                                 sample_rate_);
+  pkt::EngineResult result = engine->transcribe_samples(
+      input.data(), static_cast<int>(input.size()), sample_rate_);
   // Record per-stage timings verbatim; engines that don't report a stage
   // record 0 rather than mis-attributing wall-clock across buckets.
-  encoderMs_         += static_cast<int64_t>(result.encoder_ms);
-  decoderMs_         += static_cast<int64_t>(result.decode_ms);
-  melSpecMs_         += static_cast<int64_t>(result.preprocess_ms);
-  totalEncodedFrames_+= result.encoder_frames;
-  totalTokens_       += static_cast<int64_t>(result.token_ids.size());
+  encoderMs_ += static_cast<int64_t>(result.encoder_ms);
+  decoderMs_ += static_cast<int64_t>(result.decode_ms);
+  melSpecMs_ += static_cast<int64_t>(result.preprocess_ms);
+  totalEncodedFrames_ += result.encoder_frames;
+  totalTokens_ += static_cast<int64_t>(result.token_ids.size());
 
-  if (result.text.empty()) return ERR_NO_SPEECH;
+  if (result.text.empty())
+    return ERR_NO_SPEECH;
   return result.text;
 }
 
 std::string ParakeetModel::runSortformerProcess(const Input& input) {
-  if (input.empty()) return ERR_AUDIO_SHORT;
+  if (input.empty())
+    return ERR_AUDIO_SHORT;
 
   pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine = engine_.get();
   }
-  if (!engine) return ERR_MODEL_NOT_LOADED;
+  if (!engine)
+    return ERR_MODEL_NOT_LOADED;
 
   pkt::DiarizationOptions dopts;
-  dopts.threshold      = diarConfig_.onset;
+  dopts.threshold = diarConfig_.onset;
   dopts.min_segment_ms = static_cast<int>(diarConfig_.minDurationOn * 1000.0f);
 
   pkt::DiarizationResult diar;
   encoderMs_ += measureMs([&] {
-    diar = engine->diarize_samples(input.data(),
-                                   static_cast<int>(input.size()),
-                                   sample_rate_, dopts);
+    diar = engine->diarize_samples(
+        input.data(), static_cast<int>(input.size()), sample_rate_, dopts);
   });
 
-  if (diar.segments.empty()) return ERR_NO_SPEAKERS;
+  if (diar.segments.empty())
+    return ERR_NO_SPEAKERS;
 
   return formatDiarizationSegments(diar.segments);
 }
 
 std::unique_ptr<pkt::StreamSession> ParakeetModel::createDuplexAsrSession(
-    const pkt::StreamingOptions& opts,
-    pkt::StreamingCallback onSegment) {
+    const pkt::StreamingOptions& opts, pkt::StreamingCallback onSegment) {
   pkt::Engine* engine = nullptr;
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
@@ -762,7 +790,7 @@ void ParakeetModel::openStreamingSession() {
   }
 
   streaming_audio_seconds_ = 0.0;
-  streaming_finalized_     = false;
+  streaming_finalized_ = false;
   {
     std::lock_guard<std::mutex> lk(streaming_mutex_);
     pending_streaming_segments_.clear();
@@ -776,9 +804,8 @@ void ParakeetModel::openStreamingSession() {
 }
 
 void ParakeetModel::openSortformerStreamingSession(pkt::Engine& engine) {
-  const pkt::SortformerStreamingOptions opts =
-      buildSortformerStreamingOptions(
-          cfg_, sample_rate_, diarConfig_.onset, diarConfig_.minDurationOn);
+  const pkt::SortformerStreamingOptions opts = buildSortformerStreamingOptions(
+      cfg_, sample_rate_, diarConfig_.onset, diarConfig_.minDurationOn);
   auto session = engine.diarize_start(
       opts, [this](const pkt::StreamingDiarizationSegment& seg) {
         // Negative speaker_id is the synthetic finalize terminator.
@@ -860,7 +887,7 @@ void ParakeetModel::closeStreamingSession() {
     pending_streaming_segments_.clear();
   }
   streaming_audio_seconds_ = 0.0;
-  streaming_finalized_     = false;
+  streaming_finalized_ = false;
 }
 
 int64_t ParakeetModel::feedStreamingChunk(const Input& input) {
@@ -869,8 +896,8 @@ int64_t ParakeetModel::feedStreamingChunk(const Input& input) {
   return measureMs([&] {
     if (cfg_.modelType == ModelType::SORTFORMER) {
       if (diar_session_) {
-        diar_session_->feed_pcm_f32(input.data(),
-                                    static_cast<int>(input.size()));
+        diar_session_->feed_pcm_f32(
+            input.data(), static_cast<int>(input.size()));
         try {
           diar_session_->finalize();
         } catch (...) {
@@ -878,8 +905,8 @@ int64_t ParakeetModel::feedStreamingChunk(const Input& input) {
       }
     } else {
       if (asr_session_) {
-        asr_session_->feed_pcm_f32(input.data(),
-                                   static_cast<int>(input.size()));
+        asr_session_->feed_pcm_f32(
+            input.data(), static_cast<int>(input.size()));
         try {
           asr_session_->finalize();
         } catch (...) {
@@ -899,8 +926,9 @@ void ParakeetModel::reopenStreamingSession() {
   try {
     openStreamingSession();
   } catch (const std::exception& e) {
-    QLOG(logger::Priority::WARNING,
-         std::string("Failed to reopen streaming session: ") + e.what());
+    QLOG(
+        logger::Priority::WARNING,
+        std::string("Failed to reopen streaming session: ") + e.what());
   }
 }
 
@@ -946,7 +974,7 @@ void ParakeetModel::process(const Input& input) {
   totalSamples_ += static_cast<int64_t>(input.size());
 
   const float startTime = processed_time_;
-  const float duration  =
+  const float duration =
       static_cast<float>(input.size()) / static_cast<float>(SAMPLE_RATE);
 
   std::string text;
@@ -973,9 +1001,10 @@ void ParakeetModel::process(const Input& input) {
       }
       throwIfCancelled();
     } catch (const std::exception& e) {
-      if (isCancellationError(e)) throw;
-      QLOG(logger::Priority::ERROR,
-           std::string("Inference error: ") + e.what());
+      if (isCancellationError(e))
+        throw;
+      QLOG(
+          logger::Priority::ERROR, std::string("Inference error: ") + e.what());
       text = ERR_INFERENCE;
     }
   });
@@ -987,36 +1016,38 @@ void ParakeetModel::process(const Input& input) {
     // single "no speech" placeholder to keep one Output per process().
     if (text.empty() || isSentinel(text)) {
       Transcript transcript;
-      transcript.text     = text.empty() ? ERR_NO_SPEECH : text;
-      transcript.start    = startTime;
-      transcript.end      = startTime + duration;
+      transcript.text = text.empty() ? ERR_NO_SPEECH : text;
+      transcript.start = startTime;
+      transcript.end = startTime + duration;
       transcript.toAppend = true;
       output_.push_back(transcript);
       ++totalTranscriptions_;
-      if (on_segment_) on_segment_(transcript);
+      if (on_segment_)
+        on_segment_(transcript);
     }
     return;
   }
 
   Transcript transcript;
-  transcript.text     = text;
-  transcript.start    = startTime;
-  transcript.end      = startTime + duration;
+  transcript.text = text;
+  transcript.start = startTime;
+  transcript.end = startTime + duration;
   transcript.toAppend = true;
 
   output_.push_back(transcript);
   ++totalTranscriptions_;
 
-  if (on_segment_) on_segment_(transcript);
+  if (on_segment_)
+    on_segment_(transcript);
 }
 
-ParakeetModel::Output
-ParakeetModel::process(const Input& input,
-                       std::function<void(const Output&)> callback) {
+ParakeetModel::Output ParakeetModel::process(
+    const Input& input, std::function<void(const Output&)> callback) {
   process(input);
   Output result = std::move(output_);
   output_.clear();
-  if (callback) callback(result);
+  if (callback)
+    callback(result);
   return result;
 }
 
@@ -1049,29 +1080,29 @@ std::any ParakeetModel::process(const std::any& input) {
   return result;
 }
 
-std::string ParakeetModel::getName() const {
-  return "qvac-parakeet (ggml)";
-}
+std::string ParakeetModel::getName() const { return "qvac-parakeet (ggml)"; }
 
 RuntimeStats ParakeetModel::runtimeStats() const {
   RuntimeStats stats;
-  stats.emplace_back("processCalls",        static_cast<int64_t>(processCalls_));
-  stats.emplace_back("totalSamples",        static_cast<int64_t>(totalSamples_));
-  stats.emplace_back("totalTokens",         static_cast<int64_t>(totalTokens_));
-  stats.emplace_back("totalTranscriptions", static_cast<int64_t>(totalTranscriptions_));
-  stats.emplace_back("totalWallMs",         static_cast<int64_t>(totalWallMs_));
+  stats.emplace_back("processCalls", static_cast<int64_t>(processCalls_));
+  stats.emplace_back("totalSamples", static_cast<int64_t>(totalSamples_));
+  stats.emplace_back("totalTokens", static_cast<int64_t>(totalTokens_));
+  stats.emplace_back(
+      "totalTranscriptions", static_cast<int64_t>(totalTranscriptions_));
+  stats.emplace_back("totalWallMs", static_cast<int64_t>(totalWallMs_));
   // Legacy alias of totalWallMs; addon-cpp output handlers expect this key.
-  stats.emplace_back("totalTime",           static_cast<int64_t>(totalWallMs_));
-  stats.emplace_back("modelLoadMs",         static_cast<int64_t>(modelLoadMs_));
-  stats.emplace_back("encoderMs",           static_cast<int64_t>(encoderMs_));
-  stats.emplace_back("decoderMs",           static_cast<int64_t>(decoderMs_));
-  stats.emplace_back("melSpecMs",           static_cast<int64_t>(melSpecMs_));
-  stats.emplace_back("totalEncodedFrames",  static_cast<int64_t>(totalEncodedFrames_));
+  stats.emplace_back("totalTime", static_cast<int64_t>(totalWallMs_));
+  stats.emplace_back("modelLoadMs", static_cast<int64_t>(modelLoadMs_));
+  stats.emplace_back("encoderMs", static_cast<int64_t>(encoderMs_));
+  stats.emplace_back("decoderMs", static_cast<int64_t>(decoderMs_));
+  stats.emplace_back("melSpecMs", static_cast<int64_t>(melSpecMs_));
+  stats.emplace_back(
+      "totalEncodedFrames", static_cast<int64_t>(totalEncodedFrames_));
 
   // Active backend captured at load(): backendDevice is the device class
   // (0 = CPU, 1 = GPU); backendId identifies the GPU backend family.
-  stats.emplace_back("backendDevice",       static_cast<int64_t>(backend_device_));
-  stats.emplace_back("backendId",           static_cast<int64_t>(backend_id_));
+  stats.emplace_back("backendDevice", static_cast<int64_t>(backend_device_));
+  stats.emplace_back("backendId", static_cast<int64_t>(backend_id_));
   stats.emplace_back(
       "gpuUnsupported", static_cast<int64_t>(backend_gpu_unsupported_));
   // 1 when the FastConformer encoder ran on the Apple Neural Engine (Core ML
@@ -1080,12 +1111,11 @@ RuntimeStats ParakeetModel::runtimeStats() const {
       "encoderOnCoreml", static_cast<int64_t>(encoder_on_coreml_));
 
   // audioDurationMs derived from samples / sample_rate
-  const double sr = sample_rate_ > 0
-                        ? static_cast<double>(sample_rate_)
-                        : static_cast<double>(SAMPLE_RATE);
-  stats.emplace_back("audioDurationMs",
-                     static_cast<int64_t>(static_cast<double>(totalSamples_) /
-                                          sr * 1000.0));
+  const double sr = sample_rate_ > 0 ? static_cast<double>(sample_rate_)
+                                     : static_cast<double>(SAMPLE_RATE);
+  stats.emplace_back(
+      "audioDurationMs",
+      static_cast<int64_t>(static_cast<double>(totalSamples_) / sr * 1000.0));
   return stats;
 }
 

@@ -37,38 +37,29 @@ struct Transcript {
   bool startsWord;
 
   Transcript()
-      : toAppend{false},
-        start(-1.0F),
-        end(-1.0F),
-        id{0},
-        isEndOfTurn{false},
+      : toAppend{false}, start(-1.0F), end(-1.0F), id{0}, isEndOfTurn{false},
         startsWord{true} {}
 
   explicit Transcript(std::string_view strView)
-      : text{strView},
-        toAppend{false},
-        start{-1.0F},
-        end{-1.0F},
-        id{0},
-        isEndOfTurn{false},
-        startsWord{true} {}
+      : text{strView}, toAppend{false}, start{-1.0F}, end{-1.0F}, id{0},
+        isEndOfTurn{false}, startsWord{true} {}
 };
 
 /**
  * Model types supported by Parakeet
  */
 enum class ModelType : std::uint8_t {
-  CTC,        // English-only, fast transcription with punctuation/capitalization
-  TDT,        // Multilingual (~25 languages) with auto-detection
-  EOU,        // Real-time streaming with end-of-utterance detection
-  SORTFORMER  // Speaker diarization (up to 4 speakers)
+  CTC,       // English-only, fast transcription with punctuation/capitalization
+  TDT,       // Multilingual (~25 languages) with auto-detection
+  EOU,       // Real-time streaming with end-of-utterance detection
+  SORTFORMER // Speaker diarization (up to 4 speakers)
 };
 
 /**
  * Audio input for transcription
  */
 struct AudioInput {
-  std::vector<float> audioData;  // Audio samples (normalized to [-1, 1])
+  std::vector<float> audioData; // Audio samples (normalized to [-1, 1])
   int sampleRate = 16000;
   int channels = 1;
 };
@@ -111,4 +102,3 @@ struct DiarizationConfig {
 };
 
 } // namespace qvac::asrggml::parakeet
-

@@ -80,8 +80,8 @@ public:
   ~ParakeetStreamingProcessor() override;
 
   ParakeetStreamingProcessor(const ParakeetStreamingProcessor&) = delete;
-  ParakeetStreamingProcessor& operator=(const ParakeetStreamingProcessor&) =
-      delete;
+  ParakeetStreamingProcessor&
+  operator=(const ParakeetStreamingProcessor&) = delete;
   ParakeetStreamingProcessor(ParakeetStreamingProcessor&&) = delete;
   ParakeetStreamingProcessor& operator=(ParakeetStreamingProcessor&&) = delete;
 
@@ -123,7 +123,7 @@ private:
   mutable std::mutex mtx_;
   std::condition_variable cv_;
   std::vector<float> pending_;
-  bool ended_     = false;
+  bool ended_ = false;
   bool cancelled_ = false;
 
   // Segments queued by the streaming callback during a single

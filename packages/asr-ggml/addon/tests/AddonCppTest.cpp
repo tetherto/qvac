@@ -18,8 +18,7 @@ constexpr int K_CANCEL_SETTLE_DELAY_MS = 10;
 constexpr std::size_t K_SHORT_AUDIO_SECONDS = 1;
 constexpr std::size_t K_LONG_AUDIO_SECONDS = 20;
 
-auto makeConfig(bool useGpu = false)
-    -> qvac::asrggml::whisper::WhisperConfig {
+auto makeConfig(bool useGpu = false) -> qvac::asrggml::whisper::WhisperConfig {
   qvac::asrggml::whisper::WhisperConfig config;
   config.whisperContextCfg["model"] =
       std::string("../../../models/ggml-tiny.bin");
@@ -53,8 +52,7 @@ auto hasStatKey(
 TEST(WhisperAddonCppTest, RunJobEmitsRuntimeStats) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
-  auto instance =
-      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
+  auto instance = qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
   instance.addon->activate();
 
   auto input = makeInputSamples(K_SHORT_AUDIO_SECONDS);
@@ -98,8 +96,7 @@ TEST(WhisperAddonCppTest, RunJobWithGpuEnabledConfigCompletes) {
 TEST(WhisperAddonCppTest, RejectsSecondRunWhileBusy) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
-  auto instance =
-      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
+  auto instance = qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
   instance.addon->activate();
 
   auto firstInput = makeInputSamples(K_LONG_AUDIO_SECONDS);
@@ -112,8 +109,7 @@ TEST(WhisperAddonCppTest, RejectsSecondRunWhileBusy) {
 TEST(WhisperAddonCppTest, CancelAllowsNextRun) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
-  auto instance =
-      qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
+  auto instance = qvac::asrggml::addon_cpp::createWhisperInstance(makeConfig());
   instance.addon->activate();
 
   auto firstInput = makeInputSamples(K_LONG_AUDIO_SECONDS);

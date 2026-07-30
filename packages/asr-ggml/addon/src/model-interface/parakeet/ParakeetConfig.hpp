@@ -132,7 +132,9 @@ struct ParakeetConfig {
            openclCacheDir == other.openclCacheDir;
   }
 
-  bool operator!=(const ParakeetConfig& other) const { return !(*this == other); }
+  bool operator!=(const ParakeetConfig& other) const {
+    return !(*this == other);
+  }
 };
 
 } // namespace qvac::asrggml::parakeet

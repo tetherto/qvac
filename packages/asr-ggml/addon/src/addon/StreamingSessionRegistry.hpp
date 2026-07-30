@@ -44,8 +44,7 @@ struct IStreamingSession {
 // per-engine inline maps used to do separately.
 inline std::mutex g_streamingMtx;
 inline std::unordered_map<
-    qvac_lib_inference_addon_cpp::AddonJs*,
-    std::unique_ptr<IStreamingSession>>
+    qvac_lib_inference_addon_cpp::AddonJs*, std::unique_ptr<IStreamingSession>>
     g_streamingSessions;
 
 // Registers a session for `instance`, CONSTRUCTING it only after the

@@ -1,5 +1,5 @@
-#include <any>
 #include <algorithm>
+#include <any>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -34,14 +34,14 @@ auto makeInputSamples(size_t seconds) -> std::vector<float> {
 auto hasStatKey(
     const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
     const std::string& key) -> bool {
-  return std::any_of(
-      stats.begin(),
-      stats.end(),
-      [&](const auto& entry) { return entry.first == key; });
+  return std::any_of(stats.begin(), stats.end(), [&](const auto& entry) {
+    return entry.first == key;
+  });
 }
 
-class BlockingBusyModel : public qvac_lib_inference_addon_cpp::model::IModel,
-                          public qvac_lib_inference_addon_cpp::model::IModelCancel {
+class BlockingBusyModel
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   auto getName() const -> std::string override { return "BlockingBusyModel"; }
 
@@ -77,8 +77,8 @@ public:
 
   void waitUntilBlocked() {
     std::unique_lock<std::mutex> lock(mutex_);
-    ASSERT_TRUE(
-        cv_.wait_for(lock, std::chrono::seconds(2), [this] { return blocked_; }));
+    ASSERT_TRUE(cv_.wait_for(
+        lock, std::chrono::seconds(2), [this] { return blocked_; }));
   }
 
   void unblock() {
@@ -94,8 +94,9 @@ private:
   mutable bool cancelled_{false};
 };
 
-auto createBlockingAddon() -> std::pair<std::unique_ptr<qvac_lib_inference_addon_cpp::AddonCpp>,
-                                        BlockingBusyModel*> {
+auto createBlockingAddon() -> std::pair<
+    std::unique_ptr<qvac_lib_inference_addon_cpp::AddonCpp>,
+    BlockingBusyModel*> {
   auto stringHandler = std::make_shared<
       qvac_lib_inference_addon_cpp::out_handl::CppContainerOutputHandler<
           std::vector<std::string>>>();
@@ -120,7 +121,8 @@ auto createBlockingAddon() -> std::pair<std::unique_ptr<qvac_lib_inference_addon
 } // namespace
 
 TEST(ParakeetAddonCppTest, RunJobEmitsOutputAndRuntimeStats) {
-  auto instance = qvac::asrggml::addon_cpp::createParakeetInstance(makeConfig());
+  auto instance =
+      qvac::asrggml::addon_cpp::createParakeetInstance(makeConfig());
 
   auto input = makeInputSamples(1);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(input))));
@@ -149,14 +151,14 @@ TEST(ParakeetAddonCppTest, RejectsSecondRunWhileBusy) {
 }
 
 TEST(ParakeetAddonCppTest, CancelAllowsNextRun) {
-  auto instance = qvac::asrggml::addon_cpp::createParakeetInstance(makeConfig());
+  auto instance =
+      qvac::asrggml::addon_cpp::createParakeetInstance(makeConfig());
 
   auto firstInput = makeInputSamples(5);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(firstInput))));
   instance.addon->cancelJob();
 
-  auto maybeCancelError =
-      instance.errorOutput->tryPop(std::chrono::seconds(5));
+  auto maybeCancelError = instance.errorOutput->tryPop(std::chrono::seconds(5));
 
   if (!maybeCancelError.has_value()) {
     instance.transcriptOutput->tryPop(std::chrono::seconds(1));
@@ -165,7 +167,8 @@ TEST(ParakeetAddonCppTest, CancelAllowsNextRun) {
 
   auto secondInput = makeInputSamples(1);
   bool accepted = false;
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(5);
   while (std::chrono::steady_clock::now() < deadline) {
     if (instance.addon->runJob(std::any(secondInput))) {
       accepted = true;

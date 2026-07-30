@@ -11,10 +11,12 @@
 namespace {
 struct VadSegmentsDeleter {
   void operator()(whisper_vad_segments* s) const {
-    if (s != nullptr) whisper_vad_free_segments(s);
+    if (s != nullptr)
+      whisper_vad_free_segments(s);
   }
 };
-using VadSegmentsPtr = std::unique_ptr<whisper_vad_segments, VadSegmentsDeleter>;
+using VadSegmentsPtr =
+    std::unique_ptr<whisper_vad_segments, VadSegmentsDeleter>;
 
 // whisper.cpp VAD segment timestamps are reported in centiseconds.
 constexpr float K_CENTISECONDS_TO_SECONDS = 0.01F;
@@ -87,8 +89,8 @@ void StreamingProcessor::appendAudio(std::vector<float>&& samples) {
     }
     // Drop oldest audio when backlog exceeds safety cap
     if (static_cast<int>(pendingAudio_.size()) > config_.maxBufferSamples) {
-      int excess = static_cast<int>(pendingAudio_.size()) -
-                   config_.maxBufferSamples;
+      int excess =
+          static_cast<int>(pendingAudio_.size()) - config_.maxBufferSamples;
       pendingAudio_.erase(
           pendingAudio_.begin(), pendingAudio_.begin() + excess);
       QLOG(
@@ -139,8 +141,7 @@ void StreamingProcessor::processAudioRange(int startSample, int endSample) {
           "s)");
 
   std::vector<float> segment(
-      processBuffer_.begin() + startSample,
-      processBuffer_.begin() + endSample);
+      processBuffer_.begin() + startSample, processBuffer_.begin() + endSample);
 
   try {
     model_.process(segment);
@@ -286,9 +287,8 @@ int StreamingProcessor::findLastCompleteSegment(
 void StreamingProcessor::dispatchCompleteSegments(
     whisper_vad_segments* segments, int lastComplete, int bufferSize) {
   for (int i = 0; i <= lastComplete; i++) {
-    const float t0S =
-        whisper_vad_segments_get_segment_t0(segments, i) *
-        K_CENTISECONDS_TO_SECONDS;
+    const float t0S = whisper_vad_segments_get_segment_t0(segments, i) *
+                      K_CENTISECONDS_TO_SECONDS;
     const float t1S = segmentEndSeconds(segments, i);
     const int startSample = std::max(0, secondsToSample(t0S));
     const int endSample = std::min(secondsToSample(t1S), bufferSize);
@@ -343,8 +343,7 @@ void StreamingProcessor::runVadSegmentation(
   if (segments) {
     const int nSeg = whisper_vad_segments_n_segments(segments.get());
     const float totalDurationS =
-        static_cast<float>(bufferSize) /
-        static_cast<float>(config_.sampleRate);
+        static_cast<float>(bufferSize) / static_cast<float>(config_.sampleRate);
 
     updateSpeakingState(segments.get(), nSeg, totalDurationS, bufferSize);
 
@@ -391,8 +390,10 @@ void StreamingProcessor::finalizeStream() {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
         "StreamingProcessor: stream ended with errors");
-    outputQueue_->queueException(std::runtime_error(
-        "StreamingProcessor: one or more segments failed during processing"));
+    outputQueue_->queueException(
+        std::runtime_error(
+            "StreamingProcessor: one or more segments failed during "
+            "processing"));
   } else {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,

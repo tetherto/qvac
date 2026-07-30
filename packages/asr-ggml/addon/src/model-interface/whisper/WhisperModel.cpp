@@ -169,9 +169,10 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
 
 namespace {
 std::string toLowerCopy(std::string value) {
-  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
+  std::transform(
+      value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
   return value;
 }
 
@@ -855,8 +856,7 @@ std::vector<float> decodeS16le(const std::vector<uint8_t>& audioData) {
     const auto bits = static_cast<uint16_t>(
         lowByte | static_cast<uint16_t>(highByte << K_BYTE_SHIFT_8));
     const auto sample = static_cast<int16_t>(bits);
-    samples.push_back(
-        static_cast<float>(sample) / K_S16_NORMALIZATION_DIVISOR);
+    samples.push_back(static_cast<float>(sample) / K_S16_NORMALIZATION_DIVISOR);
   }
   return samples;
 }

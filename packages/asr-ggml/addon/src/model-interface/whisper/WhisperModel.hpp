@@ -14,9 +14,9 @@
 #include <whisper.h>
 
 #include "WhisperConfig.hpp"
-#include "model-interface/WhisperTypes.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "model-interface/WhisperTypes.hpp"
 
 namespace qvac::asrggml::whisper {
 

@@ -10,13 +10,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "model-interface/WhisperTypes.hpp"
-#include "addon/GgmlLogForwarding.hpp"
 #include "addon/AsrErrors.hpp"
+#include "addon/GgmlLogForwarding.hpp"
 #include "addon/StreamingSessionRegistry.hpp"
 #include "inference-addon-cpp/queue/OutputCallbackInterface.hpp"
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
 #include "model-interface/StreamingProcessor.hpp"
+#include "model-interface/WhisperTypes.hpp"
 #include "model-interface/whisper/WhisperConfig.hpp"
 #include "model-interface/whisper/WhisperModel.hpp"
 
@@ -24,9 +24,7 @@ using namespace qvac::asrggml;
 using namespace qvac::asrggml::whisper;
 
 // Helper function used across multiple test classes
-std::string getValidModelPath() {
-  return "../../../models/ggml-tiny.bin";
-}
+std::string getValidModelPath() { return "../../../models/ggml-tiny.bin"; }
 
 bool hasValidModelPath() {
   return std::filesystem::exists(getValidModelPath());
@@ -209,8 +207,10 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
 
   {
     StreamingProcessor processor(model, outputQueue, streamConfig);
-    processor.appendAudio(std::vector<float>(
-        static_cast<std::size_t>(streamConfig.vadRunIntervalSamples), 0.0F));
+    processor.appendAudio(
+        std::vector<float>(
+            static_cast<std::size_t>(streamConfig.vadRunIntervalSamples),
+            0.0F));
     processor.end();
 
     // end() joined the worker, so the IStreamingSession teardown counters
@@ -1478,14 +1478,18 @@ TEST(StreamingSessionRegistry, DoubleStartIsPerInstance) {
       fakeInstanceKey(slotB), fakeSessionFactory(nullptr, &builds));
   EXPECT_EQ(builds, 2);
 
-  EXPECT_NE(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)), nullptr);
-  EXPECT_NE(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)), nullptr);
+  EXPECT_NE(
+      qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)), nullptr);
+  EXPECT_NE(
+      qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)), nullptr);
   EXPECT_NE(
       qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)),
       qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)));
 
-  EXPECT_NE(qvac::asrggml::takeStreamingSession(fakeInstanceKey(slotA)), nullptr);
-  EXPECT_NE(qvac::asrggml::takeStreamingSession(fakeInstanceKey(slotB)), nullptr);
+  EXPECT_NE(
+      qvac::asrggml::takeStreamingSession(fakeInstanceKey(slotA)), nullptr);
+  EXPECT_NE(
+      qvac::asrggml::takeStreamingSession(fakeInstanceKey(slotB)), nullptr);
 }
 
 // A failing engine ctor (e.g. whisper's "failed to initialize VAD context")
@@ -1537,8 +1541,10 @@ TEST(StreamingSessionRegistry, ClearAllCancelsEverySurvivingSession) {
 
   EXPECT_TRUE(cancelledA);
   EXPECT_TRUE(cancelledB);
-  EXPECT_EQ(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)), nullptr);
-  EXPECT_EQ(qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)), nullptr);
+  EXPECT_EQ(
+      qvac::asrggml::findStreamingSession(fakeInstanceKey(slotA)), nullptr);
+  EXPECT_EQ(
+      qvac::asrggml::findStreamingSession(fakeInstanceKey(slotB)), nullptr);
 }
 
 TEST(StreamingSessionRegistry, TakeSharedTransfersOwnership) {

@@ -79,9 +79,8 @@ createWhisperInstance(whisper::WhisperConfig&& config) {
 
 struct ParakeetAddonInstance {
   std::unique_ptr<qvac_lib_inference_addon_cpp::AddonCpp> addon;
-  std::shared_ptr<
-      qvac_lib_inference_addon_cpp::out_handl::CppQueuedOutputHandler<
-          std::vector<parakeet::Transcript>>>
+  std::shared_ptr<qvac_lib_inference_addon_cpp::out_handl::
+                      CppQueuedOutputHandler<std::vector<parakeet::Transcript>>>
       transcriptOutput;
   std::shared_ptr<
       qvac_lib_inference_addon_cpp::out_handl::CppQueuedOutputHandler<

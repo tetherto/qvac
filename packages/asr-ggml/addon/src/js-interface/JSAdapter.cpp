@@ -13,9 +13,9 @@ namespace qvac::asrggml {
 namespace js = qvac_lib_inference_addon_cpp::js;
 namespace general_error = qvac_errors::general_error;
 
+using parakeet::ParakeetConfig;
 using whisper::JSValueVariant;
 using whisper::WhisperConfig;
-using parakeet::ParakeetConfig;
 
 namespace {
 
@@ -124,8 +124,9 @@ auto JSAdapter::buildWhisperConfig(js::Object jsObject, js_env_t* env)
     loadMap(whisperConfigObj.value(), env, config.whisperMainCfg);
 
     // then subnested see if vad params exist
-    auto vadParamsObj = whisperConfigObj.value().getOptionalProperty<js::Object>(
-        env, "vadParams");
+    auto vadParamsObj =
+        whisperConfigObj.value().getOptionalProperty<js::Object>(
+            env, "vadParams");
     if (vadParamsObj.has_value()) {
       loadVadParams(vadParamsObj.value(), env, config);
     }
@@ -210,8 +211,7 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readString(jsObject, env, "backendsDir", config.backendsDir);
   readString(jsObject, env, "openclCacheDir", config.openclCacheDir);
 
-  auto innerConfigOpt =
-      jsObject.getOptionalProperty<js::Object>(env, "config");
+  auto innerConfigOpt = jsObject.getOptionalProperty<js::Object>(env, "config");
   if (innerConfigOpt.has_value()) {
     readInnerModelParams(innerConfigOpt.value(), env, config);
   }

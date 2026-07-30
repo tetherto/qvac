@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <ggml.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -22,7 +23,6 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
-#include <ggml.h>
 #include <js.h>
 #include <whisper.h>
 
@@ -105,8 +105,8 @@ struct JsWhisperTranscriptArrayHandler
   JsWhisperTranscriptArrayHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<whisper::Transcript>>(
-            [this](const std::vector<whisper::Transcript>& output)
-                -> js_value_t* {
+            [this](
+                const std::vector<whisper::Transcript>& output) -> js_value_t* {
               auto jsOutput = js::Array::create(this->env_);
               for (size_t i = 0; i < output.size(); ++i) {
                 auto jsTranscript = js::Object::create(this->env_);
@@ -300,10 +300,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   whisper::WhisperModel::AnyInput anyInput;
   anyInput.input = std::move(samples);
-  anyInput.outputCallback =
-      [&instance](const whisper::Transcript& transcript) {
-        instance.addonCpp->outputQueue->queueResult(std::any(transcript));
-      };
+  anyInput.outputCallback = [&instance](const whisper::Transcript& transcript) {
+    instance.addonCpp->outputQueue->queueResult(std::any(transcript));
+  };
 
   return instance.runJob(std::any(std::move(anyInput)));
 }
@@ -617,8 +616,7 @@ inline void applyStreamingOverrides(
 
 } // namespace detail
 
-inline js_value_t*
-startStreaming(js_env_t* env, js_callback_info_t* info) try {
+inline js_value_t* startStreaming(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
@@ -720,8 +718,7 @@ JSCATCH
 // the worker joins before the counters are read, so the JS drivers can
 // populate a synthetic JobEnded's stats with real values.
 
-inline js_value_t*
-endStreaming(js_env_t* env, js_callback_info_t* info) try {
+inline js_value_t* endStreaming(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
@@ -738,8 +735,8 @@ endStreaming(js_env_t* env, js_callback_info_t* info) try {
     const double audioSeconds = session->audioSeconds();
     cleaned = true;
     audioDurationMs = audioSeconds * 1000.0;
-    totalSamples = static_cast<int64_t>(
-        std::llround(audioSeconds * static_cast<double>(session->sampleRate())));
+    totalSamples = static_cast<int64_t>(std::llround(
+        audioSeconds * static_cast<double>(session->sampleRate())));
   }
 
   auto out = js::Object::create(env);
@@ -779,14 +776,12 @@ cancelWithStreaming(js_env_t* env, js_callback_info_t* info) try {
   std::shared_ptr<IStreamingSession> session =
       takeStreamingSessionShared(&instance);
 
-  return js::JsAsyncTask::run(
-      env,
-      [addonCpp = instance.addonCpp, session]() {
-        if (session) {
-          session->cancel();
-        }
-        addonCpp->cancelJob();
-      });
+  return js::JsAsyncTask::run(env, [addonCpp = instance.addonCpp, session]() {
+    if (session) {
+      session->cancel();
+    }
+    addonCpp->cancelJob();
+  });
 }
 JSCATCH
 
