@@ -35,6 +35,6 @@ export const announcement: Announcement | null = {
   description: 'a 460M vision model that outperforms models twice its size.',
   cta: {
     text: 'Download Model',
-    href: 'https://huggingface.co/collections/qvac/visionpsy',
+    href: 'https://get.qvac.tether.io/VisionPsy',
   },
 };
