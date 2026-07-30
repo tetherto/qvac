@@ -111,13 +111,22 @@ export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk
 /**
  * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
  * what the native `AcestepModel::runtimeStats()` emits — `totalTimeMs`,
- * `realTimeFactor` and `audioDurationMs`. Sample rate and channel count are NOT
- * here: they ride on each PCM chunk instead (see `AudiogenPcmChunk`).
+ * `realTimeFactor`, `audioDurationMs` and the resolved backend. Sample rate and
+ * channel count are NOT here: they ride on each PCM chunk instead (see
+ * `AudiogenPcmChunk`).
+ *
+ * `backendDevice` / `backendId` describe the backend the engine actually ran
+ * on, not the one requested, so a `useGPU: true` run that fell back to the CPU
+ * is detectable. Codes match @qvac/tts-ggml.
  */
 export interface AudiogenStats {
   audioDurationMs?: number
   totalTimeMs?: number
   realTimeFactor?: number
+  /** 0 = CPU, 1 = GPU. */
+  backendDevice?: number
+  /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
+  backendId?: number
 }
 
 /** Raw shape of the native output-callback payload. */
@@ -129,6 +138,8 @@ interface NativeAudiogenData {
   audioDurationMs?: number
   totalTimeMs?: number
   realTimeFactor?: number
+  backendDevice?: number
+  backendId?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -367,7 +378,9 @@ export class AudioGen {
       const stats: AudiogenStats = {
         ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
         ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
-        ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {})
+        ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
+        ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
+        ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
       }
       this._job.end(stats, stats)
     }
