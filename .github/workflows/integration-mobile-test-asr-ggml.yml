@@ -126,6 +126,17 @@ jobs:
       # NOT reused here: repointing another family's project would silently
       # change its device coverage) and are an out-of-repo infra prerequisite —
       # see docs/QIP-asr-ggml.md.
+      #
+      # These two secrets reuse the retiring transcription-parakeet Device Farm
+      # project and iOS device pool (same ARN values, new names) rather than a
+      # freshly provisioned project: after the parakeet workflows retire that
+      # project has no other tenant, so no AWS-side work is required. The
+      # whispercpp pair is deliberately not reused -- bci-whispercpp still runs
+      # against it. One caveat to confirm on the first iOS run: a device pool is
+      # scoped to its project, so the whisper legs now run on parakeet's pool.
+      # If its device list does not cover what the whisper legs need, add a union
+      # pool inside the same project (a pool is a child resource -- no new
+      # project or IAM required).
       - name: Verify Device Farm secrets are provisioned
         shell: bash
         env:
@@ -139,7 +150,7 @@ jobs:
             missing="$missing IOS_DEVICE_POOL_ARN_ASR_GGML"
           fi
           if [ -n "$missing" ]; then
-            echo "::error::Missing repository secret(s):$missing. The @qvac/asr-ggml mobile lane needs its own AWS Device Farm project (and, for iOS, its own device pool). Ask the CI/infra owner to provision them for the 'release' environment; do NOT repoint the transcription-whispercpp or transcription-parakeet ARNs."
+            echo "::error::Missing repository secret(s):$missing. Set them in the 'release' environment, reusing the retiring transcription-parakeet project: copy AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET and IOS_DEVICE_POOL_ARN_PARAKEET into these ASR_GGML names. That project has no other tenant once its workflows retire. Do NOT reuse the WHISPERCPP pair: bci-whispercpp still runs against it, so we would inherit a co-tenant and its Device Farm concurrency."
             exit 1
           fi
           echo "Device Farm secrets present."
