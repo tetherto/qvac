@@ -7,15 +7,35 @@
 - Register ggml backends before fitting. `llama_params_fit` only reads ggml's
   global device registry and never populates it, so without an explicit
   `llama_backend_init()` the fitter could project against an empty device list
-  and still report `SUCCESS`. An RAII scope now loads the packaged backends
-  (new optional `backendsDir`, `BACKENDS_SUBDIR` appended) or falls back to
-  ggml's default search path, then initialises and frees the llama backend.
+  and still report `SUCCESS`. Every fit now loads the packaged backends (new
+  optional `backendsDir`, `BACKENDS_SUBDIR` appended) or falls back to ggml's
+  default search path, then initialises the llama backend. Registration is
+  never undone: `llama_backend_free()` is not the inverse of
+  `llama_backend_init()` — it releases the process-global IQ dequantisation
+  tables shared by every llama consumer, which would corrupt inference running
+  concurrently in `@qvac/llm-llamacpp` (which reference-counts to avoid exactly
+  that). Leaving the backends registered is free, since ggml's registry
+  de-duplicates.
+
+- Validate `backendsDir` before it reaches `ggml_backend_load_all_from_path`,
+  which `dlopen`s every backend library it finds there. It must now be an
+  absolute path, and is canonicalised (collapsing `..`, following symlinks) and
+  required to resolve to an existing directory — so resolution never depends on
+  the process working directory, and the directory scanned is the real one
+  rather than an alias. Documented as application-controlled input in
+  `index.d.ts` and the README.
+
+- Reject a `mainGpu` past the registered GPU devices. The fitter never reads
+  `main_gpu`, so an out-of-range index projected as `SUCCESS` and then failed at
+  load, where llama rejects it against its own device list — the one outcome a
+  preflight exists to prevent. The bound is checked in `runFit` rather than the
+  binding because the valid range is unknown until backends are registered.
 
 - Serialise fit calls process-wide. `llama.h` documents `llama_params_fit` as
   not thread safe because it mutates global llama logger state, and this addon's
   C++ statics are shared across worklets, so concurrent callers now block. This
-  also keeps two backend scopes from overlapping, which is what allows the
-  unconditional init/free above to stay correct without reference counting.
+  also keeps two backend registrations from overlapping, which is what allows
+  the unconditional setup above to stay correct without reference counting.
 
 - Validate numeric arguments as safe integers within the range of the
   `uint32_t`/`int32_t` they are narrowed to, and check `nUbatch <= nBatch`

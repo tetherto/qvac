@@ -57,10 +57,19 @@ registry, so whatever is registered when it runs is its entire view of the
 machine. Registering is the caller's job, exactly as in upstream's
 `tools/fit-params`, which relies on `llama_backend_init()`.
 
-This addon owns that lifecycle for the duration of a call. Statically linked
-backends self-register, so `backendsDir` can be omitted; where backends ship as
-separate shared libraries, pass the directory (`BACKENDS_SUBDIR` is appended)
-or the fitter sees nothing.
+This addon registers backends before every fit. Statically linked backends
+self-register, so `backendsDir` can be omitted; where backends ship as separate
+shared libraries, pass the directory (`BACKENDS_SUBDIR` is appended) or the
+fitter sees nothing. It must be absolute and must resolve to an existing
+directory — every library found there is `dlopen`ed into the process, so it has
+to be an application-controlled location, never remote or user input.
+
+Registration is never undone. `llama_backend_free()` is not the inverse of
+`llama_backend_init()` — it releases the process-global IQ dequantisation
+tables that every llama consumer shares, so calling it here would break
+inference running concurrently in `@qvac/llm-llamacpp`, which reference-counts
+to avoid exactly that. Leaving the backends registered is free: ggml's registry
+de-duplicates, and every fit wants the same device inventory.
 
 An empty registry is reported as `ERROR`, never `SUCCESS` — a projection made
 against a machine the fitter cannot see is worse than no projection. Check
@@ -75,7 +84,7 @@ Calls are **serialised process-wide**. `llama.h` documents `llama_params_fit` as
 not thread safe because it mutates global llama logger state, and this addon's
 C++ statics are shared across every worklet in a process, so concurrent callers
 block rather than corrupt each other. Serialising also guarantees two backend
-scopes never overlap, which is why the backend lifecycle below needs no
+registrations never overlap, which is why the backend setup above needs no
 reference counting.
 
 ### Fit semantics (from `llama.h`)

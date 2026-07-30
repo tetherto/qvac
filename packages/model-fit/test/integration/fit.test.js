@@ -373,6 +373,35 @@ test('fitParams rejects a non-string backendsDir', async function (t) {
   )
 })
 
+// Everything found in backendsDir is dlopen'd into this process, so the path is
+// checked before it gets there rather than being handed over as given.
+test('fitParams rejects a backendsDir it will not dlopen from', async function (t) {
+  await t.exception.all(
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: 'relative/backends' }),
+    /backendsDir must be an absolute path/
+  )
+  await t.exception.all(
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: '/model-fit-no-such-backends-dir' }),
+    /backendsDir is not an existing directory/
+  )
+})
+
+// The fitter ignores main_gpu entirely, so an out-of-range index used to project
+// as SUCCESS and only fail later at load — the one outcome a preflight exists to
+// prevent. Only meaningful where there is a GPU to index past.
+test('fitParams rejects a mainGpu past the registered GPUs', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const probe = fitParams({ modelPath })
+  if (probe.nGpuDevices === 0) {
+    t.pass('host-only machine: mainGpu is inert and 0 stays valid')
+    return
+  }
+  await t.exception.all(
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, mainGpu: probe.nGpuDevices }),
+    /mainGpu \d+ is out of range/
+  )
+})
+
 test('fitParams on a missing file reports ERROR (does not throw)', function (t) {
   const res = fitParams({ modelPath: '/nonexistent/does-not-exist.gguf' })
   t.is(res.status, FIT_STATUS.ERROR, 'missing model yields ERROR status')

@@ -21,14 +21,56 @@ namespace {
 /// worklet, but this addon's C++ statics are shared across every worklet in the
 /// process, so nothing else prevents two of them calling in at once.
 ///
-/// Holding this for the entire call also means two BackendScopes can never
-/// overlap, which is what makes the unconditional init/free below safe without
-/// the reference counting @qvac/llm-llamacpp needs (it keeps many models alive
-/// concurrently and therefore cannot serialise).
+/// Holding this for the entire call also means two registrations can never
+/// overlap, which is what lets the backend setup below stay unconditional
+/// without the reference counting @qvac/llm-llamacpp needs (it keeps many
+/// models alive concurrently and therefore cannot serialise).
 std::mutex
     g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-/// Owns the ggml/llama backend lifecycle for one fit call.
+/// Resolves the directory the packaged ggml backends are loaded from.
+///
+/// The resolved path is handed to `ggml_backend_load_all_from_path`, which
+/// scans it and `dlopen`s every backend library it finds — so it is a
+/// native-code-loading sink, and the one string field in this API that reaches
+/// one. Callers are expected to pass an app-controlled location (see the trust
+/// note in index.d.ts), but resolve it to something concrete anyway, so what
+/// gets loaded is decided here rather than by whatever the string happened to
+/// mean at `dlopen` time:
+///
+///  - absolute only, so resolution never depends on the process working
+///    directory, which nothing in a worklet controls;
+///  - canonicalised, which collapses `..` and follows symlinks, so the
+///    directory we scan is the real one and not an alias pointing elsewhere;
+///  - must already exist as a directory, so a typo fails loudly here instead
+///    of silently projecting against an empty device list.
+///
+/// Throws `std::invalid_argument` when any of those does not hold.
+std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
+  std::filesystem::path backendsPath(backendsDir);
+  if (!backendsPath.is_absolute()) {
+    throw std::invalid_argument(
+        "model-fit: backendsDir must be an absolute path, got '" + backendsDir +
+        "'");
+  }
+
+#ifdef BACKENDS_SUBDIR
+  backendsPath /= std::filesystem::path(BACKENDS_SUBDIR);
+#endif
+
+  std::error_code ec;
+  const std::filesystem::path resolved =
+      std::filesystem::canonical(backendsPath, ec);
+  if (ec || !std::filesystem::is_directory(resolved, ec)) {
+    throw std::invalid_argument(
+        "model-fit: backendsDir is not an existing directory: '" +
+        backendsPath.string() + "'");
+  }
+
+  return resolved;
+}
+
+/// Registers the ggml/llama backends this fit will be projected against.
 ///
 /// `llama_params_fit` does not load backends — it only reads ggml's global
 /// device registry, so whatever is registered when it runs *is* its entire view
@@ -43,34 +85,31 @@ std::mutex
 /// back to ggml's default search path, then hand off to `llama_backend_init()`.
 /// The explicit load keeps this correct regardless of whether the linked llama
 /// build performs its own guarded load.
-class BackendScope {
-public:
-  explicit BackendScope(const std::string& backendsDir) {
-    if (!backendsDir.empty()) {
-      std::filesystem::path backendsPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      backendsPath = (backendsPath / std::filesystem::path(BACKENDS_SUBDIR))
-                         .lexically_normal();
-#endif
-      ggml_backend_load_all_from_path(backendsPath.string().c_str());
-    } else if (ggml_backend_reg_count() == 0) {
-      ggml_backend_load_all();
-    }
-
-    llama_backend_init();
-    // Upstream's tools/fit-params calls this immediately after backend init.
-    // DISABLED is the llama default and keeps NUMA behaviour explicit rather
-    // than inherited.
-    llama_numa_init(GGML_NUMA_STRATEGY_DISABLED);
+///
+/// There is deliberately no teardown counterpart. `llama_backend_free()` is not
+/// the inverse of `llama_backend_init()`: it lowers to `ggml_quantize_free()`,
+/// which releases the *process-global* IQ1/IQ2/IQ3 dequantisation tables every
+/// llama consumer in the process shares. @qvac/llm-llamacpp reference-counts
+/// precisely so that call cannot happen while a model is still loaded (see
+/// LlamaLazyInitializeBackend.cpp). g_fitMutex orders fit calls against each
+/// other and nothing more — it says nothing about a model another addon holds
+/// open — so freeing here would pull those tables out from under live
+/// inference. Leaving the backends registered costs nothing: ggml's registry
+/// de-duplicates by reg pointer, and every fit needs the same inventory anyway.
+void registerBackends(const std::string& backendsDir) {
+  if (!backendsDir.empty()) {
+    const std::filesystem::path backendsPath = resolveBackendsPath(backendsDir);
+    ggml_backend_load_all_from_path(backendsPath.string().c_str());
+  } else if (ggml_backend_reg_count() == 0) {
+    ggml_backend_load_all();
   }
 
-  ~BackendScope() { llama_backend_free(); }
-
-  BackendScope(const BackendScope&) = delete;
-  BackendScope& operator=(const BackendScope&) = delete;
-  BackendScope(BackendScope&&) = delete;
-  BackendScope& operator=(BackendScope&&) = delete;
-};
+  llama_backend_init();
+  // Upstream's tools/fit-params calls this immediately after backend init.
+  // DISABLED is the llama default and keeps NUMA behaviour explicit rather
+  // than inherited.
+  llama_numa_init(GGML_NUMA_STRATEGY_DISABLED);
+}
 
 /// Reads the model's trained context length straight from GGUF metadata.
 ///
@@ -138,9 +177,9 @@ FitResult runFit(const FitRequest& req) {
   const size_t maxDevices = llama_max_devices();
   out.maxDevices = maxDevices;
 
-  // Register backends before anything queries device memory. Held for the whole
-  // call so the registry cannot be torn down underneath the fitter.
-  const BackendScope backends(req.backendsDir);
+  // Register backends before anything queries device memory. Nothing tears the
+  // registry down afterwards — see registerBackends.
+  registerBackends(req.backendsDir);
   countDevices(out.nDevices, out.nGpuDevices);
 
   // No registered device means backend loading failed outright. The fitter
@@ -152,6 +191,35 @@ FitResult runFit(const FitRequest& req) {
     out.reason = FitReason::NoBackendDevice;
     out.tensorSplit.assign(maxDevices, 0.0F);
     return out;
+  }
+
+  // Bound mainGpu now that there is a machine to bound it against.
+  //
+  // The fitter itself never reads main_gpu, so an out-of-range index costs
+  // nothing here — it costs the caller later. llama consults it only at load,
+  // where it rejects an index past its own device list ("invalid value for
+  // main_gpu") and returns no model. A preflight that answers SUCCESS for a
+  // configuration that cannot load is worse than no preflight, so reject it
+  // while it is still a question about arguments. binding.cpp cannot: the valid
+  // range is not known until the backends are registered.
+  //
+  // The bound is deliberately loose. llama indexes a list it builds itself —
+  // RPC servers and discrete GPUs, falling back to integrated ones only when
+  // that list would otherwise be empty — which is never longer than the
+  // GPU-class devices ggml has registered. Bounding by that count therefore
+  // rejects only what llama could not accept under any split mode, and leaves
+  // the narrower judgement to llama, which knows its own list.
+  //
+  // A host with no accelerator is exempt. There is no device to index, 0 is the
+  // llama default, and the fitter has no GPU placement to make either way, so
+  // rejecting it there would turn the default value into an error on every
+  // CPU-only machine rather than catching a mistake.
+  if (req.hasMainGpu && out.nGpuDevices > 0 &&
+      static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
+    throw std::invalid_argument(
+        "model-fit: mainGpu " + std::to_string(req.mainGpu) +
+        " is out of range (" + std::to_string(out.nGpuDevices) +
+        " GPU device(s) registered)");
   }
 
   // `llama_params_fit` segfaults on a path it cannot open: gguf_init_from_file

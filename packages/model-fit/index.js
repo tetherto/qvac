@@ -78,10 +78,12 @@ function validateRelationships (config) {
  * Backends must be registered before the fitter can see any device, so pass
  * `backendsDir` wherever the packaged ggml backends ship as separate shared
  * libraries; omit it for a statically linked build, which self-registers.
+ * Every backend library in that directory is `dlopen`ed into this process, so
+ * it must be an application-controlled location — never remote or user input.
  *
  * @param {object} config
  * @param {string} config.modelPath  Absolute path to the GGUF file.
- * @param {string} [config.backendsDir] Directory holding the packaged backends.
+ * @param {string} [config.backendsDir] Absolute directory holding the backends.
  * @param {number} [config.nCtx]      Desired context. 0 lets the fitter pick.
  * @param {number} [config.nCtxMin]   Lower bound when reducing context.
  * @param {number} [config.nBatch]    Logical batch size (0 = llama default).

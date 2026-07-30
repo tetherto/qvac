@@ -5,6 +5,13 @@ export interface FitConfig {
    * Directory holding the packaged ggml backends. Required wherever backends
    * ship as separate shared libraries — without it the fitter sees no devices
    * and reports ERROR. Omit for a statically linked build.
+   *
+   * Must be an absolute path that resolves to an existing directory; anything
+   * else throws.
+   *
+   * SECURITY: every backend library found here is `dlopen`ed into the calling
+   * process. Pass an application-controlled location only — never a value
+   * derived from remote or user input.
    */
   backendsDir?: string
   /**

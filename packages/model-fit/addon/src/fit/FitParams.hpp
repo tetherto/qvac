@@ -164,8 +164,14 @@ struct FitResult {
 /// Runs `llama_params_fit` for `req`. Never loads weight data — the fitter uses
 /// its internal no-alloc simulation, so this is safe to call before a real
 /// model load. Does not throw for a "won't fit" (FAILURE) outcome; that is a
-/// valid, reported result. Throws `std::invalid_argument` only for a missing
-/// model path.
+/// valid, reported result, as are an unreadable model and an empty device
+/// registry (both ERROR).
+///
+/// Throws `std::invalid_argument` for arguments that cannot be acted on:
+///  - an empty `modelPath`;
+///  - a `backendsDir` that is relative, escapes itself, or is not a directory;
+///  - a `mainGpu` past the registered GPU devices;
+///  - an `nCtx` above the context length the model declares.
 FitResult runFit(const FitRequest& req);
 
 } // namespace model_fit
