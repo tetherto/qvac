@@ -143,12 +143,18 @@ jobs:
       # The whispercpp pair is deliberately not the fallback: bci-whispercpp still
       # runs against that project, so we would be sharing its concurrency.
       #
-      # A device pool is scoped to its project, so the whisper legs now run on
-      # parakeet's iOS pool. The collected Device Farm logs name the device that
-      # ran, so a coverage mismatch shows up on the first iOS run; the fix is a
-      # union pool inside the same project (a child resource -- no new project or
-      # IAM). Android is unaffected: it schedules by device-selection filter from
-      # this workflow's own inputs, not by pool.
+      # Scope of the pool swap, precisely: this lane passes one spec and no
+      # scheduling-mode, so schedule-test-run takes its default dual-flagship
+      # path. There, Android schedules two filter-based runs (Samsung + Pixel,
+      # hardcoded in the shared action) and iOS schedules one pool-based run plus
+      # one iPhone-17 filter run. Filters are project-independent, so only that
+      # single iOS pool run is affected by borrowing parakeet's project -- three
+      # of the four runs are identical either way. The collected Device Farm logs
+      # name the device that ran, so a mismatch is visible on the first iOS run;
+      # the fix would be a union pool inside the same project (a child resource,
+      # no new project or IAM). No android-device-pool-arn is needed here: the
+      # ANDROID_DEVICE_POOL_ARN_* secrets serve packages that run in the sharded
+      # or single-pool modes, which this lane does not use.
       - name: Verify Device Farm secrets are provisioned
         shell: bash
         env:
@@ -335,10 +341,10 @@ jobs:
           app-type: ${{ steps.build.outputs.app-type }}
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          # Fresh Device Farm project for the unified family. NO fallback to
-          # the parakeet (or whisper/BCI-shared) project: repointing another
-          # family's project would silently change its device coverage. The
-          # secret pair is a hard pre-merge infra dependency.
+          # Resolves the ASR_GGML project secret when it exists, else the
+          # retiring transcription-parakeet one -- see the note on the secret
+          # verification step above. Not the whisper/BCI-shared project: that one
+          # still has a live tenant.
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
           # Empty on normal runs => action auto-detects test-groups.json
           # (functional tests). Set on benchmark runs => only the benchmarks.
