@@ -46,7 +46,7 @@ If the PR identifier is missing, ask once. Nothing else to ask up-front.
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth status`). The token needs `repo` scope to read PR metadata, checks, and reviews on `tetherto/qvac`.
-- `read:org` is **not** required by the skill itself. If privileged fork jobs fail while recording `qvac/fork-verified`, check whether `fork-approval` has `PAT_TOKEN` with `repo` + status write scope.
+- `read:org` is **not** required by the skill itself. If privileged fork jobs fail while recording `qvac/fork-verified`, check `fork-approval` logs — the gate job uses `github.token` with `statuses: write` (not `PAT_TOKEN`).
 
 The skill does not require a checked-out worktree. All inspection is via `gh`.
 
@@ -130,13 +130,13 @@ Walk down this checklist in order. Stop at the first match per dimension; print 
 |---|---|---|---|
 | C1 | PR `isDraft == true` AND a workflow has `pull_request: types: [opened, synchronize, reopened]` (default) | Draft PRs do not fire `pull_request` events for `ready_for_review` excluded triggers. Mark the PR as ready or push a new commit. | GitHub default `pull_request` event semantics |
 | C2 | Workflow runs are present but jobs gated on `needs: fork-approval` are WAITING / pending environment approval | External fork PR: a merge/release-team member must approve the `fork-ci` environment for this run (GitHub UI → pending deployment). Each new push re-prompts. | `docs/ci/LABELS.md` (fork-ci) |
-| C3 | Same jobs SKIPPED after approval, AND `qvac/fork-verified` commit status is missing or not `success` for `headRefOid` | `fork-approval` should record `qvac/fork-verified` on the head SHA after env approval. If missing, check `fork-approval` job logs / `PAT_TOKEN`. Self-hosted `pull_request` jobs (e.g. `pr-test-inference-addon-cpp*`) read this status, not labels. | `.cursor/rules/devops/github-actions.mdc` |
+| C3 | Same jobs SKIPPED after approval, AND `qvac/fork-verified` commit status is missing or not `success` for `headRefOid` | `fork-approval` should record `qvac/fork-verified` on the head SHA after env approval via `github.token` (`statuses: write`). If missing, check `fork-approval` job logs. Self-hosted `pull_request` jobs (e.g. `pr-test-inference-addon-cpp*`) read this status, not labels. | `.cursor/rules/devops/github-actions.mdc` |
 | C4 | PR is from a fork AND privileged jobs ran without env approval (should not happen post label-gate retirement) | Report to DevOps — privileged fork jobs must `needs: fork-approval`. | `ci-trust-policy.test.mjs` |
 | C5 | PR is from a fork (`headRepositoryOwner.login != tetherto`) AND only secret-bearing jobs are missing | Expected until `fork-ci` is approved for the current SHA. Unprivileged `pull_request` fork jobs stay read-only (no secrets). | `docs/ci/LABELS.md` |
 | C6 | An expensive validation workflow is missing AND PR is an external fork AND `fork-ci` not yet approved for current SHA | Ask merge/release team to approve the pending `fork-ci` deployment on the latest workflow run. Do not recommend the retired `verified` label. | `docs/ci/LABELS.md` |
 | C7 | `pr-checks-sdk-pod.yml` jobs are skipped AND PR touches `packages/sdk/` from a fork AND `safe-to-test` is missing | SDK pod's check-running gate. Reviewer must apply `safe-to-test` after auditing the diff. | `LABELS.md § safe-to-test` |
 | C8 | E2E suite did not run AND PR touches SDK AND neither `test-e2e-smoke` nor `test-e2e-full` is present | SDK E2E is opt-in via these labels. Apply the smoke variant for normal PR feedback. | `LABELS.md § test-e2e-smoke / test-e2e-full` |
-| C9 | A workflow run is FAILED in `fork-approval` (red, not waiting) | Hard misconfiguration — usually missing `PAT_TOKEN` or failure recording `qvac/fork-verified`. DevOps issue. | `fork-approval` job logs |
+| C9 | A workflow run is FAILED in `fork-approval` (red, not waiting) | Hard misconfiguration — usually missing `statuses: write` on the gate job or failure recording `qvac/fork-verified`. DevOps issue. | `fork-approval` job logs |
 | C10 | Required check is in `IN_PROGRESS` state with no failure; user is just impatient | Wait. Or surface the slowest job's link. | `gh pr checks` output |
 
 For each match, print **what the rule says** (one short quote pulled from the cite) plus **what the user should do** (a single concrete action).

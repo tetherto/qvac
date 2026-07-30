@@ -14,7 +14,8 @@ jobs:
     name: Fork approval gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      statuses: write
     environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
     steps:
       - name: Harden Runner
@@ -25,7 +26,7 @@ jobs:
       - name: Record fork-ci approval on head SHA
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
         run: |
