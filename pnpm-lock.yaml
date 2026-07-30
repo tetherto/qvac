@@ -152,6 +152,9 @@ importers:
       bare-buffer:
         specifier: ^3.4.2
         version: 3.6.2
+      bare-cpu-info:
+        specifier: 0.1.1
+        version: 0.1.1
       bare-crypto:
         specifier: ^1.15.0
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -164,6 +167,9 @@ importers:
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-gpu-info:
+        specifier: 0.1.1
+        version: 0.1.1
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -299,7 +305,7 @@ importers:
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: workspace:^0.2.0
+        specifier: workspace:^0.3.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: workspace:^0.4.0
@@ -1466,6 +1472,9 @@ importers:
       bare-buffer:
         specifier: ^3.4.2
         version: 3.6.2
+      bare-cpu-info:
+        specifier: 0.1.1
+        version: 0.1.1
       bare-crypto:
         specifier: ^1.15.0
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1478,6 +1487,9 @@ importers:
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-gpu-info:
+        specifier: 0.1.1
+        version: 0.1.1
       bare-link:
         specifier: '>=3.0.0'
         version: 3.3.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -2030,6 +2042,15 @@ importers:
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.5(supports-color@8.1.1)
+      eslint-import-resolver-typescript:
+        specifier: ^4.4.5
+        version: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)
+      eslint-plugin-import:
+        specifier: ^2.32.0
+        version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2042,6 +2063,9 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.63.0
+        version: 8.65.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
 
 packages:
 
@@ -4275,6 +4299,10 @@ packages:
   bare-cov@1.2.2:
     resolution: {integrity: sha512-d/b4HdL5ohZDwBvDegJeSkmo1X2MGlm22jXzuY2D7wl2W1+7nk/b7+HMogwgUa+zi8rVVRJQKHCHPHYBJpvlvw==}
 
+  bare-cpu-info@0.1.1:
+    resolution: {integrity: sha512-IeOV9Dq2O9EmcHx5tv+2tfkGS5l4hcK9LL6p8EFc3CHNQ3xK3/hJn2T43YNxqTQn/38FkPJACfRybZqAMS1pJw==}
+    engines: {bare: '>=1.14.0'}
+
   bare-crypto@1.15.3:
     resolution: {integrity: sha512-macV9lbyJTsLPRXJkBtz8ivTGEo3LCyJInLT9IB/PWJ7pRXwvHs/FP4bx/fWw+HZkiepIYCAV2cuU5CR92XWCw==}
     peerDependencies:
@@ -4343,6 +4371,10 @@ packages:
     peerDependenciesMeta:
       bare-buffer:
         optional: true
+
+  bare-gpu-info@0.1.1:
+    resolution: {integrity: sha512-qI/WZiBuJ4ETcfwinUOBI/GZ43oO/L2tgstXLmXeIA6qCSFmfeBkj+VPijg9xZf28UcOFjnSritAMXMqp5qzbg==}
+    engines: {bare: '>=1.14.0'}
 
   bare-hrtime@2.1.1:
     resolution: {integrity: sha512-VMb3tHo05gsnbu3OXTmkDiwTjMlOsbQmKoysKqKEyR09m77TuDrYFbj3Q5GGk10dAKsUHrnXmwCaeJqzVpB5ZA==}
@@ -12356,6 +12388,8 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
+  bare-cpu-info@0.1.1: {}
+
   bare-crypto@1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       bare-assert: 1.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -12439,6 +12473,8 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
       - react-native-b4a
+
+  bare-gpu-info@0.1.1: {}
 
   bare-hrtime@2.1.1: {}
 
