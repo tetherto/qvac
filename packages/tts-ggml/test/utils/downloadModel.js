@@ -9,12 +9,12 @@ const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
 // Returns base directory for models - uses global.testDir on mobile, current dir otherwise
-function getBaseDir () {
+function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
 /** Returns true if file exists and is valid JSON; false if missing, wrong size, or invalid. */
-function isValidJsonCache (filepath) {
+function isValidJsonCache(filepath) {
   try {
     if (!fs.existsSync(filepath)) return false
     const stats = fs.statSync(filepath)
@@ -33,7 +33,7 @@ function isValidJsonCache (filepath) {
  * Mobile-friendly HTTPS download using bare-https.
  * Handles redirects and writes directly to file.
  */
-async function downloadWithHttp (url, filepath, maxRedirects = 10) {
+async function downloadWithHttp(url, filepath, maxRedirects = 10) {
   return new Promise((resolve, reject) => {
     const https = require('bare-https')
     const { URL } = require('bare-url')
@@ -69,7 +69,9 @@ async function downloadWithHttp (url, filepath, maxRedirects = 10) {
           redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
         }
         console.log(` [HTTPS] Redirecting to: ${redirectUrl}`)
-        downloadWithHttp(redirectUrl, filepath, maxRedirects - 1).then(resolve).catch(reject)
+        downloadWithHttp(redirectUrl, filepath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
         return
       }
 
@@ -90,7 +92,9 @@ async function downloadWithHttp (url, filepath, maxRedirects = 10) {
         downloadedBytes += chunk.length
         if (contentLength > 0 && downloadedBytes % (1024 * 1024) < chunk.length) {
           const percent = ((downloadedBytes / contentLength) * 100).toFixed(1)
-          console.log(` [HTTPS] Progress: ${percent}% (${downloadedBytes} / ${contentLength} bytes)`)
+          console.log(
+            ` [HTTPS] Progress: ${percent}% (${downloadedBytes} / ${contentLength} bytes)`
+          )
         }
       })
 
@@ -108,15 +112,25 @@ async function downloadWithHttp (url, filepath, maxRedirects = 10) {
   })
 }
 
-function getFileSizeFromUrl (url) {
+function getFileSizeFromUrl(url) {
   try {
     const { spawnSync } = require('bare-subprocess')
-    const result = spawnSync('curl', [
-      '-I', '-L', url,
-      '--fail', '--silent', '--show-error',
-      '--connect-timeout', '10',
-      '--max-time', '30'
-    ], { stdio: ['inherit', 'pipe', 'pipe'] })
+    const result = spawnSync(
+      'curl',
+      [
+        '-I',
+        '-L',
+        url,
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--connect-timeout',
+        '10',
+        '--max-time',
+        '30'
+      ],
+      { stdio: ['inherit', 'pipe', 'pipe'] }
+    )
 
     if (result.status === 0 && result.stdout) {
       const output = result.stdout.toString()
@@ -129,13 +143,13 @@ function getFileSizeFromUrl (url) {
   return null
 }
 
-async function ensureFileDownloaded (url, filepath) {
+async function ensureFileDownloaded(url, filepath) {
   const isJson = filepath.endsWith('.json')
   const dir = path.dirname(filepath)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
   const expectedSize = isMobile ? null : getFileSizeFromUrl(url)
-  const minSize = expectedSize ? Math.floor(expectedSize * 0.9) : (isJson ? 100 : 1000000)
+  const minSize = expectedSize ? Math.floor(expectedSize * 0.9) : isJson ? 100 : 1000000
 
   if (fs.existsSync(filepath)) {
     const stats = fs.statSync(filepath)
@@ -180,12 +194,21 @@ async function ensureFileDownloaded (url, filepath) {
     try {
       const { spawnSync } = require('bare-subprocess')
       if (isJson) {
-        const result = spawnSync('curl', [
-          '-L', url,
-          '--fail', '--silent', '--show-error',
-          '--connect-timeout', '30',
-          '--max-time', '300'
-        ], { stdio: ['inherit', 'pipe', 'pipe'] })
+        const result = spawnSync(
+          'curl',
+          [
+            '-L',
+            url,
+            '--fail',
+            '--silent',
+            '--show-error',
+            '--connect-timeout',
+            '30',
+            '--max-time',
+            '300'
+          ],
+          { stdio: ['inherit', 'pipe', 'pipe'] }
+        )
 
         if (result.status === 0 && result.stdout) {
           fs.writeFileSync(filepath, result.stdout)
@@ -199,12 +222,23 @@ async function ensureFileDownloaded (url, filepath) {
           console.log(` Download failed with exit code: ${result.status}`)
         }
       } else {
-        const result = spawnSync('curl', [
-          '-L', '-o', filepath, url,
-          '--fail', '--silent', '--show-error',
-          '--connect-timeout', '30',
-          '--max-time', '1800'
-        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        const result = spawnSync(
+          'curl',
+          [
+            '-L',
+            '-o',
+            filepath,
+            url,
+            '--fail',
+            '--silent',
+            '--show-error',
+            '--connect-timeout',
+            '30',
+            '--max-time',
+            '1800'
+          ],
+          { stdio: ['inherit', 'inherit', 'pipe'] }
+        )
 
         if (result.status === 0 && fs.existsSync(filepath)) {
           const stats = fs.statSync(filepath)
@@ -244,13 +278,15 @@ async function ensureFileDownloaded (url, filepath) {
 // {CHATTERBOX,SUPERTONIC}*_GGUFS entry's `registryPath` field; `source`
 // is the matching `registrySource` (today always "s3", mirroring the
 // `s3:///...` URL prefix used in registry-server/data/models.prod.json).
-async function downloadFromRegistry (registryPath, registrySource, destPath, minSize, maxSize) {
+async function downloadFromRegistry(registryPath, registrySource, destPath, minSize, maxSize) {
   let QVACRegistryClient
   try {
-    ({ QVACRegistryClient } = require('@qvac/registry-client'))
+    ;({ QVACRegistryClient } = require('@qvac/registry-client'))
   } catch (err) {
-    console.log(' Registry client (@qvac/registry-client) not installed; ' +
-      'skipping registry fetch.  Install as a devDependency to enable.')
+    console.log(
+      ' Registry client (@qvac/registry-client) not installed; ' +
+        'skipping registry fetch.  Install as a devDependency to enable.'
+    )
     return false
   }
 
@@ -279,15 +315,21 @@ async function downloadFromRegistry (registryPath, registrySource, destPath, min
       const stats = fs.statSync(result.artifact.path)
       if (stats.size < minSize) {
         console.log(` Registry download too small: ${stats.size} bytes (expected >=${minSize})`)
-        try { fs.unlinkSync(destPath) } catch (_e) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_e) {}
       } else if (maxSize && stats.size > maxSize) {
         // Should be impossible (the registry served a file outside the
         // declared band) but assert so a future model swap that
         // accidentally points at the wrong quant level surfaces here
         // instead of silently triggering an OOM on-device.
-        console.log(` Registry download too large: ${stats.size} bytes (expected <=${maxSize}). ` +
-          'Did the registry path flip to a different quantisation tier?')
-        try { fs.unlinkSync(destPath) } catch (_e) {}
+        console.log(
+          ` Registry download too large: ${stats.size} bytes (expected <=${maxSize}). ` +
+            'Did the registry path flip to a different quantisation tier?'
+        )
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_e) {}
       } else {
         console.log(` ✓ Registry download: ${path.basename(destPath)} (${stats.size} bytes)`)
         return true
@@ -297,10 +339,14 @@ async function downloadFromRegistry (registryPath, registrySource, destPath, min
     }
   } catch (err) {
     console.log(` Registry download failed: ${err && err.message ? err.message : String(err)}`)
-    try { fs.unlinkSync(destPath) } catch (_e) {}
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_e) {}
   } finally {
     if (client) {
-      try { await client.close() } catch (_e) {}
+      try {
+        await client.close()
+      } catch (_e) {}
     }
   }
 
@@ -311,7 +357,7 @@ async function downloadFromRegistry (registryPath, registrySource, destPath, min
 // Returns true iff every file ended up present at the expected size.
 // Used by the four `ensure*` helpers below as the fallback path when
 // no local candidate directory already had the GGUFs.
-async function tryFetchGgufsFromRegistry (ggufs, targetDir) {
+async function tryFetchGgufsFromRegistry(ggufs, targetDir) {
   try {
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true })
   } catch (err) {
@@ -325,8 +371,7 @@ async function tryFetchGgufsFromRegistry (ggufs, targetDir) {
     if (fs.existsSync(dest)) {
       try {
         const stats = fs.statSync(dest)
-        const inBand = stats.size >= f.minSize &&
-          (!f.maxSize || stats.size <= f.maxSize)
+        const inBand = stats.size >= f.minSize && (!f.maxSize || stats.size <= f.maxSize)
         if (inBand) {
           console.log(` ✓ Already present at expected size: ${f.name} (${stats.size} bytes)`)
           continue
@@ -337,11 +382,17 @@ async function tryFetchGgufsFromRegistry (ggufs, targetDir) {
           // Stale cache from a previous quantisation tier (e.g. an f16
           // file lingering after the registry source flipped to q4_0).
           // Drop it and re-fetch the smaller variant.
-          console.log(` Re-fetching ${f.name} (cached ${stats.size} bytes > ${f.maxSize}; ` +
-            'likely a stale cache from a different quantisation tier)')
+          console.log(
+            ` Re-fetching ${f.name} (cached ${stats.size} bytes > ${f.maxSize}; ` +
+              'likely a stale cache from a different quantisation tier)'
+          )
         }
-        try { fs.unlinkSync(dest) } catch (_e) {}
-      } catch (_e) { /* fall through to download */ }
+        try {
+          fs.unlinkSync(dest)
+        } catch (_e) {}
+      } catch (_e) {
+        /* fall through to download */
+      }
     }
     if (!f.registryPath || !f.registrySource) {
       console.log(` ${f.name} has no registryPath/registrySource; cannot fetch.`)
@@ -350,7 +401,12 @@ async function tryFetchGgufsFromRegistry (ggufs, targetDir) {
     }
     // eslint-disable-next-line no-await-in-loop
     const ok = await downloadFromRegistry(
-      f.registryPath, f.registrySource, dest, f.minSize, f.maxSize)
+      f.registryPath,
+      f.registrySource,
+      dest,
+      f.minSize,
+      f.maxSize
+    )
     if (!ok) {
       allOk = false
       // Keep going so the user sees errors for every missing file in
@@ -363,11 +419,21 @@ async function tryFetchGgufsFromRegistry (ggufs, targetDir) {
 
 // Whisper GGML (for the transcription-WER integration check).
 const WHISPER_MODELS = {
-  'ggml-small.bin': { url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin', minSize: 460000000 },
-  'ggml-medium.bin': { url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin', minSize: 1400000000 }
+  'ggml-tiny.bin': {
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin',
+    minSize: 74000000
+  },
+  'ggml-small.bin': {
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+    minSize: 460000000
+  },
+  'ggml-medium.bin': {
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+    minSize: 1400000000
+  }
 }
 
-async function ensureWhisperModel (targetPath = null) {
+async function ensureWhisperModel(targetPath = null) {
   if (!targetPath) {
     targetPath = path.join(getBaseDir(), 'models', 'whisper', 'ggml-medium.bin')
   }
@@ -405,10 +471,9 @@ async function ensureWhisperModel (targetPath = null) {
 //   - chatterbox-t3-turbo / -t3-mtl / supertonic / supertonic2:
 //     q4_0 + q8_0 published under qvac_models_compiled/ggml/<engine>/
 //     2026-05-18/ (added in qvac2 commit 029aafe6).
-//   - chatterbox-s3gen / -s3gen-mtl: only f16 exists under
-//     qvac_models_compiled/chatterbox/2026-05-08/ (the vocoder /
-//     HiFT side hasn't been quantised yet; once it lands here, point
-//     the entries below at the q4_0 path and drop the f16 fallback).
+//   - chatterbox-s3gen / -s3gen-mtl: q4_0 (also q5_0 / q8_0) published
+//     under qvac_models_compiled/ggml/chatterbox/2026-06-01/. (The prior
+//     f16-only build lived under qvac_models_compiled/chatterbox/2026-05-08/.)
 //
 // On-disk filenames stay at the historical `<name>.gguf` shape so the
 // TTSGgml index.js resolver finds them without changing its hard-coded
@@ -417,10 +482,10 @@ async function ensureWhisperModel (targetPath = null) {
 // quantisation levels; tts-cpp reads the quant from the GGUF metadata
 // at load time, not from the filename.
 const REGISTRY_SOURCE = 's3'
-const REGISTRY_DATE_F16 = '2026-05-08' // chatterbox-s3gen* (no quant variant yet)
+const REGISTRY_DATE_S3GEN_Q4_0 = '2026-06-01' // chatterbox-s3gen* / -s3gen-mtl* q4_0 (under ggml/chatterbox/)
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
-const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32 (QVAC-20568)
-const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0 (QVAC-20686)
+const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32
+const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0
 
 // Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
 // stale f16 cache from a previous test run gets rejected and re-fetched
@@ -428,12 +493,16 @@ const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0
 // headroom on each side of the actual on-registry size to absorb future
 // re-quantisation passes without needing a code change here.
 const SIZE_CHATTERBOX_T3_Q4_0 = { minSize: 100_000_000, maxSize: 500_000_000 }
-const SIZE_CHATTERBOX_S3GEN_F16 = { minSize: 500_000_000, maxSize: 2_000_000_000 }
+// q4_0 s3gen keeps the S3TokenizerV2 encoder + CAMPPlus + mel filterbanks +
+// norms/biases at source dtype (per the converter deny-list) and only block-
+// quantises the big linears/conv kernels, so it is smaller than the ~1 GB f16
+// build but still a few hundred MB. Generous band covers q4_0..f16 either way.
+const SIZE_CHATTERBOX_S3GEN_Q4_0 = { minSize: 150_000_000, maxSize: 2_000_000_000 }
 const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 // Supertonic 3 (31-language) tiers: q8_0 ~126 MB, q4_0 ~80 MB, f16 ~191 MB,
 // f32 ~398 MB.  All four are published on the QVAC model registry (f16 / f32 @
-// 2026-06-10, QVAC-20568; q8_0 / q4_0 @ 2026-06-15, QVAC-20686).  One generous
+// 2026-06-10; q8_0 / q4_0 @ 2026-06-15). One generous
 // band covers them all so the resolver accepts whichever tier was fetched.
 const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
 
@@ -446,8 +515,8 @@ const CHATTERBOX_GGUFS = [
   },
   {
     name: 'chatterbox-s3gen.gguf',
-    ...SIZE_CHATTERBOX_S3GEN_F16,
-    registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen.gguf`,
+    ...SIZE_CHATTERBOX_S3GEN_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_S3GEN_Q4_0}/chatterbox-s3gen-q4_0.gguf`,
     registrySource: REGISTRY_SOURCE
   }
 ]
@@ -461,8 +530,8 @@ const CHATTERBOX_MTL_GGUFS = [
   },
   {
     name: 'chatterbox-s3gen-mtl.gguf',
-    ...SIZE_CHATTERBOX_S3GEN_F16,
-    registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen-mtl.gguf`,
+    ...SIZE_CHATTERBOX_S3GEN_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_S3GEN_Q4_0}/chatterbox-s3gen-mtl-q4_0.gguf`,
     registrySource: REGISTRY_SOURCE
   }
 ]
@@ -481,6 +550,142 @@ const SUPERTONIC_MTL_GGUFS = [
     name: 'supertonic2.gguf',
     ...SIZE_SUPERTONIC2_Q4_0,
     registryPath: `qvac_models_compiled/ggml/supertonic/${REGISTRY_DATE_Q4_0}/supertonic2-q4_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
+]
+
+// LavaSR 48 kHz bandwidth-extension enhancer (benchmark `enhancer=lavasr` axis).
+// fp16 (~28 MB, the benchmark default) + fp32 (~56 MB) are published on the QVAC
+// registry under the 2026-06-26 build. A q8_0 tier can be layered on top; the C++
+// loader dequantizes it at load, so the forward math matches fp32 and only the
+// GGUF shrinks. The `enhancerVariant` axis (default fp16) picks the tier; each
+// tier is fetched from the registry and kept on disk under its own name so tiers
+// can coexist, exactly like the Supertonic 3 tiers below. One generous band spans
+// q8_0 (~15 MB) .. fp32 (~56 MB); it is only a truncation guard because every tier
+// has a distinct filename + registry path (so a stale cache can't be mistaken for
+// another tier).
+// REGISTRY_DATE_LAVASR / REGISTRY_DATE_LAVASR_DENOISER are mirrored in
+// scripts/generate-mobile-model-manifest.js (LAVASR_MODELS) for the Android
+// prestage; keep them in sync. generate-mobile-model-manifest.test.js pins the
+// dates so a drift fails there (that Node script can't require this Bare-only
+// module to share the constant directly).
+const REGISTRY_DATE_LAVASR = '2026-06-26'
+const SIZE_LAVASR_ENHANCER = { minSize: 4_000_000, maxSize: 80_000_000 }
+
+// Single source of truth for the enhancer quant tiers. fp16 / fp32 are published
+// today; the q8_0 tier resolves once its GGUF is uploaded. Shared by
+// normalizeEnhancerVariant + lavasrEnhancerGguf so the axis and the fetch path can
+// never drift.
+const DEFAULT_ENHANCER_VARIANT = 'f16'
+const VALID_ENHANCER_VARIANTS = ['f16', 'f32', 'q8_0']
+
+// Enhancer tiers whose GGUF is actually published on the QVAC registry. A fetch
+// failure for one of these is a real registry/network/auth error, so the caller
+// must hard-fail like the engine GGUF rather than record a false green; a tier
+// outside this set is simply not on S3 yet, so its fetch failure is an expected
+// soft-skip until the GGUF lands. Keep in lockstep with the "On registry today"
+// table in benchmarks/RTF-BENCHMARKS.md.
+const PUBLISHED_ENHANCER_VARIANTS = ['f16', 'f32']
+
+// Whether the enhancer tier's GGUF is published (canonicalizes first so casing
+// and the fp16 default resolve correctly).
+function isEnhancerVariantPublished(variant) {
+  return PUBLISHED_ENHANCER_VARIANTS.includes(normalizeEnhancerVariant(variant))
+}
+
+// Canonicalize an enhancer quant tier (case-insensitive, default fp16). Unknown
+// tiers throw so a typo fails loudly instead of silently downgrading to fp16.
+// The enhancer analog of supertonic3QuantFromVariant.
+function normalizeEnhancerVariant(value) {
+  const raw = String(value === undefined || value === null ? '' : value).trim()
+  if (raw === '') return DEFAULT_ENHANCER_VARIANT
+  const match = VALID_ENHANCER_VARIANTS.find((tier) => tier.toLowerCase() === raw.toLowerCase())
+  if (!match) {
+    throw new Error(
+      `Invalid LavaSR enhancer variant: ${raw}. Valid: ${VALID_ENHANCER_VARIANTS.join(', ')}`
+    )
+  }
+  return match
+}
+
+// GGUF descriptor for one enhancer quant tier (the enhancer analog of
+// supertonic3Gguf). The fp16 default keeps the historical `lavasr-enhancer.gguf`
+// on-disk name so pre-quant runs, examples and integration tests stay byte-stable;
+// every other tier is `lavasr-enhancer-<tier>.gguf` so tiers coexist in one
+// models/lavasr dir. The registry filename always carries the tier suffix.
+function lavasrEnhancerGguf(variant) {
+  const tier = normalizeEnhancerVariant(variant)
+  const localName =
+    tier === DEFAULT_ENHANCER_VARIANT ? 'lavasr-enhancer.gguf' : `lavasr-enhancer-${tier}.gguf`
+  return {
+    name: localName,
+    ...SIZE_LAVASR_ENHANCER,
+    registryPath: `qvac_models_compiled/ggml/lavasr/${REGISTRY_DATE_LAVASR}/lavasr-enhancer-${tier}.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
+}
+
+// One-line "how to build this tier offline" hint, matched to the tool that can
+// actually emit it, so a skipped quant row tells you exactly how to produce it.
+// fp16 / fp32 come straight from the converter; q8_0 is requantized from the fp16
+// GGUF with the gguf-python path (requantize-gguf.py).
+function enhancerOfflineBuildHint(variant) {
+  const tier = normalizeEnhancerVariant(variant)
+  if (tier === 'f16' || tier === 'f32') {
+    return ` scripts/convert-lavasr-enhancer-to-gguf.py --ftype ${tier}, to run offline.`
+  }
+  return ` scripts/requantize-gguf.py <f16.gguf> <out.gguf> ${tier}, to run offline.`
+}
+
+// Map a LavaSR enhancer fetch result to a benchmark outcome so the RTF and
+// streaming suites share one policy and can't drift. A published tier (fp16/fp32)
+// that fails to resolve is a real registry/network error the caller must throw on
+// (`fail`), matching the engine GGUF; a not-yet-published tier is an expected
+// `skip` until its GGUF lands on S3. A successful fetch yields the staged `path`.
+function classifyEnhancerResolution(result, variant) {
+  if (result && result.success) return { path: result.path }
+  const tier = normalizeEnhancerVariant(variant)
+  if (isEnhancerVariantPublished(tier)) {
+    return {
+      fail: true,
+      reason:
+        `LavaSR enhancer GGUF (${tier}) is published but could not be resolved from the ` +
+        'registry (set LAVASR_ENHANCER_GGUF to a local copy to run offline)'
+    }
+  }
+  return {
+    skip: true,
+    reason:
+      `LavaSR enhancer GGUF (${tier}) is not published to the registry yet ` +
+      '(set LAVASR_ENHANCER_GGUF to a local copy to benchmark it now)'
+  }
+}
+
+// Denoiser analog. The denoiser (fp16/fp32) is published, so any resolution
+// failure is a real error rather than a not-yet-uploaded tier: always `fail`.
+function classifyDenoiserResolution(result) {
+  if (result && result.success) return { path: result.path }
+  return {
+    fail: true,
+    reason:
+      'LavaSR denoiser GGUF is published but could not be resolved from the registry ' +
+      '(set LAVASR_DENOISER_GGUF to a local copy to run offline)'
+  }
+}
+
+// LavaSR UL-UNAS speech denoiser (benchmark `denoiser=lavasr` axis). Runs BEFORE
+// the enhancer and preserves the sample rate. Published on the QVAC registry as
+// fp16 (~0.5 MB, the benchmark default) and fp32 (~0.7 MB); point
+// options.registryPath / $LAVASR_DENOISER_REGISTRY_PATH at the fp32 build to pull
+// that instead. Kept on disk as `lavasr-denoiser.gguf` (the quant lives in the
+// GGUF metadata, not the filename). The band spans fp16 + fp32 with headroom.
+const REGISTRY_DATE_LAVASR_DENOISER = '2026-07-03'
+const SIZE_LAVASR_DENOISER = { minSize: 100_000, maxSize: 5_000_000 }
+const LAVASR_DENOISER_GGUFS = [
+  {
+    name: 'lavasr-denoiser.gguf',
+    ...SIZE_LAVASR_DENOISER,
+    registryPath: `qvac_models_compiled/ggml/lavasr/${REGISTRY_DATE_LAVASR_DENOISER}/lavasr-denoiser-f16.gguf`,
     registrySource: REGISTRY_SOURCE
   }
 ]
@@ -520,13 +725,29 @@ const ANDROID_CANDIDATE_DIRS = [
   '/data/local/tmp/qvac-tts-ggml/models'
 ]
 
+// Map models dirs to the `lavasr/<fileName>` path the prestage step pushes into.
+// Pure so the join logic is unit-testable without an Android platform.
+function lavasrCandidatePaths(dirs, fileName) {
+  return dirs.map((dir) => path.join(dir, 'lavasr', fileName))
+}
+
+// LavaSR GGUFs are adb-pushed into a `lavasr/` subdir of each Android models
+// dir (mobile has no on-device registry on Android, so the benchmark's
+// prestage step stages them there). The enhancer/denoiser resolvers scan these
+// so a pushed file is found without a network fetch; empty off-Android, where
+// resolution falls through to the on-device registry.
+function androidLavasrCandidates(fileName) {
+  if (!(isMobile && platform === 'android')) return []
+  return lavasrCandidatePaths(ANDROID_CANDIDATE_DIRS, fileName)
+}
+
 /** Optional `TTS_GGML_LOCAL_MODELS_DIR` env override + a desktop dev
  *  fallback that points at chatterbox.cpp's converter output dir.
  *  Both are appended to the candidate list AFTER the caller-supplied
  *  `targetDir` so production runs remain deterministic. */
-function desktopFallbackDirs () {
+function desktopFallbackDirs() {
   const out = []
-  const env = (process && process.env) ? process.env.TTS_GGML_LOCAL_MODELS_DIR : null
+  const env = process && process.env ? process.env.TTS_GGML_LOCAL_MODELS_DIR : null
   if (env) out.push(env)
   out.push('./models')
   out.push('../../../chatterbox.cpp/models')
@@ -541,7 +762,7 @@ function desktopFallbackDirs () {
  * registry source flipped to a q4_0 variant — same name on disk, much
  * smaller payload).
  */
-function hasAllGgufsIn (dir, ggufs) {
+function hasAllGgufsIn(dir, ggufs) {
   for (const f of ggufs) {
     const p = path.join(dir, f.name)
     if (!fs.existsSync(p)) return false
@@ -556,7 +777,7 @@ function hasAllGgufsIn (dir, ggufs) {
   return true
 }
 
-function hasAllGgufs (dir) {
+function hasAllGgufs(dir) {
   return hasAllGgufsIn(dir, CHATTERBOX_GGUFS)
 }
 
@@ -579,7 +800,7 @@ function hasAllGgufs (dir) {
  * TODO: once the GGUFs land on a known HuggingFace repo, wire up the
  * download URLs here and switch the default to "fetch from HF".
  */
-async function ensureChatterboxModels (options = {}) {
+async function ensureChatterboxModels(options = {}) {
   const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
   console.log(`Ensuring Chatterbox GGUFs (requested dir: ${requestedDir})...`)
 
@@ -627,20 +848,26 @@ async function ensureChatterboxModels (options = {}) {
 
   try {
     if (!fs.existsSync(requestedDir)) fs.mkdirSync(requestedDir, { recursive: true })
-  } catch (e) { /* ignore — informational dir only */ }
+  } catch (e) {
+    /* ignore — informational dir only */
+  }
 
   const results = {}
   for (const f of CHATTERBOX_GGUFS) {
     const p = path.join(requestedDir, f.name)
     const exists = fs.existsSync(p)
     const size = exists ? fs.statSync(p).size : 0
-    console.log(` ✗ ${f.name} ${exists ? `too small (${size} bytes, expected ≥ ${f.minSize})` : `missing at ${p}`}`)
+    console.log(
+      ` ✗ ${f.name} ${exists ? `too small (${size} bytes, expected ≥ ${f.minSize})` : `missing at ${p}`}`
+    )
     results[f.name] = { success: false, path: p }
   }
   console.log('')
   if (isMobile && platform === 'android') {
-    console.log('Chatterbox GGUFs not found and registry fetch failed.  On Android, ' +
-      '`adb push` them to one of:')
+    console.log(
+      'Chatterbox GGUFs not found and registry fetch failed.  On Android, ' +
+        '`adb push` them to one of:'
+    )
     for (const d of ANDROID_CANDIDATE_DIRS) console.log(`  ${d}`)
     console.log('(or copy into the app-internal dir that testDir maps to).')
   } else {
@@ -663,7 +890,7 @@ async function ensureChatterboxModels (options = {}) {
   return { success: false, results, targetDir: requestedDir }
 }
 
-async function ensureChatterboxMtlModels (options = {}) {
+async function ensureChatterboxMtlModels(options = {}) {
   const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
   console.log(`Ensuring Chatterbox MTL GGUFs (requested dir: ${requestedDir})...`)
 
@@ -705,12 +932,14 @@ async function ensureChatterboxMtlModels (options = {}) {
 
   console.log(' Chatterbox MTL GGUFs not found locally and registry fetch failed.  Convert with:')
   console.log('   python scripts/convert-t3-mtl-to-gguf.py --out chatterbox-t3-mtl.gguf')
-  console.log('   python scripts/convert-s3gen-to-gguf.py --variant mtl --out chatterbox-s3gen-mtl.gguf')
+  console.log(
+    '   python scripts/convert-s3gen-to-gguf.py --variant mtl --out chatterbox-s3gen-mtl.gguf'
+  )
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, results: {}, targetDir: requestedDir }
 }
 
-async function ensureSupertonicModel (options = {}) {
+async function ensureSupertonicModel(options = {}) {
   const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
   console.log(`Ensuring Supertonic GGUF (requested dir: ${requestedDir})...`)
 
@@ -751,12 +980,14 @@ async function ensureSupertonicModel (options = {}) {
   }
 
   console.log(' Supertonic GGUF not found locally and registry fetch failed.  Convert with:')
-  console.log('   python scripts/convert-supertonic2-to-gguf.py --arch supertonic --out supertonic.gguf')
+  console.log(
+    '   python scripts/convert-supertonic2-to-gguf.py --arch supertonic --out supertonic.gguf'
+  )
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, path: null, targetDir: requestedDir }
 }
 
-async function ensureSupertonicMtlModel (options = {}) {
+async function ensureSupertonicMtlModel(options = {}) {
   const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
   console.log(`Ensuring Supertonic MTL GGUF (requested dir: ${requestedDir})...`)
 
@@ -797,7 +1028,9 @@ async function ensureSupertonicMtlModel (options = {}) {
   }
 
   console.log(' Supertonic MTL GGUF not found locally and registry fetch failed.  Convert with:')
-  console.log('   python scripts/convert-supertonic2-to-gguf.py --arch supertonic2 --out supertonic2.gguf')
+  console.log(
+    '   python scripts/convert-supertonic2-to-gguf.py --arch supertonic2 --out supertonic2.gguf'
+  )
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, path: null, targetDir: requestedDir }
 }
@@ -806,8 +1039,8 @@ async function ensureSupertonicMtlModel (options = {}) {
 // encodes the quant so q8_0 / q4_0 can coexist in one models/ dir (unlike v1/v2
 // which keep a single canonical filename and read the quant from metadata).
 // All four tiers are published on the QVAC model registry: f16 / f32 under the
-// 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants under the
-// 2026-06-15 build (QVAC-20686).  Each tier maps to its own S3 build date.
+// 2026-06-10 build and the q8_0 / q4_0 block-quants under the
+// 2026-06-15 build. Each tier maps to its own S3 build date.
 const SUPERTONIC3_REGISTRY_DATES = {
   f16: REGISTRY_DATE_SUPERTONIC3,
   f32: REGISTRY_DATE_SUPERTONIC3,
@@ -815,26 +1048,159 @@ const SUPERTONIC3_REGISTRY_DATES = {
   q4_0: REGISTRY_DATE_SUPERTONIC3_QUANT
 }
 
-function supertonic3Gguf (quant) {
+// Single source of truth for the default Supertonic 3 tier. Shared by
+// `supertonic3QuantFromVariant` (unknown-variant fallback) and
+// `ensureSupertonic3Model` (missing `options.quant`) so the two can't drift —
+// q4_0 is the tier staged in CI / on mobile Device Farm.
+const DEFAULT_SUPERTONIC3_QUANT = 'q4_0'
+
+// Map a benchmark `variant` label (q4 / q8 / f16 / mixed) to the published
+// Supertonic 3 quant tier. Unlike v1/v2 (which read the quant from GGUF
+// metadata), v3 encodes the tier in the on-disk filename, so the benchmarks
+// must resolve the label to a concrete tier before fetching. Owned here next to
+// `supertonic3Gguf` / `SUPERTONIC3_REGISTRY_DATES` and imported by both
+// benchmark suites so the mapping lives in one place.
+function supertonic3QuantFromVariant(variant) {
+  switch (variant) {
+    case 'q8':
+      return 'q8_0'
+    case 'f16':
+      return 'f16'
+    case 'q4':
+      return 'q4_0'
+    default:
+      return DEFAULT_SUPERTONIC3_QUANT
+  }
+}
+
+function supertonic3Gguf(quant) {
   const gguf = {
     name: `supertonic3-${quant}.gguf`,
     ...SIZE_SUPERTONIC3
   }
   const date = SUPERTONIC3_REGISTRY_DATES[quant]
   if (date) {
-    gguf.registryPath =
-      `qvac_models_compiled/ggml/supertonic/${date}/supertonic3-${quant}.gguf`
+    gguf.registryPath = `qvac_models_compiled/ggml/supertonic/${date}/supertonic3-${quant}.gguf`
+    gguf.registrySource = REGISTRY_SOURCE
+  }
+  return gguf
+}
+
+// Parler family (registered per PR #3372): mini / large / indic each ship
+// q8_0 + f16 + f32. tts-cpp reads the quant tier from GGUF metadata.
+// One generous size band covers every tier (mini q8_0 ~1.1 GB up to indic
+// f32 ~3.67 GB); the ~50%-headroom convention of the other bands.
+const REGISTRY_DATE_PARLER = '2026-07-20'
+const SIZE_PARLER = { minSize: 500_000_000, maxSize: 5_500_000_000 }
+const PARLER_PUBLISHED = {
+  mini: { file: 'parler-mini-v1', tiers: ['q8_0', 'f16', 'f32'] },
+  large: { file: 'parler-large-v1', tiers: ['q8_0', 'f16', 'f32'] },
+  indic: { file: 'parler-indic', tiers: ['q8_0', 'f16', 'f32'] }
+}
+const DEFAULT_PARLER_QUANT = 'q8_0'
+
+// Map a benchmark `variant` label (q8 / f16 / q6_k) to the published Parler
+// quant tier. Like Supertonic 3, Parler encodes the tier in the on-disk
+// filename, so benchmarks resolve the label before fetching. Kept next to
+// PARLER_PUBLISHED so the mapping lives in one place.
+function parlerQuantFromVariant(variant) {
+  switch (variant) {
+    case 'q8':
+      return 'q8_0'
+    case 'f16':
+      return 'f16'
+    case 'q6_k':
+      return 'q6_k'
+    default:
+      return DEFAULT_PARLER_QUANT
+  }
+}
+
+function parlerGguf(variant, quant) {
+  const pub = PARLER_PUBLISHED[variant]
+  if (!pub) return null
+  const gguf = {
+    name: `${pub.file}-${quant}.gguf`,
+    ...SIZE_PARLER
+  }
+  if (pub.tiers.includes(quant)) {
+    gguf.registryPath = `qvac_models_compiled/ggml/parler-tts/${REGISTRY_DATE_PARLER}/${pub.file}-${quant}.gguf`
     gguf.registrySource = REGISTRY_SOURCE
   }
   return gguf
 }
 
 /**
+ * Ensure a Parler GGUF for the requested variant + quant tier is staged in
+ * a directory the native addon can read, and return that path.  Mirrors
+ * ensureSupertonic3Model: reuse an already-staged copy, else fetch from the
+ * QVAC model registry.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - dir to look in (default ./models).
+ * @param {string} [options.variant] - 'mini' | 'large' | 'indic' (default 'mini').
+ * @param {string} [options.quant] - published tier (default 'q8_0').
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string, variant: string, quant: string }>}
+ */
+async function ensureParlerModel(options = {}) {
+  const variant = options.variant || 'mini'
+  const quant = options.quant || DEFAULT_PARLER_QUANT
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  const gguf = parlerGguf(variant, quant)
+  if (!gguf) {
+    console.log(` Unknown parler variant '${variant}' (expected mini | large | indic).`)
+    return { success: false, path: null, targetDir: requestedDir, variant, quant }
+  }
+  console.log(`Ensuring Parler GGUF (${variant} ${quant}) (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, [gguf])) {
+      console.log(` ✓ using Parler ${variant} ${quant} GGUF at ${dir}`)
+      return { success: true, path: path.join(dir, gguf.name), targetDir: dir, variant, quant }
+    }
+  }
+
+  if (gguf.registryPath) {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return {
+        success: true,
+        path: path.join(requestedDir, gguf.name),
+        targetDir: requestedDir,
+        variant,
+        quant
+      }
+    }
+    console.log(
+      ` Parler ${variant} ${quant} GGUF (${gguf.name}) not staged and registry fetch failed`
+    )
+    console.log(` Expected on the registry at: ${gguf.registryPath}`)
+    return { success: false, path: null, targetDir: requestedDir, variant, quant }
+  }
+
+  console.log(
+    ` Parler ${variant} ${quant} GGUF (${gguf.name}) is not a published tier ` +
+      `(published: ${PARLER_PUBLISHED[variant].tiers.join(', ')}).`
+  )
+  return { success: false, path: null, targetDir: requestedDir, variant, quant }
+}
+
+/**
  * Ensure a Supertonic 3 GGUF for the requested quant tier is staged in a
  * directory the native addon can read, and return that path.
  *
- * All four tiers are published on the QVAC model registry (f16 / f32 via
- * QVAC-20568, q8_0 / q4_0 via QVAC-20686), so this helper resolves them from
+ * All four tiers are published on the QVAC model registry (f16 / f32 and
+ * q8_0 / q4_0), so this helper resolves them from
  * S3 only (mirroring the v1/v2 helpers): it reuses an already-staged copy when
  * present, otherwise fetches from the registry.  If the fetch fails (offline,
  * or the @qvac/registry-client devDependency is missing) it returns
@@ -843,11 +1209,12 @@ function supertonic3Gguf (quant) {
  *
  * @param {Object} [options]
  * @param {string} [options.targetDir] - dir to look in (default ./models).
- * @param {string} [options.quant] - quant tier: 'q8_0' | 'q4_0' | 'f16' | 'f32'.
+ * @param {string} [options.quant] - quant tier: 'q8_0' | 'q4_0' | 'f16' | 'f32'
+ *   (default DEFAULT_SUPERTONIC3_QUANT = 'q4_0', matching the CI / mobile tier).
  * @returns {Promise<{ success: boolean, path: string|null, targetDir: string, quant: string }>}
  */
-async function ensureSupertonic3Model (options = {}) {
-  const quant = options.quant || 'q8_0'
+async function ensureSupertonic3Model(options = {}) {
+  const quant = options.quant || DEFAULT_SUPERTONIC3_QUANT
   const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
   const gguf = supertonic3Gguf(quant)
   console.log(`Ensuring Supertonic 3 GGUF (${quant}) (requested dir: ${requestedDir})...`)
@@ -873,17 +1240,26 @@ async function ensureSupertonic3Model (options = {}) {
   // All tiers are on the registry — fetch into the (writable) requestedDir.
   if (gguf.registryPath) {
     if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
-      return { success: true, path: path.join(requestedDir, gguf.name), targetDir: requestedDir, quant }
+      return {
+        success: true,
+        path: path.join(requestedDir, gguf.name),
+        targetDir: requestedDir,
+        quant
+      }
     }
     console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) not staged and registry fetch failed`)
-    console.log(' (network / registry unavailable, or the @qvac/registry-client devDependency is missing).')
+    console.log(
+      ' (network / registry unavailable, or the @qvac/registry-client devDependency is missing).'
+    )
     console.log(` Expected on the registry at: ${gguf.registryPath}`)
     return { success: false, path: null, targetDir: requestedDir, quant }
   }
 
   // No registry mapping for this tier (unexpected) — every published tier has
   // one, so this only triggers on an unknown quant string.
-  console.log(` Supertonic 3 ${quant} GGUF (${gguf.name}) has no registry mapping (unknown quant tier).`)
+  console.log(
+    ` Supertonic 3 ${quant} GGUF (${gguf.name}) has no registry mapping (unknown quant tier).`
+  )
   return { success: false, path: null, targetDir: requestedDir, quant }
 }
 
@@ -902,9 +1278,8 @@ async function ensureSupertonic3Model (options = {}) {
  * @param {string} [options.targetDir] - where to stage / look for the dict.
  * @returns {Promise<{ success: boolean, dir: string }>}
  */
-async function ensureMecabDict (options = {}) {
-  const targetDir = options.targetDir ||
-    path.join(getBaseDir(), 'models', MECAB_IPADIC_DIRNAME)
+async function ensureMecabDict(options = {}) {
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', MECAB_IPADIC_DIRNAME)
   console.log(`Ensuring MeCab/IPAdic dictionary (dir: ${targetDir})...`)
 
   const candidateDirs = [targetDir]
@@ -937,6 +1312,320 @@ async function ensureMecabDict (options = {}) {
   return { success: false, dir: targetDir }
 }
 
+// Benchmark enhancer axis. `none` runs the engine as-is; `lavasr` layers the
+// LavaSR 48 kHz bandwidth-extension enhancer on top of the engine output
+// (resolved via ensureLavaSREnhancerGguf). Shared by the RTF + streaming
+// benchmark suites so the env parsing + validation lives in one unit-tested
+// place, mirroring supertonic3QuantFromVariant.
+const VALID_ENHANCERS = ['none', 'lavasr']
+const DEFAULT_ENHANCER = 'none'
+const VALID_DENOISERS = ['none', 'lavasr']
+const DEFAULT_DENOISER = 'none'
+// Distinct label/artifact token for the denoiser leg. The enhancer contributes
+// its value verbatim (`lavasr`); the denoiser uses `denoise` so the two axes stay
+// unambiguous when both appear in one canonical label or artifact name.
+const DENOISER_LABEL_TOKEN = 'denoise'
+
+// Trims first, then defaults blank input, so a padded or whitespace-only env
+// value behaves like the unset default instead of throwing. Mirrors
+// normalizeEnhancerVariant so all three benchmark axes canonicalize identically.
+function normalizeAxisValue(kind, validValues, defaultValue, value) {
+  const raw = String(value === undefined || value === null ? '' : value).trim()
+  const normalized = (raw === '' ? defaultValue : raw).toLowerCase()
+  if (!validValues.includes(normalized)) {
+    throw new Error(`Invalid benchmark ${kind}: ${normalized}. Valid: ${validValues.join(', ')}`)
+  }
+  return normalized
+}
+
+function normalizeEnhancer(value) {
+  return normalizeAxisValue('enhancer', VALID_ENHANCERS, DEFAULT_ENHANCER, value)
+}
+
+function normalizeDenoiser(value) {
+  return normalizeAxisValue('denoiser', VALID_DENOISERS, DEFAULT_DENOISER, value)
+}
+
+// Trailing token the enhancer axis contributes to artifact filenames, canonical
+// [PERF_REPORT_START] labels and matrix run labels: empty string for the default
+// (enhancer=none) so those strings stay byte-for-byte identical to pre-axis runs,
+// otherwise the normalized enhancer id. Centralised so every producer
+// (getArtifactFileName, buildCanonicalReport, buildLabel) agrees on one rule.
+function enhancerTag(value) {
+  const enhancer = normalizeEnhancer(value)
+  return enhancer === DEFAULT_ENHANCER ? '' : enhancer
+}
+
+// Trailing token for the denoiser axis, mirroring enhancerTag. Uses the fixed
+// `denoise` marker (not the axis value) so it never collides with the enhancer
+// token when both legs are on in one label / artifact name.
+function denoiserTag(value) {
+  const denoiser = normalizeDenoiser(value)
+  return denoiser === DEFAULT_DENOISER ? '' : DENOISER_LABEL_TOKEN
+}
+
+// Trailing token the enhancer QUANT tier contributes to artifact filenames and
+// matrix run labels. Empty when the enhancer is off OR the tier is the fp16
+// default, so pre-quant `lavasr` artifacts/labels stay byte-for-byte identical;
+// otherwise the canonical tier id (e.g. `q8_0`). Only meaningful next to an
+// enhancer token — a non-default tier without `enhancer=lavasr` contributes
+// nothing (the tier is inert when no enhancer runs).
+function enhancerVariantTag(enhancer, variant) {
+  if (enhancerTag(enhancer) === '') return ''
+  const tier = normalizeEnhancerVariant(variant)
+  return tier === DEFAULT_ENHANCER_VARIANT ? '' : tier
+}
+
+/**
+ * Ensure the LavaSR enhancer GGUF is staged, returning its path.
+ * Resolution order: $LAVASR_ENHANCER_GGUF, a locally-staged
+ * models/lavasr/lavasr-enhancer[-<tier>].gguf (and a couple of fallbacks), then
+ * the QVAC registry. Pass the returned path to TTSGgml as files.lavasrEnhancer.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - preferred dir (default models/lavasr).
+ * @param {string} [options.quant] - enhancer quant tier (f16 | f32 | q8_0;
+ *   default fp16). Picks both the registry tier GGUF and the on-disk filename so
+ *   tiers coexist. Ignored when options.registryPath
+ *   is set (the explicit path wins).
+ * @param {string} [options.registryPath] - override the resolved registry path
+ *   (e.g. a one-off build); also settable via $LAVASR_ENHANCER_REGISTRY_PATH.
+ * @param {string} [options.registrySource] - registry source (default s3).
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string, quant: string }>}
+ */
+async function ensureLavaSREnhancerGguf(options = {}) {
+  const quant = normalizeEnhancerVariant(options.quant)
+  const descriptor = lavasrEnhancerGguf(quant)
+  const fileName = descriptor.name
+  const baseDir = getBaseDir()
+  const requestedDir = options.targetDir || path.join(baseDir, 'models', 'lavasr')
+
+  const envPath = process.env && process.env.LAVASR_ENHANCER_GGUF
+  if (envPath && fs.existsSync(envPath)) {
+    console.log(` ✓ using LavaSR enhancer GGUF at ${envPath} (LAVASR_ENHANCER_GGUF)`)
+    return { success: true, path: envPath, targetDir: path.dirname(envPath), quant }
+  }
+
+  const candidates = [
+    path.join(requestedDir, fileName),
+    path.join(baseDir, 'models', 'lavasr', fileName),
+    path.join(baseDir, 'models', fileName),
+    ...androidLavasrCandidates(fileName)
+  ]
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      console.log(` ✓ using LavaSR enhancer GGUF (${quant}) at ${p}`)
+      return { success: true, path: p, targetDir: path.dirname(p), quant }
+    }
+  }
+
+  const gguf = options.registryPath
+    ? {
+        name: fileName,
+        ...SIZE_LAVASR_ENHANCER,
+        registryPath: options.registryPath,
+        registrySource: options.registrySource || REGISTRY_SOURCE
+      }
+    : descriptor
+  if (typeof tryFetchGgufsFromRegistry === 'function') {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return {
+        success: true,
+        path: path.join(requestedDir, fileName),
+        targetDir: requestedDir,
+        quant
+      }
+    }
+  }
+
+  console.log(
+    ` LavaSR enhancer GGUF (${quant}) could not be staged from the registry (${gguf.registryPath}).`
+  )
+  console.log(' Set LAVASR_ENHANCER_GGUF to a local copy, or build one with')
+  console.log(enhancerOfflineBuildHint(quant))
+  return { success: false, path: null, targetDir: requestedDir, quant }
+}
+
+/**
+ * Ensure the LavaSR denoiser GGUF is staged, returning its path.
+ * Mirrors ensureLavaSREnhancerGguf: $LAVASR_DENOISER_GGUF, a locally-staged
+ * models/lavasr/lavasr-denoiser.gguf (and a couple of fallbacks), then the QVAC
+ * registry (TTS_DENOISER_LAVASR_FP16 by default). Pass the returned path to
+ * TTSGgml as files.lavasrDenoiser (it runs before the enhancer).
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - preferred dir (default models/lavasr).
+ * @param {string} [options.registryPath] - override the default fp16 registry
+ *   path (e.g. the fp32 build); also settable via $LAVASR_DENOISER_REGISTRY_PATH.
+ * @param {string} [options.registrySource] - registry source (default s3).
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string }>}
+ */
+async function ensureLavaSRDenoiserGguf(options = {}) {
+  const fileName = 'lavasr-denoiser.gguf'
+  const baseDir = getBaseDir()
+  const requestedDir = options.targetDir || path.join(baseDir, 'models', 'lavasr')
+
+  const envPath = process.env && process.env.LAVASR_DENOISER_GGUF
+  if (envPath && fs.existsSync(envPath)) {
+    console.log(` ✓ using LavaSR denoiser GGUF at ${envPath} (LAVASR_DENOISER_GGUF)`)
+    return { success: true, path: envPath, targetDir: path.dirname(envPath) }
+  }
+
+  const candidates = [
+    path.join(requestedDir, fileName),
+    path.join(baseDir, 'models', 'lavasr', fileName),
+    path.join(baseDir, 'models', fileName),
+    ...androidLavasrCandidates(fileName)
+  ]
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      console.log(` ✓ using LavaSR denoiser GGUF at ${p}`)
+      return { success: true, path: p, targetDir: path.dirname(p) }
+    }
+  }
+
+  const gguf = options.registryPath
+    ? {
+        name: fileName,
+        ...SIZE_LAVASR_DENOISER,
+        registryPath: options.registryPath,
+        registrySource: options.registrySource || REGISTRY_SOURCE
+      }
+    : LAVASR_DENOISER_GGUFS[0]
+  if (typeof tryFetchGgufsFromRegistry === 'function') {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return { success: true, path: path.join(requestedDir, fileName), targetDir: requestedDir }
+    }
+  }
+
+  console.log(` LavaSR denoiser GGUF could not be staged from the registry (${gguf.registryPath}).`)
+  console.log(' Set LAVASR_DENOISER_GGUF to a local copy, or convert one with')
+  console.log(' scripts/convert-lavasr-denoiser-to-gguf.py, to run offline.')
+  return { success: false, path: null, targetDir: requestedDir }
+}
+
+// Minimum plausible size of a real Cangjie5_TC TSV (the full table is ~1 MB;
+// 400 KB guards against a truncated / placeholder download).
+const CANGJIE_TSV_MIN_BYTES = 400000
+
+// Cangjie5_TC.json ships as a JSON array of "<char>\t<code>" strings.  Pull
+// every JSON string literal out (regex avoids a full parse of the large blob)
+// and unescape the standard JSON escapes we care about.
+function extractCangjieEntries(raw) {
+  const str = typeof raw === 'string' ? raw : Buffer.from(raw).toString('utf8')
+  const entries = []
+  const re = /"([^"\\]*(?:\\.[^"\\]*)*)"/g
+  let m
+  while ((m = re.exec(str)) !== null) {
+    const val = m[1]
+      .replace(/\\t/g, '\t')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\"/g, '"')
+    entries.push(val)
+  }
+  return entries
+}
+
+// Convert the Cangjie5_TC.json array into the two-column "<char>\t<code>" TSV
+// that tts-cpp's CangjieTable::load() (parse_tsv_line) expects: first column a
+// single-codepoint hanzi, second column the Cangjie code.  De-dupes on the
+// leading codepoint, matching tts-cpp (which keeps the first entry per char).
+function writeCangjieJsonArrayToTsv(jsonBody, tsvPath) {
+  const data = extractCangjieEntries(jsonBody)
+  if (data.length === 0) {
+    throw new Error('Cangjie JSON: no entries extracted')
+  }
+  const lines = []
+  const seenFirstCp = new Set()
+  for (const entry of data) {
+    const tabIdx = entry.indexOf('\t')
+    if (tabIdx <= 0) continue
+    const ch = entry.slice(0, tabIdx)
+    const code = entry.slice(tabIdx + 1)
+    if (ch.length === 0) continue
+    const cp = ch.codePointAt(0)
+    if (seenFirstCp.has(cp)) continue
+    seenFirstCp.add(cp)
+    lines.push(`${ch}\t${code}`)
+  }
+  fs.writeFileSync(tsvPath, lines.join('\n') + '\n', 'utf8')
+}
+
+/**
+ * Ensure the Cangjie5_TC TSV used for Chatterbox MTL Chinese ("zh") is staged,
+ * returning its path.  Resolution order: $CHATTERBOX_CANGJIE_TSV, a cached
+ * Cangjie5_TC.tsv under the models dir, then a download+convert of the upstream
+ * Cangjie5_TC.json.  Pass the returned path to TTSGgml as files.cangjieTsvPath.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - preferred dir (default models/).
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string }>}
+ */
+async function ensureCangjieTsv(options = {}) {
+  const baseDir = getBaseDir()
+  const requestedDir = options.targetDir || path.join(baseDir, 'models')
+  const fileName = 'Cangjie5_TC.tsv'
+
+  const envPath = process.env && process.env.CHATTERBOX_CANGJIE_TSV
+  if (envPath && fs.existsSync(envPath)) {
+    console.log(` ✓ using Cangjie TSV at ${envPath} (CHATTERBOX_CANGJIE_TSV)`)
+    return { success: true, path: envPath, targetDir: path.dirname(envPath) }
+  }
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    const p = path.join(dir, fileName)
+    if (fs.existsSync(p)) {
+      try {
+        if (fs.statSync(p).size >= CANGJIE_TSV_MIN_BYTES) {
+          console.log(` ✓ using Cangjie TSV at ${p}`)
+          return { success: true, path: p, targetDir: dir }
+        }
+      } catch (_e) {}
+    }
+  }
+
+  const tsvPath = path.join(requestedDir, fileName)
+  const jsonPath = path.join(requestedDir, 'Cangjie5_TC.json')
+  const cangjieJsonUrl =
+    'https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/Cangjie5_TC.json'
+
+  console.log(' Downloading Cangjie5_TC.json...')
+  const dl = await ensureFileDownloaded(cangjieJsonUrl, jsonPath)
+  if (!dl.success || !fs.existsSync(jsonPath)) {
+    console.log(' Cangjie JSON download failed; zh synthesis will be skipped.')
+    return { success: false, path: null, targetDir: requestedDir }
+  }
+
+  try {
+    const jsonBody = fs.readFileSync(jsonPath, 'utf8')
+    writeCangjieJsonArrayToTsv(jsonBody, tsvPath)
+    const size = fs.statSync(tsvPath).size
+    if (size >= CANGJIE_TSV_MIN_BYTES) {
+      console.log(` ✓ built Cangjie TSV: ${tsvPath} (${size} bytes)`)
+      return { success: true, path: tsvPath, targetDir: requestedDir }
+    }
+    console.log(` Cangjie TSV too small: ${size} bytes`)
+    if (fs.existsSync(tsvPath)) fs.unlinkSync(tsvPath)
+  } catch (e) {
+    console.log(` Cangjie parse/write error: ${e.message}`)
+    if (fs.existsSync(tsvPath)) fs.unlinkSync(tsvPath)
+  }
+  return { success: false, path: null, targetDir: requestedDir }
+}
+
 module.exports = {
   ensureFileDownloaded,
   ensureWhisperModel,
@@ -945,5 +1634,33 @@ module.exports = {
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
-  ensureMecabDict
+  supertonic3QuantFromVariant,
+  DEFAULT_SUPERTONIC3_QUANT,
+  ensureParlerModel,
+  parlerQuantFromVariant,
+  DEFAULT_PARLER_QUANT,
+  ensureMecabDict,
+  ensureCangjieTsv,
+  ensureLavaSREnhancerGguf,
+  ensureLavaSRDenoiserGguf,
+  lavasrEnhancerGguf,
+  normalizeEnhancer,
+  normalizeDenoiser,
+  normalizeEnhancerVariant,
+  isEnhancerVariantPublished,
+  classifyEnhancerResolution,
+  classifyDenoiserResolution,
+  enhancerTag,
+  denoiserTag,
+  enhancerVariantTag,
+  VALID_ENHANCERS,
+  DEFAULT_ENHANCER,
+  VALID_DENOISERS,
+  DEFAULT_DENOISER,
+  VALID_ENHANCER_VARIANTS,
+  DEFAULT_ENHANCER_VARIANT,
+  PUBLISHED_ENHANCER_VARIANTS,
+  ANDROID_CANDIDATE_DIRS,
+  lavasrCandidatePaths,
+  androidLavasrCandidates
 }

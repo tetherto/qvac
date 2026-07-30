@@ -7,49 +7,45 @@
  * 3. Disabled default
  */
 
-import type { ProfilerMode, PerCallProfiling } from "@/schemas";
-import { getGlobalSingleton } from "@/utils/global-singleton";
-import type {
-  ProfilerRuntimeOptions,
-  ProfilingEvent,
-  AggregatedStats,
-} from "./types";
+import type { ProfilerMode, PerCallProfiling } from '@/schemas'
+import { getGlobalSingleton } from '@/utils/global-singleton'
+import type { ProfilerRuntimeOptions, ProfilingEvent, AggregatedStats } from './types'
 import {
   createAggregator,
   recordEvent as aggregatorRecord,
   getAggregates as aggregatorGetAggregates,
   getRecentEvents as aggregatorGetRecentEvents,
   clearAggregator,
-  setMaxRecentEvents,
-} from "./aggregator";
-import { nowMs, generateProfileId } from "./clock";
+  setMaxRecentEvents
+} from './aggregator'
+import { nowMs, generateProfileId } from './clock'
 
 export interface ResolvedProfilerConfig {
-  enabled: boolean;
-  mode: ProfilerMode;
-  includeServerBreakdown: boolean;
-  operationFilters: string[];
-  maxRecentEvents: number;
+  enabled: boolean
+  mode: ProfilerMode
+  includeServerBreakdown: boolean
+  operationFilters: string[]
+  maxRecentEvents: number
 }
 
 const DEFAULT_CONFIG: ResolvedProfilerConfig = {
   enabled: false,
-  mode: "summary",
+  mode: 'summary',
   includeServerBreakdown: false,
   operationFilters: [],
-  maxRecentEvents: 1000,
-};
-
-type RecordCallback = (event: ProfilingEvent) => void;
-
-interface ControllerState {
-  runtimeOverride: boolean | undefined;
-  runtimeOptions: ProfilerRuntimeOptions;
-  onRecordCallbacks: RecordCallback[];
-  initialized: boolean;
+  maxRecentEvents: 1000
 }
 
-const CONTROLLER_STATE_KEY = Symbol.for("@qvac/sdk:profiler-controller-state");
+type RecordCallback = (event: ProfilingEvent) => void
+
+interface ControllerState {
+  runtimeOverride: boolean | undefined
+  runtimeOptions: ProfilerRuntimeOptions
+  onRecordCallbacks: RecordCallback[]
+  initialized: boolean
+}
+
+const CONTROLLER_STATE_KEY = Symbol.for('@qvac/sdk:profiler-controller-state')
 
 function getControllerState(): ControllerState {
   const state = getGlobalSingleton(CONTROLLER_STATE_KEY, () => {
@@ -57,98 +53,92 @@ function getControllerState(): ControllerState {
       runtimeOverride: undefined,
       runtimeOptions: {},
       onRecordCallbacks: [],
-      initialized: false,
-    };
-  });
+      initialized: false
+    }
+  })
   if (!state.initialized) {
-    createAggregator(DEFAULT_CONFIG.maxRecentEvents);
-    state.initialized = true;
+    createAggregator(DEFAULT_CONFIG.maxRecentEvents)
+    state.initialized = true
   }
 
-  return state;
+  return state
 }
 
 export function enable(options?: ProfilerRuntimeOptions): void {
-  const state = getControllerState();
-  state.runtimeOverride = true;
-  state.runtimeOptions = options ? { ...options } : {};
-  clearAggregator();
-  setMaxRecentEvents(DEFAULT_CONFIG.maxRecentEvents);
+  const state = getControllerState()
+  state.runtimeOverride = true
+  state.runtimeOptions = options ? { ...options } : {}
+  clearAggregator()
+  setMaxRecentEvents(DEFAULT_CONFIG.maxRecentEvents)
 }
 
 export function disable(): void {
-  const state = getControllerState();
-  state.runtimeOverride = false;
-  state.runtimeOptions = {};
-  setMaxRecentEvents(DEFAULT_CONFIG.maxRecentEvents);
+  const state = getControllerState()
+  state.runtimeOverride = false
+  state.runtimeOptions = {}
+  setMaxRecentEvents(DEFAULT_CONFIG.maxRecentEvents)
 }
 
 export function isEnabled(): boolean {
-  const state = getControllerState();
-  return state.runtimeOverride ?? false;
+  const state = getControllerState()
+  return state.runtimeOverride ?? false
 }
 
 export function getEffectiveConfig(): ResolvedProfilerConfig {
-  const state = getControllerState();
+  const state = getControllerState()
   return {
     enabled: isEnabled(),
     mode: state.runtimeOptions.mode ?? DEFAULT_CONFIG.mode,
     includeServerBreakdown:
-      state.runtimeOptions.includeServerBreakdown ??
-      DEFAULT_CONFIG.includeServerBreakdown,
+      state.runtimeOptions.includeServerBreakdown ?? DEFAULT_CONFIG.includeServerBreakdown,
     operationFilters: [
-      ...(state.runtimeOptions.operationFilters ?? DEFAULT_CONFIG.operationFilters),
+      ...(state.runtimeOptions.operationFilters ?? DEFAULT_CONFIG.operationFilters)
     ],
-    maxRecentEvents: DEFAULT_CONFIG.maxRecentEvents,
-  };
+    maxRecentEvents: DEFAULT_CONFIG.maxRecentEvents
+  }
 }
 
-export function shouldProfile(
-  operation: string,
-  perCallOptions?: PerCallProfiling,
-): boolean {
+export function shouldProfile(operation: string, perCallOptions?: PerCallProfiling): boolean {
   if (perCallOptions?.enabled !== undefined) {
-    return perCallOptions.enabled;
+    return perCallOptions.enabled
   }
 
   if (!isEnabled()) {
-    return false;
+    return false
   }
 
-  const config = getEffectiveConfig();
+  const config = getEffectiveConfig()
   if (config.operationFilters.length > 0) {
-    return config.operationFilters.includes(operation);
+    return config.operationFilters.includes(operation)
   }
 
-  return true;
+  return true
 }
 
-export function shouldIncludeServerBreakdown(
-  perCallOptions?: PerCallProfiling,
-): boolean {
+export function shouldIncludeServerBreakdown(perCallOptions?: PerCallProfiling): boolean {
   if (perCallOptions?.includeServerBreakdown !== undefined) {
-    return perCallOptions.includeServerBreakdown;
+    return perCallOptions.includeServerBreakdown
   }
-  return getEffectiveConfig().includeServerBreakdown;
+  return getEffectiveConfig().includeServerBreakdown
 }
 
 export function generateId(): string {
-  return generateProfileId();
+  return generateProfileId()
 }
 
 export function record(event: ProfilingEvent): void {
-  const state = getControllerState();
-  let eventWithTs = event;
+  const state = getControllerState()
+  let eventWithTs = event
   if (event.ts === undefined) {
-    eventWithTs = { ...event, ts: nowMs() };
+    eventWithTs = { ...event, ts: nowMs() }
   }
 
-  const storeInBuffer = getEffectiveConfig().mode === "verbose";
-  aggregatorRecord(eventWithTs, storeInBuffer);
+  const storeInBuffer = getEffectiveConfig().mode === 'verbose'
+  aggregatorRecord(eventWithTs, storeInBuffer)
 
   for (const cb of state.onRecordCallbacks) {
     try {
-      cb(eventWithTs);
+      cb(eventWithTs)
     } catch {
       // Callback errors should not break profiling
     }
@@ -157,24 +147,24 @@ export function record(event: ProfilingEvent): void {
 
 /** Returns unsubscribe function. */
 export function onRecord(callback: RecordCallback): () => void {
-  const state = getControllerState();
-  state.onRecordCallbacks.push(callback);
+  const state = getControllerState()
+  state.onRecordCallbacks.push(callback)
   return () => {
-    const idx = state.onRecordCallbacks.indexOf(callback);
+    const idx = state.onRecordCallbacks.indexOf(callback)
     if (idx >= 0) {
-      state.onRecordCallbacks.splice(idx, 1);
+      state.onRecordCallbacks.splice(idx, 1)
     }
-  };
+  }
 }
 
 export function getAggregates(): Record<string, AggregatedStats> {
-  return aggregatorGetAggregates();
+  return aggregatorGetAggregates()
 }
 
 export function getRecentEvents(): ProfilingEvent[] {
-  return aggregatorGetRecentEvents();
+  return aggregatorGetRecentEvents()
 }
 
 export function clear(): void {
-  clearAggregator();
+  clearAggregator()
 }

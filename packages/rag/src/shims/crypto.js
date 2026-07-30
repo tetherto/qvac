@@ -2,7 +2,7 @@
 
 const { QvacErrorRAG, ERR_CODES } = require('../errors')
 
-function ensureCrypto () {
+function ensureCrypto() {
   const crypto = typeof globalThis !== 'undefined' ? globalThis.crypto : null
   if (crypto && crypto !== module.exports && typeof crypto.createHash === 'function') {
     return crypto
@@ -13,13 +13,20 @@ function ensureCrypto () {
   })
 }
 
-const cryptoShim = new Proxy({}, {
-  get (_target, prop) {
-    return ensureCrypto()[prop]
-  },
-  has (_target, prop) {
-    try { return prop in ensureCrypto() } catch { return false }
+const cryptoShim = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      return ensureCrypto()[prop]
+    },
+    has(_target, prop) {
+      try {
+        return prop in ensureCrypto()
+      } catch {
+        return false
+      }
+    }
   }
-})
+)
 
 module.exports = cryptoShim

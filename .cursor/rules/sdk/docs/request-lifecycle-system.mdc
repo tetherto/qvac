@@ -132,7 +132,7 @@ The addon (`@qvac/llm-llamacpp` and friends) exposes a synchronous `cancel(jobId
 Three scope values express the addon's truth today:
 
 - `"request"` — addon accepts a `requestId` (or equivalent token) on its cancel call. Future code can route a per-request cancel directly through the addon without any cross-talk between in-flight requests on the same model.
-- `"model"` — addon cancels "the thing currently running on this model." Sufficient when a concurrency policy (e.g. `oneAtATimePerModel`) guarantees at most one in-flight request per model.
+- `"model"` — addon cancels "the thing currently running on this model." Sufficient when a serializing concurrency policy guarantees at most one in-flight request per model.
 - `"none"` — addon has no cancel surface. SDK falls back to soft-cancel: the registry aborts the signal, the handler's stream stops yielding, and the result is discarded — the C++ work runs to completion in the background. No correctness issue because the result is no longer observed; just wasted compute until the work naturally ends.
 
 `hard: true` documents that `addon.cancel()` interrupts compute (the llama.cpp / whisper.cpp / parakeet / sdcpp-diffusion path). `hard: false` (or omitted) means cancel is best-effort and compute may run to completion even when the addon accepts the call.
@@ -146,12 +146,14 @@ The llama.cpp addon owns one KV-cache + one decode loop per model. Two concurren
 The registry exposes an admission-control hook so callers don't have to externally enforce "one completion per model":
 
 ```typescript
-registry.policy({ kind: "completion", oneAtATimePerModel: true });
+registry.policy({ kind: "completion", maxConcurrentPerModel: 1, onOverflow: "queue" });
 ```
 
-`oneAtATimePerModel` rejects the second `begin({ kind: "completion", modelId: "m1" })` with `RequestRejectedByPolicyError` (52420) — a typed error that propagates through the RPC boundary and gives the client a clean signal to either retry after the first one ends or surface "model busy" to the user. The error is structured (carries `requestId`, `kind`, `modelId`, `reason`) rather than a generic 500, so clients can `instanceof` narrow.
+`maxConcurrentPerModel` is the per-`(lane, modelId)` slot count (`1` today — the single-context reality; raise it to the addon's batching width once continuous batching lands). `onOverflow` decides what an over-capacity `begin(...)` does: `"queue"` (the default) **serializes** — the second `begin({ kind: "completion", modelId: "m1" })` **waits FIFO** behind the in-flight one; `"reject"` throws `RequestRejectedByPolicyError` (52420) immediately (the legacy `oneAtATimePerModel` behavior). On the queue path, `begin` rejects only when the per-model wait queue is already at its `maxQueueDepthPerModel` cap (default 64), or when a waiter exceeds an optional `queueTimeoutMs`. The error is structured (carries `requestId`, `kind`, `modelId`, `reason`) rather than a generic 500, so clients can `instanceof` narrow and surface "model saturated" to the user.
 
-Other kinds (`embeddings`, `transcribe`, `translate`, `finetune`) intentionally do **not** register a `oneAtATimePerModel` policy: those addons tolerate concurrent requests against the same model (embeddings is genuinely concurrent on the addon side; the streaming kinds share the addon's job-state but the registry's per-request lifecycle is sufficient for cancel routing without admission control). Per-kind policies can be registered if and when an addon's concurrency invariants change.
+The worker singleton wires `completion` **and** `batchCompletion` with `maxConcurrentPerModel: 1, onOverflow: "queue"` and a shared `llamacppCompletion` lane (`sharedSlotGroup`), so the two kinds contend for one slot per model — see "Shared slot groups" in `request-lifecycle-primitives.mdc`.
+
+Other kinds (`embeddings`, `transcribe`, `translate`, `finetune`) intentionally do **not** register a policy: those addons tolerate concurrent requests against the same model (embeddings is genuinely concurrent on the addon side; the streaming kinds share the addon's job-state but the registry's per-request lifecycle is sufficient for cancel routing without admission control). Per-kind policies can be registered if and when an addon's concurrency invariants change.
 
 The policy runs **before** controller / scope allocation in `begin(...)`, so a rejected `begin` leaves no registry entry behind. Disposing the holder of the in-flight slot releases admission for the next request — `await using` makes this automatic.
 
@@ -188,7 +190,7 @@ Test coverage: `same-tick cancel-before-begin retroactively aborts the later beg
 | `server/bare/runtime/disposable-scope.ts`                                  | `DisposableScope` factory + module-load `Symbol.asyncDispose` guard                                      |
 | `server/bare/runtime/request-context.ts`                                   | `RequestContext`, `RequestKind`, `RequestState` types                                                    |
 | `server/bare/runtime/request-registry.ts`                                  | `createRequestRegistry()`, `ManagedRequestContext`, `RequestOutcome`, cancel/begin/end/list logic, bounded `cancelled-before-begin` race-close map, `ConcurrencyPolicy` + `[request-lifecycle]` structured logging |
-| `server/bare/runtime/request-registry-singleton.ts`                        | `getRequestRegistry()` worker-scoped accessor; installs the `completion` → `oneAtATimePerModel` policy on first use |
+| `server/bare/runtime/request-registry-singleton.ts`                        | `getRequestRegistry()` worker-scoped accessor; installs the serializing `completion` + `batchCompletion` policies (shared `llamacppCompletion` lane) on first use |
 | `server/bare/runtime/with-request-context.ts`                              | `withRequestContext(logger, ctx)` — per-request logger wrapper prefixing every emit with the lifecycle correlation tuple |
 | `server/bare/runtime/request-id.ts`                                        | UUID generation helper for caller-provided ids                                                           |
 | `server/bare/runtime/index.ts`                                             | Public re-exports — handlers import from `@/server/bare/runtime`                                         |
@@ -207,7 +209,7 @@ Test coverage: `same-tick cancel-before-begin retroactively aborts the later beg
 | `client/api/completion-stream.ts`                                          | Client-side construction of `InferenceCancelledError` on `stopReason: "cancelled"`                       |
 | `schemas/completion-event.ts`                                              | `stopReason` enum carries `"cancelled"`                                                                  |
 | `test/unit/runtime/disposable-scope.test.ts`                               | Scope contract: LIFO, idempotency, error aggregation, late-defer                                         |
-| `test/unit/runtime/request-registry.test.ts`                               | Registry contract: begin/cancel/end, parent-signal composition, listener detach, Stop-button race close, bounded-set invariants, `oneAtATimePerModel` admission rule |
+| `test/unit/runtime/request-registry.test.ts`                               | Registry contract: begin/cancel/end, parent-signal composition, listener detach, Stop-button race close, bounded-set invariants, serializing-policy FIFO admission + shared-lane rule |
 | `test/unit/runtime/kv-cache-session.test.ts`                               | `KvCacheSession` contract: begin/commit/rollback semantics, double-rollback idempotency, delete-by-scope |
 | `test/unit/runtime/with-request-context.test.ts`                           | `withRequestContext` prefix shape and underlying-logger pass-through                                     |
 | `test/unit/runtime/request-lifecycle-logging.test.ts`                      | `[request-lifecycle] begin/cancel/end` line shape, single-emit guarantee, `cancelAll` fan-out            |

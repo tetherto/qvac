@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import { buildServer } from '../src/serve/index.js'
 
-// Wire-level validation is covered by the bats e2e suite. This file only
+// Wire-level validation lives in the e2e suite (test/e2e). This file only
 // pins the OpenAPI document because that's a unique testability angle.
 describe('serve openapi', () => {
   it('exposes every route at /openapi.json', async () => {

@@ -7,6 +7,14 @@
     "tests_bare": true
   },
   {
+    "package": "bare-sdk",
+    "path": "packages/bare-sdk",
+    "pkg_manager": "bun",
+    "needs_bare": true,
+    "tests_bare": true,
+    "sdk_sources": ["workspace"]
+  },
+  {
     "package": "cli",
     "path": "packages/cli",
     "sdk_sources": ["workspace"],
@@ -35,5 +43,9 @@
   {
     "package": "opencode-plugin",
     "path": "plugins/opencode"
+  },
+  {
+    "package": "openclaw-plugin",
+    "path": "plugins/openclaw"
   }
 ]

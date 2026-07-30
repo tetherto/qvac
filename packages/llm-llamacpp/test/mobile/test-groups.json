@@ -1,17 +1,22 @@
 {
   "ios": {
     "finetuning": ["runFinetuningPauseResumeTest"],
+    "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
     "imageFruitPlate": ["runImageFruitPlateTest"],
+    "imageMmprojGpu": ["runImageMmprojGpuTest"],
+    "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
+    "continuousBatching": ["runContinuousBatchingTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
+      "runKvCacheTypeDefaultsTest",
       "runToolsCompactTest"
     ],
     "lightB": [
@@ -27,15 +32,20 @@
     ]
   },
   "android": {
+    "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
     ],
+    "funcShardF": [
+      "runFinetuningArchsTest"
+    ],
     "funcShardB": [
       "runToolsCompactTest",
-      "runSlidingContextTest"
+      "runSlidingContextTest",
+      "runKvCacheTypeDefaultsTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
@@ -53,6 +63,8 @@
       "runQwen35Test",
       "runModelLoadingTest",
       "runImageFruitPlateTest",
+      "runImageMmprojGpuTest",
+      "runQwen35ImageTileModeTokensTest",
       "runGrammarTest",
       "runTurboquantTest",
       "runBitnetTest",
@@ -62,6 +74,7 @@
   "androidWeekly": {
     "ocr": [
       "runOcrLightonTest",
+      "runOcrUnlimitedTest",
       "runOcrPaddleTest"
     ],
     "imageHeavy": [
@@ -73,15 +86,20 @@
       "runGemma4ImageFruitPlatePerfTest",
       "runGemma4ImageHighResAuroraPerfTest"
     ],
+    "vlmPerfUnlimitedOcr": [
+      "runUnlimitedOcrPerfTest"
+    ],
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest"
+      "runQwen35ImageHighResAuroraPerfTest",
+      "runQwen35MultimodalCacheStressTest"
     ]
   },
   "iosWeekly": {
     "ocr": [
       "runOcrLightonTest",
+      "runOcrUnlimitedTest",
       "runOcrPaddleTest"
     ],
     "imageHeavy": [
@@ -93,10 +111,14 @@
       "runGemma4ImageFruitPlatePerfTest",
       "runGemma4ImageHighResAuroraPerfTest"
     ],
+    "vlmPerfUnlimitedOcr": [
+      "runUnlimitedOcrPerfTest"
+    ],
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest"
+      "runQwen35ImageHighResAuroraPerfTest",
+      "runQwen35MultimodalCacheStressTest"
     ]
   }
 }

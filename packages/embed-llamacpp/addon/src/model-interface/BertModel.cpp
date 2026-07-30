@@ -645,6 +645,16 @@ void BertModel::init(BertModelSetup& setup) {
   init_.result = std::move(llamaInit);
   model_ = init_.result->model();
   ctx_ = init_.result->context();
+  // common_init_from_params returns a result with a null model/context when the
+  // model fails to load (corrupt GGUF, or no usable backend under
+  // GGML_BACKEND_DL). Fail loudly here rather than dereferencing null below
+  // (which segfaults the process instead of surfacing a catchable error).
+  if (model_ == nullptr || ctx_ == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadModel),
+        "model initialization returned a null model/context");
+  }
   vocab_ = llama_model_get_vocab(model_);
   batch_ = llama_batch_init(init_.params.n_batch, 0, 1);
   pooling_type = llama_pooling_type(ctx_);

@@ -4,124 +4,123 @@ import {
   unloadModel,
   type ToolCall,
   type CompletionStats,
-  QWEN3_1_7B_INST_Q4,
-} from "@qvac/sdk";
-import { tools, toolSchemas, mockExecute } from "./shared";
+  QWEN3_1_7B_INST_Q4
+} from '@qvac/sdk'
+import { tools, toolSchemas, mockExecute } from './shared'
 
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
     modelConfig: {
       ctx_size: 4096,
-      tools: true,
+      tools: true
     },
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
-  console.log(`▸ Model loaded successfully! Model ID: ${modelId}`);
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
+  console.log(`▸ Model loaded successfully! Model ID: ${modelId}`)
 
   const history = [
     {
-      role: "system",
-      content:
-        "You are a helpful assistant that can use tools to get the weather and horoscope.",
+      role: 'system',
+      content: 'You are a helpful assistant that can use tools to get the weather and horoscope.'
     },
     {
-      role: "user",
-      content: "What's the weather in Tokyo and my horoscope for Aquarius?",
-    },
-  ];
+      role: 'user',
+      content: "What's the weather in Tokyo and my horoscope for Aquarius?"
+    }
+  ]
 
-  console.log("\n▸ AI Response:");
-  console.log("▸ (Streaming with tool definitions in prompt)\n");
+  console.log('\n▸ AI Response:')
+  console.log('▸ (Streaming with tool definitions in prompt)\n')
 
-  const result = completion({ modelId, history, stream: true, tools });
+  const result = completion({ modelId, history, stream: true, tools })
 
   const tokensTask = (async () => {
     for await (const token of result.tokenStream) {
-      process.stdout.write(token);
+      process.stdout.write(token)
     }
-  })();
+  })()
 
   const toolsTask = (async () => {
     for await (const evt of result.toolCallStream) {
       console.log(
-        `\n\n▸ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`,
-      );
-      console.log(`▸ ID: ${evt.call.id}`);
+        `\n\n▸ Tool Call Detected: ${evt.call.name}(${JSON.stringify(evt.call.arguments)})`
+      )
+      console.log(`▸ ID: ${evt.call.id}`)
     }
-  })();
+  })()
 
-  await Promise.all([tokensTask, toolsTask]);
+  await Promise.all([tokensTask, toolsTask])
 
-  const stats: CompletionStats | undefined = await result.stats;
-  const toolCalls: ToolCall[] = await result.toolCalls;
+  const stats: CompletionStats | undefined = await result.stats
+  const toolCalls: ToolCall[] = await result.toolCalls
 
-  console.log("\n\n▸ Parsed Tool Calls:");
+  console.log('\n\n▸ Parsed Tool Calls:')
   if (toolCalls.length > 0) {
     for (const call of toolCalls) {
-      console.log(`▸ ${call.name}(${JSON.stringify(call.arguments)})`);
+      console.log(`▸ ${call.name}(${JSON.stringify(call.arguments)})`)
 
-      const schema = toolSchemas[call.name as keyof typeof toolSchemas];
+      const schema = toolSchemas[call.name as keyof typeof toolSchemas]
       if (schema) {
-        const validated = schema.safeParse(call.arguments);
+        const validated = schema.safeParse(call.arguments)
         if (validated.success) {
-          console.log(`▸ Arguments validated with Zod`);
+          console.log(`▸ Arguments validated with Zod`)
         } else {
-          console.log(`✖ Validation failed:`, validated.error);
+          console.log(`✖ Validation failed:`, validated.error)
         }
       }
     }
   } else {
-    console.log("▸ No tool calls detected in response");
+    console.log('▸ No tool calls detected in response')
   }
 
-  console.log("\n▸ Performance Stats:", stats);
+  console.log('\n▸ Performance Stats:', stats)
 
   if (toolCalls.length > 0) {
-    console.log("\n\n▸ Simulating Tool Execution...");
+    console.log('\n\n▸ Simulating Tool Execution...')
 
     const toolResults = toolCalls.map((call) => {
-      const result = mockExecute(call.name, call.arguments);
-      console.log(`▸ ${call.name}: ${result}`);
-      return { toolCallId: call.id, result };
-    });
+      const result = mockExecute(call.name, call.arguments)
+      console.log(`▸ ${call.name}: ${result}`)
+      return { toolCallId: call.id, result }
+    })
 
     history.push({
-      role: "assistant",
-      content: await result.text,
-    });
+      role: 'assistant',
+      content: await result.text
+    })
 
     for (const toolResult of toolResults) {
       history.push({
-        role: "tool",
-        content: toolResult.result,
-      });
+        role: 'tool',
+        content: toolResult.result
+      })
     }
 
-    console.log("\n\n▸ Follow-up Response with Tool Results:");
+    console.log('\n\n▸ Follow-up Response with Tool Results:')
     const followUpResult = completion({
       modelId,
       history,
       stream: true,
-      tools,
-    });
+      tools
+    })
 
     for await (const token of followUpResult.tokenStream) {
-      process.stdout.write(token);
+      process.stdout.write(token)
     }
 
-    const followUpStats = await followUpResult.stats;
-    console.log("\n\n▸ Follow-up Stats:", followUpStats);
+    const followUpStats = await followUpResult.stats
+    console.log('\n\n▸ Follow-up Stats:', followUpStats)
   }
 
-  console.log("\n\n▸ Completed!");
-  await unloadModel({ modelId, clearStorage: false });
+  console.log('\n\n▸ Completed!')
+  await unloadModel({ modelId, clearStorage: false })
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

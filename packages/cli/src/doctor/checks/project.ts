@@ -7,7 +7,7 @@ import type { Check } from '../check.js'
 // Locate @qvac/sdk the same way a consumer project's runtime would, so
 // we correctly find the package whether installed locally, hoisted in a
 // monorepo, or linked via workspaces.
-function resolveSdkPackageJson (projectRoot: string): string | null {
+function resolveSdkPackageJson(projectRoot: string): string | null {
   try {
     const req = createRequire(path.join(projectRoot, 'package.json'))
     for (const spec of [`${DEFAULT_SDK_NAME}/package.json`, `${DEFAULT_SDK_NAME}/package`]) {

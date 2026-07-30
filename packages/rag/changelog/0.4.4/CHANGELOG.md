@@ -9,4 +9,3 @@ Release Date: 2026-04-01
 ## 🧹 Chores
 
 - Bump bare-crypto to ^1.13.4 and clean up rag dependency declarations. (see PR [#1253](https://github.com/tetherto/qvac/pull/1253))
-

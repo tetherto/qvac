@@ -2,9 +2,26 @@ name: 'Close stale issues and PRs'
 on:
   schedule:
     - cron: '30 12 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Log planned actions without modifying pull requests
+        required: false
+        type: boolean
+        default: false
+
 permissions:
-  actions: write
   pull-requests: write
+  contents: read
+  issues: read
+
+# This workflow mutates external state (labels, comments, closes PRs), so a
+# running instance is never cancelled. Real runs (scheduled or a manual
+# non-dry-run dispatch) share one group and serialize; each dry-run dispatch
+# gets a unique group via the run id so previews never block real runs.
+concurrency:
+  group: ${{ github.workflow }}${{ ((github.event_name == 'workflow_dispatch' && inputs.dry-run) && format('-dry-run-{0}', github.run_id)) || '' }}
+  cancel-in-progress: false
 
 jobs:
   stale:
@@ -12,6 +29,7 @@ jobs:
     steps:
       - uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10
         with:
+          debug-only: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
           stale-pr-message: 'This PR is stale because it has been open 21 days with no activity. It is flagged for removal. Remove stale label or set the PR to Draft or this will be closed in one day.'
           close-pr-message: 'This PR was closed because it has been stalled for 22 days with no activity. You can reopen this PR later if it is still necessary.'
           days-before-pr-stale: 21
@@ -21,12 +39,13 @@ jobs:
 
   stale-draft-prs:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
         with:
           script: |
+            const dryRun = process.env.DRY_RUN === 'true'
             const { processStaleDraftPrs } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/stale-draft-prs.mjs`)
-            await processStaleDraftPrs({ github, context, core })
+            await processStaleDraftPrs({ github, context, core, dryRun })

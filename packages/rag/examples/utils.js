@@ -19,18 +19,20 @@ const RAG_MODELS = {
   }
 }
 
-async function ensureModels (keys, diskPath) {
+async function ensureModels(keys, diskPath) {
   diskPath = diskPath || DEFAULT_DISK_PATH
 
-  const requested = keys.map(key => {
+  const requested = keys.map((key) => {
     const model = RAG_MODELS[key]
     if (!model) {
-      throw new Error(`Unknown model key: ${key}. Available keys: ${Object.keys(RAG_MODELS).join(', ')}`)
+      throw new Error(
+        `Unknown model key: ${key}. Available keys: ${Object.keys(RAG_MODELS).join(', ')}`
+      )
     }
     return { key, ...model, fullPath: path.resolve(diskPath, model.filename) }
   })
 
-  const missing = requested.filter(m => !fs.existsSync(m.fullPath))
+  const missing = requested.filter((m) => !fs.existsSync(m.fullPath))
 
   if (missing.length === 0) {
     console.log('Models already cached locally.')
@@ -62,7 +64,7 @@ async function ensureModels (keys, diskPath) {
   return toResult(requested, diskPath)
 }
 
-function toResult (requested, diskPath) {
+function toResult(requested, diskPath) {
   const out = {}
   for (const m of requested) {
     out[m.key] = { filename: m.filename, dir: diskPath, fullPath: m.fullPath }

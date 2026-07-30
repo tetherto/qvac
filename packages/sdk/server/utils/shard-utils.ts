@@ -1,19 +1,16 @@
-import {
-  ModelLoadFailedError,
-  InvalidShardUrlPatternError,
-} from "@/utils/errors-server";
-import { generateShortHash } from "./formatting";
-import { validateAndJoinPath } from "./path-security";
-import type { ShardPatternInfo, ShardUrl } from "@/schemas";
-import { extractAndWriteTensorsFile } from "./gguf-tensor-extractor";
-import { promises as fsPromises } from "bare-fs";
+import { ModelLoadFailedError, InvalidShardUrlPatternError } from '@/utils/errors-server'
+import { generateShortHash } from './formatting'
+import { validateAndJoinPath } from './path-security'
+import type { ShardPatternInfo, ShardUrl } from '@/schemas'
+import { extractAndWriteTensorsFile } from './gguf-tensor-extractor'
+import { promises as fsPromises } from 'bare-fs'
 
 /**
  * Detect if model filename follows shard pattern (00001-of-0000x)
  */
 export function detectShardedModel(filename: string): ShardPatternInfo {
-  const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/;
-  const match = filename.match(shardPattern);
+  const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/
+  const match = filename.match(shardPattern)
 
   if (match && match[1] && match[2] && match[3] && match[4]) {
     return {
@@ -21,11 +18,11 @@ export function detectShardedModel(filename: string): ShardPatternInfo {
       baseFilename: match[1],
       currentShard: parseInt(match[2], 10),
       totalShards: parseInt(match[3], 10),
-      extension: match[4],
-    };
+      extension: match[4]
+    }
   }
 
-  return { isSharded: false };
+  return { isSharded: false }
 }
 
 /**
@@ -36,26 +33,22 @@ export function detectShardedModel(filename: string): ShardPatternInfo {
  * @returns Array of all numbered shard filenames
  */
 export function generateShardFilenames(shardName: string): string[] {
-  const shardInfo = detectShardedModel(shardName);
+  const shardInfo = detectShardedModel(shardName)
 
   if (!shardInfo.isSharded || !shardInfo.totalShards) {
-    throw new ModelLoadFailedError(
-      `Not a sharded model filename: ${shardName}`,
-    );
+    throw new ModelLoadFailedError(`Not a sharded model filename: ${shardName}`)
   }
 
-  const filenames: string[] = [];
-  const { baseFilename, totalShards, extension } = shardInfo;
+  const filenames: string[] = []
+  const { baseFilename, totalShards, extension } = shardInfo
 
   for (let i = 1; i <= totalShards; i++) {
-    const shardNumber = i.toString().padStart(5, "0");
-    const totalShardsStr = totalShards.toString().padStart(5, "0");
-    filenames.push(
-      `${baseFilename}-${shardNumber}-of-${totalShardsStr}${extension}`,
-    );
+    const shardNumber = i.toString().padStart(5, '0')
+    const totalShardsStr = totalShards.toString().padStart(5, '0')
+    filenames.push(`${baseFilename}-${shardNumber}-of-${totalShardsStr}${extension}`)
   }
 
-  return filenames;
+  return filenames
 }
 
 /**
@@ -66,27 +59,27 @@ export function generateShardFilenames(shardName: string): string[] {
  * @returns Object with shard URLs array and cache key
  */
 export function parsePatternBasedShardUrl(shardUrl: string): {
-  shardUrls: ShardUrl[];
-  cacheKey: string;
+  shardUrls: ShardUrl[]
+  cacheKey: string
 } {
-  const urlParts = shardUrl.split("/");
-  const filename = urlParts[urlParts.length - 1]?.split("?")[0] || "";
-  const shardInfo = detectShardedModel(filename);
+  const urlParts = shardUrl.split('/')
+  const filename = urlParts[urlParts.length - 1]?.split('?')[0] || ''
+  const shardInfo = detectShardedModel(filename)
 
   if (!shardInfo.isSharded || !shardInfo.baseFilename) {
-    throw new InvalidShardUrlPatternError(shardUrl);
+    throw new InvalidShardUrlPatternError(shardUrl)
   }
 
-  const shardFilenames = generateShardFilenames(filename);
-  const baseUrl = urlParts.slice(0, -1).join("/");
+  const shardFilenames = generateShardFilenames(filename)
+  const baseUrl = urlParts.slice(0, -1).join('/')
 
   return {
     shardUrls: shardFilenames.map((shardFilename) => ({
       url: `${baseUrl}/${shardFilename}`,
-      filename: shardFilename,
+      filename: shardFilename
     })),
-    cacheKey: generateShortHash(`${baseUrl}/${shardInfo.baseFilename}`),
-  };
+    cacheKey: generateShortHash(`${baseUrl}/${shardInfo.baseFilename}`)
+  }
 }
 
 /**
@@ -99,27 +92,17 @@ export function parsePatternBasedShardUrl(shardUrl: string): {
  */
 export async function extractTensorsFromShards(
   shardDir: string,
-  shardFilename: string,
+  shardFilename: string
 ): Promise<string> {
-  const shardInfo = detectShardedModel(shardFilename);
+  const shardInfo = detectShardedModel(shardFilename)
 
-  if (
-    !shardInfo.isSharded ||
-    !shardInfo.baseFilename ||
-    !shardInfo.totalShards
-  ) {
-    throw new ModelLoadFailedError(
-      `Not a sharded model filename: ${shardFilename}`,
-    );
+  if (!shardInfo.isSharded || !shardInfo.baseFilename || !shardInfo.totalShards) {
+    throw new ModelLoadFailedError(`Not a sharded model filename: ${shardFilename}`)
   }
 
-  const allShardFilenames = generateShardFilenames(shardFilename);
+  const allShardFilenames = generateShardFilenames(shardFilename)
 
-  return extractAndWriteTensorsFile(
-    shardDir,
-    allShardFilenames,
-    shardInfo.baseFilename,
-  );
+  return extractAndWriteTensorsFile(shardDir, allShardFilenames, shardInfo.baseFilename)
 }
 
 /**
@@ -128,28 +111,25 @@ export async function extractTensorsFromShards(
  * @param shardFilename - Filename of any shard (e.g., "model-00001-of-00002.gguf")
  * @returns true if all numbered shards exist, false otherwise
  */
-export async function checkAllShardsExist(
-  shardDir: string,
-  shardFilename: string,
-) {
-  const shardInfo = detectShardedModel(shardFilename);
+export async function checkAllShardsExist(shardDir: string, shardFilename: string) {
+  const shardInfo = detectShardedModel(shardFilename)
 
   if (!shardInfo.isSharded) {
-    return false;
+    return false
   }
 
-  const shardFilenames = generateShardFilenames(shardFilename);
+  const shardFilenames = generateShardFilenames(shardFilename)
 
   const allShardsExist = await Promise.all(
     shardFilenames.map((f) =>
       fsPromises
         .access(validateAndJoinPath(shardDir, f))
         .then(() => true)
-        .catch(() => false),
-    ),
-  ).then((results) => results.every((exists) => exists));
+        .catch(() => false)
+    )
+  ).then((results) => results.every((exists) => exists))
 
-  return allShardsExist;
+  return allShardsExist
 }
 
 /**
@@ -158,27 +138,24 @@ export async function checkAllShardsExist(
  * @param shardFilename - Filename of any shard (e.g., "model-00001-of-00002.gguf")
  * @returns true if all shards and tensors.txt exist, false otherwise
  */
-export async function validateShardedModelCache(
-  shardDir: string,
-  shardFilename: string,
-) {
-  const shardInfo = detectShardedModel(shardFilename);
+export async function validateShardedModelCache(shardDir: string, shardFilename: string) {
+  const shardInfo = detectShardedModel(shardFilename)
 
   if (!shardInfo.isSharded || !shardInfo.baseFilename) {
-    return false;
+    return false
   }
 
-  const allShardsExist = await checkAllShardsExist(shardDir, shardFilename);
+  const allShardsExist = await checkAllShardsExist(shardDir, shardFilename)
 
   if (!allShardsExist) {
-    return false;
+    return false
   }
 
-  const tensorsFile = `${shardInfo.baseFilename}.tensors.txt`;
+  const tensorsFile = `${shardInfo.baseFilename}.tensors.txt`
   const tensorsExist = await fsPromises
     .access(validateAndJoinPath(shardDir, tensorsFile))
     .then(() => true)
-    .catch(() => false);
+    .catch(() => false)
 
-  return tensorsExist;
+  return tensorsExist
 }

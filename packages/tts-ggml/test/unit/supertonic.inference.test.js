@@ -9,7 +9,7 @@ const process = require('bare-process')
 
 global.process = process
 
-function createMockedSupertonicModel ({
+function createMockedSupertonicModel({
   onOutput = () => {},
   binding,
   files,
@@ -80,6 +80,28 @@ test('Supertonic: ttsParams shape passes voice/steps/speed/seed/threads/useGPU',
   t.absent(params.s3genModelPath, 'no s3gen path leaked into supertonic params')
 })
 
+test('Supertonic: vulkanCacheDir (config) plumbs into ttsParams', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { config: { language: 'en', useGPU: true, vulkanCacheDir: '/data/vk' } }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.vulkanCacheDir, '/data/vk', 'config.vulkanCacheDir reaches params')
+})
+
+test('Supertonic: vulkanCacheDir (top-level option) plumbs into ttsParams', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { vulkanCacheDir: '/data/vk-top' }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.vulkanCacheDir, '/data/vk-top', 'top-level vulkanCacheDir reaches params')
+})
+
+test('Supertonic: vulkanCacheDir omitted leaves params key absent', (t) => {
+  const model = createMockedSupertonicModel()
+  const params = model._buildTtsParams()
+  t.absent(params.vulkanCacheDir, 'no vulkanCacheDir key when unset')
+})
+
 test('Supertonic: voice option also accepts voiceName for ONNX-tts cross-compat', (t) => {
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
@@ -102,10 +124,13 @@ test('Supertonic: synthesis returns audio output and stats', async (t) => {
 
   const response = await model.run({ type: 'text', input: 'Hello supertonic.' })
   const outputs = []
-  await response.onUpdate(d => outputs.push(d)).await()
+  await response.onUpdate((d) => outputs.push(d)).await()
 
   t.ok(outputs.length > 0, 'supertonic emits at least one update')
-  t.ok(outputs.some(d => d.outputArray), 'supertonic output has outputArray')
+  t.ok(
+    outputs.some((d) => d.outputArray),
+    'supertonic output has outputArray'
+  )
   t.ok(response.stats.totalSamples > 0, 'supertonic stats include totalSamples')
   t.ok(events.length > 0, 'raw addon callback fired for supertonic run')
   await model.unload()
@@ -156,10 +181,7 @@ test('Supertonic: streamChunkTokens / streamFirstChunkTokens rejected at constru
       })
     } catch (e) {
       threw = true
-      t.ok(
-        /Chatterbox-only/.test(e.message),
-        `${knob} error mentions Chatterbox-only`
-      )
+      t.ok(/Chatterbox-only/.test(e.message), `${knob} error mentions Chatterbox-only`)
       t.ok(
         /runStream\(\) \/ runStreaming\(\)/.test(e.message),
         `${knob} error points at sentence-level streaming alternative`
@@ -175,13 +197,13 @@ test('Supertonic: runStream emits per-sentence chunks with chunkIndex + isLast (
   const text = 'First chunk one. Second chunk two. Third chunk three.'
   const r = await model.runStream(text, { maxChunkScalars: 18 })
   const updates = []
-  await r.onUpdate(d => updates.push(d)).await()
+  await r.onUpdate((d) => updates.push(d)).await()
 
-  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  const withChunk = updates.filter((u) => u.chunkIndex !== undefined)
   t.ok(withChunk.length >= 2, 'supertonic runStream emits multiple chunks')
   t.is(withChunk[0].chunkIndex, 0, 'first chunkIndex is 0')
   t.ok(typeof withChunk[0].sentenceChunk === 'string', 'sentenceChunk is a string')
-  const isLastFlags = withChunk.map(u => !!u.isLast)
+  const isLastFlags = withChunk.map((u) => !!u.isLast)
   t.is(isLastFlags.filter(Boolean).length, 1, 'exactly one isLast=true on the final chunk')
   t.is(isLastFlags[isLastFlags.length - 1], true, 'final chunk carries isLast=true')
   t.is(isLastFlags[0], false, 'first chunk is not isLast (if multiple chunks)')
@@ -191,20 +213,23 @@ test('Supertonic: runStream emits per-sentence chunks with chunkIndex + isLast (
 test('Supertonic: runStreaming with async iterator drives one job per sentence (mocked)', async (t) => {
   const model = createMockedSupertonicModel()
   await model.load()
-  async function * lines () {
+  async function* lines() {
     yield 'First yielded sentence.'
     yield 'Second yielded sentence.'
     yield 'Third yielded sentence.'
   }
   const r = await model.runStreaming(lines())
   const updates = []
-  await r.onUpdate(d => updates.push(d)).await()
+  await r.onUpdate((d) => updates.push(d)).await()
 
-  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  const withChunk = updates.filter((u) => u.chunkIndex !== undefined)
   t.is(withChunk.length, 3, 'supertonic runStreaming emits 3 chunks')
   t.is(withChunk[0].chunkIndex, 0)
   t.is(withChunk[2].chunkIndex, 2)
-  t.ok(withChunk.every(u => u.isLast === undefined), 'isLast is undefined for async-iter mode (count not known up-front)')
+  t.ok(
+    withChunk.every((u) => u.isLast === undefined),
+    'isLast is undefined for async-iter mode (count not known up-front)'
+  )
   await model.unload()
 })
 
@@ -228,6 +253,175 @@ test('Supertonic: modelDir auto-detects supertonic.gguf', async (t) => {
       'supertonic path resolved from modelDir'
     )
   } finally {
-    try { fs.rmSync(tmpRoot, { recursive: true, force: true }) } catch (_e) {}
+    try {
+      fs.rmSync(tmpRoot, { recursive: true, force: true })
+    } catch (_e) {}
   }
+})
+
+// === LavaSR enhancer param forwarding ===
+// Enhancement is enabled purely by the presence of a GGUF path; there is no
+// `enhance` flag for this layer to forward or keep in sync.
+
+test('Supertonic: files.lavasrEnhancer forwards lavasrEnhancerPath (no enhance flag)', (t) => {
+  const model = createMockedSupertonicModel({
+    files: {
+      supertonicModel: './models/supertonic.gguf',
+      lavasrEnhancer: './models/lavasr/lavasr-enhancer.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, './models/lavasr/lavasr-enhancer.gguf')
+  t.absent(params.enhance, 'no separate enhance flag is forwarded')
+})
+
+test('Supertonic: enhancerPath via enhancer block (no files) forwards the path', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { enhancer: { type: 'lavasr', enhancerPath: '/abs/enh.gguf' } }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
+  t.absent(params.enhance, 'presence of the path is what enables enhancement')
+})
+
+test('Supertonic: unknown enhancer.type is rejected at construction', (t) => {
+  t.exception(
+    () =>
+      createMockedSupertonicModel({
+        files: {
+          supertonicModel: './models/supertonic.gguf',
+          lavasrEnhancer: '/abs/enh.gguf'
+        },
+        extra: { enhancer: { type: 'bogus' } }
+      }),
+    /unknown enhancer\.type/,
+    'a typo in enhancer.type throws instead of silently disabling enhancement'
+  )
+})
+
+test('Supertonic: enhancer block without a path is a no-op (no enhancer params)', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { enhancer: { type: 'lavasr' } }
+  })
+  const params = model._buildTtsParams()
+  t.absent(params.lavasrEnhancerPath, 'no resolvable path -> enhancement stays off')
+})
+
+test('Supertonic: no enhancer -> no enhancer params (backward compat)', (t) => {
+  const model = createMockedSupertonicModel()
+  const params = model._buildTtsParams()
+  t.absent(params.lavasrEnhancerPath, 'no lavasrEnhancerPath when enhancer absent')
+  t.absent(params.enhance, 'no enhance flag when enhancer absent')
+})
+
+// === LavaSR denoiser param forwarding ===
+// Mirrors the enhancer: enabled purely by a GGUF path, runs before the
+// enhancer, rate-preserving. The tts-cpp UL-UNAS forward is implemented in
+// qvac-ext-lib-whisper.cpp PR #78; these tests exercise the JS wiring
+// (path forwarding + validation) without loading a model.
+
+test('Supertonic: files.lavasrDenoiser forwards lavasrDenoiserPath', (t) => {
+  const model = createMockedSupertonicModel({
+    files: {
+      supertonicModel: './models/supertonic.gguf',
+      lavasrDenoiser: './models/lavasr/lavasr-denoiser.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrDenoiserPath, './models/lavasr/lavasr-denoiser.gguf')
+})
+
+test('Supertonic: denoiserPath via denoiser block (no files) forwards the path', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { denoiser: { type: 'lavasr', denoiserPath: '/abs/den.gguf' } }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrDenoiserPath, '/abs/den.gguf')
+})
+
+test('Supertonic: unknown denoiser.type is rejected at construction', (t) => {
+  t.exception(
+    () =>
+      createMockedSupertonicModel({
+        files: {
+          supertonicModel: './models/supertonic.gguf',
+          lavasrDenoiser: '/abs/den.gguf'
+        },
+        extra: { denoiser: { type: 'bogus' } }
+      }),
+    /unknown denoiser\.type/,
+    'a typo in denoiser.type throws instead of silently disabling denoising'
+  )
+})
+
+test('Supertonic: denoiser and enhancer forward both paths (denoise before enhance)', (t) => {
+  const model = createMockedSupertonicModel({
+    files: {
+      supertonicModel: './models/supertonic.gguf',
+      lavasrEnhancer: '/abs/enh.gguf',
+      lavasrDenoiser: '/abs/den.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf', 'enhancer path forwarded')
+  t.is(params.lavasrDenoiserPath, '/abs/den.gguf', 'denoiser path forwarded alongside enhancer')
+})
+
+test('Supertonic: no denoiser -> no denoiser params (backward compat)', (t) => {
+  const model = createMockedSupertonicModel()
+  t.absent(model._buildTtsParams().lavasrDenoiserPath, 'no lavasrDenoiserPath when denoiser absent')
+})
+
+// === Output sample rate ===
+
+test('Supertonic: outputSampleRate forwards to ttsParams; omitted when unset', (t) => {
+  const withRate = new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel: './models/supertonic.gguf' },
+    config: { language: 'en', outputSampleRate: 16000 }
+  })
+  t.is(
+    withRate._buildTtsParams().outputSampleRate,
+    16000,
+    'outputSampleRate forwarded to native params'
+  )
+
+  const noRate = new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel: './models/supertonic.gguf' },
+    config: { language: 'en' }
+  })
+  t.absent(
+    noRate._buildTtsParams().outputSampleRate,
+    'no outputSampleRate when unset (engine keeps native)'
+  )
+})
+
+test('Supertonic: out-of-range outputSampleRate rejected at construction', (t) => {
+  for (const bad of [999, 200000]) {
+    t.exception(
+      () =>
+        new TTSGgml({
+          engine: TTSGgml.ENGINE_SUPERTONIC,
+          files: { supertonicModel: './models/supertonic.gguf' },
+          config: { language: 'en', outputSampleRate: bad }
+        }),
+      /between 8000 and 192000/,
+      `outputSampleRate=${bad} rejected`
+    )
+  }
+})
+
+test('Supertonic: outputSampleRate coexists with the enhancer (no longer ignored)', (t) => {
+  // Both set is now valid (enhancer -> 48 kHz -> resample to outputSampleRate);
+  // it must NOT throw at construction.
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel: './models/supertonic.gguf', lavasrEnhancer: '/abs/enh.gguf' },
+    enhancer: { type: 'lavasr' },
+    config: { language: 'en', outputSampleRate: 22050 }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.outputSampleRate, 22050, 'outputSampleRate forwarded alongside the enhancer')
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf', 'enhancer still forwarded')
 })

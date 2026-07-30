@@ -132,7 +132,9 @@ function rowsFromFile (file, desktopDevice, meta) {
           backend: rc.device,
           rb: rc['reasoning-budget'],
           ck: rc['cache-type-k'],
-          cv: rc['cache-type-v']
+          cv: rc['cache-type-v'],
+          bs: rc['batch-size'],
+          ctx: rc['ctx-size']
         })
         const m = c.metrics || {}
         if (int(m.promptTokens) !== null && meta.promptTokens === null) {
@@ -186,11 +188,13 @@ function rowsFromFile (file, desktopDevice, meta) {
   return rows
 }
 
-function configLabel ({ model, backend, rb, ck, cv }) {
+function configLabel ({ model, backend, rb, ck, cv, bs, ctx }) {
   const parts = [`[${model}]`]
   if (backend) parts.push(`[${backend}]`)
   if (rb !== undefined && rb !== null && rb !== '') parts.push(`[rb=${rb}]`)
   if (ck || cv) parts.push(ck === cv ? `[kv=${ck}]` : `[kv=${ck || '?'}/${cv || '?'}]`)
+  if (bs !== undefined && bs !== null && bs !== '') parts.push(`[bs=${bs}]`)
+  if (ctx !== undefined && ctx !== null && ctx !== '') parts.push(`[ctx=${ctx}]`)
   return parts.join(' ')
 }
 
@@ -302,16 +306,20 @@ function metaLine (meta, addonVersion, hasDesktopRows, mobileReps) {
 }
 
 // Shard key for a mobile row, parsed from its "[<modelId>] [<dev>] [rb=..]
-// [kv=<cache>]" label, to match _benchmark-matrix.js mobileShardKey.
+// [kv=<cache>] [bs=<N>]" label, to match _benchmark-matrix.js mobileShardKey.
+// [bs=N] is present only on batch-sweep rows, so cross-product rows keep their
+// two-part "<model>|<kv>" key.
 function shardKeyOf (config) {
   const model = /^\[([^\]]+)\]/.exec(config)
   const kv = /\[kv=([^\]]+)\]/.exec(config)
-  return model && kv ? `${model[1]}|${kv[1]}` : null
+  if (!model || !kv) return null
+  const bs = /\[bs=([^\]]+)\]/.exec(config)
+  return bs ? `${model[1]}|${kv[1]}|bs${bs[1]}` : `${model[1]}|${kv[1]}`
 }
 
 function shardLabel (key) {
-  const [model, kv] = key.split('|')
-  return `${model} [kv=${kv}]`
+  const [model, kv, bs] = key.split('|')
+  return `${model} [kv=${kv}]${bs ? ` [bs=${bs.slice(2)}]` : ''}`
 }
 
 // Per-device coverage of the mobile shard matrix. Every shard that runs emits
@@ -348,7 +356,7 @@ function coverageLines (rows, desktopDevice, devices, expectedShards) {
 
   // Only show the dimension breakdown when the expected set came from the live
   // matrix; a stamped older run may have different dimensions than today's code.
-  const dims = expectedShards ? '' : ` (${SIZES.length} sizes x ${QUANTS.length} quants x ${CACHE_TYPES.length} KV-cache types)`
+  const dims = expectedShards ? '' : ` (${SIZES.length} sizes x ${QUANTS.length} quants x ${CACHE_TYPES.length} KV-cache types, plus the batch sweep)`
   const lines = ['## Coverage', '']
   lines.push(
     `Mobile matrix: ${expected.length} shards expected per device${dims}. ` +
@@ -399,9 +407,18 @@ function mermaidBar (title, ylabel, labels, values) {
 // is one real measured number. xychart-beta is single-series and cannot draw
 // error bars, so the per-backend breakdowns by KV-cache type / quantization,
 // with 3-rep stddev whiskers, live in the HTML chart artifact.
+// The charts hold every axis but one at a single value; the additive batch
+// sweep varies batch-size (a dimension the charts do not hold), so its rows
+// would land in a held-config bucket they were not measured for and silently win
+// the "first row" pick. Batch rows are the only ones tagged [bs=…], so excluding
+// them keeps every chart bucket to one cross-product measurement.
+function isBatchSweepRow (config) {
+  return /\[bs=/.test(config)
+}
+
 function mermaidSection (rows, desktopDevice, chartsUrl) {
   const held = { backend: 'gpu', rb: CHART_RB, size: CHART_SIZE, quant: CHART_QUANT_HELD, kv: CHART_KV_DEFAULT }
-  const pts = atConfig(rows, held).filter(r => r.device !== desktopDevice && !r.crashed && r.tps !== null)
+  const pts = atConfig(rows, held).filter(r => r.device !== desktopDevice && !r.crashed && r.tps !== null && !isBatchSweepRow(r.config))
   if (pts.length < 2) return []
   const byDevice = new Map()
   for (const r of pts) if (!byDevice.has(r.device)) byDevice.set(r.device, r.tps)
@@ -482,9 +499,11 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
   )
   lines.push('')
   lines.push(
-    'Config labels read `[model] [gpu|cpu] [rb=N] [kv=type]`, where `rb` is the ' +
-    'reasoning budget (-1 leaves the model\'s reasoning channel on, 0 disables it) ' +
-    'and `kv` is the KV-cache type.'
+    'Config labels read `[model] [gpu|cpu] [rb=N] [kv=type] [bs=N] [ctx=N]`, where ' +
+    '`rb` is the reasoning budget (-1 leaves the model\'s reasoning channel on, 0 ' +
+    'disables it), `kv` is the KV-cache type, `bs` is the batch/ubatch size, and ' +
+    '`ctx` is the context size. The batch sweep varies `bs` at a fixed baseline ' +
+    'against a long context-filling prompt, so its rows carry `ctx=8192`.'
   )
   lines.push('')
 
@@ -679,7 +698,7 @@ function svgBarChart (title, unit, cats, series, maxOverride) {
 
 function renderHtml (rows, desktopDevice, meta, addonVersionArg) {
   const addonVersion = meta.addonVersion || addonVersionArg || ''
-  const mobile = rows.filter(r => r.device !== desktopDevice)
+  const mobile = rows.filter(r => r.device !== desktopDevice && !isBatchSweepRow(r.config))
   const devices = [...new Set(mobile.filter(r => !r.crashed).map(r => r.device))].sort()
   const legend = devices.map((d, i) => `<span style="display:inline-flex;align-items:center;margin:0 14px 6px 0"><span style="width:12px;height:12px;background:${CHART_COLORS[i % CHART_COLORS.length]};display:inline-block;margin-right:5px;border-radius:2px"></span>${d}</span>`).join('')
   const KVO = ['f16', 'q8_0', 'q4_0', 'tbq3_0/pq3_0', 'tbq4_0/pq4_0', 'pq3_0', 'pq4_0']

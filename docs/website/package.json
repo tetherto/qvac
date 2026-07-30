@@ -4,7 +4,7 @@
   "description": "Official documentation and single source of truth for QVAC",
   "private": true,
   "scripts": {
-    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/**/*.ts",
+    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/*/*.ts ../../packages/sdk/examples/*/*/*.ts",
     "build": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links",
     "build:static": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",

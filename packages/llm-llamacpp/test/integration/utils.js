@@ -4,15 +4,36 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 const process = require('bare-process')
+const crypto = require('bare-crypto')
 
 const TRANSIENT_ERROR_CODES = new Set([
-  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  // DNS / name resolution
+  'EAI_NODATA',
+  'EAI_AGAIN',
+  'EAI_FAIL',
+  'ENOTFOUND',
+  // connectivity — these dominate mobile Device Farm flakiness: a transient
+  // network drop surfaces as ENETUNREACH/EHOSTUNREACH and MUST be retried
+  // (previously these were treated as fatal, so a sub-second blip failed the
+  // whole run with no retry).
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ECONNREFUSED',
+  // mid-transfer / timeout
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNABORTED',
+  'ESIZE',
+  // post-transfer: the request "resolved" but the .part is missing/short or
+  // couldn't be finalized (truncated/interrupted transfer) — retry it instead
+  // of hard-failing on the resulting ENOENT/short file.
+  'EINCOMPLETE'
 ])
 
 const cleanedIntegrationCacheFiles = new Set()
 
-function cleanupIntegrationCacheFiles (...cachePaths) {
+function cleanupIntegrationCacheFiles(...cachePaths) {
   for (const cachePath of cachePaths.flat()) {
     if (!cachePath || cleanedIntegrationCacheFiles.has(cachePath)) continue
     if (!path.isAbsolute(cachePath)) {
@@ -28,7 +49,7 @@ function cleanupIntegrationCacheFiles (...cachePaths) {
   }
 }
 
-function isTransientError (err) {
+function isTransientError(err) {
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
   if (err.statusCode) {
     const s = err.statusCode
@@ -37,11 +58,15 @@ function isTransientError (err) {
   return false
 }
 
-function urlHost (url) {
-  try { return new URL(url).host } catch (_) { return url }
+function urlHost(url) {
+  try {
+    return new URL(url).host
+  } catch (_) {
+    return url
+  }
 }
 
-async function downloadFileOnce (url, dest, opts = {}) {
+async function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let settled = false
@@ -72,16 +97,22 @@ async function downloadFileOnce (url, dest, opts = {}) {
     })
 
     const reqTimer = setTimeout(() => {
-      req.destroy(Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), { code: 'ETIMEDOUT' }))
+      req.destroy(
+        Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), {
+          code: 'ETIMEDOUT'
+        })
+      )
     }, timeoutMs)
 
-    const req = https.request(url, response => {
+    const req = https.request(url, (response) => {
       clearTimeout(reqTimer)
 
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
         if (_redirectCount >= maxRedirects) {
-          fs.unlink(dest, () => safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`)))
+          fs.unlink(dest, () =>
+            safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`))
+          )
           return
         }
         fs.unlink(dest, (unlinkErr) => {
@@ -109,10 +140,12 @@ async function downloadFileOnce (url, dest, opts = {}) {
       const resetIdle = () => {
         if (idleTimer) clearTimeout(idleTimer)
         idleTimer = setTimeout(() => {
-          response.destroy(Object.assign(
-            new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
-            { code: 'ETIMEDOUT' }
-          ))
+          response.destroy(
+            Object.assign(
+              new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
+              { code: 'ETIMEDOUT' }
+            )
+          )
         }, idleTimeoutMs)
       }
       resetIdle()
@@ -124,18 +157,37 @@ async function downloadFileOnce (url, dest, opts = {}) {
       })
 
       response.pipe(file)
-      file.on('close', () => { if (idleTimer) clearTimeout(idleTimer); safeResolve() })
+      file.on('close', () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        safeResolve()
+      })
     })
 
-    req.on('error', err => { clearTimeout(reqTimer); file.destroy(); cleanupAndReject(err) })
+    req.on('error', (err) => {
+      clearTimeout(reqTimer)
+      file.destroy()
+      cleanupAndReject(err)
+    })
     req.end()
   })
 }
 
-async function downloadFileWithRetries (urls, dest, opts = {}) {
-  const { retries = 3, minBytes = 1, ...downloadOpts } = opts
+async function downloadFileWithRetries(urls, dest, opts = {}) {
+  // Defaults tuned for mobile Device Farm: connectivity gaps here can last tens
+  // of seconds, so 4 attempts over ~7s gave up far too early. 7 attempts with a
+  // backoff cap of 20s spans a ~1-2 min window, riding out real blips. Each
+  // attempt is bounded by downloadFileOnce's own connect/idle timers (which
+  // reset on data), so a slow-but-progressing large download is allowed to run
+  // to completion rather than being capped by a fixed per-attempt deadline.
+  const { retries = 6, minBytes = 1, backoffCapMs = 20_000, ...downloadOpts } = opts
   const urlList = Array.isArray(urls) ? urls : [urls]
   const partPath = dest + '.part'
+
+  // Drop any leftover .part from a previously interrupted/killed run so a stale
+  // temp file can't be mistaken for this download's output.
+  try {
+    fs.unlinkSync(partPath)
+  } catch (_) {}
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const url = urlList[attempt % urlList.length]
@@ -143,56 +195,319 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
     try {
       await downloadFileOnce(url, partPath, downloadOpts)
 
-      const stat = fs.statSync(partPath)
-      if (stat.size < minBytes) {
-        fs.unlinkSync(partPath)
-        throw Object.assign(new Error(`Downloaded file is empty from ${host}`), { code: 'ESIZE' })
+      // Verify the artifact actually landed and is non-trivial. A "resolved"
+      // download whose .part is missing or short means the transfer was
+      // truncated/interrupted — surface it as EINCOMPLETE so the loop RETRIES
+      // instead of hard-failing on a fatal ENOENT (which previously killed the
+      // run after a single attempt).
+      let size = -1
+      try {
+        size = fs.statSync(partPath).size
+      } catch (_) {
+        size = -1
+      }
+      if (size < minBytes) {
+        throw Object.assign(
+          new Error(
+            `Incomplete download from ${host} (${size < 0 ? 'missing .part' : size + ' bytes'})`
+          ),
+          { code: 'EINCOMPLETE' }
+        )
       }
 
-      fs.renameSync(partPath, dest)
+      try {
+        fs.renameSync(partPath, dest)
+      } catch (err) {
+        throw Object.assign(
+          new Error(`Failed to finalize download from ${host}: ${err.code || err.message}`),
+          { code: 'EINCOMPLETE' }
+        )
+      }
       return
     } catch (err) {
-      try { fs.unlinkSync(partPath) } catch (_) {}
+      try {
+        fs.unlinkSync(partPath)
+      } catch (_) {}
 
       const attemptsLeft = retries - attempt
       if (!isTransientError(err) || attemptsLeft === 0) {
-        console.error(`[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`)
+        console.error(
+          `[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`
+        )
         throw err
       }
 
-      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
-      console.log(`[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`)
-      await new Promise(resolve => setTimeout(resolve, delay))
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, backoffCapMs)
+      console.log(
+        `[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`
+      )
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
 }
 
-async function ensureModel ({ modelName, downloadUrl }) {
-  const modelDir = path.resolve(__dirname, '../model')
-  const modelPath = path.join(modelDir, modelName)
+const DEFAULT_MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
+let _manifestCache
 
-  if (fs.existsSync(modelPath)) {
-    const stat = fs.statSync(modelPath)
-    if (stat.size > 0) {
-      return [modelName, modelDir]
+// Loads and caches the model manifest (single source of truth for model URLs +
+// sha256/bytes integrity). The default manifest is mandatory so packaging or
+// parsing errors cannot silently disable integrity checks.
+//
+// The default path is loaded via a literal require() rather than fs.readFileSync.
+// Mobile builds pack this file into a single bundle via bare-pack, which follows
+// static require()/import calls. A dynamic fs.readFileSync call is invisible to
+// that traversal and drops the manifest from the bundle, so model lookup fails
+// on-device even though the file was present at build time.
+function validateManifest(manifest, source) {
+  if (!manifest || typeof manifest !== 'object' || !manifest.models) {
+    throw new Error(`Required model manifest is invalid (${source}): missing models object`)
+  }
+  return manifest
+}
+
+function loadManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
+  if (manifestPath === DEFAULT_MANIFEST_PATH) {
+    if (_manifestCache !== undefined) return _manifestCache
+    try {
+      _manifestCache = validateManifest(
+        require('./models.manifest.json'),
+        'test/integration/models.manifest.json'
+      )
+    } catch (err) {
+      throw new Error(`Failed to load required model manifest: ${err.message}`)
     }
-    console.log(`[download] Removing zero-byte cached file: ${modelName}`)
-    fs.unlinkSync(modelPath)
+    return _manifestCache
+  }
+  try {
+    return validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath)
+  } catch (err) {
+    throw new Error(`Failed to load required model manifest "${manifestPath}": ${err.message}`)
+  }
+}
+
+function resolveModelEntry(modelName, { manifest } = {}) {
+  const m = manifest !== undefined ? manifest : loadManifest()
+  validateManifest(m, manifest !== undefined ? 'explicit manifest override' : 'default manifest')
+  const entry = m.models[modelName]
+  if (!entry) {
+    throw new Error(`Model "${modelName}" is missing from required models.manifest.json`)
+  }
+  if (!Array.isArray(entry.urls) || entry.urls.length === 0) {
+    throw new Error(`Model "${modelName}" has no source URL in models.manifest.json`)
+  }
+  if (typeof entry.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(entry.sha256)) {
+    throw new Error(`Model "${modelName}" has no valid SHA-256 pin in models.manifest.json`)
+  }
+  if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+    throw new Error(`Model "${modelName}" has no valid byte-size pin in models.manifest.json`)
+  }
+  return entry
+}
+
+// Streaming sha256 via the package's direct bare-crypto dependency.
+async function sha256File(filePath) {
+  return await new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256')
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+// Verifies a model file against a manifest entry. Byte-length is checked first
+// (cheap) so a size mismatch fails fast before hashing a multi-GB file.
+// { ok: true } when it passes (or when no integrity value is pinned yet).
+async function verifyModelFile(filePath, entry, hashFile = sha256File) {
+  let stats
+  try {
+    stats = fs.statSync(filePath)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+  if (stats.size === 0) return { ok: false, reason: 'zero-byte file' }
+
+  if (entry && Number.isInteger(entry.bytes) && stats.size !== entry.bytes) {
+    return { ok: false, reason: `size ${stats.size} != expected ${entry.bytes}` }
   }
 
-  fs.mkdirSync(modelDir, { recursive: true })
-  console.log(`[download] Downloading test model ${modelName}...`)
+  const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
+  if (hasSha) {
+    let got
+    try {
+      got = await hashFile(filePath)
+    } catch (err) {
+      return { ok: false, reason: `sha256 failed: ${err.message}` }
+    }
+    if (typeof got !== 'string' || !/^[0-9a-f]{64}$/i.test(got)) {
+      return { ok: false, reason: 'sha256 failed: no valid digest returned' }
+    }
+    if (got !== entry.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
+    }
+    return { ok: true }
+  }
 
-  await downloadFileWithRetries(downloadUrl, modelPath)
+  return { ok: true, skipped: true }
+}
+
+const _verificationCache = new Map()
+
+function verificationKey(filePath, entry) {
+  const stats = fs.statSync(filePath)
+  const mtimeMs =
+    typeof stats.mtimeMs === 'number'
+      ? stats.mtimeMs
+      : stats.mtime && typeof stats.mtime.getTime === 'function'
+        ? stats.mtime.getTime()
+        : 0
+  return [
+    filePath,
+    stats.dev,
+    stats.ino,
+    stats.size,
+    mtimeMs,
+    entry.sha256.toLowerCase(),
+    entry.bytes
+  ].join(':')
+}
+
+async function verifyModelFileOnce(filePath, entry, hashFile = sha256File) {
+  let key
+  try {
+    key = verificationKey(filePath, entry)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+
+  let verification = _verificationCache.get(key)
+  if (!verification) {
+    verification = verifyModelFile(filePath, entry, hashFile)
+    _verificationCache.set(key, verification)
+  }
+  const result = await verification
+  if (!result.ok) _verificationCache.delete(key)
+  return result
+}
+
+function resetVerificationCache() {
+  _verificationCache.clear()
+}
+
+// Counts real download attempts so warm-vs-cold behaviour is unit-testable.
+let _downloadCount = 0
+function getDownloadCount() {
+  return _downloadCount
+}
+function resetDownloadCount() {
+  _downloadCount = 0
+}
+
+// Android Device Farm pre-staging: the device's network to huggingface.co is
+// unreliable (~40% of downloads fail even with retries), but the Device Farm
+// HOST has solid network. The test-spec pre_test phase downloads each model on
+// the host and `adb push`es it here; when a model is already staged we skip the
+// on-device download entirely.
+//
+// /data/local/tmp is the one location that is both adb-writable from the host
+// AND readable by the app process (proven on these devices: the harness already
+// pushes testFilter.txt here and the app reads it). The app's own scoped dirs
+// (/data/data/<pkg>, /sdcard/Android/data/<pkg>) reject adb access on Android
+// 11+, so they cannot be used for host pre-staging.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function prestagedModelDir(modelName) {
+  if (os.platform() !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+  } catch (_) {}
+  return null
+}
+
+async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
+  fs.copyFileSync(path.join(stagedDir, modelName), modelPath)
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(`[prestage] copied model ${modelName} failed integrity: ${res.reason}`)
+  }
+}
+
+// The standalone default modelDir assignment is patched by the mobile test
+// packager to point at a writable app directory. Keep this shape stable.
+async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, download } = {}) {
+  const modelDir = path.resolve(__dirname, '../model')
+  const dir = modelDirOverride || modelDir
+  const modelPath = path.join(dir, modelName)
+
+  // Model URL + sha256/bytes come exclusively from models.manifest.json (by
+  // modelName). The manifest is also the cache key for
+  // .github/actions/cache-models. `modelDir`, `manifest`, and `download`
+  // overrides exist for unit testing, but still require a fully pinned entry.
+  const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
+  const doDownload = download || downloadFileWithRetries
+  const urls = entry.urls
+
+  if (fs.existsSync(modelPath)) {
+    const res = await verifyModelFileOnce(modelPath, entry)
+    if (res.ok) {
+      console.log(`[download] ${modelName}: cached copy verified, skipping download`)
+      return [modelName, dir]
+    }
+    console.log(
+      `[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`
+    )
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+  }
+
+  // Pre-staged path: copy the host-staged model from the read-only staging dir
+  // into the normal (app-private, WRITABLE) modelDir, then return modelDir. The
+  // copy is a fast local operation (no network). Returning a writable dir is
+  // essential — tests write sibling files next to the model (sliding-context
+  // caches, finetuning checkpoints via path.join(modelDir, ...)), which would
+  // fail if we returned the read-only /data/local/tmp staging dir directly.
+  const staged = prestagedModelDir(modelName)
+  if (staged) {
+    fs.mkdirSync(dir, { recursive: true })
+    console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
+    await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    return [modelName, dir]
+  }
+
+  fs.mkdirSync(dir, { recursive: true })
+  console.log(`[download] Downloading test model ${modelName}...`)
+  _downloadCount++
+
+  await doDownload(urls, modelPath, { retries: 6 })
+
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(
+      `[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`
+    )
+  }
 
   const stat = fs.statSync(modelPath)
   console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(1)}MB`)
-  return [modelName, modelDir]
+  return [modelName, dir]
 }
 
-async function ensureModelPath ({ modelName, downloadUrl }) {
-  const [downloadedModelName, modelDir] = await ensureModel({ modelName, downloadUrl })
-  return path.join(modelDir, downloadedModelName)
+async function ensureModelPath({ modelName, modelDir, manifest, download } = {}) {
+  const [downloadedModelName, resolvedDir] = await ensureModel({
+    modelName,
+    modelDir,
+    manifest,
+    download
+  })
+  return path.join(resolvedDir, downloadedModelName)
 }
 
 /**
@@ -207,7 +522,7 @@ async function ensureModelPath ({ modelName, downloadUrl }) {
  * const imagePath = getMediaPath('elephant.jpg')
  * const imageBytes = fs.readFileSync(imagePath)
  */
-function getMediaPath (filename) {
+function getMediaPath(filename) {
   // Mobile environment - use asset loading from testAssets
   const isMobile = os.platform() === 'ios' || os.platform() === 'android'
   if (isMobile && global.assetPaths) {
@@ -218,7 +533,9 @@ function getMediaPath (filename) {
       return resolvedPath
     }
     // Asset not found in manifest
-    throw new Error(`Asset not found in testAssets: ${filename}. Make sure ${filename} is in testAssets/ directory and rebuild the app.`)
+    throw new Error(
+      `Asset not found in testAssets: ${filename}. Make sure ${filename} is in testAssets/ directory and rebuild the app.`
+    )
   }
 
   // Desktop environment - use media directory at addon root
@@ -254,7 +571,7 @@ function getMediaPath (filename) {
  * // ... run inference ...
  * console.log(collector.generatedText)
  */
-function makeOutputCollector (t, logger = console) {
+function makeOutputCollector(t, logger = console) {
   const outputText = {}
   let jobCompleted = false
   let generatedText = ''
@@ -262,7 +579,7 @@ function makeOutputCollector (t, logger = console) {
   let startTime = null
   let stats = null
 
-  function onOutput (addon, event, jobId, output, error) {
+  function onOutput(addon, event, jobId, output, error) {
     if (event === 'Output') {
       if (!outputText[jobId]) {
         outputText[jobId] = ''
@@ -289,22 +606,32 @@ function makeOutputCollector (t, logger = console) {
   return {
     onOutput,
     outputText,
-    get generatedText () { return generatedText },
-    get jobCompleted () { return jobCompleted },
-    get timeToFirstToken () { return timeToFirstToken },
-    get stats () { return stats },
-    setStartTime (time) { startTime = time }
+    get generatedText() {
+      return generatedText
+    },
+    get jobCompleted() {
+      return jobCompleted
+    },
+    get timeToFirstToken() {
+      return timeToFirstToken
+    },
+    get stats() {
+      return stats
+    },
+    setStartTime(time) {
+      startTime = time
+    }
   }
 }
 
-function getDefaultTextModel () {
+function getDefaultTextModel() {
   return {
     modelName: process.env.TEXT_MODEL_NAME || 'small-test-model.gguf',
     downloadUrl: 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf'
   }
 }
 
-function getFinetuneModel () {
+function getFinetuneModel() {
   // Use Qwen3_0.6B.Q8_0.gguf for finetuning tests (same as examples)
   // If model exists locally, use it; otherwise use small test model as fallback
   const modelDir = path.resolve(__dirname, '../../models')
@@ -326,7 +653,7 @@ function getFinetuneModel () {
   }
 }
 
-function createDefaultGpuConfig (overrides = {}) {
+function createDefaultGpuConfig(overrides = {}) {
   return {
     gpu_layers: '99',
     ctx_size: '2048',
@@ -335,7 +662,7 @@ function createDefaultGpuConfig (overrides = {}) {
   }
 }
 
-function createTestAddon (binding, modelPath, projectionPath, config, onOutput) {
+function createTestAddon(binding, modelPath, projectionPath, config, onOutput) {
   const { LlamaInterface } = require('../../addon.js')
   return new LlamaInterface(
     binding,
@@ -348,7 +675,7 @@ function createTestAddon (binding, modelPath, projectionPath, config, onOutput) 
   )
 }
 
-async function waitForJobCompletion (addon, collector, options = {}) {
+async function waitForJobCompletion(addon, collector, options = {}) {
   const { checkComplete } = options
   const maxWaitSeconds = options.maxWaitSeconds || 600
   const pollIntervalMs = options.pollIntervalMs || 500
@@ -363,12 +690,12 @@ async function waitForJobCompletion (addon, collector, options = {}) {
         return
       }
     }
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
   }
   throw new Error('Timeout waiting for job completion')
 }
 
-function createTestDataset (filePath, format = 'chat') {
+function createTestDataset(filePath, format = 'chat') {
   if (format === 'chat') {
     // Create a minimal chat-format JSONL dataset
     const samples = [
@@ -397,24 +724,51 @@ function createTestDataset (filePath, format = 'chat') {
 
     const dir = path.dirname(filePath)
     fs.mkdirSync(dir, { recursive: true })
-    const content = samples.map(s => JSON.stringify(s)).join('\n')
+    const content = samples.map((s) => JSON.stringify(s)).join('\n')
     fs.writeFileSync(filePath, content)
   } else {
     // For tokenized format, we'd need actual tokenized data
     // For now, just create a simple text file
     const dir = path.dirname(filePath)
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(filePath, 'This is a test dataset for finetuning.\nIt contains some sample text for training.')
+    fs.writeFileSync(
+      filePath,
+      'This is a test dataset for finetuning.\nIt contains some sample text for training.'
+    )
   }
   return filePath
 }
 
-function createPauseResumeTestDataset (filePath, count = 8) {
+function createPauseResumeTestDataset(filePath, count = 8) {
   const baseSamples = [
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] }
+    {
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'What is 2+2?' },
+        { role: 'assistant', content: '2+2 equals 4.' }
+      ]
+    },
+    {
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'What is the capital of France?' },
+        { role: 'assistant', content: 'The capital of France is Paris.' }
+      ]
+    },
+    {
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'Hello, how are you?' },
+        { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }
+      ]
+    },
+    {
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'What color is the sky?' },
+        { role: 'assistant', content: 'The sky is typically blue on a clear day.' }
+      ]
+    }
   ]
   const samples = []
   for (let i = 0; i < count; i++) {
@@ -422,21 +776,29 @@ function createPauseResumeTestDataset (filePath, count = 8) {
   }
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
-  const content = samples.map(s => JSON.stringify(s)).join('\n')
+  const content = samples.map((s) => JSON.stringify(s)).join('\n')
   fs.writeFileSync(filePath, content + '\n')
   return filePath
 }
 
-function setupParams (modelDir, overrides = {}) {
+function setupParams(modelDir, overrides = {}) {
   const { testId = 'pause-resume', datasetSize, ...finetuneOverrides } = overrides
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
+  // Scope the LoRA-adapter output dir per testId and wipe it up front. It was
+  // previously a single shared `finetune-output/` dir, so back-to-back finetunes
+  // (e.g. the two models in the archs loop, or a prior run on a persistent
+  // runner) wrote to the same path — a finetune that failed to produce an
+  // adapter would leave the previous run's `trained-lora-adapter.gguf` for the
+  // inference phase to load, yielding a spurious pass or a confusing failure.
+  const outputParametersDir = path.resolve(modelDir, `finetune-output_${testId}`)
   createPauseResumeTestDataset(trainDatasetPath, datasetSize)
   cleanupCheckpoints(checkpointDir)
+  cleanupCheckpoints(outputParametersDir)
 
   return {
     trainDatasetDir: trainDatasetPath,
-    outputParametersDir: path.resolve(modelDir, 'finetune-output'),
+    outputParametersDir,
     learningRate: 1e-5,
     lrMin: 1e-8,
     loraModules: 'attn_q,attn_k,attn_v,attn_o',
@@ -448,7 +810,7 @@ function setupParams (modelDir, overrides = {}) {
   }
 }
 
-function cleanupCheckpoints (checkpointDir) {
+function cleanupCheckpoints(checkpointDir) {
   if (fs.existsSync(checkpointDir)) {
     try {
       fs.rmSync(checkpointDir, { recursive: true, force: true })
@@ -456,17 +818,17 @@ function cleanupCheckpoints (checkpointDir) {
   }
 }
 
-function verifyCheckpointExists (checkpointPath) {
+function verifyCheckpointExists(checkpointPath) {
   return fs.existsSync(checkpointPath) && fs.statSync(checkpointPath).isDirectory()
 }
 
-function findPauseCheckpoint (checkpointDir) {
+function findPauseCheckpoint(checkpointDir) {
   if (!fs.existsSync(checkpointDir)) {
     return null
   }
 
   const files = fs.readdirSync(checkpointDir)
-  const pauseCheckpoints = files.filter(f => f.startsWith('pause_checkpoint_step_'))
+  const pauseCheckpoints = files.filter((f) => f.startsWith('pause_checkpoint_step_'))
 
   if (pauseCheckpoints.length === 0) {
     return null
@@ -481,7 +843,7 @@ function findPauseCheckpoint (checkpointDir) {
   return path.join(checkpointDir, pauseCheckpoints[0])
 }
 
-function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
+function setupFinetuneTestData(testDataDir, testCheckpointDir, testId) {
   const trainDatasetPath = path.join(testDataDir, `train_${testId}.jsonl`)
   const evalDatasetPath = path.join(testDataDir, `eval_${testId}.jsonl`)
   const checkpointDir = path.join(testCheckpointDir, `test_${testId}`)
@@ -493,7 +855,7 @@ function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
   return { trainDatasetPath, evalDatasetPath, checkpointDir }
 }
 
-function parsePauseCheckpointMetadata (pauseCheckpointPath) {
+function parsePauseCheckpointMetadata(pauseCheckpointPath) {
   const metadataPath = path.join(pauseCheckpointPath, 'metadata.txt')
   if (!fs.existsSync(metadataPath)) {
     return null
@@ -514,7 +876,7 @@ function parsePauseCheckpointMetadata (pauseCheckpointPath) {
   }
 }
 
-function verifyPauseCheckpoint (t, checkpointDir) {
+function verifyPauseCheckpoint(t, checkpointDir) {
   const pauseCheckpointPath = findPauseCheckpoint(checkpointDir)
 
   if (!pauseCheckpointPath) {
@@ -535,12 +897,20 @@ function verifyPauseCheckpoint (t, checkpointDir) {
   const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
   t.ok(fs.existsSync(modelPath), 'Pause checkpoint must contain model.gguf (LoRA adapter)')
   const optimizerPath = path.join(pauseCheckpointPath, 'optimizer.gguf')
-  t.ok(fs.existsSync(optimizerPath), 'Pause checkpoint must contain optimizer.gguf (optimizer state)')
+  t.ok(
+    fs.existsSync(optimizerPath),
+    'Pause checkpoint must contain optimizer.gguf (optimizer state)'
+  )
 
   return pauseCheckpointPath
 }
 
-async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, message = 'Finetuning completed too quickly') {
+async function handleEarlyCompletion(
+  t,
+  finetuneHandle,
+  checkpointDir = null,
+  message = 'Finetuning completed too quickly'
+) {
   t.comment(`${message} - this is acceptable for small datasets`)
   const result = await (finetuneHandle?.await ? finetuneHandle.await() : finetuneHandle)
   t.ok(result && typeof result === 'object', 'Finetuning should complete with result object')
@@ -550,13 +920,101 @@ async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, m
   return result
 }
 
-async function verifyFinalStatus (t, model, result = null) {
+async function verifyFinalStatus(t, model, result = null) {
   t.ok(result, 'Result must be provided')
+}
+
+// Assert a finetune stat is a finite number IF present. Only null/undefined
+// counts as "absent" — a NaN value must FAIL. NaN is the exact symptom of a
+// broken backward op (the reason these finetune suites exist), so we must NOT
+// early-return on it as an earlier version did (which hid regressions).
+function assertFiniteMetricIfPresent(t, stats, key, id) {
+  const v = stats?.[key]
+  if (v == null) return
+  t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
+  t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not NaN/Inf), got: ${v}`)
+}
+
+// Resolve once a finetune handle has emitted at least `minSteps` progress
+// events; reject on timeout. Used by suites that pause/resume mid-training.
+function waitForProgress(handle, minSteps = 2, timeoutMs = 600_000) {
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(
+        new Error(
+          `waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`
+        )
+      )
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
+}
+
+// Load a base model with a trained LoRA adapter and run a short generation to
+// confirm the adapter is usable. Single source of truth for what were three
+// copy-pasted copies (archs / moe / pause-resume finetune suites). The only real
+// differences between them were `gpuLayers` — MoE uses partial offload, the
+// dense suites use full '999' — and whether inference stats are logged.
+async function runLoraInference(
+  t,
+  { id, modelPath, loraAdapterPath, gpuLayers = '999', forceCpuDevice = false, logStats = false }
+) {
+  // Required lazily so merely importing utils.js (e.g. from a manifest script)
+  // does not eagerly load the native addon — only callers that run inference do.
+  const LlmLlamacpp = require('./../../index.js')
+  // Guard: the adapter must exist before we try to verify it. A soft-failed
+  // COMPLETED assertion does not abort the test (safeTest only catches throws),
+  // so without this a missing/stale adapter would be silently loaded — fail loud.
+  t.ok(
+    fs.existsSync(loraAdapterPath),
+    `[${id}] trained LoRA adapter must exist at ${loraAdapterPath}`
+  )
+  t.comment(`[${id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
+  const inferModel = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config: {
+      gpu_layers: gpuLayers,
+      ctx_size: '512',
+      device: forceCpuDevice ? 'cpu' : 'gpu',
+      predict: '32',
+      lora: loraAdapterPath
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+  try {
+    await inferModel.load()
+    const response = await inferModel.run([{ role: 'user', content: 'Hello' }])
+    let generated = ''
+    await response
+      .onUpdate((token) => {
+        generated += token
+      })
+      .await()
+    t.ok(generated.length > 0, `[${id}] LoRA inference should produce output`)
+    t.comment(
+      `[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
+    )
+    if (logStats) {
+      t.comment(`[${id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
+    }
+  } finally {
+    await inferModel.unload().catch(() => {})
+  }
 }
 
 const test = require('brittle')
 
-function safeTest (name, opts, fn) {
+function safeTest(name, opts, fn) {
   test(name, opts, async (t) => {
     try {
       await fn(t)
@@ -571,6 +1029,15 @@ module.exports = {
   cleanupIntegrationCacheFiles,
   ensureModel,
   ensureModelPath,
+  loadManifest,
+  resolveModelEntry,
+  verifyModelFile,
+  verifyModelFileOnce,
+  sha256File,
+  resetVerificationCache,
+  copyPrestagedModel,
+  getDownloadCount,
+  resetDownloadCount,
   getMediaPath,
   makeOutputCollector,
   getDefaultTextModel,
@@ -588,6 +1055,9 @@ module.exports = {
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
+  assertFiniteMetricIfPresent,
+  waitForProgress,
+  runLoraInference,
   safeTest,
   downloadFileWithRetries
 }

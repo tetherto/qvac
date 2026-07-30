@@ -41,32 +41,31 @@ npm install @qvac/sdk
 3. Create the quickstart script:
 
 ```js
-import { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel } from "@qvac/sdk";
+import { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel } from '@qvac/sdk'
 try {
-    // Load a model into memory
-    const modelId = await loadModel({
-        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-        onProgress: (progress) => {
-            console.log(progress);
-        },
-    });
-    // You can use the loaded model multiple times
-    const history = [
-        {
-            role: "user",
-            content: "Explain quantum computing in one sentence",
-        },
-    ];
-    const result = completion({ modelId, history, stream: true });
-    for await (const token of result.tokenStream) {
-        process.stdout.write(token);
+  // Load a model into memory
+  const modelId = await loadModel({
+    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+    onProgress: (progress) => {
+      console.log(progress)
     }
-    // Unload model to free up system resources
-    await unloadModel({ modelId });
-}
-catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
+  })
+  // You can use the loaded model multiple times
+  const history = [
+    {
+      role: 'user',
+      content: 'Explain quantum computing in one sentence'
+    }
+  ]
+  const result = completion({ modelId, history, stream: true })
+  for await (const token of result.tokenStream) {
+    process.stdout.write(token)
+  }
+  // Unload model to free up system resources
+  await unloadModel({ modelId })
+} catch (error) {
+  console.error('❌ Error:', error)
+  process.exit(1)
 }
 ```
 
@@ -75,6 +74,30 @@ catch (error) {
 ```bash
 node quickstart.js
 ```
+
+## System resource diagnostics
+
+Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and
+driver capabilities. Pass `sample: true` only when you also need a fresh usage
+sample:
+
+```ts
+import { getSystemResources } from '@qvac/sdk'
+
+const resources = await getSystemResources({ sample: true })
+
+if (resources.capabilities.memory.totalBytes.status === 'supported') {
+  console.log('System memory:', resources.capabilities.memory.totalBytes.value)
+}
+
+if (resources.sample?.cpu.status === 'supported') {
+  console.log('CPU utilization:', resources.sample.cpu.value)
+}
+```
+
+Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
+Supported values include their source and scope. These values are diagnostics;
+they do not reserve memory or guarantee that a model can be loaded.
 
 ## Examples
 
@@ -120,11 +143,11 @@ npm i path/to/sdk-0.3.0.tgz
 
 The SDK test suite is organized into three buckets by runtime:
 
-| Bucket | Runtime | Location | Command |
-|--------|---------|----------|---------|
-| Unit | Bun / Node | `test/unit/` | `bun run test:unit` |
-| Server (Bare) | Bare | `test/bare/` | `bun run test:bare` |
-| Client (consumer) | Node / RN | `e2e/` | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime    | Location     | Command                                |
+| ----------------- | ---------- | ------------ | -------------------------------------- |
+| Unit              | Bun / Node | `test/unit/` | `bun run test:unit`                    |
+| Server (Bare)     | Bare       | `test/bare/` | `bun run test:bare`                    |
+| Client (consumer) | Node / RN  | `e2e/`       | See [`e2e/README.md`](./e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
@@ -200,13 +223,13 @@ Must include BEFORE/AFTER code examples showing the migration path:
 **BEFORE:**
 
 ```typescript
-const model = await loadModel("model-path");
+const model = await loadModel('model-path')
 ```
 
 **AFTER:**
 
 ```typescript
-const modelId = await loadModel("model-path", { modelType: "llm" });
+const modelId = await loadModel('model-path', { modelType: 'llm' })
 ```
 ````
 
@@ -215,10 +238,10 @@ Or using inline comments:
 ````markdown
 ```typescript
 // old
-const model = await loadModel("model-path");
+const model = await loadModel('model-path')
 
 // new
-const modelId = await loadModel("model-path", { modelType: "llm" });
+const modelId = await loadModel('model-path', { modelType: 'llm' })
 ```
 ````
 
@@ -233,9 +256,9 @@ Must include at least one fenced code block showing the new API usage:
 // New completion API with streaming support
 for await (const token of completion({
   modelId,
-  history: [{ role: "user", content: "Hello!" }],
+  history: [{ role: 'user', content: 'Hello!' }]
 }).tokenStream) {
-  process.stdout.write(token);
+  process.stdout.write(token)
 }
 ```
 ````

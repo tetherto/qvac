@@ -1,7 +1,6 @@
-import "#polyfill-bare-globals";
-
 // Public API exports only
 export {
+  batchCompletion,
   completion,
   deleteCache,
   loadModel,
@@ -31,6 +30,7 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  getSystemResources,
   loggingStream,
   subscribeServerLogs,
   type ServerLogHandler,
@@ -55,10 +55,10 @@ export {
   vlaPreprocessImage,
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
-  type FinetuneHandle,
-} from "./client/api";
-export { close } from "./client";
-export { plugins } from "./client/plugins-factory";
+  type FinetuneHandle
+} from './client/api'
+export { close } from './client'
+export { plugins } from './client/plugins-factory'
 export {
   type LifecycleState,
   type ModelProgressUpdate,
@@ -74,6 +74,10 @@ export {
   type CompletionFinal,
   type CompletionRun,
   type CompletionStats,
+  type BatchCompletionEvent,
+  type BatchCompletionResult,
+  type BatchCompletionRun,
+  type BatchPrompt,
   type EmbedStats,
   VERBOSITY,
   type Attachment,
@@ -94,6 +98,10 @@ export {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,
+  type TtsClientParamsInput,
+  type TtsParlerEmotion,
+  type TtsParlerLoadConfig,
+  type TtsParlerRuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
@@ -115,6 +123,18 @@ export {
   type GetModelInfoParams,
   type GetLoadedModelInfoParams,
   type LoadedModelInfo,
+  type GetSystemResourcesInput,
+  type ResourceScope,
+  type ResourceProvenance,
+  type ResourceMetric,
+  type GraphicsDriver,
+  type GraphicsDriverCapabilities,
+  type CPUResourceCapabilities,
+  type GPUResourceCapabilities,
+  type SystemResourceCapabilities,
+  type GPUResourceSample,
+  type SystemResourceSample,
+  type SystemResources,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
@@ -170,18 +190,18 @@ export {
   type FinetuneStatus,
   type FinetuneProgress,
   type FinetuneStats,
-  type FinetuneResult,
-} from "./schemas";
+  type FinetuneResult
+} from './schemas'
 
-export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
+export { type ToolInput, type ToolHandler } from './utils/tool-helpers'
 
 // Model types - canonical naming with backward-compatible aliases
-export { MODEL_TYPES, ModelType } from "./schemas";
+export { MODEL_TYPES, ModelType } from './schemas'
 
 // Model registry constants
-export * from "./models/registry";
+export * from './models/registry'
 
-export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
+export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
 
 // Error classes that clients need for `instanceof` checks on rejected
 // promises. `InferenceCancelledError` rides the standard `QvacError`
@@ -189,10 +209,9 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 // `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
 // rejections. `RequestRejectedByPolicyError` is thrown by
 // `await RequestRegistry.begin(...)` when a registered concurrency policy
-// refuses a new request. With the default queue policy a same-model
-// `completion` no longer rejects — it waits FIFO — so this now surfaces the
-// bounded-queue cases: `onOverflow: "reject"`, the per-model queue-depth cap,
-// or a `queueTimeoutMs` elapsing. It propagates out through the worker so the
+// refuses a new request. A same-model `completion` doesn't reject — it waits
+// FIFO — so this surfaces only when the per-model wait queue is already at its
+// `maxQueueDepthPerModel` cap. It propagates out through the worker so the
 // client can distinguish "the model is saturated" from "the request failed".
 //
 // `RequestIdConflictError` and `RequestNotFoundError` are thrown by
@@ -203,14 +222,15 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 // the typed-error reconstructor in `client/rpc/rpc-error.ts` so
 // `err instanceof <Class>` works on the consumer side, not just on
 // the worker side.
-export { InferenceCancelledError } from "./utils/errors-server";
-export type { InferenceCancelledPartial } from "./utils/errors-server";
+export { InferenceCancelledError } from './utils/errors-server'
+export type { InferenceCancelledPartial } from './utils/errors-server'
 export {
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-} from "./utils/errors-server";
+  TranslationFailedError
+} from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
 // rpc-client life-signal race when the bare worker exits unexpectedly
@@ -223,13 +243,13 @@ export {
   BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
-  RequestValidationFailedError,
-} from "./utils/errors-client";
+  RequestValidationFailedError
+} from './utils/errors-client'
 
 // Logging exports
-export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from "./logging";
-export type { Logger, LogTransport, LoggerOptions } from "./logging";
+export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
+export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler } from "./profiling";
-export type { ProfilerRuntimeOptions, ProfilerExport } from "./profiling";
+export { profiler } from './profiling'
+export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'

@@ -11,25 +11,27 @@ import {
   type ResponseFormat
 } from './common.js'
 
-export const responsesBody = z.object({
-  model: z.string().min(1),
-  input: z.union([z.string(), z.array(z.unknown())]),
-  instructions: z.string().optional(),
-  stream: z.boolean().optional(),
-  store: z.boolean().optional(),
-  previous_response_id: z.string().optional(),
-  conversation: z.unknown().optional(),
-  background: z.boolean().optional(),
-  tools: z.array(toolDef).optional(),
-  text: z.unknown().optional(),
-  response_format: responseFormat.optional(),
-  temperature: z.number().optional(),
-  top_p: z.number().optional(),
-  max_output_tokens: z.number().int().optional(),
-  max_tokens: z.number().int().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  parallel_tool_calls: z.boolean().optional()
-}).passthrough()
+export const responsesBody = z
+  .object({
+    model: z.string().min(1),
+    input: z.union([z.string(), z.array(z.unknown())]),
+    instructions: z.string().optional(),
+    stream: z.boolean().optional(),
+    store: z.boolean().optional(),
+    previous_response_id: z.string().optional(),
+    conversation: z.unknown().optional(),
+    background: z.boolean().optional(),
+    tools: z.array(toolDef).optional(),
+    text: z.unknown().optional(),
+    response_format: responseFormat.optional(),
+    temperature: z.number().optional(),
+    top_p: z.number().optional(),
+    max_output_tokens: z.number().int().optional(),
+    max_tokens: z.number().int().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    parallel_tool_calls: z.boolean().optional()
+  })
+  .passthrough()
 
 export const responsesIdParams = z.object({ id: z.string().min(1) })
 
@@ -55,7 +57,7 @@ export const RESPONSES_UNSUPPORTED_PARAMS = [
 export class UnsupportedToolTypeError extends Error {
   readonly toolType: string
 
-  constructor (toolType: string) {
+  constructor(toolType: string) {
     super(`Unsupported tool type "${toolType}" for Responses API.`)
     this.name = 'UnsupportedToolTypeError'
     this.toolType = toolType
@@ -63,20 +65,20 @@ export class UnsupportedToolTypeError extends Error {
 }
 
 export class InvalidResponsesConversationError extends Error {
-  constructor () {
+  constructor() {
     super('"conversation" is not supported by this server (no Conversation persistence).')
     this.name = 'InvalidResponsesConversationError'
   }
 }
 
 export class InvalidResponsesBackgroundError extends Error {
-  constructor () {
+  constructor() {
     super('"background": true is not supported; only synchronous responses are available.')
     this.name = 'InvalidResponsesBackgroundError'
   }
 }
 
-export function validateResponsesStatefulOptions (body: Record<string, unknown>): {
+export function validateResponsesStatefulOptions(body: Record<string, unknown>): {
   previousResponseId: string | undefined
   storeEnabled: boolean
 } {
@@ -92,7 +94,9 @@ export function validateResponsesStatefulOptions (body: Record<string, unknown>)
   return { previousResponseId, storeEnabled }
 }
 
-export function extractResponsesResponseFormat (body: Record<string, unknown>): ResponseFormat | undefined {
+export function extractResponsesResponseFormat(
+  body: Record<string, unknown>
+): ResponseFormat | undefined {
   const top = body['response_format']
   if (top !== undefined && top !== null) {
     return extractResponseFormat({ response_format: top } as Record<string, unknown>)
@@ -114,7 +118,9 @@ interface ResponsesFunctionTool {
   parameters?: Record<string, unknown>
 }
 
-export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | undefined): Tool[] | undefined {
+export function openaiResponsesToolsToSdk(
+  tools: ResponsesFunctionTool[] | undefined
+): Tool[] | undefined {
   if (!tools || tools.length === 0) return undefined
 
   return tools
@@ -126,7 +132,9 @@ export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | unde
           type: 'function',
           name,
           description: typeof t.description === 'string' ? t.description : '',
-          parameters: normalizeToolParameters(t.parameters ?? { type: 'object', properties: {} }) as Tool['parameters']
+          parameters: normalizeToolParameters(
+            t.parameters ?? { type: 'object', properties: {} }
+          ) as Tool['parameters']
         }
       }
       throw new UnsupportedToolTypeError(t.type)
@@ -134,21 +142,27 @@ export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | unde
     .filter((t): t is Tool => t !== null)
 }
 
-function inputTextPart (text: string): Record<string, unknown> {
+function inputTextPart(text: string): Record<string, unknown> {
   return { type: 'input_text', text }
 }
 
-function normalizeInputItemId (item: Record<string, unknown>, index: number): Record<string, unknown> {
+function normalizeInputItemId(
+  item: Record<string, unknown>,
+  index: number
+): Record<string, unknown> {
   if (typeof item['id'] === 'string' && item['id'].length > 0) return item
   return { ...item, id: `item_${index}_${crypto.randomUUID()}` }
 }
 
-function responsesFunctionCallItemToAssistantContent (item: Record<string, unknown>): string {
+function responsesFunctionCallItemToAssistantContent(item: Record<string, unknown>): string {
   const name = typeof item['name'] === 'string' ? item['name'] : ''
   const rawArgs = item['arguments']
-  const argsStr = typeof rawArgs === 'string'
-    ? rawArgs
-    : (rawArgs !== null && rawArgs !== undefined ? JSON.stringify(rawArgs) : '{}')
+  const argsStr =
+    typeof rawArgs === 'string'
+      ? rawArgs
+      : rawArgs !== null && rawArgs !== undefined
+        ? JSON.stringify(rawArgs)
+        : '{}'
   let args: Record<string, unknown>
   try {
     args = JSON.parse(argsStr) as Record<string, unknown>
@@ -159,22 +173,26 @@ function responsesFunctionCallItemToAssistantContent (item: Record<string, unkno
   return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
 }
 
-export function normalizeResponsesInputItemsForStorage (input: unknown): unknown[] {
+export function normalizeResponsesInputItemsForStorage(input: unknown): unknown[] {
   if (typeof input === 'string') {
-    return [{
-      type: 'message',
-      id: `item_0_${crypto.randomUUID()}`,
-      role: 'user',
-      content: [inputTextPart(input)]
-    }]
+    return [
+      {
+        type: 'message',
+        id: `item_0_${crypto.randomUUID()}`,
+        role: 'user',
+        content: [inputTextPart(input)]
+      }
+    ]
   }
   if (!Array.isArray(input)) {
-    return [{
-      type: 'message',
-      id: `item_0_${crypto.randomUUID()}`,
-      role: 'user',
-      content: [inputTextPart('')]
-    }]
+    return [
+      {
+        type: 'message',
+        id: `item_0_${crypto.randomUUID()}`,
+        role: 'user',
+        content: [inputTextPart('')]
+      }
+    ]
   }
   return input.map((raw, i) => {
     if (typeof raw === 'string') {
@@ -188,11 +206,16 @@ export function normalizeResponsesInputItemsForStorage (input: unknown): unknown
     if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
       return normalizeInputItemId(raw as Record<string, unknown>, i)
     }
-    return { type: 'message', id: `item_${i}_${crypto.randomUUID()}`, role: 'user', content: [inputTextPart('')] }
+    return {
+      type: 'message',
+      id: `item_${i}_${crypto.randomUUID()}`,
+      role: 'user',
+      content: [inputTextPart('')]
+    }
   })
 }
 
-export function openaiResponsesInputToHistory (
+export function openaiResponsesInputToHistory(
   input: unknown,
   instructions: string | undefined
 ): Array<{ role: string; content: string }> {
@@ -233,21 +256,23 @@ export function openaiResponsesInputToHistory (
     }
     if (t === 'function_call_output') {
       const out = item['output']
-      const text = typeof out === 'string'
-        ? out
-        : (out !== null && out !== undefined ? JSON.stringify(out) : '')
+      const text =
+        typeof out === 'string' ? out : out !== null && out !== undefined ? JSON.stringify(out) : ''
       history.push({ role: 'tool', content: text })
       continue
     }
     if (t === 'function_call') {
-      history.push({ role: 'assistant', content: responsesFunctionCallItemToAssistantContent(item) })
+      history.push({
+        role: 'assistant',
+        content: responsesFunctionCallItemToAssistantContent(item)
+      })
     }
   }
 
   return history
 }
 
-function flattenResponsesContent (content: unknown): string {
+function flattenResponsesContent(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   const parts: string[] = []
@@ -270,7 +295,7 @@ export interface StoredResponseLike {
 
 export const RESPONSES_HISTORY_MAX_DEPTH = 32
 
-export function historyPrefixFromStoredResponse (
+export function historyPrefixFromStoredResponse(
   stored: StoredResponseLike,
   resolve?: (id: string) => StoredResponseLike | undefined,
   maxDepth: number = RESPONSES_HISTORY_MAX_DEPTH
@@ -298,9 +323,8 @@ export function historyPrefixFromStoredResponse (
       prefix.push({ role: 'user', content: text })
     } else if (item['type'] === 'function_call_output') {
       const out = item['output']
-      const text = typeof out === 'string'
-        ? out
-        : (out !== null && out !== undefined ? JSON.stringify(out) : '')
+      const text =
+        typeof out === 'string' ? out : out !== null && out !== undefined ? JSON.stringify(out) : ''
       prefix.push({ role: 'tool', content: text })
     } else if (item['type'] === 'function_call') {
       prefix.push({ role: 'assistant', content: responsesFunctionCallItemToAssistantContent(item) })
@@ -319,7 +343,8 @@ export function historyPrefixFromStoredResponse (
         prefix.push({ role: 'assistant', content: text })
       } else if (o['type'] === 'function_call') {
         const name = typeof o['name'] === 'string' ? o['name'] : ''
-        const args = typeof o['arguments'] === 'string' ? o['arguments'] : JSON.stringify(o['arguments'] ?? {})
+        const args =
+          typeof o['arguments'] === 'string' ? o['arguments'] : JSON.stringify(o['arguments'] ?? {})
         prefix.push({
           role: 'assistant',
           content: `<tool_call>\n${JSON.stringify({ name, arguments: safeJsonParse(args) })}\n</tool_call>`
@@ -336,7 +361,7 @@ export function historyPrefixFromStoredResponse (
   return prefix
 }
 
-function safeJsonParse (s: string): Record<string, unknown> {
+function safeJsonParse(s: string): Record<string, unknown> {
   try {
     return JSON.parse(s) as Record<string, unknown>
   } catch {
@@ -344,7 +369,7 @@ function safeJsonParse (s: string): Record<string, unknown> {
   }
 }
 
-function extractOutputTextFromMessage (msg: Record<string, unknown>): string {
+function extractOutputTextFromMessage(msg: Record<string, unknown>): string {
   const content = msg['content']
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
@@ -375,18 +400,23 @@ export interface SdkResponsesArgs {
   stream: boolean
 }
 
-export function toSdkResponsesArgs (body: ResponsesBody): SdkResponsesArgs {
-  const { previousResponseId, storeEnabled } = validateResponsesStatefulOptions(body as Record<string, unknown>)
-  const tools = openaiResponsesToolsToSdk(body.tools as Parameters<typeof openaiResponsesToolsToSdk>[0])
+export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
+  const { previousResponseId, storeEnabled } = validateResponsesStatefulOptions(
+    body as Record<string, unknown>
+  )
+  const tools = openaiResponsesToolsToSdk(
+    body.tools as Parameters<typeof openaiResponsesToolsToSdk>[0]
+  )
   const responseFmt = extractResponsesResponseFormat(body as Record<string, unknown>)
   const instructions = typeof body.instructions === 'string' ? body.instructions : undefined
   const inputItems = normalizeResponsesInputItemsForStorage(body.input)
   const history = openaiResponsesInputToHistory(body.input, instructions)
 
   const meta = body.metadata
-  const metadata = meta !== undefined && meta !== null && typeof meta === 'object' && !Array.isArray(meta)
-    ? meta as Record<string, unknown>
-    : undefined
+  const metadata =
+    meta !== undefined && meta !== null && typeof meta === 'object' && !Array.isArray(meta)
+      ? (meta as Record<string, unknown>)
+      : undefined
 
   const parallel = body.parallel_tool_calls
   const parallelToolCalls = typeof parallel === 'boolean' ? parallel : true
@@ -402,9 +432,12 @@ export function toSdkResponsesArgs (body: ResponsesBody): SdkResponsesArgs {
     metadata,
     temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
     topP: typeof body.top_p === 'number' ? body.top_p : undefined,
-    maxOutputTokens: typeof body.max_output_tokens === 'number'
-      ? body.max_output_tokens
-      : (typeof body.max_tokens === 'number' ? body.max_tokens : undefined),
+    maxOutputTokens:
+      typeof body.max_output_tokens === 'number'
+        ? body.max_output_tokens
+        : typeof body.max_tokens === 'number'
+          ? body.max_tokens
+          : undefined,
     parallelToolCalls,
     stream: Boolean(body.stream)
   }

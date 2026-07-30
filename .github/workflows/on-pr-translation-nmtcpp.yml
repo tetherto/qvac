@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -15,7 +16,6 @@ on:
     paths:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
-      - ".github/actions/cache-models/**"
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,7 @@ env:
   PKG_DIR: packages/translation-nmtcpp
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -52,6 +52,46 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -83,7 +123,7 @@ jobs:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
   verify-fabric-lockstep:
-    needs: [authorize, changes]
+    needs: [fork-approval, authorize, changes]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
@@ -99,11 +139,13 @@ jobs:
 
   sanity-checks:
     needs:
+      - fork-approval
       - authorize
       - changes
       - verify-fabric-lockstep
+      - ci-router
       - label-gate
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -120,7 +162,7 @@ jobs:
           workdir: packages/translation-nmtcpp
 
   ts-checks:
-    needs: [authorize, changes, sanity-checks]
+    needs: [fork-approval, authorize, changes, sanity-checks]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
@@ -143,12 +185,14 @@ jobs:
 
   cpp-lint:
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
+      - ci-router
       - label-gate
     if: |-
-      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -158,9 +202,11 @@ jobs:
 
   cpp-tests:
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
+      - ci-router
       - label-gate
     permissions:
       contents: read
@@ -168,12 +214,69 @@ jobs:
       pull-requests: write
       id-token: write
     if: |-
-      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      always() && !cancelled() && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
     secrets: inherit
     with:
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+  detect-native-changes:
+    needs:
+      - fork-approval
+      - authorize
+      - changes
+      - ci-router
+      - label-gate
+    if: |-
+      always() && !cancelled() && needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/translation-nmtcpp
+
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - fork-approval
+      - detect-native-changes
+      - sanity-checks
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-translation-nmtcpp.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   prebuild:
     permissions:
@@ -182,27 +285,58 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - changes
+      - ci-router
       - sanity-checks
+      - detect-native-changes
+      - prebuild-artifact-reuse
       - label-gate
     if: |-
-      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      always() && !cancelled() && needs.sanity-checks.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+  prebuild-artifact-save:
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs:
+      - fork-approval
+      - prebuild
+      - detect-native-changes
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
       - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
       - label-gate
     if: |-
-      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
       packages: read
@@ -211,7 +345,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -220,24 +354,27 @@ jobs:
       pull-requests: write # Allow commenting on PRs
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
       - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
       - label-gate
     if: |-
-      always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   merge-guard:
-    needs: [authorize, changes, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, changes, ci-router, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') && needs.ts-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

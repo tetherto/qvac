@@ -4,6 +4,119 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `ocr-ggml.js`, `addonLogging.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and OCR output are unchanged.
+
+## [0.13.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
+## [0.12.2] - 2026-07-21
+
+### Fixed
+
+- The C++ → JS logger callback in `ocr-ggml.js` invoked the logger method detached from its instance (`const write = transitionCb[level]; write(message)`), introduced by the TypeScript-wrapper migration. `QvacLogger` methods use `this` internally, so the first native-side log line crashed with `Cannot read properties of undefined (reading '_log')`. The callback now invokes `transitionCb[level](message)` as a method, restoring the pre-migration behavior (same bug class as the translation-nmtcpp Bergamot e2e failure).
+
+## [0.12.1] - 2026-07-20
+
+### Fixed
+
+- `addonLogging.d.ts` now exports the `AddonLogging` interface. The TypeScript-wrapper migration left it unexported behind an `export =` value, so consumers that embed the logging surface in an exported declaration (such as an SDK plugin returning it from `definePlugin`) failed declaration emit with TS4023. The wrapper now exports the value with `export default` and an explicit `module.exports = addonLogging`, matching the other migrated addon wrappers and keeping the bare CommonJS runtime shape unchanged.
+
+## [0.12.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.11.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.10.2] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (clip flash-attention AUTO fallback on non-coopmat GPUs + bounded ggml-opencl driver submissions — fixes Android vision-encoder crashes on very large encodes; no API change for this package).
+
+## [0.10.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.10.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
+## [0.9.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking for i8mm/AVX2 GEMM; no API change for this package).
+
+## [0.8.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.0` → `9341.1.3` (Gemma-4 E2B vision-encoder Arm Mali/Vulkan attention speedup + encoder token-count fix; no API change for this package).
+
+### Pull Requests
+
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
+
+## [0.7.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+## [0.7.0] - 2026-06-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0` (Qwen3.5-VL multi-tile batching; no API change for this package).
+
+## Pull Requests
+
+- [#2841](https://github.com/tetherto/qvac/pull/2841) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (ocr-ggml)
+
+## [0.6.0] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.5.0] - 2026-06-22
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `9341.0.0`, which enables `GGML_BACKEND_DL` dynamic backend loading on desktop Linux: the Vulkan GPU backend and runtime-dispatched CPU micro-architecture variants now load as standalone modules from `prebuilds`. No public API change. (PR [#2733](https://github.com/tetherto/qvac/pull/2733))
+
 ## [0.4.0] - 2026-06-19
 
 ### Added

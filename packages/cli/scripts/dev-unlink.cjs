@@ -20,7 +20,7 @@ const { spawnSync } = require('node:child_process')
 const CLI_DIR = path.resolve(__dirname, '..')
 const FILES = ['package.json']
 
-function run (cmd, args, opts = {}) {
+function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, {
     cwd: CLI_DIR,
     stdio: 'inherit',
@@ -31,7 +31,7 @@ function run (cmd, args, opts = {}) {
   }
 }
 
-function prompt (question) {
+function prompt(question) {
   return new Promise((resolve) => {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -44,10 +44,10 @@ function prompt (question) {
   })
 }
 
-async function main () {
+async function main() {
   console.log(
     'dev:unlink will restore packages/cli/package.json to its committed state\n' +
-    'and re-run `npm install` (regenerating package-lock.json).\n'
+      'and re-run `npm install` (regenerating package-lock.json).\n'
   )
 
   if (process.stdin.isTTY && !process.env['DEV_UNLINK_YES']) {

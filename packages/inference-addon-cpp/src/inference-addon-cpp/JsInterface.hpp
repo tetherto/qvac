@@ -12,6 +12,7 @@
 #include "JsLogger.hpp"
 #include "JsUtils.hpp"
 #include "ModelInterfaces.hpp"
+#include "Pin.hpp"
 #include "addon/AddonJs.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
@@ -137,6 +138,26 @@ public:
     }
     return js::Number(env_, args_[argIndex]).as<CppNumberType>(env_);
   }
+
+  /// @brief Like getIntegralOptional, but the number is parsed through
+  /// js::Number::asChecked: it must be a finite, non-negative integer
+  /// <= 2^53 - 1, anything else throws InvalidArgument instead of being
+  /// truncated by the cast. Use for untrusted numbers that address or size
+  /// native state (job ids, counts, indices).
+  template <typename CppNumberType>
+  std::optional<CppNumberType> getCheckedIntegralOptional(int argIndex) {
+    static_assert(
+        std::is_integral_v<CppNumberType>,
+        "CppNumberType must be an integral type");
+    if (argIndex < 0 || argIndex >= args_.size()) {
+      return std::nullopt;
+    }
+    if (js::is<js::Null>(env_, args_[argIndex]) ||
+        js::is<js::Undefined>(env_, args_[argIndex])) {
+      return std::nullopt;
+    }
+    return js::Number(env_, args_[argIndex]).asChecked<CppNumberType>(env_);
+  }
 };
 
 using namespace qvac_errors;
@@ -178,6 +199,13 @@ public:
 
   static auto createInstance(js_env_t* env, std::unique_ptr<AddonJs>&& addonJs)
       -> js_value_t* try {
+    // Pin this addon's shared library in memory the first time a model instance
+    // is created, so that bare's dlclose() on worklet.terminate() never unmaps
+    // code that still has thread-local / pthread_key_t destructors registered
+    // (ggml, OpenMP, ...). Without this, the next thread exit after teardown
+    // jumps into unmapped memory and aborts on Android. See Pin.hpp. Idempotent
+    // (runs once per loaded addon).
+    pinAddon();
     std::scoped_lock lock{instancesMtx_};
     auto& handle = instances_.emplace_back(std::move(addonJs));
     return js::External::create(env, handle.get());
@@ -199,6 +227,17 @@ public:
     auto& instance = getInstance(env, argsParser.get(0, "instance"));
     instance.addonCpp->activate();
     return nullptr;
+  }
+  JSCATCH
+
+  /// @returns JS number: active jobs (in-flight + queued) from the scheduler,
+  /// so JS need not maintain its own admission counter.
+  static auto activeJobs(js_env_t* env, js_callback_info_t* info)
+      -> js_value_t* try {
+    JsArgsParser argsParser(env, info);
+    auto& instance = getInstance(env, argsParser.get(0, "instance"));
+    return js::Number::create(
+        env, static_cast<double>(instance.addonCpp->activeJobs()));
   }
   JSCATCH
 
@@ -260,26 +299,36 @@ public:
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);
     auto handle = argsParser.getRawPointer(0, "instance");
-    std::scoped_lock lockGuard{instancesMtx_};
-    auto found = std::find_if(
-        instances_.begin(),
-        instances_.end(),
-        [handle](auto& instanceUniquePtr) {
-          return static_cast<void*>(instanceUniquePtr.get()) == handle;
-        });
-    if (found == instances_.end()) {
-      throw StatusError(general_error::InvalidArgument, "Invalid handle");
+    std::unique_ptr<AddonJs> removed;
+    {
+      std::scoped_lock lockGuard{instancesMtx_};
+      auto found = std::find_if(
+          instances_.begin(),
+          instances_.end(),
+          [handle](auto& instanceUniquePtr) {
+            return static_cast<void*>(instanceUniquePtr.get()) == handle;
+          });
+      if (found == instances_.end()) {
+        throw StatusError(general_error::InvalidArgument, "Invalid handle");
+      }
+      removed = std::move(*found);
+      instances_.erase(found);
     }
-    instances_.erase(found);
+    // Destroyed outside instancesMtx_: teardown delivers the remaining output
+    // events synchronously, and a callback that re-enters a binding taking
+    // the mutex (getInstance, create/destroyInstance) must not deadlock.
+    removed.reset();
     return nullptr;
   }
   JSCATCH
 
+  /// Cancel jobs. Arg 1 is an optional job id: omitted (or null/undefined)
+  /// cancels every job, a number cancels only that job.
   static auto cancel(js_env_t* env, js_callback_info_t* info)
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);
     auto& instance = getInstance(env, argsParser.get(0, "instance"));
-    return instance.cancelJob();
+    return instance.cancelJob(argsParser.getCheckedIntegralOptional<JobId>(1));
   }
   JSCATCH
 };

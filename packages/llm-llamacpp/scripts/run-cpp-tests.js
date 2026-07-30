@@ -7,15 +7,15 @@ const { spawnSync } = require('child_process')
 
 const { ensureUnitTestModels } = require('./download-unit-test-models')
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const flags = new Set(['--coverage', '--ci'])
   const coverage = argv.includes('--coverage')
   const ciOnly = argv.includes('--ci')
-  const gtestArgs = argv.filter(arg => !flags.has(arg))
+  const gtestArgs = argv.filter((arg) => !flags.has(arg))
   return { coverage, ciOnly, gtestArgs }
 }
 
-async function main () {
+async function main() {
   const { coverage, ciOnly, gtestArgs } = parseArgs(process.argv.slice(2))
 
   await ensureUnitTestModels({ ciOnly })
@@ -30,10 +30,7 @@ async function main () {
     env.LLVM_PROFILE_FILE = env.LLVM_PROFILE_FILE || 'default.profraw'
   }
 
-  const result = spawnSync(binary, [
-    '--gtest_output=xml:cpp-test-results.xml',
-    ...gtestArgs
-  ], {
+  const result = spawnSync(binary, ['--gtest_output=xml:cpp-test-results.xml', ...gtestArgs], {
     cwd,
     stdio: 'inherit',
     shell: false,

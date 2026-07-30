@@ -24,18 +24,20 @@ const QvacResponse = require('../QvacResponse')
  *   this._job.output(data)
  *   this._job.end(stats)
  */
-function createJobHandler (opts) {
+function createJobHandler(opts) {
   let active = null
 
   // Clears `active` whenever the response settles (end / fail / abort), not
   // only on explicit end()/fail(). Identity-guarded against stale-replace
   // races so a late settle on a stale response can't clobber a newer active.
+  // Registered as a settlement hook, not as 'end'/'error' listeners: hooks
+  // run before public listeners, so a prepended listener that throws cannot
+  // abort the emit loop ahead of this cleanup and leave a settled response
+  // active.
   const bindCleanup = (response) => {
-    const clearIfCurrent = () => {
+    response._onSettled(() => {
       if (active === response) active = null
-    }
-    response.onFinish(clearIfCurrent)
-    response.onError(clearIfCurrent)
+    })
   }
 
   return {
@@ -50,7 +52,7 @@ function createJobHandler (opts) {
      *   abort `reason` becomes the response error (passed through unchanged when it's an Error).
      * @returns {QvacResponse}
      */
-    start (runOpts) {
+    start(runOpts) {
       if (active) {
         active.failed(new Error('Stale job replaced by new run'))
         active = null
@@ -74,7 +76,7 @@ function createJobHandler (opts) {
      * @param {QvacResponse} response
      * @returns {QvacResponse} The same response, for convenience.
      */
-    startWith (response) {
+    startWith(response) {
       if (active) {
         active.failed(new Error('Stale job replaced by new run'))
         active = null
@@ -91,7 +93,7 @@ function createJobHandler (opts) {
      *
      * @param {*} data
      */
-    output (data) {
+    output(data) {
       if (!active) return
       active.updateOutput(data)
     },
@@ -103,17 +105,20 @@ function createJobHandler (opts) {
      * @param {*} [stats] - If provided (non-null), forwarded via updateStats() before ending.
      * @param {*} [result] - If provided, passed to ended(result). Otherwise ended() uses default (output array).
      */
-    end (stats, result) {
+    end(stats, result) {
       if (!active) return
       const ref = active
       active = null
-      if (stats != null) {
-        ref.updateStats(stats)
-      }
-      if (result !== undefined) {
-        ref.ended(result)
-      } else {
-        ref.ended()
+      try {
+        if (stats != null) {
+          ref.updateStats(stats)
+        }
+      } finally {
+        if (result !== undefined) {
+          ref.ended(result)
+        } else {
+          ref.ended()
+        }
       }
     },
 
@@ -122,7 +127,7 @@ function createJobHandler (opts) {
      *
      * @param {Error|string} error
      */
-    fail (error) {
+    fail(error) {
       if (!active) return
       const ref = active
       active = null
@@ -133,7 +138,7 @@ function createJobHandler (opts) {
      * Returns the current active QvacResponse, or null if idle.
      * @type {QvacResponse|null}
      */
-    get active () {
+    get active() {
       return active
     }
   }

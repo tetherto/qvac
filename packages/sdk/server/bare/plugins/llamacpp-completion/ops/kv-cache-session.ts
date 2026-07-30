@@ -1,25 +1,25 @@
-import { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
+import { promises as fsPromises } from 'bare-fs'
+import path from 'bare-path'
 import {
   findMatchingCache,
   generateConfigHash,
   getCacheFilePath,
   getCurrentCacheInfo,
   renameCacheFile,
-  deleteCache as deleteCacheUtil,
-} from "@/server/bare/ops/kv-cache-utils";
-import type { CacheMessage } from "@/server/utils";
+  deleteCache as deleteCacheUtil
+} from '@/server/bare/ops/kv-cache-utils'
+import type { CacheMessage } from '@/server/utils'
 import {
   logCacheSaveError,
-  logCacheStatus,
-} from "@/server/bare/plugins/llamacpp-completion/ops/cache-logger";
-import { getServerLogger } from "@/logging";
-import type { Logger } from "@/logging/types";
+  logCacheStatus
+} from '@/server/bare/plugins/llamacpp-completion/ops/cache-logger'
+import { getServerLogger } from '@/logging'
+import type { Logger } from '@/logging/types'
 
 // Used by cross-model paths that have no `RequestContext` (e.g.
 // `deleteKvCacheState`). Per-session call sites receive a logger from
 // the caller — typically `withRequestContext(...)`.
-const moduleLogger = getServerLogger();
+const moduleLogger = getServerLogger()
 
 /**
  * Single owner of the three KV-cache bookkeeping layers.
@@ -77,7 +77,7 @@ const moduleLogger = getServerLogger();
  * trustworthy. Cancelled or zero-token turns must remove the entry so
  * the next-turn slice doesn't read a stale boundary.
  */
-const cachedMessageCounts = new Map<string, number>();
+const cachedMessageCounts = new Map<string, number>()
 
 /**
  * In-memory registry of caches initialized this session. The addon
@@ -86,76 +86,72 @@ const cachedMessageCounts = new Map<string, number>();
  * by `${modelId}:${configHash}:${cacheKey}`, so on-disk caches from
  * older worker runs still hit the lazy-load path in `beginTurn`.
  */
-const initializedCaches = new Set<string>();
+const initializedCaches = new Set<string>()
 
-function initRegistryKey(
-  modelId: string,
-  configHash: string,
-  cacheKey: string,
-): string {
-  return `${modelId}:${configHash}:${cacheKey}`;
+function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
+  return `${modelId}:${configHash}:${cacheKey}`
 }
 
 // ----- public types -----
 
 export interface TurnHandle {
   /** Resolved on-disk cache file path the addon will read from / write to. */
-  readonly cachePath: string;
+  readonly cachePath: string
   /**
    * Snapshot of the on-disk saved-message count at `beginTurn` time
    * (0 if the cache was just primed). Consumed by `decideCachedHistorySlice`
    * to pick the message tail for the next addon call.
    */
-  readonly savedCount: number;
+  readonly savedCount: number
 }
 
 export interface BeginCustomTurnInput {
-  kind: "custom";
+  kind: 'custom'
   /** User-provided session key (`completion({ kvCache: "session-a" })`). */
-  customKey: string;
+  customKey: string
   /** Hash of system prompt + (static) tool names. */
-  configHash: string;
+  configHash: string
   /**
    * Prime the cache by sending system prompt + (static) tools to the
    * addon. Called when the cache doesn't exist in-memory OR on disk.
    * Kept as an injected closure so this module has no dependency on the
    * model registry / addon — the handler closes over `model` and tools.
    */
-  primeIfMissing: (cachePath: string) => Promise<void>;
+  primeIfMissing: (cachePath: string) => Promise<void>
 }
 
 export interface BeginAutoTurnInput {
-  kind: "auto";
+  kind: 'auto'
   /** Hash of system prompt + (static) tool names. */
-  configHash: string;
+  configHash: string
   /** Conversation history used to compute the pre-response cache key. */
-  history: CacheMessage[];
+  history: CacheMessage[]
   /** See `BeginCustomTurnInput.primeIfMissing`. */
-  primeIfMissing: (cachePath: string) => Promise<void>;
+  primeIfMissing: (cachePath: string) => Promise<void>
 }
 
-export type BeginTurnInput = BeginCustomTurnInput | BeginAutoTurnInput;
+export type BeginTurnInput = BeginCustomTurnInput | BeginAutoTurnInput
 
 export interface StaticCommitResult {
-  kind: "static";
+  kind: 'static'
   /** `history.length + 1` — recorded at the turn's current `cachePath`. */
-  messageCount: number;
+  messageCount: number
 }
 
 export interface AutoRenameCommitResult {
-  kind: "autoRename";
+  kind: 'autoRename'
   /**
    * Destination path the addon's pre-response cache file should be
    * renamed to (computed from `cacheMessages + responseText`). The
    * stale entry at the source path is dropped from `cachedMessageCounts`
    * and the new count is recorded at this target path.
    */
-  targetCachePath: string;
+  targetCachePath: string
   /** Number of messages the renamed cache represents (`savedHistory.length`). */
-  messageCount: number;
+  messageCount: number
 }
 
-export type CommitResult = StaticCommitResult | AutoRenameCommitResult;
+export type CommitResult = StaticCommitResult | AutoRenameCommitResult
 
 export interface KvCacheSession {
   /**
@@ -165,7 +161,7 @@ export interface KvCacheSession {
    * `TurnHandle` the handler attaches to `ctx.scope.defer(...)` for the
    * rollback hook.
    */
-  beginTurn(input: BeginTurnInput): Promise<TurnHandle>;
+  beginTurn(input: BeginTurnInput): Promise<TurnHandle>
 
   /**
    * Commit a successful turn — records the new saved-message count,
@@ -174,7 +170,7 @@ export interface KvCacheSession {
    * turn's internal `committed` flag so the deferred `rollback` becomes
    * a no-op on the happy path.
    */
-  commitTurn(turn: TurnHandle, result: CommitResult): Promise<void>;
+  commitTurn(turn: TurnHandle, result: CommitResult): Promise<void>
 
   /**
    * Roll back an in-flight turn — atomically deletes the on-disk cache
@@ -185,7 +181,7 @@ export interface KvCacheSession {
    * this via `ctx.scope.defer(...)` so it runs regardless of how the
    * handler exits (success branch removes itself via `commitTurn`).
    */
-  rollback(turn: TurnHandle): Promise<void>;
+  rollback(turn: TurnHandle): Promise<void>
 
   /**
    * Forget the in-memory saved-message count for the turn's path
@@ -194,16 +190,16 @@ export interface KvCacheSession {
    * (`clearStaleCount: true`) — the next turn re-sends the full history
    * but the cache itself is still usable.
    */
-  dropStaleSavedCount(turn: TurnHandle): void;
+  dropStaleSavedCount(turn: TurnHandle): void
 }
 
 interface InternalTurnState {
-  cachePath: string;
-  registryKey: string;
+  cachePath: string
+  registryKey: string
   /** Flipped by `commitTurn`; consulted at the top of `rollback`. */
-  committed: boolean;
+  committed: boolean
   /** Flipped at the end of `rollback`; protects against double-rollback. */
-  rolledBack: boolean;
+  rolledBack: boolean
 }
 
 // ----- factory -----
@@ -216,63 +212,55 @@ interface InternalTurnState {
  */
 export function createKvCacheSession(
   modelId: string,
-  options?: { logger?: Logger },
+  options?: { logger?: Logger }
 ): KvCacheSession {
-  const logger = options?.logger ?? moduleLogger;
+  const logger = options?.logger ?? moduleLogger
   // Per-session map: each `TurnHandle` carries an opaque entry here. A
   // WeakMap so handles drop their state once the handler scope releases
   // the reference; the module-scoped maps above survive.
-  const turnState = new WeakMap<TurnHandle, InternalTurnState>();
+  const turnState = new WeakMap<TurnHandle, InternalTurnState>()
 
   function makeHandle(cachePath: string, registryKey: string): TurnHandle {
     const handle: TurnHandle = {
       cachePath,
-      savedCount: cachedMessageCounts.get(cachePath) ?? 0,
-    };
+      savedCount: cachedMessageCounts.get(cachePath) ?? 0
+    }
     turnState.set(handle, {
       cachePath,
       registryKey,
       committed: false,
-      rolledBack: false,
-    });
-    return handle;
+      rolledBack: false
+    })
+    return handle
   }
 
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
-    const cachePath = await getCacheFilePath(
-      modelId,
-      input.configHash,
-      input.customKey,
-    );
-    const registryKey = initRegistryKey(
-      modelId,
-      input.configHash,
-      input.customKey,
-    );
+    const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
+    const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
 
     // In-memory registry check first — the addon defers disk writes, so
     // a freshly-primed cache may not yet exist on disk. If the
     // in-memory flag isn't set, fall back to a filesystem probe so
     // caches surviving across worker restarts still hit the reuse path.
-    let exists = initializedCaches.has(registryKey);
+    let exists = initializedCaches.has(registryKey)
     if (!exists) {
       try {
-        await fsPromises.access(cachePath);
-        exists = true;
-        initializedCaches.add(registryKey);
+        await fsPromises.access(cachePath)
+        exists = true
+        initializedCaches.add(registryKey)
       } catch {
-        exists = false;
+        exists = false
       }
     }
-    logCacheStatus(input.customKey, exists);
+    logCacheStatus(input.customKey, exists)
 
     if (!exists) {
-      await input.primeIfMissing(cachePath);
-      await verifyPrimedFile(cachePath, logger);
-      initializedCaches.add(registryKey);
+      await input.primeIfMissing(cachePath)
+      await verifyPrimedFile(cachePath, logger)
+      initializedCaches.add(registryKey)
     }
 
-    return makeHandle(cachePath, registryKey);
+    return makeHandle(cachePath, registryKey)
   }
 
   async function beginAuto(input: BeginAutoTurnInput): Promise<TurnHandle> {
@@ -281,79 +269,57 @@ export function createKvCacheSession(
     // internally. The post-response key (used after a successful turn)
     // is computed by the caller and passed to `commitTurn` as
     // `targetCachePath`.
-    const existingCache = await findMatchingCache(
-      modelId,
-      input.configHash,
-      input.history,
-    );
-    const preResponseCacheInfo = await getCurrentCacheInfo(
-      modelId,
-      input.configHash,
-      input.history,
-    );
+    const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
+    const preResponseCacheInfo = await getCurrentCacheInfo(modelId, input.configHash, input.history)
 
     const cachePath =
-      existingCache !== null
-        ? existingCache.cachePath
-        : preResponseCacheInfo.cachePath;
+      existingCache !== null ? existingCache.cachePath : preResponseCacheInfo.cachePath
     const cacheKeyForRegistry =
-      existingCache !== null
-        ? existingCache.cacheKey
-        : preResponseCacheInfo.cacheKey;
-    const registryKey = initRegistryKey(
-      modelId,
-      input.configHash,
-      cacheKeyForRegistry,
-    );
+      existingCache !== null ? existingCache.cacheKey : preResponseCacheInfo.cacheKey
+    const registryKey = initRegistryKey(modelId, input.configHash, cacheKeyForRegistry)
 
-    const cacheExists = existingCache !== null;
-    logCacheStatus("auto", cacheExists);
+    const cacheExists = existingCache !== null
+    logCacheStatus('auto', cacheExists)
 
     if (!cacheExists) {
-      await input.primeIfMissing(cachePath);
-      await verifyPrimedFile(cachePath, logger);
-      initializedCaches.add(registryKey);
+      await input.primeIfMissing(cachePath)
+      await verifyPrimedFile(cachePath, logger)
+      initializedCaches.add(registryKey)
     }
 
-    return makeHandle(cachePath, registryKey);
+    return makeHandle(cachePath, registryKey)
   }
 
   async function beginTurn(input: BeginTurnInput): Promise<TurnHandle> {
-    if (input.kind === "custom") return beginCustom(input);
-    return beginAuto(input);
+    if (input.kind === 'custom') return beginCustom(input)
+    return beginAuto(input)
   }
 
-  async function commitTurn(
-    turn: TurnHandle,
-    result: CommitResult,
-  ): Promise<void> {
-    const state = turnState.get(turn);
+  async function commitTurn(turn: TurnHandle, result: CommitResult): Promise<void> {
+    const state = turnState.get(turn)
     if (!state) {
       // Handle from a different session or already torn down. Treat as
       // no-op — caller shouldn't be reaching into another session's
       // state, but failing loudly here punishes the rollback-after-end
       // path more than it helps.
-      return;
+      return
     }
-    if (state.committed || state.rolledBack) return;
+    if (state.committed || state.rolledBack) return
 
-    if (result.kind === "static") {
+    if (result.kind === 'static') {
       // Custom-key path: the addon wrote the new cache state inline
       // at the same path. Verify the file persisted (the addon
       // currently swallows save errors — see TODO in
       // `verifySaveAndRecord`) and record the new boundary.
-      const ok = await verifySaveAndRecord(
-        state.cachePath,
-        result.messageCount,
-      );
+      const ok = await verifySaveAndRecord(state.cachePath, result.messageCount)
       if (!ok) {
         // The expected save didn't land — treat the turn as a rollback
         // so the next turn re-primes cleanly.
-        await runRollback(state);
-        return;
+        await runRollback(state)
+        return
       }
-      state.committed = true;
-      return;
+      state.committed = true
+      return
     }
 
     // Auto-rename path: the pre-response file is now stale (its key
@@ -361,40 +327,37 @@ export function createKvCacheSession(
     // post-response key and record the new count there.
     if (!(await renameCacheFile(state.cachePath, result.targetCachePath))) {
       logger.warn(
-        `[kv-cache] Auto cache rename failed; rolling back. from=${state.cachePath} to=${result.targetCachePath}`,
-      );
-      await runRollback(state);
-      return;
+        `[kv-cache] Auto cache rename failed; rolling back. from=${state.cachePath} to=${result.targetCachePath}`
+      )
+      await runRollback(state)
+      return
     }
 
     // The source path's entry is gone (the file moved). Drop it and
     // record the new count at the rename target.
-    cachedMessageCounts.delete(state.cachePath);
+    cachedMessageCounts.delete(state.cachePath)
 
-    const ok = await verifySaveAndRecord(
-      result.targetCachePath,
-      result.messageCount,
-    );
+    const ok = await verifySaveAndRecord(result.targetCachePath, result.messageCount)
     if (!ok) {
       // Rename succeeded but the file isn't where we expected. Roll
       // back via the target path instead of the (now-empty) source.
-      state.cachePath = result.targetCachePath;
-      await runRollback(state);
-      return;
+      state.cachePath = result.targetCachePath
+      await runRollback(state)
+      return
     }
 
     // Successful auto-rename. The handle's `cachePath` field still
     // points at the (now-gone) source path — that's fine, the handle
     // is committed and won't roll back. Future turns compute fresh
     // paths.
-    state.committed = true;
+    state.committed = true
   }
 
   async function rollback(turn: TurnHandle): Promise<void> {
-    const state = turnState.get(turn);
-    if (!state) return;
-    if (state.committed || state.rolledBack) return;
-    await runRollback(state);
+    const state = turnState.get(turn)
+    if (!state) return
+    if (state.committed || state.rolledBack) return
+    await runRollback(state)
   }
 
   async function runRollback(state: InternalTurnState): Promise<void> {
@@ -403,29 +366,29 @@ export function createKvCacheSession(
     // the in-memory clear. In practice handlers serialise per model;
     // the order is belt-and-suspenders.
     try {
-      await fsPromises.unlink(state.cachePath);
+      await fsPromises.unlink(state.cachePath)
     } catch (unlinkError) {
       logger.warn(
-        `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
-      );
+        `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
+      )
     }
-    initializedCaches.delete(state.registryKey);
-    cachedMessageCounts.delete(state.cachePath);
-    state.rolledBack = true;
+    initializedCaches.delete(state.registryKey)
+    cachedMessageCounts.delete(state.cachePath)
+    state.rolledBack = true
   }
 
   function dropStaleSavedCount(turn: TurnHandle): void {
-    const state = turnState.get(turn);
-    if (!state) return;
-    cachedMessageCounts.delete(state.cachePath);
+    const state = turnState.get(turn)
+    if (!state) return
+    cachedMessageCounts.delete(state.cachePath)
   }
 
   return {
     beginTurn,
     commitTurn,
     rollback,
-    dropStaleSavedCount,
-  };
+    dropStaleSavedCount
+  }
 }
 
 // ----- module-level administrative API -----
@@ -461,36 +424,36 @@ export function createKvCacheSession(
  * no-op on absent keys).
  */
 export async function deleteKvCacheState(
-  target: { kvCacheKey: string; modelId?: string } | { all: true },
+  target: { kvCacheKey: string; modelId?: string } | { all: true }
 ): Promise<void> {
-  if ("all" in target) {
-    const removed = await deleteCacheUtil({ all: true });
-    cachedMessageCounts.clear();
-    initializedCaches.clear();
+  if ('all' in target) {
+    const removed = await deleteCacheUtil({ all: true })
+    cachedMessageCounts.clear()
+    initializedCaches.clear()
     // `removed` is the kv-cache root dir; surfaces it for ops
     // visibility but isn't part of the contract.
-    moduleLogger.debug(`[kv-cache] Cleared all caches under ${removed}`);
-    return;
+    moduleLogger.debug(`[kv-cache] Cleared all caches under ${removed}`)
+    return
   }
 
   const removedPath = await deleteCacheUtil({
     kvCacheKey: target.kvCacheKey,
-    ...(target.modelId !== undefined && { modelId: target.modelId }),
-  });
+    ...(target.modelId !== undefined && { modelId: target.modelId })
+  })
 
   // Prefix-cleanup the in-memory counts. The on-disk directory tree
   // is `{kvCacheRoot}/{kvCacheKey}[/{modelId}]/`, so every entry in
   // `cachedMessageCounts` whose key is the removed directory itself
   // or sits beneath it must go.
-  clearCachedMessageCountsByPrefix(removedPath, path.sep);
+  clearCachedMessageCountsByPrefix(removedPath, path.sep)
 
   // The in-memory init-set keys are
   // `${modelId}:${configHash}:${kvCacheKey}` — clear by the user-
   // facing kvCacheKey (and optionally narrow by modelId).
   clearInitializedCachesByScope({
     cacheKey: target.kvCacheKey,
-    ...(target.modelId !== undefined && { modelId: target.modelId }),
-  });
+    ...(target.modelId !== undefined && { modelId: target.modelId })
+  })
 }
 
 // ----- private helpers -----
@@ -526,34 +489,29 @@ export async function deleteKvCacheState(
  * `completion-stream.ts` lets the error propagate up and no
  * `initializedCaches` entry is recorded.
  */
-async function verifyPrimedFile(
-  cachePath: string,
-  logger: Logger,
-): Promise<void> {
-  let stats: { size: number };
+async function verifyPrimedFile(cachePath: string, logger: Logger): Promise<void> {
+  let stats: { size: number }
   try {
-    stats = await fsPromises.stat(cachePath);
+    stats = await fsPromises.stat(cachePath)
   } catch (statError) {
     // ENOENT is the common case here — addon prime returned without
     // calling save (most often: signal abort during prefill).
     throw new Error(
-      `[kv-cache] prime closure resolved but no cache file was written. path=${cachePath} cause=${statError instanceof Error ? statError.message : String(statError)}`,
-    );
+      `[kv-cache] prime closure resolved but no cache file was written. path=${cachePath} cause=${statError instanceof Error ? statError.message : String(statError)}`
+    )
   }
   if (stats.size === 0) {
     // Best-effort cleanup so a future probe doesn't trust the empty
     // file. Unlink failure is non-fatal — we still throw on the
     // primary "prime didn't persist" condition.
     try {
-      await fsPromises.unlink(cachePath);
+      await fsPromises.unlink(cachePath)
     } catch (unlinkError) {
       logger.warn(
-        `[kv-cache] Failed to remove empty primed cache file. path=${cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
-      );
+        `[kv-cache] Failed to remove empty primed cache file. path=${cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
+      )
     }
-    throw new Error(
-      `[kv-cache] prime closure resolved but cache file is empty. path=${cachePath}`,
-    );
+    throw new Error(`[kv-cache] prime closure resolved but cache file is empty. path=${cachePath}`)
   }
 }
 
@@ -568,57 +526,54 @@ async function verifyPrimedFile(
  * false), drop the `access()` probe and wrap the `model.run()` call in
  * a real try/catch that forwards the error.
  */
-async function verifySaveAndRecord(
-  cachePath: string,
-  messageCount: number,
-): Promise<boolean> {
+async function verifySaveAndRecord(cachePath: string, messageCount: number): Promise<boolean> {
   try {
-    await fsPromises.access(cachePath);
-    cachedMessageCounts.set(cachePath, messageCount);
-    return true;
+    await fsPromises.access(cachePath)
+    cachedMessageCounts.set(cachePath, messageCount)
+    return true
   } catch (err) {
-    cachedMessageCounts.delete(cachePath);
-    logCacheSaveError(cachePath, err);
-    return false;
+    cachedMessageCounts.delete(cachePath)
+    logCacheSaveError(cachePath, err)
+    return false
   }
 }
 
 function clearCachedMessageCountsByPrefix(prefix: string, sep: string): void {
   if (!prefix) {
-    cachedMessageCounts.clear();
-    return;
+    cachedMessageCounts.clear()
+    return
   }
   for (const key of cachedMessageCounts.keys()) {
     if (key === prefix) {
-      cachedMessageCounts.delete(key);
-      continue;
+      cachedMessageCounts.delete(key)
+      continue
     }
-    if (!key.startsWith(prefix + sep)) continue;
-    cachedMessageCounts.delete(key);
+    if (!key.startsWith(prefix + sep)) continue
+    cachedMessageCounts.delete(key)
   }
 }
 
 function clearInitializedCachesByScope(scope: {
-  cacheKey?: string | undefined;
-  modelId?: string | undefined;
+  cacheKey?: string | undefined
+  modelId?: string | undefined
 }): void {
   if (scope.cacheKey === undefined && scope.modelId === undefined) {
-    initializedCaches.clear();
-    return;
+    initializedCaches.clear()
+    return
   }
   for (const key of initializedCaches) {
-    const firstSep = key.indexOf(":");
-    const secondSep = key.indexOf(":", firstSep + 1);
-    if (firstSep === -1 || secondSep === -1) continue;
-    const entryModelId = key.slice(0, firstSep);
-    const entryCacheKey = key.slice(secondSep + 1);
+    const firstSep = key.indexOf(':')
+    const secondSep = key.indexOf(':', firstSep + 1)
+    if (firstSep === -1 || secondSep === -1) continue
+    const entryModelId = key.slice(0, firstSep)
+    const entryCacheKey = key.slice(secondSep + 1)
     if (scope.cacheKey !== undefined && entryCacheKey !== scope.cacheKey) {
-      continue;
+      continue
     }
     if (scope.modelId !== undefined && entryModelId !== scope.modelId) {
-      continue;
+      continue
     }
-    initializedCaches.delete(key);
+    initializedCaches.delete(key)
   }
 }
 
@@ -635,35 +590,25 @@ function clearInitializedCachesByScope(scope: {
  */
 export const __kvCacheSessionTestHooks = {
   getSavedCount(cachePath: string): number | undefined {
-    return cachedMessageCounts.get(cachePath);
+    return cachedMessageCounts.get(cachePath)
   },
   setSavedCountForTest(cachePath: string, count: number): void {
-    cachedMessageCounts.set(cachePath, count);
+    cachedMessageCounts.set(cachePath, count)
   },
-  hasInitializedKey(
-    modelId: string,
-    configHash: string,
-    cacheKey: string,
-  ): boolean {
-    return initializedCaches.has(
-      initRegistryKey(modelId, configHash, cacheKey),
-    );
+  hasInitializedKey(modelId: string, configHash: string, cacheKey: string): boolean {
+    return initializedCaches.has(initRegistryKey(modelId, configHash, cacheKey))
   },
-  markInitializedForTest(
-    modelId: string,
-    configHash: string,
-    cacheKey: string,
-  ): void {
-    initializedCaches.add(initRegistryKey(modelId, configHash, cacheKey));
+  markInitializedForTest(modelId: string, configHash: string, cacheKey: string): void {
+    initializedCaches.add(initRegistryKey(modelId, configHash, cacheKey))
   },
   resetForTest(): void {
-    cachedMessageCounts.clear();
-    initializedCaches.clear();
-  },
-};
+    cachedMessageCounts.clear()
+    initializedCaches.clear()
+  }
+}
 
 // Re-export `generateConfigHash` from the path utilities so callers of
 // the session can compute the hash without separately importing
 // `kv-cache-utils`. The function itself stays in `kv-cache-utils.ts`
 // (pure, no state) — only the re-export lives here.
-export { generateConfigHash };
+export { generateConfigHash }

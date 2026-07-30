@@ -1,8 +1,8 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from "@/schemas";
-import { deleteKvCacheState } from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session";
-import { getServerLogger } from "@/logging";
+import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas'
+import { deleteKvCacheState } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 /**
  * RPC handler for `deleteCache(...)`. The three KV-cache bookkeeping
@@ -13,29 +13,27 @@ const logger = getServerLogger();
  * `fsPromises.unlink`, the `initializedCaches` set, or the
  * `cachedMessageCounts` map.
  */
-export async function handleDeleteCache(
-  request: DeleteCacheRequest,
-): Promise<DeleteCacheResponse> {
+export async function handleDeleteCache(request: DeleteCacheRequest): Promise<DeleteCacheResponse> {
   try {
-    if ("all" in request && request.all) {
-      await deleteKvCacheState({ all: true });
-    } else if ("kvCacheKey" in request) {
+    if ('all' in request && request.all) {
+      await deleteKvCacheState({ all: true })
+    } else if ('kvCacheKey' in request) {
       await deleteKvCacheState({
         kvCacheKey: request.kvCacheKey,
-        ...(request.modelId !== undefined && { modelId: request.modelId }),
-      });
+        ...(request.modelId !== undefined && { modelId: request.modelId })
+      })
     }
 
     return {
-      type: "deleteCache",
-      success: true,
-    };
+      type: 'deleteCache',
+      success: true
+    }
   } catch (error) {
-    logger.error("Error deleting cache:", error);
+    logger.error('Error deleting cache:', error)
     return {
-      type: "deleteCache",
+      type: 'deleteCache',
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
   }
 }

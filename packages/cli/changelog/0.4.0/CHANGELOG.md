@@ -12,4 +12,3 @@ Release Date: 2026-05-13
 ## 🧹 Chores
 
 - Consolidate PR templates and hide style note in HTML comment — delete the 19 unused per-package `PULL_REQUEST_TEMPLATE.md` files (including `packages/cli/PULL_REQUEST_TEMPLATE.md`) and centralise on `.github/PULL_REQUEST_TEMPLATE/{sdk-pod,addon}.md` plus a minimal default. (see PR [#1924](https://github.com/tetherto/qvac/pull/1924))
-

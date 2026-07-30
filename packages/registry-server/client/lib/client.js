@@ -16,8 +16,14 @@ const fs = require('#fs')
 const DEFAULT_DOWNLOAD_MAX_RETRIES = 3
 const RETRIABLE_DOWNLOAD_CODES = ['REQUEST_TIMEOUT']
 
+// While the app is backgrounded the swarm is suspended; a retry must wait for
+// resume rather than burn its (small) retry budget timing out against a dead
+// swarm. Bounded so a never-resumed runtime still fails instead of hanging.
+const RESUME_WAIT_MAX_MS = 5 * 60 * 1000
+const RESUME_WAIT_POLL_MS = 200
+
 class QVACRegistryClient extends ReadyResource {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     super()
 
     this.logger = new Logger(opts.logger)
@@ -40,7 +46,7 @@ class QVACRegistryClient extends ReadyResource {
     this.ready()
   }
 
-  async _open () {
+  async _open() {
     this.logger.debug('_open called')
 
     this.logger.debug('Opening corestore')
@@ -59,10 +65,13 @@ class QVACRegistryClient extends ReadyResource {
     await this._metadataReady
   }
 
-  async _connectMetadataCore () {
+  async _connectMetadataCore() {
     if (!this.registryCoreKey) {
       this.logger.error('Missing registry core key for read mode')
-      throw new QvacErrorRegistryClient({ code: ERR_CODES.FAILED_TO_CONNECT, adds: 'Missing registry core key. Set QVAC_REGISTRY_CORE_KEY environment variable.' })
+      throw new QvacErrorRegistryClient({
+        code: ERR_CODES.FAILED_TO_CONNECT,
+        adds: 'Missing registry core key. Set QVAC_REGISTRY_CORE_KEY environment variable.'
+      })
     }
 
     const viewKey = IdEnc.decode(this.registryCoreKey)
@@ -90,15 +99,18 @@ class QVACRegistryClient extends ReadyResource {
     })
   }
 
-  async _ensureMetadata () {
+  async _ensureMetadata() {
     await this.ready()
     await this._metadataReady
     if (!this.db) {
-      throw new QvacErrorRegistryClient({ code: ERR_CODES.FAILED_TO_CONNECT, adds: 'Registry database not available.' })
+      throw new QvacErrorRegistryClient({
+        code: ERR_CODES.FAILED_TO_CONNECT,
+        adds: 'Registry database not available.'
+      })
     }
   }
 
-  async getModel (path, source) {
+  async getModel(path, source) {
     this._validateString(path, 'path')
     this._validateString(source, 'source')
 
@@ -115,7 +127,7 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
-  async findModels (query = {}, opts = {}) {
+  async findModels(query = {}, opts = {}) {
     await this._ensureMetadata()
     const { includeDeprecated = false } = opts
     this.logger.debug('findModels called', { query, includeDeprecated })
@@ -123,25 +135,25 @@ class QVACRegistryClient extends ReadyResource {
     let models = await this.db.findModelsByPath(query).toArray()
 
     if (!includeDeprecated) {
-      models = models.filter(m => !m.deprecated)
+      models = models.filter((m) => !m.deprecated)
     }
 
     return models
   }
 
-  async findModelsByEngine (query = {}) {
+  async findModelsByEngine(query = {}) {
     await this._ensureMetadata()
     this.logger.debug('findModelsByEngine called', { query })
     return this.db.findModelsByEngine(query).toArray()
   }
 
-  async findModelsByName (query = {}) {
+  async findModelsByName(query = {}) {
     await this._ensureMetadata()
     this.logger.debug('findModelsByName called', { query })
     return this.db.findModelsByName(query).toArray()
   }
 
-  async findModelsByQuantization (query = {}) {
+  async findModelsByQuantization(query = {}) {
     await this._ensureMetadata()
     this.logger.debug('findModelsByQuantization called', { query })
     return this.db.findModelsByQuantization(query).toArray()
@@ -157,19 +169,19 @@ class QVACRegistryClient extends ReadyResource {
    * @param {boolean} [params.includeDeprecated=false] - Include deprecated models
    * @returns {Promise<Array>} Array of matching models
    */
-  async findBy (params = {}) {
+  async findBy(params = {}) {
     await this._ensureMetadata()
     this.logger.debug('findBy called', { params })
     return this.db.findBy(params)
   }
 
-  _validateString (value, name) {
+  _validateString(value, name) {
     if (typeof value !== 'string' || value.length === 0) {
       throw new Error(`Invalid ${name}: ${value}`)
     }
   }
 
-  async _checkBlobProgress (core, blobPointer) {
+  async _checkBlobProgress(core, blobPointer) {
     const totalBlocks = blobPointer.blockLength
     const totalBytes = blobPointer.byteLength
 
@@ -186,7 +198,7 @@ class QVACRegistryClient extends ReadyResource {
     return { cachedBlocks, totalBlocks, totalBytes }
   }
 
-  async _getBlobsCore (blobsCoreKey) {
+  async _getBlobsCore(blobsCoreKey) {
     let keyBuffer
     if (Buffer.isBuffer(blobsCoreKey)) {
       keyBuffer = blobsCoreKey
@@ -209,7 +221,82 @@ class QVACRegistryClient extends ReadyResource {
     return { core, blobs }
   }
 
-  async downloadModel (path, source, options = {}) {
+  /**
+   * Blocks while the swarm is suspended (app backgrounded), so a retry does not
+   * fire against a swarm that cannot connect yet and exhaust the retry budget.
+   * Bounded by RESUME_WAIT_MAX_MS; returns (and lets the retry proceed/fail) if
+   * the runtime never resumes.
+   */
+  async _waitForSwarmResumed(signal) {
+    if (!this.hyperswarm || !this.hyperswarm.suspended) return
+
+    const start = Date.now()
+    while (this.hyperswarm.suspended) {
+      if (signal && signal.aborted) throw new Error('Download cancelled')
+      if (Date.now() - start > RESUME_WAIT_MAX_MS) {
+        this.logger.warn('Swarm still suspended after resume wait; retrying anyway')
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, RESUME_WAIT_POLL_MS))
+    }
+  }
+
+  /**
+   * Blocks until at least one peer is replicating the core, so a retry after a
+   * network drop waits for the network to actually return instead of firing
+   * (and timing out) against zero peers and burning the retry budget. Bounded
+   * by RESUME_WAIT_MAX_MS. No-op when peer info is unavailable.
+   */
+  async _waitForPeers(core, signal) {
+    if (!core || !Array.isArray(core.peers)) return
+    if (core.peers.length > 0) return
+
+    const start = Date.now()
+    while (core.peers.length === 0) {
+      if (signal && signal.aborted) throw new Error('Download cancelled')
+      if (Date.now() - start > RESUME_WAIT_MAX_MS) {
+        this.logger.warn('No peers after reconnect wait; retrying anyway')
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, RESUME_WAIT_POLL_MS))
+    }
+  }
+
+  /**
+   * Re-establish peers for a blobs core before retrying a download. After the
+   * app backgrounds (or the network drops) the swarm connection for this core
+   * is gone; this waits for the swarm to resume and for a peer to be replicating
+   * the core, then re-runs the join + findingPeers + update sequence and awaits
+   * it. Resume itself is cheap: the next attempt reuses the blocks already
+   * cached in the core (the output file is re-streamed from those blocks, not
+   * appended to).
+   *
+   * Honours `signal`: a foreground cancel during the (bounded but up to
+   * RESUME_WAIT_MAX_MS) swarm/peer waits aborts promptly instead of blocking
+   * until peers return or the cap elapses.
+   */
+  async _reconnectCore(core, signal) {
+    if (!core || !this.hyperswarm) return
+    if (signal && signal.aborted) throw new Error('Download cancelled')
+
+    await this._waitForSwarmResumed(signal)
+
+    this.logger.debug('Re-establishing peers before download retry', {
+      discoveryKey: IdEnc.normalize(core.discoveryKey)
+    })
+
+    const done = core.findingPeers()
+    this.hyperswarm.join(core.discoveryKey, { client: true, server: false })
+    try {
+      await this.hyperswarm.flush()
+    } finally {
+      done()
+    }
+    await this._waitForPeers(core, signal)
+    await core.update()
+  }
+
+  async downloadModel(path, source, options = {}) {
     this._validateString(path, 'path')
     this._validateString(source, 'source')
 
@@ -217,7 +304,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs
+    let core, blobs, blockStart, blockEnd, rangeDownload
 
     try {
       this.logger.info('Downloading model', { path, source })
@@ -225,11 +312,17 @@ class QVACRegistryClient extends ReadyResource {
 
       const model = await this.getModel(path, source)
       if (!model) {
-        throw new QvacErrorRegistryClient({ code: ERR_CODES.MODEL_NOT_FOUND, adds: `Model not found: ${path} (source: ${source})` })
+        throw new QvacErrorRegistryClient({
+          code: ERR_CODES.MODEL_NOT_FOUND,
+          adds: `Model not found: ${path} (source: ${source})`
+        })
       }
 
       if (!model.blobBinding || !model.blobBinding.coreKey) {
-        throw new QvacErrorRegistryClient({ code: ERR_CODES.MODEL_NOT_FOUND, adds: 'Model missing blob binding' })
+        throw new QvacErrorRegistryClient({
+          code: ERR_CODES.MODEL_NOT_FOUND,
+          adds: 'Model missing blob binding'
+        })
       }
 
       this.logger.debug('Model metadata retrieved', { model })
@@ -251,31 +344,32 @@ class QVACRegistryClient extends ReadyResource {
 
       const totalSize = model.blobBinding.byteLength
 
-      const rangeDownload = core.download({
+      rangeDownload = core.download({
         start: model.blobBinding.blockOffset,
         length: model.blobBinding.blockLength
       })
 
-      const blockStart = model.blobBinding.blockOffset
-      const blockEnd = blockStart + model.blobBinding.blockLength
+      blockStart = model.blobBinding.blockOffset
+      blockEnd = blockStart + model.blobBinding.blockLength
 
       let artifact
       if (options.outputFile) {
         await withRetry(
           () => this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options),
           {
-            maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            maxRetries: options.maxRetries ?? DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
-            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            // Wait for the swarm to resume + reconnect peers before retrying,
+            // so the retry doesn't immediately time out again against a dead
+            // swarm (e.g. after the app backgrounded). The core's cached blocks
+            // are not cleared until success, so the retry re-streams cheaply.
+            beforeRetry: () => this._reconnectCore(core, options.signal),
             logger: this.logger
           }
         )
         artifact = { path: options.outputFile, totalSize }
 
-        rangeDownload.destroy()
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-        if (blobs) await blobs.close()
-        if (core) await core.close()
+        await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
       } else {
         const stream = blobs.createReadStream(model.blobBinding, {
           wait: true,
@@ -283,27 +377,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        const cleanup = async () => {
-          rangeDownload.destroy()
-          await this._clearBlobBlocks(core, blockStart, blockEnd)
-          if (blobs) {
-            try {
-              await blobs.close()
-            } catch (cleanupError) {
-              this.logger.warn('Error closing blob instance', { error: cleanupError.message })
-            }
-          }
-          if (core) {
-            try {
-              await core.close()
-            } catch (cleanupError) {
-              this.logger.warn('Error closing blob core', { error: cleanupError.message })
-            }
-          }
-          this.logger.debug('Blob resources closed after stream end')
-        }
-
-        stream.once('end', cleanup)
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
       }
 
       this.logger.info('Model downloaded successfully')
@@ -315,44 +389,38 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      if (blobs) {
-        try {
-          await blobs.close()
-        } catch (cleanupError) {
-          this.logger.warn('Error closing blob instance on error', { error: cleanupError.message })
-        }
-      }
-      if (core) {
-        try {
-          await core.close()
-        } catch (cleanupError) {
-          this.logger.warn('Error closing blob core on error', { error: cleanupError.message })
-        }
-      }
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
 
       throw error
     }
   }
 
-  async downloadBlob (blobBinding, options = {}) {
+  async downloadBlob(blobBinding, options = {}) {
     if (!blobBinding || !blobBinding.coreKey) {
       throw new Error('Invalid blobBinding: coreKey is required')
     }
-    if (typeof blobBinding.blockOffset !== 'number' ||
-        typeof blobBinding.blockLength !== 'number' ||
-        typeof blobBinding.byteLength !== 'number') {
-      throw new Error('Invalid blobBinding: blockOffset, blockLength, and byteLength are required numbers')
+    if (
+      typeof blobBinding.blockOffset !== 'number' ||
+      typeof blobBinding.blockLength !== 'number' ||
+      typeof blobBinding.byteLength !== 'number'
+    ) {
+      throw new Error(
+        'Invalid blobBinding: blockOffset, blockLength, and byteLength are required numbers'
+      )
     }
 
     if (options && typeof options !== 'object') {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs
+    let core, blobs, blockStart, blockEnd, rangeDownload
 
     try {
       this.logger.info('Downloading blob directly', {
-        coreKey: typeof blobBinding.coreKey === 'string' ? blobBinding.coreKey.slice(0, 12) + '...' : '(buffer)',
+        coreKey:
+          typeof blobBinding.coreKey === 'string'
+            ? blobBinding.coreKey.slice(0, 12) + '...'
+            : '(buffer)',
         blockOffset: blobBinding.blockOffset,
         blockLength: blobBinding.blockLength,
         byteLength: blobBinding.byteLength
@@ -383,10 +451,10 @@ class QVACRegistryClient extends ReadyResource {
       }
       const totalSize = blobBinding.byteLength
 
-      const blockStart = pointer.blockOffset
-      const blockEnd = blockStart + pointer.blockLength
+      blockStart = pointer.blockOffset
+      blockEnd = blockStart + pointer.blockLength
 
-      const rangeDownload = core.download({
+      rangeDownload = core.download({
         start: pointer.blockOffset,
         length: pointer.blockLength
       })
@@ -396,18 +464,17 @@ class QVACRegistryClient extends ReadyResource {
         await withRetry(
           () => this._streamBlobToFile(blobs, core, pointer, options.outputFile, options),
           {
-            maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            maxRetries: options.maxRetries ?? DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
-            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            // Wait for swarm resume + peer reconnect before retrying (see
+            // downloadModel). Cached blocks are reused; the file is re-streamed.
+            beforeRetry: () => this._reconnectCore(core, options.signal),
             logger: this.logger
           }
         )
         artifact = { path: options.outputFile, totalSize }
 
-        rangeDownload.destroy()
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-        if (blobs) await blobs.close()
-        if (core) await core.close()
+        await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
       } else {
         const stream = blobs.createReadStream(pointer, {
           wait: true,
@@ -415,23 +482,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        const cleanup = async () => {
-          rangeDownload.destroy()
-          await this._clearBlobBlocks(core, blockStart, blockEnd)
-          if (blobs) {
-            try { await blobs.close() } catch (e) {
-              this.logger.warn('Error closing blob instance', { error: e.message })
-            }
-          }
-          if (core) {
-            try { await core.close() } catch (e) {
-              this.logger.warn('Error closing blob core', { error: e.message })
-            }
-          }
-          this.logger.debug('Blob resources closed after stream end')
-        }
-
-        stream.once('end', cleanup)
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -440,33 +491,73 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      if (blobs) {
-        try { await blobs.close() } catch (e) {
-          this.logger.warn('Error closing blob instance on error', { error: e.message })
-        }
-      }
-      if (core) {
-        try { await core.close() } catch (e) {
-          this.logger.warn('Error closing blob core on error', { error: e.message })
-        }
-      }
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
 
       throw error
     }
   }
 
-  async _clearBlobBlocks (core, start, end) {
+  _releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd) {
+    let released = false
+
+    // 'close' also covers a destroyed or errored stream; on 'end' alone a
+    // cancelled stream download would never free its blocks.
+    const release = () => {
+      if (released) return
+      released = true
+      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd).catch((e) =>
+        this.logger.warn('Error releasing blob resources', { error: e.message })
+      )
+    }
+
+    stream.once('end', release)
+    stream.once('close', release)
+  }
+
+  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
+    // Stop replication before clearing to prevent blocks from being refetched.
+    if (rangeDownload) rangeDownload.destroy()
+
+    if (core && blockStart !== undefined) {
+      await this._clearBlobBlocks(core, blockStart, blockEnd)
+    }
+    if (blobs) {
+      try {
+        await blobs.close()
+      } catch (e) {
+        this.logger.warn('Error closing blob instance', { error: e.message })
+      }
+    }
+    if (core) {
+      try {
+        await core.close()
+      } catch (e) {
+        this.logger.warn('Error closing blob core', { error: e.message })
+      }
+    }
+
+    this.logger.debug('Blob resources released')
+  }
+
+  async _clearBlobBlocks(core, start, end) {
     try {
       const cleared = await core.clear(start, end, { diff: true })
       await core.compact()
-      this.logger.info('Cleared blob blocks from corestore', { start, end, blocks: cleared ? cleared.blocks : end - start })
+      this.logger.info('Cleared blob blocks from corestore', {
+        start,
+        end,
+        blocks: cleared ? cleared.blocks : end - start
+      })
     } catch (err) {
       this.logger.warn('Failed to clear blob blocks from corestore', { error: err.message })
     }
   }
 
-  async _streamBlobToFile (blobs, core, blobPointer, filePath, options) {
-    const { cachedBlocks, totalBlocks, totalBytes } = await this._checkBlobProgress(core, blobPointer)
+  async _streamBlobToFile(blobs, core, blobPointer, filePath, options) {
+    const { cachedBlocks, totalBlocks, totalBytes } = await this._checkBlobProgress(
+      core,
+      blobPointer
+    )
 
     this.logger.debug('Blob progress before download', {
       cachedBlocks,
@@ -488,7 +579,10 @@ class QVACRegistryClient extends ReadyResource {
     }
 
     const progressHandler = (index, bytes) => {
-      if (index >= blobPointer.blockOffset && index < blobPointer.blockOffset + blobPointer.blockLength) {
+      if (
+        index >= blobPointer.blockOffset &&
+        index < blobPointer.blockOffset + blobPointer.blockLength
+      ) {
         downloadedBytes += bytes
         const capped = Math.min(downloadedBytes, totalBytes)
         if (options.onProgress) {
@@ -533,11 +627,15 @@ class QVACRegistryClient extends ReadyResource {
             reject(new Error('Download cancelled'))
             return
           }
-          options.signal.addEventListener('abort', () => {
-            stream.destroy()
-            writeStream.destroy()
-            reject(new Error('Download cancelled'))
-          }, { once: true })
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              stream.destroy()
+              writeStream.destroy()
+              reject(new Error('Download cancelled'))
+            },
+            { once: true }
+          )
         }
       })
     } finally {
@@ -546,7 +644,7 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
-  async suspend (opts = {}) {
+  async suspend(opts = {}) {
     this.logger.debug('suspend called')
 
     if (!this.opened || this.closing) {
@@ -564,7 +662,7 @@ class QVACRegistryClient extends ReadyResource {
     this.logger.debug('QVACRegistryClient suspended')
   }
 
-  async resume (opts = {}) {
+  async resume(opts = {}) {
     this.logger.debug('resume called')
 
     if (!this.opened || this.closing) {
@@ -582,7 +680,7 @@ class QVACRegistryClient extends ReadyResource {
     this.logger.debug('QVACRegistryClient resumed')
   }
 
-  async _close () {
+  async _close() {
     this.logger.debug('_close called')
 
     if (this._metadataReady) {

@@ -453,42 +453,41 @@ TEST_F(WhisperHandlersTest, ToWhisperFullParamsInvalidLanguageCode) {
   EXPECT_THROW(toWhisperFullParams(config), qvac_errors::StatusError);
 }
 
-TEST_F(WhisperHandlersTest, ToWhisperFullParamsValidDetectLanguage) {
-  WhisperConfig config;
-
-  // Test valid detect_language and language settings
-  config.whisperMainCfg["language"] = std::string("auto");
-  // Don't set detect_language - it should be set automatically by language
-  // handler
-
-  // Should not throw
-  EXPECT_NO_THROW(toWhisperFullParams(config));
-
-  // Test another valid combination - specific language without detect_language
-  config.whisperMainCfg.clear();
-  config.whisperMainCfg["language"] = std::string("en");
-  // Don't set detect_language - it should be set automatically by language
-  // handler
-
-  EXPECT_NO_THROW(toWhisperFullParams(config));
-}
-
-TEST_F(WhisperHandlersTest, DetectLanguageWithAutoAndDetectFalse) {
+TEST_F(WhisperHandlersTest, LanguageAutoEnablesBuiltinAutodetect) {
   WhisperConfig config;
   config.whisperMainCfg["language"] = std::string("auto");
-  config.whisperMainCfg["detect_language"] = false;
 
-  // Valid: auto with detect_language = false is allowed (auto-corrected)
-  EXPECT_NO_THROW(toWhisperFullParams(config));
+  whisper_full_params params = toWhisperFullParams(config);
+  // "auto" clears language so whisper.cpp runs its built-in detection, while
+  // detect_language stays false so transcription still proceeds.
+  EXPECT_EQ(params.language, nullptr);
+  EXPECT_FALSE(params.detect_language);
 }
 
-TEST_F(WhisperHandlersTest, DetectLanguageWithNonAutoAndDetectTrue) {
+TEST_F(WhisperHandlersTest, SpecificLanguageDisablesDetect) {
   WhisperConfig config;
   config.whisperMainCfg["language"] = std::string("en");
-  config.whisperMainCfg["detect_language"] = true;
 
-  // Should throw: detect_language must be false if language is not auto
-  EXPECT_THROW(toWhisperFullParams(config), qvac_errors::StatusError);
+  whisper_full_params params = toWhisperFullParams(config);
+  ASSERT_NE(params.language, nullptr);
+  EXPECT_EQ(std::string(params.language), "en");
+  EXPECT_FALSE(params.detect_language);
+}
+
+TEST_F(WhisperHandlersTest, DetectLanguageKeyRejected) {
+  // detect_language was removed from the public surface; it is now an unknown
+  // key and must be rejected for every language and value combination.
+  auto expectRejected = [](const std::string& language, bool detect) {
+    WhisperConfig config;
+    config.whisperMainCfg["language"] = language;
+    config.whisperMainCfg["detect_language"] = detect;
+    EXPECT_THROW(toWhisperFullParams(config), qvac_errors::StatusError);
+  };
+
+  expectRejected("auto", true);
+  expectRejected("auto", false);
+  expectRejected("en", true);
+  expectRejected("en", false);
 }
 
 TEST_F(WhisperHandlersTest, ToWhisperContextParamsValid) {
@@ -1288,7 +1287,7 @@ TEST_F(WhisperModelTest, PreprocessAudioDataUnsupportedFormatThrows) {
   }
 }
 
-// ── whisper.cpp / ggml log forwarding (QVAC-19783) ─────────────────────────
+// ── whisper.cpp / ggml log forwarding ─────────────────────────
 // Helper: run forwardGgmlLog while capturing std::cout (QLOG routes there in
 // this no-JS test build, where JS_LOGGER is undefined).
 namespace {

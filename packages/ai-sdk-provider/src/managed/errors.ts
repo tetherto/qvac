@@ -16,7 +16,7 @@ export type QvacManagedErrorCode =
 export class QvacManagedModeError extends Error {
   readonly code: QvacManagedErrorCode
 
-  constructor (code: QvacManagedErrorCode, message: string, options?: { cause?: unknown }) {
+  constructor(code: QvacManagedErrorCode, message: string, options?: { cause?: unknown }) {
     super(message, options)
     this.name = 'QvacManagedModeError'
     this.code = code
@@ -26,7 +26,7 @@ export class QvacManagedModeError extends Error {
 export class UnknownManagedModelError extends QvacManagedModeError {
   readonly unknownModels: readonly string[]
 
-  constructor (unknownModels: readonly string[]) {
+  constructor(unknownModels: readonly string[]) {
     super(
       'UNKNOWN_MODEL',
       `Unknown QVAC model constant(s): ${unknownModels.join(', ')}. ` +
@@ -40,7 +40,7 @@ export class UnknownManagedModelError extends QvacManagedModeError {
 export class DuplicateManagedModelError extends QvacManagedModeError {
   readonly duplicateModels: readonly string[]
 
-  constructor (duplicateModels: readonly string[]) {
+  constructor(duplicateModels: readonly string[]) {
     super(
       'DUPLICATE_MODEL',
       `Duplicate model name(s) in managed \`models\`: ${duplicateModels.join(', ')}. ` +
@@ -55,7 +55,7 @@ export class DuplicateManagedModelError extends QvacManagedModeError {
 export class MultipleDefaultManagedModelsError extends QvacManagedModeError {
   readonly defaultModels: readonly string[]
 
-  constructor (defaultModels: readonly string[]) {
+  constructor(defaultModels: readonly string[]) {
     super(
       'MULTIPLE_DEFAULTS',
       `More than one managed model sets \`default: true\`: ${defaultModels.join(', ')}. ` +
@@ -68,7 +68,7 @@ export class MultipleDefaultManagedModelsError extends QvacManagedModeError {
 }
 
 export class CliNotFoundError extends QvacManagedModeError {
-  constructor (cause?: unknown) {
+  constructor(cause?: unknown) {
     super(
       'CLI_NOT_FOUND',
       'Managed mode requires the `@qvac/cli` package. Install it (e.g. `npm i @qvac/cli`) ' +
@@ -80,14 +80,14 @@ export class CliNotFoundError extends QvacManagedModeError {
 }
 
 export class ServeSpawnFailedError extends QvacManagedModeError {
-  constructor (message: string, cause?: unknown) {
+  constructor(message: string, cause?: unknown) {
     super('SERVE_SPAWN_FAILED', message, cause === undefined ? undefined : { cause })
     this.name = 'ServeSpawnFailedError'
   }
 }
 
 export class ServeStartTimeoutError extends QvacManagedModeError {
-  constructor (timeoutMs: number, baseURL: string) {
+  constructor(timeoutMs: number, baseURL: string) {
     super(
       'SERVE_START_TIMEOUT',
       `qvac serve did not become healthy at ${baseURL} within ${timeoutMs}ms. ` +
@@ -101,7 +101,7 @@ export class ServeExitedError extends QvacManagedModeError {
   readonly exitCode: number | null
   readonly signal: NodeJS.Signals | null
 
-  constructor (exitCode: number | null, signal: NodeJS.Signals | null, tail: string) {
+  constructor(exitCode: number | null, signal: NodeJS.Signals | null, tail: string) {
     super(
       'SERVE_EXITED',
       `qvac serve exited before becoming healthy (code=${String(exitCode)}, signal=${String(signal)}).` +
@@ -114,7 +114,7 @@ export class ServeExitedError extends QvacManagedModeError {
 }
 
 export class PortAllocationFailedError extends QvacManagedModeError {
-  constructor (cause?: unknown) {
+  constructor(cause?: unknown) {
     super(
       'PORT_ALLOCATION_FAILED',
       'Failed to allocate a free port for qvac serve.',

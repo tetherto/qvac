@@ -72,15 +72,31 @@ export interface LlamaConfig {
   'tensor-split'?: string
   'cache-type-k'?: string
   'cache-type-v'?: string
+  /**
+   * Run the multimodal projector (mmproj / vision encoder) on the GPU. Accepts
+   * 'true'/'on'/'1' or 'false'/'off'/'0'. When unset, the backend is auto-selected
+   * per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other
+   * Android GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be
+   * detected) — the LLM layers still run on the GPU while the projector stays on
+   * CPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU).
+   */
+  'mmproj-use-gpu'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string
-  /** Reasoning channel budget. `-1` (default) leaves the model's reasoning channel on; `0` disables it. */
-  reasoning_budget?: -1 | 0 | '-1' | '0'
+  /**
+   * Reasoning channel budget. `-1` (default) leaves the model's reasoning
+   * channel on; `0` disables it; any positive integer caps the reasoning
+   * channel at that many tokens (the sampler force-emits `</think>` once
+   * the budget is exhausted).
+   */
+  reasoning_budget?: number | `${number}`
   /**
    * Number of concurrent sequence slots for continuous-batching (`--parallel` /
    * `n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch
-   * scheduler so multiple `run()` calls are decoded together in a single
-   * forward pass. Default `1` (sequential, batching disabled).
+   * scheduler so the prompts of a single batch-array `run()` call are decoded
+   * together across slots; separate top-level `run()` calls are not batched
+   * (only one response is active at a time). Default `1` (sequential, batching
+   * disabled).
    */
   parallel?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined
@@ -157,23 +173,129 @@ export interface GenerationParams {
   json_schema?: string | Record<string, unknown>
   /**
    * Per-request reasoning channel budget. `-1` keeps the model's reasoning
-   * channel on; `0` disables it for this request. Equivalent to the load-time
+   * channel on; `0` disables it for this request; any positive integer caps
+   * the reasoning channel at that many tokens. Equivalent to the load-time
    * `reasoning_budget` config but scoped to a single `run()` call; the prior
    * value is restored afterwards.
    */
-  reasoning_budget?: -1 | 0
+  reasoning_budget?: number
+  /**
+   * When the model emits a reasoning block during generation (e.g.
+   * `<think>...</think>` for the Qwen3 family, `<|channel>thought ...
+   * <channel|>` for Gemma 4), drop those tokens from the KV cache at
+   * end-of-generation so subsequent turns do not accumulate reasoning
+   * history.
+   *
+   * Defaults to `true`: for reasoning-capable models the safer
+   * default is to drop hidden reasoning blocks so that later turns
+   * are not steered by internal reasoning that the user never sees.
+   * Set to `false` to preserve reasoning tokens in the KV / SSM
+   * cache across turns (e.g. chain-of-thought agents that want the
+   * next turn to attend to prior reasoning, interpretability
+   * tooling, or cache-reuse patterns that depend on the
+   * reasoning-inclusive state). Supported on both text and
+   * multimodal contexts. No-op for models without a recognised
+   * reasoning channel.
+   *
+   * Recurrent / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba,
+   * Granite-Hybrid, ...) are supported when the reasoning close
+   * marker tokenises to a single vocab token. The recurrent half of
+   * the memory module is snapshotted at the end-of-prefill boundary
+   * and restored at end-of-generation. The replay buffer then feeds
+   * any generated-opener seed tokens, the canonical close marker, and
+   * the post-reasoning tail back through the decoder so both KV halves
+   * stay consistent. Chat templates that force-open the reasoning
+   * channel during prefill and templates that let the model generate
+   * the opener are both supported: on the generated-opener path, every
+   * sampled token from end-of-prefill up to and including the opener
+   * flip is seeded into the replay buffer so the restored snapshot
+   * still lands in a balanced `<think>...</think>` state on the next
+   * turn. If a hybrid / recurrent model uses a multi-token close
+   * marker while this feature is enabled, the request fails with
+   * `StatusError` instead of silently preserving reasoning in cache.
+   * Prefill-only
+   * (cache-warm) requests are exempt from this check: they never
+   * enter generation and cannot emit reasoning tokens, so a cache
+   * warm on a non-conforming hybrid model still succeeds.
+   *
+   * Uniform hard-fail contract: any inability to remove the reasoning
+   * span from cache — whether the end-of-prefill boundary snapshot
+   * capture, the pure-attention `seq_rm + seq_add` primitive, the
+   * hybrid restore / replay step, or an unsupported multi-token
+   * recurrent close marker — is surfaced to the caller as a
+   * `StatusError`. There is no soft-failure counter: if the feature is
+   * enabled and cache cleanup cannot complete, the final request result is
+   * failed rather than reported as a successful answer with the reasoning span
+   * still resident in cache.
+   *
+   * Streaming caveat: token callbacks (`outputCallback` / batch `onToken`) are
+   * invoked during generation, while reasoning-block compaction runs at
+   * end-of-generation. If compaction fails, streaming callers may already have
+   * received partial or complete text. Treat streamed text as tentative until
+   * the request completes successfully; non-streaming callers receive no
+   * successful returned answer on this failure path.
+   *
+   * Before throwing, the affected sequence is cleaned up so that the
+   * next request on the same context starts from a coherent state:
+   *   * Pure-attention `seq_rm + seq_add` rejection — the primitive
+   *     is documented all-or-nothing, so live KV is unchanged when
+   *     compaction is rejected. The driver drops the current
+   *     request's contribution (`[preRequestCursor, currentCursor)`)
+   *     from live memory and restores its positional accounting to
+   *     the pre-request cursor before throwing, so both driver
+   *     metadata and live KV agree on the pre-request state.
+   *   * Boundary-capture or hybrid restore / replay failure — the
+   *     driver rolls back to its pre-request checkpoint (or clears
+   *     the sequence entirely on restore underflow) and resets
+   *     positional accounting so subsequent turns cannot decode into
+   *     contaminated positions.
+   *
+   * On the continuous-batch path, the scheduler's error-recovery leg
+   * deliberately does NOT persist the failed slot's cache: when the
+   * request was configured with `cacheKey` + `saveCacheToDisk`, the
+   * last known-good on-disk cache is preserved rather than being
+   * overwritten with the post-failure state. The same skip-save rule
+   * applies to graceful cancels of hybrid / recurrent requests when
+   * rollback to the pre-request cursor cannot be completed (recurrent
+   * full-state restore refused, or no pre-request snapshot was captured
+   * yet the driver has advanced past the pre-request cursor). Cancels
+   * that can be rolled back cleanly still persist as usual.
+   */
+  remove_thinking_from_context?: boolean
 }
 
 export interface RunOptions {
   prefill?: boolean
   generationParams?: GenerationParams
   cacheKey?: string
+  /**
+   * When `true` and `cacheKey` is set, the driver persists the sequence's
+   * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
+   * later run keyed by the same string can resume without re-prefilling.
+   *
+   * The continuous-batch scheduler intentionally SKIPS the save on
+   * teardown legs where persistence could corrupt the last known-good
+   * on-disk cache:
+   *   - Any batch error-recovery path (e.g. decode failure, per-slot
+   *     failure with `SaveCachePolicy::Skip`, or a
+   *     `remove_thinking_from_context` hard-fail).
+   *   - Graceful cancel of a hybrid / recurrent request whose driver
+   *     cannot roll live memory back to the pre-request cursor —
+   *     either the recurrent full-state restore was refused, or no
+   *     pre-request snapshot exists yet the driver advanced past the
+   *     pre-request cursor. Cancels that roll back cleanly still save.
+   *
+   * On both skip paths the sequence's in-memory KV is still cleared, so
+   * subsequent requests decode from a coherent baseline; only the
+   * on-disk cache is untouched. Pure-attention drivers always roll back
+   * via `removeLastNTokens` and therefore save on cancel as usual.
+   */
   saveCacheToDisk?: boolean
 }
 
 export interface BatchPrompt {
   id?: string
-  prompt: (UserTextMessage | ChatFunctionDefinition)[]
+  prompt: Message[]
   runOptions?: RunOptions
 }
 
@@ -204,6 +326,15 @@ export interface RuntimeStats {
   promptTokens: number
   /** Context-window slides for single requests, or the sum across completed batch slots. */
   contextSlides: number
+  /**
+   * Number of `<think>` (or model-equivalent) reasoning blocks dropped
+   * from the KV cache at end-of-generation by the
+   * `remove_thinking_from_context` feature. Per-inference for single
+   * requests; summed across completed slots for batch requests. 0 when
+   * the model has no recognised reasoning channel, when the feature
+   * was disabled per-request, or when no reasoning blocks were emitted.
+   */
+  thinkingBlockDiscards: number
   /**
    * Average active sequences decoded together during the last request,
    * including overlapping requests from other callers.

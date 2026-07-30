@@ -15,13 +15,13 @@ export interface ManagedServeHostConfig {
   readonly logFile: string | undefined
 }
 
-function numberFromEnv (value: string | undefined, fallback: number): number {
+function numberFromEnv(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
 }
 
-export function resolveManagedServeHostConfig (env: NodeJS.ProcessEnv): ManagedServeHostConfig {
+export function resolveManagedServeHostConfig(env: NodeJS.ProcessEnv): ManagedServeHostConfig {
   const options = mergeOptions(optionsFromEnv(env))
   const catalogEntry = findCatalogEntry(options.model)
   return {

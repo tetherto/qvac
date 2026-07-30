@@ -176,7 +176,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"high_noise_steps",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.highNoiseSteps = requirePositiveInt(v, "high_noise_steps");
+       const int steps = requireInt(v, "high_noise_steps");
+       if (steps == 0 || steps < -1)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "high_noise_steps must be -1 or > 0, got: " +
+                 std::to_string(steps));
+       c.highNoiseSteps = steps;
      }},
 
     {"high_noise_sampler",
@@ -247,6 +253,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
              "vae_tile_overlap must be in [0, 1), got: " +
                  std::to_string(overlap));
        c.vaeTileOverlap = overlap;
+     }},
+
+    // temporal_tiling -- LTX-2 video VAE only. Tiles the decode along the
+    // time axis to cap peak VRAM for HD / long clips. Ignored by Wan.
+    {"temporal_tiling",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.vaeTemporalTiling = requireBool(v, "temporal_tiling");
      }},
 
     // -- Step-caching --------------------------------------------------------

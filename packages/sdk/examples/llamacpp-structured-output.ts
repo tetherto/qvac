@@ -1,9 +1,4 @@
-import {
-  loadModel,
-  completion,
-  unloadModel,
-  QWEN3_600M_INST_Q4,
-} from "@qvac/sdk";
+import { loadModel, completion, unloadModel, QWEN3_600M_INST_Q4 } from '@qvac/sdk'
 
 // Demonstrates per-request structured output via `responseFormat`.
 // Three modes are exercised against the same model so you can eyeball the
@@ -13,27 +8,26 @@ import {
 //   bun run examples/llamacpp-structured-output.ts
 
 const PERSON_SCHEMA = {
-  type: "object",
+  type: 'object',
   properties: {
-    name: { type: "string" },
-    age: { type: "integer" },
-    occupation: { type: "string" },
+    name: { type: 'string' },
+    age: { type: 'integer' },
+    occupation: { type: 'string' }
   },
-  required: ["name", "age", "occupation"],
-  additionalProperties: false,
-} as const;
+  required: ['name', 'age', 'occupation'],
+  additionalProperties: false
+} as const
 
 const HISTORY = [
   {
-    role: "system",
-    content:
-      "You extract structured information about people from short bios. /no_think",
+    role: 'system',
+    content: 'You extract structured information about people from short bios. /no_think'
   },
   {
-    role: "user",
-    content: "Hi, I'm Alice, I'm 30 years old and I work as a data engineer.",
-  },
-];
+    role: 'user',
+    content: "Hi, I'm Alice, I'm 30 years old and I work as a data engineer."
+  }
+]
 
 // `json_object` mode only enforces that the output is *some* valid JSON object
 // — it doesn't pin the keys. Small models (Qwen3-0.6B in this example) will
@@ -44,97 +38,95 @@ const HISTORY = [
 // grammar itself forces the keys.
 const JSON_OBJECT_HISTORY = [
   {
-    role: "system",
+    role: 'system',
     content:
-      'You extract structured information about people from short bios and reply ONLY with a JSON object containing "name", "age", and "occupation". /no_think',
+      'You extract structured information about people from short bios and reply ONLY with a JSON object containing "name", "age", and "occupation". /no_think'
   },
   {
-    role: "user",
-    content: "Hi, I'm Alice, I'm 30 years old and I work as a data engineer.",
-  },
-];
+    role: 'user',
+    content: "Hi, I'm Alice, I'm 30 years old and I work as a data engineer."
+  }
+]
 
 // Drains the run via the canonical `events` / `final` surface and returns the
 // content text. `tokenStream` / `text` / `stats` still work but are legacy and
 // will be deprecated, so new code should consume `events` for streaming and
 // await `final.contentText` for the aggregated result.
-async function runToContent(
-  run: ReturnType<typeof completion>,
-): Promise<string> {
+async function runToContent(run: ReturnType<typeof completion>): Promise<string> {
   for await (const event of run.events) {
-    if (event.type === "contentDelta") process.stdout.write(event.text);
+    if (event.type === 'contentDelta') process.stdout.write(event.text)
   }
-  const final = await run.final;
-  process.stdout.write("\n");
-  return final.contentText;
+  const final = await run.final
+  process.stdout.write('\n')
+  return final.contentText
 }
 
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
-  console.log(`\n▸ Model loaded: ${modelId}\n`);
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
+  console.log(`\n▸ Model loaded: ${modelId}\n`)
 
-  console.log("▸ --- 1. responseFormat: text (baseline, free-form) ---");
+  console.log('▸ --- 1. responseFormat: text (baseline, free-form) ---')
   await runToContent(
     completion({
       modelId,
       history: HISTORY,
       stream: true,
-      responseFormat: { type: "text" },
-    }),
-  );
+      responseFormat: { type: 'text' }
+    })
+  )
 
-  console.log("\n▸ --- 2. responseFormat: json_object (any valid JSON) ---");
+  console.log('\n▸ --- 2. responseFormat: json_object (any valid JSON) ---')
   const jsonObjectOut = await runToContent(
     completion({
       modelId,
       history: JSON_OBJECT_HISTORY,
       stream: true,
-      responseFormat: { type: "json_object" },
-    }),
-  );
-  console.log("▸ parsed:", JSON.parse(jsonObjectOut.trim()));
+      responseFormat: { type: 'json_object' }
+    })
+  )
+  console.log('▸ parsed:', JSON.parse(jsonObjectOut.trim()))
 
-  console.log("\n▸ --- 3. responseFormat: json_schema (strict shape) ---");
+  console.log('\n▸ --- 3. responseFormat: json_schema (strict shape) ---')
   const jsonSchemaOut = await runToContent(
     completion({
       modelId,
       history: HISTORY,
       stream: true,
       responseFormat: {
-        type: "json_schema",
+        type: 'json_schema',
         json_schema: {
-          name: "person",
-          schema: PERSON_SCHEMA,
-        },
-      },
-    }),
-  );
+          name: 'person',
+          schema: PERSON_SCHEMA
+        }
+      }
+    })
+  )
   // Output is guaranteed schema-valid JSON: object with exactly
   // {name: string, age: integer, occupation: string}, no extras.
   const parsed = JSON.parse(jsonSchemaOut.trim()) as {
-    name: string;
-    age: number;
-    occupation: string;
-  };
-  console.log("▸ parsed:", parsed);
+    name: string
+    age: number
+    occupation: string
+  }
+  console.log('▸ parsed:', parsed)
   console.log(
-    "▸ schema-valid:",
-    typeof parsed.name === "string" &&
+    '▸ schema-valid:',
+    typeof parsed.name === 'string' &&
       Number.isInteger(parsed.age) &&
-      typeof parsed.occupation === "string" &&
-      Object.keys(parsed).sort().join(",") === "age,name,occupation",
-  );
+      typeof parsed.occupation === 'string' &&
+      Object.keys(parsed).sort().join(',') === 'age,name,occupation'
+  )
 
-  await unloadModel({ modelId });
+  await unloadModel({ modelId })
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

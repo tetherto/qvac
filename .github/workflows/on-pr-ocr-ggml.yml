@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -39,6 +40,10 @@ permissions:
 env:
   PKG_DIR: packages/ocr-ggml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   label-gate:
     name: Authorise (label-gate)
@@ -62,6 +67,45 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -83,7 +127,7 @@ jobs:
 
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize]
+    needs: [fork-approval, authorize]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -97,9 +141,11 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     needs:
+      - fork-approval
       - authorize
+      - ci-router
       - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -127,8 +173,8 @@ jobs:
         continue-on-error: true
 
   cpp-lint:
-    needs: [authorize, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, ci-router, label-gate, fork-approval]
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -156,32 +202,125 @@ jobs:
         working-directory: packages/ocr-ggml
         run: npm run test:dts
 
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/ocr-ggml
+
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - fork-approval
+      - detect-native-changes
+      - sanity-checks
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-ocr-ggml.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+
   prebuild:
     permissions:
       contents: write
       pull-requests: write
       packages: write
       id-token: write
-    needs: [authorize, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - sanity-checks
+      - detect-native-changes
+      - prebuild-artifact-reuse
+      - label-gate
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') &&
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+  prebuild-artifact-save:
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs:
+      - fork-approval
+      - prebuild
+      - detect-native-changes
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
     permissions:
       contents: read
       packages: read
       id-token: write
-    needs: [authorize, prebuild, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate, fork-approval]
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -189,18 +328,18 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
-    needs: [authorize, prebuild, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate, fork-approval]
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [authorize, run-integration-tests, run-mobile-integration-tests]
-    if: always() && needs.authorize.outputs.allowed == 'true'
+    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -231,12 +370,14 @@ jobs:
           exclude: 'full-suite|canvasSize lab_results'
 
   merge-guard:
-    needs: [authorize, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests, label-gate]
+    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests, label-gate]
     # Always run so the PR still gets a status check even if label-gate is
-    # skipped or fails; matches on-pr-tts-ggml.yml's pattern.
-    if: always()
+    # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
+    # ensures this doesn't hold the concurrency group open after a
+    # superseding push cancels the run.
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}

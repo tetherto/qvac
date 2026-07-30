@@ -6,12 +6,11 @@ const process = require('bare-process')
 const {
   DEFAULT_RESULTS_DIR,
   DEFAULT_REPEATS,
-  DEFAULT_INPUTS_FILE,
   MODELS,
   PARAMETER_SWEEP
 } = require('./embed-parameter-sweep.config')
 const { createProgressReporter } = require('./progress')
-const { tsFileStamp, toMarkdown, toJsonLines } = require('./reporters')
+const { tsFileStamp, toMarkdown, toReportJson, toJsonLines } = require('./reporters')
 const { buildCases, runModelCases } = require('./case-runner')
 
 function loadLocalEmbedAddon () {
@@ -53,21 +52,61 @@ function resolveAddonCtor (addonSource) {
   }
 }
 
+function stripSurroundingQuotes (value) {
+  const s = String(value)
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1)
+  }
+  return s
+}
+
+function normalizeArgValue (value) {
+  if (value === true || value == null) return value
+  let normalized = String(value).trim()
+  if (normalized.startsWith('=')) {
+    normalized = normalized.slice(1).trim()
+  }
+  normalized = stripSurroundingQuotes(normalized).trim()
+  return normalized
+}
+
 function parseArgs (argv) {
   const parsed = {}
   for (let i = 2; i < argv.length; i++) {
     const token = argv[i]
     if (!token.startsWith('--')) continue
+    const inlineEqIndex = token.indexOf('=')
+    if (inlineEqIndex !== -1) {
+      const key = token.slice(2, inlineEqIndex)
+      parsed[key] = normalizeArgValue(token.slice(inlineEqIndex + 1))
+      continue
+    }
     const key = token.slice(2)
     const next = argv[i + 1]
     if (!next || next.startsWith('--')) {
       parsed[key] = true
     } else {
-      parsed[key] = next
+      parsed[key] = normalizeArgValue(next)
       i++
     }
   }
   return parsed
+}
+
+// --models <comma-list> limits the sweep to those manifest ids (used for a
+// quick CI plumbing check); empty runs the full manifest. Unknown ids fail
+// loudly rather than silently running a smaller grid than intended.
+function selectModels (allModels, value) {
+  const ids = String(value || '').split(',').map((x) => x.trim()).filter(Boolean)
+  if (ids.length === 0) return allModels
+  const missing = ids.filter((id) => !allModels.some((m) => m.id === id))
+  if (missing.length) {
+    throw new Error(
+      `Unknown model id(s) in --models: ${missing.join(', ')}. ` +
+      `Available: ${allModels.map((m) => m.id).join(', ')}`
+    )
+  }
+  return allModels.filter((m) => ids.includes(m.id))
 }
 
 function parseRepeats (value) {
@@ -87,21 +126,25 @@ async function main () {
   const AddonCtor = resolveAddonCtor(addonSource)
   const repeats = parseRepeats(args.repeats)
   const resultsDir = DEFAULT_RESULTS_DIR
-  const inputsFilePath = DEFAULT_INPUTS_FILE
-  if (!fs.existsSync(inputsFilePath)) {
-    throw new Error(
-      `Missing inputs file: ${inputsFilePath}. ` +
-      'Place a JSON object { "<batchSize>": string[5], ... } at benchmarks/performance/inputs.json.'
-    )
-  }
-  const inputsByBatchSize = JSON.parse(fs.readFileSync(inputsFilePath, 'utf8'))
-  const selectedModels = MODELS
+  const selectedModels = selectModels(MODELS, args.models)
 
   fs.mkdirSync(resultsDir, { recursive: true })
+  // Record what this run actually covered so the renderer can flag a narrowed
+  // run (a --models subset or reduced --repeats, used for quick plumbing checks)
+  // instead of letting it read as the full official sweep.
+  const requestedModelIds = selectedModels.map((m) => m.id)
+  const manifestModelIds = MODELS.map((m) => m.id)
   const report = {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     repeats,
+    coverage: {
+      requestedModelIds,
+      manifestModelIds,
+      repeats,
+      defaultRepeats: DEFAULT_REPEATS,
+      narrowed: requestedModelIds.length < manifestModelIds.length || repeats !== DEFAULT_REPEATS
+    },
     models: []
   }
 
@@ -126,23 +169,55 @@ async function main () {
       debugLogger,
       modelDef: plan.modelDef,
       cases: plan.cases,
-      inputsByBatchSize,
       progress
     })
     report.models.push(modelResult)
   }
 
   report.finishedAt = new Date().toISOString()
+
+  isShuttingDown = true
+
   const stamp = tsFileStamp()
+  const jsonPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.json`)
   const jsonlPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.jsonl`)
   const mdPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.md`)
-  fs.writeFileSync(jsonlPath, toJsonLines(report))
-  fs.writeFileSync(mdPath, toMarkdown(report))
-  debugLogger.log('\nDone.')
+  try {
+    fs.writeFileSync(jsonPath, JSON.stringify(toReportJson(report), null, 2))
+    fs.writeFileSync(jsonlPath, toJsonLines(report))
+    fs.writeFileSync(mdPath, toMarkdown(report))
+    debugLogger.log('\nDone.')
+    debugLogger.log(`JSON: ${jsonPath}`)
+    debugLogger.log(`JSONL: ${jsonlPath}`)
+    debugLogger.log(`MD:   ${mdPath}`)
+  } catch (writeError) {
+    console.error('Failed to write report files:', writeError)
+  }
 }
 
+let isShuttingDown = false
+
+process.on('uncaughtException', (error) => {
+  if (isShuttingDown) {
+    return
+  }
+  console.error('Uncaught exception in parameter sweep:')
+  console.error(error && error.stack ? error.stack : String(error))
+  process.exit(130)
+})
+
+process.on('unhandledRejection', (reason) => {
+  if (isShuttingDown) {
+    return
+  }
+  console.error('Unhandled rejection in parameter sweep:')
+  console.error(reason && reason.stack ? reason.stack : String(reason))
+  process.exit(130)
+})
+
 main().catch((error) => {
+  isShuttingDown = true
   console.error('Parameter sweep failed:')
-  console.error(error.stack || String(error))
-  process.exit(1)
+  console.error(error && error.stack ? error.stack : String(error))
+  process.exit(130)
 })

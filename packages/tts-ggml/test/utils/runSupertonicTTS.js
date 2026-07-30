@@ -9,12 +9,11 @@ const { createWavBuffer } = require('./wav-helper')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
-async function loadSupertonicTTS (params = {}) {
+async function loadSupertonicTTS(params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models'))
 
-  const supertonicPath =
-    params.supertonicModelPath || path.join(defaultModelDir, 'supertonic.gguf')
+  const supertonicPath = params.supertonicModelPath || path.join(defaultModelDir, 'supertonic.gguf')
 
   const config = { language: params.language || 'en' }
   if (params.useGPU !== undefined) {
@@ -23,9 +22,15 @@ async function loadSupertonicTTS (params = {}) {
     config.useGPU = false
   }
 
+  const files = { supertonicModel: supertonicPath }
+  // The enhancer / denoiser paths are the "on" switches for the LavaSR stages;
+  // only set them when a path was resolved so an unset value leaves the stage off.
+  if (params.lavasrEnhancerPath) files.lavasrEnhancer = params.lavasrEnhancerPath
+  if (params.lavasrDenoiserPath) files.lavasrDenoiser = params.lavasrDenoiserPath
+
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
-    files: { supertonicModel: supertonicPath },
+    files,
     voice: params.voice || 'F1',
     steps: params.steps,
     speed: params.speed,
@@ -39,7 +44,7 @@ async function loadSupertonicTTS (params = {}) {
   return model
 }
 
-async function runSupertonicTTS (model, params = {}, expectation = {}) {
+async function runSupertonicTTS(model, params = {}, expectation = {}) {
   const tag = '[Supertonic] '
   const sampleRate = SUPERTONIC_SAMPLE_RATE
 
@@ -56,7 +61,7 @@ async function runSupertonicTTS (model, params = {}, expectation = {}) {
     const response = await model.run({ input: params.text, type: 'text' })
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         if (data && data.outputArray) {
           outputArray = outputArray.concat(Array.from(data.outputArray))
         }
@@ -66,19 +71,24 @@ async function runSupertonicTTS (model, params = {}, expectation = {}) {
 
     const sampleCount = outputArray.length
     const stats = response.stats || null
-    const durationMs = stats?.audioDurationMs || (sampleCount / (sampleRate / 1000))
+    const outputSampleRate = reportedSampleRate || sampleRate
+    const durationMs = stats?.audioDurationMs || sampleCount / (outputSampleRate / 1000)
 
     let passed = true
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) passed = false
     if (expectation.maxSamples !== undefined && sampleCount > expectation.maxSamples) passed = false
-    if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs) passed = false
-    if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs) passed = false
+    if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs)
+      passed = false
+    if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs)
+      passed = false
 
-    const wavBuffer = createWavBuffer(outputArray, sampleRate)
+    const wavBuffer = createWavBuffer(outputArray, outputSampleRate)
 
     if (params.saveWav === true) {
       const wavPath = params.wavOutputPath || path.join(__dirname, '../output/supertonic.wav')
-      try { fs.mkdirSync(path.dirname(wavPath), { recursive: true }) } catch (_e) {}
+      try {
+        fs.mkdirSync(path.dirname(wavPath), { recursive: true })
+      } catch (_e) {}
       if (!isMobile || params.wavOutputPath) {
         fs.writeFileSync(wavPath, wavBuffer)
       }
@@ -93,14 +103,18 @@ async function runSupertonicTTS (model, params = {}, expectation = {}) {
         samples: outputArray,
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate,
         wavBuffer,
         stats
       }
     }
   } catch (error) {
-    return { output: `${tag}Error: ${error.message}`, passed: false, data: { error: error.message } }
+    return {
+      output: `${tag}Error: ${error.message}`,
+      passed: false,
+      data: { error: error.message }
+    }
   }
 }
 

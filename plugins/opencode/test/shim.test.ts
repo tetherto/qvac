@@ -81,7 +81,10 @@ test('transformSSEChunk emits a reasoning chunk then a content chunk', () => {
   }
   const out = transformSSEChunk(chunk, split)
   assert.equal(out.length, 2)
-  assert.equal((out[0]?.choices?.[0]?.delta as { reasoning_content?: string }).reasoning_content, 'why')
+  assert.equal(
+    (out[0]?.choices?.[0]?.delta as { reasoning_content?: string }).reasoning_content,
+    'why'
+  )
   assert.equal((out[1]?.choices?.[0]?.delta as { content?: string }).content, 'hi')
 })
 

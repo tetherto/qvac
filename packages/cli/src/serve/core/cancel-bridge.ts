@@ -36,7 +36,7 @@ import type { Logger } from '../../logger.js'
  * time without `--experimental-test-module-mocks`; threading an injection
  * point through keeps the test fast and free of module-mock plumbing.
  */
-export function bindClientDisconnectCancel (
+export function bindClientDisconnectCancel(
   req: IncomingMessage,
   res: ServerResponse,
   requestId: string,

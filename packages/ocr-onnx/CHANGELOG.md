@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.7.1] - 2026-07-03
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.7.0] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Package-local vcpkg triplets now layer
+  on the shared `vcpkg-overlays/` tree. Bumped `@qvac/onnx` to `^0.15.1` for
+  the same static-runtime baseline. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.6.0] - 2026-06-02
 
 ### Changed

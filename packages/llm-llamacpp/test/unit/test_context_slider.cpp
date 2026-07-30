@@ -8,8 +8,15 @@
 
 #include <gtest/gtest.h>
 
+#include "model-interface/ContextShifter.hpp"
 #include "model-interface/ContextSlider.hpp"
+#include "model-interface/ReasoningBlockCompactor.hpp"
 #include "model-interface/ToolsCompactController.hpp"
+#include "utils/ReasoningRollbackState.hpp"
+
+using qvac_lib_inference_addon_llama::ContextShifter;
+using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 
 namespace {
 constexpr llama_seq_id kSeqId = 7;
@@ -31,6 +38,11 @@ struct SeqAddCall {
   llama_pos endPos = 0;
   llama_pos delta = 0;
 };
+
+bool operator==(const SeqAddCall& lhs, const SeqAddCall& rhs) {
+  return lhs.seqId == rhs.seqId && lhs.startPos == rhs.startPos &&
+         lhs.endPos == rhs.endPos && lhs.delta == rhs.delta;
+}
 
 class FakeLlamaContextOps final : public IContextSliderOps {
 public:
@@ -136,6 +148,32 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -100);
 }
 
+TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
+  ToolsCompactController controller(std::nullopt);
+  FakeLlamaContextOps ops(/*ctxSize=*/400);
+
+  ContextSlideOutcome outcome = trySlidePrefill(
+      /*lctx=*/nullptr,
+      kSeqId,
+      ContextUsage{/*pos=*/100, /*cacheTokens=*/350},
+      ContextUsage{/*pos=*/20, /*cacheTokens=*/80},
+      ContextUsage{/*pos=*/10, /*cacheTokens=*/80},
+      /*nDiscarded=*/40,
+      controller,
+      ops);
+
+  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
+  EXPECT_EQ(outcome.newNPast, 60);
+  EXPECT_EQ(outcome.discarded, 40);
+
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 20, 60}));
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 60);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 100);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -40);
+}
+
 TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
@@ -200,108 +238,7 @@ TEST_F(ContextSliderTest, PrefillSlidesAgainstPerSeqCapBelowFullCtx) {
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -512);
 }
 
-TEST_F(ContextSliderTest, PrefillFullWipeInvokesSeqRmOnly) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  FakeLlamaContextOps ops(/*ctxSize=*/300);
-
-  controller.onTokenize(120, 50);
-  controller.onEvalComplete(120, 120);
-  EXPECT_EQ(controller.anchor(), 50);
-
-  ContextSlideOutcome outcome = trySlidePrefill(
-      /*lctx=*/nullptr,
-      kSeqId,
-      /*nPast=*/120,
-      /*firstMsgTokens=*/50,
-      /*nTokensToAppend=*/200,
-      /*nDiscarded=*/100,
-      controller,
-      ops);
-
-  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::FullWipe);
-  EXPECT_EQ(outcome.newNPast, 50);
-  EXPECT_EQ(outcome.discarded, 70);
-  EXPECT_EQ(controller.anchor(), -1);
-
-  ASSERT_EQ(ops.memoryCalls(), 1);
-  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
-  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 120);
-  EXPECT_TRUE(ops.seqAddCalls().empty());
-}
-
-TEST_F(ContextSliderTest, PrefillFullWipePreservesTailWhenExactWipeFails) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  FakeLlamaContextOps ops(/*ctxSize=*/300);
-
-  controller.onTokenize(120, 50);
-  controller.onEvalComplete(120, 120);
-  ops.failSeqRmFor({kSeqId, 50, 120});
-
-  ContextSlideOutcome outcome = trySlidePrefill(
-      /*lctx=*/nullptr,
-      kSeqId,
-      /*nPast=*/120,
-      /*firstMsgTokens=*/50,
-      /*nTokensToAppend=*/200,
-      /*nDiscarded=*/100,
-      controller,
-      ops);
-
-  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::FullWipe);
-  EXPECT_EQ(outcome.newNPast, 51);
-  EXPECT_EQ(outcome.discarded, 69);
-  EXPECT_EQ(controller.anchor(), -1);
-
-  ASSERT_EQ(ops.memoryCalls(), 1);
-  ASSERT_EQ(ops.seqRmCalls().size(), 2u);
-  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 50, 120}));
-  EXPECT_EQ(ops.seqRmCalls()[1], (SeqRmCall{kSeqId, 50, 119}));
-
-  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
-  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 119);
-  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 120);
-  EXPECT_EQ(ops.seqAddCalls()[0].delta, -69);
-}
-
-TEST_F(ContextSliderTest, PrefillFullWipeWhenPartialSlideCannotFit) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  FakeLlamaContextOps ops(/*ctxSize=*/512);
-
-  controller.onTokenize(474, 25);
-  controller.onEvalComplete(474, 474);
-  ops.failSeqRmFor({kSeqId, 25, 474});
-
-  ContextSlideOutcome outcome = trySlidePrefill(
-      /*lctx=*/nullptr,
-      kSeqId,
-      /*nPast=*/474,
-      /*firstMsgTokens=*/25,
-      /*nTokensToAppend=*/308,
-      /*nDiscarded=*/512,
-      controller,
-      ops);
-
-  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::FullWipe);
-  EXPECT_EQ(outcome.newNPast, 26);
-  EXPECT_EQ(outcome.discarded, 448);
-  EXPECT_EQ(controller.anchor(), -1);
-
-  ASSERT_EQ(ops.memoryCalls(), 1);
-  ASSERT_EQ(ops.seqRmCalls().size(), 2u);
-  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 25, 474}));
-  EXPECT_EQ(ops.seqRmCalls()[1], (SeqRmCall{kSeqId, 25, 473}));
-
-  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
-  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 473);
-  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 474);
-  EXPECT_EQ(ops.seqAddCalls()[0].delta, -448);
-}
-
-TEST_F(ContextSliderTest, PrefillFullWipeRespectsDiscardBudget) {
+TEST_F(ContextSliderTest, PrefillOverflowWhenPartialSlideCannotFit) {
   ToolsCompactController controller(ToolsCompactProfile{});
   FakeLlamaContextOps ops(/*ctxSize=*/512);
 
@@ -400,6 +337,132 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -120);
 }
 
+TEST_F(
+    ContextSliderTest,
+    GenerationSlideWithTrackedReasoningSpanInvalidatesFinalCompaction) {
+  ReasoningRollbackState rollback;
+  ToolsCompactController tools(std::nullopt);
+  ReasoningBlockCompactor compactor(rollback, tools);
+  ContextShifter shifter(compactor, rollback);
+  FakeLlamaContextOps ops(/*ctxSize=*/100);
+
+  shifter.setDiscardBudget(20);
+  compactor.setRemoveThinkingFromContext(true);
+  compactor.setReasoningEnabled(true);
+  compactor.setNeedsRecurrentSnapshot(false);
+  compactor.setOpenSpan(/*start=*/80);
+  ASSERT_TRUE(compactor.hasOpenSpan());
+
+  const auto slide = shifter.applyGenerationDiscard(
+      /*ctx=*/nullptr,
+      kSeqId,
+      /*pos=*/100,
+      /*protectedPrefixPos=*/10,
+      /*effectiveCtx=*/100,
+      /*cacheTokens=*/-1,
+      "[Test]",
+      ops);
+
+  EXPECT_EQ(slide.kind, ContextShifter::Outcome::Kind::Slid);
+  EXPECT_EQ(slide.newPos, 80);
+  EXPECT_FALSE(compactor.hasOpenSpan())
+      << "slide invalidates absolute span coordinates immediately";
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0], (SeqRmCall{kSeqId, 10, 30}));
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0], (SeqAddCall{kSeqId, 30, 100, -20}));
+
+  const auto outcome =
+      compactor.compact(/*ctx=*/nullptr, kSeqId, slide.newPos, "[Test]");
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
+      << "a generation slide after reasoning opens must hard-fail instead of "
+         "making remove_thinking_from_context a silent NoOp";
+  EXPECT_NE(
+      outcome.failureMessage.find("slide invalidated"), std::string::npos);
+  EXPECT_EQ(compactor.blockDiscards(), 0)
+      << "slide-invalidation failures are not successful reasoning discards";
+}
+
+TEST_F(
+    ContextSliderTest,
+    GenerationSlideBeforeGeneratedOpenerDefersFailureUntilOpenerAppears) {
+  ReasoningRollbackState rollback;
+  ToolsCompactController tools(std::nullopt);
+  ReasoningBlockCompactor compactor(rollback, tools);
+  ContextShifter shifter(compactor, rollback);
+  FakeLlamaContextOps ops(/*ctxSize=*/100);
+
+  shifter.setDiscardBudget(20);
+  compactor.setRemoveThinkingFromContext(true);
+  compactor.setReasoningEnabled(true);
+  compactor.setNeedsRecurrentSnapshot(true);
+  rollback.seedReasoningBoundaryForTesting(/*nPast=*/60);
+  ASSERT_TRUE(rollback.hasReasoningBoundary());
+
+  const auto slide = shifter.applyGenerationDiscard(
+      /*ctx=*/nullptr,
+      kSeqId,
+      /*pos=*/100,
+      /*protectedPrefixPos=*/10,
+      /*effectiveCtx=*/100,
+      /*cacheTokens=*/-1,
+      "[Test]",
+      ops);
+
+  EXPECT_EQ(slide.kind, ContextShifter::Outcome::Kind::Slid);
+  EXPECT_FALSE(rollback.hasReasoningBoundary())
+      << "generation slides clear the stale recurrent boundary immediately";
+
+  compactor.setOpenSpan(/*start=*/80);
+  EXPECT_FALSE(compactor.hasOpenSpan())
+      << "the opener is not trackable after its boundary was invalidated";
+
+  const auto outcome =
+      compactor.compact(/*ctx=*/nullptr, kSeqId, slide.newPos, "[Test]");
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
+      << "a generated opener after a boundary-invalidating slide must "
+         "hard-fail instead of making remove_thinking_from_context a NoOp";
+  EXPECT_NE(
+      outcome.failureMessage.find("slide invalidated"), std::string::npos);
+  EXPECT_EQ(compactor.blockDiscards(), 0)
+      << "slide-invalidation failures are not successful reasoning discards";
+}
+
+TEST_F(
+    ContextSliderTest,
+    GenerationSlideBeforeGeneratedOpenerNoOpsWhenNoOpenerAppears) {
+  ReasoningRollbackState rollback;
+  ToolsCompactController tools(std::nullopt);
+  ReasoningBlockCompactor compactor(rollback, tools);
+  ContextShifter shifter(compactor, rollback);
+  FakeLlamaContextOps ops(/*ctxSize=*/100);
+
+  shifter.setDiscardBudget(20);
+  compactor.setRemoveThinkingFromContext(true);
+  compactor.setReasoningEnabled(true);
+  compactor.setNeedsRecurrentSnapshot(true);
+  rollback.seedReasoningBoundaryForTesting(/*nPast=*/60);
+
+  const auto slide = shifter.applyGenerationDiscard(
+      /*ctx=*/nullptr,
+      kSeqId,
+      /*pos=*/100,
+      /*protectedPrefixPos=*/10,
+      /*effectiveCtx=*/100,
+      /*cacheTokens=*/-1,
+      "[Test]",
+      ops);
+
+  EXPECT_EQ(slide.kind, ContextShifter::Outcome::Kind::Slid);
+  EXPECT_FALSE(rollback.hasReasoningBoundary());
+
+  const auto outcome =
+      compactor.compact(/*ctx=*/nullptr, kSeqId, slide.newPos, "[Test]");
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::NoOp)
+      << "a boundary-invalidating slide should only hard-fail if reasoning is "
+         "actually emitted later";
+}
+
 TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
   ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
@@ -492,4 +555,158 @@ TEST_F(
   EXPECT_EQ(ops.seqAddCalls()[0].startPos, 90);
   EXPECT_EQ(ops.seqAddCalls()[0].endPos, 120);
   EXPECT_EQ(ops.seqAddCalls()[0].delta, -40);
+}
+
+// ---------------------------------------------------------------------------
+// compactKvRange — used by `TextLlmContext::compactThinkSpan` to drop a
+// model's reasoning block from the KV cache without involving the regular
+// slide policy logic.
+// ---------------------------------------------------------------------------
+
+TEST_F(ContextSliderTest, CompactKvRange_HappyPath_RemovesRangeAndShiftsTail) {
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+
+  // Cache layout:  [user prompt 100][reasoning 50][answer 30]
+  // We want to drop the reasoning block at [100, 150).
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/100,
+      /*endPos=*/150,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::Compacted);
+  EXPECT_EQ(outcome.discarded, 50);
+  EXPECT_EQ(outcome.newNPast, 130);
+
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
+  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 100);
+  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 150);
+
+  // The surviving tail `[150, 180)` should shift down by 50 to occupy
+  // `[100, 130)`.
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 150);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 180);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -50);
+}
+
+TEST_F(ContextSliderTest, CompactKvRange_EmptyRange_IsNoOp) {
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/100,
+      /*endPos=*/100,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::NoOp);
+  EXPECT_EQ(outcome.discarded, 0);
+  EXPECT_EQ(outcome.newNPast, 180);
+  EXPECT_TRUE(ops.seqRmCalls().empty());
+  EXPECT_TRUE(ops.seqAddCalls().empty());
+}
+
+TEST_F(ContextSliderTest, CompactKvRange_InvertedRange_IsNoOp) {
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/150,
+      /*endPos=*/100,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::NoOp);
+  EXPECT_EQ(outcome.newNPast, 180);
+  EXPECT_TRUE(ops.seqRmCalls().empty());
+  EXPECT_TRUE(ops.seqAddCalls().empty());
+}
+
+TEST_F(ContextSliderTest, CompactKvRange_EndPastNPast_IsNoOp) {
+  // Defensive: end > nPast means the recorded span is stale (e.g. a
+  // slide already discarded some of those tokens). Refuse to compact
+  // rather than corrupt the cache.
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/100,
+      /*endPos=*/200,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::NoOp);
+  EXPECT_EQ(outcome.newNPast, 180);
+  EXPECT_TRUE(ops.seqRmCalls().empty());
+}
+
+TEST_F(ContextSliderTest, CompactKvRange_NegativeStart_IsNoOp) {
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/-1,
+      /*endPos=*/50,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::NoOp);
+  EXPECT_EQ(outcome.newNPast, 180);
+  EXPECT_TRUE(ops.seqRmCalls().empty());
+}
+
+TEST_F(ContextSliderTest, CompactKvRange_SeqRmFailure_ReportsAndSkipsShift) {
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+  ops.failSeqRmFor({.seqId = kSeqId, .startPos = 100, .endPos = 150});
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/100,
+      /*endPos=*/150,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::MemoryOperationFailed);
+  // Caller must not advance bookkeeping on a failed compaction.
+  EXPECT_EQ(outcome.newNPast, 180);
+  EXPECT_EQ(outcome.discarded, 0);
+  // seqRm was attempted but failed; seqAdd must NOT run, otherwise the
+  // cache would be shifted without the corresponding window removed.
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  EXPECT_TRUE(ops.seqAddCalls().empty());
+}
+
+TEST_F(ContextSliderTest, CompactKvRange_TailExactlyAtEnd_NoShiftNeeded) {
+  // Range covers everything from `startPos` to `nPast`. The shift is a
+  // no-op range `[end, end)` for `seqAdd`, but we still expect it to
+  // be invoked (the slider does not branch on empty tails — `seqAdd`
+  // with start==end is a cheap no-op for the underlying llama API).
+  FakeLlamaContextOps ops(/*ctxSize=*/1024);
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/100,
+      /*endPos=*/180,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::Compacted);
+  EXPECT_EQ(outcome.discarded, 80);
+  EXPECT_EQ(outcome.newNPast, 100);
+  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
+  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
+  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 180);
+  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 180);
+  EXPECT_EQ(ops.seqAddCalls()[0].delta, -80);
 }

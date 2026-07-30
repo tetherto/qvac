@@ -1,8 +1,118 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0]
 
----
+Release Date: 2026-07-27
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.4.0
+
+This release migrates `@qvac/ai-sdk-provider` to AI SDK 7, adds native files / speech / transcription contracts on top of the OpenAI-compatible transport, and requires `@qvac/cli` 0.9 for managed mode so callers pick up the latest serve fixes through the published package graph.
+
+## Breaking Changes
+
+### AI SDK 7 and Node 22
+
+The provider now depends on AI SDK 7 (`ai@^7`) and `@ai-sdk/openai-compatible@^3`. Node 20 is no longer supported; runtimes must be Node 22 or newer.
+
+**Before:**
+
+```bash
+npm install @qvac/ai-sdk-provider ai@^6 @ai-sdk/openai-compatible@^2
+```
+
+**After:**
+
+```bash
+npm install @qvac/ai-sdk-provider ai@^7 @ai-sdk/openai-compatible@^3
+```
+
+Language, embedding, and image calls keep the same OpenAI-compatible wire shape. Custom middleware and direct model integrations must use the AI SDK v4 provider interfaces that ship with these versions.
+
+### Managed Mode Requires CLI 0.9
+
+The optional `@qvac/cli` peer for managed mode is now `^0.9.0` only. Older CLI minors (`0.6`–`0.8`) are no longer accepted, so managed installs resolve the CLI 0.9 / SDK 0.16 runtime that includes the latest serve fixes.
+
+**Before:**
+
+```json
+{ "peerDependencies": { "@qvac/cli": "^0.6.0 || ^0.7.0 || ^0.8.0" } }
+```
+
+**After:**
+
+```json
+{ "peerDependencies": { "@qvac/cli": "^0.9.0" } }
+```
+
+Install managed mode with:
+
+```bash
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.9.0
+```
+
+## Native Files, Speech, and Transcription
+
+External and managed providers now expose QVAC-native `files()`, `transcriptionModel()`, and `speechModel()` contracts composed over the existing OpenAI-compatible fallback. Local `uploadFile` references resolve through the running `qvac serve` process instead of becoming cloud URLs.
+
+```ts
+import { createQvac } from '@qvac/ai-sdk-provider'
+import { generateText, uploadFile } from 'ai'
+import { readFileSync } from 'node:fs'
+
+const qvac = createQvac({ baseURL: 'http://127.0.0.1:11434/v1', apiKey: 'qvac' })
+
+const file = await uploadFile({
+  provider: qvac,
+  file: readFileSync('./note.txt'),
+  mediaType: 'text/plain'
+})
+
+const { text } = await generateText({
+  model: qvac('qwen3.5-9b'),
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { type: 'file', data: file },
+        { type: 'text', text: 'Summarize this.' }
+      ]
+    }
+  ]
+})
+```
+
+## Model Constant Refresh
+
+The mirrored model constant surface picks up the latest TTS-ggml / Parler TTS exports and drops retired Parakeet and older Chatterbox / Supertonic constants that the SDK registry no longer publishes. See `models.md` for the full added and removed lists.
+
+## Compatibility
+
+`createQvac()` external mode remains the default synchronous path. Managed mode (`mode: 'managed'`) keeps the same options shape (`models`, `reuse`, `closeOnParentExit`, timeouts) and still returns a `ManagedQvacProvider` with `baseURL` / `port` / `pid` / `close()`.
+
+## [0.3.0]
+
+Release Date: 2026-07-03
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.3.0
+
+## Larger Agent Models in the Catalog
+
+The friendly model catalog now includes larger models aimed at agentic and coding workloads, alongside the existing families:
+
+- `gpt-oss-20b` → `GPT_OSS_20B_INST_Q4_K_M`
+- `gemma4-31b` → `GEMMA4_31B_MULTIMODAL_Q4_K_M`
+- `qwen3.6-27b` → `QWEN3_6_27B_MULTIMODAL_Q4_K_XL`
+- `qwen3.6-35b-a3b` → `QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M`
+
+These ids resolve to model constants already shipped in `@qvac/sdk` 0.14.x, so `qvac serve` can load them directly. Callers can now select these larger models by friendly id in both catalog UIs and generated serve configs.
+
+## Managed Mode Supports CLI 0.8
+
+`@qvac/ai-sdk-provider` now accepts the `@qvac/cli` `0.8.x` line as its optional managed-mode CLI peer, in addition to `0.6.x` and `0.7.x`. Installing the provider alongside CLI 0.8 resolves to the `@qvac/sdk` 0.14.x runtime, which is where the larger catalog models are available.
+
+## Compatibility
+
+External mode is unchanged and remains the default synchronous path. There are no breaking API changes in this release; the catalog additions are additive and existing model ids continue to resolve as before.
 
 ## [0.2.2]
 
@@ -10,11 +120,11 @@ Release Date: 2026-06-16
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.2.2
 
-### Fixed
+## Managed Mode Supports CLI 0.7
 
-- Allow managed-mode installs with either the `@qvac/cli` `0.6.x` or `0.7.x` line as the optional CLI peer, so strict package managers can resolve the provider while CLI 0.7 brings in the newer SDK runtime.
+`@qvac/ai-sdk-provider` now accepts both the `@qvac/cli` `0.6.x` and `0.7.x` lines as its optional managed-mode CLI peer. This lets strict package managers install the provider alongside CLI 0.7, which resolves to the newer `@qvac/sdk` 0.13.x runtime.
 
----
+No provider API changes are included in this patch release.
 
 ## [0.2.1]
 
@@ -22,11 +132,11 @@ Release Date: 2026-06-15
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.2.1
 
-### Fixed
+## Managed Mode Compatibility
 
-- Require the published `@qvac/cli` `0.6.x` line as the optional managed-mode CLI peer, so consumers can install `@qvac/ai-sdk-provider` alongside the current CLI release without strict peer-resolution failures.
+`@qvac/ai-sdk-provider` now declares the published `@qvac/cli` `0.6.x` line as its optional managed-mode CLI peer. This keeps strict package managers from rejecting installs where applications use managed mode with the current QVAC CLI release.
 
----
+No provider API changes are included in this patch release.
 
 ## [0.2.0]
 
@@ -34,12 +144,30 @@ Release Date: 2026-06-10
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.2.0
 
-### Added
+## Managed Mode
 
-- **Managed mode (`mode: 'managed'`).** `createQvac({ mode: 'managed', models, ... })` returns a `Promise<ManagedQvacProvider>` that synthesizes an ephemeral `qvac.config.json` from a model list and brings up `qvac serve openai` for you — no hand-authored config or separate CLI step. Serves are **shared** across processes via a *fleet key* (model set + per-model config + host + binary + pinned port), owned by a **detached runner** that idle-reaps the serve once no consumer process remains for `serveIdleTimeout` (default 5 min). `close()` / `await using` detaches the calling process; a serve still in use by another consumer keeps running. Includes crash-recovery (`fetch` re-resolves and retries once on `ECONNREFUSED`) and a self-healing registry under `~/.qvac/managed-serves/`. New options: `models`, `servePort`, `serveHost`, `serveStartTimeout`, `serveBinPath`, `reuse`, `serveIdleTimeout`. New exports: `ManagedQvacProvider`, `QvacManagedOptions`, `QvacManagedModel`, `QvacExternalOptions`, and the managed error classes (`QvacManagedModeError` + subclasses) with the `QvacManagedErrorCode` union. Requires the optional `@qvac/cli` peer dependency. **External mode is unchanged**; the managed subsystem is dynamically imported only when `mode: 'managed'` is set.
-- **Refreshed model catalog.** Updated the generated provider catalog against the live QVAC registry for the 0.2.0 release, adding 17 OpenAI-compatible model constants with no removals.
+`@qvac/ai-sdk-provider` can now run `qvac serve` for local applications instead of requiring users to start a separate server first. Calling `createQvac({ mode: 'managed', models })` creates an ephemeral serve config, starts the QVAC CLI on a free local port, waits for the OpenAI-compatible endpoint to become healthy, and returns a normal AI SDK provider pointed at that serve.
 
----
+Managed serves are shared by default. If another process requests the same model fleet and config, it attaches to the existing warm serve instead of spawning another process and loading the same model into memory again. A detached runner owns the serve and reaps it after the last consumer exits and the idle timeout expires.
+
+## Lifecycle Improvements
+
+The managed serve lifecycle is designed for coding agents and other local tools that may start, restart, or crash frequently:
+
+- `close()` and `await using` detach the current consumer without killing a serve that another session is still using.
+- `closeOnParentExit` lets plugin hosts clean up when their parent tool exits.
+- Process-group shutdown ensures the serve and its inference worker are terminated together.
+- Connection-refused recovery re-resolves a serve and retries once when the backing process has disappeared before a request starts.
+
+## Friendly Model Catalog
+
+The package now exposes a small public catalog that maps models.dev-style ids, such as `qwen3.5-9b`, to the SDK constants that `qvac serve` loads. This keeps model ids consistent across catalog UIs, provider configuration, and generated serve configs while preserving support for raw SDK constants.
+
+The generated catalog was refreshed against the live QVAC registry for this release, adding 17 OpenAI-compatible model constants with no removals.
+
+## Compatibility
+
+External mode is unchanged and remains the default synchronous path. Managed mode is loaded only when `mode: 'managed'` is used and requires `@qvac/cli` as an optional peer dependency.
 
 ## [0.1.0]
 
@@ -70,7 +198,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
-  apiKey: 'qvac'                         // anything non-empty; serve does not validate
+  apiKey: 'qvac' // anything non-empty; serve does not validate
 })
 
 const { textStream } = streamText({
@@ -83,7 +211,7 @@ for await (const chunk of textStream) {
 }
 ```
 
-The provider exposes the same surface as any AI SDK provider — `qvac('alias')` for the default chat model, plus explicit `qvac.chatModel(...)`, `qvac.completionModel(...)`, `qvac.textEmbeddingModel(...)`, and `qvac.imageModel(...)` accessors. A pre-built default instance (`qvac`) is also exported for quick scripts; explicit `createQvac({ baseURL })` is recommended until the default `baseURL` is finalized (see *Known limitations* below).
+The provider exposes the same surface as any AI SDK provider — `qvac('alias')` for the default chat model, plus explicit `qvac.chatModel(...)`, `qvac.completionModel(...)`, `qvac.textEmbeddingModel(...)`, and `qvac.imageModel(...)` accessors. A pre-built default instance (`qvac`) is also exported for quick scripts; explicit `createQvac({ baseURL })` is recommended until the default `baseURL` is finalized (see _Known limitations_ below).
 
 ---
 
@@ -94,8 +222,8 @@ Every model in the QVAC P2P registry that has an OpenAI-shaped endpoint is expor
 ```ts
 import { models, allModels } from '@qvac/ai-sdk-provider'
 
-models.QWEN3_4B_INST_Q4_K_M.endpointCategory  // 'chat'      (compile-time known)
-models.WHISPER_EN_TINY_Q8_0.endpointCategory  // 'transcription'
+models.QWEN3_4B_INST_Q4_K_M.endpointCategory // 'chat'      (compile-time known)
+models.WHISPER_EN_TINY_Q8_0.endpointCategory // 'transcription'
 
 for (const m of allModels) {
   console.log(`${m.name} (${m.endpointCategory}, ${m.expectedSize} bytes)`)

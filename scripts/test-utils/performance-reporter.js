@@ -99,10 +99,24 @@ function _detectGpu (platform) {
     : null
   if (!nodeExecSync && !bareSpawnSync) return null
 
+  // Accepts either a flat string command (split on whitespace) or an explicit
+  // argv array. Use the array form when a single argument must retain spaces or
+  // shell metacharacters — e.g. PowerShell's `-Command "<expr>"`, where the `|`
+  // is parsed by PowerShell itself, not by an OS shell. Splitting such a command
+  // on whitespace shattered the pipeline, so PowerShell echoed the literal query
+  // back and it surfaced as the Windows "GPU name" in perf reports (QVAC-21618).
   function _safeExec (cmd) {
+    const argv = Array.isArray(cmd) ? cmd.filter(Boolean) : null
+
     if (nodeExecSync) {
+      // Node's execSync runs through a shell, so a flat string works as-is. For
+      // the argv form, quote any argument containing whitespace so the shell
+      // keeps it as a single token (and does not interpret the inner `|`).
+      const cmdStr = argv
+        ? argv.map(part => /\s/.test(part) ? `"${part}"` : part).join(' ')
+        : cmd
       try {
-        return nodeExecSync(cmd, {
+        return nodeExecSync(cmdStr, {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
           timeout: 5000
@@ -111,11 +125,11 @@ function _detectGpu (platform) {
         return null
       }
     }
-    // Bare path: spawnSync takes (bin, args[]). All commands we shell
-    // out to here are flat (no shell metacharacters, no quoting) so a
-    // simple split-on-whitespace is safe.
+    // Bare path: spawnSync takes (bin, args[]) with no shell, so an explicit
+    // argv array passes metacharacters through untouched. Flat strings (which
+    // carry no shell metacharacters) are split on whitespace as before.
     try {
-      const parts = cmd.split(/\s+/).filter(Boolean)
+      const parts = argv || cmd.split(/\s+/).filter(Boolean)
       if (!parts.length) return null
       const res = bareSpawnSync(parts[0], parts.slice(1), {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -200,9 +214,46 @@ function _detectGpu (platform) {
     return null
   }
 
+  // NVIDIA kernel-driver procfs fallback for Linux. /proc/driver/nvidia exists
+  // whenever the nvidia module is loaded (guaranteed on a CUDA host) and carries
+  // the friendly model name, so it recovers "NVIDIA GeForce RTX 3090" even when
+  // the nvidia-smi *binary* is not installed / not on PATH — the case on the GPU
+  // CI runners. QVAC-20684.
+  function _readProcNvidia () {
+    let fsM = fs
+    let pathM = pathMod
+    if (!fsM || !pathM) {
+      try {
+        fsM = fsM || require('fs')
+        pathM = pathM || require('path')
+      } catch (_) {
+        return null
+      }
+    }
+    const base = '/proc/driver/nvidia/gpus'
+    let gpus
+    try {
+      gpus = fsM.readdirSync(base)
+    } catch (_) {
+      return null
+    }
+    for (const gpu of gpus.sort()) {
+      try {
+        const info = fsM.readFileSync(pathM.join(base, gpu, 'information'), 'utf8')
+        const m = info.match(/^Model:\s*(.+)$/m)
+        if (m) return m[1].trim()
+      } catch (_) {
+        continue
+      }
+    }
+    return null
+  }
+
   if (platform === 'linux') {
     const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
     if (nv) return nv
+    const proc = _readProcNvidia()
+    if (proc) return proc
     const lspci = _safeExec('lspci')
     if (lspci) {
       const lines = lspci.split('\n').filter(l => /VGA|3D|Display/i.test(l))
@@ -221,6 +272,14 @@ function _detectGpu (platform) {
   if (platform === 'win32') {
     const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
     if (nv) return nv
+    // PowerShell CIM: `wmic` was removed in Windows 11 24H2 / Server 2025, so it
+    // is absent on the windows-2025 runner. Try CIM first, keep wmic for older
+    // Windows images. QVAC-20684.
+    const ps = _safeExec(['powershell', '-NoProfile', '-Command', 'Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name'])
+    if (ps) {
+      const lines = ps.split('\n').map(l => l.trim()).filter(Boolean)
+      if (lines.length) return lines[0]
+    }
     const wmic = _safeExec('wmic path win32_VideoController get name')
     if (wmic) {
       const lines = wmic.split('\n').slice(1).map(l => l.trim()).filter(Boolean)
@@ -496,28 +555,18 @@ const METRIC_COLUMNS = {
     { key: 'whisper_decode_time_ms', label: 'Decode (ms)' },
     { key: 'audio_duration_ms', label: 'Audio (ms)' }
   ],
-  // ONNX TTS RTF benchmark — one row per (engine, variant, backend, useGPU)
-  // configuration. Mirrors the per-engine `aggregate-onnx-tts-rtf.js`
-  // desktop aggregator's column set so the rendered Step Summary matches
-  // what engineers see in `summarize` runs.
-  'onnx-tts': [
-    { key: 'real_time_factor', label: 'Mean RTF' },
-    { key: 'rtf_p50', label: 'P50 RTF' },
-    { key: 'rtf_p95', label: 'P95 RTF' },
-    { key: 'wall_time_ms', label: 'Wall (ms)' },
-    { key: 'cold_rtf', label: 'Cold RTF' },
-    { key: 'model_load_ms', label: 'Load (ms)' },
-    { key: 'tps', label: 'Tokens/sec' },
-    { key: 'ttfa_ms', label: 'TTFA (ms)' },
-    { key: 'inter_chunk_p95_ms', label: 'Inter-chunk P95 (ms)' }
-  ],
   diffusion: [
     { key: 'model_load_ms', label: 'Load (ms)' },
     { key: 'generation_ms', label: 'Gen (ms)' },
     { key: 'ttfb_ms', label: 'TTFB (ms)' },
     { key: 'total_steps', label: 'Steps' },
     { key: 'width', label: 'Width' },
-    { key: 'height', label: 'Height' }
+    { key: 'height', label: 'Height' },
+    { key: 'conditioner_ms', label: 'Cond (ms)' },
+    { key: 'denoise_ms', label: 'Denoise (ms)' },
+    { key: 'vae_ms', label: 'VAE (ms)' },
+    { key: 'post_process_ms', label: 'Post (ms)' },
+    { key: 'steps_per_second', label: 'Steps/s' }
   ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -607,6 +656,11 @@ function createPerformanceReporter (opts) {
           total_steps: null,
           width: null,
           height: null,
+          conditioner_ms: null,
+          denoise_ms: null,
+          vae_ms: null,
+          post_process_ms: null,
+          steps_per_second: null,
           ...metrics
         },
         input: (extra && extra.input) || null,

@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 
+#include "ReasoningUtils.hpp"
 #include "common/chat.h"
 #include "common/common.h"
 
@@ -16,10 +17,54 @@ namespace utils {
 
 bool isQwen3Model(const ::llama_model* model);
 bool isHarmonyModel(const ::llama_model* model);
+bool isGemma4Model(const ::llama_model* model);
 llama_token getHarmonyCallToken(::llama_context* lctx);
 std::optional<std::string> getModelArchitecture(const ::llama_model* model);
 bool supportsToolsCompactForModelMetadata(
     const std::optional<std::string>& architecture);
+
+// Reasoning channel markers for the model family, or std::nullopt
+// when the family has no recognised channel. Extend the table here
+// to add support for new families.
+std::optional<ReasoningTags>
+selectReasoningTagsForModel(const ::llama_model* model);
+
+// Architecture-only variant. Covers families identifiable from
+// `general.architecture` alone (Qwen3-family: `qwen3`, `qwen35`,
+// `qwen35moe`, ...). Gemma 4 needs basename and is resolved in
+// `selectReasoningTagsForModel`.
+std::optional<ReasoningTags> selectReasoningTagsForArchitecture(
+    const std::optional<std::string>& architecture);
+
+/**
+ * @brief Selects reasoning detection tags by preferring chat-template-derived
+ * values over the model-family fallback.
+ *
+ * Returns `{templateThinkingStartTag, templateThinkingEndTag}` when both
+ * template tags are non-empty. Otherwise returns `fallbackTags`, which may
+ * itself be `std::nullopt` when the model family has no recognised
+ * reasoning channel.
+ *
+ * Single source of truth for the "template-first, family-fallback" policy
+ * used by `remove_thinking_from_context` detection / compaction. Pure
+ * function with no runtime dependencies, so it is unit-testable in
+ * isolation.
+ */
+std::optional<ReasoningTags> selectReasoningTagSource(
+    const std::string& templateThinkingStartTag,
+    const std::string& templateThinkingEndTag,
+    const std::optional<ReasoningTags>& fallbackTags);
+
+/**
+ * @brief Returns true when `architecture` is in the Qwen3 reasoning
+ * family (`qwen3`, `qwen3moe`, `qwen35`, `qwen35moe`).
+ *
+ * Used to scope Qwen3-specific runtime behaviors (e.g. EOS-inside-
+ * reasoning close-marker substitution) so they do not silently apply
+ * to other families that also have a recognised reasoning channel
+ * (e.g. Gemma 4). Empty / unknown architectures return false.
+ */
+bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture);
 
 /**
  * @brief Returns true when the GGUF metadata basename identifies a MedPsy
@@ -38,6 +83,13 @@ bool isMedPsyBasename(std::string_view basename);
  * Qwen3 templates.
  */
 bool isMedPsyModel(const ::llama_model* model);
+
+/**
+ * @brief Returns true when `basename` (case-insensitive) contains a
+ * Gemma 4 marker substring. Exposed for unit testing without requiring
+ * a real ::llama_model.
+ */
+bool isGemma4Basename(std::string_view basename);
 
 std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
     const std::optional<std::string>& architecture);
@@ -71,11 +123,35 @@ std::string getChatTemplate(
  *
  * @p outThinkingForcedOpen (optional) receives the flag indicating that the
  *    template force-opened the reasoning channel in the prompt suffix.
+ * @p outThinkingStartTag (optional) receives the template-specific reasoning
+ *    start tag, when the template exposes one.
+ * @p outThinkingEndTag (optional) receives the template-specific reasoning
+ *    end tag, when the template exposes one.
+ * @p outGenerationPrompt (optional) receives the assistant generation prompt
+ *    already appended to the formatted prompt.
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs,
-    bool* outThinkingForcedOpen = nullptr);
+    bool* outThinkingForcedOpen = nullptr,
+    std::string* outThinkingStartTag = nullptr,
+    std::string* outThinkingEndTag = nullptr,
+    std::string* outGenerationPrompt = nullptr);
+
+/**
+ * @brief Configures the common-sampling reasoning-budget fields from
+ * template-derived thinking tags.
+ *
+ * Returns true when the sampling block changed and the caller should recreate
+ * the common_sampler.
+ */
+bool configureReasoningBudgetSampling(
+    common_params& params, ::llama_context* lctx,
+    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& generationPrompt);
+
+std::string getThinkingForcedOpenText(
+    const std::string& generationPrompt, const std::string& thinkingStartTag);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

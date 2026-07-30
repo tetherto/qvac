@@ -9,7 +9,7 @@ const TranscriptionWhispercpp = require('../index.js')
 // Demonstrates reloading the model with different configurations
 // This example transcribes the same audio twice with different language settings
 
-async function main () {
+async function main() {
   const args = process.argv.slice(2)
   const [audioPathArg, modelPathArg] = args
 
@@ -18,7 +18,9 @@ async function main () {
   const modelPath = modelPathArg || path.join(modelsDir, 'ggml-tiny.bin')
 
   if (!fs.existsSync(modelPath)) {
-    console.error(`Model file not found at ${modelPath}. Download or provide a path as the second argument.`)
+    console.error(
+      `Model file not found at ${modelPath}. Download or provide a path as the second argument.`
+    )
     process.exit(1)
   }
   if (!fs.existsSync(audioFilePath)) {
@@ -143,7 +145,7 @@ async function main () {
   console.log('='.repeat(60))
 }
 
-async function transcribeAudio (model, audioFilePath) {
+async function transcribeAudio(model, audioFilePath) {
   const bitRate = 128000
   const bytesPerSecond = bitRate / 8
   const audioStream = fs.createReadStream(audioFilePath, { highWaterMark: bytesPerSecond })
@@ -167,13 +169,16 @@ async function transcribeAudio (model, audioFilePath) {
   }
 
   if (full.length) {
-    return full.map(s => s.text).join(' ').trim()
+    return full
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
   } else {
     return '(No transcription output received)'
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('❌ Error:', err)
   process.exit(1)
 })

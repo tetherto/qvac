@@ -10,7 +10,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(qvac-lib-infer-vla C CXX)
 
@@ -74,6 +74,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/pi05.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/groot.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/model_factory.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
@@ -104,15 +105,6 @@ target_compile_definitions(${qvac-lib-infer-vla}
 if(GGML_BACKEND_DL)
   target_compile_definitions(${qvac-lib-infer-vla} PRIVATE GGML_BACKEND_DL)
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${qvac-lib-infer-vla}
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)

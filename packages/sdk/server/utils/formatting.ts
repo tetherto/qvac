@@ -1,47 +1,39 @@
-import crypto from "bare-crypto";
-import { Buffer } from "bare-buffer";
+import crypto from 'bare-crypto'
+import { Buffer } from 'bare-buffer'
 
 /**
  * Generate a short hash (16 characters) from any input string
  */
 export function generateShortHash(input: string): string {
-  const hash = crypto
-    .createHash("sha-256")
-    .update(Buffer.from(input, "utf8"))
-    .digest("hex");
-  return hash.substring(0, 16);
+  const hash = crypto.createHash('sha-256').update(Buffer.from(input, 'utf8')).digest('hex')
+  return hash.substring(0, 16)
 }
 
 function isModelDescriptor(value: unknown): value is { src: string } {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "src" in value &&
-    typeof (value).src === "string"
-  );
+    typeof value === 'object' && value !== null && 'src' in value && typeof value.src === 'string'
+  )
 }
 
 function normalizeValue(value: unknown): unknown {
   if (isModelDescriptor(value)) {
-    return value.src;
+    return value.src
   }
   if (Array.isArray(value)) {
-    return value.map(normalizeValue);
+    return value.map(normalizeValue)
   }
-  if (typeof value === "object" && value !== null) {
-    return normalizeConfig(value as Record<string, unknown>);
+  if (typeof value === 'object' && value !== null) {
+    return normalizeConfig(value as Record<string, unknown>)
   }
-  return value;
+  return value
 }
 
-function normalizeConfig(
-  config: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+function normalizeConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
   for (const key of Object.keys(config).sort()) {
-    result[key] = normalizeValue(config[key]);
+    result[key] = normalizeValue(config[key])
   }
-  return result;
+  return result
 }
 
 /**
@@ -49,11 +41,9 @@ function normalizeConfig(
  * - Recursively sorts all object keys
  * - Normalizes ModelDescriptor objects to their src string
  */
-export function canonicalConfigString(
-  config: Record<string, unknown> | undefined,
-): string {
-  if (!config) return "{}";
-  return JSON.stringify(normalizeConfig(config));
+export function canonicalConfigString(config: Record<string, unknown> | undefined): string {
+  if (!config) return '{}'
+  return JSON.stringify(normalizeConfig(config))
 }
 
 /**
@@ -63,17 +53,13 @@ export function canonicalConfigString(
  * @param decimals - Number of decimal places (default: 2)
  * @returns Percentage clamped between 0-100 with fixed decimal places
  */
-export function calculatePercentage(
-  current: number,
-  total: number,
-  decimals: number = 2,
-): number {
+export function calculatePercentage(current: number, total: number, decimals: number = 2): number {
   if (total <= 0 || current < 0) {
-    return 0;
+    return 0
   }
 
-  const rawPercentage = (current / total) * 100;
-  const clampedPercentage = Math.min(Math.max(rawPercentage, 0), 100);
+  const rawPercentage = (current / total) * 100
+  const clampedPercentage = Math.min(Math.max(rawPercentage, 0), 100)
 
-  return Number(clampedPercentage.toFixed(decimals));
+  return Number(clampedPercentage.toFixed(decimals))
 }

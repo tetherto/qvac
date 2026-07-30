@@ -12,13 +12,15 @@
  *   const responseA = run(() => addon.runJob(inputA))
  *   const responseB = run(() => addon.runJob(inputB)) // waits for A
  */
-function exclusiveRunQueue () {
+function exclusiveRunQueue() {
   let waiter = Promise.resolve()
 
-  return async function run (fn) {
+  return async function run(fn) {
     const prev = waiter
     let release
-    waiter = new Promise(resolve => { release = resolve })
+    waiter = new Promise((resolve) => {
+      release = resolve
+    })
     await prev
     try {
       return await fn()

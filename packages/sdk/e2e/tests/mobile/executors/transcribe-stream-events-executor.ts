@@ -1,88 +1,83 @@
-import { transcribeStream } from "@qvac/sdk";
-import type { TestResult } from "@tetherto/qvac-test-suite/mobile";
-import type { ResourceManager } from "../../shared/resource-manager.js";
-import { ModelAssetExecutor } from "./model-asset-executor.js";
+import { transcribeStream } from '@qvac/sdk'
+import type { TestResult } from '@tetherto/qvac-test-suite/mobile'
+import type { ResourceManager } from '../../shared/resource-manager.js'
+import { ModelAssetExecutor } from './model-asset-executor.js'
 import {
   runTranscribeStreamEventsTest,
-  type TranscribeStreamEventsParams,
-} from "../../shared/transcribe-stream-events-runner.js";
-import { transcribeStreamEventsTests } from "../../transcribe-stream-events-tests.js";
+  type TranscribeStreamEventsParams
+} from '../../shared/transcribe-stream-events-runner.js'
+import { transcribeStreamEventsTests } from '../../transcribe-stream-events-tests.js'
 
 interface BaseParams extends TranscribeStreamEventsParams {
-  audioFileName: string;
+  audioFileName: string
 }
 
 export class MobileTranscribeStreamEventsExecutor extends ModelAssetExecutor<
   typeof transcribeStreamEventsTests
 > {
-  pattern = /^transcribe-stream-events-/;
-  protected handlers = {};
-  protected defaultHandler = this.run.bind(this);
+  pattern = /^transcribe-stream-events-/
+  protected handlers = {}
+  protected defaultHandler = this.run.bind(this)
 
-  private audioAssets: Record<string, number> | null = null;
+  private audioAssets: Record<string, number> | null = null
 
   constructor(resources: ResourceManager) {
-    super(resources);
+    super(resources)
   }
 
   private async loadAudioAssets() {
     if (!this.audioAssets) {
       // @ts-ignore - assets.ts is generated at consumer build time
-      const assets = await import("../../../../assets");
-      this.audioAssets = assets.audio;
+      const assets = await import('../../../../assets')
+      this.audioAssets = assets.audio
     }
-    return this.audioAssets!;
+    return this.audioAssets!
   }
 
   private async loadAudioBytes(audioFileName: string): Promise<Uint8Array> {
-    const audio = await this.loadAudioAssets();
-    const assetModule = audio[audioFileName];
+    const audio = await this.loadAudioAssets()
+    const assetModule = audio[audioFileName]
     if (!assetModule) {
-      throw new Error(`Audio fixture not found in bundled assets: ${audioFileName}`);
+      throw new Error(`Audio fixture not found in bundled assets: ${audioFileName}`)
     }
-    const path = await this.resolveAsset(assetModule);
+    const path = await this.resolveAsset(assetModule)
     // @ts-ignore - expo-file-system is a peer dependency available in mobile context
-    const { File } = await import("expo-file-system");
-    return await new File(`file://${path}`).bytes();
+    const { File } = await import('expo-file-system')
+    return await new File(`file://${path}`).bytes()
   }
 
-  private async run(
-    testId: string,
-    params: unknown,
-  ): Promise<TestResult> {
-    const p = params as BaseParams;
-    const modelId = await this.resources.ensureLoaded("whisper");
+  private async run(testId: string, params: unknown): Promise<TestResult> {
+    const p = params as BaseParams
+    const modelId = await this.resources.ensureLoaded('whisper')
 
-    if (testId === "transcribe-stream-events-invalid") {
+    if (testId === 'transcribe-stream-events-invalid') {
       try {
         await transcribeStream({
           modelId,
           emitVadEvents: p.emitVadEvents as true,
           ...(p.endOfTurnSilenceMs !== undefined && {
-            endOfTurnSilenceMs: p.endOfTurnSilenceMs,
-          }),
-        });
+            endOfTurnSilenceMs: p.endOfTurnSilenceMs
+          })
+        })
         return {
           passed: false,
-          output: `expected transcribeStream to reject endOfTurnSilenceMs=${p.endOfTurnSilenceMs}`,
-        };
+          output: `expected transcribeStream to reject endOfTurnSilenceMs=${p.endOfTurnSilenceMs}`
+        }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
+        const msg = error instanceof Error ? error.message : String(error)
         if (/endOfTurnSilenceMs|nonnegative|invalid/i.test(msg)) {
-          return { passed: true, output: msg };
+          return { passed: true, output: msg }
         }
         return {
           passed: false,
-          output: `unexpected error message for invalid endOfTurnSilenceMs: ${msg}`,
-        };
+          output: `unexpected error message for invalid endOfTurnSilenceMs: ${msg}`
+        }
       }
     }
 
-    const bytes = await this.loadAudioBytes(p.audioFileName);
+    const bytes = await this.loadAudioBytes(p.audioFileName)
     const mode =
-      testId === "transcribe-stream-events-disabled"
-        ? "events-disabled"
-        : "events-emitted";
-    return runTranscribeStreamEventsTest(modelId, bytes, p, mode);
+      testId === 'transcribe-stream-events-disabled' ? 'events-disabled' : 'events-emitted'
+    return runTranscribeStreamEventsTest(modelId, bytes, p, mode)
   }
 }

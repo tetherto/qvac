@@ -75,7 +75,15 @@ test('Object data with a nested results array still routes to JobEnded (regressi
   // suite would notice via classify() resolving to undefined; this unit
   // test pins down the current shape-keyed behaviour so the regression
   // is caught at the unit level, not at integration time.
-  const result = mapAddonEvent('struct ...::SomeWrappedOutput', { results: [{ label: 'x', confidence: 1 }] }, null)
-  t.is(result.type, 'JobEnded', 'TODAY: object data wins over inner array; revisit if upstream wraps Output in an object')
+  const result = mapAddonEvent(
+    'struct ...::SomeWrappedOutput',
+    { results: [{ label: 'x', confidence: 1 }] },
+    null
+  )
+  t.is(
+    result.type,
+    'JobEnded',
+    'TODAY: object data wins over inner array; revisit if upstream wraps Output in an object'
+  )
   t.alike(result.data.results, [{ label: 'x', confidence: 1 }])
 })

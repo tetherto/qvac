@@ -16,6 +16,10 @@ inputs:
   addon-npm-name:
     description: "NPM package name (used as artifact suffix)"
     required: true
+  artifact-name-suffix:
+    description: "Optional extra suffix appended to the artifact names, for callers that run several jobs per platform and would otherwise collide (upload-artifact rejects duplicates)"
+    required: false
+    default: ""
   enables-perf:
     description: "true if the addon emits perf data"
     required: false
@@ -27,6 +31,10 @@ inputs:
     description: "JSON array of Device Farm run ARNs (any length)"
     required: false
     default: "[]"
+  batch-suffix:
+    description: "Optional per-batch infix (e.g. 'bs256-faoff-') so a workflow that calls this action once per matrix batch does not collide artifact names. Must end with '-' when set. Empty = single-call behaviour."
+    required: false
+    default: ""
 
 outputs:
   console-log-artifact:
@@ -52,10 +60,12 @@ runs:
       shell: bash
       env:
         ADDON_NAME: ${{ inputs.addon-npm-name }}
+        EXTRA: ${{ inputs.artifact-name-suffix }}
       run: |
         # Strip @ + replace / with - so @qvac/transcription-whispercpp ->
         # qvac-transcription-whispercpp (used in upload-artifact names).
         SUFFIX=$(echo "$ADDON_NAME" | sed 's|@||g' | tr '/' '-')
+        if [ -n "$EXTRA" ]; then SUFFIX="${SUFFIX}-${EXTRA}"; fi
         echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
 
     - name: Download Device Farm logs
@@ -416,7 +426,7 @@ runs:
       if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
       uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
       with:
-        name: console-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        name: console-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.batch-suffix }}${{ inputs.platform }}
         path: console-logs/
         retention-days: 30
         if-no-files-found: ignore
@@ -498,7 +508,7 @@ runs:
       if: always() && inputs.enables-perf == 'true' && steps.extract_perf.outputs.found == 'true'
       uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
       with:
-        name: perf-report-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        name: perf-report-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.batch-suffix }}${{ inputs.platform }}
         path: perf-report/
         retention-days: 30
         if-no-files-found: ignore

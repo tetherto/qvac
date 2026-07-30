@@ -54,18 +54,18 @@ export type InvalidVectorStoreIdKind = 'invalid' | 'duplicate'
 
 export class InvalidVectorStoreIdError extends Error {
   readonly kind: InvalidVectorStoreIdKind
-  constructor (id: string, reason: string, kind: InvalidVectorStoreIdKind = 'invalid') {
+  constructor(id: string, reason: string, kind: InvalidVectorStoreIdKind = 'invalid') {
     super(`Invalid vector store id "${id}": ${reason}`)
     this.name = 'InvalidVectorStoreIdError'
     this.kind = kind
   }
 }
 
-export function generateVectorStoreId (): string {
+export function generateVectorStoreId(): string {
   return ID_PREFIX + randomBytes(ID_RANDOM_BYTES).toString('hex')
 }
 
-export function idToWorkspace (id: string): string {
+export function idToWorkspace(id: string): string {
   if (typeof id !== 'string' || id.length === 0) {
     throw new InvalidVectorStoreIdError(String(id), 'must be a non-empty string')
   }
@@ -78,15 +78,12 @@ export function idToWorkspace (id: string): string {
     }
   }
   if (!SAFE_ID_PATTERN.test(id)) {
-    throw new InvalidVectorStoreIdError(
-      id,
-      'must match [a-zA-Z0-9_-]{1,64}'
-    )
+    throw new InvalidVectorStoreIdError(id, 'must match [a-zA-Z0-9_-]{1,64}')
   }
   return id
 }
 
-function clone (meta: VectorStoreMeta): VectorStoreMeta {
+function clone(meta: VectorStoreMeta): VectorStoreMeta {
   return {
     id: meta.id,
     createdAt: meta.createdAt,
@@ -99,7 +96,7 @@ function clone (meta: VectorStoreMeta): VectorStoreMeta {
   }
 }
 
-function computeExpiresAt (
+function computeExpiresAt(
   baseMs: number,
   expiresAfter: VectorStoreExpiresAfter | null
 ): number | null {
@@ -109,12 +106,10 @@ function computeExpiresAt (
   return baseMs + Math.floor(days * 24 * 60 * 60 * 1000)
 }
 
-export function createVectorStoresStore (
-  now: () => number = Date.now
-): VectorStoresStore {
+export function createVectorStoresStore(now: () => number = Date.now): VectorStoresStore {
   const stores = new Map<string, VectorStoreMeta>()
 
-  function create (input: CreateVectorStoreInput = {}): VectorStoreMeta {
+  function create(input: CreateVectorStoreInput = {}): VectorStoreMeta {
     const id = input.id !== undefined ? idToWorkspace(input.id) : generateVectorStoreId()
     if (stores.has(id)) {
       throw new InvalidVectorStoreIdError(id, 'already exists', 'duplicate')
@@ -135,12 +130,12 @@ export function createVectorStoresStore (
     return clone(meta)
   }
 
-  function get (id: string): VectorStoreMeta | null {
+  function get(id: string): VectorStoreMeta | null {
     const meta = stores.get(id)
     return meta ? clone(meta) : null
   }
 
-  function update (id: string, input: UpdateVectorStoreInput): VectorStoreMeta | null {
+  function update(id: string, input: UpdateVectorStoreInput): VectorStoreMeta | null {
     const meta = stores.get(id)
     if (!meta) return null
     if (input.name !== undefined) {
@@ -156,17 +151,17 @@ export function createVectorStoresStore (
     return clone(meta)
   }
 
-  function deleteStore (id: string): boolean {
+  function deleteStore(id: string): boolean {
     return stores.delete(id)
   }
 
-  function list (): VectorStoreMeta[] {
+  function list(): VectorStoreMeta[] {
     return Array.from(stores.values())
       .map(clone)
       .sort((a, b) => b.createdAt - a.createdAt)
   }
 
-  function touch (id: string): void {
+  function touch(id: string): void {
     const meta = stores.get(id)
     if (!meta) return
     meta.lastActiveAt = now()
@@ -175,7 +170,7 @@ export function createVectorStoresStore (
     }
   }
 
-  function setEmbedding (id: string, alias: string): void {
+  function setEmbedding(id: string, alias: string): void {
     const meta = stores.get(id)
     if (!meta) return
     if (meta.embeddingAlias !== null) return
@@ -220,7 +215,7 @@ export interface VectorStoreRagInfo {
   open?: boolean
 }
 
-export function vectorStoreToOpenAI (
+export function vectorStoreToOpenAI(
   meta: VectorStoreMeta,
   ragInfo?: VectorStoreRagInfo
 ): OpenAIVectorStoreObject {
@@ -269,9 +264,11 @@ export interface RagSearchResultLike {
   score: number
 }
 
-export type ChunkAttributionLookup = (chunkId: string) => { fileId: string; fileName: string } | null
+export type ChunkAttributionLookup = (
+  chunkId: string
+) => { fileId: string; fileName: string } | null
 
-export function searchResultsToOpenAI (
+export function searchResultsToOpenAI(
   results: RagSearchResultLike[],
   query: string,
   lookup?: ChunkAttributionLookup

@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
 import { buildResponseObject } from '../src/serve/adapters/openai/responses-shape.js'
 import { writeBlockingResponse } from '../src/serve/adapters/openai/response-writers.js'
-import type { ResponsesHandlerParams, ResponseWriterContext } from '../src/serve/adapters/openai/response-writers.js'
+import type {
+  ResponsesHandlerParams,
+  ResponseWriterContext
+} from '../src/serve/adapters/openai/response-writers.js'
 import type { CompletionRun, ToolCall, CompletionStats } from '@qvac/sdk'
 
 const uuidSuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -59,7 +62,9 @@ describe('buildResponseObject', () => {
     assert.equal(out[1]!.type, 'function_call')
     const ra = o['required_action'] as {
       type: string
-      submit_tool_outputs: { tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> }
+      submit_tool_outputs: {
+        tool_calls: Array<{ id: string; function: { name: string; arguments: string } }>
+      }
     }
     assert.equal(ra.type, 'submit_tool_outputs')
     assert.equal(ra.submit_tool_outputs.tool_calls.length, 1)
@@ -179,7 +184,7 @@ describe('buildResponseObject', () => {
   })
 })
 
-function minimalRouteContext (): ResponseWriterContext {
+function minimalRouteContext(): ResponseWriterContext {
   return {
     logger: { info: (): void => {} },
     responsesStore: {
@@ -193,7 +198,7 @@ function minimalRouteContext (): ResponseWriterContext {
   }
 }
 
-function baseHandlerParams (): ResponsesHandlerParams {
+function baseHandlerParams(): ResponsesHandlerParams {
   return {
     ctx: minimalRouteContext(),
     sdkModelId: 'mid',
@@ -212,7 +217,7 @@ function baseHandlerParams (): ResponsesHandlerParams {
   }
 }
 
-function fakeCompletion (opts: {
+function fakeCompletion(opts: {
   text: string
   toolCalls: ToolCall[]
   stats?: CompletionStats
@@ -220,7 +225,7 @@ function fakeCompletion (opts: {
 }): CompletionRun {
   // Writers consume `result.events`; drive it the way the SDK does (content
   // delta, tool calls, stats, terminal done) rather than the legacy promises.
-  async function * events (): AsyncGenerator<unknown> {
+  async function* events(): AsyncGenerator<unknown> {
     let seq = 0
     if (opts.text) yield { type: 'contentDelta', seq: seq++, text: opts.text }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
@@ -234,8 +239,8 @@ function fakeCompletion (opts: {
     text: Promise.resolve(opts.text),
     toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
-    tokenStream: (async function * empty (): AsyncGenerator<string> {})(),
-    toolCallStream: (async function * empty (): AsyncGenerator<never> {})()
+    tokenStream: (async function* (): AsyncGenerator<string> {})(),
+    toolCallStream: (async function* (): AsyncGenerator<never> {})()
   }
 }
 
@@ -246,14 +251,14 @@ describe('writeBlockingResponse', () => {
     let sent = false
     const res = {
       setHeader: (): void => {},
-      writeHead (s: number): void {
+      writeHead(s: number): void {
         status = s
         sent = true
       },
-      end (payload?: string | Buffer): void {
+      end(payload?: string | Buffer): void {
         if (typeof payload === 'string') bodyStr = payload
       },
-      get headersSent (): boolean {
+      get headersSent(): boolean {
         return sent
       }
     } as unknown as ServerResponse
@@ -280,10 +285,10 @@ describe('writeBlockingResponse', () => {
       writeHead: (): void => {
         sent = true
       },
-      end (payload?: string | Buffer): void {
+      end(payload?: string | Buffer): void {
         if (typeof payload === 'string') bodyStr = payload
       },
-      get headersSent (): boolean {
+      get headersSent(): boolean {
         return sent
       }
     } as unknown as ServerResponse
@@ -298,7 +303,9 @@ describe('writeBlockingResponse', () => {
     const obj = await writeBlockingResponse(res, p, result)
     assert.equal(obj['status'], 'requires_action')
     assert.ok((obj['required_action'] as { submit_tool_outputs: unknown }).submit_tool_outputs)
-    const parsed = JSON.parse(bodyStr) as { required_action: { submit_tool_outputs: { tool_calls: unknown[] } } }
+    const parsed = JSON.parse(bodyStr) as {
+      required_action: { submit_tool_outputs: { tool_calls: unknown[] } }
+    }
     assert.equal(parsed.required_action.submit_tool_outputs.tool_calls.length, 1)
   })
 })

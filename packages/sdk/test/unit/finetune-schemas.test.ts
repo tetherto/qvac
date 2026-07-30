@@ -1,119 +1,120 @@
-import test from "brittle";
+import test from 'brittle'
 import {
   finetuneProgressResponseSchema,
   finetuneRequestSchema,
   finetuneResponseSchema,
-  finetuneValidationSchema,
-} from "@/schemas";
+  finetuneValidationSchema
+} from '@/schemas'
+import { contractValidate } from './utils/contract-validator'
 
-test("finetuneValidationSchema: defaults split validation fraction", (t) => {
+test('finetuneValidationSchema: defaults split validation fraction', (t) => {
   const result = finetuneValidationSchema.parse({
-    type: "split",
-  });
+    type: 'split'
+  })
 
-  t.is(result.type, "split");
-  t.is(result.type === "split" ? result.fraction : undefined, 0.05);
-});
+  t.is(result.type, 'split')
+  t.is(result.type === 'split' ? result.fraction : undefined, 0.05)
+})
 
-test("finetuneRequestSchema: accepts an optional requestId on the run shape", (t) => {
+test('finetuneRequestSchema: accepts an optional requestId on the run shape', (t) => {
   const baseOptions = {
-    trainDatasetDir: "/tmp/train.jsonl",
-    validation: { type: "none" as const },
-    outputParametersDir: "/tmp/out",
-  };
+    trainDatasetDir: '/tmp/train.jsonl',
+    validation: { type: 'none' as const },
+    outputParametersDir: '/tmp/out'
+  }
   const result = finetuneRequestSchema.safeParse({
-    type: "finetune",
-    modelId: "m1",
+    type: 'finetune',
+    modelId: 'm1',
     options: baseOptions,
-    requestId: "req-1",
-  });
-  t.is(result.success, true);
-});
+    requestId: 'req-1'
+  })
+  t.is(result.success, true)
+})
 
-test("finetuneRequestSchema: requestId is optional for run requests", (t) => {
+test('finetuneRequestSchema: requestId is optional for run requests', (t) => {
   const baseOptions = {
-    trainDatasetDir: "/tmp/train.jsonl",
-    validation: { type: "none" as const },
-    outputParametersDir: "/tmp/out",
-  };
+    trainDatasetDir: '/tmp/train.jsonl',
+    validation: { type: 'none' as const },
+    outputParametersDir: '/tmp/out'
+  }
   const result = finetuneRequestSchema.safeParse({
-    type: "finetune",
-    modelId: "m1",
-    options: baseOptions,
-  });
-  t.is(result.success, true);
-});
+    type: 'finetune',
+    modelId: 'm1',
+    options: baseOptions
+  })
+  t.is(result.success, true)
+})
 
-test("finetuneRequestSchema: accepts run, state, and control operations", (t) => {
+test('finetuneRequestSchema: accepts run, state, and control operations', (t) => {
   const baseOptions = {
-    trainDatasetDir: "/tmp/train.jsonl",
-    validation: { type: "none" as const },
-    outputParametersDir: "/tmp/out",
-  };
+    trainDatasetDir: '/tmp/train.jsonl',
+    validation: { type: 'none' as const },
+    outputParametersDir: '/tmp/out'
+  }
 
   const autoRequest = finetuneRequestSchema.parse({
-    type: "finetune",
-    modelId: "model-auto",
+    type: 'finetune',
+    modelId: 'model-auto',
     options: baseOptions,
-    withProgress: true,
-  });
+    withProgress: true
+  })
   const startRequest = finetuneRequestSchema.parse({
-    type: "finetune",
-    modelId: "model-start",
-    operation: "start",
+    type: 'finetune',
+    modelId: 'model-start',
+    operation: 'start',
     options: baseOptions,
-    withProgress: true,
-  });
+    withProgress: true
+  })
   const resumeRequest = finetuneRequestSchema.parse({
-    type: "finetune",
-    modelId: "model-resume",
-    operation: "resume",
-    options: baseOptions,
-  });
+    type: 'finetune',
+    modelId: 'model-resume',
+    operation: 'resume',
+    options: baseOptions
+  })
   const getStateRequest = finetuneRequestSchema.parse({
-    type: "finetune",
-    modelId: "model-state",
-    operation: "getState",
-    options: baseOptions,
-  });
+    type: 'finetune',
+    modelId: 'model-state',
+    operation: 'getState',
+    options: baseOptions
+  })
   const pauseRequest = finetuneRequestSchema.parse({
-    type: "finetune",
-    modelId: "model-pause",
-    operation: "pause",
-  });
+    type: 'finetune',
+    modelId: 'model-pause',
+    operation: 'pause'
+  })
   const cancelRequest = finetuneRequestSchema.parse({
-    type: "finetune",
-    modelId: "model-cancel",
-    operation: "cancel",
-  });
+    type: 'finetune',
+    modelId: 'model-cancel',
+    operation: 'cancel'
+  })
 
-  t.is(autoRequest.operation, undefined);
-  t.is(startRequest.operation, "start");
-  t.is(resumeRequest.operation, "resume");
-  t.is(getStateRequest.operation, "getState");
-  t.is(pauseRequest.operation, "pause");
-  t.is(cancelRequest.operation, "cancel");
-});
+  t.is(autoRequest.operation, undefined)
+  t.is(startRequest.operation, 'start')
+  t.is(resumeRequest.operation, 'resume')
+  t.is(getStateRequest.operation, 'getState')
+  t.is(pauseRequest.operation, 'pause')
+  t.is(cancelRequest.operation, 'cancel')
+})
 
-test("finetuneRequestSchema: rejects dataset validation without path", (t) => {
+test('finetuneRequestSchema: rejects dataset validation without path', (t) => {
   t.exception(() =>
     finetuneRequestSchema.parse({
-      type: "finetune",
-      modelId: "model-invalid",
-      operation: "start",
+      type: 'finetune',
+      modelId: 'model-invalid',
+      operation: 'start',
       options: {
-        trainDatasetDir: "/tmp/train.jsonl",
-        validation: { type: "dataset" },
-        outputParametersDir: "/tmp/out",
-      },
-    }),
-  );
-});
+        trainDatasetDir: '/tmp/train.jsonl',
+        validation: { type: 'dataset' },
+        outputParametersDir: '/tmp/out'
+      }
+    })
+  )
+})
 
-test("finetuneProgressResponseSchema: parses nullable progress fields", (t) => {
+test('finetuneProgressResponseSchema: parses nullable progress fields', (t) => {
   const progress = finetuneProgressResponseSchema.parse({
-    type: "finetune:progress",
-    modelId: "model-progress",
+    type: 'finetune:progress',
+    modelId: 'model-progress',
     is_train: true,
     loss: 1.25,
     loss_uncertainty: null,
@@ -124,69 +125,69 @@ test("finetuneProgressResponseSchema: parses nullable progress fields", (t) => {
     current_batch: 2,
     total_batches: 9,
     elapsed_ms: 1500,
-    eta_ms: 2500,
-  });
+    eta_ms: 2500
+  })
 
-  t.is(progress.type, "finetune:progress");
-  t.is(progress.modelId, "model-progress");
-  t.is(progress.loss, 1.25);
-  t.is(progress.loss_uncertainty, null);
-  t.is(progress.accuracy, 0.75);
-  t.is(progress.global_steps, 3);
-});
+  t.is(progress.type, 'finetune:progress')
+  t.is(progress.modelId, 'model-progress')
+  t.is(progress.loss, 1.25)
+  t.is(progress.loss_uncertainty, null)
+  t.is(progress.accuracy, 0.75)
+  t.is(progress.global_steps, 3)
+})
 
-test("finetuneResponseSchema: parses terminal stats payload", (t) => {
+test('finetuneResponseSchema: parses terminal stats payload', (t) => {
   const response = finetuneResponseSchema.parse({
-    type: "finetune",
-    status: "COMPLETED",
+    type: 'finetune',
+    status: 'COMPLETED',
     stats: {
       train_loss: 0.8,
       train_accuracy: 0.9,
       global_steps: 12,
-      epochs_completed: 2,
-    },
-  });
+      epochs_completed: 2
+    }
+  })
 
-  t.is(response.type, "finetune");
-  t.is(response.status, "COMPLETED");
-  t.is(response.stats?.global_steps, 12);
-  t.is(response.stats?.epochs_completed, 2);
-});
+  t.is(response.type, 'finetune')
+  t.is(response.status, 'COMPLETED')
+  t.is(response.stats?.global_steps, 12)
+  t.is(response.stats?.epochs_completed, 2)
+})
 
-test("finetuneResponseSchema: parses idle terminal status", (t) => {
+test('finetuneResponseSchema: parses idle terminal status', (t) => {
   const response = finetuneResponseSchema.parse({
-    type: "finetune",
-    status: "IDLE",
-  });
+    type: 'finetune',
+    status: 'IDLE'
+  })
 
-  t.is(response.type, "finetune");
-  t.is(response.status, "IDLE");
-});
+  t.is(response.type, 'finetune')
+  t.is(response.status, 'IDLE')
+})
 
-test("finetuneResponseSchema: parses running status", (t) => {
+test('finetuneResponseSchema: parses running status', (t) => {
   const response = finetuneResponseSchema.parse({
-    type: "finetune",
-    status: "RUNNING",
-  });
+    type: 'finetune',
+    status: 'RUNNING'
+  })
 
-  t.is(response.type, "finetune");
-  t.is(response.status, "RUNNING");
-});
+  t.is(response.type, 'finetune')
+  t.is(response.status, 'RUNNING')
+})
 
-test("finetuneResponseSchema: parses cancelled terminal status", (t) => {
+test('finetuneResponseSchema: parses cancelled terminal status', (t) => {
   const response = finetuneResponseSchema.parse({
-    type: "finetune",
-    status: "CANCELLED",
-  });
+    type: 'finetune',
+    status: 'CANCELLED'
+  })
 
-  t.is(response.type, "finetune");
-  t.is(response.status, "CANCELLED");
-});
+  t.is(response.type, 'finetune')
+  t.is(response.status, 'CANCELLED')
+})
 
-test("finetuneResponseSchema: accepts NaN terminal uncertainties", (t) => {
+test('finetuneResponseSchema: accepts NaN terminal uncertainties', (t) => {
   const response = finetuneResponseSchema.parse({
-    type: "finetune",
-    status: "COMPLETED",
+    type: 'finetune',
+    status: 'COMPLETED',
     stats: {
       train_loss: 0.8,
       train_loss_uncertainty: Number.NaN,
@@ -197,20 +198,20 @@ test("finetuneResponseSchema: accepts NaN terminal uncertainties", (t) => {
       val_accuracy: 0.85,
       val_accuracy_uncertainty: Number.NaN,
       global_steps: 3,
-      epochs_completed: 1,
-    },
-  });
+      epochs_completed: 1
+    }
+  })
 
-  t.ok(Number.isNaN(response.stats?.train_loss_uncertainty));
-  t.ok(Number.isNaN(response.stats?.val_loss_uncertainty));
-  t.ok(Number.isNaN(response.stats?.train_accuracy_uncertainty));
-  t.ok(Number.isNaN(response.stats?.val_accuracy_uncertainty));
-});
+  t.ok(Number.isNaN(response.stats?.train_loss_uncertainty))
+  t.ok(Number.isNaN(response.stats?.val_loss_uncertainty))
+  t.ok(Number.isNaN(response.stats?.train_accuracy_uncertainty))
+  t.ok(Number.isNaN(response.stats?.val_accuracy_uncertainty))
+})
 
-test("finetuneResponseSchema: accepts null terminal uncertainties", (t) => {
+test('finetuneResponseSchema: accepts null terminal uncertainties', (t) => {
   const response = finetuneResponseSchema.parse({
-    type: "finetune",
-    status: "COMPLETED",
+    type: 'finetune',
+    status: 'COMPLETED',
     stats: {
       train_loss: 0.8,
       train_loss_uncertainty: null,
@@ -221,12 +222,91 @@ test("finetuneResponseSchema: accepts null terminal uncertainties", (t) => {
       val_accuracy: 0.85,
       val_accuracy_uncertainty: null,
       global_steps: 3,
-      epochs_completed: 1,
-    },
-  });
+      epochs_completed: 1
+    }
+  })
 
-  t.is(response.stats?.train_loss_uncertainty, null);
-  t.is(response.stats?.val_loss_uncertainty, null);
-  t.is(response.stats?.train_accuracy_uncertainty, null);
-  t.is(response.stats?.val_accuracy_uncertainty, null);
-});
+  t.is(response.stats?.train_loss_uncertainty, null)
+  t.is(response.stats?.val_loss_uncertainty, null)
+  t.is(response.stats?.train_accuracy_uncertainty, null)
+  t.is(response.stats?.val_accuracy_uncertainty, null)
+})
+
+test('contract finetune.request: validates run and control operations', (t) => {
+  const runRequest = {
+    type: 'finetune',
+    modelId: 'm1',
+    options: {
+      trainDatasetDir: '/tmp/train.jsonl',
+      validation: { type: 'none' },
+      outputParametersDir: '/tmp/out'
+    },
+    withProgress: true
+  }
+  t.is(finetuneRequestSchema.safeParse(runRequest).success, true)
+  const runContract = contractValidate('finetune.request', runRequest)
+  t.ok(runContract.valid, `contract accepts run request: ${runContract.errors}`)
+
+  const pauseRequest = { type: 'finetune', modelId: 'model-pause', operation: 'pause' }
+  t.is(finetuneRequestSchema.safeParse(pauseRequest).success, true)
+  const pauseContract = contractValidate('finetune.request', pauseRequest)
+  t.ok(pauseContract.valid, `contract accepts pause control request: ${pauseContract.errors}`)
+
+  const datasetWithoutPath = {
+    type: 'finetune',
+    modelId: 'model-invalid',
+    operation: 'start',
+    options: {
+      trainDatasetDir: '/tmp/train.jsonl',
+      validation: { type: 'dataset' },
+      outputParametersDir: '/tmp/out'
+    }
+  }
+  t.is(finetuneRequestSchema.safeParse(datasetWithoutPath).success, false)
+  t.is(
+    contractValidate('finetune.request', datasetWithoutPath).valid,
+    false,
+    'dataset validation without path is rejected by the contract too'
+  )
+})
+
+test('contract finetune:progress.response: validates progress updates', (t) => {
+  const progress = {
+    type: 'finetune:progress',
+    modelId: 'model-progress',
+    is_train: true,
+    loss: 1.25,
+    loss_uncertainty: null,
+    accuracy: 0.75,
+    accuracy_uncertainty: null,
+    global_steps: 3,
+    current_epoch: 1,
+    current_batch: 2,
+    total_batches: 9,
+    elapsed_ms: 1500,
+    eta_ms: 2500
+  }
+  t.is(finetuneProgressResponseSchema.safeParse(progress).success, true)
+  const contract = contractValidate('finetune:progress.response', progress)
+  t.ok(contract.valid, `contract accepts nullable progress fields: ${contract.errors}`)
+
+  const badLoss = { type: 'finetune:progress', modelId: 'model-progress', loss: 'high' }
+  t.is(finetuneProgressResponseSchema.safeParse(badLoss).success, false)
+  t.is(contractValidate('finetune:progress.response', badLoss).valid, false)
+})
+
+test('contract finetune.response: validates terminal stats payload', (t) => {
+  const terminal = {
+    type: 'finetune',
+    status: 'COMPLETED',
+    stats: {
+      train_loss: 0.8,
+      train_accuracy: 0.9,
+      global_steps: 12,
+      epochs_completed: 2
+    }
+  }
+  t.is(finetuneResponseSchema.safeParse(terminal).success, true)
+  const contract = contractValidate('finetune.response', terminal)
+  t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
+})

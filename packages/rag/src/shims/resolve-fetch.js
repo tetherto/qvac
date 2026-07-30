@@ -2,7 +2,7 @@
 
 const { QvacErrorRAG, ERR_CODES } = require('../errors')
 
-function resolveFetch () {
+function resolveFetch() {
   try {
     const fetchMod = require('#fetch')
     return fetchMod.default || fetchMod

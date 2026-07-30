@@ -50,7 +50,10 @@ describe('emitOpenApiSpec', () => {
     const path = join(dir, 'spec.json')
     try {
       await emitOpenApiSpec({ output: path })
-      const doc = JSON.parse(readFileSync(path, 'utf8')) as { openapi: string; paths: Record<string, unknown> }
+      const doc = JSON.parse(readFileSync(path, 'utf8')) as {
+        openapi: string
+        paths: Record<string, unknown>
+      }
       assert.match(doc.openapi, /^3\./)
       assert.ok(Object.keys(doc.paths).length >= 10)
     } finally {

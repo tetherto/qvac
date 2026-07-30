@@ -1,11 +1,11 @@
-import test from "brittle";
+import test from 'brittle'
 import {
   loadModelOptionsToRequestSchema,
   downloadAssetOptionsToRequestSchema,
-  bciTranscribeStreamRequestSchema,
-} from "@/schemas";
-import { ragRequestSchema } from "@/schemas/rag";
-import { ModelType } from "@/schemas/model-types";
+  bciTranscribeStreamRequestSchema
+} from '@/schemas'
+import { ragRequestSchema } from '@/schemas/rag'
+import { ModelType } from '@/schemas/model-types'
 
 // -----------------------------------------------------------------------------
 // requestId wire-shape round-trip — schema half.
@@ -22,112 +22,111 @@ import { ModelType } from "@/schemas/model-types";
 // `cancelHandler.ts`.
 // -----------------------------------------------------------------------------
 
-
-test("loadModelOptionsToRequestSchema: forwards requestId onto the wire envelope", (t) => {
+test('loadModelOptionsToRequestSchema: forwards requestId onto the wire envelope', (t) => {
   const parsed = loadModelOptionsToRequestSchema.parse({
     modelType: ModelType.llamacppCompletion,
-    modelSrc: "/tmp/model.gguf",
-    requestId: "client-uuid-load",
-  });
+    modelSrc: '/tmp/model.gguf',
+    requestId: 'client-uuid-load'
+  })
   t.is(
     (parsed as { requestId?: string }).requestId,
-    "client-uuid-load",
-    "loadModel envelope must carry the client-generated requestId",
-  );
-});
+    'client-uuid-load',
+    'loadModel envelope must carry the client-generated requestId'
+  )
+})
 
-test("loadModelOptionsToRequestSchema: requestId is optional (legacy clients)", (t) => {
+test('loadModelOptionsToRequestSchema: requestId is optional (legacy clients)', (t) => {
   const parsed = loadModelOptionsToRequestSchema.parse({
     modelType: ModelType.llamacppCompletion,
-    modelSrc: "/tmp/model.gguf",
-  });
+    modelSrc: '/tmp/model.gguf'
+  })
   t.is(
     (parsed as { requestId?: string }).requestId,
     undefined,
-    "missing requestId stays undefined on the envelope — server falls back to server-generated id",
-  );
-});
+    'missing requestId stays undefined on the envelope — server falls back to server-generated id'
+  )
+})
 
-test("downloadAssetOptionsToRequestSchema: forwards requestId onto the wire envelope", (t) => {
+test('downloadAssetOptionsToRequestSchema: forwards requestId onto the wire envelope', (t) => {
   const parsed = downloadAssetOptionsToRequestSchema.parse({
-    assetSrc: "/tmp/asset.bin",
-    requestId: "client-uuid-dl",
-  });
+    assetSrc: '/tmp/asset.bin',
+    requestId: 'client-uuid-dl'
+  })
   t.is(
     (parsed as { requestId?: string }).requestId,
-    "client-uuid-dl",
-    "downloadAsset envelope must carry the client-generated requestId",
-  );
-});
+    'client-uuid-dl',
+    'downloadAsset envelope must carry the client-generated requestId'
+  )
+})
 
-test("downloadAssetOptionsToRequestSchema: requestId is optional", (t) => {
+test('downloadAssetOptionsToRequestSchema: requestId is optional', (t) => {
   const parsed = downloadAssetOptionsToRequestSchema.parse({
-    assetSrc: "/tmp/asset.bin",
-  });
-  t.is((parsed as { requestId?: string }).requestId, undefined);
-});
+    assetSrc: '/tmp/asset.bin'
+  })
+  t.is((parsed as { requestId?: string }).requestId, undefined)
+})
 
-test("bciTranscribeStreamRequestSchema: forwards requestId onto the wire envelope", (t) => {
+test('bciTranscribeStreamRequestSchema: forwards requestId onto the wire envelope', (t) => {
   const parsed = bciTranscribeStreamRequestSchema.parse({
-    type: "bciTranscribeStream",
-    modelId: "model-bci",
-    requestId: "client-uuid-bci-stream",
-  });
+    type: 'bciTranscribeStream',
+    modelId: 'model-bci',
+    requestId: 'client-uuid-bci-stream'
+  })
   t.is(
     (parsed as { requestId?: string }).requestId,
-    "client-uuid-bci-stream",
-    "BCI stream envelope must carry the client-generated requestId",
-  );
-});
+    'client-uuid-bci-stream',
+    'BCI stream envelope must carry the client-generated requestId'
+  )
+})
 
-test("ragRequestSchema: forwards requestId for ingest", (t) => {
+test('ragRequestSchema: forwards requestId for ingest', (t) => {
   const parsed = ragRequestSchema.parse({
-    type: "rag",
-    operation: "ingest",
-    workspace: "ws-a",
-    modelId: "model-a",
-    documents: "hello",
-    requestId: "client-uuid-rag",
-  });
+    type: 'rag',
+    operation: 'ingest',
+    workspace: 'ws-a',
+    modelId: 'model-a',
+    documents: 'hello',
+    requestId: 'client-uuid-rag'
+  })
   t.is(
     (parsed as { requestId?: string }).requestId,
-    "client-uuid-rag",
-    "rag ingest envelope must carry the client-generated requestId",
-  );
-});
+    'client-uuid-rag',
+    'rag ingest envelope must carry the client-generated requestId'
+  )
+})
 
-test("ragRequestSchema: requestId is optional for ingest", (t) => {
+test('ragRequestSchema: requestId is optional for ingest', (t) => {
   const parsed = ragRequestSchema.parse({
-    type: "rag",
-    operation: "ingest",
-    workspace: "ws-a",
-    modelId: "model-a",
-    documents: "hello",
-  });
-  t.is((parsed as { requestId?: string }).requestId, undefined);
-});
+    type: 'rag',
+    operation: 'ingest',
+    workspace: 'ws-a',
+    modelId: 'model-a',
+    documents: 'hello'
+  })
+  t.is((parsed as { requestId?: string }).requestId, undefined)
+})
 
-test("ragRequestSchema: forwards requestId for reindex (storage-only op)", (t) => {
+test('ragRequestSchema: forwards requestId for reindex (storage-only op)', (t) => {
   const parsed = ragRequestSchema.parse({
-    type: "rag",
-    operation: "reindex",
-    workspace: "ws-a",
-    requestId: "client-uuid-reindex",
-  });
-  t.is((parsed as { requestId?: string }).requestId, "client-uuid-reindex");
-});
+    type: 'rag',
+    operation: 'reindex',
+    workspace: 'ws-a',
+    requestId: 'client-uuid-reindex'
+  })
+  t.is((parsed as { requestId?: string }).requestId, 'client-uuid-reindex')
+})
 
-test("ragRequestSchema: forwards requestId for saveEmbeddings", (t) => {
+test('ragRequestSchema: forwards requestId for saveEmbeddings', (t) => {
   const parsed = ragRequestSchema.parse({
-    type: "rag",
-    operation: "saveEmbeddings",
-    workspace: "ws-a",
+    type: 'rag',
+    operation: 'saveEmbeddings',
+    workspace: 'ws-a',
     documents: [],
-    requestId: "client-uuid-save",
-  });
+    requestId: 'client-uuid-save'
+  })
   t.is(
     (parsed as { requestId?: string }).requestId,
-    "client-uuid-save",
-    "saveEmbeddings envelope must carry the client-generated requestId",
-  );
-});
+    'client-uuid-save',
+    'saveEmbeddings envelope must carry the client-generated requestId'
+  )
+})

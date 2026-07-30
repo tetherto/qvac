@@ -9,7 +9,7 @@ const { WhisperInterface } = require('../../whisper')
 const process = require('bare-process')
 global.process = process
 
-function createTestModel ({ onOutput = () => { }, binding = undefined } = {}) {
+function createTestModel({ onOutput = () => {}, binding = undefined } = {}) {
   TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
 
   const args = {
@@ -25,8 +25,10 @@ function createTestModel ({ onOutput = () => { }, binding = undefined } = {}) {
   }
   const model = new TranscriptionWhispercpp(args, config)
   let capturedConfigResolve
-  const capturedConfig = new Promise(resolve => { capturedConfigResolve = resolve })
-  model._createAddon = configurationParams => {
+  const capturedConfig = new Promise((resolve) => {
+    capturedConfigResolve = resolve
+  })
+  model._createAddon = (configurationParams) => {
     capturedConfigResolve(configurationParams)
     const _binding = binding || new MockedBinding()
     return new WhisperInterface(_binding, configurationParams, onOutput, transitionCb)
@@ -101,7 +103,7 @@ test('Reload method handles configuration changes correctly', async (t) => {
   await wait()
 
   // Verify initial processing worked
-  const initialOutputEvents = events.filter(e => e.event === 'Output' && e.jobId === 1)
+  const initialOutputEvents = events.filter((e) => e.event === 'Output' && e.jobId === 1)
   t.ok(initialOutputEvents.length > 0, 'Should receive Output events before reload')
 
   // Clear events for reload test
@@ -136,7 +138,7 @@ test('Reload method handles configuration changes correctly', async (t) => {
   await wait()
 
   // Verify processing still works after reload
-  const reloadOutputEvents = events.filter(e => e.event === 'Output' && e.jobId === 2)
+  const reloadOutputEvents = events.filter((e) => e.event === 'Output' && e.jobId === 2)
   t.ok(reloadOutputEvents.length > 0, 'Should receive Output events after reload')
 })
 
@@ -210,7 +212,10 @@ test('Reload method handles multiple reloads correctly', async (t) => {
 
   await model.addon.reload(config1)
   let status = await model.addon.status()
-  t.ok(status === 'idle' || status === 'loading', 'Status should be idle or loading after first reload')
+  t.ok(
+    status === 'idle' || status === 'loading',
+    'Status should be idle or loading after first reload'
+  )
 
   await model.addon.activate()
   status = await model.addon.status()
@@ -225,7 +230,10 @@ test('Reload method handles multiple reloads correctly', async (t) => {
 
   await model.addon.reload(config2)
   status = await model.addon.status()
-  t.ok(status === 'idle' || status === 'loading', 'Status should be idle or loading after second reload')
+  t.ok(
+    status === 'idle' || status === 'loading',
+    'Status should be idle or loading after second reload'
+  )
 
   await model.addon.activate()
   status = await model.addon.status()
@@ -277,6 +285,6 @@ test('Reload method works with different language settings', async (t) => {
   await wait()
 
   // Verify processing works with different language
-  const outputEvents = events.filter(e => e.event === 'Output' && e.jobId === 2)
+  const outputEvents = events.filter((e) => e.event === 'Output' && e.jobId === 2)
   t.ok(outputEvents.length > 0, 'Should process audio with Spanish configuration')
 })

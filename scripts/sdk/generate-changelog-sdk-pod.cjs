@@ -15,6 +15,7 @@
 const fs = require("fs");
 const path = require("path");
 const { validatePR } = require("./validator.cjs");
+const { getPackageDir, getNpmName } = require("./package-paths.cjs");
 const {
   generateChangelog,
   getRepoRoot,
@@ -35,11 +36,9 @@ const SECTIONS = [
 
 /**
  * Per-package PR exclusion list. The path-scope filter in
- * `getPRNumbers(...)` picks up any PR whose diff touches `packages/<pkg>/**`,
- * but cross-cutting monorepo chores (path renames, repo-wide reformats, etc.)
- * often touch one tiny SDK-side file (a test executor, a historical changelog
- * doc) and get pulled in as if they were SDK release items. Those PRs belong
- * in the devops changelog, not the SDK changelog.
+ * `getPRNumbers(...)` scopes to the package dir (`scripts/sdk/package-paths.cjs`).
+ * Cross-cutting monorepo chores that only graze this package belong in devops
+ * changelogs — list them here if they lack `[skiplog]`.
  *
  * The first-line defence is for the PR author to tag the title `[skiplog]` —
  * that's free and retroactive only if the PR is still open. For already-merged
@@ -54,6 +53,12 @@ const EXCLUDED_PRS = {
       "Monorepo-wide path simplification across 26+ packages; only " +
       "incidentally touched packages/sdk via a test executor and a " +
       "historical changelog doc. Devops chore, not an SDK release item.",
+    2639:
+      "Shipped in 0.13.5 but reverted in 0.14.0 by #2908 (Android worklet " +
+      "leak / OOM); net change across the 0.13.0→0.14.0 minor span is zero, " +
+      "so it must not appear as a shipped fix. The revert PR #2908 is itself " +
+      "invisible to the path-scoped PR scan because the squash subject leads " +
+      "with the reverted '(#2639)' reference.",
   },
 };
 
@@ -238,7 +243,7 @@ function parseModelHistoryFile(filePath) {
  * @returns {{ added: string[], removed: string[], previousCount: number, newCount: number } | null}
  */
 function getModelChangesFromHistory(packageName, baseRef) {
-  const historyPath = `packages/${packageName}/models/history`;
+  const historyPath = path.join(getPackageDir(packageName), "models", "history");
   const repoRoot = getRepoRoot();
   const historyDir = path.join(repoRoot, historyPath);
 
@@ -503,7 +508,8 @@ function generateChangelogEntry(
  */
 function generateChangelogFiles(packageName, version, prs, outputDir, baseRef) {
   const changelogDir =
-    outputDir || path.join(getRepoRoot(), "packages", packageName, "changelog", version);
+    outputDir ||
+    path.join(getRepoRoot(), getPackageDir(packageName), "changelog", version);
 
   if (!fs.existsSync(changelogDir)) {
     fs.mkdirSync(changelogDir, { recursive: true });
@@ -877,7 +883,7 @@ function compareSemverDesc(a, b) {
  */
 function rebuildRootChangelog(packageName) {
   const repoRoot = getRepoRoot();
-  const pkgDir = path.join(repoRoot, "packages", packageName);
+  const pkgDir = path.join(repoRoot, getPackageDir(packageName));
   const changelogRoot = path.join(pkgDir, "changelog");
 
   if (!fs.existsSync(changelogRoot)) {
@@ -919,7 +925,7 @@ function rebuildRootChangelog(packageName) {
     let content = fs.readFileSync(versionFile, "utf8").trim();
     // Transform version headers to "## [X.Y.Z]" for aggregated file
     content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
-    content = content.replace(/^# QVAC SDK v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
+    content = content.replace(/^# QVAC .+? v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
     // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
     content = content.replace(
       /\(\.\/([^)]+\.md)\)/g,
@@ -954,13 +960,8 @@ function rebuildRootChangelog(packageName) {
  */
 function generateAnnouncementPost(packageName, version) {
   const repoRoot = getRepoRoot();
-  const versionDir = path.join(
-    repoRoot,
-    "packages",
-    packageName,
-    "changelog",
-    version,
-  );
+  const packageDir = getPackageDir(packageName);
+  const versionDir = path.join(repoRoot, packageDir, "changelog", version);
 
   if (!fs.existsSync(versionDir)) {
     console.warn(`⚠️ No changelog directory found at ${versionDir}`);
@@ -968,21 +969,17 @@ function generateAnnouncementPost(packageName, version) {
   }
 
   const repoUrl = "https://github.com/tetherto/qvac";
-  const npmName = `@qvac/${packageName}`;
+  const npmName = getNpmName(packageName);
   const tagName = `${packageName}-v${version}`;
-  const changelogTreeUrl = `${repoUrl}/tree/main/packages/${packageName}/changelog/${version}`;
-  const breakingMdUrl = `${repoUrl}/blob/main/packages/${packageName}/changelog/${version}/breaking.md`;
+  const changelogTreeUrl = `${repoUrl}/tree/main/${packageDir}/changelog/${version}`;
+  const breakingMdUrl = `${repoUrl}/blob/main/${packageDir}/changelog/${version}/breaking.md`;
   const releaseTagUrl = `${repoUrl}/releases/tag/${tagName}`;
   const npmUrl = `https://www.npmjs.com/package/${npmName}/v/${version}`;
 
-  // The breaking-changes block only appears when there are breaking PRs.
-  // `breaking.md` is only written by `generateChangelogFiles` when at least
-  // one PR carries the [bc] tag, so its presence on disk is the authoritative
-  // signal — no need to re-parse CHANGELOG.md to figure it out.
   const hasBreaking = fs.existsSync(path.join(versionDir, "breaking.md"));
 
   let post = "";
-  post += `:qvac: SDK ${version} :rocket: NPM Public release\n\n`;
+  post += `:qvac: ${npmName} ${version} :rocket: NPM Public release\n\n`;
   post += `:package: NPM: ${npmUrl}\n`;
   post += `:technologist: Github release: ${releaseTagUrl}\n`;
   post += `:page_facing_up: Full Changelog: ${changelogTreeUrl}\n\n`;
@@ -1009,8 +1006,7 @@ function generateAnnouncementPost(packageName, version) {
 function readPackageVersion(packageName) {
   const pkgPath = path.join(
     getRepoRoot(),
-    "packages",
-    packageName,
+    getPackageDir(packageName),
     "package.json",
   );
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
@@ -1103,7 +1099,9 @@ async function main() {
     rebuildRootChangelog(packageName);
 
     console.log("\n🎉 Changelog generation complete!");
-    console.log(`\nGenerated files in: packages/${packageName}/changelog/${data.version}/`);
+    console.log(
+      `\nGenerated files in: ${getPackageDir(packageName)}/changelog/${data.version}/`,
+    );
   } catch (error) {
     console.error(`\n❌ ${error.message}`);
     process.exit(1);

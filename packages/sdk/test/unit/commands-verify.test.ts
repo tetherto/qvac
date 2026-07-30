@@ -7,32 +7,23 @@ import {
   deduplicateAddons,
   formatAddonId,
   readAddonPackageJson
-} from "@/commands/verify/addon-source";
-import {
-  collectAddonsFromBundle,
-  InvalidBundleSourceError,
-} from "@/commands/verify/bundle-source";
+} from '@/commands/verify/addon-source'
+import { collectAddonsFromBundle, InvalidBundleSourceError } from '@/commands/verify/bundle-source'
 import {
   collectAddonsFromNodeModules,
-  InvalidNodeModulesSourceError,
-} from "@/commands/verify/node-modules-source";
-import { checkPrebuilds } from "@/commands/verify/prebuilds";
-import {
-  checkAbi,
-  resolveBareRuntime,
-  type BareRuntimeResolution,
-} from "@/commands/verify/abi";
+  InvalidNodeModulesSourceError
+} from '@/commands/verify/node-modules-source'
+import { checkPrebuilds } from '@/commands/verify/prebuilds'
+import { checkAbi, resolveBareRuntime, type BareRuntimeResolution } from '@/commands/verify/abi'
 import {
   formatVerifyBundleResult,
   hasErrors,
   hasWarnings,
-  verifyBundle,
-} from "@/commands/verify/index";
+  verifyBundle
+} from '@/commands/verify/index'
 
-async function withTempDir (fn: (dir: string) => Promise<void> | void): Promise<void> {
-  const dir = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-bundle-'))
-  )
+async function withTempDir(fn: (dir: string) => Promise<void> | void): Promise<void> {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-bundle-')))
   try {
     await fn(dir)
   } finally {
@@ -40,12 +31,12 @@ async function withTempDir (fn: (dir: string) => Promise<void> | void): Promise<
   }
 }
 
-function writeJson (filePath: string, value: unknown): void {
+function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2))
 }
 
-function writePackageJson (
+function writePackageJson(
   projectRoot: string,
   relPackageDir: string,
   body: Record<string, unknown>
@@ -55,17 +46,13 @@ function writePackageJson (
   return path.join(projectRoot, relPackageDir)
 }
 
-function writePrebuild (
-  packageRoot: string,
-  host: string,
-  filename = 'native.bare'
-): void {
+function writePrebuild(packageRoot: string, host: string, filename = 'native.bare'): void {
   const dir = path.join(packageRoot, 'prebuilds', host)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, filename), '')
 }
 
-function escapeForJsString (s: string): string {
+function escapeForJsString(s: string): string {
   return s
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
@@ -74,10 +61,10 @@ function escapeForJsString (s: string): string {
     .replace(/\t/g, '\\t')
 }
 
-function writeBareBundle (
+function writeBareBundle(
   bundlePath: string,
   resolutions: Record<string, unknown>,
-  options: { id?: string, body?: string } = {}
+  options: { id?: string; body?: string } = {}
 ): void {
   const bundleId = options.id ?? 'test-bundle-id'
   const header = JSON.stringify({ id: bundleId, resolutions })
@@ -192,10 +179,11 @@ describe('collectAddonsFromBundle', () => {
   it('throws InvalidBundleSourceError when bundle is missing', async () => {
     await withTempDir(async (dir) => {
       await assert.rejects(
-        () => collectAddonsFromBundle({
-          bundlePath: path.join(dir, 'missing.js'),
-          projectRoot: dir
-        }),
+        () =>
+          collectAddonsFromBundle({
+            bundlePath: path.join(dir, 'missing.js'),
+            projectRoot: dir
+          }),
         InvalidBundleSourceError
       )
     })
@@ -324,10 +312,7 @@ describe('collectAddonsFromBundle', () => {
       })
       const addons = await collectAddonsFromBundle({ bundlePath, projectRoot: dir })
       assert.equal(addons.length, 2)
-      assert.deepEqual(
-        addons.map((a) => a.version).sort(),
-        ['3.9.0', '4.0.0']
-      )
+      assert.deepEqual(addons.map((a) => a.version).sort(), ['3.9.0', '4.0.0'])
     })
   })
 
@@ -369,9 +354,10 @@ describe('collectAddonsFromNodeModules', () => {
   it('throws InvalidNodeModulesSourceError when the root is missing', async () => {
     await withTempDir(async (dir) => {
       await assert.rejects(
-        () => collectAddonsFromNodeModules({
-          nodeModulesRoot: path.join(dir, 'nope')
-        }),
+        () =>
+          collectAddonsFromNodeModules({
+            nodeModulesRoot: path.join(dir, 'nope')
+          }),
         InvalidNodeModulesSourceError
       )
     })
@@ -426,7 +412,10 @@ describe('collectAddonsFromNodeModules', () => {
         version: '1.0.0'
       })
       const result = await collectAddonsFromNodeModules({ nodeModulesRoot: nm })
-      assert.deepEqual(result.map((r) => r.name), ['bare-os'])
+      assert.deepEqual(
+        result.map((r) => r.name),
+        ['bare-os']
+      )
     })
   })
 
@@ -445,11 +434,7 @@ describe('collectAddonsFromNodeModules', () => {
         addon: true
       })
       fs.mkdirSync(nm, { recursive: true })
-      fs.symlinkSync(
-        path.join(store, 'bare-os-real'),
-        path.join(nm, 'bare-os'),
-        'dir'
-      )
+      fs.symlinkSync(path.join(store, 'bare-os-real'), path.join(nm, 'bare-os'), 'dir')
       fs.mkdirSync(path.join(nm, '@qvac'), { recursive: true })
       fs.symlinkSync(
         path.join(store, 'qvac-native-real'),
@@ -527,10 +512,7 @@ describe('checkPrebuilds', () => {
         },
         hosts: ['ios-arm64', 'android-arm64', 'ios-arm64-simulator']
       })
-      assert.deepEqual(
-        issues.map((i) => i.host).sort(),
-        ['android-arm64', 'ios-arm64-simulator']
-      )
+      assert.deepEqual(issues.map((i) => i.host).sort(), ['android-arm64', 'ios-arm64-simulator'])
     })
   })
 })
@@ -552,10 +534,10 @@ describe('resolveBareRuntime', () => {
 
   it('reads from bare-runtime/version when present', async () => {
     await withTempDir(async (dir) => {
-      writeJson(
-        path.join(dir, 'node_modules', 'bare-runtime', 'package.json'),
-        { name: 'bare-runtime', version: '1.16.0' }
-      )
+      writeJson(path.join(dir, 'node_modules', 'bare-runtime', 'package.json'), {
+        name: 'bare-runtime',
+        version: '1.16.0'
+      })
       const result = await resolveBareRuntime({ projectRoot: dir })
       assert.equal(result.resolved, true)
       if (result.resolved) assert.equal(result.runtime.source, 'bare-runtime')
@@ -564,14 +546,14 @@ describe('resolveBareRuntime', () => {
 
   it('prefers bare-runtime over bare when both are installed', async () => {
     await withTempDir(async (dir) => {
-      writeJson(
-        path.join(dir, 'node_modules', 'bare-runtime', 'package.json'),
-        { name: 'bare-runtime', version: '1.16.0' }
-      )
-      writeJson(
-        path.join(dir, 'node_modules', 'bare', 'package.json'),
-        { name: 'bare', version: '1.15.0' }
-      )
+      writeJson(path.join(dir, 'node_modules', 'bare-runtime', 'package.json'), {
+        name: 'bare-runtime',
+        version: '1.16.0'
+      })
+      writeJson(path.join(dir, 'node_modules', 'bare', 'package.json'), {
+        name: 'bare',
+        version: '1.15.0'
+      })
       const result = await resolveBareRuntime({ projectRoot: dir })
       assert.equal(result.resolved, true)
       if (result.resolved) {
@@ -583,10 +565,10 @@ describe('resolveBareRuntime', () => {
 
   it('falls back to bare/version when bare-runtime is not installed', async () => {
     await withTempDir(async (dir) => {
-      writeJson(
-        path.join(dir, 'node_modules', 'bare', 'package.json'),
-        { name: 'bare', version: '1.15.0' }
-      )
+      writeJson(path.join(dir, 'node_modules', 'bare', 'package.json'), {
+        name: 'bare',
+        version: '1.15.0'
+      })
       const result = await resolveBareRuntime({ projectRoot: dir })
       assert.equal(result.resolved, true)
       if (result.resolved) {
@@ -711,7 +693,7 @@ describe('checkAbi', () => {
   })
 })
 
-function resolution (version: string): BareRuntimeResolution {
+function resolution(version: string): BareRuntimeResolution {
   return { resolved: true, runtime: { version, source: 'flag' } }
 }
 
@@ -758,8 +740,7 @@ describe('verifyBundle orchestrator', () => {
       assert.equal(result.issues.length, 1)
       assert.equal(result.issues[0]?.code, 'invalid-runtime-version')
       assert.equal(
-        result.issues[0]?.code === 'invalid-runtime-version' &&
-          result.issues[0]?.providedValue,
+        result.issues[0]?.code === 'invalid-runtime-version' && result.issues[0]?.providedValue,
         'not-a-version'
       )
     })
@@ -1123,10 +1104,10 @@ describe('verifyBundle config source', () => {
         engines: { bare: '>=1.14.0' }
       })
       writePrebuild(packageRoot, 'darwin-arm64')
-      writeJson(
-        path.join(dir, 'node_modules', 'bare-runtime', 'package.json'),
-        { name: 'bare-runtime', version: '1.15.0' }
-      )
+      writeJson(path.join(dir, 'node_modules', 'bare-runtime', 'package.json'), {
+        name: 'bare-runtime',
+        version: '1.15.0'
+      })
       fs.writeFileSync(path.join(dir, 'qvac.config.json'), '{ "bareRuntimeVersion": ')
       const result = await verifyBundle({
         projectRoot: dir,

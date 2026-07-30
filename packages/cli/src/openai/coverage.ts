@@ -1,8 +1,5 @@
 import { buildCoverageReport } from './coverage/build-report.js'
-import {
-  filterCoverageRows,
-  formatCoverageReportHuman
-} from './coverage/format.js'
+import { filterCoverageRows, formatCoverageReportHuman } from './coverage/format.js'
 
 export interface RunOpenAiCoverageOptions {
   json?: boolean
@@ -13,9 +10,7 @@ export interface RunOpenAiCoverageOptions {
   offline?: boolean
 }
 
-export async function runOpenAiCoverage (
-  options: RunOpenAiCoverageOptions = {}
-): Promise<void> {
+export async function runOpenAiCoverage(options: RunOpenAiCoverageOptions = {}): Promise<void> {
   const buildOpts: Parameters<typeof buildCoverageReport>[0] = {}
   if (options.offline) buildOpts.offline = true
   const report = await buildCoverageReport(buildOpts)
@@ -28,17 +23,12 @@ export async function runOpenAiCoverage (
   const filtered = filterCoverageRows(report, filterOpts)
 
   if (options.json) {
-    process.stdout.write(
-      `${JSON.stringify({ ...report, rows: filtered }, null, 2)}\n`
-    )
+    process.stdout.write(`${JSON.stringify({ ...report, rows: filtered }, null, 2)}\n`)
     return
   }
 
   const listOnlyUnsupported =
-    options.unsupported &&
-    !options.unknown &&
-    !options.primaryAi &&
-    !options.consumerPrimary
+    options.unsupported && !options.unknown && !options.primaryAi && !options.consumerPrimary
   if (listOnlyUnsupported) {
     for (const row of filtered) {
       process.stdout.write(`${row.method} ${row.path}\n`)

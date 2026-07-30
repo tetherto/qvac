@@ -11,13 +11,13 @@
  */
 export async function resolveBundledAssetUri(assetModule: number): Promise<string> {
   // @ts-ignore - expo-asset is a peer dependency available in mobile context
-  const { Asset } = await import("expo-asset");
-  const asset = Asset.fromModule(assetModule);
-  asset.downloaded = false;
-  await asset.downloadAsync();
-  const rawUri: string | undefined = asset.localUri ?? asset.uri;
+  const { Asset } = await import('expo-asset')
+  const asset = Asset.fromModule(assetModule)
+  asset.downloaded = false
+  await asset.downloadAsync()
+  const rawUri: string | undefined = asset.localUri ?? asset.uri
   if (!rawUri) {
-    throw new Error(`Failed to resolve asset: ${asset.name ?? "unknown"}`);
+    throw new Error(`Failed to resolve asset: ${asset.name ?? 'unknown'}`)
   }
-  return decodeURIComponent(rawUri.replace(/^file:\/\//, ""));
+  return decodeURIComponent(rawUri.replace(/^file:\/\//, ''))
 }

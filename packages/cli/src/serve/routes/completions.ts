@@ -15,7 +15,7 @@ import {
 } from '../schemas/completions.js'
 import type { GenerationParams } from '../schemas/common.js'
 
-function randomId (): string {
+function randomId(): string {
   return Math.random().toString(36).slice(2, 12)
 }
 
@@ -25,20 +25,36 @@ interface SharedParams {
   generationParams: GenerationParams | undefined
 }
 
-async function runBlockingSingle (req: FastifyRequest, reply: FastifyReply, p: SharedParams, prompt: string): Promise<void> {
+async function runBlockingSingle(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  p: SharedParams,
+  prompt: string
+): Promise<void> {
   const choice = await runOne(req, p, prompt, 0)
-  req.server.qvac.logger.info(`  completions done tokens=${choice.tokenCount} finish=${choice.finishReason}`)
+  req.server.qvac.logger.info(
+    `  completions done tokens=${choice.tokenCount} finish=${choice.finishReason}`
+  )
   reply.send({
     id: `cmpl-${randomId()}`,
     object: 'text_completion',
     created: Math.floor(Date.now() / 1000),
     model: p.modelAlias,
     choices: [choice.public],
-    usage: { prompt_tokens: 0, completion_tokens: choice.tokenCount, total_tokens: choice.tokenCount }
+    usage: {
+      prompt_tokens: 0,
+      completion_tokens: choice.tokenCount,
+      total_tokens: choice.tokenCount
+    }
   })
 }
 
-async function runBlockingMulti (req: FastifyRequest, reply: FastifyReply, p: SharedParams, prompts: string[]): Promise<void> {
+async function runBlockingMulti(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  p: SharedParams,
+  prompts: string[]
+): Promise<void> {
   const choices = []
   let totalTokens = 0
   for (let i = 0; i < prompts.length; i++) {
@@ -57,7 +73,16 @@ async function runBlockingMulti (req: FastifyRequest, reply: FastifyReply, p: Sh
   })
 }
 
-async function runOne (req: FastifyRequest, p: SharedParams, prompt: string, index: number): Promise<{ public: { text: string; index: number; logprobs: null; finish_reason: OpenAiFinishReason }; tokenCount: number; finishReason: OpenAiFinishReason }> {
+async function runOne(
+  req: FastifyRequest,
+  p: SharedParams,
+  prompt: string,
+  index: number
+): Promise<{
+  public: { text: string; index: number; logprobs: null; finish_reason: OpenAiFinishReason }
+  tokenCount: number
+  finishReason: OpenAiFinishReason
+}> {
   const result = completion({
     modelId: p.sdkModelId,
     history: legacyPromptToHistory(prompt),
@@ -73,7 +98,12 @@ async function runOne (req: FastifyRequest, p: SharedParams, prompt: string, ind
   }
 }
 
-async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: SharedParams, prompt: string): Promise<void> {
+async function runStreaming(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  p: SharedParams,
+  prompt: string
+): Promise<void> {
   const result = completion({
     modelId: p.sdkModelId,
     history: legacyPromptToHistory(prompt),
@@ -85,7 +115,11 @@ async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: Shared
   const raw = reply.raw
   const id = `cmpl-${randomId()}`
   const created = Math.floor(Date.now() / 1000)
-  const chunk = (text: string, finishReason: string | null, extra?: Record<string, unknown>): Record<string, unknown> => ({
+  const chunk = (
+    text: string,
+    finishReason: string | null,
+    extra?: Record<string, unknown>
+  ): Record<string, unknown> => ({
     id,
     object: 'text_completion',
     created,
@@ -94,15 +128,23 @@ async function runStreaming (req: FastifyRequest, reply: FastifyReply, p: Shared
     ...extra
   })
 
-  const { completionTokens, finishReason } = await drainCompletion(
-    result,
-    (token) => sendSSE(raw, chunk(token, null))
+  const { completionTokens, finishReason } = await drainCompletion(result, (token) =>
+    sendSSE(raw, chunk(token, null))
   )
 
-  req.server.qvac.logger.info(`  completions streaming done tokens=${completionTokens} finish=${finishReason}`)
-  sendSSE(raw, chunk('', finishReason, {
-    usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
-  }))
+  req.server.qvac.logger.info(
+    `  completions streaming done tokens=${completionTokens} finish=${finishReason}`
+  )
+  sendSSE(
+    raw,
+    chunk('', finishReason, {
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: completionTokens,
+        total_tokens: completionTokens
+      }
+    })
+  )
   endSSE(raw)
 }
 
@@ -125,50 +167,60 @@ clients expecting raw completion semantics may see template-shaped output.
 `.trim()
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
-  app.post('/v1/completions', {
-    schema: { body: completionsBody, tags: ['Completions'], summary: 'Legacy text completion', description: descriptions.completion },
-    config: { unsupportedParams: [...COMPLETIONS_UNSUPPORTED_PARAMS] },
-    preHandler: [requireModel('chat'), logUnsupported]
-  }, async (req, reply) => {
-    let sdk
-    try {
-      sdk = toSdkCompletionsArgs(req.body)
-    } catch (err) {
-      if (err instanceof InvalidPromptError) {
-        throw new HttpError(400, 'invalid_prompt', err.message)
+  app.post(
+    '/v1/completions',
+    {
+      schema: {
+        body: completionsBody,
+        tags: ['Completions'],
+        summary: 'Legacy text completion',
+        description: descriptions.completion
+      },
+      config: { unsupportedParams: [...COMPLETIONS_UNSUPPORTED_PARAMS] },
+      preHandler: [requireModel('chat'), logUnsupported]
+    },
+    async (req, reply) => {
+      let sdk
+      try {
+        sdk = toSdkCompletionsArgs(req.body)
+      } catch (err) {
+        if (err instanceof InvalidPromptError) {
+          throw new HttpError(400, 'invalid_prompt', err.message)
+        }
+        throw err
       }
-      throw err
-    }
 
-    if (sdk.prompt.kind === 'multi' && sdk.stream) {
-      throw new HttpError(
-        400,
-        'unsupported_streaming',
-        'Multi-prompt input cannot be streamed. Send a single string prompt or set "stream" to false.'
+      if (sdk.prompt.kind === 'multi' && sdk.stream) {
+        throw new HttpError(
+          400,
+          'unsupported_streaming',
+          'Multi-prompt input cannot be streamed. Send a single string prompt or set "stream" to false.'
+        )
+      }
+
+      const shared: SharedParams = {
+        sdkModelId: req.qvacModel!.sdkModelId,
+        modelAlias: req.qvacModel!.alias,
+        generationParams: sdk.generationParams
+      }
+
+      const promptCount = sdk.prompt.kind === 'single' ? 1 : sdk.prompt.values.length
+      app.qvac.logger.info(
+        `  completions model=${shared.modelAlias} prompts=${promptCount} stream=${sdk.stream}` +
+          `${shared.generationParams ? ` genParams=${JSON.stringify(shared.generationParams)}` : ''}`
       )
-    }
 
-    const shared: SharedParams = {
-      sdkModelId: req.qvacModel!.sdkModelId,
-      modelAlias: req.qvacModel!.alias,
-      generationParams: sdk.generationParams
+      if (sdk.prompt.kind === 'single' && sdk.stream) {
+        await runStreaming(req, reply, shared, sdk.prompt.value)
+      } else if (sdk.prompt.kind === 'single') {
+        await runBlockingSingle(req, reply, shared, sdk.prompt.value)
+      } else {
+        await runBlockingMulti(req, reply, shared, sdk.prompt.values)
+      }
     }
-
-    const promptCount = sdk.prompt.kind === 'single' ? 1 : sdk.prompt.values.length
-    app.qvac.logger.info(
-      `  completions model=${shared.modelAlias} prompts=${promptCount} stream=${sdk.stream}` +
-      `${shared.generationParams ? ` genParams=${JSON.stringify(shared.generationParams)}` : ''}`
-    )
-
-    if (sdk.prompt.kind === 'single' && sdk.stream) {
-      await runStreaming(req, reply, shared, sdk.prompt.value)
-    } else if (sdk.prompt.kind === 'single') {
-      await runBlockingSingle(req, reply, shared, sdk.prompt.value)
-    } else {
-      await runBlockingMulti(req, reply, shared, sdk.prompt.values)
-    }
-  })
+  )
 }
 
 export default plugin

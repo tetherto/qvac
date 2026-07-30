@@ -1,12 +1,12 @@
-import configPlugins from "@expo/config-plugins";
-import type { ExpoConfig } from "expo/config";
-import withAndroidArchitecture from "./withAndroidArchitecture";
-import withAndroidNdkVersion from "./withAndroidNdkVersion";
-import withDeviceInfo from "./withDeviceInfo";
-import withMobileBundle from "./withMobileBundle";
-import withOpenCL from "./withOpenCL";
+import configPlugins from '@expo/config-plugins'
+import type { ExpoConfig } from 'expo/config'
+import withAndroidArchitecture from './withAndroidArchitecture'
+import withAndroidNdkVersion from './withAndroidNdkVersion'
+import withDeviceInfo from './withDeviceInfo'
+import withMobileBundle from './withMobileBundle'
+import withOpenCL from './withOpenCL'
 
-const { withPlugins } = configPlugins;
+const { withPlugins } = configPlugins
 
 /**
  * Main Qvac SDK Expo plugin that combines all necessary mobile configurations:
@@ -22,21 +22,21 @@ function withQvacSDK(config: ExpoConfig): ExpoConfig {
     withMobileBundle,
     withDeviceInfo,
     [
-      "expo-build-properties",
+      'expo-build-properties',
       {
         android: {
           minSdkVersion: 29,
-          ndkVersion: "29.0.14206865",
+          ndkVersion: '29.0.14206865',
           enableProguardInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
-          enableMinifyInReleaseBuilds: true,
-        },
-      },
+          enableMinifyInReleaseBuilds: true
+        }
+      }
     ],
     withAndroidNdkVersion,
     withAndroidArchitecture,
-    withOpenCL,
-  ]);
+    withOpenCL
+  ])
 }
 
-export default withQvacSDK;
+export default withQvacSDK

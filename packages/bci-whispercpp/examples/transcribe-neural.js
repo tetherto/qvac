@@ -17,10 +17,11 @@ const os = require('bare-os')
 const BCIWhispercpp = require('../index')
 const { flattenSegments } = require('../lib/util')
 
-const DEFAULT_MODEL = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
+const DEFAULT_MODEL =
+  (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   path.join(__dirname, '..', 'models', 'ggml-bci-windowed.bin')
 
-async function main () {
+async function main() {
   const args = global.Bare ? global.Bare.argv.slice(2) : process.argv.slice(2)
   const isBatch = args[0] === '--batch'
 
@@ -39,12 +40,15 @@ async function main () {
     console.error('Set WHISPER_MODEL_PATH or pass as second argument.')
     return
   }
+  const embedderPath = path.join(path.dirname(modelPath), 'bci-embedder.bin')
 
   if (isBatch) {
     const manifestPath = path.join(__dirname, '..', 'test', 'fixtures', 'manifest.json')
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 
-    console.log('=== BCI Neural Signal Transcription (Batch: ' + manifest.samples.length + ' samples) ===\n')
+    console.log(
+      '=== BCI Neural Signal Transcription (Batch: ' + manifest.samples.length + ' samples) ===\n'
+    )
 
     const startTime = Date.now()
 
@@ -59,13 +63,16 @@ async function main () {
     let sumWER = 0
 
     for (const [day, samples] of byDay) {
-      const bci = new BCIWhispercpp({
-        files: { model: modelPath }
-      }, {
-        whisperConfig: { language: 'en', temperature: 0.0 },
-        miscConfig: { caption_enabled: false },
-        bciConfig: day >= 0 ? { day_idx: day } : undefined
-      })
+      const bci = new BCIWhispercpp(
+        {
+          files: { model: modelPath, embedder: embedderPath }
+        },
+        {
+          whisperConfig: { language: 'en', temperature: 0.0 },
+          miscConfig: { caption_enabled: false },
+          bciConfig: day >= 0 ? { day_idx: day } : undefined
+        }
+      )
       await bci.load()
 
       try {
@@ -79,7 +86,10 @@ async function main () {
           const response = await bci.transcribeFile(samplePath)
           const output = await response.await()
           const segments = flattenSegments(output)
-          const text = segments.map(s => s.text).join('').trim()
+          const text = segments
+            .map((s) => s.text)
+            .join('')
+            .trim()
           const wer = BCIWhispercpp.computeWER(text, sample.expected_text)
 
           console.log('  [' + sample.file + '] day=' + day)
@@ -106,12 +116,15 @@ async function main () {
       return
     }
 
-    const bci = new BCIWhispercpp({
-      files: { model: modelPath }
-    }, {
-      whisperConfig: { language: 'en', temperature: 0.0 },
-      miscConfig: { caption_enabled: false }
-    })
+    const bci = new BCIWhispercpp(
+      {
+        files: { model: modelPath, embedder: embedderPath }
+      },
+      {
+        whisperConfig: { language: 'en', temperature: 0.0 },
+        miscConfig: { caption_enabled: false }
+      }
+    )
 
     await bci.load()
     console.log('Model loaded.\n')
@@ -124,14 +137,17 @@ async function main () {
     console.log('=== BCI Neural Signal Transcription ===')
     console.log('Signal:     ' + signalPath)
     console.log('Timesteps:  ' + T + ', Channels: ' + C)
-    console.log('Duration:   ~' + (T * 20 / 1000).toFixed(1) + 's\n')
+    console.log('Duration:   ~' + ((T * 20) / 1000).toFixed(1) + 's\n')
 
     try {
       const startTime = Date.now()
       const response = await bci.transcribeFile(signalPath)
       const output = await response.await()
       const segments = flattenSegments(output)
-      const text = segments.map(s => s.text).join('').trim()
+      const text = segments
+        .map((s) => s.text)
+        .join('')
+        .trim()
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
 
       console.log('Text: "' + text + '"')

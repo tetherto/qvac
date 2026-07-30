@@ -6,7 +6,12 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXIT_CODE_FILE="$SCRIPT_DIR/.exit-code"
-TIMEOUT=${INTEGRATION_TEST_TIMEOUT:-600}
+# Default raised 600 -> 1200s for the GGML_BACKEND_DL build: the CPU backend is
+# a runtime-dispatched microarch variant (GGML_NATIVE=OFF), so the EasyOCR/DocTR
+# [CPU] tests run markedly slower than the old -march=native build (~90s each)
+# and the full suite outgrew the 600s cap. Tests pass; this is headroom for the
+# slower-but-correct DL CPU path. Still overridable via INTEGRATION_TEST_TIMEOUT.
+TIMEOUT=${INTEGRATION_TEST_TIMEOUT:-1200}
 
 rm -f "$EXIT_CODE_FILE"
 

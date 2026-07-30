@@ -1,1 +1,1 @@
-export { send, stream, close } from "./rpc/rpc-client";
+export { send, stream, close } from './rpc/rpc-client'

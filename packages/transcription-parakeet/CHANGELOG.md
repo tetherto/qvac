@@ -7,6 +7,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `getBackendInfo()` now reports which compute backend ran the FastConformer encoder: `encoderBackend` (`'coreml'` when the Apple Neural Engine Core ML sidecar drives the encoder, else mirrors `backendName`) and `encoderOnCoreml` (boolean). `RuntimeStats` gains `encoderOnCoreml` (0/1). Off Apple, or whenever the Core ML sidecar is absent, both report the ggml backend; the TDT/CTC decoder always runs on ggml.
+
+### Fixed
+
+- Long audio no longer crashes or exhausts memory during offline transcription.
+  The batch `transcribe` path ran the Parakeet encoder over the entire input in
+  one pass, whose self-attention grows with the square of the audio length, so
+  multi-hour files were killed by the OS (a ~90 min file peaked at ~100 GB). The
+  bundled `parakeet-cpp` (bumped to `2026-07-21#0`) now slides the encoder over
+  long inputs in overlapping windows with bounded memory; short inputs keep the
+  identical single-pass path. `transcribeStream` was already bounded and is
+  unchanged.
+
+## [0.10.1] - 2026-07-20
+
+### Changed
+
+- Migrated the published JavaScript wrapper to generated TypeScript sources and added declarations for the supported `./parakeet` subpath export, while preserving the existing CommonJS runtime API.
+- Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`parakeet-cpp` >= 2026-07-13#1, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16/i8mm kernels, leaving quantized models slow (tdt q4_0 mean RTF 0.2285 -> 0.0612 on ubuntu-24.04-arm; q4_0 now beats q8_0 like on every other desktop platform).
+- Bumped the `parakeet-cpp` `version>=` floors from `2026-07-13#1` to `2026-07-13#2` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), which raises the `ggml-speech` floor to `2026-07-15` (`tetherto/qvac-ext-ggml` speech `d7e27ac7`, [#42](https://github.com/tetherto/qvac-ext-ggml/pull/42) — QVAC-21623 ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM). `parakeet-cpp` source is unchanged (rebuild-only re-pin); the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical). Registry baseline unchanged.
+
+### Fixed
+
+- `BACKENDS_SUBDIR` is now defined on `parakeet_model_core` (the target that compiles `ParakeetModel.cpp`), so the engine scans `prebuilds/<bare-target>/<module>/` for dynamically-loadable ggml backends instead of the prebuilds root. Latent on all platforms; required for the desktop-Linux per-arch CPU variants.
+
+## [0.10.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.9.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932). Ships in the 0.9.x line, which stays outside the `^0.8.3` range the already-released SDK 0.14.x pins, so it does not implicitly flow into that SDK.
+
+## [0.9.0] - 2026-07-07
+
+### Changed
+
+- Bumped the `parakeet-cpp` `version>=` floors from `2026-07-06` to `2026-07-07`,
+  consuming merged registry PR
+  [tetherto/qvac-registry-vcpkg#239](https://github.com/tetherto/qvac-registry-vcpkg/pull/239)
+  (QVAC-21005). Fixes a GPU-only defect where the TDT decoder dropped the final
+  sub-word of some multi-piece words (`analyses` → `analys`, `kilomètres` →
+  `km`), inflating non-English WER and, on Vulkan/CUDA, degenerating into
+  repetition loops. Root cause: the 2-layer TDT predictor LSTM only persisted its
+  last layer's state on the on-device graph path (the other layer's state write
+  was pruned by graph construction), leaving the predictor partly stateless; the
+  fix persists every layer's state. Manifest-only: `default-registry.baseline` is
+  unchanged. CPU output was already correct.
+- Bumped the `parakeet-cpp` `version>=` floors (`osx | ios` → `metal`, `android`
+  → `vulkan, opencl`, `!(osx | ios | android)` → `vulkan`) from `2026-06-18#3`
+  to `2026-07-06`, consuming merged registry PR
+  [tetherto/qvac-registry-vcpkg#234](https://github.com/tetherto/qvac-registry-vcpkg/pull/234)
+  (QVAC-18192). The Parakeet encoder, subsampling, and Sortformer paths now
+  route compute through a shared `ggml_backend_sched` with the CPU backend
+  last, giving automatic per-op CPU fallback for ops the active GPU backend
+  can't run (previously any GPU-unsupported op would abort). The cached
+  encoder graph stays on a persistent gallocr; the TDT decoder stays on direct
+  compute. Manifest-only: `default-registry.baseline` is unchanged, and the
+  `ggml-speech` floor stays `2026-07-03` (PR #74 carries no ggml change).
+  Behaviour is unchanged on today's supported backends.
+
+## [0.8.3] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+## [0.8.2] - 2026-06-24
+
+### Changed
+
+- New `getBackendInfo()` surfaces the active GPU hardware name. The native addon now captures `ggml_backend_dev_description()` for the resolved GPU device at `load()` (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro") and exposes it through `TranscriptionParakeet#getBackendInfo()` → `{ backendDevice, backendId, backendName, backendDescription }`. The RTF benchmark uses it as a fallback for `labels.gpuModel` on CI GPU runners where the host probe (nvidia-smi / procfs) can't see the device but the ggml CUDA/Vulkan/Metal backend still knows its name via `cudaGetDeviceProperties` / `VkPhysicalDeviceProperties` / `MTLDevice.name` (QVAC-21167).
+- Bumped the `parakeet-cpp` `version>=` constraint from `2026-06-18` to `2026-06-18#1`, which refreshes the bundled `ggml-speech` from `2026-06-09` to `2026-06-15` (speech branch tip `7bb9f229`), keeping it consistent with the other speech-stack addons (`tts-cpp` already pins `ggml-speech 2026-06-15`). The `parakeet-cpp` C++ source is unchanged (same `master` REF `b95ad447`), so this only moves `ggml-speech`. The registry baseline is left unchanged; `version>=` resolves the new port-version forward of the pinned baseline (QVAC-21322, registry [tetherto/qvac-registry-vcpkg#210](https://github.com/tetherto/qvac-registry-vcpkg/pull/210)).
+
+## Pull Requests
+
+- [#2743](https://github.com/tetherto/qvac/pull/2743) - QVAC-21167 feat[api]: expose addon GPU device name via getBackendInfo() (parakeet)
+- [#2847](https://github.com/tetherto/qvac/pull/2847) - QVAC-21322 transcription-parakeet: consume ggml-speech 2026-06-15 (parakeet-cpp 2026-06-18#1)
+
+## [0.8.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Package-local vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.8.0]
+
+### Added
+
+- **Android GPU for Parakeet (QVAC-20556).** Remove the `#ifdef __ANDROID__`
+  guard in `ParakeetModel::load` that forced `useGPU=false`; `useGPU` now flows
+  to `parakeet-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which runs
+  the encoder on the GPU and selects the backend per its Adreno-tier / vendor
+  policy — Adreno 700+ on OpenCL (TDT decode routed to the host so the missing
+  `ARGMAX` kernel can't abort), Mali / Xclipse on Vulkan, with unsupported
+  tiers/vendors routed to CPU and surfaced via the new `gpuUnsupported` runtime
+  stat (`index.d.ts` `RuntimeStats.gpuUnsupported`). `CMakeLists.txt` now stages
+  the Vulkan/OpenCL MODULE `.so`s in the Android prebuild (reverses the [0.7.2]
+  CPU-only packaging), and the `default-registry` baseline advances to `6fe4e2b`
+  so the new version resolves. The Android gpu-smoke skips are dropped (GPU
+  asserted on Adreno/Mali; a policy CPU fallback flagged via `gpuUnsupported` is
+  accepted).
+
 ### Changed
 
 - Bumped the `parakeet-cpp` `version>=` constraint to `2026-06-10` (whisper.cpp `1c75d6e9`), which refreshes the bundled `ggml-speech` to the current speech-branch tip `bec032cd`. The registry baseline is left unchanged. The `parakeet-cpp` C++ tree is unchanged since the previous `128dae42` pin, so this only moves `ggml-speech`; prebuilds and the desktop RTF benchmark now build against the latest speech stack (QVAC-20614).

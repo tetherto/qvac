@@ -26,7 +26,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-addon-sd C CXX)
 
@@ -71,6 +71,10 @@ if(ANDROID AND GGML_BACKEND_DL)
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
     endif()
+    if(TARGET ggml::${_backend})
+      list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET ggml::${_backend})
+      continue()
+    endif()
     # qvac ggml ports prefix backend module filenames (e.g.
     # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). These
     # modules are installed under vcpkg's bin/ directory on Android.
@@ -105,6 +109,7 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/VideoModelCapabilities.cpp
   )
 
   target_sources(
@@ -143,10 +148,12 @@ if(BUILD_TESTING)
   add_subdirectory(test/unit)
 endif()
 
-if(WIN32)
-  target_link_libraries(
-    ${inference-addon-sd}
-    PRIVATE
-      msvcrt.lib
-  )
+# Symbol-export hygiene: hide this addon's statically linked ggml /
+# stable-diffusion symbols so they cannot interpose on another ggml addon
+# loaded into the same process (see packages/ggml-coload-smoke and
+# .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs). Matches
+# every other ggml addon, which all rely on --exclude-libs,ALL alone;
+# diffusion-cpp previously shipped nothing.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${inference-addon-sd}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()

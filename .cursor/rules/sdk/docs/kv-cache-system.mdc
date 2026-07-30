@@ -31,6 +31,11 @@ const result = completion({ modelId, history: [...], kvCache: true });
 const result = completion({ modelId, history: [...] });
 ```
 
+`batchCompletion()` does not expose SDK-managed KV cache yet. Batch prompts are
+submitted as independent text prompts in one addon `run()` call; per-item cache
+support should be added deliberately because the current cache session
+bookkeeping is scoped around a single assistant turn.
+
 ### String-Keyed Cache
 
 Use named cache keys for multi-session applications. Subsequent requests with the same key reuse the cached context — only the last message is sent, full context is loaded from cache.

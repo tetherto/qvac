@@ -17,7 +17,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 # Android STL configuration must be set before project()
@@ -271,15 +271,6 @@ if(USE_BERGAMOT)
       bergamot-translator::bergamot-translator
   )
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${translation-nmtcpp}
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(addon/tests)

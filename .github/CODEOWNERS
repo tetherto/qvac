@@ -1,1 +1,5 @@
 * @tetherto/qvac-internal-merge @tetherto/qvac-internal-mgmt
+
+# License compliance exception allowlist — edits require a Tier-1 reviewer so
+# license exceptions are never self-served by the PR author (QVAC-21554).
+/.github/license-allowlist.yml @tetherto/qvac-internal-merge

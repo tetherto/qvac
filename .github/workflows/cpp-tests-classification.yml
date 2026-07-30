@@ -43,6 +43,7 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64
@@ -81,6 +82,16 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
+      - if: matrix.platform == 'linux'
+        name: Set Vulkan SDK Path on Linux
+        shell: bash
+        # classification-ggml builds the GGML_BACKEND_DL fabric (gpu-backends);
+        # building the ggml-vulkan module from source needs the Vulkan SDK,
+        # pre-installed on the self-hosted qvac runner at /opt/vulkansdk. (The
+        # consumer-side find_dependency(Vulkan) is removed under DL by
+        # qvac-fabric 8828.0.2#5, but the fabric's Vulkan build still needs it.)
+        run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
+
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
         env:
@@ -114,4 +125,14 @@ jobs:
 
       - name: Run C++ tests
         working-directory: ${{ env.WORKDIR }}
+        env:
+          # addon-test links AddressSanitizer but dynamically loads the
+          # non-ASan, -static-libstdc++ @qvac/fabric prebuild. Cross-module
+          # new/delete and fabric's intentional long-lived runtime allocations
+          # would otherwise abort the run, so relax exactly those two checks.
+          # See packages/classification-ggml/test/unit/CMakeLists.txt for the
+          # full rationale. Harmless on win32 (nothing is ASan-linked there).
+          # test:cpp:run runs test:scripts first (runner exit-code / ASAN_OPTIONS
+          # regressions) before spawning the ASan-instrumented addon-test binary.
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: npm run test:cpp:run

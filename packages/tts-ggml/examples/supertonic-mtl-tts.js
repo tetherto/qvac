@@ -37,8 +37,9 @@
  * supertonic-mtl-sweep-tts.js; for the simpler English-pinned entry
  * point see supertonic-tts.js.
  *
- * NOTE: Supertonic supports GPU on capable hosts (CPU-only on Android).
- * This example keeps useGPU=false; opt in with config: { useGPU: true }.
+ * NOTE: Supertonic supports GPU on capable hosts, including Android via
+ * tts-cpp's per-vendor allowlist.  This example keeps useGPU=false; opt
+ * in with config: { useGPU: true }.
  */
 
 const fs = require('bare-fs')

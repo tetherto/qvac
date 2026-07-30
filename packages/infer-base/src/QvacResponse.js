@@ -15,6 +15,7 @@ const statuses = Object.freeze({
  */
 class QvacResponse extends EventEmitter {
   _status = statuses.RUNNING
+  _settleHooks = []
 
   /**
    * Creates a new QvacResponse instance.
@@ -27,10 +28,7 @@ class QvacResponse extends EventEmitter {
    * @param {number} [pollInterval=100] - Iterator polling interval in ms. Safety net only —
    *   `iterate()` wakes immediately on output/end/error events.
    */
-  constructor (
-    { cancelHandler, signal } = {},
-    pollInterval = 100
-  ) {
+  constructor({ cancelHandler, signal } = {}, pollInterval = 100) {
     super()
     this.output = []
     this.stats = {}
@@ -54,7 +52,7 @@ class QvacResponse extends EventEmitter {
    * @param {Function} callback - Function invoked with each output update.
    * @returns {QvacResponse} The current instance for chaining.
    */
-  onUpdate (callback) {
+  onUpdate(callback) {
     this.on('output', callback)
     return this
   }
@@ -65,7 +63,7 @@ class QvacResponse extends EventEmitter {
    * @param {Function} [callback] - Optional callback invoked with the terminal result.
    * @returns {QvacResponse} The current instance for chaining.
    */
-  onFinish (callback) {
+  onFinish(callback) {
     if (callback) {
       this.once('end', (result) => callback(result))
     }
@@ -76,7 +74,7 @@ class QvacResponse extends EventEmitter {
    * Returns a promise that resolves with the terminal result when the response finishes.
    * @returns {Promise<any>} A promise that resolves with the terminal result or rejects if an error occurs.
    */
-  await () {
+  await() {
     return this._finishPromise
   }
 
@@ -85,7 +83,7 @@ class QvacResponse extends EventEmitter {
    * @param {Function} callback - Function invoked with the error.
    * @returns {QvacResponse} The current instance for chaining.
    */
-  onError (callback) {
+  onError(callback) {
     this.on('error', callback)
     return this
   }
@@ -95,7 +93,7 @@ class QvacResponse extends EventEmitter {
    * @param {Function} callback - Function invoked when a cancel event occurs.
    * @returns {QvacResponse} The current instance for chaining.
    */
-  onCancel (callback) {
+  onCancel(callback) {
     this.on('cancel', callback)
     return this
   }
@@ -104,7 +102,7 @@ class QvacResponse extends EventEmitter {
    * Adds an output update and emits an 'output' event.
    * @param {*} output - The output data to add.
    */
-  updateOutput (output) {
+  updateOutput(output) {
     this.output.push(output)
     this.emit('output', output)
   }
@@ -113,7 +111,7 @@ class QvacResponse extends EventEmitter {
    * Updates the response statistics and emits a 'stats' event.
    * @param {*} stats - Statistics data.
    */
-  updateStats (stats) {
+  updateStats(stats) {
     this.stats = stats
     this.emit('stats', stats)
   }
@@ -123,7 +121,7 @@ class QvacResponse extends EventEmitter {
    * Idempotent: no-op once already settled. Detaches the abort-signal listener (if any).
    * @param {Error} error - The error that caused the failure.
    */
-  failed (error) {
+  failed(error) {
     if (this._status !== statuses.RUNNING) return
     if (!(error instanceof Error)) {
       error = new Error(String(error).trim())
@@ -132,30 +130,32 @@ class QvacResponse extends EventEmitter {
     this._status = statuses.ERRORED
     this._error = error
     this._teardownAbort()
+    this._rejectFinish(error)
+    this._runSettleHooks()
     const errorListeners = this.listenerCount('error')
     if (errorListeners > 0) {
       this.emit('error', error)
     }
-    this._rejectFinish(error)
   }
 
   /**
    * Marks the response as ended, emits an 'end' event, and resolves the finish promise.
    * Idempotent: no-op once already settled. Detaches the abort-signal listener (if any).
    */
-  ended (result = this.output) {
+  ended(result = this.output) {
     if (this._status !== statuses.RUNNING) return
     this._status = statuses.ENDED
     this._teardownAbort()
-    this.emit('end', result)
     this._resolveFinish(result)
+    this._runSettleHooks()
+    this.emit('end', result)
   }
 
   /**
    * Returns the most recent output.
    * @returns {*} The latest output, or null if no output exists.
    */
-  getLatest () {
+  getLatest() {
     return this.output.length ? this.output.at(-1) : null
   }
 
@@ -173,7 +173,7 @@ class QvacResponse extends EventEmitter {
    * @yields {*} Each output update.
    * @throws {*} Throws an error if the response ends with an error status.
    */
-  async * iterate () {
+  async *iterate() {
     if (this._status === statuses.ERRORED) {
       throw this._error
     }
@@ -221,7 +221,7 @@ class QvacResponse extends EventEmitter {
     if (this._status === statuses.ERRORED) throw this._error
   }
 
-  _wireAbortSignal (signal) {
+  _wireAbortSignal(signal) {
     const buildError = () => {
       const reason = signal.reason
       if (reason instanceof Error) return reason
@@ -255,21 +255,42 @@ class QvacResponse extends EventEmitter {
    *
    * @param {Error} error - The abort error to settle with.
    */
-  _markAbortPending (error) {
+  _markAbortPending(error) {
     if (this._status !== statuses.RUNNING) return
     this._status = statuses.ERRORED
     this._error = error
     this._teardownAbort()
 
     queueMicrotask(() => {
+      this._rejectFinish(error)
+      // Hooks run here rather than at the synchronous reservation above:
+      // the job handler registers its hook right after construction returns,
+      // which is after an already-aborted signal reserved the state.
+      this._runSettleHooks()
       if (this.listenerCount('error') > 0) {
         this.emit('error', error)
       }
-      this._rejectFinish(error)
     })
   }
 
-  _teardownAbort () {
+  /**
+   * Internal: registers a hook invoked exactly once when the response
+   * settles (ended / failed / abort), after the finish promise settles and
+   * before any public 'end'/'error' listener runs — so a throwing listener
+   * cannot skip it. Hooks must not throw. Not part of the public API.
+   * @param {Function} hook
+   */
+  _onSettled(hook) {
+    this._settleHooks.push(hook)
+  }
+
+  _runSettleHooks() {
+    const hooks = this._settleHooks
+    this._settleHooks = []
+    for (const hook of hooks) hook()
+  }
+
+  _teardownAbort() {
     if (this._abortSignal !== null && this._onAbort !== null) {
       try {
         this._abortSignal.removeEventListener('abort', this._onAbort)
@@ -285,7 +306,7 @@ class QvacResponse extends EventEmitter {
    * Cancels the response by invoking the cancel handler and emitting a 'cancel' event.
    * @returns {Promise<void>}
    */
-  async cancel () {
+  async cancel() {
     if (this._status !== statuses.RUNNING) {
       return
     }

@@ -91,8 +91,14 @@ function loadModelsFromManifest () {
 const MODELS = loadModelsFromManifest()
 
 // Parameter sweep (cartesian product). Tuned to the focused sweep:
-// only quantization and reasoning-budget vary; every other dimension is
-// pinned to a single value. Edit these arrays to sweep more dimensions.
+// quantization, KV-cache type, and reasoning-budget vary; every other dimension
+// is pinned to a single value. Edit these arrays to sweep more dimensions.
+// KV-cache is swept symmetrically (cache-type-k === cache-type-v): the cartesian
+// produces every k/v combination, but case-runner skips the mixed ones, so only
+// f16/q8_0/q4_0 symmetric pairs run. flash-attn is ON: a quantized KV-cache
+// (q8_0/q4_0) requires flash-attention — without it the context fails to
+// initialize ("Failed to initialize context") on both CUDA and Metal. f16 runs
+// fine with flash-attn on, so the whole KV sweep shares one flash-attn setting.
 const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_1', 'Q4_K_M', 'Q6_K', 'Q8_0'],
   device: getDefaultSweepDevices(),
@@ -100,11 +106,35 @@ const PARAMETER_SWEEP = {
   threads: ['4'],
   'batch-size': ['512'],
   'ubatch-size': ['512'],
-  'flash-attn': ['off'],
-  'cache-type-k': ['f16'],
-  'cache-type-v': ['f16'],
+  'flash-attn': ['on'],
+  'cache-type-k': ['f16', 'q8_0', 'q4_0'],
+  'cache-type-v': ['f16', 'q8_0', 'q4_0'],
   'reasoning-budget': ['-1', '0']
   // verbosity: fixed at '0' (not swept)
+}
+
+// Additive batch/ubatch sweep, run once at a fixed representative baseline
+// rather than crossed with PARAMETER_SWEEP. batch-size/ubatch-size only affect
+// prefill throughput (ppTPS), and the ppTPS-vs-batch curve is invariant across
+// quantization and KV-cache type, so crossing batch with those axes would only
+// replicate the same curve; measuring it once at the baseline keeps the cost
+// additive (+batch cells) instead of multiplicative. batch-size === ubatch-size
+// (the diagonal; mixed pairs are not benchmarked). Every batch is measured
+// against the SAME fixed long prompt — the ctx-filling case at ctx-size 8192
+// (~7k tokens) — so each batch chunks a full prefill and the ppTPS numbers are
+// directly comparable across batch sizes (a batch-matched prompt would vary the
+// prompt length per batch and confound the comparison).
+const BATCH_SWEEP = {
+  promptCase: 'ctx-filling',
+  quantization: 'Q4_K_M',
+  device: getDefaultSweepDevices(),
+  'ctx-size': '8192',
+  'batch-size': ['512', '1024', '2048', '4096'],
+  'flash-attn': 'on',
+  'cache-type-k': 'f16',
+  'cache-type-v': 'f16',
+  'reasoning-budget': '-1',
+  threads: '4'
 }
 
 module.exports = {
@@ -117,5 +147,6 @@ module.exports = {
   BENCH_DEFAULT_RUNTIME,
   MODEL_RUNTIME_OVERRIDES,
   MODELS,
-  PARAMETER_SWEEP
+  PARAMETER_SWEEP,
+  BATCH_SWEEP
 }

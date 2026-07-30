@@ -1,4 +1,5 @@
 import type { OpenAICompatibleProvider } from '@ai-sdk/openai-compatible'
+import type { FilesV4, SpeechModelV4, TranscriptionModelV4 } from '@ai-sdk/provider'
 
 // Options shared by every mode. `mode` is the discriminant; it defaults to
 // `'external'` so existing v1 callers (which never passed `mode`) keep the
@@ -91,6 +92,9 @@ export type QvacOptions = QvacExternalOptions | QvacManagedOptions
 // TypeScript without paying runtime cost.
 export type QvacProvider = OpenAICompatibleProvider & {
   readonly _brand: 'qvac'
+  files(): FilesV4
+  transcriptionModel(modelId: string): TranscriptionModelV4
+  speechModel(modelId: string): SpeechModelV4
 }
 
 // Provider returned by managed mode. Carries the live serve coordinates plus a

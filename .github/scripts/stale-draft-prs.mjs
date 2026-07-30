@@ -86,9 +86,17 @@ async function getStaleLabelAppliedAt (github, owner, repo, pullNumber) {
   return latest
 }
 
-export async function processStaleDraftPrs ({ github, context, core }) {
+function logDryRun (core, message) {
+  core.info(`[dry-run] ${message}`)
+}
+
+export async function processStaleDraftPrs ({ github, context, core, dryRun = false }) {
   const owner = context.repo.owner
   const repo = context.repo.repo
+
+  if (dryRun) {
+    core.info('Dry-run mode enabled: no labels, comments, or closures will be applied')
+  }
 
   const pulls = await github.paginate(github.rest.pulls.list, {
     owner,
@@ -118,13 +126,17 @@ export async function processStaleDraftPrs ({ github, context, core }) {
     if (hasStaleLabel(pull.labels)) {
       const authorCommented = await authorHasCommentedOnPr(github, owner, repo, number, authorLogin)
       if (authorCommented) {
-        core.info(`Removing stale label from PR #${number}: author has commented since opening`)
-        await github.rest.issues.removeLabel({
-          owner,
-          repo,
-          issue_number: number,
-          name: STALE_LABEL
-        })
+        if (dryRun) {
+          logDryRun(core, `Would remove stale label from PR #${number}: author has commented since opening`)
+        } else {
+          core.info(`Removing stale label from PR #${number}: author has commented since opening`)
+          await github.rest.issues.removeLabel({
+            owner,
+            repo,
+            issue_number: number,
+            name: STALE_LABEL
+          })
+        }
         continue
       }
 
@@ -135,19 +147,24 @@ export async function processStaleDraftPrs ({ github, context, core }) {
       }
 
       if (daysSince(staleLabelAppliedAt) >= DAYS_BEFORE_CLOSE) {
-        core.info(`Closing stale draft PR #${number}`)
-        await github.rest.issues.createComment({
-          owner,
-          repo,
-          issue_number: number,
-          body: CLOSE_DRAFT_MESSAGE
-        })
-        await github.rest.pulls.update({
-          owner,
-          repo,
-          pull_number: number,
-          state: 'closed'
-        })
+        if (dryRun) {
+          logDryRun(core, `Would close stale draft PR #${number}`)
+          logDryRun(core, `Would comment on PR #${number}: ${CLOSE_DRAFT_MESSAGE}`)
+        } else {
+          core.info(`Closing stale draft PR #${number}`)
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: number,
+            body: CLOSE_DRAFT_MESSAGE
+          })
+          await github.rest.pulls.update({
+            owner,
+            repo,
+            pull_number: number,
+            state: 'closed'
+          })
+        }
       } else {
         core.info(`Skipping PR #${number}: stale label applied ${daysSince(staleLabelAppliedAt).toFixed(1)} day(s) ago`)
       }
@@ -165,18 +182,24 @@ export async function processStaleDraftPrs ({ github, context, core }) {
       continue
     }
 
-    core.info(`Marking draft PR #${number} as stale (no author comments since opening)`)
-    await github.rest.issues.addLabels({
-      owner,
-      repo,
-      issue_number: number,
-      labels: [STALE_LABEL]
-    })
-    await github.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: number,
-      body: STALE_DRAFT_MESSAGE
-    })
+    if (dryRun) {
+      logDryRun(core, `Would mark draft PR #${number} as stale (no author comments since opening)`)
+      logDryRun(core, `Would add label "${STALE_LABEL}" to PR #${number}`)
+      logDryRun(core, `Would comment on PR #${number}: ${STALE_DRAFT_MESSAGE}`)
+    } else {
+      core.info(`Marking draft PR #${number} as stale (no author comments since opening)`)
+      await github.rest.issues.addLabels({
+        owner,
+        repo,
+        issue_number: number,
+        labels: [STALE_LABEL]
+      })
+      await github.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: number,
+        body: STALE_DRAFT_MESSAGE
+      })
+    }
   }
 }

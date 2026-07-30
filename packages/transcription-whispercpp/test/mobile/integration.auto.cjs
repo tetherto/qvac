@@ -35,12 +35,26 @@ async function runMobilePerfTinyCpuTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/mobile-perf-tiny-cpu.test.js', options)
 }
 
+// CPU quantization sweep (base/small × q5_1/q8_0). Declared among the CPU cases
+// so it runs before any GPU case — see mobile-perf-sweep-gpu.test.js for the
+// GPU-teardown crash-isolation rationale.
+async function runMobilePerfSweepCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sweep-cpu.test.js', options)
+}
+
 async function runModelFileValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/model-file-validation.test.js', options)
 }
 
 async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-transcriptions.test.js', options)
+}
+
+// GPU quantization sweep (base/small × q5_1/q8_0). Declared after every CPU
+// case and immediately before the known-crasher tiny-GPU case below, so the CPU
+// sweep's coverage is protected from any GPU-teardown crash.
+async function runMobilePerfSweepGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sweep-gpu.test.js', options)
 }
 
 // Intentionally ordered LAST (not alphabetically): the GPU teardown can crash
@@ -61,6 +75,8 @@ module.exports = {
   runLiveStreamSimulationTest,
   runLongEsTest,
   runMobilePerfTinyCpuTest,
+  runMobilePerfSweepCpuTest,
+  runMobilePerfSweepGpuTest,
   runMobilePerfTinyGpuTest,
   runModelFileValidationTest,
   runMultipleTranscriptionsTest

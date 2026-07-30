@@ -15,7 +15,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(embed-llamacpp C CXX)
 
@@ -85,7 +85,7 @@ target_include_directories(
 target_link_libraries(
   ${embed-llamacpp}
   PRIVATE
-    llama::llama llama::common
+    llama::llama llama::llama-common
 )
 
 target_compile_definitions(${embed-llamacpp} PUBLIC JS_LOGGER)
@@ -103,12 +103,4 @@ if(BUILD_TESTING)
   enable_testing()
   
   add_subdirectory(test/unit)
-endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${embed-llamacpp}
-    PRIVATE
-      msvcrt.lib
-  )
 endif()

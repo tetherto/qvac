@@ -22,10 +22,7 @@ const TranslationNmtcpp = require('../index')
 const path = require('bare-path')
 const process = require('bare-process')
 
-const {
-  ensureBergamotModelFiles,
-  getBergamotFileNames
-} = require('../lib/bergamot-model-fetcher')
+const { ensureBergamotModelFiles, getBergamotFileNames } = require('../lib/bergamot-model-fetcher')
 
 // ============================================================
 // LOGGING CONFIGURATION
@@ -51,7 +48,7 @@ const spanishText = `
   Fue un dia perfecto para explorar la ciudad.
 `
 
-async function main () {
+async function main() {
   console.log('Setting up pivot translation: Spanish -> English -> Italian')
   console.log('-----------------------------------------------------------')
   console.log('Original Spanish text:')
@@ -102,9 +99,10 @@ async function main () {
     const response = await model.run(spanishText)
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         process.stdout.write(data)
-      }).onFinish(() => {
+      })
+      .onFinish(() => {
         console.log('\n\nFinished pivot translation...')
       })
       .await()
@@ -114,5 +112,4 @@ async function main () {
   }
 }
 
-main()
-  .catch(console.error)
+main().catch(console.error)

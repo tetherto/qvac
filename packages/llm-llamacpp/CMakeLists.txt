@@ -15,7 +15,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-addon-llama C CXX)
 
@@ -39,7 +39,7 @@ find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 # Required to call llama.cpp's `json_schema_to_grammar()` for per-request
 # JSON-Schema → GBNF conversion. The function signature lives in libcommon
-# (linked via `llama::common`) but takes a `nlohmann::ordered_json`, so we
+# (linked via `llama::llama-common`) but takes a `nlohmann::ordered_json`, so we
 # need the full nlohmann headers, not just the forward decl shipped with
 # `llama/common/json-schema-to-grammar.h`.
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -84,15 +84,20 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -113,7 +118,7 @@ endif()
     ${inference-addon-llama}
     PRIVATE
       llama::llama
-      llama::common
+      llama::llama-common
       llama::mtmd
       nlohmann_json::nlohmann_json
       unofficial::concurrentqueue::concurrentqueue
@@ -137,15 +142,20 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -163,7 +173,7 @@ if(BUILD_CLI)
     cli_tool
           PRIVATE
           llama::llama
-          llama::common
+          llama::llama-common
           llama::mtmd
           nlohmann_json::nlohmann_json
           unofficial::concurrentqueue::concurrentqueue
@@ -172,7 +182,7 @@ if(BUILD_CLI)
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support
   target_compile_features(cli_tool PRIVATE cxx_std_20)
-  
+
   # Install ggml backends next to the CLI tool binary in build folder
   if((ANDROID OR UNIX) AND NOT APPLE)
     foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -190,16 +200,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-  
+
   # Integration tests for model classes (includes backend selection tests)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
-endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${inference-addon-llama}
-    PRIVATE
-      msvcrt.lib
-  )
 endif()

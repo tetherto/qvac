@@ -16,6 +16,7 @@
 #include "handlers/SdGenHandlers.hpp"
 #include "handlers/SdVidGenHandlers.hpp"
 #include "utils/EsrganUpscaler.hpp"
+#include "utils/VideoModelCapabilities.hpp"
 
 /**
  * Core stable-diffusion.cpp model wrapper.
@@ -148,6 +149,12 @@ private:
   processVideo(const GenerationJob& job, const picojson::value& parsed);
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
+
+  // LTX-2 is inferred from its LTX-only embeddings-connectors input. Its
+  // temporal rules are unavailable from the current stable-diffusion C API,
+  // while spatial alignment is always derived from native model capabilities.
+  bool isLtxModel_{false};
+  qvac_lib_inference_addon_sd::VideoModelCapabilities videoModelCapabilities_{};
 
   std::unique_ptr<sd_ctx_t, decltype(&free_sd_ctx)> sdCtx_;
   qvac_lib_inference_addon_sd::EsrganUpscaler upscaler_;

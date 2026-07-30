@@ -1,28 +1,36 @@
 /**
+ * Distinguishes a legitimate per-call timeout from a transport failure (e.g.
+ * a worker crash) for callers racing this against other rejection sources.
+ */
+export class OperationTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Operation timeout after ${timeoutMs}ms`)
+    this.name = 'OperationTimeoutError'
+  }
+}
+
+/**
  * Creates a timeout promise that rejects after the specified duration
  */
 function createTimeoutPromise(timeoutMs: number): Promise<never> {
   return new Promise<never>((_, reject) => {
     setTimeout(() => {
-      reject(new Error(`Operation timeout after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
+      reject(new OperationTimeoutError(timeoutMs))
+    }, timeoutMs)
+  })
 }
 
 /**
  * Wraps a promise with an optional timeout
  * If no timeout is provided, returns the original promise unchanged
  */
-export async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs?: number,
-): Promise<T> {
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
   if (timeoutMs === undefined) {
-    return promise;
+    return promise
   }
 
-  const timeoutPromise = createTimeoutPromise(timeoutMs);
-  return Promise.race([promise, timeoutPromise]);
+  const timeoutPromise = createTimeoutPromise(timeoutMs)
+  return Promise.race([promise, timeoutPromise])
 }
 
 /**
@@ -31,17 +39,17 @@ export async function withTimeout<T>(
  */
 export async function* withTimeoutStream<T>(
   generator: AsyncGenerator<T>,
-  timeoutMs?: number,
+  timeoutMs?: number
 ): AsyncGenerator<T> {
   if (timeoutMs === undefined) {
-    yield* generator;
-    return;
+    yield* generator
+    return
   }
 
   for await (const item of generator) {
-    const itemPromise = Promise.resolve(item);
-    const timeoutPromise = createTimeoutPromise(timeoutMs);
-    const result = await Promise.race([itemPromise, timeoutPromise]);
-    yield result;
+    const itemPromise = Promise.resolve(item)
+    const timeoutPromise = createTimeoutPromise(timeoutMs)
+    const result = await Promise.race([itemPromise, timeoutPromise])
+    yield result
   }
 }

@@ -18,9 +18,15 @@
 #include <llama.h>
 
 #include "LlmContext.hpp"
+#include "MediaLoadOrder.hpp"
 #include "MultiRequestBatcher.hpp"
 #include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
+
+/// Defined in test/unit/test_internal_peers.hpp (tests only); befriended below
+/// so unit tests can inject decode/media-eval stubs. Never defined in
+/// production builds, where it is only ever named as a friend.
+class ContinuousBatchSchedulerTestPeer;
 
 namespace qvac_lib_inference_addon_llama::batching {
 
@@ -29,9 +35,34 @@ namespace qvac_lib_inference_addon_llama::batching {
 /// (natural stop) so onGenerationCompletePolicy runs; a prefill-only slot only
 /// flushes via onSequenceEnd. One place for the mapping every terminal path
 /// shares (normal drain, cancel-all, decode-error finalization).
-void finalizeTerminalDriver(
+///
+/// Returns `true` when the terminal hook left the driver in a state safe
+/// to persist via `saveCache`. Cancel/DecodeError paths forward
+/// `onCancel`'s rollback-ok signal; natural generation forwards
+/// `onGenerationFinished` so a prediction-limit rollback can also veto
+/// persistence. Prefill-only paths always return `true`. Callers that
+/// persist cache MUST skip `saveCache` when this returns `false` so a
+/// failed recurrent rollback cannot leak the request into the on-disk cache.
+[[nodiscard]] bool finalizeTerminalDriver(
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback);
+
+/// Decide whether a generating slot may temporarily touch its per-slot token
+/// cap because the driver will slide its window back below the ceiling on the
+/// next step. Slides only happen during generation (never prefill) and only
+/// when sliding is configured.
+[[nodiscard]] bool computeSlideCapable(
+    const SequenceDriver& driver, bool slideConfigured, bool isPrefill);
+
+/// Whether prompt + generation budget overruns the per-sequence cap at
+/// admission. `promptSize` is the position span and `promptKvSize` the KV-cell
+/// span of the prompt; for M-RoPE media `promptKvSize >= promptSize`, so the
+/// KV-cell span is the binding quantity that must also leave room for
+/// `nPredict`. `nPredict <= 0` means "no scheduler cap" (the batcher's ceiling
+/// governs), so the budget is never exceeded in that case.
+[[nodiscard]] bool generationBudgetExceeded(
+    unsigned promptSize, unsigned promptKvSize, int nPredict,
+    unsigned perSeqMaxTokens);
 
 /// Per-request streaming sinks. Both are optional; missing callbacks
 /// are no-ops.
@@ -44,6 +75,16 @@ struct SubmitRequest {
   std::vector<common_chat_msg> chatMsgs;
   std::vector<common_chat_tool> tools;
   PromptLayout layout;
+  /// Raw media payloads (images/audio) referenced by the prompt. Only
+  /// accepted when the scheduler's driver factory builds multimodal
+  /// drivers; text drivers reject a non-empty list at admission.
+  std::vector<std::vector<uint8_t>> media;
+  /// Every media marker in prompt order, byte buffers and paths interleaved as
+  /// they appear in the prompt. The per-slot driver loads media via this plan
+  /// (see `computeMediaLoadOrder`), consuming byte payloads from `media` by
+  /// index and paths inline, so each bitmap binds to its marker in order. Like
+  /// `media`, only multimodal drivers accept a non-empty list.
+  std::vector<PlannedMedia> mediaPlan;
   bool prefill = false;
   std::string cacheKey;
   bool saveCacheToDisk = false;
@@ -59,36 +100,62 @@ struct SubmitRequest {
   StreamCallbacks streams;
 };
 
+using SchedulerDecodeFunc = std::function<int(llama_context*, llama_batch&)>;
+using SchedulerSynchronizeFunc = std::function<void(llama_context*)>;
+
+struct TimedDecodeResult {
+  int rc = 0;
+  std::chrono::nanoseconds duration{};
+};
+
+/// Time one scheduler decode step through backend completion: llama_decode can
+/// run asynchronously, so synchronize before recording time or mutating state.
+[[nodiscard]] TimedDecodeResult timeDecodeStep(
+    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
+    const SchedulerSynchronizeFunc& synchronize);
+
 /// Aggregated per-scheduler runtime stats. `avgConcurrentSeq`/`elapsedMs`
 /// are derived getters computed from live state, not stored.
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t contextSlides = 0;
+  int64_t thinkingBlockDiscards = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 
   void reset();
 
-  /// Account for one `llama_decode` step of `stepDuration`. A step carrying
-  /// any decode token is charged wholly to decode; only pure-prefill steps
-  /// feed the prefill bucket, so prompt tokens piggybacking a decode step
-  /// never inflate the prefill rate.
+  /// Account for one `llama_decode` step of `stepDuration`. Mixed
+  /// prefill+decode steps are split proportionally by token count between
+  /// the prefill and decode buckets, so batch TTFT / ppTPS reflect the
+  /// prompt work that piggybacks a decode step during continuous batching.
+  /// Compactor replay decode is excluded because `onGenerationFinished`
+  /// runs outside this timer, not by any special-casing here.
   void recordDecodeStep(
       uint64_t numActiveSequences, uint64_t prefillTokens,
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
   /// Fold one completed slot's contribution into the running totals.
-  void accumulateSlot(int64_t nPast, int64_t nSlides, const Request& req);
+  void accumulateSlot(
+      int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
+      const Request& req);
 
   [[nodiscard]] double avgConcurrentSeq() const;
   [[nodiscard]] double elapsedMs() const;
 
   /// Generation throughput (tok/s) from decode-step timing, 0 if none. Batch
-  /// analogue of single-prompt `TPS`.
+  /// analogue of single-prompt `TPS`. Mixed-step time is split
+  /// proportionally with the prefill bucket (see `recordDecodeStep`).
   [[nodiscard]] double decodeTokensPerSecond() const;
-  /// Prompt-processing throughput (tok/s) from pure-prefill-step timing, 0 if
-  /// none. Batch analogue of `ppTPS`.
+  /// Prompt-processing throughput (tok/s) from prefill-step timing, 0 if
+  /// none. Batch analogue of `ppTPS`. Mixed steps contribute their prefill
+  /// share of both tokens and time (see `recordDecodeStep`).
   [[nodiscard]] double prefillTokensPerSecond() const;
+  /// Wall-clock time (ms) attributed to prefill across batch steps
+  /// (pure-prefill steps plus the prefill share of mixed steps). Batch
+  /// analogue of single-prompt `TTFT`; excludes compactor replay decode
+  /// because that runs outside this timer, not by mixed-step gating.
+  [[nodiscard]] double prefillTimeMs() const noexcept { return prefillTimeMs_; }
 
 private:
   uint64_t decodeStepCount_ = 0;
@@ -105,6 +172,14 @@ struct BatchResult {
   std::vector<std::string> outputs;
   RuntimeStatsSnapshot stats;
 };
+
+/// Builds the per-slot `SequenceDriver` at admission time. The model layer
+/// owns the concrete context selection (text vs multimodal) and supplies this
+/// factory, so the scheduler depends on no concrete driver type. `params`
+/// already carries the merged per-request sampling overrides.
+using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
+    const common_params& params, ToolsCompactController& tools, uint32_t seqId,
+    llama_pos perSeqCtxCeiling)>;
 
 /// Continuous-batching driver: owns the underlying `MultiRequestBatcher`,
 /// per-slot `common_sampler` + UTF-8 buffers, and the production wiring
@@ -128,11 +203,16 @@ public:
   /// @param baseParams          Baseline llama/common params copied into each
   ///                            admitted slot policy before request overrides
   ///                            are applied.
+  /// @param driverFactory       Per-slot driver builder. Required and
+  ///                            non-empty: the model layer owns the single
+  ///                            text-vs-multimodal selection, so the scheduler
+  ///                            never names a concrete driver type.
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
       llama_pos configuredNDiscarded,
-      std::optional<ToolsCompactProfile> toolsCompactProfile);
+      std::optional<ToolsCompactProfile> toolsCompactProfile,
+      DriverFactory driverFactory);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
@@ -192,13 +272,55 @@ public:
   /// is running, for the same reason as `cancel(seqId)`.
   void clear();
 
-  /// Override the decode function used by stepLocked(). For unit tests only --
-  /// inject a stub that returns a non-zero rc to exercise the decode-error
-  /// path without a real llama_decode call succeeding.
-  using DecodeFunc = std::function<int(llama_context*, llama_batch&)>;
-  void setDecodeFuncForTesting(DecodeFunc fn) { decodeFunc_ = std::move(fn); }
+  /// Decode function used by stepLocked() (defaults to llama_decode), context
+  /// synchronization used before recording decode/media step time (defaults to
+  /// llama_synchronize), and media-segment eval used by
+  /// serviceNextMediaSegmentLocked() (defaults to driver.evalMediaSegment()).
+  /// Unit tests override decode/media through ContinuousBatchSchedulerTestPeer.
+  using DecodeFunc = SchedulerDecodeFunc;
+  using SynchronizeFunc = SchedulerSynchronizeFunc;
+  using EvalMediaFunc =
+      std::function<llama_pos(SequenceDriver&, size_t, llama_pos)>;
 
 private:
+  // Test peer (global namespace) sets decodeFunc_ and evalMediaFunc_ directly.
+  // See test_internal_peers.hpp.
+  friend class ::ContinuousBatchSchedulerTestPeer;
+
+  /// RAII for the two points where a step must drop `mutex_` for a blocking
+  /// call (media-segment eval, `llama_decode`): unlocks on construction, and
+  /// on destruction reacquires the lock and applies any teardown
+  /// (`cancel(seqId)` / `clear()`) recorded while it was dropped, before the
+  /// step touches slot state again. Reconciling on every reacquisition is the
+  /// invariant that stops a concurrently-cancelled/cleared slot from being
+  /// decoded, advanced, or streamed after the unlock window. A null `lock`
+  /// (no worker driving the step) is a no-op on both ends.
+  class StepUnlockGuard {
+  public:
+    StepUnlockGuard(
+        ContinuousBatchScheduler& scheduler,
+        std::unique_lock<std::mutex>* lock);
+    /// `noexcept`: the deferred-teardown work it runs is `noexcept`, but
+    /// re-acquiring `mutex_` is not. The only exception that step can raise is
+    /// the `std::system_error` `std::mutex::lock()` is permitted to throw on an
+    /// unrecoverable lock failure -- i.e. the OS failing to honour its
+    /// `pthread_mutex_lock` contract for an initialised normal mutex. That is
+    /// not recoverable: the worker's sole mutex is gone and, crucially, we are
+    /// no longer holding it, so letting it escape would hand a lock-free state
+    /// to the worker's catch handler (which assumes the lock is held). The
+    /// destructor catches it, logs, and `std::abort()`s instead -- a clean stop
+    /// at the point of failure rather than UB downstream.
+    ~StepUnlockGuard() noexcept;
+    StepUnlockGuard(const StepUnlockGuard&) = delete;
+    StepUnlockGuard& operator=(const StepUnlockGuard&) = delete;
+    StepUnlockGuard(StepUnlockGuard&&) = delete;
+    StepUnlockGuard& operator=(StepUnlockGuard&&) = delete;
+
+  private:
+    ContinuousBatchScheduler& scheduler_;
+    std::unique_lock<std::mutex>* lock_;
+  };
+
   struct BatchGroup {
     explicit BatchGroup(size_t requestCount) : outputs(requestCount) {}
 
@@ -224,6 +346,7 @@ private:
     std::shared_ptr<BatchGroup> group;
     size_t outputIndex = 0;
     bool saveCacheToDisk = false;
+    bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
   };
 
@@ -232,25 +355,72 @@ private:
   void admitPendingIntoFreeSlotsLocked();
   [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
   [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
-  [[nodiscard]] bool hasWorkLocked() const;
-  [[nodiscard]] unsigned numActiveLocked() const;
-  void completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group);
+  /// Evaluate the head media barrier of one awaiting slot (lowest seqId)
+  /// via its driver, unlocking around the embedded `llama_decode`. A
+  /// media failure only fails that slot's request, never the whole
+  /// scheduler.
+  void serviceNextMediaSegmentLocked(std::unique_lock<std::mutex>* lock);
+  void failSlotLocked(uint32_t seqId, std::exception_ptr error);
+  [[nodiscard]] MultiRequestBatcher::PrefillCompleteFn prefillCompleteFn();
+  /// Extract finished requests and run the full per-slot drain (terminal
+  /// driver hook with output flushing, stats, cache save, KV clear).
+  void drainFinishedLocked();
+  [[nodiscard]] bool hasWorkLocked() const noexcept;
+  [[nodiscard]] unsigned numActiveLocked() const noexcept;
+  void
+  completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
-      const std::shared_ptr<BatchGroup>& group, std::exception_ptr error);
+      const std::shared_ptr<BatchGroup>& group,
+      std::exception_ptr error) noexcept;
   void cancelPendingLocked();
-  void clearLocked();
-  void cancelSlotLocked(uint32_t seqId);
+  void clearLocked() noexcept;
+  /// Persistence policy for `cancelSlotLocked`. `Save` is the default and
+  /// matches the graceful-cancel semantics that the drain path already
+  /// runs: on cancel, `onCancel` rolls the driver back to its admission
+  /// cursor and `saveCacheForSlot` persists that rolled-back state so
+  /// the caller's `cacheKey` reflects the pre-request warm baseline.
+  ///
+  /// `Skip` is the error-recovery variant: after an unexpected driver
+  /// throw the slot's live memory and logical accounting are already
+  /// unhealthy (see e.g. `ReasoningBlockCompactor::compact()`'s hybrid
+  /// restore/replay failure path, which wipes the sequence and throws).
+  /// Saving in that state would silently overwrite the user's previous
+  /// on-disk cache with an inconsistent/empty state, so error-recovery
+  /// callers pass `Skip` to preserve the last known-good file.
+  enum class SaveCachePolicy { Save, Skip };
+
+  /// Tear down a single slot (cancel path). `noexcept`: callers run it from
+  /// the StepUnlockGuard destructor and the worker loop, so the teardown itself
+  /// must never throw. Every throwing step (driver finalize + cache save, and
+  /// the onDone callback inside notifyDone) is contained; the cleanup tail
+  /// (notifyDone/batcher cancel/freeSlot) always runs.
+  void cancelSlotLocked(
+      uint32_t seqId,
+      SaveCachePolicy savePolicy = SaveCachePolicy::Save) noexcept;
   /// Apply teardown requests recorded by cancel()/clear() while the
   /// worker was mid-step. Must run before admitting pending requests so
-  /// a deferred cancel can never hit a freed-and-reused slot.
-  void applyDeferredTeardownLocked();
+  /// a deferred cancel can never hit a freed-and-reused slot. `noexcept` so the
+  /// StepUnlockGuard destructor's teardown step cannot throw -- the only thing
+  /// that destructor can throw is the mutex re-acquire (see its declaration).
+  void applyDeferredTeardownLocked() noexcept;
+  /// Fire the slot's onDone stream callback, then complete its group. Throwing
+  /// variant for the normal-completion path: a throwing onDone propagates so
+  /// the worker loop surfaces it as a batch error rather than silently
+  /// completing the group as a success.
   void notifyDone(uint32_t seqId);
-  void freeSlot(uint32_t seqId);
+  /// `noexcept` teardown variant (cancel/clear/fail paths). Contains the
+  /// caller-provided onDone internally so a throwing callback can neither
+  /// escape a noexcept path nor skip the group-completion below.
+  void notifyDoneNoexcept(uint32_t seqId) noexcept;
+  void freeSlot(uint32_t seqId) noexcept;
+  /// Remove every KV-cache cell owned by `seqId` from the shared context.
+  /// Single home for the cleanup repeated across all slot-teardown paths.
+  void clearSeqKv(uint32_t seqId) noexcept;
   void finalizeFinishedSequences();
   std::function<void(const std::string&)>
   getOutputCallback(SlotState& slot, uint32_t seqId);
   std::function<bool(const Request&)> hasValidDriverF() const;
-  void saveCacheForSlot(uint32_t seqId, const SlotState& slot);
+  void saveCacheForSlot(uint32_t seqId, SlotState& slot);
   void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
 
   LlmModelContext shared_;
@@ -262,6 +432,7 @@ private:
   common_params baseParams_;
   llama_pos configuredNDiscarded_;
   std::optional<ToolsCompactProfile> toolsCompactProfile_;
+  DriverFactory driverFactory_;
 
   /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
   /// admission and per-request `prompt + n_predict` validation.
@@ -280,9 +451,19 @@ private:
   bool clearRequested_ = false;
   RuntimeStatsSnapshot stats_;
 
-  /// Decode function used in stepLocked(). Defaults to llama_decode; can be
-  /// overridden via setDecodeFuncForTesting() to inject a failing stub.
+  /// Decode function used in stepLocked(). Defaults to llama_decode; a test
+  /// stub can be injected via
+  /// ContinuousBatchSchedulerTestPeer::setDecodeFunc().
   DecodeFunc decodeFunc_;
+
+  /// Context synchronization used after a successful decode/media eval and
+  /// before recording step time. Defaults to llama_synchronize.
+  SynchronizeFunc synchronizeFunc_;
+
+  /// Media-segment eval used in serviceNextMediaSegmentLocked(). Defaults to
+  /// driver.evalMediaSegment(); a test stub can be injected via
+  /// ContinuousBatchSchedulerTestPeer::setEvalMediaFunc().
+  EvalMediaFunc evalMediaFunc_;
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching

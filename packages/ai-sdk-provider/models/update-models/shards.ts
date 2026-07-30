@@ -1,6 +1,6 @@
 import type { ProcessedModel, ShardDetection, ShardMetadataEntry } from './types.ts'
 
-export function detectShardedModel (filename: string): ShardDetection {
+export function detectShardedModel(filename: string): ShardDetection {
   const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/
   const match = filename.match(shardPattern)
 
@@ -17,7 +17,7 @@ export function detectShardedModel (filename: string): ShardDetection {
   return { isSharded: false }
 }
 
-export function groupShardedModels (models: ProcessedModel[]): ProcessedModel[] {
+export function groupShardedModels(models: ProcessedModel[]): ProcessedModel[] {
   const shardGroups = new Map<string, ProcessedModel[]>()
   const nonShardedModels: ProcessedModel[] = []
 
@@ -41,7 +41,9 @@ export function groupShardedModels (models: ProcessedModel[]): ProcessedModel[] 
     const totalExpectedShards = firstShard.shardInfo?.totalShards ?? 0
 
     if (shards.length !== totalExpectedShards) {
-      console.warn(`⚠️  Expected ${totalExpectedShards} shards but found ${shards.length} for ${baseKey}`)
+      console.warn(
+        `⚠️  Expected ${totalExpectedShards} shards but found ${shards.length} for ${baseKey}`
+      )
     }
 
     const totalSize = shards.reduce((sum, s) => sum + s.expectedSize, 0)

@@ -8,7 +8,6 @@
     "run:param-sweep": "node ./prepare-models.js --target addon && bare ./embed-parameter-sweep.js"
   },
   "dependencies": {
-    "@qvac/dl-filesystem": "latest",
     "@qvac/embed-llamacpp": "latest",
     "bare-fs": "latest",
     "bare-path": "latest",

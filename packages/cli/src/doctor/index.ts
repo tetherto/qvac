@@ -2,9 +2,8 @@ import { collectCheckSections, isReportOk } from './checks/index.js'
 import { formatJsonReport, formatReport } from './format.js'
 import type { DoctorReport, RunDoctorOptions } from './types.js'
 
-export async function runDoctor (
-  options: RunDoctorOptions = {}
-): Promise<DoctorReport> {
+// lunte-disable-next-line require-await
+export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorReport> {
   const projectRoot = options.projectRoot ?? process.cwd()
   const sections = collectCheckSections({ projectRoot })
 

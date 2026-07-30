@@ -1,4 +1,4 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 /**
  * End-to-end coverage for registry-download configuration plumbing.
@@ -15,30 +15,27 @@ import type { TestDefinition } from "@tetherto/qvac-test-suite";
  */
 
 export const configRegistryDownloadSmoke: TestDefinition = {
-  testId: "config-registry-download-smoke",
+  testId: 'config-registry-download-smoke',
   params: {},
   // expectation is validated inside the executor
-  expectation: { validation: "function", fn: () => true },
-  suites: ["smoke"],
+  expectation: { validation: 'function', fn: () => true },
+  suites: ['smoke'],
   metadata: {
-    category: "config",
-    dependency: "none",
-    estimatedDurationMs: 60000,
-  },
-};
+    category: 'config',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
 
 export const configRegistryDownloadRespectsCancel: TestDefinition = {
-  testId: "config-registry-download-respects-cancel",
+  testId: 'config-registry-download-respects-cancel',
   params: {},
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: 'function', fn: () => true },
   metadata: {
-    category: "config",
-    dependency: "none",
-    estimatedDurationMs: 120000,
-  },
-};
+    category: 'config',
+    dependency: 'none',
+    estimatedDurationMs: 120000
+  }
+}
 
-export const configTests = [
-  configRegistryDownloadSmoke,
-  configRegistryDownloadRespectsCancel,
-];
+export const configTests = [configRegistryDownloadSmoke, configRegistryDownloadRespectsCancel]

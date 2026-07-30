@@ -18,4 +18,3 @@ Release Date: 2026-06-02
 
 - Migrate SDK TTS from onnx-tts to tts-ggml. (see PR [#2244](https://github.com/tetherto/qvac/pull/2244)) - See [breaking changes](./breaking.md), [model changes](./models.md)
   Added: TTS_S3GEN_MULTILINGUAL_CHATTERBOX, TTS_S3GEN_EN_CHATTERBOX, TTS_T3_MULTILINGUAL_CHATTERBOX_FP16, TTS_T3_TURBO_EN_CHATTERBOX_FP16, TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0 (and 7 more)
-

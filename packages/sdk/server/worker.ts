@@ -2,9 +2,9 @@
  * Default worker entry point that registers ALL built-in plugins.
  */
 
-import { initializeWorkerCore, ensureRPCSetup } from "@/server/worker-core";
-import { registerPlugins } from "@/server/plugins";
-import { getServerLogger } from "@/logging";
+import { initializeWorkerCore, ensureRPCSetup } from '@/server/worker-core'
+import { registerPlugins } from '@/server/plugins'
+import { getServerLogger } from '@/logging'
 import {
   llmPlugin,
   embeddingsPlugin,
@@ -16,14 +16,14 @@ import {
   ocrPlugin,
   diffusionPlugin,
   vlaPlugin,
-  classificationPlugin,
-} from "@/server/bare/plugins";
+  classificationPlugin
+} from '@/server/bare/plugins'
 
-const { hasRPCConfig } = initializeWorkerCore();
+const { hasRPCConfig } = initializeWorkerCore()
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
-logger.info("🐻 Hello from Bare");
+logger.info('🐻 Hello from Bare')
 
 registerPlugins([
   llmPlugin,
@@ -36,18 +36,18 @@ registerPlugins([
   ocrPlugin,
   diffusionPlugin,
   vlaPlugin,
-  classificationPlugin,
-]);
+  classificationPlugin
+])
 
 logger.info(
   hasRPCConfig
-    ? "Parsed RPC configuration from arguments"
-    : "Using default configuration (direct mode)",
-);
+    ? 'Parsed RPC configuration from arguments'
+    : 'Using default configuration (direct mode)'
+)
 
 // Auto-setup RPC only if we successfully parsed RPC configuration
 if (hasRPCConfig) {
-  ensureRPCSetup();
+  ensureRPCSetup()
 } else {
-  logger.info("Running in direct mode - RPC setup will be lazy");
+  logger.info('Running in direct mode - RPC setup will be lazy')
 }

@@ -20,14 +20,14 @@ const client = new OpenAI({ baseURL: 'http://localhost:11434/v1' })
 const job = await client.videos.create({
   model: 'wan-i2v',
   prompt: 'subject slowly turns and smiles',
-  input_reference: await toFile(fs.createReadStream('./frame.png'), 'frame.png'),
+  input_reference: await toFile(fs.createReadStream('./frame.png'), 'frame.png')
 })
 
 // img2vid via data URI (JSON)
 const job2 = await client.videos.create({
   model: 'wan-i2v',
   prompt: 'subject slowly turns and smiles',
-  input_reference: { image_url: 'data:image/png;base64,...' },
+  input_reference: { image_url: 'data:image/png;base64,...' }
 })
 ```
 

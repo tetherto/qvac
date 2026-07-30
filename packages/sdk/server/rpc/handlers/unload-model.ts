@@ -1,35 +1,33 @@
-import { unloadModel } from "@/server/bare/ops/unload-model";
-import { getRegistryStats } from "@/server/bare/registry/model-registry";
-import { hasActiveProviders } from "@/server/bare/hyperswarm";
-import type { UnloadModelRequest, UnloadModelResponse } from "@/schemas";
-import { getServerLogger } from "@/logging";
+import { unloadModel } from '@/server/bare/ops/unload-model'
+import { getRegistryStats } from '@/server/bare/registry/model-registry'
+import { hasActiveProviders } from '@/server/bare/hyperswarm'
+import type { UnloadModelRequest, UnloadModelResponse } from '@/schemas'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
-export async function handleUnloadModel(
-  request: UnloadModelRequest,
-): Promise<UnloadModelResponse> {
-  const { modelId, clearStorage } = request;
+export async function handleUnloadModel(request: UnloadModelRequest): Promise<UnloadModelResponse> {
+  const { modelId, clearStorage } = request
   try {
-    logger.debug("Unloading model", modelId);
-    await unloadModel({ modelId, clearStorage });
+    logger.debug('Unloading model', modelId)
+    await unloadModel({ modelId, clearStorage })
 
-    const stats = getRegistryStats();
-    const modelsActive = stats.totalModels > 0;
-    const providersActive = hasActiveProviders();
+    const stats = getRegistryStats()
+    const modelsActive = stats.totalModels > 0
+    const providersActive = hasActiveProviders()
 
     return {
-      type: "unloadModel",
+      type: 'unloadModel',
       success: true,
       hasActiveModels: modelsActive,
-      hasActiveProviders: providersActive,
-    };
+      hasActiveProviders: providersActive
+    }
   } catch (error) {
-    logger.error("Error during model unload:", error);
+    logger.error('Error during model unload:', error)
     return {
-      type: "unloadModel",
+      type: 'unloadModel',
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
   }
 }

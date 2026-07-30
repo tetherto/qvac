@@ -10,11 +10,11 @@ const { concatenatePcmChunks } = require('./pcmConcatenator')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
-function getBaseDir () {
+function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
-async function synthesizeChunk (model, text, tag) {
+async function synthesizeChunk(model, text, tag) {
   let outputArray = []
   let jobStats = null
   let reportedSampleRate = null
@@ -25,7 +25,7 @@ async function synthesizeChunk (model, text, tag) {
   })
 
   await response
-    .onUpdate(data => {
+    .onUpdate((data) => {
       if (data && data.outputArray) {
         const temp = Array.from(data.outputArray)
         outputArray = outputArray.concat(temp)
@@ -42,7 +42,7 @@ async function synthesizeChunk (model, text, tag) {
   return { outputArray, reportedSampleRate, jobStats, stats: response.stats || jobStats }
 }
 
-async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
+async function runTTSWithSplit(model, params, expectation = {}, options = {}) {
   const sampleRate = options.sampleRate || 24000
   const engineTag = options.engineTag || ''
   const tag = engineTag ? `[${engineTag}] ` : ''
@@ -76,7 +76,9 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
 
     for (let i = 0; i < chunks.length; i++) {
       const chunkText = chunks[i]
-      console.log(`${tag}  Chunk ${i + 1}/${chunks.length}: "${chunkText.substring(0, 60)}${chunkText.length > 60 ? '...' : ''}"`)
+      console.log(
+        `${tag}  Chunk ${i + 1}/${chunks.length}: "${chunkText.substring(0, 60)}${chunkText.length > 60 ? '...' : ''}"`
+      )
 
       const result = await synthesizeChunk(model, chunkText, tag)
       pcmChunks.push(Int16Array.from(result.outputArray))
@@ -90,10 +92,11 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
 
     const combined = concatenatePcmChunks(pcmChunks)
     const sampleCount = combined.length
-    const durationMs = (sampleCount / sampleRate) * 1000
+    const outputSampleRate = lastReportedSampleRate || sampleRate
+    const durationMs = (sampleCount / outputSampleRate) * 1000
 
     const passed = checkExpectations(sampleCount, durationMs, expectation)
-    const wavBuffer = createWavBuffer(Array.from(combined), sampleRate)
+    const wavBuffer = createWavBuffer(Array.from(combined), outputSampleRate)
 
     saveWavIfNeeded(params, wavBuffer, tag)
 
@@ -106,26 +109,32 @@ async function runTTSWithSplit (model, params, expectation = {}, options = {}) {
         samples: Array.from(combined),
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate: lastReportedSampleRate,
         wavBuffer,
         stats: { totalTime, totalSamples, audioDurationMs: durationMs }
       }
     }
   } catch (error) {
-    return { output: `${tag}Error: ${error.message}`, passed: false, data: { error: error.message } }
+    return {
+      output: `${tag}Error: ${error.message}`,
+      passed: false,
+      data: { error: error.message }
+    }
   }
 }
 
-function checkExpectations (sampleCount, durationMs, expectation) {
+function checkExpectations(sampleCount, durationMs, expectation) {
   if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) return false
   if (expectation.maxSamples !== undefined && sampleCount > expectation.maxSamples) return false
-  if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs) return false
-  if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs) return false
+  if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs)
+    return false
+  if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs)
+    return false
   return true
 }
 
-function saveWavIfNeeded (params, wavBuffer, tag) {
+function saveWavIfNeeded(params, wavBuffer, tag) {
   if (params.saveWav !== true) return
   if (isMobile && !params.wavOutputPath) {
     console.log(`${tag}Skipping WAV save on mobile (no writable path provided)`)
@@ -134,12 +143,14 @@ function saveWavIfNeeded (params, wavBuffer, tag) {
   const defaultWavPath = path.join(__dirname, '../output/test.wav')
   const wavPath = params.wavOutputPath || defaultWavPath
   const outputDir = path.dirname(wavPath)
-  try { fs.mkdirSync(outputDir, { recursive: true }) } catch (err) {}
+  try {
+    fs.mkdirSync(outputDir, { recursive: true })
+  } catch (err) {}
   fs.writeFileSync(wavPath, wavBuffer)
   console.log(`${tag}Saved WAV to: ${wavPath}`)
 }
 
-async function runTTS (model, params, expectation = {}, options = {}) {
+async function runTTS(model, params, expectation = {}, options = {}) {
   const sampleRate = options.sampleRate || 24000
   const engineTag = options.engineTag || ''
   const tag = engineTag ? `[${engineTag}] ` : ''
@@ -168,7 +179,7 @@ async function runTTS (model, params, expectation = {}, options = {}) {
     })
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         if (data && data.outputArray) {
           const temp = Array.from(data.outputArray)
           outputArray = outputArray.concat(temp)
@@ -184,7 +195,11 @@ async function runTTS (model, params, expectation = {}, options = {}) {
 
     let passed = true
     const sampleCount = outputArray.length
-    const durationMs = response.stats?.audioDurationMs || jobStats?.audioDurationMs || (sampleCount / (sampleRate / 1000))
+    const outputSampleRate = reportedSampleRate || sampleRate
+    const durationMs =
+      response.stats?.audioDurationMs ||
+      jobStats?.audioDurationMs ||
+      sampleCount / (outputSampleRate / 1000)
 
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) {
       passed = false
@@ -199,7 +214,7 @@ async function runTTS (model, params, expectation = {}, options = {}) {
       passed = false
     }
 
-    const wavBuffer = createWavBuffer(outputArray, sampleRate)
+    const wavBuffer = createWavBuffer(outputArray, outputSampleRate)
 
     if (params.saveWav === true) {
       if (isMobile && !params.wavOutputPath) {
@@ -223,12 +238,22 @@ async function runTTS (model, params, expectation = {}, options = {}) {
     const roundedStats = stats
       ? {
           totalTime: stats.totalTime ? Number(stats.totalTime.toFixed(4)) : stats.totalTime,
-          tokensPerSecond: stats.tokensPerSecond ? Number(stats.tokensPerSecond.toFixed(2)) : stats.tokensPerSecond,
-          realTimeFactor: stats.realTimeFactor ? Number(stats.realTimeFactor.toFixed(5)) : stats.realTimeFactor,
+          tokensPerSecond: stats.tokensPerSecond
+            ? Number(stats.tokensPerSecond.toFixed(2))
+            : stats.tokensPerSecond,
+          realTimeFactor: stats.realTimeFactor
+            ? Number(stats.realTimeFactor.toFixed(5))
+            : stats.realTimeFactor,
           audioDurationMs: stats.audioDurationMs,
           totalSamples: stats.totalSamples,
           backendDevice: stats.backendDevice,
-          backendId: stats.backendId
+          backendId: stats.backendId,
+          // The allowlist above dropped gpuUnsupported, so gpu-smoke's
+          // policy-CPU escape hatch (allowPolicyCpu && dev===0 &&
+          // stats.gpuUnsupported) never saw the flag the engine set and the
+          // Chatterbox/Mali fallback failed the strict assertion. Pass it
+          // through (runSupertonicTTS already returns the raw stats object).
+          gpuUnsupported: stats.gpuUnsupported
         }
       : null
 
@@ -244,7 +269,7 @@ async function runTTS (model, params, expectation = {}, options = {}) {
         samples: outputArray,
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate,
         wavBuffer,
         stats: roundedStats

@@ -22,7 +22,7 @@ const DEFAULT_DURATION_SECONDS = 30
  * Use durationSeconds=0 to run until Ctrl+C.
  */
 
-function getAudioInputArgs () {
+function getAudioInputArgs() {
   switch (os.platform()) {
     case 'darwin':
       return ['-f', 'avfoundation', '-i', ':0']
@@ -33,29 +33,38 @@ function getAudioInputArgs () {
   }
 }
 
-function ensureFfmpeg () {
+function ensureFfmpeg() {
   const result = spawnSync('ffmpeg', ['-version'], { stdio: ['ignore', 'ignore', 'ignore'] })
   if (result.status !== 0) {
     throw new Error('ffmpeg is required for microphone capture')
   }
 }
 
-function startMicStream () {
-  return spawn('ffmpeg', [
-    '-hide_banner',
-    '-loglevel', 'error',
-    ...getAudioInputArgs(),
-    '-ar', String(SAMPLE_RATE),
-    '-ac', '1',
-    '-sample_fmt', 's16',
-    '-f', 's16le',
-    'pipe:1'
-  ], {
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+function startMicStream() {
+  return spawn(
+    'ffmpeg',
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      ...getAudioInputArgs(),
+      '-ar',
+      String(SAMPLE_RATE),
+      '-ac',
+      '1',
+      '-sample_fmt',
+      's16',
+      '-f',
+      's16le',
+      'pipe:1'
+    ],
+    {
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )
 }
 
-function parseArgs () {
+function parseArgs() {
   const args = process.argv.slice(2)
   const modelsDir = path.join(__dirname, '..', 'models')
   const durationSeconds = Number.parseInt(args[0] || String(DEFAULT_DURATION_SECONDS), 10)
@@ -67,13 +76,13 @@ function parseArgs () {
   }
 }
 
-function assertFileExists (filePath, label) {
+function assertFileExists(filePath, label) {
   if (!fs.existsSync(filePath)) {
     throw new Error(`${label} not found at ${filePath}`)
   }
 }
 
-async function main () {
+async function main() {
   ensureFfmpeg()
 
   const { durationSeconds, modelPath, vadModelPath } = parseArgs()
@@ -118,7 +127,7 @@ async function main () {
   let response
   let timeout = null
 
-  ffmpeg.stderr.on('data', data => {
+  ffmpeg.stderr.on('data', (data) => {
     const message = data.toString().trim()
     if (message) console.error(`[ffmpeg] ${message}`)
   })
@@ -142,7 +151,7 @@ async function main () {
       vadRunIntervalMs: 300
     })
 
-    response.onUpdate(data => {
+    response.onUpdate((data) => {
       if (data?.type === 'vad') {
         console.log(`[vad] speaking=${data.speaking} probability=${data.probability}`)
         return
@@ -174,7 +183,7 @@ async function main () {
   console.log('\nMicrophone conversation example complete.')
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err)
   process.exit(1)
 })

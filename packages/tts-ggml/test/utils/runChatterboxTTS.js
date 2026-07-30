@@ -20,7 +20,7 @@ const CHATTERBOX_SAMPLE_RATE = 24000
  * (which forwards to qvac-tts-cli's --reference-audio), so no decode /
  * resample is needed on the JS side.
  */
-function resolveRefWavPath (params) {
+function resolveRefWavPath(params) {
   if (params.refWavPath) return params.refWavPath
   if (isMobile && global.assetPaths) {
     const assetKey = '../../testAssets/jfk.wav'
@@ -31,7 +31,7 @@ function resolveRefWavPath (params) {
   return path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
 }
 
-async function loadChatterboxTTS (params = {}) {
+async function loadChatterboxTTS(params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models'))
   const modelDir = params.modelDir || defaultModelDir
@@ -50,26 +50,32 @@ async function loadChatterboxTTS (params = {}) {
     config.useGPU = params.useGPU
   } else if (proc.env && proc.env.NO_GPU === 'true') {
     // Honour the workflow matrix's `no_gpu: 'true'` flag (which sets the
-    // NO_GPU env var on the job).  Defensive override -- as of tts-ggml
-    // 0.1.2 the addon's `index.js::_validateConfig` defaults Chatterbox
-    // to `useGPU = false`, so an unset value already lands on CPU, but
-    // pinning it here makes the no-GPU matrix entries' contract
-    // explicit at the test layer and survives any future flip back to
-    // an opt-out GPU default.
+    // NO_GPU env var on the job).  Defensive override -- the addon already
+    // defaults Chatterbox to `useGPU = false` when unset, so an unset value
+    // lands on CPU, but pinning it here makes the no-GPU matrix entries'
+    // contract explicit at the test layer and survives any future flip back
+    // to an opt-out GPU default.
     config.useGPU = false
   }
 
+  const files = {
+    modelDir,
+    t3Model: t3ModelPath,
+    s3genModel: s3genModelPath
+  }
+  // The enhancer / denoiser paths are the "on" switches for the LavaSR stages;
+  // only set them when a path was resolved so an unset value leaves the stage off.
+  if (params.lavasrEnhancerPath) files.lavasrEnhancer = params.lavasrEnhancerPath
+  if (params.lavasrDenoiserPath) files.lavasrDenoiser = params.lavasrDenoiserPath
+
   const model = new TTSGgml({
-    files: {
-      modelDir,
-      t3Model: t3ModelPath,
-      s3genModel: s3genModelPath
-    },
+    files,
     referenceAudio: refWavPath,
     voiceDir: params.voiceDir,
     seed: params.seed,
     threads: params.threads,
     nGpuLayers: params.nGpuLayers,
+    speed: params.speed,
     config,
     opts: { stats: true }
   })
@@ -78,29 +84,31 @@ async function loadChatterboxTTS (params = {}) {
   return model
 }
 
-async function runChatterboxTTS (model, params, expectation = {}) {
+async function runChatterboxTTS(model, params, expectation = {}) {
   return runTTS(model, params, expectation, {
     sampleRate: CHATTERBOX_SAMPLE_RATE,
     engineTag: 'Chatterbox'
   })
 }
 
-async function runChatterboxTTSWithSplit (model, params, expectation = {}) {
+async function runChatterboxTTSWithSplit(model, params, expectation = {}) {
   return runTTSWithSplit(model, params, expectation, {
     sampleRate: CHATTERBOX_SAMPLE_RATE,
     engineTag: 'Chatterbox'
   })
 }
 
-function checkExpectations (sampleCount, durationMs, expectation) {
+function checkExpectations(sampleCount, durationMs, expectation) {
   if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) return false
   if (expectation.maxSamples !== undefined && sampleCount > expectation.maxSamples) return false
-  if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs) return false
-  if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs) return false
+  if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs)
+    return false
+  if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs)
+    return false
   return true
 }
 
-function saveWavIfNeeded (params, wavBuffer, tag) {
+function saveWavIfNeeded(params, wavBuffer, tag) {
   if (params.saveWav !== true) return
   if (isMobile && !params.wavOutputPath) {
     console.log(`${tag}Skipping WAV save on mobile (no writable path provided)`)
@@ -109,7 +117,9 @@ function saveWavIfNeeded (params, wavBuffer, tag) {
   const defaultWavPath = path.join(__dirname, '../output/chatterbox-stream.wav')
   const wavPath = params.wavOutputPath || defaultWavPath
   const outputDir = path.dirname(wavPath)
-  try { fs.mkdirSync(outputDir, { recursive: true }) } catch (err) {}
+  try {
+    fs.mkdirSync(outputDir, { recursive: true })
+  } catch (err) {}
   fs.writeFileSync(wavPath, wavBuffer)
   console.log(`${tag}Saved WAV to: ${wavPath}`)
 }
@@ -119,7 +129,7 @@ function saveWavIfNeeded (params, wavBuffer, tag) {
  * collect PCM per chunk.  Mirrors `runSupertonicStreaming` in
  * @qvac/tts-onnx so downstream test shape stays consistent.
  */
-async function runChatterboxStreaming (model, params, expectation = {}) {
+async function runChatterboxStreaming(model, params, expectation = {}) {
   const sampleRate = CHATTERBOX_SAMPLE_RATE
   const tag = '[Chatterbox] '
 
@@ -135,7 +145,7 @@ async function runChatterboxStreaming (model, params, expectation = {}) {
   }
 
   try {
-    async function * textStream () {
+    async function* textStream() {
       for (let i = 0; i < phrases.length; i++) {
         yield phrases[i]
       }
@@ -153,7 +163,7 @@ async function runChatterboxStreaming (model, params, expectation = {}) {
     const textByChunk = new Map()
     let jobStats = null
 
-    response.onUpdate(data => {
+    response.onUpdate((data) => {
       if (data && data.outputArray != null && data.chunkIndex !== undefined) {
         pcmByChunk.set(data.chunkIndex, Int16Array.from(data.outputArray))
         if (typeof data.sentenceChunk === 'string') {
@@ -168,8 +178,8 @@ async function runChatterboxStreaming (model, params, expectation = {}) {
     await response.await()
 
     const indices = [...pcmByChunk.keys()].sort((a, b) => a - b)
-    const pcmChunks = indices.map(i => pcmByChunk.get(i))
-    const sentenceChunks = indices.map(i => textByChunk.get(i) || '')
+    const pcmChunks = indices.map((i) => pcmByChunk.get(i))
+    const sentenceChunks = indices.map((i) => textByChunk.get(i) || '')
     const combined = concatenatePcmChunks(pcmChunks, {
       crossfadeSamples: 0,
       silenceGapSamples: 0
@@ -178,7 +188,7 @@ async function runChatterboxStreaming (model, params, expectation = {}) {
     const durationMs =
       response.stats?.audioDurationMs ||
       jobStats?.audioDurationMs ||
-      (sampleCount / (sampleRate / 1000))
+      sampleCount / (sampleRate / 1000)
 
     const passed = checkExpectations(sampleCount, durationMs, expectation)
     const wavBuffer = createWavBuffer(Array.from(combined), sampleRate)

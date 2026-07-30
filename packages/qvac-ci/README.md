@@ -1,8 +1,6 @@
 # @qvac/ci
 
-CI utilities — a modular, extensible CLI for GitHub automation. Replaces inline YAML scripts with tested, versioned Node.js commands.
-
-> **Note:** Development and feature builds are published to GitHub Packages (GPR) under the name `@qvac/ci-mono`. The unscoped `@qvac/ci` name is only available after a release-branch npm publish.
+CLI utilities for GitHub CI automation. Replaces inline YAML scripts with tested, versioned Node.js commands.
 
 ## Installation
 
@@ -20,11 +18,11 @@ npx @qvac/ci <command> [flags]
 
 ### `pending-approvals`
 
-Checks whether a PR has the required approvals from the right roles (Management, Team Lead, Member), then upserts a `## Review Status` comment on the PR summarising the current state.
+Checks whether a PR has the required approvals from the right roles (Management, Team Lead, Member) and upserts a `## Review Status` comment on the PR summarising the current state.
 
-Always exits with code `0` — this command is **informational only**. Merge enforcement is delegated to GitHub-native branch protection (CODEOWNERS + ruleset approval requirements).
+Always exits `0` — informational only. Merge enforcement is handled by GitHub-native branch protection (CODEOWNERS + ruleset requirements).
 
-> **Note:** This command is deprecated as part of the Tier 1 approval migration to native GitHub controls. It will be disabled after rollout validation.
+> **Deprecated:** This command will be removed after the Tier 1 approval migration to native GitHub controls is complete.
 
 ```bash
 qvac-ci pending-approvals \
@@ -44,15 +42,15 @@ qvac-ci pending-approvals \
 | `--team-leads-team` | GitHub team slug for Team Leads **(required)** | — |
 | `--min-approvals` | Minimum total approvals required | `2` |
 
-**Environment variables (required):**
+**Required environment variables:**
 
 | Variable | Description |
 |----------|-------------|
 | `GITHUB_TOKEN` | Token used to post the review-status comment |
-| `GITHUB_APP_ID` | GitHub App ID used for team membership resolution |
+| `GITHUB_APP_ID` | GitHub App ID for team membership resolution |
 | `GITHUB_PRIVATE_KEY` | GitHub App private key (PEM) |
 
-Secrets are env-only — there are no `--token` flags. This prevents tokens from appearing in the process list, shell history, or CI log echoes.
+Secrets are env-only — no `--token` flags — to prevent tokens from appearing in the process list or CI logs.
 
 **Example GitHub Actions step:**
 
@@ -70,29 +68,11 @@ Secrets are env-only — there are no `--token` flags. This prevents tokens from
       --min-approvals 2
 ```
 
-**Comment format:**
-
-The command upserts a single `## Review Status` comment on the PR (updates in place if one already exists):
-
-```
-## Review Status
-**Current Status: ✅ APPROVED**
-Approvals so far: Management: 1, Team Lead: 1
-```
-
-```
-## Review Status
-**Current Status: ❌ PENDING**
-Approvals so far: Member: 1
-
-Pending reviews: Needs 1 Management or Team Lead.
-```
-
 ## Adding a new command
 
 1. Create `lib/commands/<name>/index.js` — extend `Command`, implement `toCommand()` and `_run()`.
 2. Create `lib/commands/<name>/helpers.js` — domain logic. Read secrets from `process.env`; never pass them as parameters. Export a mutable `helpers` object so tests can stub methods without a mock framework.
-3. Register in `lib/commands/index.js` — `main.js` picks it up automatically.
+3. Register in `lib/commands/index.js` — add an explicit `import` and push `.toCommand()` to the `commands` array. `main.js` spreads the array.
 4. Write tests in `test/unit/<name>/index.test.js` and `test/unit/<name>/helpers.test.js`. Mock all network calls.
 
 ## Development

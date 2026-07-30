@@ -11,11 +11,11 @@ const { tokenizeText } = require('./Tokenizer')
  * Predefined splitter strategies for common tokenization needs.
  */
 const PREDEFINED_SPLITTERS = {
-  character: text => text.split(''),
-  word: text => text.split(/\s+/).filter(word => word.length > 0),
-  sentence: text => text.split(/[.!?]+/).filter(s => s.trim().length > 0),
-  line: text => text.split(/\n/),
-  token: text => tokenizeText(text).tokens.map(t => t.text)
+  character: (text) => text.split(''),
+  word: (text) => text.split(/\s+/).filter((word) => word.length > 0),
+  sentence: (text) => text.split(/[.!?]+/).filter((s) => s.trim().length > 0),
+  line: (text) => text.split(/\n/),
+  token: (text) => tokenizeText(text).tokens.map((t) => t.text)
 }
 
 /**
@@ -23,7 +23,7 @@ const PREDEFINED_SPLITTERS = {
  * Provides predefined split strategies (character, word, token, sentence, line) and supports custom splitters.
  */
 class LLMChunkAdapter extends BaseChunkAdapter {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     super()
     const defaultOpts = {
       chunkSize: 256,
@@ -45,7 +45,8 @@ class LLMChunkAdapter extends BaseChunkAdapter {
    * @param {LLMChunkOpts} opts - Chunking options.
    * @returns {Promise<Array<Doc>>} - Array of chunk objects with content and id.
    */
-  async chunkText (input, opts = {}) {
+  // lunte-disable-next-line require-await
+  async chunkText(input, opts = {}) {
     try {
       this.validateInput(input)
 
@@ -74,7 +75,11 @@ class LLMChunkAdapter extends BaseChunkAdapter {
       if (error instanceof QvacErrorRAG) {
         throw error
       }
-      throw new QvacErrorRAG({ code: ERR_CODES.CHUNKING_FAILED, adds: `Failed to chunk text: ${error.message}`, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.CHUNKING_FAILED,
+        adds: `Failed to chunk text: ${error.message}`,
+        cause: error
+      })
     }
   }
 
@@ -84,7 +89,7 @@ class LLMChunkAdapter extends BaseChunkAdapter {
    * @returns {Array<Doc>} Array of Doc objects.
    * @private
    */
-  _processChunks (chunks) {
+  _processChunks(chunks) {
     const result = []
     for (const chunk of chunks) {
       if (Array.isArray(chunk.text)) {

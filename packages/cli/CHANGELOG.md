@@ -1,6 +1,120 @@
 # Changelog
 
-# QVAC CLI v0.7.0 Release Notes
+## [0.9.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.9.0
+
+This release moves the CLI to `@qvac/sdk` 0.16.0 and improves compatibility and performance for clients using the OpenAI-compatible server. It adds structured reasoning and token usage, preserves native tool-call replay for Qwen3.5 models, reuses the KV cache across chat turns, and fixes published-install coverage checks.
+
+## Richer OpenAI-Compatible Chat Responses
+
+Chat completions now expose model reasoning through `reasoning_content` instead of mixing thinking blocks into normal response content. Responses also report prompt, completion, total, and cached token counts from the underlying inference engine.
+
+Streaming clients can request a final usage chunk using the OpenAI-compatible `stream_options.include_usage` option:
+
+```json
+{
+  "model": "qwen3.5",
+  "stream": true,
+  "stream_options": { "include_usage": true },
+  "messages": [{ "role": "user", "content": "Hello" }]
+}
+```
+
+The final server-sent event contains an empty `choices` array and the completed usage totals. Existing streaming requests that do not opt in continue without a usage chunk.
+
+## More Reliable Multi-Turn Tool Calls
+
+When a conversation replays an earlier structured tool call, the server now renders Qwen3.5 calls in the model's native tool dialect. This prevents foreign tool markup from leaking into response content and keeps follow-up tool calls parseable by coding agents and other OpenAI-compatible clients.
+
+## Faster Repeated Chat Turns
+
+The OpenAI-compatible chat endpoints now enable KV-cache reuse automatically. Repeated turns can reuse the cached conversation prefix, reducing prompt processing work without requiring clients to change their requests.
+
+## File Upload Compatibility
+
+Uploaded files now retain their original MIME type in the CLI's ephemeral file store. Content responses return the preserved type, allowing AI SDK provider file workflows to handle uploaded media correctly.
+
+The companion `@qvac/ai-sdk-provider` release moves to AI SDK 7, provider v4, Node.js 22 or newer, and ESM-only usage. These breaking requirements apply to that provider package; `@qvac/cli` itself continues to declare Node.js 18 or newer.
+
+## Bug Fixes
+
+The OpenAI coverage command now resolves its router files relative to the installed package, so it no longer crashes when run from a published CLI installation. Server-side request failures also include full stack traces in logs, making production errors easier to diagnose.
+
+## Documentation and Verification
+
+The CLI documentation now states the Vulkan 1.4 minimum and removes an inaccurate CPU-fallback claim. A typed benchmark harness compares supported OpenAI providers and is included in the unit-test workflow to catch compatibility regressions.
+
+## [0.8.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.8.1
+
+This is a maintenance release. It fixes a diagnostics gap in the OpenAI-compatible server, corrects a documentation claim about Vulkan GPU fallback behavior, and moves the CLI onto `@qvac/sdk` 0.15.0.
+
+## Other Changes
+
+Server errors are now logged with their full stack trace when a request handler throws, making failures easier to diagnose from server logs rather than only the client-facing error response. The Vulkan backend documentation now states the correct minimum required Vulkan version (1.4) and removes an inaccurate claim about CPU fallback behavior. The CLI's committed `@qvac/sdk` dependency now targets `^0.15.0`. Lint, format, and typecheck tooling was also unified across SDK-pod packages with Prettier, with no user-facing effect.
+
+## [0.8.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.8.0
+
+This release brings the OpenAI-compatible server up to `@qvac/sdk` 0.14.1 and adds vision input plus two reasoning-control knobs to `/v1/chat/completions`. Installing this version is how OpenCode, the AI SDK provider, and direct `qvac serve` users pick up the SDK 0.14.1 runtime.
+
+## New APIs
+
+### Image input in chat completions
+
+`POST /v1/chat/completions` now accepts OpenAI-style `image_url` content parts, so vision-capable models can be driven through the same request shape OpenAI clients already use. Pass a base64 data URI or an HTTP(S) URL alongside text parts:
+
+```json
+{
+  "model": "<vlm-alias>",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is in this image?" },
+        { "type": "image_url", "image_url": { "url": "data:image/png;base64,<...>" } }
+      ]
+    }
+  ]
+}
+```
+
+Plain string content keeps working unchanged.
+
+### Drop reasoning from context with remove_thinking_from_context
+
+Reasoning models can now discard a turn's thinking block from the KV cache after generation, keeping the context window focused on the visible conversation. Set the flag on the request body:
+
+```jsonc
+// POST /v1/chat/completions
+{
+  "model": "qwen3...",
+  "messages": [/* ... */],
+  "remove_thinking_from_context": true
+}
+```
+
+### Sturdier Gemma4 completions
+
+Gemma4 completion draining is hardened so requests that cap reasoning (for example `reasoning_budget: 0`) finish cleanly instead of stalling on the drain path:
+
+```json
+{
+  "model": "gemma4-31b",
+  "messages": [{ "role": "user", "content": "The ocean is" }],
+  "reasoning_budget": 0
+}
+```
+
+## Other Changes
+
+The CLI's committed `@qvac/sdk` dependency now targets `^0.14.1`. Documentation gained an OpenCode plugin model-selection guide and an agent-stack test-ownership map, and the e2e suite was migrated from BATS to a `node:test` suite with added coverage for OpenAI chat-agent request shapes.
+
+## [0.7.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.7.0
 
@@ -22,14 +136,14 @@ const client = new OpenAI({ baseURL: 'http://localhost:11434/v1' })
 const job = await client.videos.create({
   model: 'wan-i2v',
   prompt: 'subject slowly turns and smiles',
-  input_reference: await toFile(fs.createReadStream('./frame.png'), 'frame.png'),
+  input_reference: await toFile(fs.createReadStream('./frame.png'), 'frame.png')
 })
 
 // img2vid via data URI (JSON)
 const job2 = await client.videos.create({
   model: 'wan-i2v',
   prompt: 'subject slowly turns and smiles',
-  input_reference: { image_url: 'data:image/png;base64,...' },
+  input_reference: { image_url: 'data:image/png;base64,...' }
 })
 ```
 
@@ -69,6 +183,7 @@ The SDK was previously a dev-only dependency that the CLI expected the host proj
 This is the first release that depends on the published `@qvac/sdk@0.12.0` `./commands` subpath, into which the bundle/verify implementation moved. There is nothing for consumers to do beyond a normal install; the SDK comes with the CLI.
 
 **Before:**
+
 ```json
 {
   "devDependencies": {
@@ -78,6 +193,7 @@ This is the first release that depends on the published `@qvac/sdk@0.12.0` `./co
 ```
 
 **After:**
+
 ```json
 {
   "dependencies": {
@@ -95,6 +211,7 @@ This is the first release that depends on the published `@qvac/sdk@0.12.0` `./co
 With the Fastify + Zod rewrite of the `serve` HTTP layer, request validation and error codes are aligned with OpenAI semantics. A request naming a model that is not configured now fails with `404 model_not_found` instead of being rejected later as a `400` on an unrelated field such as `output_format`.
 
 **Before:**
+
 ```sh
 $ curl -sX POST .../v1/images/generations \
     -H 'Content-Type: application/json' \
@@ -104,6 +221,7 @@ $ curl -sX POST .../v1/images/generations \
 ```
 
 **After:**
+
 ```sh
 $ curl -sX POST .../v1/images/generations \
     -H 'Content-Type: application/json' \
@@ -131,6 +249,7 @@ qvac openai spec -o spec.json    # write to a file
 `qvac serve openai` now exposes text-to-video on the OpenAI `/v1/videos` surface, backed by the SDK's `sdcpp-video` model type. Generation is asynchronous: `POST /v1/videos` returns a job that you poll with `GET /v1/videos/{id}`, fetch with `GET /v1/videos/{id}/content`, and clean up with `DELETE /v1/videos/{id}`.
 
 Configure a video model in `qvac.config.json`:
+
 ```json
 {
   "serve": {
@@ -374,12 +493,12 @@ The wire is the new `requestId` exposed synchronously on the SDK's decorated pro
 
 ```typescript
 // Inside qvac serve route handler (illustrative)
-import { sdkCompletion } from "@qvac/cli/serve/core/sdk";
-import { bindClientDisconnectCancel } from "@qvac/cli/serve/core/cancel-bridge";
+import { sdkCompletion } from '@qvac/cli/serve/core/sdk'
+import { bindClientDisconnectCancel } from '@qvac/cli/serve/core/cancel-bridge'
 
-const run = sdkCompletion({ /* ... */ });
-bindClientDisconnectCancel(req, res, run.requestId, logger);
-const final = await run.final;
+const run = sdkCompletion({/* ... */})
+bindClientDisconnectCancel(req, res, run.requestId, logger)
+const final = await run.final
 ```
 
 The bridge is idempotent (`req.once('close', ...)`), short-circuits if the response already finished (`res.writableEnded`), and swallows the `sdkCancel` rejection so a slow-or-failed cancel never breaks the response handler.
@@ -493,9 +612,7 @@ Blocking JSON response (default):
   "created": 1718000000,
   "output_format": "png",
   "size": "1024x1024",
-  "data": [
-    { "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }
-  ]
+  "data": [{ "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }]
 }
 ```
 

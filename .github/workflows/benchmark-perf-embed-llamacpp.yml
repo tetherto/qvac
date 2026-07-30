@@ -1,17 +1,22 @@
 name: Benchmark Performance — Embed Parameter Sweep
 
-# Manually-triggered embed performance benchmark (no sweep inputs — the matrix is
-# in the scripts). Embedding is prefill-only (a single forward pass, no decode),
-# so the headline metric is prefill throughput (ppTPS) alongside per-embedding
-# latency, embeddings/sec, and cosine-similarity vs an in-run baseline.
+# Manually-triggered embed performance benchmark. The official sweep matrix lives
+# in the scripts; the dispatch inputs only toggle/narrow a run (run_desktop,
+# run_mobile, models + repeats for a quick DESKTOP-only check — narrowed runs are
+# flagged in the report, summarize_only/artifact_run_id to re-render a prior run,
+# and compare_run_id for cross-run Δ columns). Embedding is prefill-only (a single
+# forward pass, no decode), so the headline metric is prefill throughput (ppTPS)
+# alongside per-embedding latency.
 #
 # Desktop: bare benchmarks/performance/embed-parameter-sweep.js on the self-hosted
 #          Linux GPU runner (downloads the prebuild artifacts the integration
 #          tests consume rather than compiling on the runner).
-# Mobile:  added in a follow-up once the sharded mobile scaffolding lands.
+# Mobile:  sharded on-device benchmark on Device Farm (Android + iOS), one shard
+#          per (batchSize, flashAttn) pair, generated from the matrix.
 #
 # To change what runs, edit:
-#   models.manifest.json (models) + embed-parameter-sweep.config.js (sweep dims)
+#   Desktop: models.manifest.json (models) + embed-parameter-sweep.config.js (sweep dims)
+#   Mobile:  test/integration/_benchmark-matrix.js (then regenerate shards)
 
 on:
   workflow_dispatch:
@@ -47,6 +52,10 @@ on:
         type: boolean
       artifact_run_id:
         description: "Previous run ID to summarize (the number in that run's URL). Only used when 'summarize_only' is checked."
+        required: false
+        type: string
+      compare_run_id:
+        description: "Optional baseline run ID to compare against (the number in that run's URL). Adds Δ ppTPS / latency columns vs that run."
         required: false
         type: string
 
@@ -177,6 +186,8 @@ jobs:
       pull-requests: write
       id-token: write
     uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    # Bounded: prebuild needs the GPR/signing secrets; no repository input, and the
+    # release environment + label-gate keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -187,7 +198,10 @@ jobs:
       - context
       - label-gate
       - prebuild
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && !inputs.summarize_only
+    # !cancelled() + the explicit prebuild-success check so the skip of the
+    # mobile-only verify-shards job (on a desktop-only run) does not propagate
+    # through prebuild and skip this job.
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && !inputs.summarize_only && !cancelled() && needs.prebuild.result == 'success'
     name: Desktop Parameter Sweep
     runs-on: qvac-ubuntu2204-x64-gpu
     timeout-minutes: 360
@@ -287,11 +301,13 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
-  # Mobile is sharded one batch per model (manifest order), each batch its own
-  # reused-workflow call so its weights download once and its quant shards run
-  # together. Embedding is prefill-only/fast, so a model's shards fit one Device
-  # Farm session — no fine per-config split. Batches run sequentially
-  # (max-parallel: 1) to avoid pool contention; each gets a distinct
+  # Mobile is sharded one batch per (batchSize, flashAttn) pair, each batch its
+  # own reused-workflow call carrying its 4 (model x quant) groups. batchSize and
+  # flashAttn each need a fresh model load, so making them the batch key keeps
+  # every Device Farm session to at most 2 model loads (one per device) for a
+  # given (model, quant) — a coarser per-(model, quant) batch would reload the
+  # model for each of the 8 batchSize x flashAttn combos and OOM the phones. Batches run
+  # sequentially (max-parallel: 1) to avoid pool contention; each gets a distinct
   # artifact_suffix so its perf-report doesn't collide, and summarize aggregates
   # them. The benchmark shards are deliberately absent from test-groups.json, so
   # the test_groups override here is the only path that runs them.
@@ -312,20 +328,32 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - model: embeddinggemma
-            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80","grep":"runBenchmarkPerfEmbeddinggemmaQ80Test"},{"name":"BenchmarkPerfEmbeddinggemmaQ40","grep":"runBenchmarkPerfEmbeddinggemmaQ40Test"}]'
-          - model: qwen3-embedding-06b
-            groups: '[{"name":"BenchmarkPerfQwen3Embedding06bQ80","grep":"runBenchmarkPerfQwen3Embedding06bQ80Test"},{"name":"BenchmarkPerfQwen3Embedding06bF16","grep":"runBenchmarkPerfQwen3Embedding06bF16Test"}]'
-          - model: qwen3-embedding-4b-gguf
-            groups: '[{"name":"BenchmarkPerfQwen3Embedding4bGgufQ80","grep":"runBenchmarkPerfQwen3Embedding4bGgufQ80Test"},{"name":"BenchmarkPerfQwen3Embedding4bGgufQ4KM","grep":"runBenchmarkPerfQwen3Embedding4bGgufQ4KMTest"},{"name":"BenchmarkPerfQwen3Embedding4bGgufF16","grep":"runBenchmarkPerfQwen3Embedding4bGgufF16Test"}]'
+          - config: bs256-faoff
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs256Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs256FaoffTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs256Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs256FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs256Faoff","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs256FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs256Faoff","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs256FaoffTest"}]'
+          - config: bs256-faon
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs256Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs256FaonTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs256Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs256FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs256Faon","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs256FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs256Faon","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs256FaonTest"}]'
+          - config: bs512-faoff
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs512Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs512FaoffTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs512Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs512FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs512Faoff","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs512FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs512Faoff","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs512FaoffTest"}]'
+          - config: bs512-faon
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs512Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs512FaonTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs512Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs512FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs512Faon","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs512FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs512Faon","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs512FaonTest"}]'
+          - config: bs1024-faoff
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs1024Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs1024FaoffTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs1024Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs1024FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs1024Faoff","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs1024FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs1024Faoff","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs1024FaoffTest"}]'
+          - config: bs1024-faon
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs1024Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs1024FaonTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs1024Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs1024FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs1024Faon","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs1024FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs1024Faon","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs1024FaonTest"}]'
+          - config: bs2048-faoff
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs2048Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs2048FaoffTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs2048Faoff","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs2048FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs2048Faoff","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs2048FaoffTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs2048Faoff","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs2048FaoffTest"}]'
+          - config: bs2048-faon
+            groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs2048Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs2048FaonTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs2048Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs2048FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs2048Faon","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs2048FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs2048Faon","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs2048FaonTest"}]'
     uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
+    # the release environment + label-gate keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ needs.context.outputs.ref }}
       job_timeout_minutes: 180
       test_groups: ${{ matrix.groups }}
-      artifact_suffix: ${{ matrix.model }}-
+      artifact_suffix: ${{ matrix.config }}-
 
   # Renders the desktop sweep + mobile perf-report artifacts into one markdown
   # report + an HTML chart artifact. Runs after the benchmarks, or standalone
@@ -373,6 +401,7 @@ jobs:
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
           github-token: ${{ github.token }}
           path: combined-reports
+          digest-mismatch: warn
         continue-on-error: true
 
       - name: Download mobile perf-report artifacts
@@ -382,6 +411,7 @@ jobs:
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
           github-token: ${{ github.token }}
           path: combined-reports
+          digest-mismatch: warn
         continue-on-error: true
 
       # run-meta.json (addon version + the mobile shard list this run targeted),
@@ -393,15 +423,71 @@ jobs:
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
           github-token: ${{ github.token }}
           path: combined-reports
+          digest-mismatch: warn
         continue-on-error: true
+
+      # Baseline run for the optional regression compare (Δ columns). Same artifact
+      # patterns as the current run, downloaded into a separate dir.
+      - name: Download baseline desktop sweep for comparison
+        if: inputs.compare_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: embed-param-sweep-desktop-*
+          run-id: ${{ inputs.compare_run_id }}
+          github-token: ${{ github.token }}
+          path: baseline-reports
+          digest-mismatch: warn
+        continue-on-error: true
+
+      - name: Download baseline mobile perf-reports for comparison
+        if: inputs.compare_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-embed-*
+          run-id: ${{ inputs.compare_run_id }}
+          github-token: ${{ github.token }}
+          path: baseline-reports
+          digest-mismatch: warn
+        continue-on-error: true
+
+      - name: Download baseline run-meta for comparison
+        if: inputs.compare_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: embed-benchmark-run-meta-*
+          run-id: ${{ inputs.compare_run_id }}
+          github-token: ${{ github.token }}
+          path: baseline-reports
+          digest-mismatch: warn
+        continue-on-error: true
+
+      - name: Verify baseline artifacts downloaded
+        if: inputs.compare_run_id != ''
+        shell: bash
+        env:
+          COMPARE_RUN_ID: ${{ inputs.compare_run_id }}
+        run: |
+          # SIGPIPE-safe presence check (see the render guard below for why).
+          if [ -z "$(find baseline-reports -name '*.json' -type f -print -quit 2>/dev/null)" ]; then
+            echo "::error::No baseline artifacts found for run $COMPARE_RUN_ID (wrong run ID, or artifacts expired past the 90-day retention). A comparison was requested but cannot be produced."
+            exit 1
+          fi
 
       - name: Render benchmark report
         shell: bash
         env:
           ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
+          COMPARE_RUN_ID: ${{ inputs.compare_run_id }}
           ADDON_VERSION: ${{ steps.addon_ver.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
-          if ! find combined-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          # Guard: at least one report JSON must be present. Use find -print -quit
+          # (exits after the first match) and test for empty output, instead of
+          # `find ... | grep -q .` — under `set -o pipefail` grep -q closes the pipe
+          # on the first match, find gets SIGPIPE, and the pipeline's non-zero status
+          # flips `if !` to "no reports" even when many JSONs exist (which is why this
+          # only tripped once mobile added ~16 perf-report artifacts).
+          if [ -z "$(find combined-reports -name '*.json' -type f -print -quit 2>/dev/null)" ]; then
             echo "::error::No benchmark reports found for run $ARTIFACT_RUN_ID. Nothing to render."
             exit 1
           fi
@@ -414,6 +500,14 @@ jobs:
           ARGS=(--dir combined-reports --output benchmark-artifacts/embed-benchmark-findings.md --html benchmark-artifacts/embed-benchmark-charts.html --charts-url "__CHARTS_URL__")
           if [ -n "$ADDON_VERSION" ]; then
             ARGS+=(--addon-version "$ADDON_VERSION")
+          fi
+          # Add Δ columns when a baseline run was downloaded (SIGPIPE-safe check).
+          if [ -d baseline-reports ] && [ -n "$(find baseline-reports -name '*.json' -type f -print -quit 2>/dev/null)" ]; then
+            ARGS+=(--compare-dir baseline-reports)
+            if [ -n "$COMPARE_RUN_ID" ]; then
+              ARGS+=(--baseline-run-id "$COMPARE_RUN_ID")
+              ARGS+=(--baseline-run-url "https://github.com/$REPO/actions/runs/$COMPARE_RUN_ID")
+            fi
           fi
 
           node packages/embed-llamacpp/benchmarks/performance/render-report.js "${ARGS[@]}"

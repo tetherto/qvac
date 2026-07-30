@@ -1,4 +1,4 @@
-import { AsyncDisposeUnavailableError } from "@/utils/errors-server";
+import { AsyncDisposeUnavailableError } from '@/utils/errors-server'
 
 /**
  * Module-load guard. The whole request-lifecycle primitive stack (scopes,
@@ -11,8 +11,8 @@ import { AsyncDisposeUnavailableError } from "@/utils/errors-server";
  * registry entries forever. Better to fail loudly at import time with a
  * clear error than to debug a slow registry leak in production.
  */
-if (typeof Symbol.asyncDispose !== "symbol") {
-  throw new AsyncDisposeUnavailableError();
+if (typeof Symbol.asyncDispose !== 'symbol') {
+  throw new AsyncDisposeUnavailableError()
 }
 
 /**
@@ -44,29 +44,29 @@ export interface DisposableScope {
    * Calling `defer` after the scope has been disposed runs the cleanup
    * eagerly so resources never leak silently.
    */
-  defer(cleanup: () => Promise<void> | void): void;
+  defer(cleanup: () => Promise<void> | void): void
   /** Run all registered cleanups. Idempotent. */
-  [Symbol.asyncDispose](): Promise<void>;
+  [Symbol.asyncDispose](): Promise<void>
   /** True after the first dispose has been initiated. */
-  readonly disposed: boolean;
+  readonly disposed: boolean
 }
 
 export function createDisposableScope(): DisposableScope {
-  const cleanups: Array<() => Promise<void> | void> = [];
-  let disposed = false;
-  let disposing = false;
+  const cleanups: Array<() => Promise<void> | void> = []
+  let disposed = false
+  let disposing = false
 
   function defer(cleanup: () => Promise<void> | void) {
     if (disposed || disposing) {
-      void runEagerly(cleanup);
-      return;
+      void runEagerly(cleanup)
+      return
     }
-    cleanups.push(cleanup);
+    cleanups.push(cleanup)
   }
 
   async function runEagerly(cleanup: () => Promise<void> | void) {
     try {
-      await cleanup();
+      await cleanup()
     } catch {
       // Late-deferred cleanups have no caller waiting on them; the
       // unwinding path that disposed the scope already returned its own
@@ -76,26 +76,23 @@ export function createDisposableScope(): DisposableScope {
   }
 
   async function dispose() {
-    if (disposed || disposing) return;
-    disposing = true;
-    const errors: unknown[] = [];
+    if (disposed || disposing) return
+    disposing = true
+    const errors: unknown[] = []
     while (cleanups.length > 0) {
-      const cleanup = cleanups.pop();
-      if (!cleanup) continue;
+      const cleanup = cleanups.pop()
+      if (!cleanup) continue
       try {
-        await cleanup();
+        await cleanup()
       } catch (err) {
-        errors.push(err);
+        errors.push(err)
       }
     }
-    disposed = true;
-    disposing = false;
-    if (errors.length === 1) throw errors[0];
+    disposed = true
+    disposing = false
+    if (errors.length === 1) throw errors[0]
     if (errors.length > 1) {
-      throw new AggregateError(
-        errors,
-        `DisposableScope: ${errors.length} cleanups failed`,
-      );
+      throw new AggregateError(errors, `DisposableScope: ${errors.length} cleanups failed`)
     }
   }
 
@@ -103,7 +100,7 @@ export function createDisposableScope(): DisposableScope {
     defer,
     [Symbol.asyncDispose]: dispose,
     get disposed() {
-      return disposed;
-    },
-  };
+      return disposed
+    }
+  }
 }

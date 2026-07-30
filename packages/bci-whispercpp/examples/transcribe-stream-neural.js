@@ -6,16 +6,17 @@ const os = require('bare-os')
 const BCIWhispercpp = require('../index')
 const { flattenSegments } = require('../lib/util')
 
-const DEFAULT_MODEL = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
+const DEFAULT_MODEL =
+  (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   path.join(__dirname, '..', 'models', 'ggml-bci-windowed.bin')
 
-async function * chunkify (bytes, chunkSize) {
+async function* chunkify(bytes, chunkSize) {
   for (let i = 0; i < bytes.byteLength; i += chunkSize) {
     yield bytes.subarray(i, Math.min(i + chunkSize, bytes.byteLength))
   }
 }
 
-async function main () {
+async function main() {
   const args = global.Bare ? global.Bare.argv.slice(2) : process.argv.slice(2)
 
   if (args.length < 1) {
@@ -34,13 +35,17 @@ async function main () {
     console.error('Error: Model file not found: ' + modelPath)
     return
   }
+  const embedderPath = path.join(path.dirname(modelPath), 'bci-embedder.bin')
 
-  const bci = new BCIWhispercpp({
-    files: { model: modelPath }
-  }, {
-    whisperConfig: { language: 'en', temperature: 0.0 },
-    miscConfig: { caption_enabled: false }
-  })
+  const bci = new BCIWhispercpp(
+    {
+      files: { model: modelPath, embedder: embedderPath }
+    },
+    {
+      whisperConfig: { language: 'en', temperature: 0.0 },
+      miscConfig: { caption_enabled: false }
+    }
+  )
 
   await bci.load()
   console.log('Model loaded.\n')
@@ -61,7 +66,10 @@ async function main () {
 
     response.onUpdate((out) => {
       const segs = flattenSegments(out)
-      const piece = segs.map(s => s.text).join(' ').trim()
+      const piece = segs
+        .map((s) => s.text)
+        .join(' ')
+        .trim()
       if (piece.length > 0) {
         const elapsed = ((Date.now() - startedAt) / 1000).toFixed(2)
         console.log('[' + elapsed + 's] +' + piece)
@@ -70,7 +78,10 @@ async function main () {
 
     const output = await response.await()
     const segments = flattenSegments(output)
-    const fullText = segments.map(s => s.text).join(' ').trim()
+    const fullText = segments
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
     const elapsed = ((Date.now() - startedAt) / 1000).toFixed(2)
 
     console.log('\nFinal: "' + fullText + '"')

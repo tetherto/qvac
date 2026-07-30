@@ -1,33 +1,31 @@
-import { withTimeout } from "@/utils/withTimeout";
-import { getServerLogger } from "@/logging";
+import { withTimeout } from '@/utils/withTimeout'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
-export const DHT_BOOTSTRAP_WAIT_CAP_MS = 5000;
+export const DHT_BOOTSTRAP_WAIT_CAP_MS = 5000
 
 interface BootstrappableDht {
-  bootstrapped: boolean;
-  fullyBootstrapped(): Promise<void>;
+  bootstrapped: boolean
+  fullyBootstrapped(): Promise<void>
 }
 
 // A cold routing table makes findPeer return empty -> spurious PEER_NOT_FOUND,
 // so wait for bootstrap, but only when not yet ready to keep warm-path latency.
 export async function ensureDhtBootstrapped(
   dht: BootstrappableDht,
-  timeout: number | undefined,
+  timeout: number | undefined
 ): Promise<void> {
-  if (dht.bootstrapped) return;
+  if (dht.bootstrapped) return
   const cap =
-    timeout === undefined
-      ? DHT_BOOTSTRAP_WAIT_CAP_MS
-      : Math.min(timeout, DHT_BOOTSTRAP_WAIT_CAP_MS);
+    timeout === undefined ? DHT_BOOTSTRAP_WAIT_CAP_MS : Math.min(timeout, DHT_BOOTSTRAP_WAIT_CAP_MS)
   try {
-    await withTimeout(dht.fullyBootstrapped(), cap);
+    await withTimeout(dht.fullyBootstrapped(), cap)
   } catch (error) {
     logger.warn(
       `DHT not bootstrapped within ${cap}ms before delegated connect; attempting anyway`,
-      { error },
-    );
+      { error }
+    )
   }
 }
 
@@ -37,29 +35,25 @@ export async function ensureDhtBootstrapped(
 export function describeConnectFailure(
   error: unknown,
   publicKey: string,
-  relayCount: number,
+  relayCount: number
 ): string {
   const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String(error.code)
-      : undefined;
+    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined
   const relayNote =
-    relayCount > 0
-      ? `${relayCount} swarm relay(s) configured`
-      : "no swarm relays configured";
+    relayCount > 0 ? `${relayCount} swarm relay(s) configured` : 'no swarm relays configured'
 
   switch (code) {
-    case "PEER_NOT_FOUND":
-      return `provider ${publicKey} was not found on the DHT — it may be offline, still bootstrapping, or unreachable from this network. Relays bridge a connection only after the provider is located, so they cannot find an unannounced provider (${relayNote}).`;
-    case "PEER_CONNECTION_FAILED":
-    case "CANNOT_HOLEPUNCH":
-    case "REMOTE_NOT_HOLEPUNCHABLE":
-    case "REMOTE_NOT_HOLEPUNCHING":
-    case "HOLEPUNCH_ABORTED":
-    case "HOLEPUNCH_PROBE_TIMEOUT":
-    case "HOLEPUNCH_DOUBLE_RANDOMIZED_NATS":
-      return `provider ${publicKey} was found but a connection could not be established (NAT/holepunch failure: ${code}; ${relayNote}).`;
+    case 'PEER_NOT_FOUND':
+      return `provider ${publicKey} was not found on the DHT — it may be offline, still bootstrapping, or unreachable from this network. Relays bridge a connection only after the provider is located, so they cannot find an unannounced provider (${relayNote}).`
+    case 'PEER_CONNECTION_FAILED':
+    case 'CANNOT_HOLEPUNCH':
+    case 'REMOTE_NOT_HOLEPUNCHABLE':
+    case 'REMOTE_NOT_HOLEPUNCHING':
+    case 'HOLEPUNCH_ABORTED':
+    case 'HOLEPUNCH_PROBE_TIMEOUT':
+    case 'HOLEPUNCH_DOUBLE_RANDOMIZED_NATS':
+      return `provider ${publicKey} was found but a connection could not be established (NAT/holepunch failure: ${code}; ${relayNote}).`
     default:
-      return error instanceof Error ? error.message : String(error);
+      return error instanceof Error ? error.message : String(error)
   }
 }

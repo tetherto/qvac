@@ -67,14 +67,21 @@ public:
   /// @param adrenoVersion Detected Adreno GPU version, if any.
   /// @param finetuneOverrides If set, finetuning mode is active with these
   /// context/batch params and GPU caps.
-  /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to
-  /// disable flash-attn by default since it is not reliably supported on
-  /// the OpenCL backend.
+  /// @param isOpenCl True when the chosen GPU backend is OpenCL; gates the
+  /// OpenCL KV-cache policy — rejects ALL quantized KV types, only f32/f16/bf16
+  /// are safe (quantized KV-cache shifts abort in llama_kv_cache::update on
+  /// Adreno because ggml-opencl has no F32->quantized requantize kernel).
+  /// @param isMetal True when the chosen GPU backend is Metal; used to reject
+  /// unsupported TurboQuant/PolarQuant KV-cache types.
+  /// @param isGpu True when any GPU backend was selected (OpenCL, Metal, or
+  /// Vulkan); used (together with !isOpenCl) to default the KV-cache to q8_0 on
+  /// Metal/Vulkan GPUs when the caller has not picked a cache type. OpenCL is
+  /// excluded because quantized KV-cache shifts abort on Adreno.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
       const FinetuneConfigOverrides& finetuneOverrides = {},
-      bool isOpenCl = false);
+      bool isOpenCl = false, bool isMetal = false, bool isGpu = false);
 
   /**
    * The Constructor for llama model.
@@ -125,16 +132,18 @@ public:
 
   /// Run several prompts in parallel via the continuous-batching session
   /// and return their generated texts in input order. Each output entry
-  /// matches the prompt at the same index. Throws when batching is
-  /// unsupported (multimodal context) or any prompt is rejected by the
-  /// session (oversize, empty, or capacity exhausted with no room to
-  /// queue). Output streaming via `Prompt::outputCallback` is honoured
-  /// per-slot.
+  /// matches the prompt at the same index. Media prompts are accepted on
+  /// multimodal models, and per-prompt cache (`cacheKey` / `saveCacheToDisk`)
+  /// round-trips media KV via the shared GGSQ sequence-state format. Throws
+  /// when batching is unsupported or any prompt is rejected by the session
+  /// (oversize,
+  /// empty, or capacity exhausted with no room to queue). Output
+  /// streaming via `Prompt::outputCallback` is honoured per-slot.
   std::vector<std::string>
   processPromptBatch(const std::vector<Prompt>& prompts);
 
   /// @brief True when the model was loaded with continuous batching active
-  /// (text-only context with `n_seq_max > 1`, i.e. `parallel >= 2`).
+  /// (`n_seq_max > 1`, i.e. `parallel >= 2`).
   [[nodiscard]] bool supportsBatching() const;
 
   /**
@@ -193,13 +202,12 @@ public:
   LlamaFinetuner& finetuner() { return finetuner_; }
   const LlamaFinetuner& finetuner() const { return finetuner_; }
 
-  /// For unit tests only: access the internal batch scheduler so tests can
-  /// inject a decode stub via setDecodeFuncForTesting(). Returns null when
-  /// batching is not active (n_parallel < 2 or multimodal model).
-  batching::ContinuousBatchScheduler* batchSchedulerForTesting();
-
 private:
   friend class LlamaFinetuner;
+  // Unit tests reach internals (scheduler, single-prompt context) through this
+  // peer instead of public `*ForTesting()` accessors. See
+  // test_internal_peers.hpp.
+  friend class LlamaModelTestPeer;
 
   // Impl without mutexes
   std::string processPromptImpl(const Prompt& prompt);
@@ -263,11 +271,17 @@ private:
       bool wasBatch = false;
     };
     LastRunInfo lastRun_;
+
+    /// Serializes the entry section of processPromptBatchImpl (the
+    /// activeBatchJobs_ check, cache invalidation, and KV wipe). Released
+    /// before scheduler.processBatch() so concurrent batch calls can still
+    /// overlap during generation.
+    std::mutex batchEntryMutex_;
   };
 
-  /// Continuous-batching gate. Active when the model is text-only and the
-  /// user opted into multi-sequence decoding via `n_parallel >= 2`
-  /// (which llama.cpp maps directly to `n_seq_max`).
+  /// Continuous-batching gate. Active when the user opted into multi-sequence
+  /// decoding via `n_parallel >= 2` (which llama.cpp maps directly to
+  /// `n_seq_max`); applies to text and multimodal models alike.
   static bool isMultiBatchActivated(ReloadableState& state);
 
   static std::unique_ptr<batching::ContinuousBatchScheduler>

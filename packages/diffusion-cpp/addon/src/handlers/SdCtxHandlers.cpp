@@ -2,8 +2,13 @@
 
 #include <cstddef>
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_sd {
@@ -119,6 +124,10 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     {"vae_on_cpu",
      [](SdCtxConfig& c, const std::string& v) {
        c.keepVaeOnCpu = parseBool(v, "vae_on_cpu");
+     }},
+    {"vae_decode_only",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.vaeDecodeOnly = parseBool(v, "vae_decode_only");
      }},
 
     // -- Weight precision
@@ -354,6 +363,18 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 void applySdCtxHandlers(
     SdCtxConfig& config,
     const std::unordered_map<std::string, std::string>& configMap) {
+  if (auto mainGpu = sd_backend_selection::mainGpuFromMap(configMap);
+      mainGpu.has_value()) {
+#if defined(__ANDROID__) ||                                                    \
+    (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "main-gpu is not supported on mobile (single-GPU device).");
+#else
+    config.mainGpu = *mainGpu;
+#endif
+  }
+
   for (const auto& [key, value] : configMap) {
     if (auto it = SD_CTX_HANDLERS.find(key); it != SD_CTX_HANDLERS.end()) {
       it->second(config, value);

@@ -1,2 +1,0 @@
-"""TTS Benchmark Client"""
-

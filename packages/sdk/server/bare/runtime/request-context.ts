@@ -1,5 +1,5 @@
-import type { AbortSignal } from "bare-abort-controller";
-import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
+import type { AbortSignal } from 'bare-abort-controller'
+import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
 
 /**
  * Coarse classification of a long-running request. Used by
@@ -11,18 +11,19 @@ import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
  * change and the union surfaces in editor autocomplete at every call site.
  */
 export type RequestKind =
-  | "completion"
-  | "embeddings"
-  | "transcribe"
-  | "translate"
-  | "diffusion"
-  | "tts"
-  | "ocr"
-  | "vla"
-  | "finetune"
-  | "loadModel"
-  | "downloadAsset"
-  | "rag";
+  | 'completion'
+  | 'batchCompletion'
+  | 'embeddings'
+  | 'transcribe'
+  | 'translate'
+  | 'diffusion'
+  | 'tts'
+  | 'ocr'
+  | 'vla'
+  | 'finetune'
+  | 'loadModel'
+  | 'downloadAsset'
+  | 'rag'
 
 /**
  * Lifecycle states a request transitions through. A new context starts in
@@ -34,12 +35,7 @@ export type RequestKind =
  * `state` defensively at most a couple of points and a flat enum is easier
  * to log/assert than a transition table.
  */
-export type RequestState =
-  | "running"
-  | "cancelling"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export type RequestState = 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
 
 /**
  * Per-request lifecycle handle. Created by `RequestRegistry.begin(...)`
@@ -59,10 +55,10 @@ export type RequestState =
  *    registry mutates it.
  */
 export interface RequestContext {
-  readonly requestId: string;
-  readonly kind: RequestKind;
-  readonly modelId: string | undefined;
-  readonly signal: AbortSignal;
-  readonly scope: DisposableScope;
-  state: RequestState;
+  readonly requestId: string
+  readonly kind: RequestKind
+  readonly modelId: string | undefined
+  readonly signal: AbortSignal
+  readonly scope: DisposableScope
+  state: RequestState
 }

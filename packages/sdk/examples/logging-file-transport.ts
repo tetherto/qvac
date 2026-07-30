@@ -4,32 +4,32 @@ import {
   completion,
   unloadModel,
   LLAMA_3_2_1B_INST_Q4_0,
-  VERBOSITY,
-} from "@qvac/sdk";
-import { writeFileSync, appendFileSync } from "fs";
-import { join } from "path";
+  VERBOSITY
+} from '@qvac/sdk'
+import { writeFileSync, appendFileSync } from 'fs'
+import { join } from 'path'
 
 try {
-  const logFile = join(process.cwd(), "model-logs.txt");
+  const logFile = join(process.cwd(), 'model-logs.txt')
 
   // Clear previous logs
-  writeFileSync(logFile, "");
+  writeFileSync(logFile, '')
 
   // Create logger with file transport
-  const logger = getLogger("llm-file-demo", {
-    level: "debug",
+  const logger = getLogger('llm-file-demo', {
+    level: 'debug',
     enableConsole: false, // Disable console output (logs go to file only). Set to true for both console + file
     transports: [
       // File transport - append logs to file
       (level, namespace, message) => {
-        const timestamp = new Date().toISOString();
-        const logLine = `[${timestamp}] ${level.toUpperCase()} ${namespace}: ${message}\n`;
-        appendFileSync(logFile, logLine);
-      },
-    ],
-  });
+        const timestamp = new Date().toISOString()
+        const logLine = `[${timestamp}] ${level.toUpperCase()} ${namespace}: ${message}\n`
+        appendFileSync(logFile, logLine)
+      }
+    ]
+  })
 
-  logger.info("Starting model demo with file logging");
+  logger.info('Starting model demo with file logging')
 
   // Load model with integrated logging
   const modelId = await loadModel({
@@ -37,42 +37,38 @@ try {
     modelConfig: {
       ctx_size: 2048,
       temp: 0.7,
-      verbosity: VERBOSITY.DEBUG,
+      verbosity: VERBOSITY.DEBUG
     },
-    logger, // All model logs will be captured
-  });
+    logger // All model logs will be captured
+  })
 
-  logger.info(`Model loaded: ${modelId}`);
+  logger.info(`Model loaded: ${modelId}`)
 
   // Run a simple completion
-  logger.info("Starting completion...");
+  logger.info('Starting completion...')
 
-  const messages = [
-    { role: "user", content: "Tell me a short joke about programming." },
-  ];
+  const messages = [{ role: 'user', content: 'Tell me a short joke about programming.' }]
 
-  let responseText = "";
+  let responseText = ''
 
-  const result = completion({ modelId, history: messages, stream: true });
+  const result = completion({ modelId, history: messages, stream: true })
 
   for await (const token of result.tokenStream) {
-    responseText += token;
-    process.stdout.write(token);
+    responseText += token
+    process.stdout.write(token)
   }
 
-  console.log("\n");
-  logger.info(
-    `Completion finished, ${responseText.length} characters generated`,
-  );
+  console.log('\n')
+  logger.info(`Completion finished, ${responseText.length} characters generated`)
 
   // Unload model
-  await unloadModel({ modelId });
-  logger.info("Model unloaded successfully");
+  await unloadModel({ modelId })
+  logger.info('Model unloaded successfully')
 
   // Show user where logs were saved
-  console.log(`▸ Logs saved to ${logFile}`);
-  console.log("▸ Inspect it to see detailed model operation logs");
+  console.log(`▸ Logs saved to ${logFile}`)
+  console.log('▸ Inspect it to see detailed model operation logs')
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

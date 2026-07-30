@@ -12,7 +12,7 @@ const { ensureModels } = require('./utils')
 const store = new Corestore('./store')
 const query = 'Who won the individual title in LIV Golf UK by JCB in 2025?'
 
-async function main () {
+async function main() {
   // 1. Fetch embedder + LLM model files from the QVAC registry (cached on disk after first run).
   const models = await ensureModels(['embedder', 'llm'])
 
@@ -30,7 +30,7 @@ async function main () {
     const embeddings = await response.await()
 
     if (Array.isArray(text)) {
-      return embeddings[0].map(embedding => Array.from(embedding))
+      return embeddings[0].map((embedding) => Array.from(embedding))
     } else {
       return Array.from(embeddings[0][0])
     }
@@ -52,7 +52,7 @@ async function main () {
   const rag = new RAG({ embeddingFunction, dbAdapter, llm: llmAdapter, logger })
   await rag.ready()
 
-  const knowledgeBaseMapped = knowledgeBase.map(kb => kb.text)
+  const knowledgeBaseMapped = knowledgeBase.map((kb) => kb.text)
 
   const docs = await rag.ingest(knowledgeBaseMapped, models.embedder.filename)
 
@@ -60,14 +60,14 @@ async function main () {
 
   let fullResponse = ''
   await response
-    .onUpdate(update => {
+    .onUpdate((update) => {
       fullResponse += update
     })
     .await()
 
   console.log(fullResponse)
 
-  await rag.deleteEmbeddings(docs.processed.map(doc => doc.id))
+  await rag.deleteEmbeddings(docs.processed.map((doc) => doc.id))
 
   await rag.close()
   await llm.unload()

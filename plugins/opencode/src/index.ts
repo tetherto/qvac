@@ -31,7 +31,7 @@ interface HostListening {
   readonly modelName: string
 }
 
-function resolveRuntime (options: ResolvedOptions): string {
+function resolveRuntime(options: ResolvedOptions): string {
   if (options.runtime !== undefined) return options.runtime
   if (typeof Bun !== 'undefined') return Bun.which('node') ?? Bun.which('bun') ?? 'node'
   return process.execPath
@@ -41,7 +41,10 @@ function resolveRuntime (options: ResolvedOptions): string {
 // as soon as its proxy is up, before the (possibly slow) model download. Host
 // milestones stay hidden by default so they do not corrupt OpenCode's TUI; enable
 // `debug` / `QVAC_DEBUG=1` to mirror them onto stderr.
-function spawnHost (options: ResolvedOptions, projectDir: string): Promise<{ child: ReturnType<typeof spawn>, listening: HostListening }> {
+function spawnHost(
+  options: ResolvedOptions,
+  projectDir: string
+): Promise<{ child: ReturnType<typeof spawn>; listening: HostListening }> {
   const hostPath = join(dirname(fileURLToPath(import.meta.url)), 'managed-serve-host.js')
   const runtime = resolveRuntime(options)
 
@@ -55,7 +58,9 @@ function spawnHost (options: ResolvedOptions, projectDir: string): Promise<{ chi
       stdio: ['ignore', 'pipe', 'inherit']
     })
   } catch (err) {
-    return Promise.reject(new HostSpawnFailedError(`failed to spawn qvac serve host with "${runtime}"`, err))
+    return Promise.reject(
+      new HostSpawnFailedError(`failed to spawn qvac serve host with "${runtime}"`, err)
+    )
   }
 
   return new Promise((resolve, reject) => {
@@ -92,7 +97,7 @@ function spawnHost (options: ResolvedOptions, projectDir: string): Promise<{ chi
   })
 }
 
-function registerTeardown (child: ReturnType<typeof spawn>): void {
+function registerTeardown(child: ReturnType<typeof spawn>): void {
   const stop = (): void => {
     try {
       child.kill('SIGTERM')
@@ -112,7 +117,7 @@ function registerTeardown (child: ReturnType<typeof spawn>): void {
   })
 }
 
-function injectProvider (cfg: Config, listening: HostListening, options: ResolvedOptions): void {
+function injectProvider(cfg: Config, listening: HostListening, options: ResolvedOptions): void {
   const providers = cfg.provider ?? {}
   providers['qvac'] = {
     npm: '@ai-sdk/openai-compatible',
@@ -122,7 +127,13 @@ function injectProvider (cfg: Config, listening: HostListening, options: Resolve
     options: { baseURL: listening.baseURL, apiKey: 'qvac', timeout: options.readyTimeoutMs },
     // Keyed by the friendly, models.dev-style id so OpenCode's model id
     // (`qvac/qwen3.5-9b`) matches the serve alias the host registered, 1:1.
-    models: { [listening.modelId]: { name: `${listening.modelName} (local)`, tool_call: true, reasoning: true } }
+    models: {
+      [listening.modelId]: {
+        name: `${listening.modelName} (local)`,
+        tool_call: true,
+        reasoning: true
+      }
+    }
   }
   cfg.provider = providers
 
@@ -149,6 +160,7 @@ export const QvacManagedServe: Plugin = async (input, options) => {
   registerTeardown(child)
 
   const hooks: Hooks = {
+    // lunte-disable-next-line require-await
     config: async (cfg: Config): Promise<void> => {
       injectProvider(cfg, listening, resolved)
     }

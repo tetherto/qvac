@@ -3,7 +3,15 @@ const path = require('bare-path')
 const HyperDB = require('hyperdb/builder')
 const Hyperschema = require('hyperschema')
 
-const SCHEMA_DIR = path.join(__dirname, '..', 'src', 'adapters', 'database', 'hyperspec', 'hyperschema')
+const SCHEMA_DIR = path.join(
+  __dirname,
+  '..',
+  'src',
+  'adapters',
+  'database',
+  'hyperspec',
+  'hyperschema'
+)
 const DB_DIR = path.join(__dirname, '..', 'src', 'adapters', 'database', 'hyperspec', 'hyperdb')
 
 buildRAGSchema()
@@ -14,7 +22,7 @@ buildRAGDatabase()
  * @param {string} [schemaDir] - Directory to save schema files
  * @returns {void}
  */
-function buildRAGSchema (schemaDir = SCHEMA_DIR) {
+function buildRAGSchema(schemaDir = SCHEMA_DIR) {
   const schema = Hyperschema.from(schemaDir)
   const rag = schema.namespace('rag')
 
@@ -89,7 +97,7 @@ function buildRAGSchema (schemaDir = SCHEMA_DIR) {
  * @param {string} [dbDir] - Directory to save database files
  * @returns {void}
  */
-function buildRAGDatabase (schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
+function buildRAGDatabase(schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
   const db = HyperDB.from(schemaDir, dbDir)
   const dbNs = db.namespace('rag')
 
@@ -137,12 +145,16 @@ function buildRAGDatabase (schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
   console.log('✅ RAG HyperDB specification built successfully!')
   console.log(`📁 Schema saved to: ${schemaDir}`)
   console.log(`📁 Database files saved to: ${dbDir}`)
-  console.log('\n📝 IMPORTANT: Generated hyperspec files have been manually converted to use dynamic imports')
+  console.log(
+    '\n📝 IMPORTANT: Generated hyperspec files have been manually converted to use dynamic imports'
+  )
   console.log('   This prevents static dependency resolution when HyperDBAdapter is not used.')
-  console.log('   If you regenerate specs, you\'ll need to manually convert static requires to dynamic imports.')
+  console.log(
+    "   If you regenerate specs, you'll need to manually convert static requires to dynamic imports."
+  )
 }
 
-function removeUnusedRuntimeImport (indexPath) {
+function removeUnusedRuntimeImport(indexPath) {
   const content = fs.readFileSync(indexPath, 'utf8')
   const updated = content.replace(
     "const { IndexEncoder, c, b4a } = require('hyperdb/runtime')",

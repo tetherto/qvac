@@ -1,0 +1,78 @@
+name: Security baseline
+
+# Canonical security baseline (TruffleHog secret scan + CodeQL static analysis)
+# rolled out to Tier-1 repos per QVAC-21550. This is a thin caller that
+# delegates to the org's reusable workflow (authored under QVAC-19055); its
+# inputs and behavior are documented in
+# tetherto/qvac-actions/docs/security-baseline.md.
+#
+# Uses plain `pull_request` (never `pull_request_target`): fork PRs run with a
+# read-only token and no secrets, and this baseline needs none of the
+# privileged context (`codeql-upload: never` below), so the "pwn request"
+# surface of `pull_request_target` buys nothing here.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    # Pinned to the 0.1.0 tag's immutable commit SHA per the org freeze-and-pin
+    # convention for reusable workflows (never `@main`).
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+      actions: read
+    with:
+      # Explicit language list: CodeQL autodetect frequently misses C/C++ in
+      # mixed repos. C/C++ coverage is intentionally deferred for this first
+      # rollout (CodeQL autobuild needs the clang/vcpkg/bare-make toolchain) and
+      # is tracked as a follow-up; this caller covers the JS/TS + Python surface.
+      languages: javascript-typescript,python
+      severity-threshold: high
+      # qvac uses GitHub "Default setup" for code scanning, which rejects SARIF
+      # from advanced workflows. Skip the upload here; the severity gate and
+      # TruffleHog still run (SARIF is written locally for the gate to read).
+      codeql-upload: never
+
+  # Repo-local CI trust-policy + label-gate regression tests (fork CI
+  # hardening). Kept here instead of a dedicated workflow so the coverage
+  # rides along with the security baseline that already runs on every PR.
+  # Runs UNPRIVILEGED only (plain pull_request, contents: read, no secrets) —
+  # never move this under pull_request_target. NOTE: this job is repo-local and
+  # NOT part of the org reusable baseline above; preserve it across any org
+  # sync of this caller file.
+  policy-tests:
+    name: policy-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - name: Run trust-policy tests
+        run: >-
+          node --test
+          .github/actions/label-gate/test/gate.test.mjs
+          .github/actions/label-gate/test/github-client.test.mjs
+          .github/actions/label-gate/test/index.test.mjs
+          .github/scripts/test/ci-trust-policy.test.mjs

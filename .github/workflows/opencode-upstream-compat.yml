@@ -1,0 +1,112 @@
+name: OpenCode Upstream Compatibility
+
+# Scheduled tripwire for the published OpenCode integration. This intentionally
+# installs the latest public OpenCode and QVAC plugin packages in a fresh project
+# so upstream/runtime drift is caught before users report it.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # daily 07:00 UTC, after the public npm install check
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencode-upstream-compat
+  cancel-in-progress: false
+
+env:
+  QVAC_SMOKE_MODEL: qwen3.5-0.8b
+  QVAC_READY_TIMEOUT_MS: "1800000"
+  QVAC_UPSTREAM_TIMEOUT_MS: "300000"
+  OPENCODE_TIMEOUT: 45m
+
+jobs:
+  smoke:
+    name: opencode-ai@latest + @qvac/opencode-plugin@latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Run OpenCode through QVAC plugin
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/opencode-compat-smoke
+          ARTIFACT_DIR: ${{ runner.temp }}/opencode-compat-artifacts
+          QVAC_HOST_LOG: ${{ runner.temp }}/opencode-compat-artifacts/qvac-host.log
+          QVAC_DEBUG: "1"
+          QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
+        run: bash scripts/ci/opencode-upstream-compat-smoke.sh
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: opencode-upstream-compat
+          path: ${{ runner.temp }}/opencode-compat-artifacts
+          if-no-files-found: warn
+
+  notify-on-failure:
+    name: Open or update tracking issue
+    needs: smoke
+    # Manual runs are for debugging this workflow. Scheduled failures are the
+    # unattended signal that should create team-visible follow-up.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Open or update tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const title = 'OpenCode upstream compatibility smoke failing';
+            const label = 'github_actions';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Scheduled OpenCode upstream compatibility smoke failed.`,
+              ``,
+              `- Run: ${runUrl}`,
+              `- Artifact: \`opencode-upstream-compat\``,
+              `- Triage: inspect package versions, \`opencode-run.stderr\`, \`opencode-run.jsonl\`, and \`qvac-host.log\` from the artifact.`,
+              `- Likely cause: latest \`opencode-ai\` changed plugin/provider behavior, request shape, model handling, or runtime assumptions that the latest published \`@qvac/opencode-plugin\` no longer satisfies.`,
+            ].join('\n');
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => issue.pull_request === undefined && issue.title === title);
+
+            if (existing !== undefined) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Appended comment to existing issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label],
+              });
+              core.info(`Opened new issue #${created.data.number}`);
+            }

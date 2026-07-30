@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: stage the VLM benchmark into the locations the mobile test framework
+// Stage the VLM benchmark into the locations the mobile test framework
 // scans and bundles. The source of truth is THIS directory; the copies written here
 // are git-ignored. Run before the mobile build (the reusable mobile workflow's
 // `pre_build_script` input points at this file). Desktop needs NO staging — its CI
@@ -15,11 +15,14 @@ const path = require('path')
 const HERE = __dirname
 const INTEG = path.resolve(HERE, '..', '..', 'test', 'integration')
 const ASSETS = path.resolve(HERE, '..', '..', 'test', 'mobile', 'testAssets')
-const IMAGES = path.join(HERE, 'images')
+const IMAGES = path.join(HERE, 'fixture')
 
 // The entry + the modules it requires must sit together in test/integration so the
-// entry's `./harness.cjs` / harness's `./config.cjs` `./fixture.data.cjs` resolve.
-const CODE = ['vlm-matrix.test.js', 'harness.cjs', 'config.cjs', 'fixture.data.cjs']
+// entry's `./harness.cjs` / harness's `./config.cjs` etc. resolve. Stage EVERY
+// .cjs sibling (plus the entry) instead of a hand-kept list, so adding a module
+// to this folder never requires touching this file — unreferenced copies are
+// inert (the mobile bundler only follows requires from the entry).
+const CODE = fs.readdirSync(HERE).filter(f => f.endsWith('.cjs') || f === 'vlm-matrix.test.js')
 
 fs.mkdirSync(INTEG, { recursive: true })
 fs.mkdirSync(ASSETS, { recursive: true })
@@ -29,7 +32,7 @@ for (const f of CODE) {
   console.log(`staged -> test/integration/${f}`)
 }
 // Images aren't in git — CI syncs them from the fixture object store (URI configured
-// in the benchmark workflow) into images/ before this runs. Fail loudly if skipped.
+// in the benchmark workflow) into fixture/ before this runs. Fail loudly if skipped.
 const imgs = fs.existsSync(IMAGES) ? fs.readdirSync(IMAGES).filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f)) : []
 if (!imgs.length) throw new Error(`No images in ${IMAGES} — sync the fixture image store into it first`)
 for (const f of imgs) fs.copyFileSync(path.join(IMAGES, f), path.join(ASSETS, f))

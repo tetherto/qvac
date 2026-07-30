@@ -23,7 +23,7 @@ import {
 // free of any registry/process-handler coupling — the detached runner owns
 // those concerns and uses these primitives.
 
-function delay (ms: number): Promise<void> {
+function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
@@ -31,7 +31,7 @@ function delay (ms: number): Promise<void> {
 // There is an inherent TOCTOU race (another process could grab the port before
 // the serve does), but it is vanishingly small on loopback and the serve will
 // surface an EADDRINUSE we propagate as ServeExitedError.
-export function allocateFreePort (host: string): Promise<number> {
+export function allocateFreePort(host: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer()
     srv.once('error', (err) => reject(new PortAllocationFailedError(err)))
@@ -57,7 +57,7 @@ interface ServeCommand {
 // run through the current Node/Bun executable (`process.execPath`) so we don't
 // depend on the bin's exec bit or shebang — keeping it portable across Node 20+
 // and Bun, per the task's "no Bun-specific APIs" requirement.
-export function resolveServeCommand (serveBinPath?: string): ServeCommand {
+export function resolveServeCommand(serveBinPath?: string): ServeCommand {
   if (serveBinPath !== undefined && serveBinPath.length > 0) {
     return { command: serveBinPath, baseArgs: [] }
   }
@@ -92,9 +92,9 @@ export function resolveServeCommand (serveBinPath?: string): ServeCommand {
 
 // Bounded ring buffer of the child's combined stdout/stderr so a startup
 // failure can surface the tail of the serve's own diagnostics.
-function attachOutputTail (child: ChildProcess, maxChars = 4000): () => string {
+function attachOutputTail(child: ChildProcess, maxChars = 4000): () => string {
   let tail = ''
-  function append (chunk: Buffer): void {
+  function append(chunk: Buffer): void {
     tail = (tail + chunk.toString('utf8')).slice(-maxChars)
   }
   child.stdout?.on('data', append)
@@ -102,7 +102,7 @@ function attachOutputTail (child: ChildProcess, maxChars = 4000): () => string {
   return () => tail
 }
 
-async function waitForHealth (params: {
+async function waitForHealth(params: {
   child: ChildProcess
   baseURL: string
   timeoutMs: number
@@ -113,16 +113,26 @@ async function waitForHealth (params: {
   const healthUrl = `${baseURL}/models`
   const deadline = Date.now() + timeoutMs
 
-  const state: { exit: { code: number | null, signal: NodeJS.Signals | null } | null, spawnError: unknown } = {
+  const state: {
+    exit: { code: number | null; signal: NodeJS.Signals | null } | null
+    spawnError: unknown
+  } = {
     exit: null,
     spawnError: null
   }
-  child.once('exit', (code, signal) => { state.exit = { code, signal } })
-  child.once('error', (err) => { state.spawnError = err })
+  child.once('exit', (code, signal) => {
+    state.exit = { code, signal }
+  })
+  child.once('error', (err) => {
+    state.spawnError = err
+  })
 
   while (true) {
     if (state.spawnError !== null) {
-      throw new ServeSpawnFailedError(`Failed to spawn qvac serve: ${String(state.spawnError)}`, state.spawnError)
+      throw new ServeSpawnFailedError(
+        `Failed to spawn qvac serve: ${String(state.spawnError)}`,
+        state.spawnError
+      )
     }
     if (state.exit !== null) {
       throw new ServeExitedError(state.exit.code, state.exit.signal, getTail())
@@ -168,7 +178,7 @@ export interface SpawnedServe {
 // Spawn `qvac serve openai` on the given port and resolve once it answers a
 // health check. On any failure the child is killed and a structured error is
 // thrown, so the caller never leaks a half-started process.
-export async function spawnServe (options: SpawnServeOptions): Promise<SpawnedServe> {
+export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedServe> {
   const host = options.host ?? DEFAULT_SERVE_HOST
   const startTimeoutMs = options.startTimeoutMs ?? DEFAULT_SERVE_START_TIMEOUT_MS
   const fetchImpl = options.fetchImpl ?? fetch
@@ -193,7 +203,11 @@ export async function spawnServe (options: SpawnServeOptions): Promise<SpawnedSe
   // dies with the serve instead of orphaning (a plain SIGKILL of the serve pid
   // never cascades to a grandchild). We deliberately do NOT unref(): the runner
   // still owns the serve and must observe its 'exit'.
-  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env: process.env, detached: true })
+  const child = spawn(command, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: process.env,
+    detached: true
+  })
   const getTail = attachOutputTail(child)
 
   if (child.pid === undefined) {
@@ -217,7 +231,7 @@ export async function spawnServe (options: SpawnServeOptions): Promise<SpawnedSe
 // grandchild worker dies with the serve. Falls back to a direct child signal if
 // the group send fails (e.g. the leader already exited) or on Windows, which has
 // no POSIX process groups. Returns false only if nothing could be signalled.
-function signalServeTree (child: ChildProcess, signal: NodeJS.Signals): boolean {
+function signalServeTree(child: ChildProcess, signal: NodeJS.Signals): boolean {
   const pid = child.pid
   if (pid === undefined) return false
   if (process.platform !== 'win32') {
@@ -246,7 +260,10 @@ function signalServeTree (child: ChildProcess, signal: NodeJS.Signals): boolean 
 // if the serve is wedged past the grace window do we escalate to a SIGKILL of
 // the whole process group, so the worker can't survive as an orphan (a SIGKILL
 // of the serve pid alone never cascades to the grandchild).
-export async function stopServe (child: ChildProcess, graceMs = SERVE_SHUTDOWN_GRACE_MS): Promise<void> {
+export async function stopServe(
+  child: ChildProcess,
+  graceMs = SERVE_SHUTDOWN_GRACE_MS
+): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
   try {
@@ -254,10 +271,7 @@ export async function stopServe (child: ChildProcess, graceMs = SERVE_SHUTDOWN_G
   } catch {
     return
   }
-  const killedHard = await Promise.race([
-    exited.then(() => false),
-    delay(graceMs).then(() => true)
-  ])
+  const killedHard = await Promise.race([exited.then(() => false), delay(graceMs).then(() => true)])
   if (killedHard) {
     signalServeTree(child, 'SIGKILL')
     await exited

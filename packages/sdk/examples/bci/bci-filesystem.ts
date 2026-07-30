@@ -7,72 +7,72 @@
  *
  * Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>
  */
-import { loadModel, unloadModel, bciTranscribe, BCI_WINDOWED } from "@qvac/sdk";
+import { loadModel, unloadModel, bciTranscribe, BCI_WINDOWED } from '@qvac/sdk'
 
-const args = process.argv.slice(2);
+const args = process.argv.slice(2)
 
 if (!args[0]) {
-  console.error("Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>");
-  process.exit(1);
+  console.error('Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>')
+  process.exit(1)
 }
 
-const neuralFilePath = args[0];
+const neuralFilePath = args[0]
 
 try {
-  console.log("▸ Starting BCI transcription example...");
+  console.log('▸ Starting BCI transcription example...')
 
-  console.log("▸ Loading BCI model...");
+  console.log('▸ Loading BCI model...')
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
       whisperConfig: {
-        language: "en",
+        language: 'en',
         n_threads: 4,
-        temperature: 0.0,
+        temperature: 0.0
       },
       // Session day index selects the day-specific projection matrices.
       // Set this to match the recording session your neural file came from.
       bciConfig: {
-        day_idx: 1,
-      },
+        day_idx: 1
+      }
     },
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
 
-  console.log(`▸ BCI model loaded with ID: ${modelId}`);
+  console.log(`▸ BCI model loaded with ID: ${modelId}`)
 
-  console.log("▸ Transcribing neural signal...");
+  console.log('▸ Transcribing neural signal...')
   const segments = await bciTranscribe({
     modelId,
     neuralData: neuralFilePath,
-    metadata: true,
-  });
+    metadata: true
+  })
 
-  console.log("▸ Transcription result:");
+  console.log('▸ Transcription result:')
   for (const segment of segments) {
-    const start = (segment.startMs / 1000).toFixed(2);
-    const end = (segment.endMs / 1000).toFixed(2);
+    const start = (segment.startMs / 1000).toFixed(2)
+    const end = (segment.endMs / 1000).toFixed(2)
     console.log(
-      `  [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text}`,
-    );
+      `  [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text}`
+    )
   }
   console.log(
     segments
       .map((s) => s.text)
-      .join("")
-      .trim(),
-  );
+      .join('')
+      .trim()
+  )
 
-  console.log("▸ Unloading BCI model...");
-  await unloadModel({ modelId });
-  console.log("▸ BCI model unloaded successfully");
-  process.exit(0);
+  console.log('▸ Unloading BCI model...')
+  await unloadModel({ modelId })
+  console.log('▸ BCI model unloaded successfully')
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

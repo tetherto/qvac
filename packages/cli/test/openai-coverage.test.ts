@@ -2,12 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildCoverageReport } from '../src/openai/coverage/build-report.js'
+import { buildCoverageReport, DEFAULT_ROUTER } from '../src/openai/coverage/build-report.js'
 import { categorize } from '../src/openai/coverage/categorize.js'
-import {
-  filterCoverageRows,
-  formatCoverageReportHuman
-} from '../src/openai/coverage/format.js'
+import { filterCoverageRows, formatCoverageReportHuman } from '../src/openai/coverage/format.js'
 import { parseRouter } from '../src/openai/coverage/parse-router.js'
 import { parseSpec } from '../src/openai/coverage/parse-spec.js'
 import { CONSUMER_PRIMARY_ENDPOINTS } from '../src/openai/coverage/primary.js'
@@ -27,14 +24,8 @@ describe('openai coverage categorize', () => {
   it('maps x-oaiMeta.group slugs and tags case-insensitively', () => {
     assert.equal(categorize({ tags: [], group: 'containers' }), 'platform')
     assert.equal(categorize({ tags: [], group: 'chatkit' }), 'platform')
-    assert.equal(
-      categorize({ tags: ['Certificates'], group: 'administration' }),
-      'platform'
-    )
-    assert.equal(
-      categorize({ tags: [], group: 'responses' }),
-      'primary-ai'
-    )
+    assert.equal(categorize({ tags: ['Certificates'], group: 'administration' }), 'platform')
+    assert.equal(categorize({ tags: [], group: 'responses' }), 'primary-ai')
     assert.equal(categorize({ tags: ['chat'] }), 'primary-ai')
   })
 })
@@ -60,10 +51,7 @@ describe('openai coverage live report (fixture)', () => {
 
     assert.ok(report.rows.length > 0)
     assert.equal(report.summary.byCategory['unknown'].total, 1)
-    assert.equal(
-      report.rows.find((r) => r.tags.includes('NewlyAddedThing'))?.category,
-      'unknown'
-    )
+    assert.equal(report.rows.find((r) => r.tags.includes('NewlyAddedThing'))?.category, 'unknown')
 
     const categories = ['primary-ai', 'ai-secondary', 'platform', 'unknown'] as const
     for (const cat of categories) {
@@ -102,9 +90,7 @@ describe('openai coverage live report (fixture)', () => {
       routerPath: FIXTURE_ROUTER
     })
     assert.ok(report.summary.unknownBreakdown)
-    assert.ok(
-      report.summary.unknownBreakdown.some((x) => x.label === 'NewlyAddedThing')
-    )
+    assert.ok(report.summary.unknownBreakdown.some((x) => x.label === 'NewlyAddedThing'))
   })
 
   it('omits unknown section and category line when nothing is unmapped', () => {
@@ -113,6 +99,7 @@ describe('openai coverage live report (fixture)', () => {
       specSource: 'test',
       routerSource: 'test',
       implementedCount: 1,
+      extensions: [],
       rows: [
         {
           method: 'POST' as const,
@@ -184,6 +171,33 @@ describe('openai coverage live report (fixture)', () => {
   })
 })
 
+describe('openai coverage qvac extension endpoints', () => {
+  it('reports known qvac-only endpoints separately instead of throwing', async () => {
+    // Regression: GET /v1/audio/models and /v1/audio/voices are qvac-only
+    // (Open WebUI compatibility) and are absent from the real OpenAI spec.
+    const report = await buildCoverageReport({
+      specPath: FIXTURE_SPEC,
+      routerPath: FIXTURE_ROUTER
+    })
+    assert.deepEqual(report.extensions, ['GET /v1/audio/models'])
+    assert.ok(!report.rows.some((r) => r.key === 'GET /v1/audio/models'))
+  })
+})
+
+describe('openai coverage default router (real repo routes)', () => {
+  it('DEFAULT_ROUTER resolves to an existing directory relative to the running module, not a hardcoded src/ sibling', () => {
+    // Regression: DEFAULT_ROUTER used to hardcode a 'src' path segment, which
+    // does not exist in the published npm package (only dist/ ships).
+    const implementedKeys = parseRouter(DEFAULT_ROUTER)
+    assert.ok(implementedKeys.includes('POST /v1/chat/completions'))
+    assert.ok(implementedKeys.includes('POST /v1/embeddings'))
+    assert.ok(implementedKeys.includes('GET /v1/models'))
+    assert.ok(implementedKeys.includes('GET /v1/files'))
+    assert.ok(implementedKeys.includes('POST /v1/files'))
+    assert.ok(implementedKeys.includes('GET /v1/files/{file_id}'))
+  })
+})
+
 describe('openai coverage parse-spec', () => {
   it('loads fixture spec without network', async () => {
     const { entries, source } = await parseSpec({ specPath: FIXTURE_SPEC })
@@ -191,4 +205,3 @@ describe('openai coverage parse-spec', () => {
     assert.ok(entries.some((e) => e.path === '/v1/chat/completions'))
   })
 })
-

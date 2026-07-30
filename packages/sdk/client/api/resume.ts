@@ -1,5 +1,5 @@
-import { send } from "@/client/rpc/rpc-client";
-import { InvalidResponseError } from "@/utils/errors-client";
+import { send } from '@/client/rpc/rpc-client'
+import { InvalidResponseError } from '@/utils/errors-client'
 
 /**
  * Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore
@@ -30,8 +30,8 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * console.log(await state()); // "active"
  */
 export async function resume(): Promise<void> {
-  const response = await send({ type: "resume" });
-  if (response.type !== "resume") {
-    throw new InvalidResponseError("resume");
+  const response = await send({ type: 'resume' })
+  if (response.type !== 'resume') {
+    throw new InvalidResponseError('resume')
   }
 }

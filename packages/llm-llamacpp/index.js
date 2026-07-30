@@ -9,22 +9,30 @@ const BatchHandler = require('./batchHandler')
 
 const { RUN_BUSY_ERROR_MESSAGE } = BatchHandler
 
-function normalizeRunOptions (runOptions) {
+function normalizeRunOptions(runOptions) {
   if (runOptions === undefined) {
-    return { prefill: false, generationParams: undefined, cacheKey: undefined, saveCacheToDisk: false }
+    return {
+      prefill: false,
+      generationParams: undefined,
+      cacheKey: undefined,
+      saveCacheToDisk: false
+    }
   }
 
   if (!runOptions || typeof runOptions !== 'object' || Array.isArray(runOptions)) {
     throw new TypeError('Run options must be an object when provided')
   }
 
-  if (runOptions.prefill !== undefined &&
-      typeof runOptions.prefill !== 'boolean') {
+  if (runOptions.prefill !== undefined && typeof runOptions.prefill !== 'boolean') {
     throw new TypeError('prefill must be a boolean when provided')
   }
 
-  if (runOptions.generationParams !== undefined &&
-      (typeof runOptions.generationParams !== 'object' || runOptions.generationParams === null || Array.isArray(runOptions.generationParams))) {
+  if (
+    runOptions.generationParams !== undefined &&
+    (typeof runOptions.generationParams !== 'object' ||
+      runOptions.generationParams === null ||
+      Array.isArray(runOptions.generationParams))
+  ) {
     throw new TypeError('generationParams must be a plain object when provided')
   }
 
@@ -44,7 +52,7 @@ function normalizeRunOptions (runOptions) {
   }
 }
 
-function promptToAddonMessages (prompt, runOptions) {
+function promptToAddonMessages(prompt, runOptions) {
   if (!Array.isArray(prompt)) {
     throw new TypeError('Prompt input must be Message[]')
   }
@@ -55,9 +63,11 @@ function promptToAddonMessages (prompt, runOptions) {
   const mediaItems = []
 
   for (const message of prompt) {
-    if (message.role === 'user' &&
-        message.type === 'media' &&
-        message.content instanceof Uint8Array) {
+    if (
+      message.role === 'user' &&
+      message.type === 'media' &&
+      message.content instanceof Uint8Array
+    ) {
       mediaItems.push(message.content)
       textMessages.push({ ...message, content: '' })
     } else {
@@ -88,12 +98,22 @@ function promptToAddonMessages (prompt, runOptions) {
 // (a JSON Schema literal) for ergonomics, so we stringify it here. Also
 // validates the mutual exclusion with `grammar`, since enforcing it at
 // the JS boundary gives a clearer error than letting the C++ throw.
-function normalizeGenerationParams (generationParams) {
+function normalizeGenerationParams(generationParams) {
   if (generationParams === undefined) return undefined
 
-  const hasGrammar = typeof generationParams.grammar === 'string' &&
-    generationParams.grammar.length > 0
-  const hasJsonSchema = generationParams.json_schema !== undefined &&
+  if (
+    generationParams.remove_thinking_from_context !== undefined &&
+    typeof generationParams.remove_thinking_from_context !== 'boolean'
+  ) {
+    throw new TypeError(
+      'generationParams.remove_thinking_from_context must be a boolean when provided'
+    )
+  }
+
+  const hasGrammar =
+    typeof generationParams.grammar === 'string' && generationParams.grammar.length > 0
+  const hasJsonSchema =
+    generationParams.json_schema !== undefined &&
     generationParams.json_schema !== null &&
     !(typeof generationParams.json_schema === 'string' && generationParams.json_schema.length === 0)
 
@@ -108,8 +128,10 @@ function normalizeGenerationParams (generationParams) {
   let jsonSchemaString
   if (typeof generationParams.json_schema === 'string') {
     jsonSchemaString = generationParams.json_schema
-  } else if (typeof generationParams.json_schema === 'object' &&
-      !Array.isArray(generationParams.json_schema)) {
+  } else if (
+    typeof generationParams.json_schema === 'object' &&
+    !Array.isArray(generationParams.json_schema)
+  ) {
     try {
       jsonSchemaString = JSON.stringify(generationParams.json_schema)
     } catch (err) {
@@ -127,7 +149,7 @@ function normalizeGenerationParams (generationParams) {
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
 
-function normalizeFinetuneParams (opts) {
+function normalizeFinetuneParams(opts) {
   const validation = opts.validation
   if (Object.prototype.hasOwnProperty.call(opts, 'evalDatasetPath')) {
     throw new Error(
@@ -136,16 +158,14 @@ function normalizeFinetuneParams (opts) {
   }
   if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
     throw new Error(
-      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
-      'Example: validation: { type: \'split\', fraction: 0.05 }, validation: { type: \'dataset\', path: \'./eval.jsonl\' }, or validation: { type: \'none\' }.'
+      "Finetuning options must include validation: { type: 'none' | 'split' | 'dataset'[, fraction?: number][, path?: string] }. " +
+        "Example: validation: { type: 'split', fraction: 0.05 }, validation: { type: 'dataset', path: './eval.jsonl' }, or validation: { type: 'none' }."
     )
   }
   const out = { ...opts }
   const type = validation.type
   if (!VALIDATION_TYPES.includes(type)) {
-    throw new Error(
-      `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
-    )
+    throw new Error(`validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`)
   }
   if (type === 'none') {
     out.validationSplit = 0
@@ -184,14 +204,14 @@ function normalizeFinetuneParams (opts) {
  * @param {string[]} files - ordered array of absolute paths
  * @returns {string}
  */
-function pickPrimaryGgufPath (files) {
+function pickPrimaryGgufPath(files) {
   const SHARD_REGEX = /-\d+-of-\d+\.gguf$/
   return files.find((p) => SHARD_REGEX.test(p)) || files[0]
 }
 
 // Replace media Uint8Array contents with a small summary so the logger never
 // asks V8 to JSON.stringify multi-MB binary blobs.
-function sanitizePromptForLog (prompt) {
+function sanitizePromptForLog(prompt) {
   if (!Array.isArray(prompt)) return prompt
   return prompt.map((msg) => {
     if (msg && msg.type === 'media' && msg.content instanceof Uint8Array) {
@@ -203,7 +223,7 @@ function sanitizePromptForLog (prompt) {
 
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 class LlmLlamacpp {
-  constructor ({ files, config, logger = null, opts = {} }) {
+  constructor({ files, config, logger = null, opts = {} }) {
     if (!files || !Array.isArray(files.model) || files.model.length === 0) {
       throw new TypeError('files.model must be a non-empty array of absolute paths')
     }
@@ -220,7 +240,9 @@ class LlmLlamacpp {
         throw new TypeError('files.projectionModel must be an absolute path string')
       }
       if (!path.isAbsolute(files.projectionModel)) {
-        throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`)
+        throw new TypeError(
+          `files.projectionModel must be an absolute path (got: ${files.projectionModel})`
+        )
       }
     }
     this._files = files.model
@@ -245,7 +267,7 @@ class LlmLlamacpp {
     this.state = { configLoaded: false }
   }
 
-  async load () {
+  async load() {
     return this._run(async () => {
       if (this.state.configLoaded) return
       await this._load()
@@ -253,7 +275,7 @@ class LlmLlamacpp {
     })
   }
 
-  async _load () {
+  async _load() {
     this.logger.info('Starting model load')
     const primaryGgufPath = pickPrimaryGgufPath(this._files)
     const configurationParams = {
@@ -275,14 +297,16 @@ class LlmLlamacpp {
       this.logger.error('Error during model load:', loadError)
       // Best-effort cleanup of the partially-initialized addon so a subsequent
       // load() does not leak a zombie native instance.
-      try { await this.addon?.unload?.() } catch (_) {}
+      try {
+        await this.addon?.unload?.()
+      } catch (_) {}
       this.addon = null
       throw loadError
     }
     this.logger.info('Model load completed successfully')
   }
 
-  async _streamShards () {
+  async _streamShards() {
     for (const filePath of this._files) {
       const filename = path.basename(filePath)
       const stream = fs.createReadStream(filePath)
@@ -300,17 +324,17 @@ class LlmLlamacpp {
    * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk)
    * @returns {Promise<QvacResponse>}
    */
-  async run (prompt, runOptions) {
+  async run(prompt, runOptions) {
     if (BatchHandler.isBatchInput(prompt)) {
       if (runOptions !== undefined) {
         throw new TypeError('Batch run options must be set per BatchPrompt item')
       }
       return this._run(() => this._runBatchInternal(prompt))
     }
-    return this._run(() => this._runInternal(prompt, runOptions || {}))
+    return this._run(() => this._runInternal(prompt, runOptions))
   }
 
-  async _runBatchInternal (batchInput) {
+  async _runBatchInternal(batchInput) {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
@@ -333,7 +357,7 @@ class LlmLlamacpp {
     return response
   }
 
-  async _runInternal (prompt, runOptions = {}) {
+  async _runInternal(prompt, runOptions = {}) {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
@@ -359,7 +383,9 @@ class LlmLlamacpp {
     }
 
     this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
     finalized.catch((err) => {
       this.logger?.warn?.('Inference response rejected:', err?.message || err)
     })
@@ -369,7 +395,7 @@ class LlmLlamacpp {
     return response
   }
 
-  async finetune (finetuningOptions = undefined) {
+  async finetune(finetuningOptions = undefined) {
     if (!finetuningOptions) {
       throw new Error('Finetuning parameters are required.')
     }
@@ -403,7 +429,9 @@ class LlmLlamacpp {
       }
 
       this._hasActiveResponse = true
-      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      const finalized = response.await().finally(() => {
+        this._hasActiveResponse = false
+      })
       finalized.catch((err) => {
         this.logger?.warn?.('Finetune response rejected:', err?.message || err)
       })
@@ -412,9 +440,9 @@ class LlmLlamacpp {
     })
   }
 
-  _handleAddonOutputEvent (eventType, data, error) {
+  _handleAddonOutputEvent(eventType, data, error) {
     if (eventType === 'LogMsg') {
-      const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
+      const logMsg = typeof data === 'string' ? data : data?.message || JSON.stringify(data)
       this.logger?.info?.(logMsg)
       return
     }
@@ -434,7 +462,11 @@ class LlmLlamacpp {
       }
     } else if (eventType === 'JobEnded') {
       this.logger.info('Job completed')
-      const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
+      const isFinetuneTerminal =
+        data &&
+        typeof data === 'object' &&
+        data.op === 'finetune' &&
+        typeof data.status === 'string'
       if (isFinetuneTerminal) {
         this._job.end(null, data)
       } else {
@@ -448,7 +480,7 @@ class LlmLlamacpp {
     }
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const mapped = mapAddonEvent(event, data, error, this._addonEventState)
     if (mapped === null) return
     this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error)
@@ -462,20 +494,16 @@ class LlmLlamacpp {
    * @param {Object} configurationParams.config - LLM-specific settings
    * @returns {Addon} The instantiated addon interface
    */
-  _createAddon (configurationParams) {
+  _createAddon(configurationParams) {
     const binding = require('./binding')
-    return new LlamaInterface(
-      binding,
-      configurationParams,
-      this._addonOutputCallback.bind(this)
-    )
+    return new LlamaInterface(binding, configurationParams, this._addonOutputCallback.bind(this))
   }
 
   /**
    * Pause finetuning, saving a checkpoint so training can resume later.
    * Also cancels any inference job in flight.
    */
-  async pause () {
+  async pause() {
     if (this.addon?.cancel) {
       await this.addon.cancel(1)
     }
@@ -486,14 +514,14 @@ class LlmLlamacpp {
    * `finetune()` call starts fresh instead of resuming. Also cancels
    * any inference job in flight.
    */
-  async cancel () {
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel(0)
     }
     this._clearPauseCheckpoints()
   }
 
-  _clearPauseCheckpoints () {
+  _clearPauseCheckpoints() {
     const checkpointDir = this._checkpointSaveDir
     if (!checkpointDir) return
     try {
@@ -514,7 +542,7 @@ class LlmLlamacpp {
    * are safe; they hit the `!this.addon` guard and throw or no-op.
    * @returns {Promise<void>}
    */
-  async unload () {
+  async unload() {
     return this._run(async () => {
       try {
         await this.pause()
@@ -533,7 +561,9 @@ class LlmLlamacpp {
     })
   }
 
-  getState () { return this.state }
+  getState() {
+    return this.state
+  }
 }
 
 module.exports = LlmLlamacpp

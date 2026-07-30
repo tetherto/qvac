@@ -6,14 +6,12 @@ schemaType: HowTo
 
 ## Overview
 
-RAG (retrieval-augmented generation) uses [text embeddings](/ai-capabilities/text-embeddings): you embed (vectorize) documents, store them in a vector DB, and later retrieve the most relevant chunks for a query using similarity search.
+RAG (retrieval-augmented generation) uses [text embeddings](/ai-capabilities/text-embeddings): you embed (vectorize) documents, persist them in a vector store, and later retrieve the most relevant chunks for a query using similarity search.
 
 Compared to generating text embeddings only, the key differences are:
-- You must **persist embeddings** (vectors) alongside the original text (and optional metadata) in a vector DB.
+- You must **persist embeddings** (vectors) alongside the original text (and optional metadata) in a vector store.
 - At query time, you **embed the query** and run **top‑K** vector search to fetch the most relevant documents/chunks.
 - You _typically_ pass the retrieved text to [`completion()`](/reference/api#completion) as context to ground the model's answer (this retrieval step is what makes it RAG).
-
-Note that you should bring your own vector DB (e.g., HyperDB, LanceDB, ChromaDB, SQLite-Vector, etc.).
 
 ## Functions
 
@@ -35,21 +33,27 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 ## Pipeline
 
-Create your RAG pipeline using [text embeddings](/ai-capabilities/text-embeddings) and [completion](/ai-capabilities/text-generation).
+Create your RAG pipeline using [text embeddings](/ai-capabilities/text-embeddings), the functions above, and [completion](/ai-capabilities/text-generation).
+
+Regarding vector storage, you may use:
+- **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/reference/api#ragingest), [`ragSearch()`](/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
+- **External vector DB:** use the embedding primitives ([`ragChunk()`](/reference/api#ragchunk), [`embed()`](/reference/api#embed)) and store the vectors wherever you want (e.g., LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
 
 <Callout type="info">
-**Important:** make sure your vector DB schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
+**Important:** when using an external vector DB, make sure its schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
 </Callout>
 
-## Example
+## Examples
 
-The following script shows a RAG-style workflow using an embeddings model plus an in-memory SQLite vector index:
+### Built-in vector store
+
+The following script shows how to ingest documents into a built-in RAG workspace with `ragIngest()` and query them with `ragSearch()`, without setting up an external vector DB:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-sqlite.js title="rag.js" lineNumbers
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-hyperdb/ingest.js title="rag-managed.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -57,7 +61,29 @@ The following script shows a RAG-style workflow using an embeddings model plus a
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=<rootDir>/packages/sdk/examples/rag/rag-sqlite.ts title="rag.ts" lineNumbers
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-hyperdb/ingest.ts title="rag-managed.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### External vector DB
+
+The following script shows the same workflow using `embed()` plus a SQLite vector index:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-sqlite.js title="rag-sqlite.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-sqlite.ts title="rag-sqlite.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

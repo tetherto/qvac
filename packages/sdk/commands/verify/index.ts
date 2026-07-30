@@ -2,35 +2,29 @@ import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import {
   resolveConfigFileInProject,
-  loadConfigFromPath,
-} from "@/client/config-loader/resolve-config.node";
+  loadConfigFromPath
+} from '@/client/config-loader/resolve-config.node'
 import {
   createCollectDiagnostics,
   formatAddonId,
   type AddonSourceKind,
   type InvalidPackageJsonRecord,
-  type NativeAddon,
-} from "@/commands/verify/addon-source";
-import {
-  collectAddonsFromBundle,
-  InvalidBundleSourceError,
-} from "@/commands/verify/bundle-source";
+  type NativeAddon
+} from '@/commands/verify/addon-source'
+import { collectAddonsFromBundle, InvalidBundleSourceError } from '@/commands/verify/bundle-source'
 import {
   collectAddonsFromNodeModules,
-  InvalidNodeModulesSourceError,
-} from "@/commands/verify/node-modules-source";
-import {
-  checkPrebuilds,
-  type MissingPrebuildIssue,
-} from "@/commands/verify/prebuilds";
+  InvalidNodeModulesSourceError
+} from '@/commands/verify/node-modules-source'
+import { checkPrebuilds, type MissingPrebuildIssue } from '@/commands/verify/prebuilds'
 import {
   checkAbi,
   formatConfigLabel,
   normalizeVersion,
   resolveBareRuntime,
   type AbiIssue,
-  type BareRuntimeResolution,
-} from "@/commands/verify/abi";
+  type BareRuntimeResolution
+} from '@/commands/verify/abi'
 
 export interface VerifyBundleOptions {
   projectRoot: string
@@ -98,9 +92,7 @@ export interface VerifyBundleResult {
   issues: VerifyBundleIssue[]
 }
 
-export async function verifyBundle (
-  options: VerifyBundleOptions
-): Promise<VerifyBundleResult> {
+export async function verifyBundle(options: VerifyBundleOptions): Promise<VerifyBundleResult> {
   const { projectRoot, addonsSource, hosts, bareRuntimeVersion, configPath } = options
   const resolvedAddonsSource = path.isAbsolute(addonsSource)
     ? addonsSource
@@ -142,14 +134,11 @@ export async function verifyBundle (
   let resolvedConfigPath: string | null = null
   let configLoadFailed: ConfigLoadFailedIssue | null = null
   try {
-    resolvedConfigPath = await resolveConfigFileInProject(
-      projectRoot,
-      configPath ?? undefined,
-    )
+    resolvedConfigPath = await resolveConfigFileInProject(projectRoot, configPath ?? undefined)
     if (resolvedConfigPath !== null) {
       const config = await loadConfigFromPath(resolvedConfigPath)
-      if (typeof config.bareRuntimeVersion === "string") {
-        configRuntimeVersion = config.bareRuntimeVersion;
+      if (typeof config.bareRuntimeVersion === 'string') {
+        configRuntimeVersion = config.bareRuntimeVersion
       }
     }
   } catch (error) {
@@ -229,16 +218,17 @@ export async function verifyBundle (
   const diagnostics = createCollectDiagnostics()
   let addons: NativeAddon[]
   try {
-    addons = sourceKind === 'bare-pack-bundle'
-      ? await collectAddonsFromBundle({
-        bundlePath: resolvedAddonsSource,
-        projectRoot,
-        diagnostics
-      })
-      : await collectAddonsFromNodeModules({
-        nodeModulesRoot: resolvedAddonsSource,
-        diagnostics
-      })
+    addons =
+      sourceKind === 'bare-pack-bundle'
+        ? await collectAddonsFromBundle({
+            bundlePath: resolvedAddonsSource,
+            projectRoot,
+            diagnostics
+          })
+        : await collectAddonsFromNodeModules({
+            nodeModulesRoot: resolvedAddonsSource,
+            diagnostics
+          })
   } catch (error) {
     if (
       error instanceof InvalidBundleSourceError ||
@@ -311,7 +301,7 @@ export async function verifyBundle (
   }
 }
 
-function buildInvalidPackageJsonIssues (
+function buildInvalidPackageJsonIssues(
   records: InvalidPackageJsonRecord[]
 ): InvalidPackageJsonIssue[] {
   return records.map((record) => {
@@ -331,9 +321,7 @@ function buildInvalidPackageJsonIssues (
   })
 }
 
-async function detectSourceKind (
-  resolvedAddonsSource: string
-): Promise<AddonSourceKind | null> {
+async function detectSourceKind(resolvedAddonsSource: string): Promise<AddonSourceKind | null> {
   try {
     const stat = await fsp.stat(resolvedAddonsSource)
     if (stat.isFile()) return 'bare-pack-bundle'
@@ -344,23 +332,23 @@ async function detectSourceKind (
   }
 }
 
-export function hasErrors (result: VerifyBundleResult): boolean {
+export function hasErrors(result: VerifyBundleResult): boolean {
   return result.issues.some((issue) => issue.level === 'error')
 }
 
-export function hasWarnings (result: VerifyBundleResult): boolean {
+export function hasWarnings(result: VerifyBundleResult): boolean {
   return result.issues.some((issue) => issue.level === 'warning')
 }
 
-export function formatVerifyBundleResult (result: VerifyBundleResult): string {
+export function formatVerifyBundleResult(result: VerifyBundleResult): string {
   const sections: string[] = []
   const hostList = result.hosts.join(', ')
 
   if (result.issues.length === 0) {
     sections.push(
       `Native addon verification passed for ${result.addons.length} ` +
-      `addon${result.addons.length === 1 ? '' : 's'} across ${result.hosts.length} ` +
-      `host${result.hosts.length === 1 ? '' : 's'}: ${hostList}`
+        `addon${result.addons.length === 1 ? '' : 's'} across ${result.hosts.length} ` +
+        `host${result.hosts.length === 1 ? '' : 's'}: ${hostList}`
     )
     if (result.addons.length > 0) {
       sections.push('')
@@ -392,7 +380,7 @@ export function formatVerifyBundleResult (result: VerifyBundleResult): string {
   return sections.join('\n').trimEnd()
 }
 
-function formatConfigLoadFailed (issues: VerifyBundleIssue[]): string[] {
+function formatConfigLoadFailed(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
     (issue): issue is ConfigLoadFailedIssue => issue.code === 'config-load-failed'
   )
@@ -405,7 +393,7 @@ function formatConfigLoadFailed (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatMissingPrebuilds (issues: VerifyBundleIssue[]): string[] {
+function formatMissingPrebuilds(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
     (issue): issue is MissingPrebuildIssue => issue.code === 'missing-prebuild'
   )
@@ -418,24 +406,23 @@ function formatMissingPrebuilds (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatAbiMismatches (issues: VerifyBundleIssue[]): string[] {
+function formatAbiMismatches(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
-    (issue): issue is Extract<AbiIssue, { code: 'abi-mismatch' }> =>
-      issue.code === 'abi-mismatch'
+    (issue): issue is Extract<AbiIssue, { code: 'abi-mismatch' }> => issue.code === 'abi-mismatch'
   )
   if (matches.length === 0) return []
   const lines = ['  ABI mismatch:']
   for (const issue of matches) {
     lines.push(
       `    - ${issue.addon} requires bare ${issue.enginesBare}, ` +
-      `runtime is ${issue.runtimeVersion}`
+        `runtime is ${issue.runtimeVersion}`
     )
   }
   lines.push('')
   return lines
 }
 
-function formatUnknownRuntime (issues: VerifyBundleIssue[]): string[] {
+function formatUnknownRuntime(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
     (issue): issue is Extract<AbiIssue, { code: 'unknown-runtime-version' }> =>
       issue.code === 'unknown-runtime-version'
@@ -449,7 +436,7 @@ function formatUnknownRuntime (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatMalformedEnginesBare (issues: VerifyBundleIssue[]): string[] {
+function formatMalformedEnginesBare(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
     (issue): issue is Extract<AbiIssue, { code: 'malformed-engines-bare' }> =>
       issue.code === 'malformed-engines-bare'
@@ -463,7 +450,7 @@ function formatMalformedEnginesBare (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatInvalidSources (issues: VerifyBundleIssue[]): string[] {
+function formatInvalidSources(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
     (issue): issue is InvalidSourceIssue => issue.code === 'invalid-source'
   )
@@ -476,10 +463,9 @@ function formatInvalidSources (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatInvalidRuntimeVersions (issues: VerifyBundleIssue[]): string[] {
+function formatInvalidRuntimeVersions(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
-    (issue): issue is InvalidRuntimeVersionIssue =>
-      issue.code === 'invalid-runtime-version'
+    (issue): issue is InvalidRuntimeVersionIssue => issue.code === 'invalid-runtime-version'
   )
   if (matches.length === 0) return []
   const lines = ['  Invalid Bare runtime version:']
@@ -490,7 +476,7 @@ function formatInvalidRuntimeVersions (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatInvalidPackageJsons (issues: VerifyBundleIssue[]): string[] {
+function formatInvalidPackageJsons(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
     (issue): issue is InvalidPackageJsonIssue => issue.code === 'invalid-package-json'
   )
@@ -503,10 +489,9 @@ function formatInvalidPackageJsons (issues: VerifyBundleIssue[]): string[] {
   return lines
 }
 
-function formatEmptyBundleResolutions (issues: VerifyBundleIssue[]): string[] {
+function formatEmptyBundleResolutions(issues: VerifyBundleIssue[]): string[] {
   const matches = issues.filter(
-    (issue): issue is EmptyBundleResolutionsIssue =>
-      issue.code === 'empty-bundle-resolutions'
+    (issue): issue is EmptyBundleResolutionsIssue => issue.code === 'empty-bundle-resolutions'
   )
   if (matches.length === 0) return []
   const lines = ['  Empty bundle resolutions:']

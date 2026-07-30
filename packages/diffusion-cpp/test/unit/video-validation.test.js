@@ -18,19 +18,13 @@ const FAKE_CLIP_VISION = '/tmp/clip_vision_h.safetensors'
 
 // Minimal valid PNG header (24 bytes — magic + IHDR width/height).
 const FAKE_PNG = new Uint8Array([
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-  0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x40,
-  0x00, 0x00, 0x00, 0x30
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x30
 ])
 
-const FAKE_JPEG = new Uint8Array([
-  0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 0x08,
-  0x00, 0x60, 0x00, 0x80
-])
+const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x60, 0x00, 0x80])
 
-function makeQuiet () {
+function makeQuiet() {
   return {
     error: () => {},
     warn: () => {},
@@ -39,7 +33,7 @@ function makeQuiet () {
   }
 }
 
-function makeRecording () {
+function makeRecording() {
   const events = { error: [], warn: [], info: [], debug: [] }
   return {
     events,
@@ -52,7 +46,7 @@ function makeRecording () {
   }
 }
 
-function makeWanModel ({ files, config, logger } = {}) {
+function makeWanModel({ files, config, logger } = {}) {
   return new VideoStableDiffusion({
     files: files || {
       model: FAKE_MODEL,
@@ -106,27 +100,30 @@ test('ctor | throws when files.model is a relative path', async (t) => {
 
 test('ctor | throws when files.t5Xxl is a relative path', async (t) => {
   await t.exception.all(
-    () => new VideoStableDiffusion({
-      files: { model: FAKE_MODEL, t5Xxl: 'umt5.safetensors' }
-    }),
+    () =>
+      new VideoStableDiffusion({
+        files: { model: FAKE_MODEL, t5Xxl: 'umt5.safetensors' }
+      }),
     /files\.t5Xxl must be an absolute path/
   )
 })
 
 test('ctor | throws when files.vae is a relative path', async (t) => {
   await t.exception.all(
-    () => new VideoStableDiffusion({
-      files: { model: FAKE_MODEL, vae: 'vae.safetensors' }
-    }),
+    () =>
+      new VideoStableDiffusion({
+        files: { model: FAKE_MODEL, vae: 'vae.safetensors' }
+      }),
     /files\.vae must be an absolute path/
   )
 })
 
 test('ctor | throws when files.highNoiseDiffusionModel is a relative path', async (t) => {
   await t.exception.all(
-    () => new VideoStableDiffusion({
-      files: { model: FAKE_MODEL, highNoiseDiffusionModel: 'high.safetensors' }
-    }),
+    () =>
+      new VideoStableDiffusion({
+        files: { model: FAKE_MODEL, highNoiseDiffusionModel: 'high.safetensors' }
+      }),
     /files\.highNoiseDiffusionModel must be an absolute path/
   )
 })
@@ -152,6 +149,60 @@ test('ctor | accepts a Wan 2.2 file set (with high-noise expert)', async (t) => 
     logger: makeQuiet()
   })
   t.is(m.getState().configLoaded, false)
+})
+
+test('load | passes native-required path fields as strings', async (t) => {
+  const m = makeWanModel()
+  let captured = null
+
+  m._createAddon = (configurationParams) => {
+    captured = configurationParams
+    return {
+      activate: async () => {},
+      unload: async () => {}
+    }
+  }
+
+  await m.load()
+
+  t.is(captured.path, '')
+  t.is(captured.diffusionModelPath, FAKE_MODEL)
+  t.is(captured.highNoiseDiffusionModelPath, '')
+  t.is(captured.uncondDiffusionModelPath, '')
+  t.is(captured.clipLPath, '')
+  t.is(captured.clipGPath, '')
+  t.is(captured.t5XxlPath, FAKE_T5XXL)
+  t.is(captured.llmPath, '')
+  t.is(captured.vaePath, FAKE_VAE)
+  t.is(captured.clipVisionPath, FAKE_CLIP_VISION)
+  t.is(captured.esrganPath, '')
+  t.is(captured.audioVaePath, '')
+  t.is(captured.embeddingsConnectorsPath, '')
+})
+
+test('load | passes the Wan 2.2 high-noise expert to the native context', async (t) => {
+  const m = new VideoStableDiffusion({
+    files: {
+      model: FAKE_MODEL,
+      highNoiseDiffusionModel: FAKE_HIGH_NOISE,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE
+    },
+    config: { threads: 1 },
+    logger: makeQuiet()
+  })
+  let captured = null
+  m._createAddon = (configurationParams) => {
+    captured = configurationParams
+    return {
+      activate: async () => {},
+      unload: async () => {}
+    }
+  }
+
+  await m.load()
+  t.is(captured.diffusionModelPath, FAKE_MODEL)
+  t.is(captured.highNoiseDiffusionModelPath, FAKE_HIGH_NOISE)
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -222,10 +273,7 @@ test('run | suggests a nearby valid pair in the error message', async (t) => {
 test('run | width/height omitted is allowed (C++ defaults to 480x832)', async (t) => {
   const m = makeWanModel()
   // Validation passes; addon-not-loaded throws afterwards.
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi' }),
-    /Addon not initialized/
-  )
+  await t.exception.all(m.run({ mode: 'txt2vid', prompt: 'hi' }), /Addon not initialized/)
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -283,11 +331,30 @@ test('run | rejects null prompt', async (t) => {
 
 // 100x100 PNG header -- both axes off the multiple-of-16 grid.
 const OFFGRID_PNG = new Uint8Array([
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-  0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x64, // width = 100
-  0x00, 0x00, 0x00, 0x64 // height = 100
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a,
+  0x00,
+  0x00,
+  0x00,
+  0x0d,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x64, // width = 100
+  0x00,
+  0x00,
+  0x00,
+  0x64 // height = 100
 ])
 
 test('run | rejects off-grid init_image when width/height are implicit', async (t) => {
@@ -435,7 +502,16 @@ test('run | rejects moe_boundary > 1', async (t) => {
 })
 
 test('run | accepts moe_boundary at the endpoints (0 and 1)', async (t) => {
-  const m = makeWanModel()
+  const m = new VideoStableDiffusion({
+    files: {
+      model: FAKE_MODEL,
+      highNoiseDiffusionModel: FAKE_HIGH_NOISE,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE
+    },
+    config: { threads: 1 },
+    logger: makeQuiet()
+  })
   for (const b of [0, 0.0, 0.5, 1.0, 1]) {
     await t.exception.all(
       m.run({ mode: 'txt2vid', prompt: 'hi', moe_boundary: b }),
@@ -491,10 +567,7 @@ test('run | txt2vid rejects init_image', async (t) => {
 
 test('run | img2vid requires init_image', async (t) => {
   const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'img2vid', prompt: 'hi' }),
-    /img2vid requires init_image/
-  )
+  await t.exception.all(m.run({ mode: 'img2vid', prompt: 'hi' }), /img2vid requires init_image/)
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -585,37 +658,26 @@ test('run | does NOT warn when vace_strength is set and control_frames is presen
 })
 
 // ─────────────────────────────────────────────────────────────────────
-//  run(): Wan 2.2 high-noise warning
+//  run(): Wan 2.2 high-noise expert invariants
 // ─────────────────────────────────────────────────────────────────────
 
-test('run | warns when high_noise_* is set without files.highNoiseDiffusionModel', async (t) => {
-  const { logger, events } = makeRecording()
-  const m = makeWanModel({ logger })
+test('run | rejects high_noise_* without files.highNoiseDiffusionModel', async (t) => {
+  const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', high_noise_steps: 8 }),
-    /Addon not initialized/
-  )
-  t.ok(
-    events.warn.some((w) => /high_noise_steps.*Wan 2\.2-only/.test(w)),
-    'warning lists the offending high_noise field'
+    /high_noise_steps requires files\.highNoiseDiffusionModel/
   )
 })
 
-test('run | warns when moe_boundary is set without highNoiseDiffusionModel', async (t) => {
-  const { logger, events } = makeRecording()
-  const m = makeWanModel({ logger })
+test('run | rejects moe_boundary without files.highNoiseDiffusionModel', async (t) => {
+  const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', moe_boundary: 0.5 }),
-    /Addon not initialized/
-  )
-  t.ok(
-    events.warn.some((w) => /moe_boundary.*Wan 2\.2-only/.test(w)),
-    'moe_boundary triggers the Wan 2.2 warning when no high-noise expert is set'
+    /moe_boundary requires files\.highNoiseDiffusionModel/
   )
 })
 
-test('run | does NOT warn about Wan 2.2 fields when highNoiseDiffusionModel is set', async (t) => {
-  const { logger, events } = makeRecording()
+test('run | accepts Wan 2.2 MoE controls with a high-noise expert', async (t) => {
   const m = new VideoStableDiffusion({
     files: {
       model: FAKE_MODEL,
@@ -624,7 +686,7 @@ test('run | does NOT warn about Wan 2.2 fields when highNoiseDiffusionModel is s
       vae: FAKE_VAE
     },
     config: { threads: 1 },
-    logger
+    logger: makeQuiet()
   })
   await t.exception.all(
     m.run({
@@ -635,15 +697,32 @@ test('run | does NOT warn about Wan 2.2 fields when highNoiseDiffusionModel is s
     }),
     /Addon not initialized/
   )
-  t.absent(
-    events.warn.some((w) => /Wan 2\.2-only/.test(w)),
-    'no false warning when high-noise expert is configured'
+})
+
+test('run | accepts the high_noise_steps native sentinel with a high-noise expert', async (t) => {
+  const m = new VideoStableDiffusion({
+    files: {
+      model: FAKE_MODEL,
+      highNoiseDiffusionModel: FAKE_HIGH_NOISE,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE
+    },
+    config: { threads: 1 },
+    logger: makeQuiet()
+  })
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      high_noise_steps: -1,
+      moe_boundary: 0.5
+    }),
+    /Addon not initialized/
   )
 })
 
-test('run | combines multiple high_noise_* params into a single warning', async (t) => {
-  const { logger, events } = makeRecording()
-  const m = makeWanModel({ logger })
+test('run | identifies every MoE control that lacks a high-noise expert', async (t) => {
+  const m = makeWanModel()
   await t.exception.all(
     m.run({
       mode: 'txt2vid',
@@ -652,13 +731,8 @@ test('run | combines multiple high_noise_* params into a single warning', async 
       high_noise_cfg_scale: 6.0,
       moe_boundary: 0.5
     }),
-    /Addon not initialized/
+    /high_noise_steps, high_noise_cfg_scale, moe_boundary requires files\.highNoiseDiffusionModel/
   )
-  const wanWarnings = events.warn.filter((w) => /Wan 2\.2-only/.test(w))
-  t.is(wanWarnings.length, 1, 'one consolidated warning for all high_noise_* params')
-  t.ok(/high_noise_steps/.test(wanWarnings[0]), 'warning mentions high_noise_steps')
-  t.ok(/high_noise_cfg_scale/.test(wanWarnings[0]), 'warning mentions high_noise_cfg_scale')
-  t.ok(/moe_boundary/.test(wanWarnings[0]), 'warning mentions moe_boundary')
 })
 
 // ─────────────────────────────────────────────────────────────────────

@@ -38,28 +38,28 @@ Multiple OpenCode windows **share one serve** (the provider's `reuse` default): 
 
 You pick a friendly, models.dev-style id (`qwen3.5-9b`) and that exact id flows through the whole stack — OpenCode's model picker (`qvac/qwen3.5-9b`) and the request `model` field. The verbose QVAC constant (`QWEN3_5_9B_MULTIMODAL_Q4_K_M`) stays an internal detail of the serve; the friendly-id → constant mapping lives in `@qvac/ai-sdk-provider`'s catalog.
 
-| models.dev id  | QVAC constant                     |
-| -------------- | --------------------------------- |
-| `qwen3.5-0.8b` | `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M`  |
-| `qwen3.5-2b`   | `QWEN3_5_2B_MULTIMODAL_Q4_K_M`    |
-| `qwen3.5-4b`   | `QWEN3_5_4B_MULTIMODAL_Q4_K_M`    |
-| `qwen3.5-9b`   | `QWEN3_5_9B_MULTIMODAL_Q4_K_M`    |
+| models.dev id  | QVAC constant                    |
+| -------------- | -------------------------------- |
+| `qwen3.5-0.8b` | `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M` |
+| `qwen3.5-2b`   | `QWEN3_5_2B_MULTIMODAL_Q4_K_M`   |
+| `qwen3.5-4b`   | `QWEN3_5_4B_MULTIMODAL_Q4_K_M`   |
+| `qwen3.5-9b`   | `QWEN3_5_9B_MULTIMODAL_Q4_K_M`   |
 
 ## Configuration
 
 Options resolve from (lowest to highest precedence) built-in defaults, a project `qvac.json`, the `opencode.json` plugin-tuple options, and `QVAC_*` environment variables:
 
-| Option            | Env                      | Default      | Meaning |
-| ----------------- | ------------------------ | ------------ | ------- |
-| `model`           | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant |
-| `ctxSize`         | `QVAC_CTX_SIZE`          | `32768`      | serve context window |
-| `reasoningBudget` | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off |
-| `tools`           | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template |
-| `shim`            | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms |
-| `runtime`         | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve |
+| Option            | Env                      | Default      | Meaning                                                       |
+| ----------------- | ------------------------ | ------------ | ------------------------------------------------------------- |
+| `model`           | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                            |
+| `ctxSize`         | `QVAC_CTX_SIZE`          | `32768`      | serve context window                                          |
+| `reasoningBudget` | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off                                |
+| `tools`           | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template                         |
+| `shim`            | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms                            |
+| `runtime`         | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve             |
 | `readyTimeoutMs`  | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold download |
-| `setDefaultModel` | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default |
-| `debug`           | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr |
+| `setDefaultModel` | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default                   |
+| `debug`           | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr         |
 
 ```json
 {

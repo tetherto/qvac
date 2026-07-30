@@ -1,9 +1,6 @@
-import { type StopProvideRequest } from "@/schemas";
-import { send } from "@/client/rpc/rpc-client";
-import {
-  InvalidResponseError,
-  ProviderStopFailedError,
-} from "@/utils/errors-client";
+import { type StopProvideRequest } from '@/schemas'
+import { send } from '@/client/rpc/rpc-client'
+import { InvalidResponseError, ProviderStopFailedError } from '@/utils/errors-client'
 
 /**
  * Stops the running provider service.
@@ -22,17 +19,17 @@ import {
  */
 export async function stopQVACProvider() {
   const request: StopProvideRequest = {
-    type: "stopProvide",
-  };
+    type: 'stopProvide'
+  }
 
-  const response = await send(request);
-  if (response.type !== "stopProvide") {
-    throw new InvalidResponseError("stopProvide");
+  const response = await send(request)
+  if (response.type !== 'stopProvide') {
+    throw new InvalidResponseError('stopProvide')
   }
 
   if (response.error) {
-    throw new ProviderStopFailedError(response.error);
+    throw new ProviderStopFailedError(response.error)
   }
 
-  return response;
+  return response
 }

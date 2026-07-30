@@ -4,84 +4,61 @@ import {
   type Response,
   type RuntimeContext,
   type ProfilingRequestMeta,
-  PROFILING_KEY,
-} from "@/schemas";
-import type RPC from "bare-rpc";
-import {
-  sendErrorResponse,
-  sendStreamErrorResponse,
-} from "@/server/error-handlers";
-import { PluginHandlerTypeMismatchError } from "@/utils/errors-server";
-import { setSDKConfig } from "@/server/bare/registry/config-registry";
-import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
-import { type ServerProfiler } from "./profiling";
-import { isTerminalChunk } from "./rpc-utils";
-import { createProgressThrottle } from "./progress-throttle";
-import {
-  handlerSupportsProgress,
-  selectHandler,
-} from "@/server/rpc/handler-selection";
+  PROFILING_KEY
+} from '@/schemas'
+import type RPC from 'bare-rpc'
+import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
+import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
+import { setSDKConfig } from '@/server/bare/registry/config-registry'
+import { setRuntimeContext } from '@/server/bare/registry/runtime-context-registry'
+import { type ServerProfiler } from './profiling'
+import { isTerminalChunk } from './rpc-utils'
+import { createProgressThrottle } from './progress-throttle'
+import { handlerSupportsProgress, selectHandler } from '@/server/rpc/handler-selection'
 
-function getProfilingMetaFromRequest(
-  request: Request,
-): ProfilingRequestMeta | undefined {
+function getProfilingMetaFromRequest(request: Request): ProfilingRequestMeta | undefined {
   if (PROFILING_KEY in request) {
-    return (request as Record<string, unknown>)[
-      PROFILING_KEY
-    ] as ProfilingRequestMeta;
+    return (request as Record<string, unknown>)[PROFILING_KEY] as ProfilingRequestMeta
   }
-  return undefined;
+  return undefined
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type ReplyHandler = (
-  request: any,
-  ...args: any[]
-) => Promise<Response> | Response;
-type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>;
-type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>;
-type DuplexStreamHandler = (
-  request: any,
-  inputStream: any,
-) => AsyncGenerator<Response>;
+type ReplyHandler = (request: any, ...args: any[]) => Promise<Response> | Response
+type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>
+type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>
+type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type HandlerEntry = {
-  type: "reply" | "stream" | "duplex";
-  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler;
-  delegatedHandler?:
-    | ReplyHandler
-    | StreamHandler
-    | ProgressHandler
-    | DuplexStreamHandler;
-  isDelegated?: (request: Request) => boolean;
-  supportsProgress?: boolean | ((request: Request) => boolean);
-};
+  type: 'reply' | 'stream' | 'duplex'
+  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler
+  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler
+  isDelegated?: (request: Request) => boolean
+  supportsProgress?: boolean | ((request: Request) => boolean)
+}
 
 async function executeReplyHandler(
   req: RPC.IncomingRequest,
   request: Request,
   handler: ReplyHandler,
   profiler: ServerProfiler,
-  isDelegated: boolean,
+  isDelegated: boolean
 ) {
-  profiler.startHandler();
+  profiler.startHandler()
   try {
-    let response: Response;
+    let response: Response
     if (isDelegated) {
-      const profilingMeta = getProfilingMetaFromRequest(request);
-      response = await handler(
-        request,
-        profilingMeta ? { profilingMeta } : undefined,
-      );
+      const profilingMeta = getProfilingMetaFromRequest(request)
+      response = await handler(request, profilingMeta ? { profilingMeta } : undefined)
     } else {
-      response = await handler(request);
+      response = await handler(request)
     }
-    profiler.endHandler();
-    req.reply(profiler.serialize(response, true), "utf-8");
+    profiler.endHandler()
+    req.reply(profiler.serialize(response, true), 'utf-8')
   } catch (error) {
-    profiler.endHandler();
-    sendErrorResponse(req, error, profiler);
+    profiler.endHandler()
+    sendErrorResponse(req, error, profiler)
   }
 }
 
@@ -90,48 +67,45 @@ async function executeStreamHandler(
   request: Request,
   handler: StreamHandler,
   profiler: ServerProfiler,
-  isDelegated: boolean,
+  isDelegated: boolean
 ) {
-  const stream = req.createResponseStream();
-  profiler.startHandler();
-  let sentFinalChunk = false;
+  const stream = req.createResponseStream()
+  profiler.startHandler()
+  let sentFinalChunk = false
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let generator: AsyncGenerator<Response, any, any>;
+    let generator: AsyncGenerator<Response, any, any>
     if (isDelegated) {
-      const profilingMeta = getProfilingMetaFromRequest(request);
-      generator = handler(
-        request,
-        profilingMeta ? { profilingMeta } : undefined,
-      );
+      const profilingMeta = getProfilingMetaFromRequest(request)
+      generator = handler(request, profilingMeta ? { profilingMeta } : undefined)
     } else {
-      generator = handler(request);
+      generator = handler(request)
     }
 
     for await (const response of generator) {
       if (isTerminalChunk(response)) {
-        profiler.endHandler();
-        stream.write(profiler.serialize(response, true) + "\n", "utf-8");
-        sentFinalChunk = true;
+        profiler.endHandler()
+        stream.write(profiler.serialize(response, true) + '\n', 'utf-8')
+        sentFinalChunk = true
       } else {
-        stream.write(profiler.serialize(response, false) + "\n", "utf-8");
+        stream.write(profiler.serialize(response, false) + '\n', 'utf-8')
       }
     }
 
     // Fallback
     if (!sentFinalChunk) {
-      profiler.endHandler();
-      const trailer = profiler.serialize();
+      profiler.endHandler()
+      const trailer = profiler.serialize()
       if (trailer) {
-        stream.write(trailer + "\n", "utf-8");
+        stream.write(trailer + '\n', 'utf-8')
       }
     }
 
-    stream.end();
+    stream.end()
   } catch (error) {
-    profiler.endHandler();
-    sendStreamErrorResponse(stream, error, profiler);
+    profiler.endHandler()
+    sendStreamErrorResponse(stream, error, profiler)
   }
 }
 
@@ -140,41 +114,41 @@ async function executeProgressHandler(
   request: Request,
   handler: ProgressHandler,
   profiler: ServerProfiler,
-  isDelegated: boolean,
+  isDelegated: boolean
 ) {
-  const stream = req.createResponseStream();
-  profiler.startHandler();
+  const stream = req.createResponseStream()
+  profiler.startHandler()
 
   const writeBatch = (updates: Response[]) => {
-    const payload = updates.map((u) => profiler.serialize(u, false)).join("\n");
-    stream.write(payload + "\n", "utf-8");
-  };
+    const payload = updates.map((u) => profiler.serialize(u, false)).join('\n')
+    stream.write(payload + '\n', 'utf-8')
+  }
 
-  const throttle = createProgressThrottle<Response>(writeBatch);
+  const throttle = createProgressThrottle<Response>(writeBatch)
 
   try {
-    let response: Response;
+    let response: Response
     if (isDelegated) {
-      const profilingMeta = getProfilingMetaFromRequest(request);
+      const profilingMeta = getProfilingMetaFromRequest(request)
       const options: {
-        progressCallback: typeof throttle.push;
-        profilingMeta?: ProfilingRequestMeta;
-      } = { progressCallback: throttle.push };
+        progressCallback: typeof throttle.push
+        profilingMeta?: ProfilingRequestMeta
+      } = { progressCallback: throttle.push }
       if (profilingMeta) {
-        options.profilingMeta = profilingMeta;
+        options.profilingMeta = profilingMeta
       }
-      response = await handler(request, options);
+      response = await handler(request, options)
     } else {
-      response = await handler(request, throttle.push);
+      response = await handler(request, throttle.push)
     }
-    throttle.flush();
-    profiler.endHandler();
-    stream.write(profiler.serialize(response, true) + "\n", "utf-8");
-    stream.end();
+    throttle.flush()
+    profiler.endHandler()
+    stream.write(profiler.serialize(response, true) + '\n', 'utf-8')
+    stream.end()
   } catch (error) {
-    throttle.flush();
-    profiler.endHandler();
-    sendStreamErrorResponse(stream, error, profiler);
+    throttle.flush()
+    profiler.endHandler()
+    sendStreamErrorResponse(stream, error, profiler)
   }
 }
 
@@ -182,30 +156,27 @@ export async function executeDuplexHandler(
   _req: RPC.IncomingRequest,
   request: Request,
   entry: HandlerEntry,
-  inputStream: ReturnType<RPC.IncomingRequest["createRequestStream"]>,
-  outputStream: ReturnType<RPC.IncomingRequest["createResponseStream"]>,
-  profiler: ServerProfiler,
+  inputStream: ReturnType<RPC.IncomingRequest['createRequestStream']>,
+  outputStream: ReturnType<RPC.IncomingRequest['createResponseStream']>,
+  profiler: ServerProfiler
 ) {
-  const { handler } = selectHandler(entry, request);
+  const { handler } = selectHandler(entry, request)
 
-  profiler.startHandler();
+  profiler.startHandler()
 
   try {
-    for await (const response of (handler as DuplexStreamHandler)(
-      request,
-      inputStream,
-    )) {
-      outputStream.write(profiler.serialize(response, false) + "\n", "utf-8");
+    for await (const response of (handler as DuplexStreamHandler)(request, inputStream)) {
+      outputStream.write(profiler.serialize(response, false) + '\n', 'utf-8')
     }
-    profiler.endHandler();
-    const trailer = profiler.serialize();
+    profiler.endHandler()
+    const trailer = profiler.serialize()
     if (trailer) {
-      outputStream.write(trailer + "\n", "utf-8");
+      outputStream.write(trailer + '\n', 'utf-8')
     }
-    outputStream.end();
+    outputStream.end()
   } catch (error) {
-    profiler.endHandler();
-    sendStreamErrorResponse(outputStream, error, profiler);
+    profiler.endHandler()
+    sendStreamErrorResponse(outputStream, error, profiler)
   }
 }
 
@@ -214,82 +185,54 @@ export async function executeHandler(
   req: RPC.IncomingRequest,
   request: Request,
   entry: HandlerEntry,
-  profiler: ServerProfiler,
+  profiler: ServerProfiler
 ) {
-  const { handler, isDelegated } = selectHandler(entry, request);
-  const wantsProgress = handlerSupportsProgress(entry, request);
+  const { handler, isDelegated } = selectHandler(entry, request)
+  const wantsProgress = handlerSupportsProgress(entry, request)
 
-  if (entry.type === "duplex") {
-    throw new PluginHandlerTypeMismatchError(
-      request.type,
-      "reply or stream",
-      "duplex",
-    );
+  if (entry.type === 'duplex') {
+    throw new PluginHandlerTypeMismatchError(request.type, 'reply or stream', 'duplex')
   }
 
-  if (entry.type === "stream") {
-    await executeStreamHandler(
-      req,
-      request,
-      handler as StreamHandler,
-      profiler,
-      isDelegated,
-    );
+  if (entry.type === 'stream') {
+    await executeStreamHandler(req, request, handler as StreamHandler, profiler, isDelegated)
   } else if (wantsProgress) {
-    await executeProgressHandler(
-      req,
-      request,
-      handler as ProgressHandler,
-      profiler,
-      isDelegated,
-    );
+    await executeProgressHandler(req, request, handler as ProgressHandler, profiler, isDelegated)
   } else {
-    await executeReplyHandler(
-      req,
-      request,
-      handler as ReplyHandler,
-      profiler,
-      isDelegated,
-    );
+    await executeReplyHandler(req, request, handler as ReplyHandler, profiler, isDelegated)
   }
 }
 
 // Internal config initialization (bypasses schema)
 type InitConfigMessage = {
-  type: "__init_config";
-  config: QvacConfig;
-  runtimeContext?: RuntimeContext;
-};
+  type: '__init_config'
+  config: QvacConfig
+  runtimeContext?: RuntimeContext
+}
 
 export function isInitConfigMessage(data: unknown): data is InitConfigMessage {
   return (
-    typeof data === "object" &&
-    data !== null &&
-    "type" in data &&
-    data.type === "__init_config"
-  );
+    typeof data === 'object' && data !== null && 'type' in data && data.type === '__init_config'
+  )
 }
 
-export function handleInitConfig(
-  req: RPC.IncomingRequest,
-  data: InitConfigMessage,
-) {
+export function handleInitConfig(req: RPC.IncomingRequest, data: InitConfigMessage) {
   try {
     if (data.config) {
-      setSDKConfig(data.config);
+      setSDKConfig(data.config)
     }
     if (data.runtimeContext) {
-      setRuntimeContext(data.runtimeContext);
+      setRuntimeContext(data.runtimeContext)
     }
-    req.reply(JSON.stringify({ success: true }), "utf-8");
+    req.reply(JSON.stringify({ success: true }), 'utf-8')
   } catch (error) {
     req.reply(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       }),
-      "utf-8",
-    );
+      'utf-8'
+    )
   }
 }
 
@@ -298,16 +241,16 @@ export function handleInitConfig(
 // addons can release env-bound state while their JS environment is still
 // alive. Reply success/failure, never throws to the dispatcher.
 type ShutdownMessage = {
-  type: "__shutdown__";
-};
+  type: '__shutdown__'
+}
 
 export function isShutdownMessage(data: unknown): data is ShutdownMessage {
   return (
-    typeof data === "object" &&
+    typeof data === 'object' &&
     data !== null &&
-    "type" in data &&
-    (data as { type?: unknown }).type === "__shutdown__"
-  );
+    'type' in data &&
+    (data as { type?: unknown }).type === '__shutdown__'
+  )
 }
 
 export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
@@ -315,16 +258,16 @@ export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
     // Lazy import to avoid the import cycle:
     //   handler-utils -> worker-core -> create-server -> handle-request
     //   -> handler-utils. By the time this runs, all modules are loaded.
-    const { cleanupForTerminate } = await import("@/server/worker-core");
-    await cleanupForTerminate();
-    req.reply(JSON.stringify({ success: true }), "utf-8");
+    const { cleanupForTerminate } = await import('@/server/worker-core')
+    await cleanupForTerminate()
+    req.reply(JSON.stringify({ success: true }), 'utf-8')
   } catch (error) {
     req.reply(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       }),
-      "utf-8",
-    );
+      'utf-8'
+    )
   }
 }

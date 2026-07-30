@@ -9,7 +9,7 @@ const {
   INTERNAL_ERROR_CODES
 } = require('../..')
 
-test('QvacErrorBase should handle basic error creation', t => {
+test('QvacErrorBase should handle basic error creation', (t) => {
   // Define a test error code
   const TEST_CODE = 1000
   addCodes({
@@ -27,7 +27,7 @@ test('QvacErrorBase should handle basic error creation', t => {
   t.ok(error instanceof QvacErrorBase, 'Error is an instance of QvacErrorBase')
 })
 
-test('QvacErrorBase should handle unknown error codes', t => {
+test('QvacErrorBase should handle unknown error codes', (t) => {
   const UNKNOWN_CODE = 999999
   const error = new QvacErrorBase({ code: UNKNOWN_CODE })
 
@@ -36,7 +36,7 @@ test('QvacErrorBase should handle unknown error codes', t => {
   t.ok(error.message.includes(UNKNOWN_CODE.toString()), 'Error message includes the unknown code')
 })
 
-test('QvacErrorBase should handle function-based messages', t => {
+test('QvacErrorBase should handle function-based messages', (t) => {
   const FUNC_CODE = 1001
   addCodes({
     [FUNC_CODE]: {
@@ -50,10 +50,14 @@ test('QvacErrorBase should handle function-based messages', t => {
 
   // Test with single parameter that isn't an array
   const singleError = new QvacErrorBase({ code: FUNC_CODE, adds: 'value' })
-  t.is(singleError.message, 'Error with value and undefined', 'Error handles single parameter correctly')
+  t.is(
+    singleError.message,
+    'Error with value and undefined',
+    'Error handles single parameter correctly'
+  )
 })
 
-test('QvacErrorBase should handle string messages with additions', t => {
+test('QvacErrorBase should handle string messages with additions', (t) => {
   const STRING_CODE = 1002
   addCodes({
     [STRING_CODE]: {
@@ -63,10 +67,14 @@ test('QvacErrorBase should handle string messages with additions', t => {
   })
 
   const error = new QvacErrorBase({ code: STRING_CODE, adds: 'additional info' })
-  t.is(error.message, 'Base message: additional info', 'Error appends additional info to string message')
+  t.is(
+    error.message,
+    'Base message: additional info',
+    'Error appends additional info to string message'
+  )
 })
 
-test('QvacErrorBase serializes correctly with toJSON', t => {
+test('QvacErrorBase serializes correctly with toJSON', (t) => {
   const SERIAL_CODE = 1003
   addCodes({
     [SERIAL_CODE]: {
@@ -84,7 +92,7 @@ test('QvacErrorBase serializes correctly with toJSON', t => {
   t.ok(serialized.stack, 'Serialized error includes stack trace')
 })
 
-test('addCodes should throw when registering duplicate codes', t => {
+test('addCodes should throw when registering duplicate codes', (t) => {
   const DUPE_CODE = 1004
   addCodes({
     [DUPE_CODE]: {
@@ -107,7 +115,7 @@ test('addCodes should throw when registering duplicate codes', t => {
   }
 })
 
-test('addCodes should throw with invalid definition', t => {
+test('addCodes should throw with invalid definition', (t) => {
   const INVALID_CODE = 1005
 
   try {
@@ -121,7 +129,7 @@ test('addCodes should throw with invalid definition', t => {
   }
 })
 
-test('addCodes should throw when missing name or message', t => {
+test('addCodes should throw when missing name or message', (t) => {
   const MISSING_CODE = 1006
 
   try {
@@ -138,7 +146,7 @@ test('addCodes should throw when missing name or message', t => {
   }
 })
 
-test('getRegisteredCodes should return all registered codes', t => {
+test('getRegisteredCodes should return all registered codes', (t) => {
   // Register a new code for this test
   const TEST_CODE = 1007
   addCodes({
@@ -157,10 +165,14 @@ test('getRegisteredCodes should return all registered codes', t => {
   codes[TEST_CODE].name = 'MODIFIED'
   const newCodes = getRegisteredCodes()
 
-  t.is(newCodes[TEST_CODE].name, 'GET_REGISTERED_TEST', 'Original registry is not affected by modifications')
+  t.is(
+    newCodes[TEST_CODE].name,
+    'GET_REGISTERED_TEST',
+    'Original registry is not affected by modifications'
+  )
 })
 
-test('isCodeRegistered should correctly check code registration', t => {
+test('isCodeRegistered should correctly check code registration', (t) => {
   const REGISTERED_CODE = 1008
   const UNREGISTERED_CODE = 9999
 
@@ -175,10 +187,10 @@ test('isCodeRegistered should correctly check code registration', t => {
   t.absent(isCodeRegistered(UNREGISTERED_CODE), 'Returns false for unregistered code')
 })
 
-test('Extending QvacErrorBase works correctly', t => {
+test('Extending QvacErrorBase works correctly', (t) => {
   // Custom error class extending QvacErrorBase
   class CustomError extends QvacErrorBase {
-    constructor (options) {
+    constructor(options) {
       super(options)
       this.isCustom = true
     }
@@ -202,16 +214,19 @@ test('Extending QvacErrorBase works correctly', t => {
   t.is(error.message, 'Custom error test', 'Custom error has the correct message')
 })
 
-test('addCodes with package info should register codes successfully', t => {
+test('addCodes with package info should register codes successfully', (t) => {
   const PKG_CODE = 2000
   const packageInfo = { name: 'test-package', version: '1.0.0' }
 
-  addCodes({
-    [PKG_CODE]: {
-      name: 'PACKAGE_ERROR',
-      message: 'Package-based error'
-    }
-  }, packageInfo)
+  addCodes(
+    {
+      [PKG_CODE]: {
+        name: 'PACKAGE_ERROR',
+        message: 'Package-based error'
+      }
+    },
+    packageInfo
+  )
 
   const error = new QvacErrorBase({ code: PKG_CODE })
   t.is(error.code, PKG_CODE, 'Error has the correct code')
@@ -219,14 +234,17 @@ test('addCodes with package info should register codes successfully', t => {
   t.is(error.message, 'Package-based error', 'Error has the correct message')
 })
 
-test('addCodes should throw when package info is invalid', t => {
+test('addCodes should throw when package info is invalid', (t) => {
   try {
-    addCodes({
-      2001: {
-        name: 'INVALID_PACKAGE_ERROR',
-        message: 'Error with invalid package info'
-      }
-    }, { name: 'test-package' })
+    addCodes(
+      {
+        2001: {
+          name: 'INVALID_PACKAGE_ERROR',
+          message: 'Error with invalid package info'
+        }
+      },
+      { name: 'test-package' }
+    )
     t.fail('Should throw when package version is missing')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
@@ -234,12 +252,15 @@ test('addCodes should throw when package info is invalid', t => {
   }
 
   try {
-    addCodes({
-      2002: {
-        name: 'INVALID_PACKAGE_ERROR2',
-        message: 'Error with invalid package info'
-      }
-    }, { version: '1.0.0' })
+    addCodes(
+      {
+        2002: {
+          name: 'INVALID_PACKAGE_ERROR2',
+          message: 'Error with invalid package info'
+        }
+      },
+      { version: '1.0.0' }
+    )
     t.fail('Should throw when package name is missing')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
@@ -247,70 +268,88 @@ test('addCodes should throw when package info is invalid', t => {
   }
 })
 
-test('addCodes should handle package version upgrades', t => {
+test('addCodes should handle package version upgrades', (t) => {
   const UPGRADE_CODE = 2003
   const packageName = 'upgrade-test-package'
 
-  addCodes({
-    [UPGRADE_CODE]: {
-      name: 'UPGRADE_ERROR_V1',
-      message: 'Version 1 error'
-    }
-  }, { name: packageName, version: '1.0.0' })
+  addCodes(
+    {
+      [UPGRADE_CODE]: {
+        name: 'UPGRADE_ERROR_V1',
+        message: 'Version 1 error'
+      }
+    },
+    { name: packageName, version: '1.0.0' }
+  )
 
   let error = new QvacErrorBase({ code: UPGRADE_CODE })
   t.is(error.name, 'UPGRADE_ERROR_V1', 'Error has version 1 name')
 
-  addCodes({
-    [UPGRADE_CODE]: {
-      name: 'UPGRADE_ERROR_V2',
-      message: 'Version 2 error'
-    }
-  }, { name: packageName, version: '2.0.0' })
+  addCodes(
+    {
+      [UPGRADE_CODE]: {
+        name: 'UPGRADE_ERROR_V2',
+        message: 'Version 2 error'
+      }
+    },
+    { name: packageName, version: '2.0.0' }
+  )
 
   error = new QvacErrorBase({ code: UPGRADE_CODE })
   t.is(error.name, 'UPGRADE_ERROR_V2', 'Error has version 2 name after upgrade')
 })
 
-test('addCodes should ignore older package versions', t => {
+test('addCodes should ignore older package versions', (t) => {
   const VERSION_CODE = 2004
   const packageName = 'version-test-package'
 
-  addCodes({
-    [VERSION_CODE]: {
-      name: 'VERSION_ERROR_NEW',
-      message: 'Newer version error'
-    }
-  }, { name: packageName, version: '2.0.0' })
+  addCodes(
+    {
+      [VERSION_CODE]: {
+        name: 'VERSION_ERROR_NEW',
+        message: 'Newer version error'
+      }
+    },
+    { name: packageName, version: '2.0.0' }
+  )
 
-  addCodes({
-    [VERSION_CODE]: {
-      name: 'VERSION_ERROR_OLD',
-      message: 'Older version error'
-    }
-  }, { name: packageName, version: '1.0.0' })
+  addCodes(
+    {
+      [VERSION_CODE]: {
+        name: 'VERSION_ERROR_OLD',
+        message: 'Older version error'
+      }
+    },
+    { name: packageName, version: '1.0.0' }
+  )
 
   const error = new QvacErrorBase({ code: VERSION_CODE })
   t.is(error.name, 'VERSION_ERROR_NEW', 'Error keeps newer version name')
 })
 
-test('addCodes should throw when different package tries to use same code', t => {
+test('addCodes should throw when different package tries to use same code', (t) => {
   const CONFLICT_CODE = 2005
 
-  addCodes({
-    [CONFLICT_CODE]: {
-      name: 'FIRST_PACKAGE_ERROR',
-      message: 'First package error'
-    }
-  }, { name: 'first-package', version: '1.0.0' })
+  addCodes(
+    {
+      [CONFLICT_CODE]: {
+        name: 'FIRST_PACKAGE_ERROR',
+        message: 'First package error'
+      }
+    },
+    { name: 'first-package', version: '1.0.0' }
+  )
 
   try {
-    addCodes({
-      [CONFLICT_CODE]: {
-        name: 'SECOND_PACKAGE_ERROR',
-        message: 'Second package error'
-      }
-    }, { name: 'second-package', version: '1.0.0' })
+    addCodes(
+      {
+        [CONFLICT_CODE]: {
+          name: 'SECOND_PACKAGE_ERROR',
+          message: 'Second package error'
+        }
+      },
+      { name: 'second-package', version: '1.0.0' }
+    )
     t.fail('Should throw when different package uses same code')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
@@ -318,25 +357,35 @@ test('addCodes should throw when different package tries to use same code', t =>
   }
 })
 
-test('addCodes with package info should handle function messages', t => {
+test('addCodes with package info should handle function messages', (t) => {
   const FUNC_PKG_CODE = 2006
 
-  addCodes({
-    [FUNC_PKG_CODE]: {
-      name: 'PACKAGE_FUNCTION_ERROR',
-      message: (param1, param2) => `Package error with ${param1} and ${param2}`
-    }
-  }, { name: 'function-test-package', version: '1.0.0' })
+  addCodes(
+    {
+      [FUNC_PKG_CODE]: {
+        name: 'PACKAGE_FUNCTION_ERROR',
+        message: (param1, param2) => `Package error with ${param1} and ${param2}`
+      }
+    },
+    { name: 'function-test-package', version: '1.0.0' }
+  )
 
   const error = new QvacErrorBase({ code: FUNC_PKG_CODE, adds: ['pkg1', 'pkg2'] })
-  t.is(error.message, 'Package error with pkg1 and pkg2', 'Package-based function message works correctly')
+  t.is(
+    error.message,
+    'Package error with pkg1 and pkg2',
+    'Package-based function message works correctly'
+  )
 })
 
-test('addCodes with package info should validate code definitions', t => {
+test('addCodes with package info should validate code definitions', (t) => {
   try {
-    addCodes({
-      2007: 'invalid definition'
-    }, { name: 'invalid-package', version: '1.0.0' })
+    addCodes(
+      {
+        2007: 'invalid definition'
+      },
+      { name: 'invalid-package', version: '1.0.0' }
+    )
     t.fail('Should throw with invalid definition')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
@@ -344,11 +393,14 @@ test('addCodes with package info should validate code definitions', t => {
   }
 
   try {
-    addCodes({
-      2008: {
-        name: 'MISSING_MESSAGE_ERROR'
-      }
-    }, { name: 'invalid-package', version: '1.0.0' })
+    addCodes(
+      {
+        2008: {
+          name: 'MISSING_MESSAGE_ERROR'
+        }
+      },
+      { name: 'invalid-package', version: '1.0.0' }
+    )
     t.fail('Should throw when missing message')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
@@ -356,7 +408,7 @@ test('addCodes with package info should validate code definitions', t => {
   }
 })
 
-test('QvacErrorBase: error without cause has its own stack and no cause', t => {
+test('QvacErrorBase: error without cause has its own stack and no cause', (t) => {
   const CODE = 12345
   addCodes({
     [CODE]: {
@@ -375,7 +427,7 @@ test('QvacErrorBase: error without cause has its own stack and no cause', t => {
   }
 })
 
-test('QvacErrorBase: error with cause appends original stack', t => {
+test('QvacErrorBase: error with cause appends original stack', (t) => {
   const CODE = 12346
   addCodes({
     [CODE]: {
@@ -401,28 +453,28 @@ test('QvacErrorBase: error with cause appends original stack', t => {
   }
 })
 
-test('QvacErrorBase: unknown code sets fallback name and code', t => {
+test('QvacErrorBase: unknown code sets fallback name and code', (t) => {
   const err = new QvacErrorBase({ code: 999999 })
   t.is(err.code, 0, 'Unknown code sets code to 0')
   t.is(err.name, 'UNKNOWN_ERROR_CODE', 'Unknown code sets fallback name')
   t.ok(err.message.includes('Unknown QVAC error code'), 'Fallback message is used')
 })
 
-test('QvacErrorBase: no code provided sets default name and code', t => {
+test('QvacErrorBase: no code provided sets default name and code', (t) => {
   const err = new QvacErrorBase({})
   t.is(err.code, 0, 'No code sets code to 0')
   t.is(err.name, 'QvacErrorBase', 'No code sets class name')
   t.is(err.message, 'Unknown QVAC error', 'Default message is used')
 })
 
-test('QvacErrorBase: subclass preserves name and stack', t => {
-  class CustomError extends QvacErrorBase { }
+test('QvacErrorBase: subclass preserves name and stack', (t) => {
+  class CustomError extends QvacErrorBase {}
   const err = new CustomError({})
   t.is(err.name, 'CustomError', 'Subclass name is preserved')
   t.ok(err.stack.includes('CustomError'), 'Subclass stack is present')
 })
 
-test('QvacErrorBase: message formatting with function', t => {
+test('QvacErrorBase: message formatting with function', (t) => {
   const CODE = 12347
   addCodes({
     [CODE]: {
@@ -434,7 +486,7 @@ test('QvacErrorBase: message formatting with function', t => {
   t.is(err.message, 'Func error: foo bar', 'Function message formats correctly')
 })
 
-test('QvacErrorBase: message formatting with string and additions', t => {
+test('QvacErrorBase: message formatting with string and additions', (t) => {
   const CODE = 12348
   addCodes({
     [CODE]: {
@@ -446,7 +498,7 @@ test('QvacErrorBase: message formatting with string and additions', t => {
   t.is(err.message, 'Base message: extra', 'String message formats correctly')
 })
 
-test('QvacErrorBase: toJSON serializes all properties', t => {
+test('QvacErrorBase: toJSON serializes all properties', (t) => {
   const CODE = 12349
   addCodes({
     [CODE]: {

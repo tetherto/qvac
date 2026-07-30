@@ -2,21 +2,21 @@ import {
   diffusionStreamResponseSchema,
   type DiffusionStreamRequest,
   type DiffusionClientParams,
-  type DiffusionStats,
-} from "@/schemas";
-import { stream as streamRpc } from "@/client/rpc/rpc-client";
-import { decodeBase64, encodeBase64 } from "@/utils/encoding";
+  type DiffusionStats
+} from '@/schemas'
+import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 export interface DiffusionProgressTick {
-  step: number;
-  totalSteps: number;
-  elapsedMs: number;
+  step: number
+  totalSteps: number
+  elapsedMs: number
 }
 
 interface DiffusionResult {
-  progressStream: AsyncGenerator<DiffusionProgressTick>;
-  outputs: Promise<Uint8Array[]>;
-  stats: Promise<DiffusionStats | undefined>;
+  progressStream: AsyncGenerator<DiffusionProgressTick>
+  outputs: Promise<Uint8Array[]>
+  stats: Promise<DiffusionStats | undefined>
 }
 
 /**
@@ -99,101 +99,105 @@ interface DiffusionResult {
  * ```
  */
 export function diffusion(params: DiffusionClientParams): DiffusionResult {
-  const { init_image, init_images, ...rest } = params;
+  const { init_image, init_images, ...rest } = params
 
   const request: DiffusionStreamRequest = {
     ...rest,
     ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
     ...(init_images !== undefined && {
-      init_images: init_images.map(encodeBase64),
+      init_images: init_images.map(encodeBase64)
     }),
-    type: "diffusionStream",
-  };
+    type: 'diffusionStream'
+  }
 
-  let statsResolver: (value: DiffusionStats | undefined) => void = () => {};
-  let statsRejecter: (error: unknown) => void = () => {};
-  const statsPromise = new Promise<DiffusionStats | undefined>(
-    (resolve, reject) => {
-      statsResolver = resolve;
-      statsRejecter = reject;
-    },
-  );
-  statsPromise.catch(() => {});
+  let statsResolver: (value: DiffusionStats | undefined) => void = () => {}
+  let statsRejecter: (error: unknown) => void = () => {}
+  const statsPromise = new Promise<DiffusionStats | undefined>((resolve, reject) => {
+    statsResolver = resolve
+    statsRejecter = reject
+  })
+  statsPromise.catch(() => {})
 
-  const progressQueue: DiffusionProgressTick[] = [];
-  const collectedBuffers: Uint8Array[] = [];
-  let progressDone = false;
-  let progressResolve: (() => void) | null = null;
-  let streamError: Error | null = null;
+  const progressQueue: DiffusionProgressTick[] = []
+  const collectedBuffers: Uint8Array[] = []
+  let progressDone = false
+  let progressResolve: (() => void) | null = null
+  let streamError: Error | null = null
 
-  let outputsResolver: (value: Uint8Array[]) => void = () => {};
-  let outputsRejecter: (error: unknown) => void = () => {};
+  let outputsResolver: (value: Uint8Array[]) => void = () => {}
+  let outputsRejecter: (error: unknown) => void = () => {}
   const outputsPromise = new Promise<Uint8Array[]>((resolve, reject) => {
-    outputsResolver = resolve;
-    outputsRejecter = reject;
-  });
-  outputsPromise.catch(() => {});
+    outputsResolver = resolve
+    outputsRejecter = reject
+  })
+  outputsPromise.catch(() => {})
 
   const processResponses = async () => {
     try {
       for await (const response of streamRpc(request)) {
         if (
           response &&
-          typeof response === "object" &&
-          "type" in response &&
-          response.type === "diffusionStream"
+          typeof response === 'object' &&
+          'type' in response &&
+          response.type === 'diffusionStream'
         ) {
-          const parsed = diffusionStreamResponseSchema.parse(response);
+          const parsed = diffusionStreamResponseSchema.parse(response)
 
           if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
-            progressQueue.push({ step: parsed.step, totalSteps: parsed.totalSteps, elapsedMs: parsed.elapsedMs });
+            progressQueue.push({
+              step: parsed.step,
+              totalSteps: parsed.totalSteps,
+              elapsedMs: parsed.elapsedMs
+            })
             if (progressResolve) {
-              progressResolve();
-              progressResolve = null;
+              progressResolve()
+              progressResolve = null
             }
           }
 
           if (parsed.data) {
-            collectedBuffers.push(decodeBase64(parsed.data));
+            collectedBuffers.push(decodeBase64(parsed.data))
           }
 
           if (parsed.done) {
-            statsResolver(parsed.stats);
-            outputsResolver(collectedBuffers);
+            statsResolver(parsed.stats)
+            outputsResolver(collectedBuffers)
           }
         }
       }
     } catch (error) {
-      streamError = error instanceof Error ? error : new Error(String(error));
-      statsRejecter(streamError);
-      outputsRejecter(streamError);
+      streamError = error instanceof Error ? error : new Error(String(error))
+      statsRejecter(streamError)
+      outputsRejecter(streamError)
     }
 
-    progressDone = true;
+    progressDone = true
     if (progressResolve) {
-      progressResolve();
-      progressResolve = null;
+      progressResolve()
+      progressResolve = null
     }
-  };
+  }
 
-  void processResponses();
+  void processResponses()
 
   const progressStream = (async function* (): AsyncGenerator<DiffusionProgressTick> {
     while (true) {
       if (progressQueue.length > 0) {
-        yield progressQueue.shift()!;
+        yield progressQueue.shift()!
       } else if (progressDone) {
-        if (streamError) throw streamError as Error;
-        return;
+        if (streamError) throw streamError as Error
+        return
       } else {
-        await new Promise<void>((resolve) => { progressResolve = resolve; });
+        await new Promise<void>((resolve) => {
+          progressResolve = resolve
+        })
       }
     }
-  })();
+  })()
 
   return {
     progressStream,
     outputs: outputsPromise,
-    stats: statsPromise,
-  };
+    stats: statsPromise
+  }
 }

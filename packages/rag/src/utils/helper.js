@@ -11,8 +11,10 @@ const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => (i + 0x100).toString(1
  * @param {Array} b - The second vector.
  * @returns {number} - The cosine similarity between the two vectors.
  */
-function cosineSimilarity (a, b) {
-  let dot = 0; let normA = 0; let normB = 0
+function cosineSimilarity(a, b) {
+  let dot = 0
+  let normA = 0
+  let normB = 0
   const len = Math.min(a.length, b.length)
   for (let i = 0; i < len; i++) {
     dot += a[i] * b[i]
@@ -29,10 +31,10 @@ function cosineSimilarity (a, b) {
  * @param {string} content - The content.
  * @returns {number} - The text score between the query and the content.
  */
-function calculateTextScore (query, content) {
+function calculateTextScore(query, content) {
   const queryTerms = query.toLowerCase().split(/\s+/)
   const contentLower = content.toLowerCase()
-  const exactMatches = queryTerms.filter(term => contentLower.includes(term)).length
+  const exactMatches = queryTerms.filter((term) => contentLower.includes(term)).length
   const contentTerms = contentLower.split(/\s+/)
   const positions = queryTerms.reduce((map, term) => {
     const pos = contentTerms.indexOf(term)
@@ -45,7 +47,7 @@ function calculateTextScore (query, content) {
     const spread = Math.max(...posArray) - Math.min(...posArray)
     proximityScore = 1 / (1 + spread / 10)
   }
-  return (exactMatches / queryTerms.length * 0.7) + (proximityScore * 0.3)
+  return (exactMatches / queryTerms.length) * 0.7 + proximityScore * 0.3
 }
 
 /**
@@ -55,7 +57,7 @@ function calculateTextScore (query, content) {
  * @param {Array<string|PartialDoc>} docs - The documents to normalize.
  * @returns {{normalizedDocs: Array<Doc>, droppedIndices: Array<number>}} An array of normalized documents and the indices of the dropped documents.
  */
-function normalizeDocs (docs) {
+function normalizeDocs(docs) {
   if (!Array.isArray(docs)) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT })
 
   const seenIds = new Set()
@@ -63,9 +65,7 @@ function normalizeDocs (docs) {
   const droppedIndices = []
 
   docs.forEach((rawDoc, idx) => {
-    const doc = typeof rawDoc === 'string'
-      ? { content: rawDoc }
-      : rawDoc
+    const doc = typeof rawDoc === 'string' ? { content: rawDoc } : rawDoc
     if (!doc || !doc.content || (typeof doc.content === 'string' && doc.content.trim() === '')) {
       droppedIndices.push(idx)
       return
@@ -87,22 +87,36 @@ function normalizeDocs (docs) {
  * Generates a unique ID using UUID v4.
  * @returns {string} A unique identifier.
  */
-function generateId () {
+function generateId() {
   const bytes = randomBytes(UUID_BYTES)
   bytes[6] = (bytes[6] & 0x0f) | 0x40
   bytes[8] = (bytes[8] & 0x3f) | 0x80
 
-  return BYTE_TO_HEX[bytes[0]] + BYTE_TO_HEX[bytes[1]] +
-    BYTE_TO_HEX[bytes[2]] + BYTE_TO_HEX[bytes[3]] + '-' +
-    BYTE_TO_HEX[bytes[4]] + BYTE_TO_HEX[bytes[5]] + '-' +
-    BYTE_TO_HEX[bytes[6]] + BYTE_TO_HEX[bytes[7]] + '-' +
-    BYTE_TO_HEX[bytes[8]] + BYTE_TO_HEX[bytes[9]] + '-' +
-    BYTE_TO_HEX[bytes[10]] + BYTE_TO_HEX[bytes[11]] +
-    BYTE_TO_HEX[bytes[12]] + BYTE_TO_HEX[bytes[13]] +
-    BYTE_TO_HEX[bytes[14]] + BYTE_TO_HEX[bytes[15]]
+  return (
+    BYTE_TO_HEX[bytes[0]] +
+    BYTE_TO_HEX[bytes[1]] +
+    BYTE_TO_HEX[bytes[2]] +
+    BYTE_TO_HEX[bytes[3]] +
+    '-' +
+    BYTE_TO_HEX[bytes[4]] +
+    BYTE_TO_HEX[bytes[5]] +
+    '-' +
+    BYTE_TO_HEX[bytes[6]] +
+    BYTE_TO_HEX[bytes[7]] +
+    '-' +
+    BYTE_TO_HEX[bytes[8]] +
+    BYTE_TO_HEX[bytes[9]] +
+    '-' +
+    BYTE_TO_HEX[bytes[10]] +
+    BYTE_TO_HEX[bytes[11]] +
+    BYTE_TO_HEX[bytes[12]] +
+    BYTE_TO_HEX[bytes[13]] +
+    BYTE_TO_HEX[bytes[14]] +
+    BYTE_TO_HEX[bytes[15]]
+  )
 }
 
-function randomBytes (size) {
+function randomBytes(size) {
   try {
     const crypto = typeof globalThis !== 'undefined' ? globalThis.crypto : null
     if (crypto && typeof crypto.getRandomValues === 'function') {
@@ -126,9 +140,11 @@ function randomBytes (size) {
   })
 }
 
-function toUint8Array (bytes) {
+function toUint8Array(bytes) {
   if (bytes instanceof Uint8Array) return bytes
-  if (typeof ArrayBuffer !== 'undefined' && bytes instanceof ArrayBuffer) return new Uint8Array(bytes)
+  if (typeof ArrayBuffer !== 'undefined' && bytes instanceof ArrayBuffer) {
+    return new Uint8Array(bytes)
+  }
   if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(bytes)) {
     return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   }
@@ -136,27 +152,27 @@ function toUint8Array (bytes) {
 }
 
 /**
-   * Maintain min-heap property when adding elements.
-   * @param {Array} heap - The heap array.
-   * @param {number} index - The index of the element to heapify up.
-   * @private
-   */
-function heapifyUp (heap, index) {
+ * Maintain min-heap property when adding elements.
+ * @param {Array} heap - The heap array.
+ * @param {number} index - The index of the element to heapify up.
+ * @private
+ */
+function heapifyUp(heap, index) {
   while (index > 0) {
     const parentIndex = Math.floor((index - 1) / 2)
     if (heap[parentIndex].similarity <= heap[index].similarity) break
-    [heap[parentIndex], heap[index]] = [heap[index], heap[parentIndex]]
+    ;[heap[parentIndex], heap[index]] = [heap[index], heap[parentIndex]]
     index = parentIndex
   }
 }
 
 /**
-   * Maintain min-heap property when removing elements.
-   * @param {Array} heap - The heap array.
-   * @param {number} index - The index of the element to heapify down.
-   * @private
-   */
-function heapifyDown (heap, index) {
+ * Maintain min-heap property when removing elements.
+ * @param {Array} heap - The heap array.
+ * @param {number} index - The index of the element to heapify down.
+ * @private
+ */
+function heapifyDown(heap, index) {
   const heapSize = heap.length
 
   while (true) {
@@ -170,19 +186,19 @@ function heapifyDown (heap, index) {
       smallest = rightChild
     }
     if (smallest === index) break
-    [heap[index], heap[smallest]] = [heap[smallest], heap[index]]
+    ;[heap[index], heap[smallest]] = [heap[smallest], heap[index]]
     index = smallest
   }
 }
 
 /**
-   * Reservoir sampling algorithm for efficient random sampling.
-   * @param {Array} array - The array to sample from.
-   * @param {number} sampleSize - The number of items to sample.
-   * @returns {Array} A random sample of the specified size.
-   * @private
-   */
-function reservoirSample (array, sampleSize) {
+ * Reservoir sampling algorithm for efficient random sampling.
+ * @param {Array} array - The array to sample from.
+ * @param {number} sampleSize - The number of items to sample.
+ * @returns {Array} A random sample of the specified size.
+ * @private
+ */
+function reservoirSample(array, sampleSize) {
   if (sampleSize >= array.length) {
     return array.slice()
   }
@@ -201,11 +217,11 @@ function reservoirSample (array, sampleSize) {
  * @param {number} maxSize - Maximum number of entries to cache.
  * @returns {Object} Cache object with get, set, has, delete, clear, and size methods.
  */
-function createLRUCache (maxSize) {
+function createLRUCache(maxSize) {
   const cache = new Map()
 
   return {
-    get (key) {
+    get(key) {
       if (!cache.has(key)) return undefined
       // Move to end (most recently used)
       const value = cache.get(key)
@@ -214,7 +230,7 @@ function createLRUCache (maxSize) {
       return value
     },
 
-    set (key, value) {
+    set(key, value) {
       // If key exists, delete first to update position
       if (cache.has(key)) {
         cache.delete(key)
@@ -227,19 +243,19 @@ function createLRUCache (maxSize) {
       }
     },
 
-    has (key) {
+    has(key) {
       return cache.has(key)
     },
 
-    delete (key) {
+    delete(key) {
       return cache.delete(key)
     },
 
-    clear () {
+    clear() {
       cache.clear()
     },
 
-    get size () {
+    get size() {
       return cache.size
     }
   }

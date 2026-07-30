@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -15,7 +16,6 @@ on:
     paths:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
-      - ".github/actions/cache-models/**"
 
   workflow_dispatch:
   workflow_call:
@@ -30,7 +30,7 @@ env:
   PKG_DIR: packages/llm-llamacpp
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -54,6 +54,46 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -72,7 +112,7 @@ jobs:
 
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize]
+    needs: [fork-approval, authorize]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -86,10 +126,12 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - verify-fabric-lockstep
+      - ci-router
       - label-gate
     runs-on: ubuntu-latest
     steps:
@@ -107,23 +149,27 @@ jobs:
           workdir: packages/llm-llamacpp
 
   cpp-tests:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - sanity-checks
+      - ci-router
       - label-gate
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/llm-llamacpp
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   cpp-lint:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
+      - fork-approval
       - authorize
+      - ci-router
       - label-gate
     secrets: inherit
     with:
@@ -160,12 +206,87 @@ jobs:
           registry-type: gpr
           workdir: packages/llm-llamacpp
 
-  prebuild:
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
+      - ci-router
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/llm-llamacpp
+
+  # Reuse a prior run's prebuilds via ARTIFACTS rather than actions/cache.
+  # actions/cache cannot WRITE from a pull_request_target trigger (the reserve
+  # is rejected — see QVAC-21199 follow-up bug), so the cache was never
+  # populated and every push rebuilt. Instead, prebuild-artifact-save tags each
+  # successful prebuild run with a tiny marker artifact named with the native
+  # hash; here, on a no-native-change push, we find the most recent prior run of
+  # this PR's branch that carries the matching marker and download ITS
+  # `prebuilds` artifact, re-publishing it for downstream jobs. Falls back to a
+  # rebuild (reuse_hit=false) whenever nothing matches.
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - fork-approval
+      - detect-native-changes
       - sanity-checks
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-llm-llamacpp.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+  prebuild:
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - sanity-checks
+      - detect-native-changes
+      - prebuild-artifact-reuse
+      - label-gate
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     permissions:
       contents: write
       packages: write
@@ -175,13 +296,47 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+  prebuild-artifact-save:
+    # Tag this successful prebuild run with a tiny marker artifact named with
+    # the native hash. A later no-native-change push (prebuild-artifact-reuse)
+    # finds the marker and reuses THIS run's `prebuilds` artifact instead of
+    # rebuilding. Runs whenever prebuild succeeds, so the first build on any PR
+    # records reuse for subsequent JS-only pushes; native changes produce a new
+    # hash → a new marker → a fresh rebuild. Replaces actions/cache/save, which
+    # cannot write from pull_request_target.
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs:
+      - fork-approval
+      - prebuild
+      - detect-native-changes
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
+      - fork-approval
       - authorize
       - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
       - label-gate
     permissions:
       contents: read
@@ -191,7 +346,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -199,16 +354,19 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
+      - fork-approval
       - authorize
       - prebuild
+      - prebuild-artifact-reuse
       - label-gate
+      - ci-router
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   # QVAC-17830: per-run joint perf reporter. Lives in the umbrella (not in
   # either child workflow) so it can block on BOTH `run-integration-tests`
@@ -240,7 +398,7 @@ jobs:
   #     `[A-Za-z0-9-]` allowlist + 64-char cap below before use.
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [authorize, run-integration-tests, run-mobile-integration-tests]
+    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -445,9 +603,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
+    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router, label-gate]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success'}}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}

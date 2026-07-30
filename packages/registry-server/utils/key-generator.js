@@ -6,7 +6,7 @@ const crypto = require('crypto')
 const PASSPHRASE_PBKDF2_SALT = Buffer.from('qvac-registry-server/passphrase-kdf-v1', 'utf8')
 const PASSPHRASE_PBKDF2_ITERATIONS = 310000
 
-function deriveKeyMaterialFromPassphrase (passphrase, byteLength) {
+function deriveKeyMaterialFromPassphrase(passphrase, byteLength) {
   return crypto.pbkdf2Sync(
     passphrase,
     PASSPHRASE_PBKDF2_SALT,
@@ -16,7 +16,7 @@ function deriveKeyMaterialFromPassphrase (passphrase, byteLength) {
   )
 }
 
-function generatePrimaryKey (passphrase) {
+function generatePrimaryKey(passphrase) {
   if (passphrase) {
     return deriveKeyMaterialFromPassphrase(passphrase, 32)
   }
@@ -31,7 +31,7 @@ function generatePrimaryKey (passphrase) {
  * @param {string} [passphrase] - Optional passphrase for deterministic generation (testing only)
  * @returns {{ publicKey: Buffer, secretKey: Buffer }} - 32-byte public key, 64-byte secret key
  */
-function generateWriterKeyPair (passphrase) {
+function generateWriterKeyPair(passphrase) {
   // Defer require to avoid loading sodium unless needed
   const sodium = require('sodium-universal')
 

@@ -9,12 +9,11 @@ import type { CollectOptions, ProcessedModel } from './types.ts'
 // Re-export for back-compat with code that previously imported these from `registry.ts`
 export { extractModelName, processRegistryModel, toHexString } from './processing.ts'
 
-export async function collectModels (options: CollectOptions = {}): Promise<ProcessedModel[]> {
+export async function collectModels(options: CollectOptions = {}): Promise<ProcessedModel[]> {
   const { showDuplicates = false, noDedup = false } = options
   const models: ProcessedModel[] = []
 
-  const registryCoreKey: string =
-    process.env['QVAC_REGISTRY_CORE_KEY'] ?? DEFAULT_REGISTRY_CORE_KEY
+  const registryCoreKey: string = process.env['QVAC_REGISTRY_CORE_KEY'] ?? DEFAULT_REGISTRY_CORE_KEY
   const client = new QVACRegistryClient({ registryCoreKey })
 
   try {
@@ -43,7 +42,7 @@ export async function collectModels (options: CollectOptions = {}): Promise<Proc
   return deduplicateModels(withCompanions, showDuplicates)
 }
 
-export function deduplicateModels (
+export function deduplicateModels(
   models: ProcessedModel[],
   showDuplicates: boolean
 ): ProcessedModel[] {

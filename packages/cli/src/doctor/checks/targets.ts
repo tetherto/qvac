@@ -7,7 +7,7 @@ import type { Check } from '../check.js'
 // so bundling is always available. What's checked here is the host
 // toolchain needed to *deploy* to each target class.
 
-function desktopTargetsLine (hostPlatform: NodeJS.Platform, hostArch: string): string {
+function desktopTargetsLine(hostPlatform: NodeJS.Platform, hostArch: string): string {
   const nativeHost = `${hostPlatform}-${hostArch}`
   const desktops = DEFAULT_HOSTS.filter((h) => !h.startsWith('android') && !h.startsWith('ios'))
   return desktops.map((h) => (h === nativeHost ? `${h} (native)` : h)).join(', ')

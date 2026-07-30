@@ -1,5 +1,5 @@
-import test from "brittle";
-import type { SuspendableSwarm, SuspendableStore } from "@/server/bare/runtime-lifecycle";
+import test from 'brittle'
+import type { SuspendableSwarm, SuspendableStore } from '@/server/bare/runtime-lifecycle'
 import {
   registerSwarm,
   unregisterSwarm,
@@ -11,384 +11,430 @@ import {
   getRegisteredResourceCounts,
   resetLifecycleState,
   assertLifecycleAllowed,
-} from "@/server/bare/runtime-lifecycle";
-import type { Request } from "@/schemas";
-import { LifecycleOperationBlockedError } from "@/utils/errors-server";
+  onResume
+} from '@/server/bare/runtime-lifecycle'
+import type { Request } from '@/schemas'
+import { LifecycleOperationBlockedError } from '@/utils/errors-server'
 
 interface MockOptions {
-  failSuspend?: boolean;
-  failResume?: boolean;
-  delayMs?: number;
+  failSuspend?: boolean
+  failResume?: boolean
+  delayMs?: number
 }
 
 function delay(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
 function createMockSwarm(label: string, log: string[], opts?: MockOptions): SuspendableSwarm {
   const mock = {
     suspended: false,
     async suspend() {
-      if (opts?.delayMs) await delay(opts.delayMs);
-      if (opts?.failSuspend) throw new Error(`${label} suspend failed`);
-      log.push(`${label}:suspend`);
-      mock.suspended = true;
+      if (opts?.delayMs) await delay(opts.delayMs)
+      if (opts?.failSuspend) throw new Error(`${label} suspend failed`)
+      log.push(`${label}:suspend`)
+      mock.suspended = true
     },
     async resume() {
-      if (opts?.delayMs) await delay(opts.delayMs);
-      if (opts?.failResume) throw new Error(`${label} resume failed`);
-      log.push(`${label}:resume`);
-      mock.suspended = false;
-    },
-  };
-  return mock;
+      if (opts?.delayMs) await delay(opts.delayMs)
+      if (opts?.failResume) throw new Error(`${label} resume failed`)
+      log.push(`${label}:resume`)
+      mock.suspended = false
+    }
+  }
+  return mock
 }
 
 function createMockStore(label: string, log: string[], opts?: MockOptions): SuspendableStore {
   return {
     async suspend() {
-      if (opts?.delayMs) await delay(opts.delayMs);
-      if (opts?.failSuspend) throw new Error(`${label} suspend failed`);
-      log.push(`${label}:suspend`);
+      if (opts?.delayMs) await delay(opts.delayMs)
+      if (opts?.failSuspend) throw new Error(`${label} suspend failed`)
+      log.push(`${label}:suspend`)
     },
     async resume() {
-      if (opts?.delayMs) await delay(opts.delayMs);
-      if (opts?.failResume) throw new Error(`${label} resume failed`);
-      log.push(`${label}:resume`);
-    },
-  };
+      if (opts?.delayMs) await delay(opts.delayMs)
+      if (opts?.failResume) throw new Error(`${label} resume failed`)
+      log.push(`${label}:resume`)
+    }
+  }
 }
 
 function setup(log: string[], swarmOpts?: MockOptions, storeOpts?: MockOptions) {
-  resetLifecycleState();
-  const swarm = createMockSwarm("swarm", log, swarmOpts);
-  const store = createMockStore("store", log, storeOpts);
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
-  return { swarm, store };
+  resetLifecycleState()
+  const swarm = createMockSwarm('swarm', log, swarmOpts)
+  const store = createMockStore('store', log, storeOpts)
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
+  return { swarm, store }
 }
 
-test("suspend order: stores before swarms", async (t) => {
-  const log: string[] = [];
-  setup(log);
+test('suspend order: stores before swarms', async (t) => {
+  const log: string[] = []
+  setup(log)
 
-  await suspendRuntime();
+  await suspendRuntime()
 
-  t.alike(log, ["store:suspend", "swarm:suspend"]);
-});
+  t.alike(log, ['store:suspend', 'swarm:suspend'])
+})
 
-test("resume order: swarms before stores", async (t) => {
-  const log: string[] = [];
-  setup(log);
+test('resume order: swarms before stores', async (t) => {
+  const log: string[] = []
+  setup(log)
 
-  await suspendRuntime();
-  log.length = 0;
-  await resumeRuntime();
+  await suspendRuntime()
+  log.length = 0
+  await resumeRuntime()
 
-  t.alike(log, ["swarm:resume", "store:resume"]);
-});
+  t.alike(log, ['swarm:resume', 'store:resume'])
+})
 
-test("suspend is idempotent when already suspended", async (t) => {
-  const log: string[] = [];
-  setup(log);
+test('suspend is idempotent when already suspended', async (t) => {
+  const log: string[] = []
+  setup(log)
 
-  await suspendRuntime();
-  t.is(getLifecycleState(), "suspended");
+  await suspendRuntime()
+  t.is(getLifecycleState(), 'suspended')
 
-  log.length = 0;
-  await suspendRuntime();
+  log.length = 0
+  await suspendRuntime()
 
-  t.alike(log, []);
-  t.is(getLifecycleState(), "suspended");
-});
+  t.alike(log, [])
+  t.is(getLifecycleState(), 'suspended')
+})
 
-test("resume is idempotent when already active", async (t) => {
-  const log: string[] = [];
-  setup(log);
+test('resume is idempotent when already active', async (t) => {
+  const log: string[] = []
+  setup(log)
 
-  t.is(getLifecycleState(), "active");
+  t.is(getLifecycleState(), 'active')
 
-  await resumeRuntime();
+  await resumeRuntime()
 
-  t.alike(log, []);
-  t.is(getLifecycleState(), "active");
-});
+  t.alike(log, [])
+  t.is(getLifecycleState(), 'active')
+})
 
-test("concurrent suspend calls share the same transition", async (t) => {
-  const log: string[] = [];
-  setup(log, { delayMs: 20 });
+test('concurrent suspend calls share the same transition', async (t) => {
+  const log: string[] = []
+  setup(log, { delayMs: 20 })
 
-  const [r1, r2] = await Promise.all([suspendRuntime(), suspendRuntime()]);
+  const [r1, r2] = await Promise.all([suspendRuntime(), suspendRuntime()])
 
-  t.is(r1, undefined);
-  t.is(r2, undefined);
-  t.alike(log, ["store:suspend", "swarm:suspend"]);
-  t.is(getLifecycleState(), "suspended");
-});
+  t.is(r1, undefined)
+  t.is(r2, undefined)
+  t.alike(log, ['store:suspend', 'swarm:suspend'])
+  t.is(getLifecycleState(), 'suspended')
+})
 
-test("concurrent resume calls share the same transition", async (t) => {
-  const log: string[] = [];
-  setup(log, { delayMs: 20 });
+test('concurrent resume calls share the same transition', async (t) => {
+  const log: string[] = []
+  setup(log, { delayMs: 20 })
 
-  await suspendRuntime();
-  log.length = 0;
+  await suspendRuntime()
+  log.length = 0
 
-  await Promise.all([resumeRuntime(), resumeRuntime()]);
+  await Promise.all([resumeRuntime(), resumeRuntime()])
 
-  t.alike(log, ["swarm:resume", "store:resume"]);
-  t.is(getLifecycleState(), "active");
-});
+  t.alike(log, ['swarm:resume', 'store:resume'])
+  t.is(getLifecycleState(), 'active')
+})
 
-test("resume during in-flight suspend waits then resumes", async (t) => {
-  const log: string[] = [];
-  setup(log, { delayMs: 30 });
+test('resume during in-flight suspend waits then resumes', async (t) => {
+  const log: string[] = []
+  setup(log, { delayMs: 30 })
 
-  const suspendP = suspendRuntime();
-  await delay(5);
-  const resumeP = resumeRuntime();
+  const suspendP = suspendRuntime()
+  await delay(5)
+  const resumeP = resumeRuntime()
 
-  await suspendP;
-  await resumeP;
+  await suspendP
+  await resumeP
 
-  t.alike(log, ["store:suspend", "swarm:suspend", "swarm:resume", "store:resume"]);
-  t.is(getLifecycleState(), "active");
-});
+  t.alike(log, ['store:suspend', 'swarm:suspend', 'swarm:resume', 'store:resume'])
+  t.is(getLifecycleState(), 'active')
+})
 
-test("suspend during in-flight resume waits then suspends", async (t) => {
-  const log: string[] = [];
-  setup(log, { delayMs: 30 });
+test('suspend during in-flight resume waits then suspends', async (t) => {
+  const log: string[] = []
+  setup(log, { delayMs: 30 })
 
-  await suspendRuntime();
-  log.length = 0;
+  await suspendRuntime()
+  log.length = 0
 
-  const resumeP = resumeRuntime();
-  await delay(5);
-  const suspendP = suspendRuntime();
+  const resumeP = resumeRuntime()
+  await delay(5)
+  const suspendP = suspendRuntime()
 
-  await resumeP;
-  await suspendP;
+  await resumeP
+  await suspendP
 
-  t.alike(log, ["swarm:resume", "store:resume", "store:suspend", "swarm:suspend"]);
-  t.is(getLifecycleState(), "suspended");
-});
+  t.alike(log, ['swarm:resume', 'store:resume', 'store:suspend', 'swarm:suspend'])
+  t.is(getLifecycleState(), 'suspended')
+})
 
-test("partial suspend failure commits to suspended state", async (t) => {
-  const log: string[] = [];
-  resetLifecycleState();
+test('partial suspend failure commits to suspended state', async (t) => {
+  const log: string[] = []
+  resetLifecycleState()
 
-  const swarm = createMockSwarm("swarm", log);
-  const store = createMockStore("store", log, { failSuspend: true });
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
+  const swarm = createMockSwarm('swarm', log)
+  const store = createMockStore('store', log, { failSuspend: true })
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
 
-  let caught = false;
+  let caught = false
   try {
-    await suspendRuntime();
+    await suspendRuntime()
   } catch {
-    caught = true;
+    caught = true
   }
 
-  t.ok(caught);
-  t.is(getLifecycleState(), "suspended");
-});
+  t.ok(caught)
+  t.is(getLifecycleState(), 'suspended')
+})
 
-test("suspend after partial failure is a no-op", async (t) => {
-  const log: string[] = [];
-  resetLifecycleState();
+test('suspend after partial failure is a no-op', async (t) => {
+  const log: string[] = []
+  resetLifecycleState()
 
-  const swarm = createMockSwarm("swarm", log);
-  const store = createMockStore("store", log, { failSuspend: true });
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
+  const swarm = createMockSwarm('swarm', log)
+  const store = createMockStore('store', log, { failSuspend: true })
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
 
-  try { await suspendRuntime(); } catch { /* expected */ }
-
-  log.length = 0;
-  await suspendRuntime();
-
-  t.alike(log, []);
-  t.is(getLifecycleState(), "suspended");
-});
-
-test("resume after partial suspend failure repairs state", async (t) => {
-  const log: string[] = [];
-  resetLifecycleState();
-
-  const swarm = createMockSwarm("swarm", log);
-  const store = createMockStore("store", log, { failSuspend: true });
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
-
-  try { await suspendRuntime(); } catch { /* expected */ }
-
-  log.length = 0;
-  await resumeRuntime();
-
-  t.is(getLifecycleState(), "active");
-  t.ok(log.includes("store:resume"));
-  t.ok(log.includes("swarm:resume"));
-});
-
-test("partial resume failure stays suspended", async (t) => {
-  const log: string[] = [];
-  resetLifecycleState();
-
-  const swarm = createMockSwarm("swarm", log, { failResume: true });
-  const store = createMockStore("store", log);
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
-
-  await suspendRuntime();
-  log.length = 0;
-
-  let caught = false;
   try {
-    await resumeRuntime();
+    await suspendRuntime()
   } catch {
-    caught = true;
+    /* expected */
   }
 
-  t.ok(caught);
-  t.is(getLifecycleState(), "suspended");
-});
+  log.length = 0
+  await suspendRuntime()
 
-test("retry resume after partial failure restores active", async (t) => {
-  const log: string[] = [];
-  resetLifecycleState();
+  t.alike(log, [])
+  t.is(getLifecycleState(), 'suspended')
+})
 
-  const swarm = createMockSwarm("swarm", log, { failResume: true });
-  const store = createMockStore("store", log);
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
+test('resume after partial suspend failure repairs state', async (t) => {
+  const log: string[] = []
+  resetLifecycleState()
 
-  await suspendRuntime();
+  const swarm = createMockSwarm('swarm', log)
+  const store = createMockStore('store', log, { failSuspend: true })
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
 
-  try { await resumeRuntime(); } catch { /* expected partial failure */ }
-  t.is(getLifecycleState(), "suspended");
+  try {
+    await suspendRuntime()
+  } catch {
+    /* expected */
+  }
+
+  log.length = 0
+  await resumeRuntime()
+
+  t.is(getLifecycleState(), 'active')
+  t.ok(log.includes('store:resume'))
+  t.ok(log.includes('swarm:resume'))
+})
+
+test('partial resume failure stays suspended', async (t) => {
+  const log: string[] = []
+  resetLifecycleState()
+
+  const swarm = createMockSwarm('swarm', log, { failResume: true })
+  const store = createMockStore('store', log)
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
+
+  await suspendRuntime()
+  log.length = 0
+
+  let caught = false
+  try {
+    await resumeRuntime()
+  } catch {
+    caught = true
+  }
+
+  t.ok(caught)
+  t.is(getLifecycleState(), 'suspended')
+})
+
+test('retry resume after partial failure restores active', async (t) => {
+  const log: string[] = []
+  resetLifecycleState()
+
+  const swarm = createMockSwarm('swarm', log, { failResume: true })
+  const store = createMockStore('store', log)
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
+
+  await suspendRuntime()
+
+  try {
+    await resumeRuntime()
+  } catch {
+    /* expected partial failure */
+  }
+  t.is(getLifecycleState(), 'suspended')
 
   // Replace with a swarm that resumes successfully
-  unregisterSwarm(swarm);
-  const goodSwarm = createMockSwarm("swarm", log);
-  registerSwarm(goodSwarm, { label: "test-swarm", createdAt: Date.now() });
+  unregisterSwarm(swarm)
+  const goodSwarm = createMockSwarm('swarm', log)
+  registerSwarm(goodSwarm, { label: 'test-swarm', createdAt: Date.now() })
 
-  log.length = 0;
-  await resumeRuntime();
+  log.length = 0
+  await resumeRuntime()
 
-  t.is(getLifecycleState(), "active");
-  t.ok(log.includes("store:resume"));
-  t.ok(log.includes("swarm:resume"));
-});
+  t.is(getLifecycleState(), 'active')
+  t.ok(log.includes('store:resume'))
+  t.ok(log.includes('swarm:resume'))
+})
 
-test("resource unregistered during transition does not fail", async (t) => {
-  const log: string[] = [];
-  resetLifecycleState();
+test('resource unregistered during transition does not fail', async (t) => {
+  const log: string[] = []
+  resetLifecycleState()
 
-  const swarm = createMockSwarm("swarm", log, { delayMs: 30 });
-  const store = createMockStore("store", log);
-  registerSwarm(swarm, { label: "test-swarm", createdAt: Date.now() });
-  registerCorestore(store, { label: "test-store", createdAt: Date.now() });
+  const swarm = createMockSwarm('swarm', log, { delayMs: 30 })
+  const store = createMockStore('store', log)
+  registerSwarm(swarm, { label: 'test-swarm', createdAt: Date.now() })
+  registerCorestore(store, { label: 'test-store', createdAt: Date.now() })
 
-  const suspendP = suspendRuntime();
-  unregisterCorestore(store);
-  await suspendP;
+  const suspendP = suspendRuntime()
+  unregisterCorestore(store)
+  await suspendP
 
-  t.is(getLifecycleState(), "suspended");
-});
+  t.is(getLifecycleState(), 'suspended')
+})
 
-test("register and unregister updates resource counts", (t) => {
-  resetLifecycleState();
+test('register and unregister updates resource counts', (t) => {
+  resetLifecycleState()
 
-  const log: string[] = [];
-  const swarm = createMockSwarm("swarm", log);
-  const store = createMockStore("store", log);
+  const log: string[] = []
+  const swarm = createMockSwarm('swarm', log)
+  const store = createMockStore('store', log)
 
-  t.is(getRegisteredResourceCounts().swarms, 0);
-  t.is(getRegisteredResourceCounts().stores, 0);
+  t.is(getRegisteredResourceCounts().swarms, 0)
+  t.is(getRegisteredResourceCounts().stores, 0)
 
-  registerSwarm(swarm, { label: "s", createdAt: Date.now() });
-  registerCorestore(store, { label: "c", createdAt: Date.now() });
+  registerSwarm(swarm, { label: 's', createdAt: Date.now() })
+  registerCorestore(store, { label: 'c', createdAt: Date.now() })
 
-  t.is(getRegisteredResourceCounts().swarms, 1);
-  t.is(getRegisteredResourceCounts().stores, 1);
+  t.is(getRegisteredResourceCounts().swarms, 1)
+  t.is(getRegisteredResourceCounts().stores, 1)
 
-  unregisterSwarm(swarm);
-  unregisterCorestore(store);
+  unregisterSwarm(swarm)
+  unregisterCorestore(store)
 
-  t.is(getRegisteredResourceCounts().swarms, 0);
-  t.is(getRegisteredResourceCounts().stores, 0);
-});
+  t.is(getRegisteredResourceCounts().swarms, 0)
+  t.is(getRegisteredResourceCounts().stores, 0)
+})
 
 // ============== Lifecycle Gate Tests ==============
 
 function fakeRequest(type: string): Request {
-  return { type } as unknown as Request;
+  return { type } as unknown as Request
 }
 
-test("gate allows representative requests when active", (t) => {
-  resetLifecycleState();
-  t.is(getLifecycleState(), "active");
+test('gate allows representative requests when active', (t) => {
+  resetLifecycleState()
+  t.is(getLifecycleState(), 'active')
 
   // reply, stream, duplex representative + lifecycle ops
-  t.execution(() => assertLifecycleAllowed(fakeRequest("getModelInfo")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("completionStream")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("transcribeStream")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("suspend")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("resume")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("state")));
-});
+  t.execution(() => assertLifecycleAllowed(fakeRequest('getModelInfo')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('completionStream')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('transcribeStream')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('suspend')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('resume')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
+})
 
-test("gate allows only lifecycle ops and blocks representative requests when suspended", async (t) => {
-  const log: string[] = [];
-  setup(log);
-  await suspendRuntime();
-  t.is(getLifecycleState(), "suspended");
+test('gate allows only lifecycle ops and blocks representative requests when suspended', async (t) => {
+  const log: string[] = []
+  setup(log)
+  await suspendRuntime()
+  t.is(getLifecycleState(), 'suspended')
 
-  t.execution(() => assertLifecycleAllowed(fakeRequest("suspend")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("resume")));
-  t.execution(() => assertLifecycleAllowed(fakeRequest("state")));
+  t.execution(() => assertLifecycleAllowed(fakeRequest('suspend')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('resume')))
+  t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
 
   // reply, stream, duplex blocked
-  t.exception(() => assertLifecycleAllowed(fakeRequest("getModelInfo")));
-  t.exception(() => assertLifecycleAllowed(fakeRequest("completionStream")));
-  t.exception(() => assertLifecycleAllowed(fakeRequest("transcribeStream")));
-});
+  t.exception(() => assertLifecycleAllowed(fakeRequest('getModelInfo')))
+  t.exception(() => assertLifecycleAllowed(fakeRequest('completionStream')))
+  t.exception(() => assertLifecycleAllowed(fakeRequest('transcribeStream')))
+})
 
-test("gate error includes request type and lifecycle state", async (t) => {
-  const log: string[] = [];
-  setup(log);
-  await suspendRuntime();
+test('gate error includes request type and lifecycle state', async (t) => {
+  const log: string[] = []
+  setup(log)
+  await suspendRuntime()
 
   try {
-    assertLifecycleAllowed(fakeRequest("getModelInfo"));
-    t.ok(false, "should have thrown");
+    assertLifecycleAllowed(fakeRequest('getModelInfo'))
+    t.ok(false, 'should have thrown')
   } catch (error) {
-    t.ok(error instanceof LifecycleOperationBlockedError);
-    t.ok((error as Error).message.includes("getModelInfo"));
-    t.ok((error as Error).message.includes("suspended"));
+    t.ok(error instanceof LifecycleOperationBlockedError)
+    t.ok((error as Error).message.includes('getModelInfo'))
+    t.ok((error as Error).message.includes('suspended'))
   }
-});
+})
 
-test("gate blocks during transition states (suspending and resuming)", async (t) => {
+test('gate blocks during transition states (suspending and resuming)', async (t) => {
   // suspending
-  const log1: string[] = [];
-  setup(log1, { delayMs: 50 });
+  const log1: string[] = []
+  setup(log1, { delayMs: 50 })
 
-  const suspendP = suspendRuntime();
-  await delay(5);
-  t.is(getLifecycleState(), "suspending");
+  const suspendP = suspendRuntime()
+  await delay(5)
+  t.is(getLifecycleState(), 'suspending')
 
-  t.execution(() => assertLifecycleAllowed(fakeRequest("state")));
-  t.exception(() => assertLifecycleAllowed(fakeRequest("loadModel")));
+  t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
+  t.exception(() => assertLifecycleAllowed(fakeRequest('loadModel')))
 
-  await suspendP;
+  await suspendP
 
   // resuming
-  const resumeP = resumeRuntime();
-  await delay(5);
-  t.is(getLifecycleState(), "resuming");
+  const resumeP = resumeRuntime()
+  await delay(5)
+  t.is(getLifecycleState(), 'resuming')
 
-  t.execution(() => assertLifecycleAllowed(fakeRequest("state")));
-  t.exception(() => assertLifecycleAllowed(fakeRequest("loadModel")));
+  t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
+  t.exception(() => assertLifecycleAllowed(fakeRequest('loadModel')))
 
-  await resumeP;
-});
+  await resumeP
+})
+
+test('onResume listeners fire after resume and unregister cleanly', async (t) => {
+  const log: string[] = []
+  setup(log)
+  await suspendRuntime()
+
+  let fired = 0
+  const off = onResume(() => fired++)
+
+  await resumeRuntime()
+  t.is(fired, 1, 'listener fired once on resume')
+
+  off()
+  await suspendRuntime()
+  await resumeRuntime()
+  t.is(fired, 1, 'listener did not fire after unregister')
+})
+
+test('resetLifecycleState clears onResume listeners', async (t) => {
+  const log: string[] = []
+  setup(log)
+  await suspendRuntime()
+
+  let fired = 0
+  onResume(() => fired++)
+
+  resetLifecycleState()
+  // Re-register resources and cycle; the pre-reset listener must not fire.
+  setup(log)
+  await suspendRuntime()
+  await resumeRuntime()
+  t.is(fired, 0, 'listeners registered before reset are cleared')
+})

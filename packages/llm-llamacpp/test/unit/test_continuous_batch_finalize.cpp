@@ -24,17 +24,21 @@ using qvac_lib_inference_addon_llama::batching::StopReason;
 class RecordingDriver : public SequenceDriver {
 public:
   std::vector<std::string> calls;
+  GenerationStopReason terminalReason = GenerationStopReason::None;
 
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
   [[nodiscard]] int32_t getNSlides() const override { return 0; }
+  [[nodiscard]] bool supportsSliding() const override { return true; }
   void validatePromptPolicy(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
       const PromptLayout&, bool) const override {}
-  std::vector<llama_token> preparePrefill(
+  PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
-      bool, bool) override {
+      const std::vector<std::vector<uint8_t>>&,
+      const std::vector<PlannedMedia>&, bool, bool) override {
     return {};
   }
+  llama_pos evalMediaSegment(size_t, llama_pos pos) override { return pos; }
   void onPrefillComplete(llama_pos, size_t) override {}
   void syncPosition(llama_pos) override {}
   SequenceStepResult onLogitsReady(
@@ -45,13 +49,19 @@ public:
   void onSequenceEnd(const std::function<void(const std::string&)>&) override {
     calls.emplace_back("onSequenceEnd");
   }
-  void onGenerationFinished(
-      const std::function<void(const std::string&)>&) override {
+  [[nodiscard]] bool onGenerationFinished(
+      const std::function<void(const std::string&)>&,
+      GenerationStopReason reason = GenerationStopReason::None) override {
     calls.emplace_back("onGenerationFinished");
+    terminalReason = reason;
+    return rollbackOk;
   }
-  void onCancel(const std::function<void(const std::string&)>&) override {
+  [[nodiscard]] bool
+  onCancel(const std::function<void(const std::string&)>&) override {
     calls.emplace_back("onCancel");
+    return rollbackOk;
   }
+  bool rollbackOk = true;
   [[nodiscard]] bool loadCache(const std::string&, llama_pos) override {
     return false;
   }
@@ -73,7 +83,7 @@ const std::function<void(const std::string&)> kNoCallback;
 /// skips the trim, leaving tool-compaction KV state inconsistent.
 TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::DecodeError, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onCancel") || driver.fired("onGenerationFinished"))
@@ -86,7 +96,7 @@ TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
 /// shared mapping).
 TEST(ContinuousBatchFinalize, CancelledRunsCancelHook) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onCancel"));
@@ -95,20 +105,60 @@ TEST(ContinuousBatchFinalize, CancelledRunsCancelHook) {
 /// Natural end-of-generation routes through onGenerationFinished.
 TEST(ContinuousBatchFinalize, NaturalFinishRunsGenerationFinishedHook) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::Finished, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onGenerationFinished"));
+  EXPECT_EQ(driver.terminalReason, GenerationStopReason::None);
+}
+
+/// Scheduler-imposed per-sequence cap is a known truncation reason. Preserve it
+/// at the finalization boundary so recurrent drivers can roll back open
+/// reasoning spans instead of treating the slot as a normal completion and
+/// attempting strict compaction.
+TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
+  RecordingDriver driver;
+  (void)finalizeTerminalDriver(
+      driver, StopReason::LimitReached, /*prefillOnly=*/false, kNoCallback);
+
+  EXPECT_TRUE(driver.fired("onGenerationFinished"));
+  EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
 }
 
 /// A prefill-only slot never generated, so it only flushes via onSequenceEnd
 /// and must not run the generation-complete trim.
 TEST(ContinuousBatchFinalize, PrefillOnlyOnlyFlushes) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::Finished, /*prefillOnly=*/true, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onSequenceEnd"));
   EXPECT_FALSE(driver.fired("onGenerationFinished"));
   EXPECT_FALSE(driver.fired("onCancel"));
+}
+
+/// `finalizeTerminalDriver` must forward the driver's rollback-ok signal so
+/// the scheduler can skip `saveCache` when a recurrent full-state restore was
+/// refused. Cancelled / DecodeError paths report through `onCancel`; natural
+/// generation finalization can also report a rollback failure when generation
+/// was truncated mid-reasoning.
+TEST(ContinuousBatchFinalize, CancelForwardsRollbackFailure) {
+  RecordingDriver driver;
+  driver.rollbackOk = false;
+  EXPECT_FALSE(finalizeTerminalDriver(
+      driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback));
+}
+
+TEST(ContinuousBatchFinalize, CancelForwardsRollbackSuccess) {
+  RecordingDriver driver;
+  driver.rollbackOk = true;
+  EXPECT_TRUE(finalizeTerminalDriver(
+      driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback));
+}
+
+TEST(ContinuousBatchFinalize, NaturalFinishForwardsRollbackFailure) {
+  RecordingDriver driver;
+  driver.rollbackOk = false;
+  EXPECT_FALSE(finalizeTerminalDriver(
+      driver, StopReason::Finished, /*prefillOnly=*/false, kNoCallback));
 }

@@ -1,0 +1,9 @@
+dist/
+node_modules/
+bun.lock
+package-lock.json
+*.tsbuildinfo
+*.tgz
+qvac.config.json
+.npmrc
+.DS_Store
