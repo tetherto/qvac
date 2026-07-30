@@ -40,10 +40,10 @@ function resolveExitCode(result) {
 }
 
 /**
- * Resolve which build tree holds addon-test. Defaults to the plain test tree
- * (build/); the combined tests+fuzz build lives in build-fuzz/. A `--build-dir
- * <dir>` (or `--build-dir=<dir>`) flag wins over the CPP_BUILD_DIR env var,
- * which wins over the default.
+ * Resolve which build tree holds addon-test. Defaults to build/, which is where
+ * the tests-only and the combined tests+fuzz configures both land. A
+ * `--build-dir <dir>` (or `--build-dir=<dir>`) flag wins over the CPP_BUILD_DIR
+ * env var, which wins over the default.
  */
 function resolveBuildDir(argv, processEnv) {
   const eq = argv.find((a) => a.startsWith('--build-dir='))

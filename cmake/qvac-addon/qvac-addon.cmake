@@ -346,48 +346,32 @@ endfunction()
 # normal CMake dep flow is allowed by the dependency-pinning rule; this is NOT
 # remote code execution. Bump the pin when moving to a newer FuzzTest release.
 #
-# Its dependencies are sourced from vcpkg where vcpkg can supply them, so the
-# shared binary cache serves them instead of every build tree compiling them:
-# GoogleTest and the ANTLR4 C++ runtime are redirected at find_package() (see
-# qvac_addon_enable_fuzztest). The most valuable consequence is that the unit
-# tests and the fuzz targets link ONE GoogleTest — the vcpkg one — so there is no
-# target-name collision to design the build around.
-#
-# Abseil and RE2 stay on FetchContent: FuzzTest needs
-# absl/random/mocking_access.h (Abseil >= 20260526.0) for fuzztest::fuzzing_bit_gen,
-# and upstream vcpkg is still on 20260107.1 as of vcpkg master 2026-07-29, which
-# does not ship that header. RE2 has to follow Abseil rather than come from
-# vcpkg, because vcpkg's re2 links vcpkg's Abseil — mixing it with a
-# source-built Abseil would put two Abseils in one link. Move both to vcpkg once
-# a new enough Abseil is reachable (upstream bump, or a registry port), which
-# also retires the #2091 override below. See docs/architecture/ADDON-FUZZING.md.
+# Abseil, GoogleTest and the ANTLR4 C++ runtime come from vcpkg instead of
+# FuzzTest's own FetchContent declarations, so the shared binary cache serves
+# them rather than every build tree compiling them: qvac_addon_enable_fuzztest()
+# redirects those declarations at find_package(). The most valuable consequence
+# is that the unit tests and the fuzz targets link ONE GoogleTest — the vcpkg one
+# — so there is no target-name collision to design the build around. FuzzTest and
+# RE2 are the only things still compiled from source (RE2 has to be: FuzzTest
+# includes its internal headers). See docs/architecture/ADDON-FUZZING.md.
 # ---------------------------------------------------------------------------
 set(QVAC_ADDON_FUZZTEST_GIT_REPOSITORY "https://github.com/google/fuzztest.git")
 # Release 2026-06-29.
 set(QVAC_ADDON_FUZZTEST_GIT_TAG "704efb341c23011cab2a750efcdd16ad04882c80")
-
-# FuzzTest (as of 2026-06-29 and main) FetchContents Abseil 20260526.0, which
-# carries abseil bug #2091: the absl_strings CMake target links to itself, which
-# the toolchain treats as a fatal generate-time error. It was fixed upstream on
-# 2026-07-01 (abseil commit d21659a). We override FuzzTest's abseil-cpp
-# declaration with that fix commit — FetchContent honours the first declaration,
-# so declaring abseil-cpp before pulling FuzzTest wins. Drop this override once
-# a FuzzTest release pins a post-fix Abseil.
-set(QVAC_ADDON_ABSEIL_GIT_REPOSITORY "https://github.com/abseil/abseil-cpp.git")
-set(QVAC_ADDON_ABSEIL_GIT_TAG "d21659a5affab9def3333ae70c1123c3fe1a9873")
 
 # ---------------------------------------------------------------------------
 # _qvac_addon_force_cxx_standard(<dir> <standard>)
 #
 # Recursively set CXX_STANDARD on every non-interface target under <dir>.
 #
-# FuzzTest hard-sets `set(CMAKE_CXX_STANDARD 17)` for its whole fetched subtree
-# (FuzzTest + Abseil + RE2). Abseil's `absl::SourceLocation` aliases
-# std::source_location under C++20, so an Abseil built at C++17 emits different
-# MakeErrorImpl(...) symbols than a C++20 consumer TU references — an undefined
-# symbol link error. Our addon TUs need C++20 (std::span), so we lift the
-# fetched subtree to C++20 after creation to keep one consistent ABI. Applied
-# after FetchContent so it wins over FuzzTest's in-scope set().
+# FuzzTest hard-sets `set(CMAKE_CXX_STANDARD 17)` for its own subtree, but our
+# addon TUs need C++20 (std::span) and a fuzz driver instantiates FuzzTest
+# templates over types those TUs define, so the two halves must agree on the
+# standard. vcpkg's Abseil is built at C++20 for the same reason (see the
+# `abseil` port in qvac-registry-vcpkg), and propagates cxx_std_20 to its
+# dependents. We lift
+# the fetched subtree to C++20 after creation to keep one consistent ABI.
+# Applied after FetchContent so it wins over FuzzTest's in-scope set().
 # ---------------------------------------------------------------------------
 function(_qvac_addon_force_cxx_standard dir standard)
   get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
@@ -429,7 +413,8 @@ macro(qvac_addon_enable_fuzztest)
 
     # Resolve the vcpkg-supplied dependencies up front, so a manifest missing the
     # "fuzz" feature fails here naming the package instead of later with an
-    # unresolved GTest::/antlr4 link target.
+    # unresolved absl:: link target.
+    find_package(absl CONFIG REQUIRED)
     find_package(GTest CONFIG REQUIRED)
     find_package(antlr4-runtime CONFIG REQUIRED)
 
@@ -440,18 +425,18 @@ macro(qvac_addon_enable_fuzztest)
     # Deliberately no download fallback: a silent fall back to a source build
     # would reintroduce the duplicate GoogleTest these declarations exist to
     # prevent, so an unresolvable dependency must fail loudly.
+    #
+    # RE2 is NOT redirected: FuzzTest's regexp domains include RE2's internal
+    # re2/prog.h + re2/regexp.h, which no RE2 install ships (upstream installs
+    # only the four public headers). FuzzTest's own declaration builds it from
+    # source against the vcpkg Abseil found above — one Abseil in the link, and
+    # Abseil's propagated cxx_std_20 keeps RE2 on the same standard.
+    FetchContent_Declare(abseil-cpp FIND_PACKAGE_ARGS NAMES absl)
     FetchContent_Declare(googletest FIND_PACKAGE_ARGS NAMES GTest)
     FetchContent_Declare(antlr_cpp FIND_PACKAGE_ARGS NAMES antlr4-runtime)
 
     message(STATUS
       "qvac-addon: fetching FuzzTest ${QVAC_ADDON_FUZZTEST_GIT_TAG}")
-    # Override FuzzTest's abseil-cpp pin (see the bug #2091 note above). Must be
-    # declared before FuzzTest is made available so this declaration wins.
-    FetchContent_Declare(
-      abseil-cpp
-      GIT_REPOSITORY "${QVAC_ADDON_ABSEIL_GIT_REPOSITORY}"
-      GIT_TAG "${QVAC_ADDON_ABSEIL_GIT_TAG}"
-    )
     FetchContent_Declare(
       fuzztest
       GIT_REPOSITORY "${QVAC_ADDON_FUZZTEST_GIT_REPOSITORY}"
@@ -489,11 +474,6 @@ function(qvac_addon_add_fuzz_target target)
 
   qvac_addon_enable_fuzztest()
 
-  # fuzztest_setup_fuzzing_flags() applies coverage/sanitizer flags (fuzzing
-  # mode only) to targets declared after it in this directory scope, so it must
-  # run before add_executable().
-  fuzztest_setup_fuzzing_flags()
-
   add_executable(${target} ${_QAFZ_SOURCES})
   target_compile_features(${target} PRIVATE cxx_std_20)
   target_compile_options(${target} PRIVATE -Wall -Wextra -g)
@@ -506,11 +486,31 @@ function(qvac_addon_add_fuzz_target target)
 
   link_fuzztest(${target})
 
-  # ASan + LSan for the bounded unit-test runs (fuzzing mode layers coverage on
-  # top via fuzztest_setup_fuzzing_flags()).
+  # ASan + LSan, for both run modes.
   if(NOT WIN32)
     target_compile_options(${target} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(${target} PRIVATE -fsanitize=address)
+  endif()
+
+  # Coverage instrumentation for fuzzing mode — without it the fuzzer has no
+  # feedback signal on the code under test. FuzzTest's own
+  # fuzztest_setup_fuzzing_flags() macro is deliberately NOT used here: it works
+  # by appending to CMAKE_CXX_FLAGS, a directory-scoped variable read at generate
+  # time, so calling it from inside a function silently discards the flags. The
+  # failure is quiet in the worst way — FuzzTest's execution_coverage_ stays null
+  # and `--fuzz=` aborts with "To fuzz, please build with --config=fuzztest".
+  # Setting the flags on the target instead is scope-proof.
+  #
+  # Only coverage: this must not change the target's debug/sanitizer posture
+  # relative to the FuzzTest libraries it links (e.g. adding -UNDEBUG here). Both
+  # halves instantiate the same Abseil container templates, and Abseil's
+  # swisstable layout keys off the sanitizer macros, so a posture that differs
+  # per TU is an ODR violation that presents as a SIGSEGV inside raw_hash_set.
+  if(FUZZTEST_FUZZING_MODE AND NOT WIN32)
+    target_compile_options(${target} PRIVATE
+      -fsanitize-coverage=inline-8bit-counters
+      -fsanitize-coverage=trace-cmp
+    )
   endif()
 
   if(_QAFZ_LINK_FABRIC)

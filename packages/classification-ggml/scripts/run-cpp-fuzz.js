@@ -39,11 +39,13 @@ function parseArgs(argv) {
 function main() {
   const { continuous, fuzzTest, buildDir } = parseArgs(process.argv.slice(2))
   const binary = os.platform() === 'win32' ? `${BINARY_NAME}.exe` : `./${BINARY_NAME}`
-  // Both the fuzz-only and the combined tests+fuzz builds live in build-fuzz.
+  // Every configure of this package shares the default build/ tree; the fuzz
+  // scripts just pass a different -D set. --build-dir stays available for a
+  // side-by-side tree.
   const cwd = path.resolve(
     __dirname,
     '..',
-    buildDir || process.env.CPP_BUILD_DIR || 'build-fuzz',
+    buildDir || process.env.CPP_BUILD_DIR || 'build',
     'test',
     'fuzz'
   )

@@ -20,8 +20,8 @@ phase.
 > dependency-pinning rule and is **not** remote code execution.
 >
 > Of the four dependencies FuzzTest would otherwise `FetchContent` itself,
-> **GoogleTest and the ANTLR4 C++ runtime are redirected at vcpkg** — see
-> "Dependency sourcing" below for how, and for why Abseil and RE2 can't be yet.
+> **Abseil, GoogleTest and the ANTLR4 C++ runtime are redirected at vcpkg** — see
+> "Dependency sourcing" below for how, and for why RE2 structurally cannot be.
 > The reason this matters beyond build time: there is now exactly **one**
 > GoogleTest in play (the vcpkg one), which is what retired the whole
 > target-name-collision workaround the first iteration needed.
@@ -204,36 +204,40 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
 
 ### Accepted trade-offs
 
-- FuzzTest still compiles from source, along with the Abseil + RE2 part of its
-  dependency stack (see "Dependency sourcing"), scoped behind
-  `BUILD_FUZZING=OFF` so normal builds and the existing coverage job are
+- FuzzTest and RE2 still compile from source (see "Dependency sourcing"), scoped
+  behind `BUILD_FUZZING=OFF` so normal builds and the existing coverage job are
   unaffected. It is a dedicated build, never on the default path.
-- **Abseil pin override (bug #2091).** FuzzTest (as of `2026-06-29` and `main`)
-  `FetchContent`s Abseil `20260526.0`, whose `absl_strings` CMake target links to
-  itself — a fatal generate-time error under the vcpkg toolchain. The template
-  overrides FuzzTest's `abseil-cpp` declaration with the upstream fix commit
-  (`d21659a`, 2026-07-01). Drop the override once a FuzzTest release pins a
-  post-fix Abseil, or once Abseil moves to vcpkg.
-- **Whole fetched subtree forced to C++20.** FuzzTest hard-sets
-  `CMAKE_CXX_STANDARD 17` for its subtree, but `absl::SourceLocation` aliases
-  `std::source_location` under C++20, so an Abseil built at C++17 emits different
-  `MakeErrorImpl(...)` symbols than a C++20 consumer TU (our addon code needs
-  `std::span`) references — an undefined-symbol link error. The template lifts
-  every fetched target to C++20 after `FetchContent` to keep one consistent ABI.
-  This is also the open question for moving Abseil to vcpkg: the vcpkg `abseil`
-  port carries a `003-force-cxx-17.patch` and builds at the compiler default, so
-  a vcpkg Abseil would need a triplet that sets `-std=c++20` (Abseil then detects
-  at-least-C++20 and propagates `cxx_std_20`).
-- **The vcpkg-supplied dependencies are not sanitizer-instrumented.** FuzzTest's
-  own libraries are built in the fuzz tree under
-  `fuzztest_setup_fuzzing_flags()`, so they carry the same ASan/coverage flags as
-  the code under test; GoogleTest and ANTLR4 come from the vcpkg binary cache
-  without them. The same mixing already exists in the plain `test:cpp` build
+- **A newer `abseil` port in `qvac-registry-vcpkg`.** The version FuzzTest requires
+  is newer than any registry served, so the registry gained a dated `abseil`
+  `20260526.0` (see "The `abseil` registry port"). That is one more pinned
+  third-party dependency to maintain, in exchange for retiring both the
+  FetchContent'd Abseil and the abseil#2091 declaration override the first
+  iteration needed.
+- **Fetched subtree forced to C++20.** FuzzTest hard-sets `CMAKE_CXX_STANDARD 17`
+  for its subtree, but our addon TUs need C++20 (`std::span`) and a fuzz driver
+  instantiates FuzzTest templates over types those TUs define, so both halves
+  must agree on the standard. The template lifts every fetched target to C++20
+  after `FetchContent`; the Abseil port is built at C++20 for the matching ABI
+  reason and propagates `cxx_std_20` to its dependents.
+- **GoogleTest and ANTLR4 are not sanitizer-instrumented.** FuzzTest's own
+  libraries are built in the fuzz tree with the same ASan/coverage flags as the
+  code under test, and Abseil is ASan-instrumented by its port's `asan` feature
+  because it has to be (see below), but GoogleTest and ANTLR4 come from the vcpkg binary
+  cache without them. The same mixing already exists in the plain `test:cpp` build
   (ASan `addon-test` linking a non-ASan vcpkg gtest) and both bounded and
   coverage-guided runs are clean, but it does mean sanitizer coverage stops at
   those two libraries' boundary. If it ever produces false
   `container-overflow` reports, the fix is a sanitizer overlay triplet
   (`x64-linux-fuzz`) rather than relaxing `ASAN_OPTIONS`.
+- **Coverage instrumentation is set on the fuzz target, not via FuzzTest's
+  `fuzztest_setup_fuzzing_flags()`.** That macro appends to `CMAKE_CXX_FLAGS`,
+  which is directory-scoped and read at generate time, so calling it from a CMake
+  function (which is what `qvac_addon_add_fuzz_target` is) silently drops the
+  flags and leaves the fuzzer with no feedback on the code under test. The
+  corollary is a constraint on future edits: whatever changes the target's
+  debug/sanitizer posture must change it for the FuzzTest libraries too, because
+  both instantiate the same Abseil container templates. Adding `-UNDEBUG` to just
+  one side is an ODR violation.
 - Continuous-fuzzing mode is Linux/clang-first. Fuzzing is treated as a
   **Linux-only** CI concern, consistent with the existing `if(NOT WIN32)` ASan
   gating.
@@ -258,19 +262,21 @@ lines in the PR that already migrates it to the template + fabric.
   special is required to make that work. The combined configure builds only the
   two test executables; the production `.bare` module is skipped so the fuzzing
   toolchain never instruments the shipped addon. A plain `BUILD_TESTING`-only
-  build is unchanged: full production module, no FuzzTest fetch. Because the
-  combined configure caches `BUILD_FUZZING=ON`, it uses its own tree
-  (`bare-make … -b build-fuzz`, wired into the `test:cpp:fuzz*` npm scripts) so it
-  never poisons the default `build/` cache.
-- **`qvac_addon_enable_fuzztest()`** — resolves the vcpkg-supplied dependencies,
-  then fetches + builds a pinned FuzzTest once per configure (idempotent),
-  overriding FuzzTest's Abseil pin (bug #2091) and forcing the fetched subtree to
-  C++20. Defines `link_fuzztest()` / `fuzztest_setup_fuzzing_flags()`.
+  build is unchanged: full production module, no FuzzTest fetch. Every configure
+  shares the default `build/` tree, so one vcpkg install tree serves all of them
+  — but `BUILD_FUZZING` is a cached option, and when it is stale-`ON` the
+  production `.bare` module silently disappears from the build. Every npm script
+  that configures the tree therefore states `BUILD_FUZZING` explicitly (`OFF` in
+  `build:native` and `test:cpp:build`), rather than inheriting whatever the last
+  configure left behind.
+- **`qvac_addon_enable_fuzztest()`** — resolves the vcpkg-supplied dependencies
+  and redirects FuzzTest's own declarations at them, then fetches + builds a
+  pinned FuzzTest once per configure (idempotent), forcing the fetched subtree to
+  C++20. Defines `link_fuzztest()`.
 - **`qvac_addon_add_fuzz_target(<name> SOURCES … [INCLUDE_DIRS …] [LINK_LIBS …]
-  [LINK_FABRIC])`** — builds a plain `add_executable`, calls
-  `fuzztest_setup_fuzzing_flags()` (adds coverage instrumentation in fuzzing
-  mode), links FuzzTest + its GoogleTest, applies `-fsanitize=address`
-  + `-fno-omit-frame-pointer` (non-Windows) for the bounded unit-test runs, and
+  [LINK_FABRIC])`** — builds a plain `add_executable`, links FuzzTest + its
+  GoogleTest, applies `-fsanitize=address` + `-fno-omit-frame-pointer`
+  (non-Windows) in both modes plus coverage instrumentation in fuzzing mode, and
   registers a `ctest` case. Only when `LINK_FABRIC` is given does it link the
   fabric headers/module and call `qvac_addon_stage_fabric_for_test()`. Omitting
   `LINK_FABRIC` (the default, preferred for pure parse/transform targets) keeps
@@ -303,25 +309,78 @@ without patching FuzzTest.
 | --- | --- | --- |
 | GoogleTest `v1.17.0` | **vcpkg** (`gtest`, same version) | Also removes the second GoogleTest, and with it the target-name collision. |
 | ANTLR4 C++ runtime `4.13.2` | **vcpkg** (`antlr4`, same version) | Pulls `libuuid` transitively. |
-| Abseil `20260526.0` | FetchContent | FuzzTest's `fuzztest::fuzzing_bit_gen` needs `absl/random/mocking_access.h`, absent from vcpkg's newest Abseil (`20260107.1`, still current on vcpkg master as of 2026-07-29). |
-| RE2 `2025-11-05` | FetchContent | Must follow Abseil: vcpkg's `re2` links vcpkg's Abseil, so taking it from vcpkg alongside a source-built Abseil would put two Abseils in one link. |
+| Abseil `20260526.0` | **vcpkg** (`abseil`, `qvac-registry-vcpkg`, same version) | Upstream vcpkg is on `20260107.1` (still, on vcpkg master as of 2026-07-29), which predates the `absl/random/mocking_access.h` that `fuzztest::fuzzing_bit_gen` needs, and this registry's `abseil` was pinned to `20240722.0` for onnxruntime — so the registry gained a dated `20260526.0` port. See below. |
+| RE2 `2025-11-05` | FetchContent | **Structural, not version skew.** `fuzztest/internal/domains/regexp_dfa.cc` includes RE2's internal `re2/prog.h` + `re2/regexp.h` to walk a compiled regex into a DFA. Upstream RE2 installs only its four public headers, so no RE2 *install* — vcpkg or otherwise — can satisfy FuzzTest. It has to be a source tree. |
 
-The two vcpkg packages are declared in the package manifest's `fuzz` feature
-(`vcpkg.json`) and listed in the `microsoft/vcpkg` allowlist in
-`vcpkg-configuration.json`; `qvac_addon_preproject()` activates the feature
-whenever `BUILD_FUZZING` is on. `qvac_addon_enable_fuzztest()` `find_package`s
-both **before** declaring anything, so a manifest missing the feature fails
-naming the package rather than with an unresolved link target. The declarations
-deliberately carry no download fallback — silently falling back to a source
-GoogleTest would reintroduce the duplicate the redirect exists to prevent.
+The vcpkg packages are declared in the package manifest's `fuzz` feature
+(`vcpkg.json`); the ones resolved from Microsoft are listed in that registry's
+allowlist in `vcpkg-configuration.json`. `qvac_addon_preproject()` activates the
+feature whenever `BUILD_FUZZING` is on. `qvac_addon_enable_fuzztest()`
+`find_package`s them **before** declaring anything, so a manifest missing the
+feature fails naming the package rather than with an unresolved link target. The
+declarations deliberately carry no download fallback — silently falling back to a
+source GoogleTest would reintroduce the duplicate the redirect exists to prevent.
 
-**To move Abseil and RE2 across** (which also retires the #2091 override), one of:
-upstream vcpkg bumps `abseil` to ≥ `20260526.0`; an `abseil` port is added to
-`qvac-registry-vcpkg` (a small port — unlike `fuzztest`, Abseil installs cleanly —
-and `abseil` then comes off the `microsoft/vcpkg` allowlist); or FuzzTest is
-pinned back to a release matching vcpkg's Abseil, which couples every future
-FuzzTest bump to vcpkg's Abseil cadence. Verify the C++17/C++20 Abseil ABI note
-in "Accepted trade-offs" before choosing.
+Mixing a vcpkg Abseil with a source-built RE2 is safe in this direction and only
+this direction: RE2's source build binds to the imported `absl::` targets, so
+there is one Abseil in the link. The reverse (vcpkg RE2 + source Abseil) would
+put two Abseils in one link, because vcpkg's `re2` links vcpkg's `abseil`.
+
+### The `abseil` registry port
+
+`ports/abseil/` in `qvac-registry-vcpkg`, at version `20260526.0`. It replaces the
+previous onnxruntime-pinned port (`version-string: "onnxruntime"`, Abseil
+`20240722.0`) **at HEAD only**: both old entries stay in `versions/a-/abseil.json`,
+so `ocr-onnx` keeps resolving what it resolves today from its pinned baseline. The
+manifest asks for `abseil[asan]` with `"version>=": "20260526.0"`, so the floor is
+stated where the dependency is declared rather than left to the baseline.
+
+It is upstream's portfile with three deliberate differences:
+
+- **Built at C++20** (`-DCMAKE_CXX_STANDARD=20`). Abseil's ABI depends on the
+  standard — `absl::SourceLocation` aliases `std::source_location` under C++20 —
+  so a default-standard (C++17) Abseil emits different `MakeErrorImpl(...)`
+  symbols than our C++20 TUs reference, which is an undefined-symbol link error.
+  `ABSL_PROPAGATE_CXX_STD=ON` then puts `cxx_std_20` on the installed `absl::`
+  targets, so RE2 and FuzzTest inherit the same standard automatically. Verify
+  with `INTERFACE_COMPILE_FEATURES "cxx_std_20"` in the installed
+  `share/absl/abslTargets.cmake`.
+- **One patch only**, for abseil#2091 (`absl_strings` linked to itself, fatal at
+  generate time; fixed upstream 2026-07-01, after the `20260526.0` tag). Upstream
+  vcpkg's `003-force-cxx-17.patch` only relaxes Abseil's "compiler defaults to
+  < C++17" `FATAL_ERROR`, which the explicit C++20 makes unreachable, and its
+  mingw / gcc13 patches target toolchains QVAC doesn't build with.
+- **An `asan` feature**, which the `fuzz` manifest feature requests.
+  Abseil's swisstable ABI depends on the sanitizer: under ASan,
+  `raw_hash_set` stores a generation counter in the backing array and
+  `CommonFields` carries a pointer to it
+  (`ABSL_SWISSTABLE_ENABLE_GENERATIONS`). The container is a template, so an
+  ASan-instrumented consumer compiles the generations-enabled layout inline while
+  the out-of-line resize/insert helpers in an uninstrumented `libabsl` allocate
+  the layout without it — the header code reads a generation that isn't there and
+  dies with `SIGSEGV` in `raw_hash_set::begin()`. Every fuzz target links ASan, so
+  its Abseil must be built with it. It is a feature rather than the default
+  because it makes the installed libraries unlinkable without
+  `-fsanitize=address`, and because the feature earns a separate binary-cache
+  entry instead of poisoning the default one.
+
+**Coexistence with the onnxruntime-pinned Abseil.** The port that was there is
+version-sensitive for `onnxruntime`, and a second port under a distinct name is
+not an option: another name would not be picked up by other ports' `abseil`
+dependency, and two Abseils cannot coexist in one install tree (same installed
+files). So the new one takes over the `abseil` name with a *dated* version scheme,
+and the old `version-string: "onnxruntime"` entries stay in the version database —
+older baselines resolve them unchanged. What makes this safe rather than a silent
+upgrade for the other consumers (`onnxruntime`, `sentencepiece`, `marian-dev`, none
+validated at `20260526.0`) is that `onnxruntime` constrains Abseil with
+`version>= "onnxruntime#1"`: a non-comparable scheme, so resolving it *together*
+with the dated version is a hard error rather than an implicit bump.
+
+> **Pending:** `vcpkg-configuration.json` currently points `default-registry` at a
+> fork of `qvac-registry-vcpkg`, because the port is still in review
+> ([qvac-registry-vcpkg#271](https://github.com/tetherto/qvac-registry-vcpkg/pull/271)).
+> Flip it back to `tetherto/qvac-registry-vcpkg` at the post-merge baseline before
+> this lands.
 
 ## Implementation phases
 
@@ -337,15 +396,33 @@ addons at once.
 - **Phase 0 — template fuzz helper + spike (`classification-ggml`). ✅ Done.**
   Added the `BUILD_FUZZING` option in `qvac_addon_preproject`, the
   `qvac_addon_enable_fuzztest()` + `qvac_addon_add_fuzz_target()` helpers (pinned
-  FuzzTest via `FetchContent`, Abseil #2091 override, C++20 subtree forcing) to
+  FuzzTest via `FetchContent`, C++20 subtree forcing) to
   `cmake/qvac-addon/qvac-addon.cmake`, a `test/fuzz` `FUZZ_TEST` over
   `preprocessToTensor` built **without** `LINK_FABRIC` (full ASan + LSan), and
-  `fuzz*` npm scripts + `scripts/run-cpp-fuzz.js`. Validated locally: bounded
-  unit-test run passes clean, and 20 s coverage-guided fuzzing (`~933k` runs)
-  found no crash/leak. Follow-up (also done): GoogleTest and ANTLR4 moved from
-  FetchContent to vcpkg — see "Dependency sourcing" — revalidated with a clean
-  fuzz-only build, the combined tests+fuzz build (29 unit tests + bounded fuzz),
-  and 20 s coverage-guided fuzzing (`~1.12M` runs, clean).
+  `fuzz*` npm scripts + `scripts/run-cpp-fuzz.js`.
+- **Phase 0 follow-up — dependencies from vcpkg. ✅ Done.** GoogleTest, ANTLR4 and
+  (via the registry's dated port) Abseil moved off FetchContent — see "Dependency
+  sourcing". Two bugs surfaced while validating this, both worth knowing about
+  because they were silent:
+  - **Coverage instrumentation never reached the code under test.** The template
+    called FuzzTest's `fuzztest_setup_fuzzing_flags()` from inside a CMake
+    *function*; the macro appends to `CMAKE_CXX_FLAGS`, which is directory-scoped
+    and read at generate time, so the flags evaporated — `compile_commands.json`
+    showed the fuzz driver and `ImagePreprocessor.cpp` compiled with
+    `-fsanitize=address` and no `-fsanitize-coverage`. Coverage-guided mode still
+    reported progress because the FetchContent'd Abseil/RE2 in the same tree were
+    instrumented and supplied a counter map, so the fuzzer was steering on their
+    edges instead. Setting the flags on the target fixed it; a 60 s run now
+    reports **`833` of `8505` edges covered with a `517`-input corpus** over 1.45M
+    runs, growing throughout, where the pre-fix corpus stalled almost immediately.
+  - **An ASan-instrumented consumer needs an ASan Abseil.** Abseil's swisstable
+    layout changes under a sanitizer, so the uninstrumented vcpkg Abseil
+    SIGSEGV'd in `raw_hash_set` as soon as FuzzTest's memory dictionary (a
+    `flat_hash_set`) came alive — which only happened once coverage feedback
+    started working. Hence the port's `asan` feature.
+  Revalidated from a clean tree: fuzz-only build + bounded run, the combined
+  tests+fuzz build (29 unit tests + bounded fuzz), plain `test:cpp`, and 60 s
+  coverage-guided fuzzing (clean, no crash/leak).
 - **Phase 1 — image + model-header families (as addons migrate).** As each
   direct-ggml addon adopts the template, add its fuzz targets: the image family
   (`classification-ggml`, `ocr-ggml`, `vla-ggml`; `diffusion-cpp` after it
@@ -369,15 +446,15 @@ addons at once.
   `cpp-tests-classification.yml` does a **single** combined configure+build+run
   — `test:cpp:fuzz:build` then `test:cpp:fuzz:run` — so the CMake configure cost
   is paid once for both `addon-test` and the bounded fuzz target (sharing
-  the vcpkg GoogleTest) instead of configuring `build/` and `build-fuzz/`
-  separately. The combined run step sets **no** `ASAN_OPTIONS`: the unit-test
+  the vcpkg GoogleTest) instead of configuring two trees separately. The
+  combined run step sets **no** `ASAN_OPTIONS`: the unit-test
   runner self-applies the relaxed fabric-boundary options while the fuzz runner
   keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
   `test:cpp` path (no fuzzing). It reuses the caller's existing
   SHA-bound fork gate (no new trust wiring). Still open: what remains on
-  FetchContent (FuzzTest, Abseil, RE2) runs cold each job because Manual
-  Workspace Cleanup wipes `build-fuzz/`, so either move Abseil/RE2 to vcpkg (see
-  "Dependency sourcing") or cache the pinned sources/build. Then add a separate scheduled
+  FetchContent (FuzzTest, RE2) runs cold each job because Manual Workspace
+  Cleanup wipes `build/`, so cache the pinned sources/build (Abseil is already
+  vcpkg-served; RE2 cannot be — see "Dependency sourcing"). Then add a separate scheduled
   / `workflow_dispatch` fuzzing job that builds with `-DFUZZTEST_FUZZING_MODE=ON`
   and runs `--fuzz_for=<duration>` (coverage-guided, time-boxed) with a
   wall-clock budget per target on a self-hosted `qvac-*` Linux runner, applying
@@ -407,15 +484,16 @@ addons at once.
   in-process model produces false crashes. Keeping targets to pure
   parse/transform functions (not `runJob`) avoids this — and is the same choice
   that lets most targets skip the fabric link.
-- **Build-time cost.** GoogleTest and ANTLR4 come from the vcpkg binary cache;
-  FuzzTest + Abseil + RE2 are still fetched and compiled, only under
+- **Build-time cost.** Abseil, GoogleTest and ANTLR4 come from the vcpkg binary
+  cache; FuzzTest + RE2 are still fetched and compiled, only under
   `BUILD_FUZZING=ON`, so normal builds and coverage are unaffected. The fuzz
-  configure therefore still needs network access for those pinned sources — fine
-  for the local/scheduled fuzz job, and reducible further by moving Abseil/RE2 to
-  vcpkg (see "Dependency sourcing").
-- **Upstream-pin maintenance.** The FuzzTest commit, the Abseil #2091 override,
-  and the C++20 subtree forcing are all workarounds for the current FuzzTest
-  release. Each is documented at its definition in `qvac-addon.cmake` with a
+  configure therefore still needs network access for those two pinned sources —
+  fine for the local/scheduled fuzz job, and reducible only by caching them (RE2
+  cannot move to vcpkg, see "Dependency sourcing").
+- **Upstream-pin maintenance.** The FuzzTest commit and the C++20 subtree forcing
+  are workarounds for the current FuzzTest release, as is the abseil#2091 patch
+  the registry port carries. Each is documented at its definition in
+  `qvac-addon.cmake` (or the port) with a
   "drop this once…" note; revisit on every FuzzTest bump. A bump can also move
   the version floor on FuzzTest's vcpkg-supplied dependencies, so re-check
   "Dependency sourcing" against what the new pin requires.
@@ -433,20 +511,21 @@ addons at once.
 
 - `cmake/qvac-addon/qvac-addon.cmake` — the shared addon build template; home of
   `BUILD_FUZZING`, `qvac_addon_enable_fuzztest()`, `qvac_addon_add_fuzz_target()`
-  (with the FuzzTest pin, Abseil #2091 override, and C++20 subtree forcing) and
-  the existing `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
+  (with the FuzzTest pin and the C++20 subtree forcing) and the existing
+  `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
 - `packages/classification-ggml/test/fuzz/` — Phase 0 reference: the
   `CMakeLists.txt` fuzz wiring and `preprocess_fuzz.cpp` (`FUZZ_TEST` over
   `preprocessToTensor`, no fabric link).
 - `packages/classification-ggml/vcpkg.json` /
   `packages/classification-ggml/vcpkg-configuration.json` — the `fuzz` manifest
-  feature and the `microsoft/vcpkg` allowlist entries that back it.
+  feature (`abseil[asan]` with its version floor, `antlr4`, `gtest`) and the
+  `microsoft/vcpkg` allowlist entries that back the latter two.
 - `packages/classification-ggml/scripts/run-cpp-fuzz.js` — bounded /
   `--continuous` fuzz runner (full ASan + LSan, no `ASAN_OPTIONS` relaxation);
   wired via the `fuzz`, `fuzz:build`, `fuzz:run`, `fuzz:continuous` npm scripts
-  (fuzz-only tree) and the `test:cpp:fuzz*` scripts (combined tests+fuzz tree).
-  Both runners take `--build-dir <dir>` (default `build` / `build-fuzz`) so the
-  combined `build-fuzz` tree can host `addon-test` and `preprocess-fuzz` together.
+  (fuzz-only configure) and the `test:cpp:fuzz*` scripts (combined tests+fuzz
+  configure). Both runners default to `build/` and take `--build-dir <dir>` (or
+  `CPP_BUILD_DIR`) for a side-by-side tree.
 - `docs/architecture/ADDON-CMAKE-TEMPLATE.md` — template design, the fabric
   migration shape, migration order, and the planned `check-addon-cmake.mjs`
   drift guard.
