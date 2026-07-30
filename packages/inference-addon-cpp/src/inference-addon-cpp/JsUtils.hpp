@@ -855,12 +855,13 @@ class JsAsyncTask {
     /// APIs beyond the teardown handshake are illegal once false.
     bool envAlive = true;
     std::exception_ptr error;
-    /// The user work, loop-owned: the worker thread only runs it; the uv
-    /// close callback destroys it before finishing the deferred teardown.
-    /// That ordering is the point — captures (commonly the last shared_ptr
-    /// to the addon) have JS-facing destructors, and once the teardown is
-    /// finished the env can be gone. A worker-owned copy would be destroyed
-    /// after uv_async_send, racing exactly that.
+    /// The user work, loop-owned: the worker thread only runs it; completion
+    /// destroys it before settling the promise and the uv close callback
+    /// provides cleanup for paths where completion never runs. That ordering
+    /// is the point — captures (commonly the last shared_ptr to the addon)
+    /// have JS-facing destructors, and once the teardown is finished the env
+    /// can be gone. A worker-owned copy would be destroyed after uv_async_send,
+    /// racing exactly that.
     std::function<void()> work;
 
     CallbackData(
@@ -890,14 +891,14 @@ class JsAsyncTask {
   }
 
   /// Loop-side end of every task, successful or aborted (settlement failure,
-  /// worker that never started): destroys the work and its captures while
-  /// the env is still pinned, then finishes the deferred teardown and frees
-  /// the handle. Requires a registered teardown.
+  /// worker that never started): provides fallback destruction for the work,
+  /// then finishes the deferred teardown and frees the handle. Requires a
+  /// registered teardown.
   static void onCloseHandle(uv_handle_t* h) {
     auto* async = reinterpret_cast<uv_async_t*>(h);
     std::unique_ptr<CallbackData> data(static_cast<CallbackData*>(async->data));
-    // Captures die here, on the loop with the env alive — never on the
-    // detached worker racing env teardown (see CallbackData::work).
+    // Normally cleared by onComplete before promise settlement. This also
+    // handles thread-start failure, where completion never runs.
     data->work = nullptr;
     data->error = nullptr;
     // Lets a pending env teardown complete; on the live-env path it just
@@ -908,6 +909,13 @@ class JsAsyncTask {
 
   static void onComplete(uv_async_t* handle) {
     auto* data = static_cast<CallbackData*>(handle->data);
+
+    // Release captures before making completion observable to JavaScript.
+    // Otherwise an awaited cancel can proceed into destroyInstance while this
+    // task still owns the AddonCpp (and potentially a multi-gigabyte model)
+    // until the later uv close callback. This runs on the loop while the env
+    // is pinned, preserving the teardown-safety contract.
+    data->work = nullptr;
 
     // Once env teardown has begun, settling the promise would touch a dying
     // env; skip all JS work and just run the close/finish handshake below.
