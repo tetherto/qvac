@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import * as os from 'node:os'
 import mqtt from 'mqtt'
 import {
@@ -560,7 +561,7 @@ export async function startElectronConsumer() {
     mqttConfig.brokerUrl = mqttBrokerOverride
   }
 
-  const consumerId = `consumer-${platform}-${os.hostname()}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const consumerId = `consumer-${platform}-${os.hostname()}-${randomUUID()}`
   const mqttOptions = buildMqttOptions(mqttConfig, configDir)
   mqttOptions.clientId = consumerId
   mqttOptions.clean = false
