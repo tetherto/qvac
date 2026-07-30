@@ -41,6 +41,45 @@ test('fitParams rejects values that would truncate or wrap in the binding', asyn
   await t.exception.all(() => fitParams({ ...base, nCtx: 512, nCtxMin: 1024 }), /nCtxMin must not exceed/)
 })
 
+test('intended-load fields are bounded to their enum domains', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+
+  // These narrow to a C enum, not just an int, so the width of int32 is the
+  // wrong bound: an out-of-range value would reach llama as a garbage enum.
+  await t.exception.all(() => fitParams({ ...base, splitMode: 4 }), /splitMode must be between/)
+  await t.exception.all(() => fitParams({ ...base, splitMode: -1 }), /splitMode must be between/)
+  await t.exception.all(() => fitParams({ ...base, flashAttnType: 2 }), /flashAttnType must be between/)
+  await t.exception.all(() => fitParams({ ...base, flashAttnType: -2 }), /flashAttnType must be between/)
+  await t.exception.all(() => fitParams({ ...base, mainGpu: -1 }), /mainGpu must be between/)
+  await t.exception.all(() => fitParams({ ...base, typeK: -1 }), /typeK must be between/)
+  await t.exception.all(() => fitParams({ ...base, typeV: 1.5 }), /typeV must be a safe integer/)
+
+  // The exact ggml_type ceiling lives natively, where it is compiled against
+  // the same ggml.h rather than duplicated as a constant that drifts on a bump.
+  const binding = require('../../binding.js')
+  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, typeK: 100000 }), /out of range/)
+  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 4 }), /out of range/)
+})
+
+test('a pinned intended-load field is returned unchanged', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // The upstream contract is that only default-valued parameters get rewritten,
+  // so stating an intended load pins it: the projection has to fit *around* the
+  // decision rather than quietly substituting its own. Without this, a caller
+  // that already knows it will load with a quantised KV would get a projection
+  // measured against llama's F16 default and an answer that does not describe
+  // the load it is about to perform.
+  //
+  // LLAMA_SPLIT_MODE_NONE (0) is a non-default value (the default is LAYER, 1),
+  // so it genuinely pins rather than being indistinguishable from omission.
+  const res = fitParams({ modelPath, nCtx: 2048, marginMiB: 1024, splitMode: 0, mainGpu: 0 })
+
+  t.not(res.status, FIT_STATUS.ERROR, 'a pinned placement is accepted, not rejected')
+  t.is(res.splitMode, 0, 'the pinned split mode survives the fit')
+  t.is(res.mainGpu, 0, 'the pinned main GPU survives the fit')
+})
+
 test('binding.paramsFit enforces the same constraints as the wrapper', async function (t) {
   // ./binding.js is a public export, so these checks cannot live only in the
   // JS wrapper — a caller can reach the native entry point directly.

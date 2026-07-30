@@ -25,7 +25,18 @@ const NUMERIC_FIELDS = Object.freeze({
   nBatch: { min: 0, max: UINT32_MAX },
   nUbatch: { min: 0, max: UINT32_MAX },
   nGpuLayers: { min: INT32_MIN, max: INT32_MAX },
-  marginMiB: { min: 0, max: UINT32_MAX }
+  marginMiB: { min: 0, max: UINT32_MAX },
+  // Intended-load fields. splitMode and flashAttnType are small, stable enums,
+  // so their exact domains are checked here as well as natively. typeK/typeV are
+  // ggml_type indices whose upper bound (GGML_TYPE_COUNT) moves with upstream —
+  // bounding them precisely here would mean re-editing this file on every bump,
+  // so the shape check lives here and the exact bound stays in the binding,
+  // which is compiled against the same ggml.h.
+  splitMode: { min: 0, max: 3 },
+  mainGpu: { min: 0, max: INT32_MAX },
+  typeK: { min: 0, max: INT32_MAX },
+  typeV: { min: 0, max: INT32_MAX },
+  flashAttnType: { min: -1, max: 1 }
 })
 
 function validateNumber (config, key, min, max) {
@@ -77,6 +88,11 @@ function validateRelationships (config) {
  * @param {number} [config.nUbatch]   Physical batch size (0 = llama default).
  * @param {number} [config.nGpuLayers] Pin offload layer count; omit to auto-fit.
  * @param {number} [config.marginMiB] Free headroom to leave per device (MiB).
+ * @param {number} [config.splitMode]  `llama_split_mode`; omit to auto-fit.
+ * @param {number} [config.mainGpu]    Device for the model when splitMode NONE.
+ * @param {number} [config.typeK]      `ggml_type` of the K cache.
+ * @param {number} [config.typeV]      `ggml_type` of the V cache.
+ * @param {number} [config.flashAttnType] `llama_flash_attn_type`.
  * @returns {{ status: number, fits: boolean, nGpuLayers: number, nCtx: number,
  *   nBatch: number, nUbatch: number, maxDevices: number, tensorSplit: number[] }}
  */

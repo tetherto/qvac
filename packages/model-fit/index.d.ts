@@ -34,6 +34,27 @@ export interface FitConfig {
   nGpuLayers?: number
   /** Free headroom to leave on every device, in MiB (default 1024). */
   marginMiB?: number
+  /**
+   * The fields below state the load you intend to perform. `llama_params_fit`
+   * rewrites only parameters still holding their llama default, so setting one
+   * makes it a hard constraint the projection fits *around*, and omitting one
+   * leaves the fitter free to choose it and report the choice back on the plan.
+   *
+   * Pass them whenever the real load has already decided them — a projection
+   * measured against llama's defaults does not describe a load that uses
+   * something else.
+   *
+   * `enum llama_split_mode`: how the model splits across multiple GPUs.
+   */
+  splitMode?: number
+  /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  mainGpu?: number
+  /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
+  typeK?: number
+  /** `ggml_type` of the V cache. Same reasoning as `typeK`. */
+  typeV?: number
+  /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
+  flashAttnType?: number
 }
 
 /** A tensor buffer-type override the fitter selected. */

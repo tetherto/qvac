@@ -3,6 +3,10 @@
 #include <string>
 
 #include <bare.h>
+// For GGML_TYPE_COUNT: the typeK/typeV bound is taken from the same header the
+// addon is compiled against, so it tracks an upstream ggml_type addition rather
+// than being duplicated as a literal that silently goes stale.
+#include <ggml.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
@@ -119,6 +123,35 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "marginMiB")) {
     req.marginMiB = static_cast<uint32_t>(
         requireBoundedInteger(v->as<double>(env), UINT32_LIMIT, "marginMiB"));
+  }
+
+  // Intended-load fields. Bounded to their enum domains rather than the width
+  // of the int they are narrowed to: an out-of-range split mode or attention
+  // type would otherwise reach llama as a garbage enum value.
+  if (auto v = config.getOptionalProperty<jsu::Number>(env, "splitMode")) {
+    req.splitMode = static_cast<int32_t>(requireBoundedSignedInteger(
+        v->as<double>(env), 0.0, 3.0, "splitMode"));
+    req.hasSplitMode = true;
+  }
+  if (auto v = config.getOptionalProperty<jsu::Number>(env, "mainGpu")) {
+    req.mainGpu = static_cast<int32_t>(
+        requireBoundedInteger(v->as<double>(env), INT32_LIMIT, "mainGpu"));
+    req.hasMainGpu = true;
+  }
+  if (auto v = config.getOptionalProperty<jsu::Number>(env, "typeK")) {
+    req.typeK = static_cast<int32_t>(requireBoundedSignedInteger(
+        v->as<double>(env), 0.0, GGML_TYPE_COUNT - 1, "typeK"));
+    req.hasTypeK = true;
+  }
+  if (auto v = config.getOptionalProperty<jsu::Number>(env, "typeV")) {
+    req.typeV = static_cast<int32_t>(requireBoundedSignedInteger(
+        v->as<double>(env), 0.0, GGML_TYPE_COUNT - 1, "typeV"));
+    req.hasTypeV = true;
+  }
+  if (auto v = config.getOptionalProperty<jsu::Number>(env, "flashAttnType")) {
+    req.flashAttnType = static_cast<int32_t>(requireBoundedSignedInteger(
+        v->as<double>(env), -1.0, 1.0, "flashAttnType"));
+    req.hasFlashAttnType = true;
   }
 
   if (req.nBatch > 0 && req.nUbatch > 0 && req.nUbatch > req.nBatch) {

@@ -208,6 +208,35 @@ against placement you then did not use. This is also why the plan is only
 readable after narrowing to `SUCCESS` — on any other branch these fields carry
 no decision.
 
+### What you state vs. what the fitter decides
+
+The split is deliberate:
+
+| You state | The fitter decides |
+| --- | --- |
+| `nCtx`, `nCtxMin`, `nBatch`, `nUbatch` | `tensorSplit` — per-device offload proportions |
+| `nGpuLayers`, `splitMode`, `mainGpu` | `buftOverrides` — per-tensor buffer placement |
+| `typeK`, `typeV`, `flashAttnType` | anything above you leave unset |
+| `marginMiB` | |
+
+Everything in the left column is something a caller plausibly knows about the
+load it intends to perform, and stating one makes it a hard constraint the
+projection fits around.
+
+`tensorSplit` and `buftOverrides` are deliberately **not** inputs. They are the
+placement decisions that need knowledge of the model's tensor layout and the
+machine's device inventory — an expert-FFN pattern pinned to CPU so a MoE model
+fits in VRAM, for instance. A caller who already knew the right answer would not
+need to ask. So the fitter always chooses them, and they always come back on the
+plan.
+
+The consequence, which matters: a `SUCCESS` is **conditional on applying the
+placement it returns**. This addon cannot express "does this exact configuration
+fit" with no degrees of freedom left, because placement is never the caller's to
+pin. What it answers is "given what I have decided, is there a placement that
+fits — and if so, which one". Acting on the first half while ignoring the second
+is the failure this section exists to prevent.
+
 ## Known crash paths
 
 `llama_params_fit` can terminate the process on inputs this addon accepts. These

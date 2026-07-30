@@ -212,6 +212,27 @@ FitResult runFit(const FitRequest& req) {
     cparams.n_ubatch = req.nUbatch;
   }
 
+  // Placement and KV sizing the caller has already decided. Setting a field
+  // takes it out of the fitter's reach (it only rewrites default-valued ones),
+  // which is how upstream expects an intended load to be expressed: pin what is
+  // decided, leave the rest to be filled in.
+  if (req.hasSplitMode) {
+    mparams.split_mode = static_cast<llama_split_mode>(req.splitMode);
+  }
+  if (req.hasMainGpu) {
+    mparams.main_gpu = req.mainGpu;
+  }
+  if (req.hasTypeK) {
+    cparams.type_k = static_cast<ggml_type>(req.typeK);
+  }
+  if (req.hasTypeV) {
+    cparams.type_v = static_cast<ggml_type>(req.typeV);
+  }
+  if (req.hasFlashAttnType) {
+    cparams.flash_attn_type =
+        static_cast<llama_flash_attn_type>(req.flashAttnType);
+  }
+
   // Reducing towards a floor of zero could hand back a context nothing can run
   // with, so substitute a positive default when the caller left it unset.
   const uint32_t nCtxMin = req.nCtxMin != 0 ? req.nCtxMin : DEFAULT_N_CTX_MIN;

@@ -50,6 +50,37 @@ struct FitRequest {
   /// hard constraint, since only default-valued fields get rewritten.
   bool hasNGpuLayers = false;
 
+  // The remaining fields complete the upstream contract on the input side.
+  // `llama_params_fit` takes mparams/cparams as in/out and rewrites only what
+  // is still default-valued, so a caller states its intended load by pinning
+  // what it has already decided and leaving the rest for the fitter. Each is
+  // paired with a `has*` flag rather than a sentinel because every value in the
+  // field's range is legitimate — including 0, which is a valid split mode,
+  // device index and ggml type.
+
+  /// `enum llama_split_mode`: how the model splits across multiple GPUs.
+  int32_t splitMode = 0;
+  bool hasSplitMode = false;
+
+  /// Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE.
+  int32_t mainGpu = 0;
+  bool hasMainGpu = false;
+
+  /// `enum ggml_type` for the K cache. A quantised KV changes how much memory
+  /// the context needs, so pinning it fits against the real figure instead of
+  /// llama's F16 default.
+  int32_t typeK = 0;
+  bool hasTypeK = false;
+
+  /// `enum ggml_type` for the V cache. Same reasoning as `typeK`.
+  int32_t typeV = 0;
+  bool hasTypeV = false;
+
+  /// `enum llama_flash_attn_type`. Alters KV/compute memory, so a caller that
+  /// has already decided it should fit against that decision.
+  int32_t flashAttnType = 0;
+  bool hasFlashAttnType = false;
+
   /// Free headroom to leave on every device, in MiB. Upstream default is 1024.
   uint32_t marginMiB = 1024;
 };
