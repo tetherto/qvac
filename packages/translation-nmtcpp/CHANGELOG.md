@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.2.1] - 2026-07-30
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency `1.2.4` → `1.3.2`
+  to pick up the environment-scoped `JsAsyncTask` teardown fix (QVAC-18397,
+  [#3525](https://github.com/tetherto/qvac/pull/3525)). `cancel()` and
+  `destroyInstance()` run as `JsAsyncTask`s, and before 1.3.2 the detached
+  worker owned the work functor — so its captures (commonly the last
+  `shared_ptr` to the addon) were destroyed after `uv_async_send`, by which
+  point the loop could have finished teardown and the JS env could be gone.
+  A settlement failure could also throw out of `onComplete`, a C callback,
+  reaching `std::terminate`. In the integration suites this surfaced as the
+  process dying at teardown with all assertions passing — `exit 134` with
+  `libc++abi: terminate_handler unexpectedly threw an exception`, or `exit 133`
+  (`Disposing the isolate that is entered by a thread`) / `exit 139`, depending
+  on platform and timing. Flaky in CI since 2026-07-06 across linux-x64,
+  linux-arm64 and darwin-arm64. QVAC-22961.
+
 ## [8.2.0] - 2026-07-28
 
 ### Changed
