@@ -7,11 +7,8 @@ const addonLogging = {
     setLogger: binding.setLogger,
     releaseLogger: binding.releaseLogger,
 };
-// Named exports keep `setLogger`/`releaseLogger` statically discoverable by
-// cjs-module-lexer (Node's and Bare's CJS→ESM interop), so ESM named imports
-// link. The trailing `module.exports =` override below discards these
-// `exports.X` slots at runtime, but named import bindings resolve against the
-// final `module.exports` object — which carries the same two functions.
+// Required for ESM named imports: cjs-module-lexer only detects top-level
+// `exports.X =` assignments; the bindings resolve against `module.exports` below.
 exports.setLogger = addonLogging.setLogger;
 exports.releaseLogger = addonLogging.releaseLogger;
 exports.default = addonLogging;

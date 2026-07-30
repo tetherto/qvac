@@ -70,12 +70,8 @@ class QvacIndicTransResponse extends QvacResponse<string> {
   }
 }
 
-// Local aliases for the public types declared in the `TranslationNmtcpp`
-// namespace at the bottom of this file. The implementation below is a NAMED
-// CLASS EXPRESSION — its inner `TranslationNmtcpp` binding shadows the outer
-// one inside the class body, so the body cannot spell `TranslationNmtcpp.X`
-// for types. (Value lookups like `TranslationNmtcpp.ModelTypes` resolve to the
-// class's own static and are unaffected.)
+// Aliases for the namespace types: the class expression's inner name shadows
+// the outer `TranslationNmtcpp` binding, so the body cannot qualify them.
 type TranslationNmtcppArgs = TranslationNmtcpp.TranslationNmtcppArgs;
 type TranslationNmtcppConfig = TranslationNmtcpp.TranslationNmtcppConfig;
 type TranslationNmtcppFiles = TranslationNmtcpp.TranslationNmtcppFiles;
@@ -84,13 +80,9 @@ type TranslationNmtcppModelTypes = TranslationNmtcpp.TranslationNmtcppModelTypes
 type InferenceClientState = TranslationNmtcpp.InferenceClientState;
 
 /**
- * Public instance surface of a translation model.
- *
- * This is an INTERFACE, not the implementation class, so the published type is
- * structural: any object carrying these members is assignable to it. Emitting
- * the class type instead would leak its `private` fields into index.d.ts and
- * make the type nominal, rejecting consumer-side mocks and test doubles.
- * Keep it to the public members only.
+ * Public instance surface of a translation model. Kept as an interface (public
+ * members only) so the published type stays structural — emitting the class
+ * type would leak private fields and reject consumer mocks.
  */
 interface TranslationNmtcpp {
   /**
@@ -544,13 +536,9 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
 };
 
 /**
- * Declaration merging with the `TranslationNmtcpp` value above models this
- * package's CommonJS export shape — `module.exports` IS the constructor —
- * directly in the type system, so a CommonJS consumer
- * (`import TranslationNmtcpp = require('@qvac/translation-nmtcpp')`) gets a
- * real construct signature instead of TS2351. The namespace is types-only:
- * this addon attaches no properties to its export, so TypeScript emits no
- * runtime code for it and `module.exports` stays the bare class.
+ * Public types, merged with the `TranslationNmtcpp` value for the `export =`
+ * consumers. Must stay types-only so tsc emits no runtime code for it and
+ * `module.exports` remains the bare class.
  */
 // eslint-disable-next-line @typescript-eslint/no-namespace -- class/namespace merging is the only way to type a constructor-first CommonJS export.
 namespace TranslationNmtcpp {

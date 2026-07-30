@@ -1,28 +1,12 @@
-// Type-level consumer test: ES-module DEFAULT-import shape.
-//
-// Mirrors how packages/sdk consumes this addon
-// (`packages/sdk/server/bare/plugins/nmtcpp-translation/plugin.ts`):
-//
-//   import TranslationNmtcpp, {
-//     type TranslationNmtcppConfig,
-//     type TranslationNmtcppFiles
-//   } from '@qvac/translation-nmtcpp'
-//
-// Under `export =` the default import relies on esModuleInterop's synthetic
-// default, and the named type imports resolve through the namespace. Compiled
-// with the SDK's own module settings (ES2022 + bundler resolution +
-// verbatimModuleSyntax + exactOptionalPropertyTypes + noUncheckedIndexedAccess)
-// so a regression here is caught in this package's CI rather than in the SDK.
+// Type-level consumer test: the SDK's default-import shape (nmtcpp-translation
+// plugin), compiled with the SDK's module settings. Type-checked only — never
+// executed.
 
 import TranslationNmtcpp, {
   type TranslationNmtcppConfig,
   type TranslationNmtcppFiles,
 } from "../../index";
-// `nmtAddonLogging` is the SDK's addonLogging import shape:
-//   import nmtAddonLogging from '@qvac/translation-nmtcpp/addonLogging'
-// The named bindings must link too — see
-// test/integration/esm-default-export.test.js for the matching runtime
-// (cjs-module-lexer) guard. Kept in one statement for `import/no-duplicates`.
+// The SDK's addonLogging import shape; named bindings must resolve too.
 import nmtAddonLogging, {
   setLogger,
   releaseLogger,

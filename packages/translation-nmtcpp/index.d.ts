@@ -3,13 +3,9 @@ type TranslationNmtcppArgs = TranslationNmtcpp.TranslationNmtcppArgs;
 type TranslationNmtcppModelTypes = TranslationNmtcpp.TranslationNmtcppModelTypes;
 type InferenceClientState = TranslationNmtcpp.InferenceClientState;
 /**
- * Public instance surface of a translation model.
- *
- * This is an INTERFACE, not the implementation class, so the published type is
- * structural: any object carrying these members is assignable to it. Emitting
- * the class type instead would leak its `private` fields into index.d.ts and
- * make the type nominal, rejecting consumer-side mocks and test doubles.
- * Keep it to the public members only.
+ * Public instance surface of a translation model. Kept as an interface (public
+ * members only) so the published type stays structural — emitting the class
+ * type would leak private fields and reject consumer mocks.
  */
 interface TranslationNmtcpp {
     /**
@@ -68,13 +64,9 @@ interface TranslationNmtcppConstructor {
  */
 declare const TranslationNmtcpp: TranslationNmtcppConstructor;
 /**
- * Declaration merging with the `TranslationNmtcpp` value above models this
- * package's CommonJS export shape — `module.exports` IS the constructor —
- * directly in the type system, so a CommonJS consumer
- * (`import TranslationNmtcpp = require('@qvac/translation-nmtcpp')`) gets a
- * real construct signature instead of TS2351. The namespace is types-only:
- * this addon attaches no properties to its export, so TypeScript emits no
- * runtime code for it and `module.exports` stays the bare class.
+ * Public types, merged with the `TranslationNmtcpp` value for the `export =`
+ * consumers. Must stay types-only so tsc emits no runtime code for it and
+ * `module.exports` remains the bare class.
  */
 declare namespace TranslationNmtcpp {
     interface TranslationNmtcppFiles {

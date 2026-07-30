@@ -4,13 +4,9 @@ const test = require('brittle')
 const QvacLogger = require('@qvac/logging')
 const { forwardTransitionLog, LOG_LEVELS } = require('../../lib/log-forward.js')
 
-// The native log callback must invoke the sink METHOD-STYLE so `this` stays
-// bound to the logger. A detached call (`const fn = logger[level]; fn(msg)`)
-// crashes QvacLogger, whose methods delegate to `this._log`.
-//
-// The dispatch lives in lib/log-forward.js rather than marian.js precisely so
-// it can be exercised here: marian.js eagerly requires ./binding, which is not
-// available in the unit-test environment.
+// The native log callback must invoke the sink method-style — a detached call
+// crashes QvacLogger, whose methods delegate to `this._log`. The dispatch lives
+// in lib/log-forward.js (not marian.js) so it is loadable without the binding.
 
 function createRecordingLogger(t) {
   const records = []
