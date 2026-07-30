@@ -4,6 +4,9 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const VideoStableDiffusion = require('../video')
+const { setLogger, releaseLogger } = require('../addonLogging')
+
+const NATIVE_LOG_LABELS = ['ERROR', 'WARN', 'INFO', 'DEBUG']
 
 const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')
@@ -32,6 +35,13 @@ async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
   const reference = fs.readFileSync(referencePath)
 
+  // Without this the native sd_log_callback has no JS sink and every engine
+  // message (including allocation failures) is discarded inside JsLogger::log.
+  setLogger((priority, message) => {
+    const label = NATIVE_LOG_LABELS[priority] || String(priority)
+    process.stderr.write(`[sd:${label}] ${message}`)
+  })
+
   const model = new VideoStableDiffusion({
     files,
     config: {
@@ -41,7 +51,7 @@ async function main () {
       vae_tiling: true,
       vae_conv_direct: true,
       lora_apply_mode: 'at_runtime',
-      verbosity: 2
+      verbosity: Number(process.env.VERBOSITY || 2)
     },
     logger: console
   })
@@ -54,10 +64,10 @@ async function main () {
         'Reference sheet: a smiling woman, a grey horse, and a misty mountain valley. Generated video: the woman walks beside the grey horse through the misty mountain valley, cinematic natural light.',
       negative_prompt: process.env.NEG_PROMPT ||
         'worst quality, inconsistent motion, blurry, jittery, distorted',
-      width: 768,
-      height: 448,
+      width: Number(process.env.WIDTH || 768),
+      height: Number(process.env.HEIGHT || 448),
       video_frames: Number(process.env.FRAMES || 121),
-      fps: 24,
+      fps: Number(process.env.FPS || 24),
       steps: Number(process.env.STEPS || 30),
       cfg_scale: Number(process.env.CFG_SCALE || 4),
       seed: Number(process.env.SEED || 42),
@@ -68,7 +78,12 @@ async function main () {
       reference_images: [reference],
       reference_attention_strength: 1,
       reference_downscale_factor: 1,
-      temporal_tiling: true
+      temporal_tiling: true,
+      // The engine consumes vae_tile_size in LATENT units, so useful values for
+      // the LTX VAE (spatial factor 32) are small, e.g. 16 -> 512 px tiles.
+      ...(process.env.VAE_TILE_SIZE
+        ? { vae_tile_size: Number(process.env.VAE_TILE_SIZE) }
+        : {})
     })
 
     let avi
@@ -87,6 +102,7 @@ async function main () {
     console.log(`Saved ${output}`)
   } finally {
     await model.unload()
+    releaseLogger()
   }
 }
 
