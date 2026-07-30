@@ -13,26 +13,12 @@ import {
   type ResolveResult
 } from '@/schemas'
 import { ModelLoadFailedError } from '@/utils/errors-server'
-import { hyperdriveUrlSchema } from '@/schemas/load-model'
 import { createStreamLogger, registerAddonLogger } from '@/logging'
 import ocrAddonLogging from '@qvac/ocr-ggml/addonLogging'
 import { OcrGgml } from '@qvac/ocr-ggml'
 import { ocr } from '@/server/bare/plugins/ggml-ocr/ops/ocr-stream'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
-import { OCR_CRAFT } from '@/models/registry'
-
-const OCR_DETECTOR_FILENAME = 'craft_mlt_25k.gguf'
-
-function deriveDetectorSource(modelSrc: string): string | undefined {
-  if (modelSrc.startsWith('pear://')) {
-    const { key } = hyperdriveUrlSchema.parse(modelSrc)
-    return `pear://${key}/${OCR_DETECTOR_FILENAME}`
-  }
-  if (modelSrc.startsWith('registry://')) {
-    return OCR_CRAFT.src
-  }
-  return undefined
-}
+import { resolveOcrConfig } from '@/server/bare/plugins/ggml-ocr/resolve-config'
 
 function createOCRModel(
   modelId: string,
@@ -96,20 +82,7 @@ export const ocrPlugin = definePlugin({
     cfg: OCRConfig,
     ctx: ResolveContext
   ): Promise<ResolveResult<Record<string, unknown>, 'detectorModelPath'>> {
-    const { detectorModelSrc, ...ocrConfig } = cfg
-
-    const detectorSrc = detectorModelSrc ?? deriveDetectorSource(ctx.modelSrc)
-    if (!detectorSrc) {
-      throw new ModelLoadFailedError(
-        'Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc'
-      )
-    }
-
-    const detectorModelPath = await ctx.resolveModelPath(detectorSrc)
-    return {
-      config: ocrConfig,
-      artifacts: { detectorModelPath }
-    }
+    return resolveOcrConfig(cfg, ctx)
   },
 
   createModel(params: CreateModelParams): PluginModelResult {

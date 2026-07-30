@@ -27,7 +27,7 @@ Guidelines for creating effective Cursor skills, based on the [Agent Skills spec
 
 **Use `qv-` prefix plus pod segment for skill directories:**
 
-- SDK pod skills: `qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`
+- SDK pod skills: `qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`, `qv-sdk-update-models`
 - DevOps pod: `qv-devops-pr-create`, `qv-devops-pr-review`
 - Addon pod: `qv-addon-changelog`, `qv-addon-pr-create`
 - Cross-pod PR workflow: `qv-pr-review`, `qv-pr-test`, `qv-pr-mine`
@@ -282,6 +282,10 @@ If validation fails, review errors and fix before continuing.
 
 ## Anti-Patterns to Avoid
 
+### Executing Remote Code
+
+Skills must never fetch a script or binary from an external URL and run it — no `curl … | bash`, `iwr … | iex`, or download-then-execute, in `SKILL.md` steps or in `scripts/`. Install dependencies through the package manager with pinned versions instead. This is a hard security guardrail; see `.cursor/rules/devops/agentic-automation.mdc` → "No remote code execution".
+
 ### Windows-Style Paths
 
 - Good: `scripts/helper.py`
@@ -362,6 +366,11 @@ Before finalizing a skill:
 - [ ] Progressive disclosure used appropriately
 - [ ] Workflows have clear steps
 - [ ] No time-sensitive information
+
+### Security
+
+- [ ] No remote code execution (`curl … | bash`, `iwr … | iex`, download-then-run) anywhere in `SKILL.md` or `scripts/`
+- [ ] Dependencies installed via package manager with pinned versions, not remote installers
 
 ### If Including Scripts
 

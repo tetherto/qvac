@@ -3,6 +3,7 @@
 const test = require('brittle')
 const { generatePrimaryKey } = require('../../utils/key-generator')
 
+// lunte-disable-next-line require-await
 test('generatePrimaryKey - generates valid hypercore key', async (t) => {
   t.plan(3)
 
@@ -13,6 +14,7 @@ test('generatePrimaryKey - generates valid hypercore key', async (t) => {
   t.is(key.length, 32, 'Key should be 32 bytes (hypercore key size)')
 })
 
+// lunte-disable-next-line require-await
 test('generatePrimaryKey - generates unique keys', async (t) => {
   t.plan(1)
 
@@ -22,6 +24,7 @@ test('generatePrimaryKey - generates unique keys', async (t) => {
   t.not(key1.toString('hex'), key2.toString('hex'), 'Should generate unique keys')
 })
 
+// lunte-disable-next-line require-await
 test('generatePrimaryKey - accepts seed parameter', async (t) => {
   t.plan(3)
 

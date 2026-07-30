@@ -44,7 +44,7 @@ const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 const DISPATCH_REMOVE_INDEXER = `@${QVAC_MAIN_REGISTRY}/remove-indexer`
 const DISPATCH_DELETE_MODEL = `@${QVAC_MAIN_REGISTRY}/delete-model`
 
-function readEnvFile () {
+function readEnvFile() {
   const envPath = path.resolve('.env')
   const env = {}
   try {
@@ -65,7 +65,7 @@ function readEnvFile () {
   return env
 }
 
-function parseArgs () {
+function parseArgs() {
   const args = process.argv.slice(2)
   const env = readEnvFile()
 
@@ -98,20 +98,26 @@ function parseArgs () {
   return result
 }
 
-function printUsage () {
-  console.log('Usage: node migrations/001-fix-s3-bucket-in-path.js --bucket=<name> --storage=<path> [--bootstrap=<key>] [--dry-run]')
+function printUsage() {
+  console.log(
+    'Usage: node migrations/001-fix-s3-bucket-in-path.js --bucket=<name> --storage=<path> [--bootstrap=<key>] [--dry-run]'
+  )
   console.log('')
   console.log('Options:')
   console.log('  --bucket=<name>     S3 bucket name to remove from paths (required)')
   console.log('  --storage=<path>    Path to registry storage directory (required)')
-  console.log('  --bootstrap=<key>   Autobase bootstrap key (hex or z32, reads from existing storage if not provided)')
+  console.log(
+    '  --bootstrap=<key>   Autobase bootstrap key (hex or z32, reads from existing storage if not provided)'
+  )
   console.log('  --dry-run           Show what would be changed without making changes')
   console.log('')
   console.log('Example:')
-  console.log('  node migrations/001-fix-s3-bucket-in-path.js --bucket=<bucket-name> --storage=./storage --dry-run')
+  console.log(
+    '  node migrations/001-fix-s3-bucket-in-path.js --bucket=<bucket-name> --storage=./storage --dry-run'
+  )
 }
 
-async function runMigration () {
+async function runMigration() {
   const opts = parseArgs()
 
   if (!opts.bucket || !opts.storage) {
@@ -120,7 +126,9 @@ async function runMigration () {
   }
 
   if (!opts.bootstrap) {
-    console.error('ERROR: Bootstrap key is required. Pass --bootstrap=<key> or set QVAC_AUTOBASE_KEY in .env')
+    console.error(
+      'ERROR: Bootstrap key is required. Pass --bootstrap=<key> or set QVAC_AUTOBASE_KEY in .env'
+    )
     printUsage()
     process.exit(1)
   }
@@ -170,16 +178,16 @@ async function runMigration () {
     await context.view.deleteModel(path, source)
   })
 
-  function openView (store) {
+  function openView(store) {
     const dbCore = store.get('db-view')
     return new RegistryDatabase(dbCore, { extension: false })
   }
 
-  async function closeView (view) {
+  async function closeView(view) {
     await view.close()
   }
 
-  async function apply (nodes, view, base) {
+  async function apply(nodes, view, base) {
     if (!view.opened) await view.ready()
     for (const node of nodes) {
       const op = node.value
@@ -220,10 +228,10 @@ async function runMigration () {
   const allModels = await view.findModelsByPath({}).toArray()
   console.log(`Total models in database: ${allModels.length}`)
 
-  const s3Models = allModels.filter(m => m.source === 's3')
+  const s3Models = allModels.filter((m) => m.source === 's3')
   console.log(`S3 models: ${s3Models.length}`)
 
-  const affectedModels = s3Models.filter(m => m.path.startsWith(bucketPrefix))
+  const affectedModels = s3Models.filter((m) => m.path.startsWith(bucketPrefix))
   console.log(`Models with bucket prefix in path: ${affectedModels.length}`)
   console.log('')
 
@@ -303,11 +311,11 @@ async function runMigration () {
 
 if (require.main === module) {
   runMigration()
-    .then(report => {
+    .then((report) => {
       const hasErrors = report && report.errors && report.errors.length > 0
       process.exit(hasErrors ? 1 : 0)
     })
-    .catch(err => {
+    .catch((err) => {
       console.error('Fatal error:', err)
       process.exit(1)
     })

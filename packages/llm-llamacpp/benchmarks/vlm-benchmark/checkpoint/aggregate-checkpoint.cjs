@@ -33,7 +33,7 @@ const MODELS = [
   { key: 'gemma4-q4', name: 'Gemma-4-E2B', llm: 'Q4_K_M', mmproj: 'Q8_0' }
 ]
 // Platform display order (desktop first, then mobile). Unknown platforms are appended.
-const PLAT_ORDER = ['linux', 'macos', 'macmini', 'windows', 's26', 's25', 'pixel9', 'iphone16', 'iphone17', 'iphone17pro']
+const PLAT_ORDER = ['linux', 'macos', 'windows', 's26', 's25', 'pixel9', 'iphone16', 'iphone17', 'iphone17pro']
 
 const args = process.argv.slice(2)
 let date = new Date().toISOString().slice(0, 10)

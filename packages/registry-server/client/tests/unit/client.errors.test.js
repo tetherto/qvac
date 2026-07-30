@@ -2,7 +2,8 @@
 
 const test = require('brittle')
 
-test('client config - uses default registry core key when none provided', async t => {
+// lunte-disable-next-line require-await
+test('client config - uses default registry core key when none provided', async (t) => {
   t.plan(2)
 
   const RegistryConfig = require('../../lib/config')
@@ -13,7 +14,8 @@ test('client config - uses default registry core key when none provided', async 
   t.is(typeof key, 'string', 'Default key is a string')
 })
 
-test('client config - explicit key takes precedence over default', async t => {
+// lunte-disable-next-line require-await
+test('client config - explicit key takes precedence over default', async (t) => {
   t.plan(1)
 
   const RegistryConfig = require('../../lib/config')
@@ -24,7 +26,8 @@ test('client config - explicit key takes precedence over default', async t => {
   t.is(key, explicit, 'Returns the explicitly provided key')
 })
 
-test('client error - invalid path parameter', async t => {
+// lunte-disable-next-line require-await
+test('client error - invalid path parameter', async (t) => {
   t.plan(2)
 
   const QVACRegistryClient = require('../../lib/client')
@@ -45,7 +48,8 @@ test('client error - invalid path parameter', async t => {
   }
 })
 
-test('client error - invalid source parameter', async t => {
+// lunte-disable-next-line require-await
+test('client error - invalid source parameter', async (t) => {
   t.plan(2)
 
   const QVACRegistryClient = require('../../lib/client')
@@ -66,7 +70,7 @@ test('client error - invalid source parameter', async t => {
   }
 })
 
-test('downloadBlob - rejects missing coreKey', async t => {
+test('downloadBlob - rejects missing coreKey', async (t) => {
   t.plan(3)
 
   const QVACRegistryClient = require('../../lib/client')
@@ -87,14 +91,20 @@ test('downloadBlob - rejects missing coreKey', async t => {
   }
 
   try {
-    await testClient.downloadBlob({ coreKey: 'abc', blockOffset: 'not-a-number', blockLength: 0, byteLength: 0 })
+    await testClient.downloadBlob({
+      coreKey: 'abc',
+      blockOffset: 'not-a-number',
+      blockLength: 0,
+      byteLength: 0
+    })
     t.fail('Should have thrown')
   } catch (error) {
     t.ok(error.message.includes('required numbers'), 'Throws for non-number offsets')
   }
 })
 
-test('client error - invalid options parameter', async t => {
+// lunte-disable-next-line require-await
+test('client error - invalid options parameter', async (t) => {
   t.plan(1)
 
   const options = 'not-an-object'
@@ -105,7 +115,8 @@ test('client error - invalid options parameter', async t => {
   }
 })
 
-test('client error - invalid search parameters', async t => {
+// lunte-disable-next-line require-await
+test('client error - invalid search parameters', async (t) => {
   t.plan(3)
 
   const QVACRegistryClient = require('../../lib/client')

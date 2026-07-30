@@ -16,6 +16,16 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runBenchmarkPerf08bQ40F16Bs1024Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Bs1024Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-bs1024.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16Bs512Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Bs512Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-bs512.test.js', options)
+}
+
 async function runBenchmarkPerf08bQ40F16Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Test')) return __FILTERED
   return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16.test.js', options)
@@ -189,6 +199,16 @@ async function runBenchmarkPerf08bQ80Tbq30Pq30Test (options = {}) { // eslint-di
 async function runBenchmarkPerf08bQ80Tbq40Pq40Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ80Tbq40Pq40Test')) return __FILTERED
   return runIntegrationModule('../integration/benchmark-perf-08b-q8-0-tbq4-0-pq4-0.test.js', options)
+}
+
+async function runBenchmarkPerf2bQ40F16Bs1024Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf2bQ40F16Bs1024Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-2b-q4-0-f16-bs1024.test.js', options)
+}
+
+async function runBenchmarkPerf2bQ40F16Bs512Test (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf2bQ40F16Bs512Test')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-2b-q4-0-f16-bs512.test.js', options)
 }
 
 async function runBenchmarkPerf2bQ40F16Test (options = {}) { // eslint-disable-line no-unused-vars
@@ -386,6 +406,16 @@ async function runContinuousBatchingTest (options = {}) { // eslint-disable-line
   return runIntegrationModule('../integration/continuous-batching.test.js', options)
 }
 
+async function runFinetuningArchsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningArchsTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-archs.test.js', options)
+}
+
+async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-moe.test.js', options)
+}
+
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningPauseResumeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
@@ -476,6 +506,11 @@ async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unuse
   return runIntegrationModule('../integration/ocr-paddle.test.js', options)
 }
 
+async function runOcrUnlimitedTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrUnlimitedTest')) return __FILTERED
+  return runIntegrationModule('../integration/ocr-unlimited.test.js', options)
+}
+
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQuantizedKvcacheTest')) return __FILTERED
   return runIntegrationModule('../integration/quantized-kvcache.test.js', options)
@@ -534,6 +569,11 @@ async function runToolsCompactTest (options = {}) { // eslint-disable-line no-un
 async function runTurboquantTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runTurboquantTest')) return __FILTERED
   return runIntegrationModule('../integration/turboquant.test.js', options)
+}
+
+async function runUnlimitedOcrPerfTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUnlimitedOcrPerfTest')) return __FILTERED
+  return runIntegrationModule('../integration/unlimited-ocr-perf.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars

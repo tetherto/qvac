@@ -1,6 +1,6 @@
 {
   "name": "@qvac/opencode-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenCode plugin that runs a local, managed QVAC serve so `opencode` works against on-device models with no second terminal",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -22,7 +22,7 @@
     "NOTICE"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "keywords": [
     "qvac",
@@ -57,10 +57,10 @@
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.49",
-    "@qvac/ai-sdk-provider": "^0.2.2",
-    "@qvac/cli": "^0.7.0",
-    "ai": "^6.0.202"
+    "@ai-sdk/openai-compatible": "^3.0.0",
+    "@qvac/ai-sdk-provider": "^0.4.0",
+    "@qvac/cli": "^0.9.0",
+    "ai": "^7.0.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.16.0",

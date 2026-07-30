@@ -31,6 +31,12 @@
       "responseSchema": "schema.json#/$defs/classify.response"
     },
     {
+      "name": "completionOrchestrate",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/completionOrchestrate.request",
+      "responseSchema": "schema.json#/$defs/completionOrchestrate.response"
+    },
+    {
       "name": "completionStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/completionStream.request",
@@ -85,6 +91,12 @@
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/getModelInfo.request",
       "responseSchema": "schema.json#/$defs/getModelInfo.response"
+    },
+    {
+      "name": "getSystemResources",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/getSystemResources.request",
+      "responseSchema": "schema.json#/$defs/getSystemResources.response"
     },
     {
       "name": "heartbeat",

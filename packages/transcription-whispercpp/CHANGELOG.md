@@ -6,10 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Consume whisper-cpp 1.9.1#5 — the repo-reorg pin (sources move to the third_party/whisper.cpp git subtree in qvac-ext-lib-whisper.cpp; the registry-side GNUInstallDirs patch is absorbed into the subtree's declared delta). No API or behavior change.
 
 ### Fixed
 
 - A malformed audio buffer whose byte length is not a multiple of 4 (`f32le`) no longer poisons the batch transcription queue. The buffered audio is now drained when a job is finalized, so the bad request fails on its own and later well-formed `transcribe` calls on the same model recover instead of repeatedly failing until the process restarts ([tetherto/qvac#3221](https://github.com/tetherto/qvac/issues/3221)).
+- On linux-arm64 and Android, constructing a model through the low-level `WhisperInterface` without `configurationParams.backendsDir` no longer aborts the process with a NULL CPU device during activation. The native addon now falls back to locating its bundled dynamically-loaded ggml backend modules relative to its own path.
 
 ## [0.12.1] - 2026-07-20
 

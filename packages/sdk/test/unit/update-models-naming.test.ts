@@ -1,4 +1,7 @@
 import test from 'brittle'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   processRegistryModel,
   toHexString,
@@ -7,6 +10,7 @@ import {
 import { generateExportName } from '@/models/update-models/naming'
 import { groupShardedModels } from '@/models/update-models/shards'
 import { generateModelsFileContent } from '@/models/update-models/codegen'
+import { loadCurrentModels } from '@/models/update-models/history'
 import type { ProcessedModel } from '@/models/update-models/types'
 
 // ---------------------------------------------------------------------------
@@ -365,6 +369,20 @@ test('llm: Qwen3-4B — full field mapping with legacy engine + s3 source', (t) 
   t.alike(model.tags, ['generation', 'instruct', 'qwen3'])
 
   t.is(exportName, 'QWEN3_4B_INST_Q4')
+})
+
+test('llm: does not duplicate params already present in the model name', (t) => {
+  const exportName = generateExportName({
+    path: 'unsloth/Qwen3-4B-GGUF/resolve/revision/Qwen3-4B-Q4_K_M.gguf',
+    engine: 'llamacpp-completion',
+    name: 'Qwen3-4B-GGUF',
+    quantization: 'q4_K_M',
+    params: '4B',
+    tags: ['generation'],
+    usedNames: new Set<string>()
+  })
+
+  t.is(exportName, 'QWEN3_4B_Q4_K_M')
 })
 
 // ---------------------------------------------------------------------------
@@ -1467,4 +1485,64 @@ test('diffusion: FLUX.2 VAE — vae tag produces _VAE suffix', (t) => {
 
   t.is(model.addon, 'diffusion')
   t.is(exportName, 'FLUX_2_KLEIN_4B_VAE')
+})
+
+// ---------------------------------------------------------------------------
+// loadCurrentModels: quote styles
+// ---------------------------------------------------------------------------
+
+function writeCatalog(source: string) {
+  const file = join(mkdtempSync(join(tmpdir(), 'qvac-models-')), 'models.ts')
+  writeFileSync(file, source)
+  return file
+}
+
+// Regression guard: a parser that accepted only one quote style silently
+// returned zero models, which made every model look newly added and dropped
+// every removal from the generated history and changelog.
+test('loadCurrentModels: parses single- and double-quoted catalogs alike', (t) => {
+  const coreKey = Buffer.from('ab'.repeat(32), 'hex')
+
+  const models = [
+    processRegistryModel({
+      path: 'qvac_models_compiled/ggml/whisper/2026-01-01/tiny-ggml-model.bin',
+      source: 's3',
+      engine: 'whispercpp-transcription',
+      license: 'MIT',
+      name: '',
+      sizeBytes: 400,
+      sha256: 'hash_tiny',
+      tags: ['transcription'],
+      blobBinding: { coreKey, blockOffset: 1, blockLength: 2, byteOffset: 3, byteLength: 400 }
+    } as any)!,
+    processRegistryModel({
+      path: 'black-forest-labs/FLUX.2-klein-4B/resolve/abc123/vae/diffusion_pytorch_model.safetensors',
+      source: 'hf',
+      engine: '@qvac/diffusion-cpp',
+      license: 'Apache-2.0',
+      name: '',
+      sizeBytes: 500,
+      sha256: 'hash_vae',
+      tags: ['vae'],
+      blobBinding: { coreKey, blockOffset: 4, blockLength: 5, byteOffset: 6, byteLength: 500 }
+    } as any)!
+  ]
+
+  const doubleQuoted = generateModelsFileContent(models)
+  const singleQuoted = doubleQuoted.replace(/"/g, "'")
+
+  t.ok(doubleQuoted.includes('name: "'), 'fixture is double-quoted')
+  t.ok(singleQuoted.includes("name: '"), 'fixture is single-quoted')
+
+  const fromDouble = loadCurrentModels(writeCatalog(doubleQuoted))
+  const fromSingle = loadCurrentModels(writeCatalog(singleQuoted))
+
+  t.is(fromDouble.length, 2, 'both entries parsed from the double-quoted catalog')
+  t.is(fromSingle.length, 2, 'both entries parsed from the single-quoted catalog')
+  t.alike(fromSingle, fromDouble, 'quote style does not change the parse result')
+  t.alike(
+    fromDouble.map((m) => m.registryPath),
+    models.map((m) => m.registryPath),
+    'each name paired with its own registryPath'
+  )
 })

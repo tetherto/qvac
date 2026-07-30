@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -15,10 +16,6 @@ on:
     paths:
       - "packages/classification-ggml/**"
       - ".github/workflows/*classification-ggml*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
-      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
 
   workflow_call:
@@ -58,6 +55,21 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -101,6 +113,7 @@ jobs:
   sanity-checks:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - label-gate
@@ -122,6 +135,7 @@ jobs:
   cpp-tests:
     if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - sanity-checks
       - ci-router
@@ -131,12 +145,13 @@ jobs:
     with:
       workdir: packages/classification-ggml
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   cpp-lint:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - label-gate
@@ -149,6 +164,7 @@ jobs:
   ts-checks:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - label-gate
@@ -171,6 +187,7 @@ jobs:
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - label-gate
@@ -195,6 +212,7 @@ jobs:
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
+      - fork-approval
       - detect-native-changes
       - sanity-checks
       - label-gate
@@ -228,6 +246,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - sanity-checks
@@ -245,11 +264,12 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   prebuild-artifact-save:
     if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
       - label-gate
@@ -273,6 +293,7 @@ jobs:
   run-integration-tests:
     if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
+      - fork-approval
       - authorize
       - prebuild
       - prebuild-artifact-reuse
@@ -286,7 +307,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -296,6 +317,7 @@ jobs:
       id-token: write
     if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
+      - fork-approval
       - authorize
       - prebuild
       - prebuild-artifact-reuse
@@ -305,7 +327,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   merge-guard:
     needs:
@@ -332,5 +354,5 @@ jobs:
       packages: read
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}

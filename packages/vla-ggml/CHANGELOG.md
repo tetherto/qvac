@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.16.0] - 2026-07-29
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `addon.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and inference output are unchanged.
+
+## [0.15.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
+## [0.14.0] - 2026-07-20
+
+### Added
+
+- GR00T N1.7-3B LIBERO support as the third VLA architecture behind the `IVlaModel` interface, alongside SmolVLA and pi05. Qwen3-VL backbone with a VL-fusion and AlternateVLDiT action head driven by a Euler flow-matching loop, dispatched by GGUF `general.architecture`. Ships the GGUF converter and quantizer scripts, PyTorch-parity C++ tests, and cpp, desktop and mobile CI coverage. GPU offload is wired across all inference phases.
+
 ## [0.13.0] - 2026-07-20
 
 ### Changed

@@ -1,10 +1,16 @@
-import { downloadAsset, cancel, WHISPER_TINY, OCR_CYRILLIC_RECOGNIZER } from '@qvac/sdk'
+import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@tetherto/qvac-test-suite'
 import { downloadCancelIsolation } from '../../download-tests.js'
 
 const downloadTests = [downloadCancelIsolation] as const
 
 const CACHE_HIT_THRESHOLD_MS = 500
+
+// Must be a model no other test downloads: a cached target short-circuits on
+// the cache-hit branch below and the cancel path is never exercised.
+// It also shares a blob core with the survivor, so cancelling with `clearCache`
+// is proven not to disturb a concurrent download from that same core.
+const CANCEL_TARGET = BERGAMOT_ZH_EN
 
 export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
   pattern = /^download-/
@@ -34,7 +40,7 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
 
     let progressEvents = 0
     const cancelledOp = downloadAsset({
-      assetSrc: OCR_CYRILLIC_RECOGNIZER,
+      assetSrc: CANCEL_TARGET,
       onProgress: (p: { downloadKey?: string; percentage: number }) => {
         progressEvents++
         if (!cancelTriggered && p.percentage >= cancelThreshold) {
