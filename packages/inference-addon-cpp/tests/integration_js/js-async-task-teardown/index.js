@@ -7,3 +7,5 @@ exports.taskStarted = binding.taskStarted
 exports.taskFinished = binding.taskFinished
 exports.startTimedTask = binding.startTimedTask
 exports.startFailingTask = binding.startFailingTask
+exports.startCaptureReleaseTask = binding.startCaptureReleaseTask
+exports.captureReleased = binding.captureReleased

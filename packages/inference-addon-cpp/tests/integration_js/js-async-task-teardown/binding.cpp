@@ -73,6 +73,28 @@ auto startFailingTask(js_env_t* env, js_callback_info_t* /*info*/) -> js_value_t
       env, []() { throw std::runtime_error("boom from JsAsyncTask worker"); });
 } JSCATCH
 
+std::atomic<int32_t> captureReleased{0};
+
+/// Marks the moment the task lets go of its work closure's captures. Held by
+/// shared_ptr like the real captures are (AddonJs::cancelJob pins the addon —
+/// and its model — this way), so std::function copying the closure cannot flip
+/// the flag early: only the last owner's destruction does.
+struct ReleaseSentinel {
+  ~ReleaseSentinel() { captureReleased.store(1); }
+};
+
+/// Task whose work does nothing; the capture's fate is the whole subject.
+auto startCaptureReleaseTask(js_env_t* env, js_callback_info_t* /*info*/)
+    -> js_value_t* try {
+  captureReleased.store(0);
+  return js::JsAsyncTask::run(
+      env, [sentinel = std::make_shared<ReleaseSentinel>()]() {});
+} JSCATCH
+
+auto captureReleasedFlag(js_env_t* env, js_callback_info_t* /*info*/) -> js_value_t* try {
+  return js::Number::create(env, captureReleased.load());
+} JSCATCH
+
 } // namespace
 
 auto testJsAsyncTaskExports(js_env_t* env, js_value_t* exports) -> js_value_t* {
@@ -96,6 +118,8 @@ auto testJsAsyncTaskExports(js_env_t* env, js_value_t* exports) -> js_value_t* {
   V("taskFinished", taskFinished)
   V("startTimedTask", startTimedTask)
   V("startFailingTask", startFailingTask)
+  V("startCaptureReleaseTask", startCaptureReleaseTask)
+  V("captureReleased", captureReleasedFlag)
 #undef V
 
   return exports;

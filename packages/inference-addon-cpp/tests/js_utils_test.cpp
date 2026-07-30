@@ -200,18 +200,23 @@ TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
 
   std::atomic<bool> probeDestroyed{false};
   std::atomic<bool> teardownFinishedFirst{false};
+  std::atomic<bool> promiseSettledFirst{false};
   struct Probe {
     std::atomic<bool>* destroyed;
     std::atomic<bool>* finishedFirst;
+    std::atomic<bool>* settledFirst;
     ~Probe() {
       finishedFirst->store(
           mock_js::lastDeferredTeardownHandle != nullptr &&
           mock_js::lastDeferredTeardownHandle->finished.load());
+      settledFirst->store(
+          mock_js::lastCreatedDeferred != nullptr &&
+          mock_js::lastCreatedDeferred->settled.load());
       destroyed->store(true);
     }
   };
-  std::shared_ptr<Probe> probe(
-      new Probe{&probeDestroyed, &teardownFinishedFirst});
+  std::shared_ptr<Probe> probe(new Probe{
+      &probeDestroyed, &teardownFinishedFirst, &promiseSettledFirst});
 
   js_value_t* promise = js::JsAsyncTask::run(&env, [probe]() {});
   EXPECT_NE(promise, nullptr);
@@ -227,6 +232,12 @@ TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
       << "work captures were destroyed after the deferred teardown finished: "
          "their (JS-facing) destructors ran off-loop against an env that "
          "teardown may already have freed";
+  EXPECT_FALSE(promiseSettledFirst.load())
+      << "work captures were destroyed after the promise settled: whoever "
+         "awaits this promise resumes while the captures — commonly the last "
+         "shared_ptr to the addon and the model it owns — are still alive, so "
+         "an unload() awaiting a cancel can start the next load with the "
+         "previous model still pinned";
 }
 
 // A settlement failure inside completion (any JS() call failing) must not
