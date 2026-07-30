@@ -741,3 +741,9 @@ class LlmLlamacpp {
 
 module.exports = LlmLlamacpp
 module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath
+// Re-exported for tests: in the mobile test bundle a direct
+// require('@qvac/infer-base') from a bundled test file does not yield the
+// class ("QvacResponse is not a constructor"), while this module's own import
+// works on-device. Going through the package also pins class identity to the
+// one the model registers in its sinks.
+module.exports.QvacResponse = QvacResponse

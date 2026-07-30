@@ -18,8 +18,12 @@
 
 const path = require('bare-path')
 const os = require('bare-os')
-const { QvacResponse } = require('@qvac/infer-base')
 const LlmLlamacpp = require('../../index.js')
+// Through the package, not require('@qvac/infer-base'): the mobile test
+// bundle resolves a direct infer-base require to a module without the class
+// ("QvacResponse is not a constructor"), while the package's own import works
+// on-device — and it keeps class identity aligned with the model's sinks.
+const { QvacResponse } = LlmLlamacpp
 const { ensureModel, safeTest } = require('./utils')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
