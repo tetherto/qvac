@@ -2,14 +2,11 @@ name: On PR Trigger (BCI Whispercpp)
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/bci-whispercpp/**"
       - ".github/workflows/*bci-whispercpp*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
 
   workflow_dispatch:
     inputs:
@@ -22,7 +19,7 @@ on:
         required: false
         type: string
       run_verify:
-        description: "Treat this run like a 'verified' run (prebuild + integration)."
+        description: "Run all CI stages (prebuild + integration)."
         required: false
         type: boolean
         default: true
@@ -82,6 +79,21 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -123,7 +135,7 @@ jobs:
           github-token: ${{ github.token }}
 
   context:
-    needs: authorize
+    needs: [authorize, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
@@ -140,7 +152,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           INPUT_WORKDIR: ${{ inputs.workdir }}
@@ -163,7 +174,7 @@ jobs:
           else
             workdir="packages/bci-whispercpp"
             repo="$HEAD_REPO"
-            ref="$HEAD_REF"
+            ref="$HEAD_SHA"
             run_verify="true"
             base_sha="$BASE_SHA"
             head_sha="$HEAD_SHA"
@@ -187,6 +198,7 @@ jobs:
   sanity-checks:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
@@ -208,6 +220,7 @@ jobs:
 
   cpp-lint:
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
@@ -229,6 +242,7 @@ jobs:
       actions: read
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
@@ -243,6 +257,7 @@ jobs:
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - label-gate
@@ -267,6 +282,7 @@ jobs:
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
+      - fork-approval
       - detect-native-changes
       - context
       - label-gate
@@ -300,6 +316,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
@@ -324,6 +341,7 @@ jobs:
   prebuild-artifact-save:
     if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
       - label-gate
@@ -350,6 +368,7 @@ jobs:
       packages: read
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - context
       - prebuild
@@ -371,6 +390,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - context
       - prebuild
@@ -390,5 +410,5 @@ jobs:
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}

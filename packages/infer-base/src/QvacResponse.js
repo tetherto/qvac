@@ -15,6 +15,7 @@ const statuses = Object.freeze({
  */
 class QvacResponse extends EventEmitter {
   _status = statuses.RUNNING
+  _settleHooks = []
 
   /**
    * Creates a new QvacResponse instance.
@@ -129,11 +130,12 @@ class QvacResponse extends EventEmitter {
     this._status = statuses.ERRORED
     this._error = error
     this._teardownAbort()
+    this._rejectFinish(error)
+    this._runSettleHooks()
     const errorListeners = this.listenerCount('error')
     if (errorListeners > 0) {
       this.emit('error', error)
     }
-    this._rejectFinish(error)
   }
 
   /**
@@ -144,8 +146,9 @@ class QvacResponse extends EventEmitter {
     if (this._status !== statuses.RUNNING) return
     this._status = statuses.ENDED
     this._teardownAbort()
-    this.emit('end', result)
     this._resolveFinish(result)
+    this._runSettleHooks()
+    this.emit('end', result)
   }
 
   /**
@@ -259,11 +262,32 @@ class QvacResponse extends EventEmitter {
     this._teardownAbort()
 
     queueMicrotask(() => {
+      this._rejectFinish(error)
+      // Hooks run here rather than at the synchronous reservation above:
+      // the job handler registers its hook right after construction returns,
+      // which is after an already-aborted signal reserved the state.
+      this._runSettleHooks()
       if (this.listenerCount('error') > 0) {
         this.emit('error', error)
       }
-      this._rejectFinish(error)
     })
+  }
+
+  /**
+   * Internal: registers a hook invoked exactly once when the response
+   * settles (ended / failed / abort), after the finish promise settles and
+   * before any public 'end'/'error' listener runs — so a throwing listener
+   * cannot skip it. Hooks must not throw. Not part of the public API.
+   * @param {Function} hook
+   */
+  _onSettled(hook) {
+    this._settleHooks.push(hook)
+  }
+
+  _runSettleHooks() {
+    const hooks = this._settleHooks
+    this._settleHooks = []
+    for (const hook of hooks) hook()
   }
 
   _teardownAbort() {

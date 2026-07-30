@@ -10,6 +10,18 @@ export interface TTSConfigurationParams {
 export interface TTSJobData {
   type: string;
   input: string;
+  // Parler per-call voice-description/template fields (siblings of `input`),
+  // read by JSAdapter::readParlerDescriptionFields. Ignored by other engines.
+  description?: string;
+  voiceDescription?: string;
+  voice?: string;
+  emotion?: string;
+  pitch?: string;
+  pace?: string;
+  expressivity?: string;
+  noise?: string;
+  reverb?: string;
+  quality?: string;
 }
 
 export interface TTSWeightData {

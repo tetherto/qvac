@@ -6,9 +6,15 @@ schemaType: HowTo
 
 ## Overview
 
-Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml)) to run VLA policies. Load a model using `modelType: "vla"`. Then, feed it preprocessed camera frames, the robot's current state, and a tokenized natural-language instruction; the model returns an **action chunk** — `chunkSize` future timesteps of an `actionDim`-dimensional action vector — to drive the robot's actuators.
+Vision-language-action (VLA) inference uses a **GGML** engine ([`@qvac/vla-ggml`](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml)) to run VLA policies. Load a model using `modelType: "ggml-vla"`. Then, feed it preprocessed camera frames, the robot's current state, and a tokenized natural-language instruction; the model returns an **action chunk** — `chunkSize` future timesteps of an `actionDim`-dimensional action vector — to drive the robot's actuators.
 
-The same `vla()` interface drives multiple policy families that differ in (i) how many camera views they expect, and (ii) how they consume the robot state. `vlaHparams()` reports these per-model traits — `numCameras` and `stateInputMode` — so you can shape your inputs accordingly without hardcoding to a single architecture. `vla()` returns the produced action chunk together with per-stage timing stats.
+The same `vla()` interface drives multiple policy families that differ in (i) how many camera views they expect, (ii) how they consume the robot state, and (iii) how they consume camera frames. `vlaHparams()` reports these per-model traits — `numCameras`, `stateInputMode`, and `imageInputMode` — so you can shape your inputs accordingly without hardcoding to a single architecture.
+
+`imageInputMode` is either `"pixels"` or `"patches"`:
+- `"pixels"`: each `images[]` entry is a `3·w·h` pixel plane, as prepared by `vlaPreprocessImage()`.
+- `"patches"`: each `images[]` entry is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats, not a `3·w·h` pixel plane. A real consumer patchifies each camera frame the way `Gr00tPolicy` does, and the model's learned patch-embed runs inside the addon.
+
+`vla()` returns the produced action chunk together with per-stage timing stats.
 
 ## Functions
 
@@ -32,6 +38,7 @@ Supported model families:
 
 - **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Expects **2 camera views** and a **continuous** robot state. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
 - **[π₀.₅ (pi05)](https://www.physicalintelligence.company/blog/pi05)**: single all-in-one `*.gguf` file. Expects **`vlaHparams().numCameras` camera views** (3 for `PI05_BASE_Q_AGGRESSIVE`) and a **discrete** robot state tokenized into the language prompt instead of a state buffer; the `noise` prior is required. Available constant: `PI05_BASE_Q_AGGRESSIVE`.
+- **[NVIDIA GR00T N1.7-3B (LIBERO)](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)**: single all-in-one `*.gguf` file. Reports `imageInputMode: "patches"` — each of its **2 camera views** is passed as a pre-patchified buffer of `vlaHparams().imagePatchElems` floats (not a `3·w·h` pixel plane), so `vlaPreprocessImage()` does not apply. Uses a **continuous** robot state (pad it with `vlaPadState()`), and the `noise` prior is required (flow-matching). Available constants: `GROOT_Q8_VF16` (desktop) and `GROOT_Q5_VF16` (mobile).
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
@@ -76,6 +83,28 @@ The following script loads pi05 from the registry, builds synthetic inputs (zero
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/vla-pi05.ts title="vla-pi05.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### GR00T
+
+The following script loads GR00T N1.7-3B (LIBERO) from the registry and runs a single inference pass with synthetic inputs. Unlike SmolVLA and pi05, GR00T reports `imageInputMode: "patches"`: each camera entry is a pre-patchified buffer of `hparams.imagePatchElems` floats, the continuous state is padded with `vlaPadState()`, and the `noise` prior is required:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/vla-groot.js title="vla-groot.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/vla-groot.ts title="vla-groot.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

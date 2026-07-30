@@ -348,7 +348,7 @@ test('integration manifest pins integrity for every model', function (t) {
       )
     const hasBytes = Number.isInteger(entry.bytes) && entry.bytes > 0
     const hasSha = typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(entry.sha256)
-    const hasGroup = ['base', 'ideogram', 'ltx'].includes(entry.group)
+    const hasGroup = ['base', 'ideogram', 'ltx', 'wan22'].includes(entry.group)
     t.ok(hasImmutableUrls, `${name} uses immutable source URLs`)
     t.ok(hasBytes, `${name} pins bytes`)
     t.ok(hasSha, `${name} pins sha256`)

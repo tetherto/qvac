@@ -8,18 +8,7 @@ schemaType: HowTo
 
 Video generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"` with `modelConfig.mode: "video"`. Then call `video()` with a `mode` and `prompt`.
 
-Two generation modes are supported:
-
-- **`txt2vid`** — generate a video from a text prompt alone.
-- **`img2vid`** — animate a still image. Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) and optionally `strength` (0–1) to control how much the output diverges from the first frame. Requires a model loaded with `clipVisionModelSrc` (OpenCLIP ViT-H/14).
-
-`video()` returns `{ progressStream, outputs, stats }`. `outputs` resolves to one or more generated videos as `Uint8Array` buffers (AVI). Use `progressStream` to track generation step-by-step.
-
-WAN-specific knobs control the output: `video_frames` (must satisfy `4k + 1`, e.g. `17`, `33`, `49`, `81`), `fps`, `cfg_scale`, and `flow_shift` (for Wan 2.1 T2V, `3.0` is recommended — higher values can produce near-static frames).
-
-<Callout type="warn">
-`width` and `height` must be positive multiples of **16**. Values that are multiples of 8 but not 16 (e.g. `264`, `520`) are rejected at the SDK boundary for both `txt2vid` and `img2vid`.
-</Callout>
+It supports two modes — `txt2vid` (from a text prompt) and `img2vid` (animate a still image) — across the WAN 2.1 and LTX-2 model families. `video()` returns `{ progressStream, outputs, stats }`: `outputs` resolves to the generated video(s) as `Uint8Array` buffers (AVI), `progressStream` streams step-by-step progress, and `stats` carries per-run metadata.
 
 <Callout type="warn">
 Video generation is hardware-intensive: it requires at least **16 GB of video memory** or **20 GB of unified memory**.
@@ -34,12 +23,32 @@ Use the following sequence of function calls:
 
 For how to use each function, see [SDK — API reference](/reference/api/).
 
+### `video()`
+
+Generates a video from a `prompt` in one of two modes:
+
+- **`txt2vid`** — generate a video from a text prompt alone.
+- **`img2vid`** — animate a still image. Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) and optionally `strength` (0–1) to control how much the output diverges from the first frame. With WAN this requires a model loaded with `clipVisionModelSrc` (OpenCLIP ViT-H/14); LTX-2 conditions on the first frame through its video VAE and needs no CLIP-vision encoder.
+
+Generation knobs: `video_frames` (must satisfy `4k + 1`, e.g. `17`, `33`, `49`, `81`), `fps`, `cfg_scale`, and `flow_shift` (for Wan 2.1 T2V, `3.0` is recommended — higher values can produce near-static frames). LTX-2 adds `temporal_tiling` — tile the video VAE decode along the time axis to cap peak VRAM on HD / long clips (no effect on WAN, whose VAE is spatial-only).
+
+<Callout type="warn">
+`width` and `height` must be positive multiples of **16**. Values that are multiples of 8 but not 16 (e.g. `264`, `520`) are rejected at the SDK boundary for both `txt2vid` and `img2vid`. **LTX-2** is stricter: `width` and `height` must be multiples of **32**, and `video_frames` must satisfy `8*k + 1` (e.g. `25`, `121`, `241`) with a maximum of **257** — validated against the loaded model before generation.
+</Callout>
+
+The returned `stats` includes `hasAudio` (`true` when the output AVI carries a muxed audio track) and `audioSampleRate` (Hz of that track, `0` when there is no audio).
+
 ## Models
 
-Supported model families and their file layouts:
+Two model families are supported — **WAN 2.1** and **LTX-2** — and the file layout is auto-selected at load time from the model sources you provide:
 
 - **WAN 2.1 T2V** (txt2vid): split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + VAE (via `vaeModelSrc`). Available constants: `WAN2_1_T2V_1_3B_FP16`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
 - **WAN 2.1 I2V** (img2vid): same split layout as T2V, plus an OpenCLIP ViT-H/14 vision encoder (via `clipVisionModelSrc`). Available constants: `WAN2_1_I2V_14B_Q4_K_M`, `CLIP_VISION_H`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
+- **LTX-2** (txt2vid and img2vid): split layout — diffusion model + Gemma text encoder (via `llmModelSrc`) + video VAE (via `vaeModelSrc`) + text-embedding connectors (via `embeddingsConnectorsModelSrc`, whose presence selects this layout), plus an optional audio VAE (via `audioVaeModelSrc`) for the synchronized 48 kHz audio track. Its img2vid path needs no CLIP-vision encoder.
+
+<Callout type="warn">
+LTX-2 is large (~21B) — budget at least **20 GB** of video / unified memory.
+</Callout>
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
@@ -84,6 +93,50 @@ The following script shows image-to-video generation using Wan 2.1 I2V with its 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid.ts title="diffusion-img2vid.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Text-to-video with audio (LTX-2)
+
+The following script loads LTX-2 with its split layout (diffusion model + Gemma text encoder + video VAE + embedding connectors + optional audio VAE) and generates a clip with a synchronized 48 kHz audio track. It uses the LTX-2 dimension/frame constraints (multiples of 32, `8*k + 1` frames) and enables `temporal_tiling` to cap peak VRAM:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid-ltx.js title="diffusion-txt2vid-ltx.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-ltx.ts title="diffusion-txt2vid-ltx.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Image-to-video (LTX-2)
+
+The following script animates a first-frame `init_image` with LTX-2. Unlike WAN I2V, the LTX-2 img2vid path needs no CLIP-vision encoder:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-img2vid-ltx.js title="diffusion-img2vid-ltx.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid-ltx.ts title="diffusion-img2vid-ltx.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

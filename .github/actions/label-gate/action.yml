@@ -16,12 +16,14 @@ inputs:
       repository owner's org). The label applier must be an active member
       of at least one listed team for the run to be authorised. Either
       `teams` or `users` (or both) must contain at least one entry.
+      Scoped to the merge and release teams only: applying `verified` is a
+      privileged trust decision, so individual contributor / partner teams
+      (e.g. qvac-internal-dev, qvac-collabora) are intentionally excluded —
+      a merge/release member must apply the label for a fork PR to run.
     required: false
     default: |
-      qvac-internal-dev
       qvac-internal-merge
       qvac-internal-release
-      qvac-collabora
   users:
     description: >
       Comma- and/or newline-separated list of GitHub user logins that are

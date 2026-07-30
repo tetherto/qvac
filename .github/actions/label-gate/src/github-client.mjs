@@ -80,14 +80,19 @@ export class GitHubClient {
    *
    * @returns {Promise<{status: number, headers: Headers, body: unknown}>}
    */
-  async _requestOnce(method, url) {
-    const res = await this.fetch(url, {
+  async _requestOnce(method, url, requestBody) {
+    const init = {
       method,
       headers: {
         ...DEFAULT_HEADERS,
         Authorization: `Bearer ${this.token}`,
       },
-    });
+    };
+    if (requestBody !== undefined) {
+      init.headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(requestBody);
+    }
+    const res = await this.fetch(url, init);
 
     let body;
     if (res.status === 204) {
@@ -99,12 +104,12 @@ export class GitHubClient {
     return { status: res.status, headers: res.headers, body };
   }
 
-  async _request(method, path) {
+  async _request(method, path, requestBody) {
     const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
     let lastErr;
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       try {
-        const res = await this._requestOnce(method, url);
+        const res = await this._requestOnce(method, url, requestBody);
         const retriable = res.status >= 500 || res.status === 429;
         if (!retriable) return res;
         lastErr = new GitHubApiError(
@@ -176,6 +181,55 @@ export class GitHubClient {
       }
     }
     return latest;
+  }
+
+  /**
+   * Bind an approval to an exact commit by writing a commit status. Used to
+   * make `verified` authorisation SHA-specific rather than event-ordering
+   * based. Returns true on success (HTTP 201). Throws on any other status.
+   *
+   * @param {string} sha
+   * @param {{state: string, context: string, description?: string}} status
+   */
+  async setCommitStatus(sha, { state, context, description } = {}) {
+    if (!sha) throw new Error('setCommitStatus: sha is required');
+    if (!state) throw new Error('setCommitStatus: state is required');
+    if (!context) throw new Error('setCommitStatus: context is required');
+    const path = `/repos/${this.repo}/statuses/${enc(sha)}`;
+    const res = await this._request('POST', path, { state, context, description });
+    if (res.status === 201) return true;
+    throw new GitHubApiError(
+      `set commit status failed: HTTP ${res.status}`,
+      { status: res.status, method: 'POST', path, body: res.body }
+    );
+  }
+
+  /**
+   * Return true iff `sha` carries a `success` commit status for `context`.
+   * The statuses list is newest-first, so the first entry matching the
+   * context is the latest. Returns false for an unknown SHA (404/422) so a
+   * commit that was never approved fails closed.
+   *
+   * @param {string} sha
+   * @param {string} context
+   * @returns {Promise<boolean>}
+   */
+  async hasApprovalStatus(sha, context) {
+    if (!sha) return false;
+    const path = `/repos/${this.repo}/commits/${enc(sha)}/statuses?per_page=100`;
+    const res = await this._request('GET', path);
+    if (res.status === 404 || res.status === 422) return false;
+    if (res.status >= 400) {
+      throw new GitHubApiError(
+        `commit status fetch failed: HTTP ${res.status}`,
+        { status: res.status, method: 'GET', path, body: res.body }
+      );
+    }
+    if (!Array.isArray(res.body)) return false;
+    for (const s of res.body) {
+      if (s?.context === context) return s?.state === 'success';
+    }
+    return false;
   }
 
   /**
