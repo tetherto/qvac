@@ -1,13 +1,18 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Same-repo PRs and write-access actors are trusted on external forks. Optional label input gates external fork PRs when a pod-specific label is required (e.g. safe-to-test). Draft PRs are blocked. Privileged fork trust for secret-bearing jobs is enforced by the fork-ci environment gate (fork-approval job), not here.
+  Security gate for pull_request_target workflows. Same-repo PRs are trusted.
+  External fork PRs require a SHA-bound qvac/fork-verified commit status (recorded
+  by fork-approval after fork-ci environment approval) unless the actor has
+  write-or-higher permission. Optional label input adds a pod-specific label gate
+  (e.g. safe-to-test). Draft PRs are blocked. Run only after fork-approval and
+  checkout authorize-pr from the default branch — never from the PR merge ref.
 inputs:
   label:
-    description: "When set, external fork PRs must carry this label. Omit or leave empty to rely on fork-ci only."
+    description: "When set, external fork PRs must carry this label in addition to SHA-bound fork-ci approval."
     required: false
     default: ""
   github-token:
-    description: "GitHub token for permission check and label API calls"
+    description: "GitHub token for permission check and status API calls"
     required: true
 
 outputs:
@@ -29,6 +34,29 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
+    - name: Resolve approved-SHA commit status
+      id: approved
+      if: >-
+        github.event_name == 'pull_request_target' ||
+        github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        STATUS_CONTEXT: qvac/fork-verified
+      run: |
+        approved=false
+        if [ -n "$HEAD_SHA" ]; then
+          state=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" \
+            --jq "map(select(.context == \"${STATUS_CONTEXT}\"))[0].state // \"\"" \
+            2>/dev/null || echo "")
+          if [ "$state" = "success" ]; then
+            approved=true
+          fi
+        fi
+        echo "approved=$approved" >> "$GITHUB_OUTPUT"
+
     - name: Check authorization
       id: check
       shell: bash
@@ -39,6 +67,7 @@ runs:
         BASE_REPO: ${{ github.repository }}
         IS_DRAFT: ${{ github.event.pull_request.draft }}
         HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        HAS_APPROVED_SHA: ${{ steps.approved.outputs.approved }}
         LABEL_NAME: ${{ inputs.label }}
         LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       run: |
@@ -68,14 +97,24 @@ runs:
 
         echo "::notice::Actor '$GITHUB_ACTOR' write-or-higher: $HAS_WRITE"
         if [ "$HAS_WRITE" = "1" ]; then
-          echo "::notice::Actor has write-or-higher permission — authorized"
-          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_APPROVED_SHA" = "true" ]; then
+            echo "::notice::Actor has write-or-higher permission — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Write-capable actor on external fork without SHA-bound fork-ci approval — skipping"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
           exit 0
         fi
 
         if [ -z "$LABEL_NAME" ]; then
-          echo "::notice::External fork PR — authorized (fork-ci gates privileged jobs)"
-          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_APPROVED_SHA" = "true" ]; then
+            echo "::notice::External fork PR — SHA-bound fork-ci approval confirmed"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::External fork PR without fork-ci approval on this SHA — skipping"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
           exit 0
         fi
 
@@ -88,9 +127,12 @@ runs:
           exit 0
         fi
 
-        if [ "$HAS_LABEL" = "true" ]; then
-          echo "::notice::Fork PR with '$LABEL_NAME' label — authorized"
+        if [ "$HAS_LABEL" = "true" ] && [ "$HAS_APPROVED_SHA" = "true" ]; then
+          echo "::notice::Fork PR with '$LABEL_NAME' label and SHA-bound approval — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
+        elif [ "$HAS_LABEL" = "true" ]; then
+          echo "::warning::Fork PR with '$LABEL_NAME' but no SHA-bound fork-ci approval on this commit — skipping"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
         else
           echo "::warning::External fork PR without '$LABEL_NAME' label — skipping"
           echo "allowed=false" >> "$GITHUB_OUTPUT"

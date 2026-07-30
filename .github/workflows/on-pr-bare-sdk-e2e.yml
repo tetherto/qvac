@@ -11,7 +11,8 @@
 #
 # Mirrors the SDK suite's gating (on-pr-test-sdk.yml): pull_request_target for
 # registry/secret access, guarded by fork-approval (fork-ci) + authorize-pr
-# (safe-to-test for SDK-pod-specific checks) before any PR code is checked out.
+# (safe-to-test for SDK-pod-specific checks). authorize-pr runs after fork-approval
+# and is checked out from the default branch only — never the PR merge ref.
 name: QVAC Tests (bare-sdk) - PR
 
 on:
@@ -44,15 +45,19 @@ jobs:
     uses: ./.github/workflows/reusable-fork-approval.yml
     secrets: inherit
   resolve-config:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
           sparse-checkout-cone-mode: false
+          persist-credentials: false
+
 
       - name: Authorize PR
         id: auth

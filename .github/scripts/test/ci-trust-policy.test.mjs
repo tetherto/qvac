@@ -215,9 +215,12 @@ test('ci-router: external fork draft runs nothing even with heavy labels', () =>
   )
 })
 
-test('ci-router: missing head repo fails closed and repo compare is case-insensitive', () => {
+test('ci-router: missing head repo fails closed; fork and same-repo route alike', () => {
   assert.deepEqual(route({ HEAD_REPO: '' }), falseRoute)
+  // Routing is not a trust decision, so a fork and a same-repo PR get the same
+  // stages. Fork trust lives in `needs: fork-approval` (asserted further down).
   assert.deepEqual(route({ HEAD_REPO: 'TetherTo/QVAC' }), baselineRoute)
+  assert.deepEqual(route({ HEAD_REPO: 'outsider/qvac' }), baselineRoute)
 })
 
 function inferenceAuthorization(relativePath, stepName, overrides = {}) {
@@ -333,6 +336,7 @@ function authorizePr(overrides = {}) {
     BASE_REPO: 'tetherto/qvac',
     IS_DRAFT: 'false',
     HAS_WRITE: '0',
+    HAS_APPROVED_SHA: 'false',
     LABEL_NAME: '',
     LABELS_JSON: '[]',
     GITHUB_ACTOR: 'outsider',
@@ -340,9 +344,14 @@ function authorizePr(overrides = {}) {
   })
 }
 
-test('authorize-pr: external fork ready PR is authorized (fork-ci gates privileged jobs)', () => {
-  assert.equal(authorizePr().allowed, 'true')
-  assert.equal(authorizePr({ ACTION: 'synchronize' }).allowed, 'true')
+test('authorize-pr: external fork requires SHA-bound fork-ci approval', () => {
+  assert.equal(authorizePr().allowed, 'false')
+  assert.equal(authorizePr({ HAS_APPROVED_SHA: 'true' }).allowed, 'true')
+  assert.equal(
+    authorizePr({ ACTION: 'synchronize', HAS_APPROVED_SHA: 'true' }).allowed,
+    'true',
+  )
+  assert.equal(authorizePr({ ACTION: 'synchronize' }).allowed, 'false')
 })
 
 test('authorize-pr: same-repo synchronize remains authorised', () => {
@@ -362,29 +371,46 @@ test('authorize-pr: same-repo synchronize remains authorised', () => {
   )
 })
 
-test('authorize-pr: write access bypasses optional label gate from a fork', () => {
+test('authorize-pr: write access on external fork requires SHA-bound approval', () => {
+  assert.equal(authorizePr({ HAS_WRITE: '1', HAS_APPROVED_SHA: 'false' }).allowed, 'false')
   assert.equal(
-    authorizePr({ HAS_WRITE: '1', LABEL_NAME: 'safe-to-test', LABELS_JSON: '[]' })
-      .allowed,
+    authorizePr({
+      HAS_WRITE: '1',
+      HAS_APPROVED_SHA: 'true',
+      LABEL_NAME: 'safe-to-test',
+      LABELS_JSON: '[]',
+    }).allowed,
     'true',
   )
 })
 
-test('authorize-pr: org member without write is authorized when no pod label is required', () => {
+test('authorize-pr: author association alone grants no trust on an external fork', () => {
+  // authorize-pr deliberately never reads author_association: a MEMBER / OWNER
+  // / COLLABORATOR badge on a fork PR says nothing about whether THIS head SHA
+  // was reviewed. Injecting one must not move the decision in either direction.
   for (const assoc of ['MEMBER', 'OWNER', 'COLLABORATOR']) {
     assert.equal(
       authorizePr({
         AUTHOR_ASSOC: assoc,
         HAS_WRITE: '0',
-        LABELS_JSON: '[]',
+        HAS_APPROVED_SHA: 'false',
+      }).allowed,
+      'false',
+      `${assoc} without write and without an approved SHA is denied`,
+    )
+    assert.equal(
+      authorizePr({
+        AUTHOR_ASSOC: assoc,
+        HAS_WRITE: '0',
+        HAS_APPROVED_SHA: 'true',
       }).allowed,
       'true',
-      `${assoc} without write relies on fork-ci for privileged jobs`,
+      `${assoc} is allowed only because the head SHA carries fork-ci approval`,
     )
   }
 })
 
-test('authorize-pr: external fork with pod label input requires that label', () => {
+test('authorize-pr: external fork with pod label requires label and SHA', () => {
   assert.equal(
     authorizePr({
       LABEL_NAME: 'safe-to-test',
@@ -396,6 +422,15 @@ test('authorize-pr: external fork with pod label input requires that label', () 
     authorizePr({
       LABEL_NAME: 'safe-to-test',
       LABELS_JSON: '["safe-to-test"]',
+      HAS_APPROVED_SHA: 'false',
+    }).allowed,
+    'false',
+  )
+  assert.equal(
+    authorizePr({
+      LABEL_NAME: 'safe-to-test',
+      LABELS_JSON: '["safe-to-test"]',
+      HAS_APPROVED_SHA: 'true',
     }).allowed,
     'true',
   )
@@ -435,7 +470,6 @@ test('authorize-pr: drafts are denied before internal or fork trust checks', () 
     authorizePr({
       IS_DRAFT: 'true',
       HAS_WRITE: '1',
-      AUTHOR_ASSOC: 'MEMBER',
     }).allowed,
     'false',
   )
@@ -488,7 +522,6 @@ test('sdk e2e: internal PR authorised without verified; external fork stays gate
     HEAD_REPO: 'tetherto/qvac',
     LABEL_NAME: 'safe-to-test',
     LABELS_JSON: '[]',
-    AUTHOR_ASSOC: 'NONE',
     HAS_WRITE: '0',
   })
   assert.equal(internal.allowed, 'true')
@@ -498,7 +531,6 @@ test('sdk e2e: internal PR authorised without verified; external fork stays gate
     HEAD_REPO: 'TetherTo/QVAC',
     LABEL_NAME: 'safe-to-test',
     LABELS_JSON: '[]',
-    AUTHOR_ASSOC: 'NONE',
     HAS_WRITE: '0',
   })
   assert.equal(internalMixedCase.allowed, 'true')
@@ -506,11 +538,20 @@ test('sdk e2e: internal PR authorised without verified; external fork stays gate
   const fork = authorizePr({
     HEAD_REPO: 'outsider/qvac',
     LABEL_NAME: 'safe-to-test',
-    LABELS_JSON: '[]',
-    AUTHOR_ASSOC: 'NONE',
+    LABELS_JSON: '["safe-to-test"]',
+    HAS_APPROVED_SHA: 'false',
     HAS_WRITE: '0',
   })
   assert.equal(fork.allowed, 'false')
+
+  const forkApproved = authorizePr({
+    HEAD_REPO: 'outsider/qvac',
+    LABEL_NAME: 'safe-to-test',
+    LABELS_JSON: '["safe-to-test"]',
+    HAS_APPROVED_SHA: 'true',
+    HAS_WRITE: '0',
+  })
+  assert.equal(forkApproved.allowed, 'true')
 })
 
 function jobBlock(source, job) {
@@ -590,6 +631,7 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-fabric.yml',
     'on-pr-llm-llamacpp.yml',
     'on-pr-ocr-ggml.yml',
+    'on-pr-ocr-onnx.yml',
     'on-pr-onnx.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
@@ -699,7 +741,8 @@ test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording'
   )
   assert.match(source, /step-security\/harden-runner@/)
   assert.match(source, /context=qvac\/fork-verified/)
-  assert.match(source, /secrets\.PAT_TOKEN/)
+  assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/)
+  assert.match(source, /statuses:\s*write/)
   assert.match(
     source,
     /HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
@@ -881,7 +924,12 @@ function forkCiTargets() {
 
 test('fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job', () => {
   const targets = forkCiTargets()
-  assert.ok(targets.length >= 20, `found ${targets.length} fork-ci target workflows`)
+  // Floor, not an exact count: it only guards against the discovery globbing
+  // silently matching nothing (which would make every assertion below vacuous).
+  // Lower it deliberately when workflow families are retired or consolidated —
+  // this dropped from 20 when transcription-whispercpp and transcription-parakeet
+  // merged into asr-ggml.
+  assert.ok(targets.length >= 19, `found ${targets.length} fork-ci target workflows`)
   for (const path of targets) {
     const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
     assert.ok(gate, `${path}: must define a fork-approval gate job`)
@@ -890,10 +938,18 @@ test('fork-ci: every pull_request_target verified-surface workflow has the fork-
       /uses:\s*\.\/\.github\/workflows\/reusable-fork-approval\.yml/,
       `${path}: fork-approval must call reusable-fork-approval.yml`,
     )
+  }
+})
+
+test('fork-ci: fork-approval caller grants statuses: write (reusable cannot elevate token)', () => {
+  const targets = forkCiTargets()
+  for (const path of targets) {
+    const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
+    assert.ok(gate, `${path}: must define fork-approval`)
     assert.match(
       gate.text,
-      /secrets:\s*inherit/,
-      `${path}: fork-approval must inherit secrets for PAT_TOKEN`,
+      /permissions:[\s\S]*?statuses:\s*write/,
+      `${path}: fork-approval caller must declare statuses: write — reusable workflows cannot elevate GITHUB_TOKEN scope`,
     )
   }
 })
@@ -903,9 +959,48 @@ function jobDependsOnAuthorize(job) {
   return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
 }
 
+const reusablePrivilege = new Map()
+
+/**
+ * A local reusable workflow is a privileged fork surface when it can reach a
+ * secret, land on a persistent self-hosted runner, or check out PR code.
+ * Inert status aggregators like public-pr.yml (boolean inputs, hosted runner,
+ * no checkout) are not, so their callers legitimately skip fork-approval.
+ */
+function localReusableIsPrivileged(relativePath) {
+  if (reusablePrivilege.has(relativePath)) {
+    return reusablePrivilege.get(relativePath)
+  }
+  // Seed conservatively so a cyclic `uses:` chain resolves to "privileged"
+  // rather than recursing forever.
+  reusablePrivilege.set(relativePath, true)
+
+  let source
+  try {
+    source = read(relativePath)
+  } catch {
+    return true
+  }
+
+  const privileged =
+    /secrets\.(?!GITHUB_TOKEN\b)/.test(source) ||
+    /^\s*secrets:/m.test(source) ||
+    /runs-on:.*\bqvac-/.test(source) ||
+    /uses:\s*actions\/checkout@/.test(source)
+
+  reusablePrivilege.set(relativePath, privileged)
+  return privileged
+}
+
 function jobRunsPrivilegedForkSurface(job) {
   if (/secrets\.(?!GITHUB_TOKEN\b)/.test(job.text)) return true
   if (/uses:\s*[^@\n]+\n[\s\S]*?secrets:\s*inherit/.test(job.text)) return true
+  // A job that delegates to a local reusable workflow carries no checkout of
+  // its own, so the `actions/checkout` probe below waves it through even when
+  // the reusable it calls checks out PR code on a self-hosted runner. Resolve
+  // the target instead of guessing from the caller's own text.
+  const delegated = job.text.match(/uses:\s*\.\/(\.github\/workflows\/\S+)/)
+  if (delegated) return localReusableIsPrivileged(delegated[1])
   if (!/uses:\s*actions\/checkout@/.test(job.text)) return false
   if (/ref:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}/.test(job.text)) {
     return false
@@ -931,11 +1026,46 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
   }
 })
 
+test('authorize jobs: run after fork-approval and checkout authorize-pr from default branch only', () => {
+  const dir = join(root, '.github/workflows')
+  const offenders = []
+  for (const name of readdirSync(dir)) {
+    if (!/\.ya?ml$/.test(name)) continue
+    const path = join(dir, name)
+    const src = readFileSync(path, 'utf8')
+    for (const job of eachJob(src)) {
+      if (!/\.\/\.github\/actions\/authorize-pr/.test(job.text)) continue
+      if (job.name !== 'authorize' && job.name !== 'resolve-config') continue
+      if (!/\bneeds:[\s\S]*?\bfork-approval\b/.test(job.text)) {
+        offenders.push(`${name}: job ${job.name} missing needs fork-approval`)
+      }
+      if (!/default_branch/.test(job.text)) {
+        offenders.push(
+          `${name}: job ${job.name} must checkout from github.event.repository.default_branch`,
+        )
+      }
+      if (!/sparse-checkout:\s*\.github\/actions\/authorize-pr/.test(job.text)) {
+        offenders.push(
+          `${name}: job ${job.name} must sparse-checkout .github/actions/authorize-pr only`,
+        )
+      }
+      if (!/persist-credentials:\s*false/.test(job.text)) {
+        offenders.push(`${name}: job ${job.name} must set persist-credentials: false`)
+      }
+      if (!/statuses:\s*read/.test(job.text)) {
+        offenders.push(
+          `${name}: job ${job.name} must grant statuses: read for qvac/fork-verified lookup`,
+        )
+      }
+    }
+  }
+  assert.deepEqual(offenders, [])
+})
+
 // Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
 // privileged context), so it deliberately carries no authorize gate and needs
-// no fork-ci coverage.
-// workflow, so a future edit can't quietly reintroduce a secret-bearing
-// untrusted-checkout surface.
+// no fork-ci coverage. This test pins that posture so a future edit can't
+// quietly reintroduce a secret-bearing untrusted-checkout surface.
 test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {
   const entry = read('.github/workflows/on-pr-shared-ci-infra.yml')
   assert.match(entry, /^on:\n\s*pull_request:/m)
