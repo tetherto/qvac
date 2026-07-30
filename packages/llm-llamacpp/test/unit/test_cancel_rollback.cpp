@@ -1389,9 +1389,13 @@ TEST(
     auto& compactor = textCtx->compactorForTesting();
     compactor.setRemoveThinkingFromContext(true);
     compactor.setReasoningEnabled(true);
+    ASSERT_NO_THROW(compactor.snapshotAtPrefillBoundary(
+        textCtx->getCtx(), /*seqId=*/0, pos, "[Test]"));
     // Model a request that ends after `<think>` but before `</think>`:
     // the span is open and resident, but no close capture ever commits.
     compactor.setOpenSpan(pos - 1);
+    ASSERT_TRUE(compactor.hasOpenSpan())
+        << "test setup must establish a replay boundary before opening span";
     injectedOpenSpan = true;
   };
 

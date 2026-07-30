@@ -309,6 +309,12 @@ struct CompactorFixture {
   ReasoningBlockCompactor compactor{rollback, tools};
 };
 
+void seedReasoningBoundary(CompactorFixture& fx, llama_pos nPast) {
+  fx.rollback.seedReasoningBoundaryForTesting(nPast);
+  ASSERT_TRUE(fx.rollback.hasReasoningBoundary())
+      << "test setup must establish the replay boundary before opening a span";
+}
+
 } // namespace
 
 TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenRemoveThinkingOff) {
@@ -557,6 +563,7 @@ TEST(ReasoningBlockCompactorCloseCommit, IsNoOpWithoutPriorRequest) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
+  seedReasoningBoundary(fx, /*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/10);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
   ASSERT_FALSE(fx.compactor.hasPendingCloseCapture());
@@ -571,6 +578,7 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
+  seedReasoningBoundary(fx, /*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/10);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
 
