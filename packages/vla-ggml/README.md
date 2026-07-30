@@ -170,7 +170,7 @@ tokenising (see [Models](#models)). Check `hparams.numCameras` /
 
 | Export | What |
 |---|---|
-| `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. `config.embodiment` (GR00T only) picks the embodiment tag for a multi-embodiment GGUF (`''` = GGUF default). Call `await model.load({ backend? })` then `await (await model.run(input)).await()`. `await model.setEmbodiment(tag)` switches embodiment on a loaded GR00T model and returns the refreshed hparams. |
+| `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. `config.embodiment` (GR00T only) selects a row from a multi-embodiment GGUF and takes the full `VlaEmbodimentSelector`: a tag string, a numeric `cat_id` (`0..31`), or `{ tag \| catId, numCameras }` where `numCameras` overrides the stored view count (`''` / omitted = GGUF default). Call `await model.load({ backend? })` then `await (await model.run(input)).await()`. `await model.setEmbodiment(selector)` takes the same shape, switches embodiment on a loaded GR00T model and returns the refreshed hparams. |
 | `preprocessImage(pixels, w, h, { size, layout, scale })` | Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32 in `[-1, 1]`. `scale` accepts `1` (already 0..1), `1/255` (input is 0..255), or `'auto'` (default heuristic). |
 | `padState(state, targetDim)` | Zero-pad a robot-state vector to the model's `maxStateDim`. |
 Full TypeScript types in [`index.d.ts`](./index.d.ts).

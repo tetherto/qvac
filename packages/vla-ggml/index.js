@@ -507,8 +507,19 @@ class VlaModel {
             }
             // Same logger-leak guard as the missing-file path above.
             this._releaseNativeLogger();
+            // An unresolvable embodiment is a bad config, not a bad weights file — it
+            // is rejected before any weight I/O happens. Without this, the SAME root
+            // cause reported INVALID_CONFIG through setEmbodiment() and
+            // FAILED_TO_LOAD_WEIGHTS through the constructor. The resolver tags every
+            // one of its rejections with this prefix (grootResolveEmbodiment in
+            // groot.cpp) precisely so it can be told apart here.
+            const message = loadError.message;
+            const isEmbodimentError = typeof message === "string" &&
+                message.includes("grootResolveEmbodiment:");
             throw new QvacErrorAddonVla({
-                code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+                code: isEmbodimentError
+                    ? ERR_CODES.INVALID_CONFIG
+                    : ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
                 adds: loadError.message,
                 cause: loadError,
             });
@@ -533,42 +544,64 @@ class VlaModel {
     //
     // Rejects (leaving the current embodiment active) for an unknown tag or
     // cat_id, one not stored in this GGUF, an embodiment with no known camera
-    // count and no override, a single-embodiment model, or an inference that has
-    // not been awaited yet.
-    // eslint-disable-next-line @typescript-eslint/require-await -- kept async so it serializes through the exclusive run queue like run().
+    // count and no override, a single-embodiment model (including selecting the one
+    // row a v1 GGUF bakes in), or an inference that has been dispatched and not
+    // yet awaited.
+    //
+    // Unlike run(), this does NOT hand off to the worker thread: the row re-read
+    // (~20MB) and the pre-transpose rebuild run synchronously, so on Bare's single
+    // JS thread the call blocks other JS work for tens of ms — longer on mobile
+    // flash under load. Accepted trade-off: switching is a control-plane operation
+    // that must be ordered against in-flight inference anyway (hence the rejection
+    // above), and routing it through the job queue would buy concurrency the
+    // embodiment mutex would immediately serialize again. Switch between
+    // inferences, not underneath one.
     async setEmbodiment(embodiment) {
         const sel = normalizeEmbodiment(embodiment, true);
-        return this._run(async () => {
-            if (!this._handle) {
-                throw new QvacErrorAddonVla({
-                    code: ERR_CODES.INSTANCE_NOT_INITIALIZED,
-                });
-            }
-            // The _run queue is NOT sufficient on its own: run() releases it as soon
-            // as it has dispatched the job and returned the QvacResponse, while the
-            // worker thread reaches infer() later. Switching in that window would run
-            // inference on the NEW weights against input already validated against the
-            // OLD hparams — the native mutex serializes the two but cannot restore the
-            // caller's intended order, so the result would be silently wrong for an
-            // embodiment the caller never selected. Refuse until the response settles.
-            if (this._hasActiveResponse) {
-                throw new QvacErrorAddonVla({
-                    code: ERR_CODES.JOB_ALREADY_RUNNING,
-                    adds: "await the in-flight run() response before switching embodiment",
-                });
-            }
-            try {
-                this._hparams = binding.setVlaEmbodiment(this._handle, sel.catId >= 0 ? sel.catId : sel.tag, sel.numCameras);
-            }
-            catch (err) {
-                throw new QvacErrorAddonVla({
-                    code: ERR_CODES.INVALID_CONFIG,
-                    adds: err.message,
-                    cause: err,
-                });
-            }
-            return this._hparams;
-        });
+        return this._run(() => this._setEmbodimentInternal(sel));
+    }
+    // eslint-disable-next-line @typescript-eslint/require-await -- kept async so setEmbodiment can serialize it through the exclusive run queue; the switch itself is a synchronous native call.
+    async _setEmbodimentInternal(sel) {
+        if (!this._handle) {
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INSTANCE_NOT_INITIALIZED,
+            });
+        }
+        // The _run queue is NOT sufficient on its own: run() releases it as soon as
+        // it has dispatched the job and returned the QvacResponse, while the worker
+        // thread reaches infer() later. Switching in that window would run inference
+        // on the NEW weights against input already validated against the OLD
+        // hparams — the native mutex serializes the two but cannot restore the
+        // caller's intended order, so the result would be silently wrong for an
+        // embodiment the caller never selected. Refuse until the response settles.
+        if (this._hasActiveResponse) {
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.JOB_ALREADY_RUNNING,
+                adds: "await the in-flight run() response before switching embodiment",
+            });
+        }
+        try {
+            this._hparams = binding.setVlaEmbodiment(this._handle, sel.catId >= 0 ? sel.catId : sel.tag, sel.numCameras);
+        }
+        catch (err) {
+            // The binding enforces the same in-flight refusal natively. Pure wrapper
+            // use cannot reach it — _hasActiveResponse is set synchronously after a
+            // job is accepted and cleared only once the response settles, which is
+            // strictly later than the native count clears in process(). It IS
+            // reachable when a caller mixes the wrapper with binding.runJob directly,
+            // which bumps the native count and no JS flag. Same cause as the check
+            // above, so report the same code rather than blaming the config.
+            const message = err.message;
+            const inFlight = typeof message === "string" && message.includes("job is in flight");
+            throw new QvacErrorAddonVla({
+                code: inFlight
+                    ? ERR_CODES.JOB_ALREADY_RUNNING
+                    : ERR_CODES.INVALID_CONFIG,
+                adds: message,
+                cause: err,
+            });
+        }
+        return this._hparams;
     }
     async run(input) {
         return this._run(() => this._runInternal(input));

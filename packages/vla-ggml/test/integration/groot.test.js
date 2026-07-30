@@ -222,6 +222,44 @@ function _buildSyntheticInputs(ggufPath) {
   return { ggufPath, images, state, tokens, mask, noise }
 }
 
+// Same synthetic inputs, for an arbitrary camera count. Needed to actually
+// run() an embodiment whose numCameras differs from the default: the prompt
+// length is not a hparam, it follows the image count, so a 4-camera row needs
+// 4 runs of mergedPerImg placeholders and a prompt long enough to hold them
+// (LIBERO's 148 cannot). Values are deterministic for a given (nCameras, seed),
+// so two calls with the same arguments produce byte-identical inputs — the
+// failed-switch rollback check below relies on that.
+function _buildSyntheticInputsForCameras(ggufPath, nCameras, seed0) {
+  let seed = (seed0 || 0x9e3779b1) >>> 0
+  const rand = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return (seed / 0xffffffff) * 2 - 1
+  }
+  const images = []
+  for (let i = 0; i < nCameras; i++) {
+    const buf = new Float32Array(PATCHES_PER_IMG * IN_FLAT)
+    for (let j = 0; j < buf.length; j++) buf[j] = rand() * 0.1
+    images.push(buf)
+  }
+  const state = new Float32Array(STATE_DIM)
+  for (let i = 0; i < state.length; i++) state[i] = rand() * 0.1
+  const noise = new Float32Array(N_ACT * ACT_DIM)
+  for (let i = 0; i < noise.length; i++) noise[i] = rand()
+  // One [mergedPerImg image][1 text] block per camera, then text filler. Same
+  // disjoint-runs rule as _buildSyntheticInputs; only the count changes.
+  const perImg = PATCHES_PER_IMG / 4
+  const nTok = nCameras * (perImg + 1) + 20 // + text tail (LIBERO uses 20)
+  const tokens = new Int32Array(nTok)
+  let w = 0
+  for (let img = 0; img < nCameras; img++) {
+    for (let k = 0; k < perImg; k++) tokens[w++] = IMAGE_TOKEN_ID
+    tokens[w++] = 1000 + img
+  }
+  for (; w < nTok; w++) tokens[w] = 1000 + w
+  const mask = new Uint8Array(nTok).fill(1)
+  return { ggufPath, images, state, tokens, mask, noise }
+}
+
 // ── Mobile model download (mirrors addon.test.js) ──────────────────────────
 // On Device Farm the addon runs inside the packed test-addon-mobile app, so
 // the GGUF can't be baked into the APK. CI bundles groot-urls.json (presigned
@@ -700,6 +738,194 @@ test(
       const after = await model.setEmbodiment(DROID_EMBODIMENT_TAG)
       t.is(after.numCameras, DROID_NUM_CAMERAS, 'switch accepted after the response settles')
       await model.setEmbodiment(defaultTag)
+
+      // Same overlap, but straight at the binding — the guard above lives in
+      // index.js, and the SDK plugin / Python bindings / any direct harness do
+      // not go through it. Without a native check this switch succeeds and the
+      // worker then runs DROID weights against input validated for the default
+      // embodiment's camera count, returning plausible actions for an embodiment
+      // nobody selected.
+      const nativeBinding = require('../../binding')
+      const nativeProbe = _isMobile ? _buildSyntheticInputs(ggufPath) : _loadInputs()
+      const nativeResponse = await model.run({
+        images: nativeProbe.images,
+        imgWidth: IMAGE_SIZE,
+        imgHeight: IMAGE_SIZE,
+        state: nativeProbe.state,
+        tokens: nativeProbe.tokens,
+        mask: nativeProbe.mask,
+        noise: nativeProbe.noise
+      })
+      let nativeErr = null
+      try {
+        nativeBinding.setVlaEmbodiment(model._handle, DROID_EMBODIMENT_TAG, 0)
+      } catch (e) {
+        nativeErr = e
+      }
+      t.ok(nativeErr, 'binding.setVlaEmbodiment is rejected while a job is in flight')
+      t.is(
+        model.hparams.selectedEmbodimentTag,
+        defaultTag,
+        'rejected native switch leaves the active embodiment in place'
+      )
+      const nativeSettled = await nativeResponse.await()
+      t.ok(nativeSettled.actions.length > 0, 'the in-flight inference still completes')
+      // And the native path accepts it once nothing is in flight, so the guard is
+      // a real in-flight check rather than a blanket refusal.
+      const nativeAfter = nativeBinding.setVlaEmbodiment(model._handle, DROID_EMBODIMENT_TAG, 0)
+      t.is(
+        nativeAfter.numCameras,
+        DROID_NUM_CAMERAS,
+        'binding.setVlaEmbodiment is accepted once no job is in flight'
+      )
+
+      // Out-of-range ids THROUGH the binding. normalizeEmbodiment rejects these
+      // in JS before the binding is ever called, so the int32-narrowing defence
+      // in jsBoundedInt is otherwise only covered by C++ unit tests, never on the
+      // path a non-JS caller actually takes. 2**32 is the one that matters: a
+      // plain narrowing cast turns it into 0, silently selecting row 0 instead of
+      // failing.
+      for (const badId of [2 ** 32, 2 ** 31, 32, 1.5, -1]) {
+        let idErr = null
+        try {
+          nativeBinding.setVlaEmbodiment(model._handle, badId, 0)
+        } catch (e) {
+          idErr = e
+        }
+        t.ok(idErr, `binding.setVlaEmbodiment rejects cat_id ${badId}`)
+      }
+      t.is(
+        nativeBinding.getVlaHparams(model._handle).selectedEmbodimentCatId,
+        droidCatId,
+        'rejected out-of-range ids did not narrow into a different embodiment'
+      )
+
+      // runJob resolves the instance handle itself now, for the in-flight
+      // bookkeeping above, and it does so before anything else touches that
+      // argument. An unknown handle must stay a catchable JS error: if that
+      // resolution is ever made noexcept it becomes std::terminate instead, and
+      // a direct binding caller passing a stale handle takes the whole process
+      // down. This test survives only because it throws — an abort kills the run.
+      let handleErr = null
+      try {
+        nativeBinding.runJob(
+          {},
+          {
+            type: 'vla',
+            input: {
+              images: nativeProbe.images,
+              imgWidth: IMAGE_SIZE,
+              imgHeight: IMAGE_SIZE,
+              state: nativeProbe.state,
+              tokens: nativeProbe.tokens,
+              mask: nativeProbe.mask,
+              noise: nativeProbe.noise
+            }
+          }
+        )
+      } catch (e) {
+        handleErr = e
+      }
+      t.ok(handleErr, 'binding.runJob with an unknown instance handle throws rather than aborting')
+
+      await model.setEmbodiment(defaultTag)
+
+      // Actually infer on an embodiment whose camera count differs from the
+      // default. Everything above switches to DROID and back without ever
+      // running it, which leaves the one path where a stale numCameras would
+      // corrupt output untested end to end: infer() derives its whole token and
+      // patch layout from nImages, so a switch that failed to move numCameras
+      // would either be rejected here for the wrong image count or silently
+      // build the wrong layout.
+      await model.setEmbodiment(DROID_EMBODIMENT_TAG)
+      t.is(model.hparams.numCameras, DROID_NUM_CAMERAS, 'switched to the 4-camera embodiment')
+      const droidProbe = _buildSyntheticInputsForCameras(ggufPath, DROID_NUM_CAMERAS, 0x51ed2b47)
+      const droidRes = await (
+        await model.run({
+          images: droidProbe.images,
+          imgWidth: IMAGE_SIZE,
+          imgHeight: IMAGE_SIZE,
+          state: droidProbe.state,
+          tokens: droidProbe.tokens,
+          mask: droidProbe.mask,
+          noise: droidProbe.noise
+        })
+      ).await()
+      t.is(
+        droidRes.actions.length,
+        N_ACT * ACT_DIM,
+        'run() on the switched embodiment returns a full action chunk'
+      )
+      t.ok(
+        droidRes.actions.every((v) => Number.isFinite(v)),
+        'actions from the switched embodiment are finite'
+      )
+      await model.setEmbodiment(defaultTag)
+
+      // Weight-level rollback. The all-or-nothing claim is about WEIGHTS, but the
+      // rejected-switch assertions above only check hparams. Force the one
+      // reachable mid-switch failure — grootFillEmbodimentRow reopens the GGUF by
+      // path, so renaming it out from under a loaded model makes that fopen fail
+      // — then assert the model still produces bit-identical actions, i.e. the
+      // previous row is intact rather than half-overwritten.
+      //
+      // Desktop only: on Device Farm the GGUF is a verified download cache and
+      // renaming it risks poisoning it for later runs.
+      if (!_isMobile) {
+        const rollbackProbe = _buildSyntheticInputsForCameras(ggufPath, defaultCams, 0x2f6a1c93)
+        const runProbe = async () =>
+          (
+            await model.run({
+              images: rollbackProbe.images,
+              imgWidth: IMAGE_SIZE,
+              imgHeight: IMAGE_SIZE,
+              state: rollbackProbe.state,
+              tokens: rollbackProbe.tokens,
+              mask: rollbackProbe.mask,
+              noise: rollbackProbe.noise
+            })
+          ).await()
+
+        const before = await runProbe()
+        const resolved = path.resolve(ggufPath)
+        const hidden = resolved + '.rollback-probe'
+        let rollbackErr = null
+        fs.renameSync(resolved, hidden)
+        try {
+          await model.setEmbodiment(DROID_EMBODIMENT_TAG)
+        } catch (e) {
+          rollbackErr = e
+        } finally {
+          fs.renameSync(hidden, resolved)
+        }
+        // Assert the REASON, not just that it threw: a switch rejected for any
+        // other cause would make the rollback check below vacuous, since no row
+        // read would have been attempted at all.
+        t.ok(
+          rollbackErr && /cannot reopen/.test(rollbackErr.message || ''),
+          `switch rejected by the failed row re-read (got: ${rollbackErr && rollbackErr.message})`
+        )
+        t.is(
+          model.hparams.selectedEmbodimentTag,
+          defaultTag,
+          'failed switch leaves the reported embodiment unchanged'
+        )
+        t.is(model.hparams.numCameras, defaultCams, 'failed switch leaves numCameras unchanged')
+        const after = await runProbe()
+        t.is(after.actions.length, before.actions.length, 'action chunk length unchanged')
+        let firstDiff = -1
+        for (let i = 0; i < before.actions.length; i++) {
+          if (before.actions[i] !== after.actions[i]) {
+            firstDiff = i
+            break
+          }
+        }
+        t.is(
+          firstDiff,
+          -1,
+          'actions are bit-identical after the failed switch, so the weights rolled back'
+        )
+      }
     } finally {
       await model.unload().catch(() => {})
     }

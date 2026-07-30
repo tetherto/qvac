@@ -30,6 +30,12 @@
 
 #include "model-interface/vla_model.hpp"
 
+// Declared at GLOBAL scope on purpose: gguf.h is not pulled into this header,
+// and declaring it inside the namespace below would introduce a DISTINCT
+// qvac_lib_infer_vla_ggml::gguf_context that shadows the real one wherever
+// gguf.h is also included.
+struct gguf_context;
+
 namespace qvac_lib_infer_vla_ggml {
 
 // ── Backbone: Qwen3-VL vision tower ─────────────────────────────────────
@@ -488,6 +494,58 @@ GrootEmbodimentSelection grootResolveEmbodiment(
 void grootCheckEmbodimentSliceShape(
     int64_t weightRowDim, int64_t biasRowDim, int64_t nStored, int rowIndex);
 
+// The opposite integrity check to the one above, for the case where the
+// resolver found NO usable ship-set table and the load is therefore taking the
+// v1 single-embodiment path. `weightRowDim` is the weight's outermost extent
+// (ne[2]).
+//
+// A v1 weight has one row. More than one means the file carries a stored bank
+// whose table could not be read, and nothing downstream would notice: the
+// pre-transpose step bails on the rank, and the fallback graph then hands a
+// rank-3 tensor to ggml_mul_mat, where `1 % nStored != 0` trips
+// GGML_ASSERT(ggml_can_mul_mat) and aborts the process on the FIRST infer, long
+// after a load that looked successful. A GGUF is untrusted input, so this has
+// to be a catchable load error instead.
+//
+// Throws std::runtime_error if `weightRowDim` > 1. Pure, so the abort case is
+// unit-testable without building a corrupt multi-GB fixture.
+void grootCheckV1EmbodimentRank(int64_t weightRowDim);
+
+// Cross-checks the redundant groot.embodiment.count key against the real row
+// count, which is always derived from groot.embodiment.stored_cat_ids. Pass
+// `declaredCount` == `tableRows` when the key is absent, which makes an older
+// file that omits it a no-op.
+//
+// Throws std::runtime_error when the two disagree, so a file that advertises a
+// row count it does not have is a named load error rather than something that
+// loads and misreports itself.
+void grootCheckEmbodimentCount(size_t declaredCount, size_t tableRows);
+
+// Byte offset of one embodiment row inside the GGUF: `fileOffset` is the
+// tensor's absolute data offset, `rowBytes` the size of a single row,
+// `rowIndex` the row wanted. Row is the OUTERMOST ggml axis, so each row's
+// block is contiguous and the offset is a plain multiply-add.
+//
+// `rowBytes` derives from GGUF-declared dimensions, so the arithmetic is
+// bounded rather than trusted. Defence in depth only: the read at the resulting
+// offset is itself bounded to `rowBytes`, so a wrapped offset could at worst
+// produce a short read or wrong-but-in-file bytes, never an out-of-bounds
+// write.
+//
+// Throws std::runtime_error if the multiply or the add would wrap.
+size_t
+grootEmbodimentRowOffset(size_t fileOffset, int rowIndex, size_t rowBytes);
+
+// Reads an int32 array out of GGUF metadata, returning `dflt` when the key is
+// ABSENT. Exposed for tests.
+//
+// A key that is present but not an int32 array is corruption, not an older
+// file, and throws std::runtime_error: silently falling back to the default
+// would discard a ship-set table the tensors are still shaped for, and the
+// mismatch then surfaces only much later (see grootCheckV1EmbodimentRank).
+std::vector<int>
+ggufGetI32ArrOr(struct gguf_context* g, const char* key, std::vector<int> dflt);
+
 // Forward-declared PIMPL (defined in groot.cpp) so the public header doesn't
 // drag in backend handles / ggml contexts. Out-of-line dtor, as in Pi05Model.
 struct GrootModelInternal;
@@ -533,8 +591,13 @@ public:
   // is unknown, its cat_id is not in this GGUF's ship set, its num_cameras is
   // unknown/invalid with no override, or the GGUF stores a single embodiment
   // row; the currently selected embodiment is left intact in every throwing
-  // case. Serialized against infer() internally, so a caller may not observe a
-  // half-switched model, but note that a switch changes the expected camera
+  // case. A v1 GGUF is rejected UNCONDITIONALLY — including a request naming
+  // the very tag it bakes in, which would otherwise look like a successful
+  // no-op and let a num_cameras override rewrite hparams() on a model that
+  // cannot honour it. Serialized against infer() internally, so a caller may
+  // not observe a half-switched model; serialization alone is not sufficient
+  // though, so the call is also refused while a job is in flight (see
+  // VlaModel::setEmbodiment). Note that a switch changes the expected camera
   // count: the next infer() must supply hparams().num_cameras images.
   void setEmbodiment(const VlaEmbodimentRequest& request) override;
 

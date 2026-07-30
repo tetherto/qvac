@@ -39,6 +39,22 @@ inline VlaModel& vlaFromInstance(js_env_t* env, js_value_t* instanceHandle) {
   return *vla;
 }
 
+// Resolve the instance handle to the VlaModel, or null if it refers to some
+// other model type. runJob's dispatch bookkeeping uses this: a wrong model type
+// is not this function's business, so it returns null rather than throwing.
+//
+// NOT noexcept: getInstance still throws StatusError for a handle it does not
+// know, and this is the first thing runJob does that touches that argument. A
+// noexcept here would turn an invalid handle — reachable by exactly the direct
+// binding callers the in-flight guard exists for — into std::terminate instead
+// of the catchable JS error JSCATCH already produces.
+inline VlaModel*
+vlaFromInstanceOrNull(js_env_t* env, js_value_t* instanceHandle) {
+  using namespace qvac_lib_inference_addon_cpp;
+  return dynamic_cast<VlaModel*>(
+      &JsInterface::getInstance(env, instanceHandle).addonCpp->model.get());
+}
+
 // Parse an optional integer that arrived as a config-map string ("" = unset,
 // returned as -1). createInstance's config map is all strings (ggufPath,
 // backend, backendsDir, …), so the embodiment's numeric id and camera-count
@@ -307,8 +323,34 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   std::any input{detail::parseRunInput(env, jsInput)};
-  return JsInterface::getInstance(env, args.get(0, "instance"))
-      .runJob(std::move(input));
+  js_value_t* instanceHandle = args.get(0, "instance");
+  // Count the job in BEFORE handing it over, so there is no window in which the
+  // scheduler has accepted a job that setVlaEmbodiment cannot see (it would
+  // otherwise be free to swap the weights this job is about to read). Released
+  // again below if the job was refused, and by process() once it completes.
+  VlaModel* vla = detail::vlaFromInstanceOrNull(env, instanceHandle);
+  if (vla != nullptr) {
+    vla->noteJobDispatched();
+  }
+  bool accepted = false;
+  try {
+    // Straight to addonCpp (what the framework's instance.runJob does under its
+    // js::Boolean wrapper) so acceptance is a plain bool rather than a JS value
+    // that would have to be read back to decide whether to release the count.
+    accepted = JsInterface::getInstance(env, instanceHandle)
+                   .addonCpp->runJob(std::move(input));
+  } catch (...) {
+    if (vla != nullptr) {
+      vla->noteJobSettled();
+    }
+    throw;
+  }
+  // runJob returns false when a previous job is still in flight — that job was
+  // never queued, so process() will never clear its count.
+  if (vla != nullptr && !accepted) {
+    vla->noteJobSettled();
+  }
+  return js::Boolean::create(env, accepted);
 }
 JSCATCH
 
@@ -371,7 +413,9 @@ JSCATCH
 // `selectedEmbodimentTag` and `selectedEmbodimentCatId` follow the new
 // embodiment, and the JS wrapper caches the result for its run-input
 // validation. Throws for an unknown/unshipped tag or id, an embodiment with no
-// known camera count and no override, or a single-embodiment model.
+// known camera count and no override, a single-embodiment model, or an
+// inference job still in flight (VlaModel::setEmbodiment enforces that last one
+// natively, so it holds for callers that never go through index.js).
 inline js_value_t*
 setVlaEmbodiment(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;

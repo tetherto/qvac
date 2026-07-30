@@ -40,6 +40,7 @@ declare class VlaModel {
     get hparams(): VlaModel.VlaHparams | null;
     get backendName(): string | null;
     setEmbodiment(embodiment: VlaModel.VlaEmbodimentSelector): Promise<VlaModel.VlaHparams>;
+    private _setEmbodimentInternal;
     run(input: VlaModel.VlaRunInput): Promise<VlaModel.QvacResponse>;
     private _runInternal;
     pause(): Promise<void>;

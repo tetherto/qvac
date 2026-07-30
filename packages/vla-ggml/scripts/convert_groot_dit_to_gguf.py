@@ -219,6 +219,19 @@ class Gr00tActionHeadReader:
         row.
         """
         t = self.get(key)
+        # NUM_EMBODIMENTS_TOTAL (and so `--embodiments all`) assumes the
+        # architecture's 32-category bank without consulting the checkpoint. On a
+        # smaller bank the bare index below raises IndexError with no hint of which
+        # flag caused it, so name the mismatch instead.
+        n_rows = t.shape[0]
+        over = sorted(c for c in cat_ids if not 0 <= c < n_rows)
+        if over:
+            raise SystemExit(
+                f"'{key}' has {n_rows} category rows but the requested ship set "
+                f"names cat_id(s) {over}: this checkpoint's category bank is "
+                f"smaller than the expected {NUM_EMBODIMENTS_TOTAL}, so pass an "
+                "explicit --embodiments subset instead of 'all'"
+            )
         return t[torch.tensor(cat_ids, dtype=torch.long)].contiguous()
 
 
@@ -403,14 +416,52 @@ def main():
             return 0
         return 0
 
+    def cam_for_tag(tag: str) -> int:
+        # Exact-tag lookup, v1 only. cam_for answers for a cat_id, which is the
+        # right question for a stored ROW: several rigs can share a row, so a
+        # row whose tags disagree has no one true count and stores 0. A v1 GGUF
+        # bakes ONE tag, though, and that tag's own count is not ambiguous just
+        # because a sibling tag on the same row differs. Falling back to it is
+        # therefore not the guess L1 rules out; it is the more specific answer.
+        for _name, tier in cam_tiers:
+            if tier.get(tag):
+                return tier[tag]
+        return 0
+
     # The default entry backs the v1 groot.embodiment_tag/_cat_id keys and the
     # top-level groot.num_cameras, so old loaders and the multi table agree.
     default_tag = args.default_embodiment if multi else args.embodiment_tag
     default_cat_id = resolve(default_tag)
-    # Resolve by cat_id, not by the literal default tag: tags sharing a cat_id
-    # share a view count, so an alias tag would otherwise miss KNOWN_NUM_CAMERAS
-    # and write the generic fallback into groot.num_cameras.
-    default_num_cameras = cam_for(default_cat_id) or NUM_CAMERAS
+    # Resolve by cat_id first, not by the literal default tag: tags sharing a
+    # cat_id usually share a view count, so an alias tag would otherwise miss a
+    # tier that names only its sibling and fall through to a lower one.
+    default_num_cameras = cam_for(default_cat_id)
+    if not default_num_cameras and not multi:
+        # Only after the cat_id came back unknown, and only in v1. Multi is left
+        # alone deliberately: its stored_num_cameras row would still be 0, so
+        # rescuing just the top-level key would desync the two and skip the
+        # default-row check below.
+        default_num_cameras = cam_for_tag(default_tag)
+        if default_num_cameras:
+            print(
+                f"  cat_id {default_cat_id} has no single num_cameras, but "
+                f"'{default_tag}' itself is described as {default_num_cameras}; "
+                "using that for this single-embodiment GGUF"
+            )
+    if not default_num_cameras:
+        # Fail instead of stamping NUM_CAMERAS. A wrong camera count fails
+        # SILENTLY at inference: it drives the JS image-count validation and the
+        # image-token layout, so a 6-view rig converted as 2 would be rejected for
+        # passing 6 buffers, or produce plausible-looking garbage for 2. Multi mode
+        # already raises here; v1 used to fall through to a hardcoded 2, which put
+        # exactly the guess back that "the runtime never guesses" rules out — just
+        # at conversion time instead.
+        raise SystemExit(
+            f"embodiment '{default_tag}' (cat_id {default_cat_id}) has no known "
+            "num_cameras in this checkpoint: pass "
+            f"--embodiment-cameras {default_tag}=N to pin its view count "
+            "(images per infer = len(video.modality_keys) * len(video.delta_indices))"
+        )
     if multi:
         # Ship set = cat_ids to STORE (one weight row each). Default is every
         # distinct TRAINED cat_id from embodiment_id.json; `--embodiments` names a

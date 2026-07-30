@@ -3,14 +3,25 @@
 // grootLoadModel; testing it directly exercises the load-time override and all
 // its error paths without a multi-GB model load. No GGUF, no ggml.
 
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <functional>
 #include <string>
 #include <vector>
 
+#include <ggml.h>
+#include <gguf.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/groot.hpp"
+#include "model-interface/model_factory.hpp"
 
+using qvac_lib_infer_vla_ggml::ggufGetI32ArrOr;
+using qvac_lib_infer_vla_ggml::grootCheckEmbodimentCount;
 using qvac_lib_infer_vla_ggml::grootCheckEmbodimentSliceShape;
+using qvac_lib_infer_vla_ggml::grootCheckV1EmbodimentRank;
+using qvac_lib_infer_vla_ggml::grootEmbodimentRowOffset;
 using qvac_lib_infer_vla_ggml::GrootEmbodimentSelection;
 using qvac_lib_infer_vla_ggml::grootResolveEmbodiment;
 using qvac_lib_infer_vla_ggml::VlaEmbodimentRequest;
@@ -412,4 +423,279 @@ TEST(GrootEmbodimentSliceShape, InsaneStoredCountThrows) {
   EXPECT_THROW(
       grootCheckEmbodimentSliceShape(65, 65, 65, 0), std::runtime_error);
   EXPECT_NO_THROW(grootCheckEmbodimentSliceShape(64, 64, 64, 63));
+}
+
+// ── Corrupt-metadata guards ────────────────────────────────────────────────
+// These cover the load-time rejections that would otherwise need a
+// purpose-built corrupt multi-GB GGUF. Each is the pure half of a check
+// grootLoadModel / grootSliceEmbodiment perform, so the error path runs here
+// even though the full load path cannot be exercised without a fixture.
+
+// A v1 GGUF has exactly one embodiment row. More than one means the file
+// carries a stored bank whose table could not be read, which used to load
+// "successfully" and then abort the process inside ggml on the first infer.
+TEST(GrootEmbodimentV1Rank, MultiRowWithoutTableThrows) {
+  EXPECT_NO_THROW(grootCheckV1EmbodimentRank(1));
+  // A one-row ship set also reads back as ne[2] == 1, which is exactly why the
+  // rank cannot be the multi/v1 discriminator — it must not throw here either.
+  EXPECT_THROW(grootCheckV1EmbodimentRank(2), std::runtime_error);
+  EXPECT_THROW(grootCheckV1EmbodimentRank(17), std::runtime_error);
+}
+
+TEST(GrootEmbodimentCount, DisagreeingCountThrows) {
+  EXPECT_NO_THROW(grootCheckEmbodimentCount(17, 17));
+  EXPECT_THROW(grootCheckEmbodimentCount(16, 17), std::runtime_error);
+  EXPECT_THROW(grootCheckEmbodimentCount(18, 17), std::runtime_error);
+  // grootLoadModel passes the table length when the key is absent, so an older
+  // file that omits it is a no-op rather than a mismatch.
+  EXPECT_NO_THROW(grootCheckEmbodimentCount(0, 0));
+}
+
+TEST(GrootEmbodimentRowOffset, ComputesContiguousRowOffsets) {
+  EXPECT_EQ(grootEmbodimentRowOffset(1000, 0, 64), 1000u);
+  EXPECT_EQ(grootEmbodimentRowOffset(1000, 3, 64), 1192u);
+  EXPECT_NO_THROW(grootEmbodimentRowOffset(0, 0, 0));
+}
+
+TEST(GrootEmbodimentRowOffset, OverflowThrows) {
+  // row * row_bytes wraps.
+  EXPECT_THROW(
+      grootEmbodimentRowOffset(0, 63, SIZE_MAX / 8), std::runtime_error);
+  // The multiply fits but file_offset + row_off wraps.
+  EXPECT_THROW(
+      grootEmbodimentRowOffset(SIZE_MAX - 10, 1, 64), std::runtime_error);
+}
+
+// ── Corrupt metadata THROUGH the real load path ────────────────────────────
+// The tests above prove the checks reject what they should; these prove
+// grootLoadModel actually calls them, which is the part a guard that was
+// written but never wired up would pass silently.
+//
+// All four rejections fire before grootLoadModel requires the model's tensors
+// to exist, so a few-KB GGUF reaches every one of them. The first two need no
+// tensors at all. The other two — rank-3 weights with no table, and a
+// table/tensor row-count disagreement — read a tensor's `ne` extents and
+// nothing else, which is why grootCheckEmbodimentTensorRankEarly runs them off
+// a probe tensor before mustGet rather than only from grootSliceEmbodiment
+// afterwards. A 4x4 stand-in for the first embodiment linear is enough; no
+// multi-GB fixture is involved.
+namespace {
+
+// Write a metadata-only GGUF carrying just enough for the groot loader to
+// start.
+std::string writeMetaOnlyGguf(
+    const std::string& name,
+    const std::function<void(struct gguf_context*)>& addKeys) {
+  struct gguf_context* g = gguf_init_empty();
+  if (g == nullptr) {
+    throw std::runtime_error("gguf_init_empty failed");
+  }
+  gguf_set_val_str(g, "general.architecture", "groot");
+  // grootLoadModel rejects a file with no baked tag / cat_id before it ever
+  // reads the ship-set table, so these are required for the corrupt-table
+  // checks below to be the reason the load fails.
+  gguf_set_val_str(g, "groot.embodiment_tag", "libero_sim");
+  gguf_set_val_u32(g, "groot.embodiment_cat_id", 2);
+  addKeys(g);
+  const std::string path = std::string(::testing::TempDir()) + name;
+  const bool ok = gguf_write_to_file(g, path.c_str(), /*only_meta=*/true);
+  gguf_free(g);
+  if (!ok) {
+    throw std::runtime_error("gguf_write_to_file failed for " + path);
+  }
+  return path;
+}
+
+// Same file, plus a tiny stand-in for the first embodiment linear shaped
+// [OUT, IN, rows] / [OUT, rows] — the tensor
+// grootCheckEmbodimentTensorRankEarly probes. 4x4 extents keep it a few KB; the
+// checks read `ne` only, so the zeroed data is never looked at.
+//
+// Written with only_meta=false on purpose: a GGUF that declares tensor infos
+// without the matching data blob is rejected by gguf_init_from_file itself, and
+// the load would fail before reaching any check under test.
+std::string writeGgufWithEmbodimentProbe(
+    const std::string& name, int64_t rows,
+    const std::function<void(struct gguf_context*)>& addKeys) {
+  constexpr int64_t outDim = 4;
+  constexpr int64_t inDim = 4;
+  struct ggml_init_params ip{
+      ggml_tensor_overhead() * 4 +
+          static_cast<size_t>(outDim * (inDim + 1) * rows) * sizeof(float) +
+          1024,
+      nullptr,
+      /*no_alloc=*/false};
+  struct ggml_context* ctx = ggml_init(ip);
+  if (ctx == nullptr) {
+    throw std::runtime_error("ggml_init failed");
+  }
+  struct ggml_tensor* w =
+      ggml_new_tensor_3d(ctx, GGML_TYPE_F32, outDim, inDim, rows);
+  struct ggml_tensor* b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, outDim, rows);
+  ggml_set_name(w, "embodiment.state_encoder.layer1.weight");
+  ggml_set_name(b, "embodiment.state_encoder.layer1.bias");
+  std::memset(w->data, 0, ggml_nbytes(w));
+  std::memset(b->data, 0, ggml_nbytes(b));
+
+  struct gguf_context* g = gguf_init_empty();
+  if (g == nullptr) {
+    ggml_free(ctx);
+    throw std::runtime_error("gguf_init_empty failed");
+  }
+  gguf_set_val_str(g, "general.architecture", "groot");
+  gguf_set_val_str(g, "groot.embodiment_tag", "libero_sim");
+  gguf_set_val_u32(g, "groot.embodiment_cat_id", 2);
+  addKeys(g);
+  gguf_add_tensor(g, w);
+  gguf_add_tensor(g, b);
+  const std::string path = std::string(::testing::TempDir()) + name;
+  const bool ok = gguf_write_to_file(g, path.c_str(), /*only_meta=*/false);
+  gguf_free(g);
+  ggml_free(ctx);
+  if (!ok) {
+    throw std::runtime_error("gguf_write_to_file failed for " + path);
+  }
+  return path;
+}
+
+// Returns the rejection message, or "" if the load unexpectedly succeeded. The
+// message MATTERS: a metadata-only GGUF would also be rejected for having no
+// tensors, so asserting only that something threw would pass without ever
+// reaching the check under test.
+std::string loadMetaOnlyError(const std::string& path) {
+  try {
+    qvac_lib_infer_vla_ggml::createVlaModelFromGguf(
+        path, /*forceCpu=*/true, /*backendsDir=*/"", VlaEmbodimentRequest{});
+  } catch (const std::exception& e) {
+    return e.what();
+  }
+  return "";
+}
+
+} // namespace
+
+TEST(GrootLoadCorruptMetadata, CountDisagreeingWithTableIsRejected) {
+  const std::vector<int32_t> stored = {2, 24, 25};
+  const std::string path =
+      writeMetaOnlyGguf("groot_count_mismatch.gguf", [&](gguf_context* g) {
+        gguf_set_arr_data(
+            g,
+            "groot.embodiment.stored_cat_ids",
+            GGUF_TYPE_INT32,
+            stored.data(),
+            stored.size());
+        // Claims 4 rows while the table holds 3.
+        gguf_set_val_u32(g, "groot.embodiment.count", 4);
+      });
+  const std::string err = loadMetaOnlyError(path);
+  std::remove(path.c_str());
+  EXPECT_NE(err.find("grootCheckEmbodimentCount"), std::string::npos)
+      << "expected the count cross-check to reject this file, got: " << err;
+}
+
+TEST(GrootLoadCorruptMetadata, WronglyTypedShipSetTableIsRejected) {
+  const std::vector<uint32_t> wrongType = {2, 24, 25};
+  const std::string path =
+      writeMetaOnlyGguf("groot_bad_table_type.gguf", [&](gguf_context* g) {
+        gguf_set_arr_data(
+            g,
+            "groot.embodiment.stored_cat_ids",
+            GGUF_TYPE_UINT32,
+            wrongType.data(),
+            wrongType.size());
+      });
+  // Must NOT be silently treated as absent: the weights would still be shaped
+  // for the table, and the mismatch would only surface at the first infer.
+  const std::string err = loadMetaOnlyError(path);
+  std::remove(path.c_str());
+  EXPECT_NE(err.find("is not an int32 array"), std::string::npos)
+      << "expected the wrong-type table to be reported as corruption, got: "
+      << err;
+}
+
+// A file with no readable ship-set table whose embodiment weights nonetheless
+// carry a stored bank. Without the early check this loads clean and then aborts
+// the process on the first infer, inside GGML_ASSERT(ggml_can_mul_mat).
+TEST(GrootLoadCorruptMetadata, RankThreeWeightsWithoutTableAreRejected) {
+  const std::string path = writeGgufWithEmbodimentProbe(
+      "groot_rank3_no_table.gguf", /*rows=*/3, [](gguf_context*) {
+        // No stored_cat_ids at all: the resolver takes the v1 path and reports
+        // row -1, while the tensors still hold 3 rows.
+      });
+  const std::string err = loadMetaOnlyError(path);
+  std::remove(path.c_str());
+  EXPECT_NE(err.find("grootCheckV1EmbodimentRank"), std::string::npos)
+      << "expected the v1 rank check to reject a stored bank with no table, "
+         "got: "
+      << err;
+}
+
+// The table and the tensors disagree on how many rows exist. Slicing off the
+// table's count would read another row's bytes, or past the tensor entirely.
+TEST(GrootLoadCorruptMetadata, TableRowCountDisagreeingWithTensorsIsRejected) {
+  const std::vector<int32_t> stored = {2, 24, 25};
+  const std::vector<int32_t> cams = {2, 4, 4};
+  const std::string path = writeGgufWithEmbodimentProbe(
+      "groot_row_count_mismatch.gguf",
+      // Table says 3 rows, tensors carry 2.
+      /*rows=*/2,
+      [&](gguf_context* g) {
+        gguf_set_arr_data(
+            g,
+            "groot.embodiment.stored_cat_ids",
+            GGUF_TYPE_INT32,
+            stored.data(),
+            stored.size());
+        // Present so the default row's camera count is known and the resolver
+        // gets as far as selecting a row.
+        gguf_set_arr_data(
+            g,
+            "groot.embodiment.stored_num_cameras",
+            GGUF_TYPE_INT32,
+            cams.data(),
+            cams.size());
+      });
+  const std::string err = loadMetaOnlyError(path);
+  std::remove(path.c_str());
+  EXPECT_NE(err.find("GGUF metadata/tensor mismatch"), std::string::npos)
+      << "expected the slice-shape check to reject the row-count disagreement, "
+         "got: "
+      << err;
+}
+
+// Corrupt GGUF metadata, built in memory: no file, no fixture. A ship-set table
+// written with the wrong array element type must be reported rather than
+// treated as absent, because the tensors are still shaped for it.
+TEST(GgufGetI32ArrOr, PresentButWrongTypeThrows) {
+  struct gguf_context* g = gguf_init_empty();
+  ASSERT_NE(g, nullptr);
+  const std::vector<int32_t> good = {2, 24, 25};
+  const std::vector<uint32_t> wrongType = {2, 24, 25};
+  gguf_set_arr_data(
+      g,
+      "groot.embodiment.stored_cat_ids",
+      GGUF_TYPE_INT32,
+      good.data(),
+      good.size());
+  gguf_set_arr_data(
+      g,
+      "groot.embodiment.bad_type",
+      GGUF_TYPE_UINT32,
+      wrongType.data(),
+      wrongType.size());
+  gguf_set_val_u32(g, "groot.embodiment.not_an_array", 3);
+
+  EXPECT_EQ(
+      ggufGetI32ArrOr(g, "groot.embodiment.stored_cat_ids", {}),
+      std::vector<int>({2, 24, 25}));
+  // Absent stays a silent default: that is a legitimate v1 GGUF.
+  EXPECT_EQ(
+      ggufGetI32ArrOr(g, "groot.embodiment.absent", {7}),
+      std::vector<int>({7}));
+  EXPECT_THROW(
+      ggufGetI32ArrOr(g, "groot.embodiment.bad_type", {}), std::runtime_error);
+  EXPECT_THROW(
+      ggufGetI32ArrOr(g, "groot.embodiment.not_an_array", {}),
+      std::runtime_error);
+  gguf_free(g);
 }
