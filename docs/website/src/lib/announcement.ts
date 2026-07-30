@@ -11,6 +11,13 @@
  * The copy is split in three slots to mirror the banner on qvac.tether.io:
  * `label` and `description` render in the QVAC accent color, `title` in the
  * regular foreground.
+ *
+ * Length budget: the bar is 3rem tall at every width and the copy is clamped to
+ * two lines, so anything longer loses its tail to an ellipsis (it never grows a
+ * third line and the type never shrinks). The narrowest phone is the binding
+ * constraint — roughly 85 characters across all three slots at 320px, ~105 at
+ * 375px. Past that the mobile chevron is clipped along with the tail, which
+ * costs the bar its only hint that it is tappable.
  */
 export type Announcement = {
   id: string;

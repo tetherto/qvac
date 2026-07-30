@@ -15,47 +15,66 @@ import { cn } from '@/lib/cn';
  *
  * Content is edited in `@/lib/announcement`, never here.
  *
- * The bar is one fixed-height line, so its width budget is finite and the copy
- * has to be rationed per breakpoint. Measured at 14px Inter / 12px mono, with
- * the close button eating ~38px on the right:
+ * The bar has a fixed 3rem height, but that buys two lines rather than one: a
+ * single 14px line uses 20px of the 48px, and two 12px lines use 32px. So the
+ * whole message always renders — narrow viewports buy the room by wrapping,
+ * not by hiding words. Measured widths, for the record: the full sentence is
+ * ~555px at 14px (~476px at 12px) and the CTA button is ~119px, against a text
+ * column of roughly `viewport - 56px` on mobile.
  *
- * - headline (`label` + `title`) ≈ 148px
- * - `description` ≈ 405px more
- * - CTA button ≈ 119px
+ * Two layouts, one per breakpoint (the copy is rendered twice; `display: none`
+ * keeps the inactive variant out of the accessibility tree):
  *
- * Hence two layouts instead of one: below `sm` the CTA button is replaced by a
- * chevron and the whole row becomes the link, which frees the button's 119px
- * (the headline then fits down to ~250px viewports) and turns the bar itself
- * into the tap target. The copy is rendered twice, one variant per breakpoint;
- * `display: none` keeps the inactive one out of the accessibility tree.
+ * - below `sm`, the CTA button gives way to an inline chevron and the whole row
+ *   becomes the link. That frees the button's 119px, and the freed width plus
+ *   12px type fits the full sentence in two lines down to 320px viewports,
+ *   while the bar itself becomes the tap target instead of a 30px button.
+ * - from `sm` up, headline and CTA button, wrapping to a second line until the
+ *   sentence fits on one (around 790px). No breakpoint drives that — the text
+ *   just stops wrapping once there is room.
+ *
+ * `line-clamp-2` is the backstop in both: a longer future announcement loses
+ * its tail to an ellipsis at the end of the second line instead of overflowing
+ * the fixed height.
  */
 export function AnnouncementBanner() {
   if (!announcement) return null;
 
   const { id, label, title, description, cta } = announcement;
-  const headline = <Headline label={label} title={title} />;
+
+  const message = (
+    <>
+      <span className="font-semibold text-fd-primary">{label}</span>{' '}
+      <span className="text-fd-foreground">{title}</span>{' '}
+      <span className="text-fd-primary">{description}</span>
+    </>
+  );
 
   return (
     <Banner id={id} className="border-b border-fd-border/60">
       {/*
-       * Mobile: no button, the row is the link. `h-full` stretches it over the
-       * whole bar so the tap target is the bar and not just the text, and
-       * `pe-8` keeps the copy clear of the close button (which is absolutely
-       * positioned, therefore painted above this link and still clickable).
+       * Mobile: `h-full` stretches the link over the whole bar so the tap
+       * target is the bar and not just the text; `text-start` overrides the
+       * banner's centering, since centered wrapped lines read as ragged and
+       * waste the side margins; `pe-7` keeps the copy clear of the close
+       * button, which is absolutely positioned and therefore painted above
+       * this link and still clickable.
        */}
       {cta ? (
         <a
           href={cta.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex h-full w-full items-center justify-center gap-1.5 pe-8 transition-colors active:bg-fd-primary/10 sm:hidden"
+          className="flex h-full w-full items-center pe-7 text-start text-xs transition-colors active:bg-fd-primary/10 sm:hidden"
         >
-          <span className="min-w-0 truncate">{headline}</span>
-          <ChevronRight className="size-3.5 shrink-0 text-fd-primary" />
+          <span className="line-clamp-2">
+            {message}
+            <ChevronRight className="ms-0.5 inline size-3 align-[-0.15em] text-fd-primary" />
+          </span>
         </a>
       ) : (
-        <div className="flex w-full items-center justify-center pe-8 sm:hidden">
-          <span className="min-w-0 truncate">{headline}</span>
+        <div className="flex h-full w-full items-center pe-7 text-start text-xs sm:hidden">
+          <span className="line-clamp-2">{message}</span>
         </div>
       )}
 
@@ -64,19 +83,7 @@ export function AnnouncementBanner() {
        * visually centered while clearing the close button.
        */}
       <div className="hidden w-full items-center justify-center gap-3 px-8 sm:flex">
-        <p className="min-w-0 truncate">
-          {headline}{' '}
-          {/*
-           * Headline + description + button + padding measure ~786px, which
-           * falls between `md` (768px) and `lg` (1024px) — hence the arbitrary
-           * breakpoint rather than a token: `md` clips the last words and `lg`
-           * would waste the ~240px in between. `truncate` above stays as the
-           * backstop for a longer announcement.
-           */}
-          <span className="hidden text-fd-primary min-[800px]:inline">
-            {description}
-          </span>
-        </p>
+        <p className="line-clamp-2 min-w-0">{message}</p>
         {cta ? (
           <a
             href={cta.href}
@@ -92,14 +99,5 @@ export function AnnouncementBanner() {
         ) : null}
       </div>
     </Banner>
-  );
-}
-
-function Headline({ label, title }: { label: string; title: string }) {
-  return (
-    <>
-      <span className="font-semibold text-fd-primary">{label}</span>{' '}
-      <span className="text-fd-foreground">{title}</span>
-    </>
   );
 }
