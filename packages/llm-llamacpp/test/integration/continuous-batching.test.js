@@ -316,8 +316,12 @@ async function setupMultimodalBatchModel(t, configOverrides = {}) {
   return model
 }
 
+// Replays chunks already delivered (QvacResponse.output) before subscribing,
+// like firstChunk below: onUpdate never replays, so a collector attached
+// after other awaits (a cancelled peer, the cancel promise) would silently
+// miss everything a fast job streamed in the meantime.
 async function collectText(response) {
-  const chunks = []
+  const chunks = [...response.output]
   await response
     .onUpdate((chunk) => {
       chunks.push(chunk)
