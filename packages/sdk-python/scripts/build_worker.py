@@ -66,7 +66,7 @@ def build(sdk: Path, *, force: bool) -> Path:
     ):
         os.chmod(bare, 0o755)
     _run(["bunx", "tsc", "--project", "tsconfig.json"], sdk)
-    _run(["node", "scripts/resolve-aliases.mjs"], sdk)
+    _run(["bunx", "tsc-alias", "-p", "tsconfig.alias.json"], sdk)
     if not worker.exists():
         raise SystemExit(f"build finished but {worker} is still missing")
     print(f"▸ built worker: {worker}", file=sys.stderr)

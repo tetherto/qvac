@@ -184,7 +184,7 @@
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "postcompile:aliases": "node ./scripts/resolve-aliases.mjs",
+    "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
