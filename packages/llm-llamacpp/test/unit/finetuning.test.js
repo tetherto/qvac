@@ -437,7 +437,7 @@ test('a late finetune TPS trailer never ends a subsequent inference job', async 
   // finetune sink, not to the freshly admitted inference job.
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null, 41)
   t.is(
-    inferResponse.getStatus(),
+    inferResponse._status,
     'running',
     'inference must still be running after the finetune trailer landed'
   )
