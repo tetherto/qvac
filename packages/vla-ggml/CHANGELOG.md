@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.1] - 2026-07-29
+
+### Fixed
+
+- ESM named imports (`import { VlaModel } from '@qvac/vla-ggml'`) failed at link time on Node and Bare against the 0.16.0 wrapper: the TypeScript namespace merge attached the six exported members inside an IIFE that cjs-module-lexer cannot statically analyze. The generated `index.js` now also assigns them as top-level `module.exports.X = …` statements — the exact pattern the lexer detects — restoring the pre-migration interop. Guarded by a new runtime integration test (`test/integration/esm-named-exports.test.js`); the type-level consumer tests structurally cannot catch this class of regression.
+- `new VlaModel({ files, config: null })` no longer leaks the registered native-logger callback (pinning the Bare event loop) and no longer fails `load()` with a `TypeError` re-wrapped as `FAILED_TO_LOAD_WEIGHTS`: `this._config` is normalized to `{}` at construction, restoring the pre-migration `this._config &&` guard semantics.
+- `validateRunInput` treats an `undefined` `hparams` like `null` again when deciding pixel- vs patch-mode input (the migration's `hparams !== null` check would have thrown a raw `TypeError` instead of falling back to pixel-mode validation).
+
+### Changed
+
+- Documenting a 0.16.0 behavioral nuance: `new VlaModel(null)` now throws a structured `MISSING_REQUIRED_PARAMETER` `QvacError` where pre-0.16.0 threw a raw destructuring `TypeError`.
+
 ## [0.16.0] - 2026-07-29
 
 ### Changed
