@@ -3,6 +3,9 @@
     "finetuning": [
       "runFinetuningPauseResumeTest"
     ],
+    "finetuningArchs": [
+      "runFinetuningArchsTest"
+    ],
     "toolCalling": [
       "runToolCallingTest"
     ],
@@ -67,6 +70,9 @@
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
+    ],
+    "funcShardF": [
+      "runFinetuningArchsTest"
     ],
     "funcShardB": [
       "runToolsCompactTest",

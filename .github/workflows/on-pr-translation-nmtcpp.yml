@@ -53,6 +53,21 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
+  # merge/release-team approval before ANY privileged job runs; a new push spawns
+  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
+  # to an empty environment and run with no gate. Standalone gate job so it composes
+  # with jobs that call reusable workflows (uses:) or already declare an environment.
+  # Runs ALONGSIDE the SHA-bound label-gate during migration.
+  fork-approval:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -108,7 +123,7 @@ jobs:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
   verify-fabric-lockstep:
-    needs: [authorize, changes]
+    needs: [fork-approval, authorize, changes]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
@@ -124,6 +139,7 @@ jobs:
 
   sanity-checks:
     needs:
+      - fork-approval
       - authorize
       - changes
       - verify-fabric-lockstep
@@ -146,7 +162,7 @@ jobs:
           workdir: packages/translation-nmtcpp
 
   ts-checks:
-    needs: [authorize, changes, sanity-checks]
+    needs: [fork-approval, authorize, changes, sanity-checks]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
@@ -169,6 +185,7 @@ jobs:
 
   cpp-lint:
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
@@ -185,6 +202,7 @@ jobs:
 
   cpp-tests:
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
@@ -205,6 +223,7 @@ jobs:
 
   detect-native-changes:
     needs:
+      - fork-approval
       - authorize
       - changes
       - ci-router
@@ -232,6 +251,7 @@ jobs:
   prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
+      - fork-approval
       - detect-native-changes
       - sanity-checks
       - label-gate
@@ -265,6 +285,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - changes
       - ci-router
@@ -283,6 +304,7 @@ jobs:
   prebuild-artifact-save:
     if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
       - label-gate
@@ -305,6 +327,7 @@ jobs:
 
   run-integration-tests:
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
@@ -331,6 +354,7 @@ jobs:
       pull-requests: write # Allow commenting on PRs
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - changes
       - sanity-checks
