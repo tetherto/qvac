@@ -1,6 +1,6 @@
-import QvacResponse = require("./src/QvacResponse");
-import exclusiveRunQueue = require("./src/utils/exclusiveRunQueue");
-import getApiDefinition = require("./src/utils/getApiDefinition");
+import QvacResponse = require('./src/QvacResponse');
+import exclusiveRunQueue = require('./src/utils/exclusiveRunQueue');
+import getApiDefinition = require('./src/utils/getApiDefinition');
 export type AbortSignalLike = QvacResponse.AbortSignalLike;
 export interface JobHandler {
     /**

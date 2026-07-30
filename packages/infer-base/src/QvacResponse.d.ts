@@ -1,4 +1,4 @@
-import EventEmitter = require("bare-events");
+import EventEmitter = require('bare-events');
 /**
  * QvacResponse provides an interface for handling asynchronous responses
  * with update notifications, error handling, and more.
@@ -85,10 +85,10 @@ declare namespace QvacResponse {
     interface AbortSignalLike {
         readonly aborted: boolean;
         readonly reason?: unknown;
-        addEventListener(type: "abort", listener: () => void, options?: {
+        addEventListener(type: 'abort', listener: () => void, options?: {
             once?: boolean;
         }): void;
-        removeEventListener(type: "abort", listener: () => void): void;
+        removeEventListener(type: 'abort', listener: () => void): void;
     }
 }
 export = QvacResponse;

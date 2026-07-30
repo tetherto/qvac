@@ -2,9 +2,9 @@
 /* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-explicit-any, @typescript-eslint/no-namespace, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment -- Preserve the published untyped CommonJS response/result contract; namespace merging exposes its structural abort-signal type. */
 const EventEmitter = require("bare-events");
 const statuses = Object.freeze({
-    RUNNING: "running",
-    ENDED: "ended",
-    ERRORED: "errored",
+    RUNNING: 'running',
+    ENDED: 'ended',
+    ERRORED: 'errored'
 });
 /**
  * QvacResponse provides an interface for handling asynchronous responses
@@ -36,7 +36,7 @@ class QvacResponse extends EventEmitter {
      * Registers a callback to be invoked on each output update.
      */
     onUpdate(callback) {
-        this.on("output", callback);
+        this.on('output', callback);
         return this;
     }
     /**
@@ -45,7 +45,7 @@ class QvacResponse extends EventEmitter {
      */
     onFinish(callback) {
         if (callback) {
-            this.once("end", (result) => callback(result));
+            this.once('end', (result) => callback(result));
         }
         return this;
     }
@@ -59,14 +59,14 @@ class QvacResponse extends EventEmitter {
      * Registers a callback to be invoked when an error occurs.
      */
     onError(callback) {
-        this.on("error", callback);
+        this.on('error', callback);
         return this;
     }
     /**
      * Registers a callback to be invoked when the response is cancelled.
      */
     onCancel(callback) {
-        this.on("cancel", callback);
+        this.on('cancel', callback);
         return this;
     }
     /**
@@ -74,14 +74,14 @@ class QvacResponse extends EventEmitter {
      */
     updateOutput(output) {
         this.output.push(output);
-        this.emit("output", output);
+        this.emit('output', output);
     }
     /**
      * Updates the response statistics and emits a 'stats' event.
      */
     updateStats(stats) {
         this.stats = stats;
-        this.emit("stats", stats);
+        this.emit('stats', stats);
     }
     /**
      * Marks the response as failed, emits an 'error' event, and rejects the finish promise.
@@ -98,9 +98,9 @@ class QvacResponse extends EventEmitter {
         this._teardownAbort();
         this._rejectFinish(error);
         this._runSettleHooks();
-        const errorListeners = this.listenerCount("error");
+        const errorListeners = this.listenerCount('error');
         if (errorListeners > 0) {
-            this.emit("error", error);
+            this.emit('error', error);
         }
     }
     /**
@@ -114,7 +114,7 @@ class QvacResponse extends EventEmitter {
         this._teardownAbort();
         this._resolveFinish(result);
         this._runSettleHooks();
-        this.emit("end", result);
+        this.emit('end', result);
     }
     /**
      * Returns the most recent output.
@@ -144,9 +144,9 @@ class QvacResponse extends EventEmitter {
             pendingResolve = null;
             resolve();
         };
-        this.on("output", wake);
-        this.on("end", wake);
-        this.on("error", wake);
+        this.on('output', wake);
+        this.on('end', wake);
+        this.on('error', wake);
         try {
             let index = 0;
             while (true) {
@@ -172,9 +172,9 @@ class QvacResponse extends EventEmitter {
             }
         }
         finally {
-            this.off("output", wake);
-            this.off("end", wake);
-            this.off("error", wake);
+            this.off('output', wake);
+            this.off('end', wake);
+            this.off('error', wake);
             pendingResolve = null;
         }
         if (this._status === statuses.ERRORED) {
@@ -190,7 +190,7 @@ class QvacResponse extends EventEmitter {
             if (reason !== undefined && reason !== null) {
                 return new Error(`Aborted: ${String(reason)}`);
             }
-            return new Error("Aborted");
+            return new Error('Aborted');
         };
         if (signal.aborted) {
             this._markAbortPending(buildError());
@@ -199,7 +199,7 @@ class QvacResponse extends EventEmitter {
         const onAbort = () => this.failed(buildError());
         this._abortSignal = signal;
         this._onAbort = onAbort;
-        signal.addEventListener("abort", onAbort, { once: true });
+        signal.addEventListener('abort', onAbort, { once: true });
     }
     /**
      * Reserves the errored terminal state synchronously for an already-aborted
@@ -225,8 +225,8 @@ class QvacResponse extends EventEmitter {
             // the job handler registers its hook right after construction returns,
             // which is after an already-aborted signal reserved the state.
             this._runSettleHooks();
-            if (this.listenerCount("error") > 0) {
-                this.emit("error", error);
+            if (this.listenerCount('error') > 0) {
+                this.emit('error', error);
             }
         });
     }
@@ -252,7 +252,7 @@ class QvacResponse extends EventEmitter {
     _teardownAbort() {
         if (this._abortSignal !== null && this._onAbort !== null) {
             try {
-                this._abortSignal.removeEventListener("abort", this._onAbort);
+                this._abortSignal.removeEventListener('abort', this._onAbort);
             }
             catch {
                 // Best-effort detach; ignore exotic signal implementations.
@@ -269,7 +269,7 @@ class QvacResponse extends EventEmitter {
             return;
         }
         await this._cancelHandler();
-        this.emit("cancel");
+        this.emit('cancel');
     }
 }
 module.exports = QvacResponse;

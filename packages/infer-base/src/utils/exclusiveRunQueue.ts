@@ -4,24 +4,22 @@
  * Creates a serialized execution queue. Calls to the returned function
  * are guaranteed to run one at a time, in order, even when fired concurrently.
  */
-function exclusiveRunQueue(): (
-  fn: () => Promise<any>,
-) => Promise<any> {
-  let waiter = Promise.resolve();
+function exclusiveRunQueue(): (fn: () => Promise<any>) => Promise<any> {
+  let waiter = Promise.resolve()
 
   return async function run(fn: () => Promise<any>): Promise<any> {
-    const previous = waiter;
-    let release!: () => void;
+    const previous = waiter
+    let release!: () => void
     waiter = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
+      release = resolve
+    })
+    await previous
     try {
-      return await fn();
+      return await fn()
     } finally {
-      release();
+      release()
     }
-  };
+  }
 }
 
-export = exclusiveRunQueue;
+export = exclusiveRunQueue

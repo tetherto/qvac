@@ -1,18 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports -- Preserve the published untyped CommonJS job payload contract. */
 
-import QvacResponse = require("../QvacResponse");
+import QvacResponse = require('../QvacResponse')
 
 interface CreateJobHandlerOptions {
-  cancel: () => void | Promise<void>;
+  cancel: () => void | Promise<void>
 }
 
 interface JobHandler {
-  start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse;
-  startWith(response: QvacResponse): QvacResponse;
-  output(data: any): void;
-  end(stats?: any, result?: any): void;
-  fail(error: Error | string): void;
-  readonly active: QvacResponse | null;
+  start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse
+  startWith(response: QvacResponse): QvacResponse
+  output(data: any): void
+  end(stats?: any, result?: any): void
+  fail(error: Error | string): void
+  readonly active: QvacResponse | null
 }
 
 /**
@@ -21,7 +21,7 @@ interface JobHandler {
  * boilerplate used by every addon.
  */
 function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
-  let active: QvacResponse | null = null;
+  let active: QvacResponse | null = null
 
   // Clears `active` whenever the response settles (end / fail / abort), not
   // only on explicit end()/fail(). Identity-guarded against stale-replace
@@ -32,9 +32,9 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
   // active.
   const bindCleanup = (response: QvacResponse) => {
     response._onSettled(() => {
-      if (active === response) active = null;
-    });
-  };
+      if (active === response) active = null
+    })
+  }
 
   return {
     /**
@@ -44,18 +44,18 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      */
     start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse {
       if (active) {
-        active.failed(new Error("Stale job replaced by new run"));
-        active = null;
+        active.failed(new Error('Stale job replaced by new run'))
+        active = null
       }
 
       const response = new QvacResponse({
         cancelHandler: (() => opts.cancel()) as () => Promise<void>,
-        signal: runOpts?.signal,
-      });
+        signal: runOpts?.signal
+      })
 
-      active = response;
-      bindCleanup(response);
-      return response;
+      active = response
+      bindCleanup(response)
+      return response
     },
 
     /**
@@ -65,13 +65,13 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      */
     startWith(response: QvacResponse): QvacResponse {
       if (active) {
-        active.failed(new Error("Stale job replaced by new run"));
-        active = null;
+        active.failed(new Error('Stale job replaced by new run'))
+        active = null
       }
 
-      active = response;
-      bindCleanup(response);
-      return response;
+      active = response
+      bindCleanup(response)
+      return response
     },
 
     /**
@@ -79,8 +79,8 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      * No-op if no active response (defensive guard).
      */
     output(data: any): void {
-      if (!active) return;
-      active.updateOutput(data);
+      if (!active) return
+      active.updateOutput(data)
     },
 
     /**
@@ -88,18 +88,18 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      * Clears the active response.
      */
     end(stats?: any, result?: any): void {
-      if (!active) return;
-      const ref = active;
-      active = null;
+      if (!active) return
+      const ref = active
+      active = null
       try {
         if (stats != null) {
-          ref.updateStats(stats);
+          ref.updateStats(stats)
         }
       } finally {
         if (result !== undefined) {
-          ref.ended(result);
+          ref.ended(result)
         } else {
-          ref.ended();
+          ref.ended()
         }
       }
     },
@@ -108,19 +108,19 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      * Fails the active response with an error. Clears the active response.
      */
     fail(error: Error | string): void {
-      if (!active) return;
-      const ref = active;
-      active = null;
-      ref.failed(error as Error);
+      if (!active) return
+      const ref = active
+      active = null
+      ref.failed(error as Error)
     },
 
     /**
      * Returns the current active QvacResponse, or null if idle.
      */
     get active(): QvacResponse | null {
-      return active;
-    },
-  };
+      return active
+    }
+  }
 }
 
-export = createJobHandler;
+export = createJobHandler

@@ -17,5 +17,5 @@ module.exports = {
     QvacResponse,
     exclusiveRunQueue,
     getApiDefinition,
-    createJobHandler,
+    createJobHandler
 };

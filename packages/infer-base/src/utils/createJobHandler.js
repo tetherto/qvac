@@ -29,12 +29,12 @@ function createJobHandler(opts) {
          */
         start(runOpts) {
             if (active) {
-                active.failed(new Error("Stale job replaced by new run"));
+                active.failed(new Error('Stale job replaced by new run'));
                 active = null;
             }
             const response = new QvacResponse({
                 cancelHandler: (() => opts.cancel()),
-                signal: runOpts?.signal,
+                signal: runOpts?.signal
             });
             active = response;
             bindCleanup(response);
@@ -47,7 +47,7 @@ function createJobHandler(opts) {
          */
         startWith(response) {
             if (active) {
-                active.failed(new Error("Stale job replaced by new run"));
+                active.failed(new Error('Stale job replaced by new run'));
                 active = null;
             }
             active = response;
@@ -101,7 +101,7 @@ function createJobHandler(opts) {
          */
         get active() {
             return active;
-        },
+        }
     };
 }
 module.exports = createJobHandler;

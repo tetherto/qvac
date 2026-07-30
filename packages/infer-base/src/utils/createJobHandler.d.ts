@@ -1,4 +1,4 @@
-import QvacResponse = require("../QvacResponse");
+import QvacResponse = require('../QvacResponse');
 interface CreateJobHandlerOptions {
     cancel: () => void | Promise<void>;
 }
