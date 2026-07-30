@@ -106,11 +106,17 @@ runs:
         DEVICE_MANUFACTURER: ${{ inputs.device-manufacturer }}
         JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
       run: |
+        # The run-id/attempt suffix makes the name UNIQUE to this workflow attempt.
+        # That is what lets the rollback below safely stop runs by name: a re-run of
+        # the same PR gets a different base, so the sweep can never touch another
+        # attempt's runs. Names are display-only elsewhere (monitor / log collection
+        # read run.name purely for labels), so the longer form is safe.
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           RUN_NAME_BASE="Manual-${{ github.run_number }}-${PLATFORM}"
         else
           RUN_NAME_BASE="PR-${{ github.event.pull_request.number || github.run_number }}-${PLATFORM}"
         fi
+        RUN_NAME_BASE="${RUN_NAME_BASE}-${{ github.run_id }}.${{ github.run_attempt }}"
 
         # Partial-scheduling rollback.
         #
@@ -131,11 +137,40 @@ runs:
         # out-of-band sweep of runs whose names match the run-name base with no live
         # workflow — deliberately out of scope here.
         CREATED_RUN_ARNS=""
+        SCHEDULING_STARTED=0
+
+        # Second pass, by NAME. record_created_run only runs once schedule-run has
+        # RETURNED an ARN, so a run created remotely whose response we never saw
+        # (CLI interrupted by cancellation, or a network failure) is invisible to the
+        # ARN list above. Sweeping by the unique run-name base catches those.
+        # Best-effort: list-runs is paginated/most-recent-first, so this is a safety
+        # net rather than a guarantee.
+        sweep_runs_by_name() {
+          [ -z "$PROJECT_ARN" ] && return 0
+          local listed
+          listed=$(aws devicefarm list-runs --arn "$PROJECT_ARN" \
+            --query "runs[?starts_with(name, '${RUN_NAME_BASE}')].[arn,status]" \
+            --output text 2>/dev/null) || return 0
+          [ -z "$listed" ] && return 0
+          local arn status
+          while IFS=$'\t' read -r arn status; do
+            [ -z "$arn" ] && continue
+            # COMPLETED is terminal; STOPPING is already being torn down.
+            case "$status" in COMPLETED|STOPPING) continue ;; esac
+            # Skip anything the ARN pass already handled.
+            case " $CREATED_RUN_ARNS " in *" $arn "*) continue ;; esac
+            if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
+              echo "  stopped (matched by name, ARN never returned) $arn"
+            else
+              echo "  ::warning::could not stop $arn"
+            fi
+          done <<< "$listed"
+        }
 
         rollback_created_runs() {
           local status=$?
           trap - ERR INT TERM EXIT
-          if [ -n "$CREATED_RUN_ARNS" ]; then
+          if [ "$SCHEDULING_STARTED" = "1" ]; then
             echo "::warning::Scheduling stopped part way (status $status) — stopping the runs already created to avoid billing them."
             for arn in $CREATED_RUN_ARNS; do
               if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
@@ -144,6 +179,7 @@ runs:
                 echo "  ::warning::could not stop $arn (it may have already finished)"
               fi
             done
+            sweep_runs_by_name
           fi
           exit "$status"
         }
@@ -186,6 +222,11 @@ runs:
         echo "Scheduling mode hint (used only for single-spec runs): $SCHEDULING_MODE"
 
         RUN_ARNS_JSON='[]'
+
+        # From here on a run may exist remotely, so the rollback (including the
+        # by-name sweep) becomes relevant. Before this point there is nothing to
+        # clean up and no reason to spend an API call.
+        SCHEDULING_STARTED=1
 
         if [ "$SPEC_COUNT" -gt 1 ]; then
           # Sharded mode: each group runs against the addon's pool.
