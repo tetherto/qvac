@@ -1,20 +1,4 @@
-# REVERT BEFORE MERGE — this file is a temporary alias, not embed-llamacpp's CI.
-#
-# It carries the model-fit on-pr job graph so that graph is reachable at all on
-# this PR: pull_request_target resolves workflow files from the BASE branch, and
-# on-pr-model-fit.yml does not exist on main, so the real filename can never
-# fire here. Dispatching this filename against the branch is the only way to run
-# the model-fit prebuild + integration + mobile matrix on tetherto runners.
-#
-# The real workflow lives beside this one at on-pr-model-fit.yml and is the
-# deliverable. This copy differs from it in exactly two places: the workflow
-# `name` below, so the two are told apart in the Actions UI, and the
-# prebuild-artifact-reuse `workflow-file` input, marked ALIAS at its use site.
-# To undo: `git checkout origin/main -- <this file>`.
-#
-# Consequence while the alias is in place: embed-llamacpp has no on-pr trigger
-# on this branch. main is untouched.
-name: On PR Trigger (Model Fit — dispatch alias)
+name: On PR Trigger (Model Fit)
 
 on:
   pull_request_target:
@@ -32,6 +16,7 @@ on:
     paths:
       - "packages/model-fit/**"
       - ".github/workflows/*model-fit*.yml"
+      - ".github/actions/cache-models/**"
   workflow_dispatch:
 
 permissions:
@@ -41,7 +26,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -254,8 +239,6 @@ jobs:
         uses: ./.github/actions/prebuild-artifact-reuse
         with:
           github-token: ${{ github.token }}
-          # ALIAS: must name the file actually running, or the reuse lookup
-          # searches a workflow that never produced a run on this branch.
           workflow-file: on-pr-embed-llamacpp.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
