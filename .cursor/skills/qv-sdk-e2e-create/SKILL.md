@@ -3,8 +3,8 @@ name: qv-sdk-e2e-create
 description: >
   Plans and scaffolds e2e tests in packages/sdk/e2e for a new or changed public SDK API. Use when
   adding or modifying SDK functionality that is exposed to consumers. Enforces happy / sad / error
-  coverage, deterministic model-output assertions, mobile/desktop placement, smoke-suite selection, and
-  local validation with run:local.
+  coverage, deterministic model-output assertions, desktop/mobile/Electron consumer coverage,
+  smoke-suite selection, and local validation with run:local.
 ---
 
 # SDK e2e Test Creation
@@ -40,14 +40,16 @@ recovered from code or context.
 3. **Determine model-output testability** (see §"Model-output strategy"). Propose a specific validator
    and a specific prompt/input that makes the output deterministic enough to assert.
 4. **Draft happy / sad / error cases** as a concrete test-definition sketch.
-5. **Decide executor placement and mobile constraints** (see §"Placement and mobile constraints").
+5. **Decide executor placement, consumer registration, and mobile constraints** (see §"Placement and
+   consumer constraints").
 6. **Select at most one smoke candidate** (see §"Smoke policy").
 7. **Present the plan to the user.** Include: feature summary, chosen validators with rationale, test
-   definitions sketch, placement decision, mobile concerns, smoke pick. Ask clarifying questions only
-   where genuine ambiguity remains (e.g. expected model behaviour on an edge case, preferred tolerance
-   for a `numeric-range`).
-8. **After approval**, scaffold the files and prompt the user to run locally with the exact
-   `run:local:desktop --filter <feature>-` command.
+   definitions sketch, placement decision, desktop/mobile/Electron registrations, platform concerns,
+   smoke pick. Ask clarifying questions only where genuine ambiguity remains (e.g. expected model
+   behaviour on an edge case, preferred tolerance for a `numeric-range`).
+8. **After approval**, scaffold the files and prompt the user to run locally with the exact commands
+   for every consumer. Always run `run:local:electron --filter <feature>-` to verify either the handler
+   or an intentional skip for Electron/Snap.
 
 ## Model-output strategy
 
@@ -85,7 +87,7 @@ Every public-API feature MUST have at minimum:
 
 More cases are encouraged for multi-branch features.
 
-## Placement and mobile constraints
+## Placement and consumer constraints
 
 Executor placement (from [`.cursor/rules/sdk/e2e.mdc`](../../rules/sdk/e2e.mdc)):
 
@@ -94,6 +96,16 @@ Executor placement (from [`.cursor/rules/sdk/e2e.mdc`](../../rules/sdk/e2e.mdc))
 - Needs RN `Platform`, bundled assets, or anything specific to React Native → `tests/mobile/executors/`.
 
 Never import `node:*` from `tests/shared/` or `tests/mobile/`.
+
+Placement under `tests/shared/executors/` does not register an executor automatically. Explicitly check
+and update every compatible consumer:
+
+- `tests/desktop/consumer.ts`
+- `tests/mobile/consumer.ts`
+- `tests/electron/consumer.ts` — also used by the Snap consumer
+
+If a consumer cannot support the tests, add a documented `SkipExecutor`; do not leave scheduled tests
+without a matching handler, which fails at runtime with `No handler found`.
 
 **Mobile concerns to address in the plan:**
 
@@ -104,7 +116,8 @@ Never import `node:*` from `tests/shared/` or `tests/mobile/`.
 - **Platform-specific limitations** — known iOS/Android issues (OOM, missing native lib, backend
   unsupported). Add a `SkipExecutor` at the top of `tests/mobile/consumer.ts` with a clear reason.
 
-If the feature cannot run on mobile at all, document the skip reason and ship desktop-only coverage.
+If the feature cannot run on mobile at all, document the skip reason. Evaluate Electron/Snap
+compatibility independently rather than treating desktop-only coverage as automatic.
 
 ## Smoke policy
 
@@ -161,13 +174,13 @@ Extend `AbstractModelExecutor` (base: `tests/shared/executors/abstract-model-exe
 `createExecutor` with `TestHandler` for ad-hoc cases. Bind handlers per `testId`, and use
 `ResourceManager.ensureLoaded("<resource-name>")` to obtain model IDs.
 
-Register the new executor in `tests/desktop/consumer.ts` and/or `tests/mobile/consumer.ts` in the
-`handlers: [...]` array of `createExecutor(...)`.
+Register the new executor in every compatible `handlers: [...]` array: desktop, mobile, and Electron
+(which also covers Snap). Add a documented `SkipExecutor` for intentionally unsupported consumers.
 
 ## Local validation (required before landing)
 
-After scaffolding, provide the user with the exact command to run on desktop. Do not mark the task
-complete until the user confirms the tests pass locally.
+After scaffolding, provide the exact commands for every compatible local consumer. Do not mark the task
+complete until the user confirms those tests pass locally.
 
 ```bash
 cd packages/sdk/e2e
@@ -179,6 +192,7 @@ npm run install:build:full
 npm run install:build
 
 npx qvac-test run:local:desktop --filter <feature>-
+npx qvac-test run:local:electron --filter <feature>- # verifies the handler or intentional skip
 ```
 
 For mobile verification of a smoke candidate (required before tagging `suites: ["smoke"]`):
@@ -205,15 +219,17 @@ Before presenting the plan:
 - [ ] Feature surface understood from code; any genuine gaps raised as targeted clarifying questions.
 - [ ] Model-output strategy picked and justified — not defaulted to `type`.
 - [ ] Happy, sad, and error cases drafted.
-- [ ] Executor placement chosen; mobile memory / filesystem / platform concerns addressed.
+- [ ] Executor placement chosen; desktop, mobile, Electron/Snap registration checked; mobile memory /
+      filesystem / platform concerns addressed.
 - [ ] Smoke candidate selected or explicitly skipped with reason.
 - [ ] Local validation command prepared with the correct `--filter` prefix.
 
 Before marking scaffolding complete:
 
 - [ ] Test definitions aggregated in `tests/test-definitions.ts`.
-- [ ] Executors registered in relevant consumer entry.
-- [ ] User has confirmed the new tests pass via `run:local:desktop --filter <feature>-`.
+- [ ] Executors registered or explicitly skipped in every relevant consumer entry, including Electron
+      when compatible (which also covers Snap).
+- [ ] User has confirmed the new tests pass through each compatible local consumer command.
 
 ## References
 

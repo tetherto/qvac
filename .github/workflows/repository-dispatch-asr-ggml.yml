@@ -1,13 +1,13 @@
-name: Dispatch on README (Whispercpp)
+name: Dispatch on README (ASR GGML)
 
 on:
   pull_request:
     types: [closed]
     paths:
-      - "packages/transcription-whispercpp/**"
+      - "packages/asr-ggml/**"
 
 env:
-  WORKDIR: packages/transcription-whispercpp
+  WORKDIR: packages/asr-ggml
 
 permissions:
   contents: read
