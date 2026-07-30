@@ -202,7 +202,7 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
   streamConfig.vadModelPath = getValidVadModelPath();
   streamConfig.emitVadEvents = true;
   streamConfig.vadRunIntervalSamples =
-      StreamingProcessor::Config::kDefaultSampleRate;
+      StreamingProcessor::Config::K_DEFAULT_SAMPLE_RATE;
   streamConfig.endOfTurnSilenceMs = 0;
 
   {

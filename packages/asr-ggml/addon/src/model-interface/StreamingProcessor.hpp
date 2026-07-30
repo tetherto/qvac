@@ -30,22 +30,22 @@ class StreamingProcessor : public qvac::asrggml::IStreamingSession {
 public:
   struct Config {
     std::uint64_t jobId = 0;
-    static constexpr int kDefaultSampleRate = 16000;
-    static constexpr float kDefaultMaxSpeechDurationS = 30.0F;
-    static constexpr float kVadRunIntervalS = 0.3F;
+    static constexpr int K_DEFAULT_SAMPLE_RATE = 16000;
+    static constexpr float K_DEFAULT_MAX_SPEECH_DURATION_S = 30.0F;
+    static constexpr float K_VAD_RUN_INTERVAL_S = 0.3F;
 
-    int sampleRate = kDefaultSampleRate;
+    int sampleRate = K_DEFAULT_SAMPLE_RATE;
     std::string vadModelPath;
     float vadThreshold = 0.5F;
     int minSilenceDurationMs = 500;
     int minSpeechDurationMs = 250;
-    float maxSpeechDurationS = kDefaultMaxSpeechDurationS;
+    float maxSpeechDurationS = K_DEFAULT_MAX_SPEECH_DURATION_S;
     int speechPadMs = 30;
     float samplesOverlap = 0.1F;
     int maxBufferSamples =
-        static_cast<int>(kDefaultMaxSpeechDurationS) * kDefaultSampleRate;
+        static_cast<int>(K_DEFAULT_MAX_SPEECH_DURATION_S) * K_DEFAULT_SAMPLE_RATE;
     int vadRunIntervalSamples =
-        static_cast<int>(kVadRunIntervalS * kDefaultSampleRate);
+        static_cast<int>(K_VAD_RUN_INTERVAL_S * K_DEFAULT_SAMPLE_RATE);
     bool emitVadEvents = false;
     int endOfTurnSilenceMs = 0;
   };
