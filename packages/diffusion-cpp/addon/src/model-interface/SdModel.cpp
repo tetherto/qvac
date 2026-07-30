@@ -1127,6 +1127,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   vidParams.height = vid.height;
   vidParams.seed = vid.seed;
   vidParams.video_frames = vid.videoFrames;
+  // Generation-time frame rate, distinct from the AVI muxing rate below. LTX
+  // derives temporal RoPE positions and the audio latent count from this, so
+  // leaving it at the engine default desynchronises motion timing and audio
+  // length from the requested fps.
+  vidParams.fps = vid.fps;
   vidParams.strength = vid.strength;
   vidParams.vace_strength = vid.vaceStrength;
   vidParams.moe_boundary = vid.moeBoundary;
