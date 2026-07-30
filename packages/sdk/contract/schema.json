@@ -50,6 +50,9 @@
           "$ref": "#/$defs/getModelInfo.request"
         },
         {
+          "$ref": "#/$defs/getSystemResources.request"
+        },
+        {
           "$ref": "#/$defs/heartbeat.request"
         },
         {
@@ -171,6 +174,9 @@
         },
         {
           "$ref": "#/$defs/getModelInfo.response"
+        },
+        {
+          "$ref": "#/$defs/getSystemResources.response"
         },
         {
           "$ref": "#/$defs/heartbeat.response"
@@ -4011,6 +4017,3571 @@
         }
       },
       "required": ["type", "modelInfo"],
+      "additionalProperties": false
+    },
+    "getSystemResources.request": {
+      "title": "GetSystemResourcesRequest",
+      "type": "object",
+      "properties": {
+        "sample": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string",
+          "const": "getSystemResources"
+        }
+      },
+      "required": ["type"]
+    },
+    "getSystemResources.response": {
+      "title": "GetSystemResourcesResponse",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "cpu": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "supported"
+                    },
+                    "value": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameFailed"
+                            }
+                          ]
+                        },
+                        "vendor": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorFailed"
+                            }
+                          ]
+                        },
+                        "architecture": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureFailed"
+                            }
+                          ]
+                        },
+                        "physicalCores": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresFailed"
+                            }
+                          ]
+                        },
+                        "logicalCores": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresFailed"
+                            }
+                          ]
+                        },
+                        "performanceCores": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresFailed"
+                            }
+                          ]
+                        },
+                        "efficiencyCores": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresFailed"
+                            }
+                          ]
+                        },
+                        "frequencyHz": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzFailed"
+                            }
+                          ]
+                        },
+                        "cacheLineBytes": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "supported"
+                                },
+                                "value": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "provenance": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "system",
+                                        "process",
+                                        "device",
+                                        "budget",
+                                        "shared-system"
+                                      ],
+                                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenanceScope"
+                                    }
+                                  },
+                                  "required": ["source"],
+                                  "additionalProperties": false,
+                                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenance"
+                                }
+                              },
+                              "required": ["status", "value", "provenance"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupported"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unavailable"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesUnavailable"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "unverified"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesUnverified"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "const": "failed"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["status"],
+                              "additionalProperties": false,
+                              "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesFailed"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "vendor",
+                        "architecture",
+                        "physicalCores",
+                        "logicalCores",
+                        "performanceCores",
+                        "efficiencyCores",
+                        "frequencyHz",
+                        "cacheLineBytes"
+                      ],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedValue"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": ["system", "process", "device", "budget", "shared-system"],
+                          "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedProvenanceScope"
+                        }
+                      },
+                      "required": ["source"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesCpuSupportedProvenance"
+                    }
+                  },
+                  "required": ["status", "value", "provenance"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesCpuSupported"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unavailable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesCpuUnavailable"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unverified"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesCpuUnverified"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "failed"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesCpuFailed"
+                }
+              ]
+            },
+            "memory": {
+              "type": "object",
+              "properties": {
+                "totalBytes": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "supported"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "provenance": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": ["system", "process", "device", "budget", "shared-system"],
+                              "title": "GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenanceScope"
+                            }
+                          },
+                          "required": ["source"],
+                          "additionalProperties": false,
+                          "title": "GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenance"
+                        }
+                      },
+                      "required": ["status", "value", "provenance"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupported"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesMemoryTotalBytesUnavailable"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unverified"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesMemoryTotalBytesUnverified"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "failed"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesMemoryTotalBytesFailed"
+                    }
+                  ]
+                }
+              },
+              "required": ["totalBytes"],
+              "additionalProperties": false,
+              "title": "GetSystemResourcesResponseCapabilitiesMemory"
+            },
+            "gpus": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "supported"
+                    },
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameFailed"
+                              }
+                            ]
+                          },
+                          "vendor": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorFailed"
+                              }
+                            ]
+                          },
+                          "type": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeFailed"
+                              }
+                            ]
+                          },
+                          "driverName": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameFailed"
+                              }
+                            ]
+                          },
+                          "driverVersion": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionFailed"
+                              }
+                            ]
+                          },
+                          "drivers": {
+                            "type": "object",
+                            "properties": {
+                              "vulkan": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanFailed"
+                                  }
+                                ]
+                              },
+                              "opencl": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclFailed"
+                                  }
+                                ]
+                              },
+                              "opengl": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglFailed"
+                                  }
+                                ]
+                              },
+                              "webgpu": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuFailed"
+                                  }
+                                ]
+                              },
+                              "metal": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalFailed"
+                                  }
+                                ]
+                              },
+                              "direct3d11": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Supported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Unavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Unverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Failed"
+                                  }
+                                ]
+                              },
+                              "direct3d12": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Supported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Unavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Unverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Failed"
+                                  }
+                                ]
+                              },
+                              "cuda": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaFailed"
+                                  }
+                                ]
+                              },
+                              "levelZero": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroFailed"
+                                  }
+                                ]
+                              },
+                              "rocm": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "supported"
+                                      },
+                                      "value": {
+                                        "type": "boolean"
+                                      },
+                                      "provenance": {
+                                        "type": "object",
+                                        "properties": {
+                                          "source": {
+                                            "type": "string"
+                                          },
+                                          "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                              "system",
+                                              "process",
+                                              "device",
+                                              "budget",
+                                              "shared-system"
+                                            ],
+                                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenanceScope"
+                                          }
+                                        },
+                                        "required": ["source"],
+                                        "additionalProperties": false,
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenance"
+                                      }
+                                    },
+                                    "required": ["status", "value", "provenance"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupported"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unavailable"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmUnavailable"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "unverified"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmUnverified"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "failed"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["status"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmFailed"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "vulkan",
+                              "opencl",
+                              "opengl",
+                              "webgpu",
+                              "metal",
+                              "direct3d11",
+                              "direct3d12",
+                              "cuda",
+                              "levelZero",
+                              "rocm"
+                            ],
+                            "additionalProperties": false,
+                            "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDrivers"
+                          },
+                          "unifiedMemory": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "boolean"
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryFailed"
+                              }
+                            ]
+                          },
+                          "memoryTotalBytes": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesFailed"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "vendor",
+                          "type",
+                          "driverName",
+                          "driverVersion",
+                          "drivers",
+                          "unifiedMemory",
+                          "memoryTotalBytes"
+                        ],
+                        "additionalProperties": false,
+                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem"
+                      }
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": ["system", "process", "device", "budget", "shared-system"],
+                          "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedProvenanceScope"
+                        }
+                      },
+                      "required": ["source"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedProvenance"
+                    }
+                  },
+                  "required": ["status", "value", "provenance"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesGpusSupported"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unavailable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesGpusUnavailable"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unverified"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesGpusUnverified"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "failed"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseCapabilitiesGpusFailed"
+                }
+              ]
+            }
+          },
+          "required": ["cpu", "memory", "gpus"],
+          "additionalProperties": false,
+          "title": "GetSystemResourcesResponseCapabilities"
+        },
+        "sample": {
+          "type": "object",
+          "properties": {
+            "sampledAt": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cpu": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "supported"
+                    },
+                    "value": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": ["system", "process", "device", "budget", "shared-system"],
+                          "title": "GetSystemResourcesResponseSampleCpuSupportedProvenanceScope"
+                        }
+                      },
+                      "required": ["source"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleCpuSupportedProvenance"
+                    }
+                  },
+                  "required": ["status", "value", "provenance"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleCpuSupported"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unavailable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleCpuUnavailable"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unverified"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleCpuUnverified"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "failed"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleCpuFailed"
+                }
+              ]
+            },
+            "memory": {
+              "type": "object",
+              "properties": {
+                "usedBytes": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "supported"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "provenance": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": ["system", "process", "device", "budget", "shared-system"],
+                              "title": "GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenanceScope"
+                            }
+                          },
+                          "required": ["source"],
+                          "additionalProperties": false,
+                          "title": "GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenance"
+                        }
+                      },
+                      "required": ["status", "value", "provenance"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryUsedBytesSupported"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryUsedBytesUnavailable"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unverified"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryUsedBytesUnverified"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "failed"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryUsedBytesFailed"
+                    }
+                  ]
+                },
+                "totalBytes": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "supported"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "provenance": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string",
+                              "enum": ["system", "process", "device", "budget", "shared-system"],
+                              "title": "GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenanceScope"
+                            }
+                          },
+                          "required": ["source"],
+                          "additionalProperties": false,
+                          "title": "GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenance"
+                        }
+                      },
+                      "required": ["status", "value", "provenance"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryTotalBytesSupported"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryTotalBytesUnavailable"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unverified"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryTotalBytesUnverified"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "failed"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["status"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleMemoryTotalBytesFailed"
+                    }
+                  ]
+                }
+              },
+              "required": ["usedBytes", "totalBytes"],
+              "additionalProperties": false,
+              "title": "GetSystemResourcesResponseSampleMemory"
+            },
+            "gpus": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "supported"
+                    },
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "compute": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemComputeUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemComputeUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemComputeFailed"
+                              }
+                            ]
+                          },
+                          "encode": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeFailed"
+                              }
+                            ]
+                          },
+                          "decode": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeFailed"
+                              }
+                            ]
+                          },
+                          "memoryUsedBytes": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesFailed"
+                              }
+                            ]
+                          },
+                          "memoryTotalBytes": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFailed"
+                              }
+                            ]
+                          },
+                          "powerWatts": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsFailed"
+                              }
+                            ]
+                          },
+                          "temperatureCelsius": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusFailed"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "compute",
+                          "encode",
+                          "decode",
+                          "memoryUsedBytes",
+                          "memoryTotalBytes",
+                          "powerWatts",
+                          "temperatureCelsius"
+                        ],
+                        "additionalProperties": false,
+                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItem"
+                      }
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": ["system", "process", "device", "budget", "shared-system"],
+                          "title": "GetSystemResourcesResponseSampleGpusSupportedProvenanceScope"
+                        }
+                      },
+                      "required": ["source"],
+                      "additionalProperties": false,
+                      "title": "GetSystemResourcesResponseSampleGpusSupportedProvenance"
+                    }
+                  },
+                  "required": ["status", "value", "provenance"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleGpusSupported"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unavailable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleGpusUnavailable"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "unverified"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleGpusUnverified"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "failed"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false,
+                  "title": "GetSystemResourcesResponseSampleGpusFailed"
+                }
+              ]
+            }
+          },
+          "required": ["sampledAt", "cpu", "memory", "gpus"],
+          "additionalProperties": false,
+          "title": "GetSystemResourcesResponseSample"
+        },
+        "type": {
+          "type": "string",
+          "const": "getSystemResources"
+        }
+      },
+      "required": ["capabilities", "type"],
       "additionalProperties": false
     },
     "heartbeat.request": {
