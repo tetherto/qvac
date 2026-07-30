@@ -10,6 +10,10 @@ import {
   makeEnhancedTtsHandler,
   makeOutputSampleRateComparisonHandler
 } from '../../shared/utils/tts-lavasr-helpers.js'
+import {
+  makeParlerEmotionComparisonHandler,
+  makeParlerTtsHandler
+} from '../../shared/utils/tts-parler-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
@@ -27,6 +31,12 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
       }
       if (test.testId === 'tts-supertonic-enhanced') {
         return [test.testId, this.makeEnhanced(dep)]
+      }
+      if (test.testId === 'tts-parler-emotion-conditioning') {
+        return [test.testId, this.makeParlerEmotionComparison(dep)]
+      }
+      if (test.testId.startsWith('tts-parler-')) {
+        return [test.testId, this.makeParler(dep)]
       }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
@@ -54,6 +64,22 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
 
   private makeOutputSampleRateComparison() {
     return makeOutputSampleRateComparisonHandler<Expectation, TestResult>({
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeParler(dep: string) {
+    return makeParlerTtsHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeParlerEmotionComparison(dep: string) {
+    return makeParlerEmotionComparisonHandler<Expectation, TestResult>({
+      dependency: dep,
       ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
       validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
     })

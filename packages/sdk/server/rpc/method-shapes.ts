@@ -22,6 +22,7 @@ export const methodShapes = {
   finetune: 'reply',
   getLoadedModelInfo: 'reply',
   getModelInfo: 'reply',
+  getSystemResources: 'reply',
   heartbeat: 'reply',
   loadModel: 'reply',
   loggingStream: 'stream',

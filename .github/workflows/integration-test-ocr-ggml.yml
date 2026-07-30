@@ -68,16 +68,17 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
-          # Self-hosted Apple-silicon (M4) runner with a real Metal GPU. The
+          # Self-hosted Apple-silicon runner with a real Metal GPU. The
           # GitHub-hosted macos-15-xlarge runner's virtualized Metal is
           # unreliable for sustained GPU compute (the DocTR pipeline runs
-          # correctly on real M4 hardware but non-deterministically aborts /
-          # returns garbage on the hosted VM), so the darwin Metal leg runs on
-          # the same self-hosted M4 that diffusion-cpp uses for its GPU tests.
+          # correctly on real Apple-silicon hardware but non-deterministically
+          # aborts / returns garbage on the hosted VM), so the darwin Metal leg
+          # runs on the shared self-hosted qvac-macos26-arm64-gpu runner that
+          # diffusion-cpp also uses for its GPU tests.
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64
@@ -97,8 +98,8 @@ jobs:
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 
-      # Self-hosted runners (e.g. mac-mini-m4-gpu) keep their workspace between
-      # jobs; wipe it before checkout so each run starts clean. No-op on
+      # Self-hosted runners (e.g. qvac-macos26-arm64-gpu) keep their workspace
+      # between jobs; wipe it before checkout so each run starts clean. No-op on
       # GitHub-hosted runners. See docs/ci/SELF-HOSTED-RUNNERS.md.
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -166,9 +167,9 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
-      # The self-hosted mac-mini-m4-gpu runner does not ship the AWS CLI (hosted
-      # macOS runners do). Install it user-local (no sudo) so the S3 model
-      # download below works. Mirrors integration-test-vla.yml.
+      # The self-hosted qvac-macos26-arm64-gpu runner may not ship the AWS CLI
+      # (hosted macOS runners do). Install it user-local (no sudo) so the S3
+      # model download below works. Mirrors integration-test-vla.yml.
       - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
         name: Install AWS CLI on macOS (user-local fallback for runners without pre-installed aws)
         shell: bash

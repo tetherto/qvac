@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ai-sdk-provider",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Vercel AI SDK provider for the QVAC local AI runtime (chat, embeddings, transcription, translation, speech, OCR, image)",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -27,7 +27,7 @@
     "NOTICE"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "keywords": [
     "ai",
@@ -72,20 +72,24 @@
     "test:integration": "tsx --test test/managed-integration.test.ts"
   },
   "peerDependencies": {
-    "@ai-sdk/openai-compatible": "^2.0",
-    "@qvac/cli": "^0.6.0 || ^0.7.0 || ^0.8.0",
-    "ai": "^6.0"
+    "@ai-sdk/openai-compatible": "^3.0",
+    "@qvac/cli": "^0.9.0",
+    "ai": "^7.0"
   },
   "peerDependenciesMeta": {
     "@qvac/cli": {
       "optional": true
     }
   },
+  "dependencies": {
+    "@ai-sdk/provider": "^4.0.0",
+    "@ai-sdk/provider-utils": "^5.0.0"
+  },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "^2.0",
+    "@ai-sdk/openai-compatible": "^3.0",
     "@qvac/registry-client": "^0.5.0",
     "@types/node": "^24.2.1",
-    "ai": "^6.0",
+    "ai": "^7.0",
     "lunte": "^1.8.2",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",

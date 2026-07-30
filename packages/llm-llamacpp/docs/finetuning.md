@@ -61,11 +61,15 @@ Finetune and inference use the same job queue (JobRunner): both submit a job via
 You can specify which model layers to adapt via `loraModules`. Available modules:
 
 - `attn_q`, `attn_k`, `attn_v`, `attn_o` — attention layers
-- `ffn_gate`, `ffn_up`, `ffn_down` — feed-forward layers
+- `ffn_gate`, `ffn_up`, `ffn_down` — dense feed-forward layers
+- `ffn_gate_exps`, `ffn_up_exps`, `ffn_down_exps` — per-expert feed-forward layers (mixture-of-experts models only)
+- `ffn_gate_up_exps` — fused gate+up expert projection, for MoE models that store those two projections together
 - `output` — output projection
 - `all` — all applicable modules
 
 Default (when `loraModules` is empty): attention Q, K, V, O only.
+
+> **MoE models:** the `ffn_*_exps` targets adapt the per-expert feed-forward weights and apply only to mixture-of-experts architectures (e.g. Qwen3.x-MoE, Gemma-4-MoE). They have no effect on a dense model.
 
 ---
 
@@ -573,7 +577,7 @@ Call `finetune(finetuningOptions)` again with the same params object to resume. 
 - **Flash Attention**: Disabled during finetuning (`flash_attn: 'off'` is enforced when finetuning params are provided).
 - **Exclusive access**: Finetuning and inference cannot run concurrently. Use `pause()` to pause finetuning if you need to run inference, then `finetune()` to continue. Use `cancel()` to stop and clear pause checkpoints for a fresh next run.
 - **Dataset size**: For SFT, ensure enough samples. For causal mode, the text must have more tokens than `contextLength + 1`.
-- **Model format**: Base model must be a supported GGUF (e.g., LLaMA, Qwen architecture).
+- **Model format**: Base model must be a GGUF whose architecture is in the finetuning allowlist — `gemma3`, `gemma4`, `qwen3`, `qwen35`, `qwen35moe`, or `bitnet` (matched against the model's `general.architecture`). This covers both dense and mixture-of-experts (MoE) variants of Qwen3.x and Gemma-4. Any other architecture throws `Finetuning is not supported for architecture: <arch>`.
 - **Platform**: Same platforms as inference (macOS, Linux, Windows, iOS, Android).
 
 ---

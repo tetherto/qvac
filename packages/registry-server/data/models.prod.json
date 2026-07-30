@@ -1081,7 +1081,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "latin"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
@@ -1092,7 +1095,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "detector", "craft"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
@@ -2222,7 +2228,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "arabic"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
@@ -2233,7 +2241,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "bengali"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
@@ -2244,7 +2254,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "cyrillic"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
@@ -2255,7 +2267,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "devanagari"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
@@ -2266,7 +2280,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "japanese"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
@@ -2277,7 +2293,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "kannada"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
@@ -2288,7 +2306,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "korean"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
@@ -2299,7 +2319,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "latin"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
@@ -2310,7 +2333,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "tamil"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
@@ -2321,7 +2346,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "telugu"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
@@ -2332,7 +2359,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "thai"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
@@ -2343,7 +2372,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "zh_sim"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
@@ -2354,7 +2385,9 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "recognizer", "zh_tra"],
     "notes": "",
-    "link": "https://www.jaided.ai/easyocr/modelhub/"
+    "link": "https://www.jaided.ai/easyocr/modelhub/",
+    "deprecated": true,
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; no GGUF conversion published for this language yet"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_resnet50.onnx",
@@ -2365,7 +2398,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "detector", "db_resnet50"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF docTR detector (db_mobilenet_v3_large.gguf) with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx",
@@ -2376,7 +2412,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "detector", "db_mobilenet_v3_large"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx",
@@ -2387,7 +2426,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "recognizer", "parseq"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; PARSeq is not supported by ggml-ocr - use the GGUF docTR recognizer (crnn_mobilenet_v3_small.gguf)"
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx",
@@ -2398,7 +2440,10 @@
     "licenseId": "Apache-2.0",
     "tags": ["ocr", "doctr", "recognizer", "crnn_mobilenet_v3_small"],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "deprecationReason": "ONNX OCR engine (@qvac/ocr-onnx) removed in @qvac/sdk 0.15.0; use the GGUF equivalent with the ggml-ocr engine"
   },
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
@@ -2982,6 +3027,39 @@
     "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
   },
   {
+    "source": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "OCR-specialized vision-language model for document parsing",
+    "quantization": "q4_0",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "DeepSeek-OCR-derived VLM (DeepEncoder SAM+CLIP + DeepseekV2 MoE decoder). Full-page parsing with layout <|det|> boxes and HTML tables. Q4_0 — recommended for mobile (typically faster than Q4_K_M on Adreno/Mali GPUs). Prompt: 'document parsing.'. Pair with mmproj-unlimited-ocr-F16.gguf. Requires qvac-fabric >= 9840.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
+    "source": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (DeepEncoder) for Unlimited-OCR",
+    "quantization": "f16",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "F16 — highest-fidelity vision encoder. A Q8_0 variant is available at ~44% smaller (461MB vs 825MB) with equivalent OCR accuracy on document parsing; do not go below Q8_0 for the encoder.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/unlimited-ocr/2026-07-25/mmproj-unlimited-ocr-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (DeepEncoder) for Unlimited-OCR — Q8_0",
+    "quantization": "q8_0",
+    "params": "3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ocr", "unlimited-ocr"],
+    "notes": "Q8_0 vision encoder — 461MB vs the 825MB F16, validated to match F16 OCR accuracy on document parsing (all keywords recovered, table/paragraph text identical). Weights Q8_0; biases and layer-norms kept F32. Pair with unlimited-ocr-Q4_0.gguf. Requires qvac-fabric >= 9840.",
+    "link": "https://huggingface.co/baidu/Unlimited-OCR"
+  },
+  {
     "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
@@ -3174,8 +3252,8 @@
   {
     "source": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/text_encoders/umt5_xxl_fp16.safetensors",
     "engine": "@qvac/diffusion-cpp",
-    "description": "UMT5-XXL text encoder for Wan 2.1",
-    "notes": "Repackaged from https://huggingface.co/google/umt5-xxl",
+    "description": "UMT5-XXL text encoder for Wan 2.1 and Wan 2.2",
+    "notes": "Repackaged from https://huggingface.co/google/umt5-xxl. Byte-identical to the copy in Wan_2.2_ComfyUI_Repackaged, so both Wan generations share this entry.",
     "licenseId": "Apache-2.0",
     "quantization": "fp16",
     "tags": ["text-encoder", "wan"]
@@ -3206,6 +3284,77 @@
     "description": "OpenCLIP ViT-H/14 vision encoder for Wan 2.1 image-to-video",
     "licenseId": "Apache-2.0",
     "tags": ["vision-encoder", "clip-vision", "wan"]
+  },
+  {
+    "source": "https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF/resolve/9873ba175b4b204a81f4a43c9644e6c385ee4459/Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.2 TI2V-5B Turbo text-to-video diffusion model",
+    "notes": "Community-distilled Turbo quantization of https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B.",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q5_K_S",
+    "params": "5B",
+    "tags": ["generation", "diffusion", "video", "720p", "wan"]
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/fb1388adc906ab39ffc26ee40e96b22886b56bc4/split_files/vae/wan2.2_vae.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Wan 2.2 Variational Autoencoder",
+    "licenseId": "Apache-2.0",
+    "tags": ["vae", "wan"]
+  },
+  {
+    "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "LTX-2.3 distilled text/image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Lightricks/LTX-2.3",
+    "licenseId": "ltx-2-community",
+    "quantization": "Q2_K",
+    "params": "22B",
+    "tags": ["generation", "diffusion", "video", "ltx"]
+  },
+  {
+    "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "LTX-2.3 distilled text/image-to-video diffusion model",
+    "notes": "Quantized version of https://huggingface.co/Lightricks/LTX-2.3",
+    "licenseId": "ltx-2-community",
+    "quantization": "Q5_K_M",
+    "params": "22B",
+    "tags": ["generation", "diffusion", "video", "ltx"]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/d15e4c7dc21dc55d56bf8549db57a71ad8a2a35d/gemma-3-12b-it-UD-Q4_K_XL.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Gemma 3 12B text encoder for LTX-2 video",
+    "notes": "Quantized version of https://huggingface.co/google/gemma-3-12b-it",
+    "licenseId": "gemma",
+    "quantization": "Q4_K_XL",
+    "params": "12B",
+    "tags": ["text-encoder", "gemma", "ltx"]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "LTX-2.3 video VAE decoder",
+    "notes": "Repackaged from https://huggingface.co/Lightricks/LTX-2.3",
+    "licenseId": "ltx-2-community",
+    "tags": ["vae", "video", "ltx"]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "LTX-2.3 audio VAE decoder for the synchronized audio track",
+    "notes": "Repackaged from https://huggingface.co/Lightricks/LTX-2.3",
+    "licenseId": "ltx-2-community",
+    "tags": ["vae", "audio", "ltx"]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "LTX-2.3 text-embedding connectors (selects the LTX-2 video layout)",
+    "notes": "Repackaged from https://huggingface.co/Lightricks/LTX-2.3",
+    "licenseId": "ltx-2-community",
+    "tags": ["text-encoder", "connectors", "ltx"]
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
@@ -7569,12 +7718,7 @@
     "quantization": "q8_vf16",
     "params": "groot-n1.7-3b-libero",
     "licenseId": "nvidia-open-model-license",
-    "tags": [
-      "vla",
-      "groot",
-      "libero",
-      "robotics"
-    ],
+    "tags": ["vla", "groot", "libero", "robotics"],
     "notes": "q8_vf16 profile: Q8_0 text / DiT / VL-fusion / action-head linears, F16 vision tower, F32 norms. cos 0.999995 vs the PyTorch LIBERO oracle end-to-end. Converted from nvidia/GR00T-N1.7-LIBERO (libero_10) via convert_groot_dit_to_gguf.py.",
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
   },
@@ -7585,13 +7729,7 @@
     "quantization": "q5_vf16",
     "params": "groot-n1.7-3b-libero",
     "licenseId": "nvidia-open-model-license",
-    "tags": [
-      "vla",
-      "groot",
-      "libero",
-      "robotics",
-      "mobile"
-    ],
+    "tags": ["vla", "groot", "libero", "robotics", "mobile"],
     "notes": "q5_vf16 profile: Q5_0 non-vision linears, F16 vision tower, F32 norms. cos 0.999964 vs the PyTorch LIBERO oracle. Q5_0 is required — legacy Q4_0 is too coarse for the LIBERO DiT action head, and K-quants are not supported by the qvac-fabric gguf packer. Converted from nvidia/GR00T-N1.7-LIBERO (libero_10) via convert_groot_dit_to_gguf.py.",
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
   },
@@ -7898,13 +8036,7 @@
     "quantization": "q8_0",
     "params": "0.6B",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "audio-generation",
-      "acestep",
-      "embedding",
-      "qwen3",
-      "gguf"
-    ],
+    "tags": ["audio-generation", "acestep", "embedding", "qwen3", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B"
   },
@@ -7915,12 +8047,7 @@
     "quantization": "q8_0",
     "params": "0.6B",
     "licenseId": "MIT",
-    "tags": [
-      "audio-generation",
-      "acestep",
-      "language-model",
-      "gguf"
-    ],
+    "tags": ["audio-generation", "acestep", "language-model", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B"
   },
@@ -7931,13 +8058,7 @@
     "quantization": "q8_0",
     "params": "",
     "licenseId": "MIT",
-    "tags": [
-      "audio-generation",
-      "acestep",
-      "v1.5",
-      "sft",
-      "gguf"
-    ],
+    "tags": ["audio-generation", "acestep", "v1.5", "sft", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/ACE-Step/acestep-v15-sft"
   },
@@ -7948,13 +8069,7 @@
     "quantization": "q4_k_m",
     "params": "",
     "licenseId": "MIT",
-    "tags": [
-      "audio-generation",
-      "acestep",
-      "v1.5",
-      "turbo",
-      "gguf"
-    ],
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
   },
@@ -7965,13 +8080,7 @@
     "quantization": "q8_0",
     "params": "",
     "licenseId": "MIT",
-    "tags": [
-      "audio-generation",
-      "acestep",
-      "v1.5",
-      "turbo",
-      "gguf"
-    ],
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
   },
@@ -7982,12 +8091,7 @@
     "quantization": "bf16",
     "params": "",
     "licenseId": "MIT",
-    "tags": [
-      "audio-generation",
-      "acestep",
-      "vae",
-      "gguf"
-    ],
+    "tags": ["audio-generation", "acestep", "vae", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
   },
@@ -7998,14 +8102,7 @@
     "quantization": "fp32",
     "params": "0.5B",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "tts",
-      "cosyvoice",
-      "cosyvoice3",
-      "flow",
-      "multilingual",
-      "gguf"
-    ],
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
@@ -8016,15 +8113,7 @@
     "quantization": "fp32",
     "params": "0.5B",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "tts",
-      "cosyvoice",
-      "cosyvoice3",
-      "hift",
-      "vocoder",
-      "multilingual",
-      "gguf"
-    ],
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "hift", "vocoder", "multilingual", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
@@ -8035,13 +8124,40 @@
     "quantization": "q8_0",
     "params": "0.5B",
     "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "llm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 tokenizer merge rules",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
     "tags": [
       "tts",
       "cosyvoice",
       "cosyvoice3",
-      "llm",
-      "multilingual",
-      "gguf"
+      "tokenizer",
+      "merges"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 tokenizer vocabulary",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "tts",
+      "cosyvoice",
+      "cosyvoice3",
+      "tokenizer",
+      "vocab"
     ],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
@@ -8053,14 +8169,7 @@
     "quantization": "",
     "params": "",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "tts",
-      "cosyvoice",
-      "cosyvoice3",
-      "voice",
-      "en",
-      "gguf"
-    ],
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "voice", "en", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
@@ -8071,14 +8180,7 @@
     "quantization": "",
     "params": "",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "tts",
-      "cosyvoice",
-      "cosyvoice3",
-      "voice",
-      "zh",
-      "gguf"
-    ],
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "voice", "zh", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
@@ -8089,15 +8191,7 @@
     "quantization": "",
     "params": "",
     "licenseId": "Apache-2.0",
-    "tags": [
-      "tts",
-      "cosyvoice",
-      "cosyvoice3",
-      "voice",
-      "zh",
-      "female",
-      "gguf"
-    ],
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "voice", "zh", "female", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   }

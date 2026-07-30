@@ -28,16 +28,50 @@ const PREFILL_PRESSURE_OVERSHOOT = 64
 const PREFILL_CANCEL_DELAY_MS = 150
 const MIN_QWEN35_IMAGE_CACHE_TOKENS = 2880
 
-const QWEN35_MODEL = {
-  modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
-  downloadUrl:
-    'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+// Model size is selectable so the EOS / generation-length behaviour can be A/B'd
+// between the small and larger Qwen3.5-VL checkpoints without re-editing:
+//   QVAC_QWEN35_MTMD_SIZE=0.8b (default) | 2b
+// The 0.8B model stops generation early (~552 tokens) on the first "write a long
+// story" turn, which under-fills the disposable-token budget the sliding
+// calibration depends on; this toggle lets a larger model confirm whether that
+// early-EOS behaviour is size-specific. Both models + their mmproj are pinned in
+// models.manifest.json (ensureModelPath resolves the source from there; the
+// downloadUrl here is cosmetic).
+const QWEN35_MTMD_SIZE = (process.env.QVAC_QWEN35_MTMD_SIZE || '0.8b').toLowerCase()
+
+const QWEN35_MODELS = {
+  '0.8b': {
+    model: {
+      modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
+      downloadUrl:
+        'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+    },
+    mmproj: {
+      modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+      downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+    }
+  },
+  '2b': {
+    model: {
+      modelName: 'Qwen3.5-2B-Q8_0.gguf',
+      downloadUrl:
+        'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q8_0.gguf'
+    },
+    mmproj: {
+      modelName: 'mmproj-Qwen3.5-2B-F16.gguf',
+      downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/mmproj-F16.gguf'
+    }
+  }
 }
 
-const QWEN35_MMPROJ = {
-  modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
-  downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+if (!QWEN35_MODELS[QWEN35_MTMD_SIZE]) {
+  throw new Error(
+    `QVAC_QWEN35_MTMD_SIZE must be one of ${Object.keys(QWEN35_MODELS).join(', ')} (got "${QWEN35_MTMD_SIZE}")`
+  )
 }
+
+const QWEN35_MODEL = QWEN35_MODELS[QWEN35_MTMD_SIZE].model
+const QWEN35_MMPROJ = QWEN35_MODELS[QWEN35_MTMD_SIZE].mmproj
 
 const SYSTEM_PROMPT = {
   role: 'system',
