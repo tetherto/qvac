@@ -40,6 +40,7 @@ import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
+import { systemResourcesTests } from './system-resources-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -339,6 +340,9 @@ export const tests = [
 
   // Strict Snap storage-path conformance
   ...snapStorageTests,
+
+  // Local hardware capabilities and on-demand usage sampling
+  ...systemResourcesTests,
 
   // Additional model tests
   modelSwitchLlm,

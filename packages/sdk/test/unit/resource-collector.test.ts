@@ -1,5 +1,11 @@
 import test from 'brittle'
 import { createSystemResourceCollector } from '@/server/bare/resources/collector'
+import {
+  destroyWorkerResourceCollector,
+  initializeWorkerResourceCollector
+} from '@/server/bare/resources/worker-collector'
+import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
+import { getSystemResourcesResponseSchema } from '@/schemas/system-resources'
 
 const drivers = {
   vulkan: false,
@@ -26,6 +32,7 @@ function createFixture(options?: {
   cpuArchitectures?: readonly number[]
   gpuTypes?: readonly number[]
   gpuMemory?: number
+  emptyGPUInventory?: boolean
 }) {
   const calls = {
     createCPU: 0,
@@ -73,6 +80,7 @@ function createFixture(options?: {
   const gpu = {
     gpus() {
       calls.gpuQuery++
+      if (options?.emptyGPUInventory) return []
       return [
         {
           name: 'Test GPU',
@@ -313,4 +321,65 @@ test('destroys both contexts once even when one destroy fails', (t) => {
 
   t.is(calls.cpuDestroy, 1)
   t.is(calls.gpuDestroy, 1)
+})
+
+test('resource RPC returns cached capabilities and samples only on request', (t) => {
+  destroyWorkerResourceCollector()
+  const { calls, dependencies } = createFixture()
+  initializeWorkerResourceCollector(dependencies)
+
+  const capabilitiesOnly = handleGetSystemResources({
+    type: 'getSystemResources'
+  })
+  t.is(capabilitiesOnly.type, 'getSystemResources')
+  t.absent(capabilitiesOnly.sample)
+  t.is(calls.cpuSample, 0)
+  t.is(calls.gpuSample, 0)
+
+  const withSample = handleGetSystemResources({
+    type: 'getSystemResources',
+    sample: true
+  })
+  t.is(withSample.sample?.sampledAt, 1234)
+  t.is(calls.cpuSample, 1)
+  t.is(calls.gpuSample, 1)
+  t.execution(() => getSystemResourcesResponseSchema.parse(withSample))
+
+  destroyWorkerResourceCollector()
+})
+
+test('resource RPC preserves an empty supported GPU inventory', (t) => {
+  destroyWorkerResourceCollector()
+  initializeWorkerResourceCollector(createFixture({ emptyGPUInventory: true }).dependencies)
+
+  const response = handleGetSystemResources({
+    type: 'getSystemResources',
+    sample: true
+  })
+
+  t.is(response.capabilities.gpus.status, 'supported')
+  if (response.capabilities.gpus.status === 'supported') {
+    t.alike(response.capabilities.gpus.value, [])
+  }
+  t.is(response.sample?.gpus.status, 'supported')
+  if (response.sample?.gpus.status === 'supported') {
+    t.alike(response.sample.gpus.value, [])
+  }
+
+  destroyWorkerResourceCollector()
+})
+
+test('resource RPC reports failed metrics when the collector is unavailable', (t) => {
+  destroyWorkerResourceCollector()
+
+  const response = handleGetSystemResources({
+    type: 'getSystemResources',
+    sample: true
+  })
+
+  t.is(response.capabilities.cpu.status, 'failed')
+  t.is(response.capabilities.memory.totalBytes.status, 'failed')
+  t.is(response.capabilities.gpus.status, 'failed')
+  t.is(response.sample?.cpu.status, 'failed')
+  t.execution(() => getSystemResourcesResponseSchema.parse(response))
 })

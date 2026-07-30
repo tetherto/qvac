@@ -232,11 +232,10 @@ jobs:
       !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-fabric.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
+      repo_name: "fabric"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/fabric"
 
   post-build-gate:
     name: Post-Build Gate
