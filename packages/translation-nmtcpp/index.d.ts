@@ -8,10 +8,8 @@ type InferenceClientState = TranslationNmtcpp.InferenceClientState;
  * This is an INTERFACE, not the implementation class, so the published type is
  * structural: any object carrying these members is assignable to it. Emitting
  * the class type instead would leak its `private` fields into index.d.ts and
- * make the type nominal, breaking consumer-side mocks and test doubles that
- * the hand-written (pre-TypeScript) declarations accepted.
- *
- * Members mirror the pre-migration hand-written index.d.ts exactly.
+ * make the type nominal, rejecting consumer-side mocks and test doubles.
+ * Keep it to the public members only.
  */
 interface TranslationNmtcpp {
     /**

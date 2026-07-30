@@ -1,10 +1,9 @@
 // Type-level consumer test: CommonJS `import ... = require(...)` shape.
 //
-// This is the shape a plain TypeScript CommonJS consumer uses. Before the
-// `export =` rewrite, the trailing `module.exports = TranslationNmtcpp` was a
-// bare statement invisible to the declaration emitter — the emitted `.d.ts`
-// advertised `export default`, so this file failed with TS2351 ("This
-// expression is not constructable").
+// This is the shape a plain TypeScript CommonJS consumer uses. It requires the
+// declarations to expose a construct signature via `export =` — a `module.exports`
+// assignment the declaration emitter cannot see makes this file fail with
+// TS2351 ("This expression is not constructable").
 //
 // Compiled with `tsc --noEmit -p test/types/tsconfig.cjs.json` via
 // `npm run test:types`. No runtime component — it must never be executed,

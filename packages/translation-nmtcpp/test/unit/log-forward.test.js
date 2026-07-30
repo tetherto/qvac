@@ -4,8 +4,7 @@ const test = require('brittle')
 const QvacLogger = require('@qvac/logging')
 const { forwardTransitionLog, LOG_LEVELS } = require('../../lib/log-forward.js')
 
-// Regression coverage for the C++-logger `this`-binding bug (commit 0710573ff):
-// the native log callback must invoke the sink METHOD-STYLE so `this` stays
+// The native log callback must invoke the sink METHOD-STYLE so `this` stays
 // bound to the logger. A detached call (`const fn = logger[level]; fn(msg)`)
 // crashes QvacLogger, whose methods delegate to `this._log`.
 //
@@ -71,8 +70,8 @@ test('forwardTransitionLog ignores sinks missing the target method', (t) => {
 })
 
 test('forwardTransitionLog works against a real QvacLogger (this-binding)', (t) => {
-  // The original crash case: QvacLogger's level methods call `this._log(...)`,
-  // so forwarding must not detach them from the instance.
+  // QvacLogger's level methods call `this._log(...)`, so forwarding must not
+  // detach them from the instance.
   const sink = []
   const inner = {
     error: (...m) => sink.push(['error', ...m]),

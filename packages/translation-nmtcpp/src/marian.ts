@@ -85,9 +85,8 @@ export class TranslationInterface {
     this._loggerInitialized = false;
     if (transitionCb && typeof transitionCb === "object") {
       binding.setLogger((priority, message) => {
-        // Invoke as a method on the logger object — QvacLogger methods rely
-        // on `this` internally, so the call must not be detached. See
-        // test/unit/log-forward.test.js for the regression guard.
+        // Must invoke logger methods on the logger object — QvacLogger relies
+        // on `this` internally, so the call must not be detached.
         forwardTransitionLog(transitionCb, priority, message);
       });
       this._loggerInitialized = true;

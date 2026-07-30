@@ -5,11 +5,9 @@ const test = require('brittle')
 // Guards the CJS→ESM interop surface: the SDK's nmtcpp-translation plugin
 // consumes this package as `import TranslationNmtcpp from
 // '@qvac/translation-nmtcpp'` (a default import of a CJS module), which must
-// resolve to the bare class that `module.exports` is assigned to. Runtime
-// interop behavior cannot be verified by the type-level consumer tests (the
-// declarations can be correct while the module lexer disagrees — see the
-// vla-ggml 0.16.0 → 0.16.1 named-export regression), so this exercises the
-// real dynamic-import machinery.
+// resolve to the bare class that `module.exports` is assigned to. Type-level
+// tests cannot verify this — declarations can be correct while the module
+// lexer sees nothing — so this exercises the real dynamic-import machinery.
 test('ESM default export resolves to the TranslationNmtcpp class', async (t) => {
   const ns = await import('../../index.js')
 
@@ -21,12 +19,10 @@ test('ESM default export resolves to the TranslationNmtcpp class', async (t) => 
 
 // Same interop guard for the `./addonLogging` subpath, which the SDK consumes
 // as `import nmtAddonLogging from '@qvac/translation-nmtcpp/addonLogging'`.
-// The NAMED bindings matter independently of the default: cjs-module-lexer has
-// to statically discover `setLogger`/`releaseLogger` for `import { setLogger }`
-// to link at all. A previous emit shape (a bare `module.exports = obj` override
-// with no `exports.X =` statements) left the lexer with an EMPTY named surface,
-// so named imports threw SyntaxError at link time even though the runtime
-// object had both keys.
+// The NAMED bindings need cjs-module-lexer to statically discover
+// `setLogger`/`releaseLogger` from top-level `exports.X =` statements —
+// without them, named imports throw SyntaxError at link time even though the
+// runtime object carries both keys.
 test('ESM interop exposes addonLogging default and named bindings', async (t) => {
   const ns = await import('../../addonLogging.js')
 
