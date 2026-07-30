@@ -50,7 +50,7 @@ Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. Thi
 
 Getting fork authorization wrong is high-impact and easy to do — the failure modes are subtle (a stale approval riding a state-flip onto a new commit). These rules are mandatory for **any** workflow that runs external-fork PR code with elevated access — `pull_request_target` (secrets), **or** `pull_request` on **self-hosted runners** (`qvac-*`), **or** any job that publishes/deploys.
 
-- **Approval is bound to the exact commit SHA, never to workflow-event ordering or label presence.** A `verified`/tier label present on the PR is *not* proof a given commit was approved. Every privileged run must confirm the **current `github.event.pull_request.head.sha`** is the SHA a trusted actor approved. This closes the whole class of flip bypasses:
+- **Approval is bound to the exact commit SHA, never to workflow-event ordering or label presence.** A tier/opt-in label present on the PR is *not* proof a given commit was approved. Every privileged run must confirm the **current `github.event.pull_request.head.sha`** is the SHA a merge/release actor approved via the `fork-ci` environment (or is an internal same-repo PR). This closes the whole class of flip bypasses:
   - `draft → ready_for_review` after pushing a new commit,
   - `close → reopen` after pushing a new commit,
   - any later `synchronize` / push while a stale label persists.

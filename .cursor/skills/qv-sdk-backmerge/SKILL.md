@@ -30,7 +30,7 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 
 ## Branch / remote preference
 
-Same policy as `qv-sdk-pr-create`: prefer pushing the backmerge head to the **org** remote (`tetherto/qvac`) and opening a same-repo PR. Personal-fork heads are a fallback and count as external for CI (`verified` is fork-only / per-commit / merge-release-applied).
+Same policy as `qv-sdk-pr-create`: prefer pushing the backmerge head to the **org** remote (`tetherto/qvac`) and opening a same-repo PR. Personal-fork heads are a fallback and count as external for CI (`fork-ci` environment approval required per run on the current head SHA).
 
 In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — substitute the resolved remote names from Step 1. Do not run those tokens literally.
 
@@ -205,7 +205,7 @@ gh pr create \
   --body "<body>"
 ```
 
-Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`, the parent prints both URLs side by side. If the fork fallback was used, note that merge/release must apply `verified` for privileged CI on that head.
+Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`, the parent prints both URLs side by side. If the fork fallback was used, note that merge/release must approve the `fork-ci` environment for privileged CI on that head.
 
 ## Quality Checklist
 

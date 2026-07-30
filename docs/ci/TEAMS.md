@@ -43,4 +43,4 @@ Pods are smaller, package-scoped groupings inside the umbrella teams. They drive
 
 ## See also
 
-- [`docs/ci/LABELS.md`](LABELS.md) — labels recognised by CI, including the `verified` security gate.
+- [`docs/ci/LABELS.md`](LABELS.md) — labels recognised by CI, the `fork-ci` environment, and retired `verified` label.

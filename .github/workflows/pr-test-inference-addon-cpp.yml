@@ -68,7 +68,7 @@ jobs:
             exit 0
           fi
 
-          # Internal same-repo PRs are trusted without 'verified', but native
+          # Internal same-repo PRs are trusted without fork-ci, but native
           # tests remain opt-in behind their dedicated capacity-control label.
           if [ "$IS_FORK" = "false" ]; then
             echo "allowed=$HAS_RUN_LABEL" >> "$GITHUB_OUTPUT"
@@ -76,15 +76,16 @@ jobs:
           fi
 
           # External fork: require the tier run-label AND a SHA-bound approval on
-          # the CURRENT head. A stale 'verified' label cannot authorise a new SHA
-          # via a draft->ready / close->reopen flip, and a fork synchronize has no
-          # approved status until re-review — both fail closed here.
+          # the CURRENT head (`qvac/fork-verified` commit status). A stale tier
+          # label cannot authorise a new SHA via a draft->ready / close->reopen
+          # flip, and a fork synchronize has no approved status until re-review —
+          # both fail closed here.
           if [ "$HAS_RUN_LABEL" = "true" ] && [ "$HAS_APPROVED_SHA" = "true" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "::notice::Native tests require 'run-cpp-addon-tests'; external forks also require a SHA-bound 'verified' approval on the current commit."
+          echo "::notice::Native tests require 'run-cpp-addon-tests'; external forks also require a SHA-bound fork-ci approval (`qvac/fork-verified`) on the current commit."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
   run-unit-tests:
