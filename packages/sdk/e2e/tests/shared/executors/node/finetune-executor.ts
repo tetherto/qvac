@@ -319,7 +319,9 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   }
 
   async progressLossSchema(params: BaseParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded(params.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(
+      params.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY
+    )
     const paths = await this.createDatasets()
 
     try {
@@ -366,7 +368,9 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   }
 
   async progressZeroDrop(params: BaseParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded(params.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(
+      params.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY
+    )
     const paths = await this.createDatasets()
 
     try {
