@@ -79,6 +79,7 @@ import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
@@ -527,6 +528,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),

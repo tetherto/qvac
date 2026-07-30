@@ -1,7 +1,9 @@
+type NativeLoggerCallback = (priority: number, message: string) => void;
 export interface AddonLogging {
-  setLogger(callback: (priority: number, message: string) => void): void
-  releaseLogger(): void
+    setLogger: (callback: NativeLoggerCallback) => void;
+    releaseLogger: () => void;
 }
-
-declare const addonLogging: AddonLogging
-export default addonLogging
+declare const addonLogging: AddonLogging;
+export declare const setLogger: (callback: NativeLoggerCallback) => void;
+export declare const releaseLogger: () => void;
+export default addonLogging;
