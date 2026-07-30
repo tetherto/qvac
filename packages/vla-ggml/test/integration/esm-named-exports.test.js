@@ -2,12 +2,8 @@
 
 const test = require('brittle')
 
-// Guards the CJS→ESM interop surface: Node's and Bare's module lexers must be
-// able to statically discover the attached members of `module.exports` so ESM
-// consumers (like the SDK's `import { VlaModel } from '@qvac/vla-ggml'`) link.
-// A type-level test cannot catch this — the declarations can be correct while
-// the lexer sees nothing — so this test exercises the real runtime import
-// machinery via dynamic import.
+// ESM named imports depend on cjs-module-lexer statically discovering the
+// exports — only a runtime import exercises that, not the type-level tests.
 test('ESM named exports are statically discoverable', async (t) => {
   const ns = await import('../../index.js')
 

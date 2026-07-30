@@ -380,10 +380,7 @@ class VlaModel {
       }
     }
     this._files = files.model;
-    // Normalize here rather than relying on the destructuring default: that
-    // default only fires for `undefined`, so a JS consumer passing
-    // `config: null` (symmetric with the documented `logger: null`) would
-    // otherwise store null and crash the native-logger and load paths.
+    // `??` needed: the destructuring default only covers `undefined`, not `config: null`.
     this._config = config ?? {};
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.opts = opts;
@@ -803,12 +800,8 @@ namespace VlaModel {
 
 export = VlaModel;
 
-// The namespace merge above attaches the six members inside an IIFE, which
-// cjs-module-lexer (Node's and Bare's CJS→ESM interop) cannot statically see —
-// an ESM `import { VlaModel } from '@qvac/vla-ggml'` would fail at link time
-// with "Named export not found". These top-level assignments are redundant at
-// runtime (same values the IIFE already attached) but are the exact pattern the
-// lexer detects, keeping named ESM imports working on Node and Bare.
+// Runtime-redundant, but required: cjs-module-lexer only detects top-level
+// `module.exports.X =` assignments, so ESM named imports break without these.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface; these mirror the typed namespace members above. */
 module.exports.VlaModel = VlaModel;
 module.exports.preprocessImage = addonModule.preprocessImage;
