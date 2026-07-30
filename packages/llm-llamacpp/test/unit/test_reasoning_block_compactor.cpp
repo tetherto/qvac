@@ -13,6 +13,7 @@
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::reasoningCompactionRequiresReplay;
 using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
@@ -34,6 +35,31 @@ using qvac_lib_inference_addon_llama::utils::
 //      `recordPreReasoningToken`) feature gates and open-span
 //      invariants,
 //   3. the success path against a seeded boundary snapshot.
+
+TEST(ReasoningCompactionPolicy, ShiftCapableAttentionUsesInPlaceCompaction) {
+  EXPECT_FALSE(reasoningCompactionRequiresReplay(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*memoryCanShift=*/true));
+}
+
+TEST(ReasoningCompactionPolicy, RecurrentAndHybridAlwaysUseReplay) {
+  EXPECT_TRUE(reasoningCompactionRequiresReplay(
+      /*isRecurrent=*/true,
+      /*isHybrid=*/false,
+      /*memoryCanShift=*/true));
+  EXPECT_TRUE(reasoningCompactionRequiresReplay(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/true,
+      /*memoryCanShift=*/true));
+}
+
+TEST(ReasoningCompactionPolicy, NonShiftableAttentionUsesReplay) {
+  EXPECT_TRUE(reasoningCompactionRequiresReplay(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*memoryCanShift=*/false));
+}
 
 TEST(ReasoningSnapshotPolicy, CapturesOnlyForForcedOpenRecurrentReasoning) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
@@ -823,6 +849,40 @@ private:
 };
 
 } // namespace
+
+TEST(ReasoningBlockCompactorRouting, Dsv4ClassificationNeverUsesBoundedSeqRm) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  const bool requiresReplay = reasoningCompactionRequiresReplay(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*memoryCanShift=*/false);
+  ASSERT_TRUE(requiresReplay);
+  fx.compactor.setNeedsRecurrentSnapshot(requiresReplay);
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/35);
+
+  fx.compactor.setOpenSpan(/*start=*/35);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(/*pos=*/127);
+  for (llama_pos pos = 127; pos < 710; ++pos) {
+    fx.compactor.recordPostReasoningToken(/*id=*/42);
+  }
+
+  AcceptingSliderOps slider;
+  fx.compactor.setContextSliderOpsForTesting(&slider);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/710, "[Test]");
+  fx.compactor.setContextSliderOpsForTesting(nullptr);
+
+  EXPECT_EQ(
+      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped);
+  EXPECT_EQ(slider.seqRmCalls(), 0);
+  EXPECT_EQ(slider.seqAddCalls(), 0);
+  EXPECT_FALSE(fx.compactor.hasOpenSpan());
+  EXPECT_FALSE(fx.rollback.hasReasoningBoundary());
+  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
+}
 
 TEST(
     ReasoningBlockCompactorOpenSpan,

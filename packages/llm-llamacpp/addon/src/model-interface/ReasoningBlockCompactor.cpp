@@ -19,6 +19,22 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace qvac_lib_inference_addon_llama {
 
+bool reasoningCompactionRequiresReplay(
+    bool isRecurrent, bool isHybrid, bool memoryCanShift) noexcept {
+  return isRecurrent || isHybrid || !memoryCanShift;
+}
+
+bool reasoningCompactionRequiresReplay(
+    const llama_model* model, llama_context* ctx) noexcept {
+  const bool isRecurrent = model != nullptr && llama_model_is_recurrent(model);
+  const bool isHybrid = model != nullptr && llama_model_is_hybrid(model);
+  auto* const memory = ctx != nullptr ? llama_get_memory(ctx) : nullptr;
+  const bool memoryCanShift =
+      memory != nullptr && llama_memory_can_shift(memory);
+  return reasoningCompactionRequiresReplay(
+      isRecurrent, isHybrid, memoryCanShift);
+}
+
 namespace {
 
 // Best-effort sequence wipe used before throwing on the hybrid
@@ -412,7 +428,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
               out.newPos));
       return out;
     }
-    // `seq_rm + seq_add` was rejected. Attention KV was not modified
+    // `seq_rm` was rejected. Attention KV was not modified
     // (the primitive is documented to be all-or-nothing on rejection),
     // so no seq wipe is performed here — live memory still matches
     // `pos`. Report `FailedKvIntact` so the caller can roll back
@@ -420,8 +436,8 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     QLOG_IF(
         Priority::WARNING,
         string_format(
-            "%s thinking-block compaction failed: seq_rm + seq_add "
-            "rejected range [%d, %d) (pos=%d, seqId=%d); hard-failing "
+            "%s thinking-block compaction failed: seq_rm rejected range "
+            "[%d, %d) (pos=%d, seqId=%d); hard-failing "
             "the request so the reasoning span does not remain in "
             "cache\n",
             labelTag,
@@ -431,8 +447,8 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
             seqId));
     out.kind = Outcome::Kind::FailedKvIntact;
     out.failureMessage = string_format(
-        "%s ReasoningBlockCompactor::compact: pure-attention "
-        "seq_rm + seq_add rejected span [%d, %d) (pos=%d, "
+        "%s ReasoningBlockCompactor::compact: in-place seq_rm rejected "
+        "span [%d, %d) (pos=%d, "
         "seqId=%d)",
         labelTag,
         start,
@@ -442,10 +458,9 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     return out;
   }
 
-  // Recurrent / hybrid path. A `seq_rm` over a partial tail that
-  // includes the final committed position is rejected by the
-  // recurrent memory module, so we cannot use the pure-attention
-  // primitive here. Instead:
+  // State-replay path. Recurrent / hybrid models and memory
+  // implementations that cannot shift reject or cannot safely apply
+  // interior `seq_rm`, so use the captured full-state boundary instead:
   //   1. restore the FULL-state snapshot taken at the recurrent
   //      rollback boundary — this rebuilds both the attention KV and
   //      the recurrent state back to that point in one call; no

@@ -167,15 +167,11 @@ void MtmdLlmContext::initializeCommonState() {
           isHarmonyModel_,
           harmonyCallToken_));
 
-  // Snapshot-required detection mirrors TextLlmContext: gate on the
-  // architectural predicate (recurrent or hybrid) rather than on
-  // `llama_memory_can_shift`, which is about RoPE K-shift and reports
-  // `true` for recurrent + hybrid memories. See TextLlmContext for
-  // the full rationale.
+  // Snapshot-required detection mirrors TextLlmContext: recurrent / hybrid
+  // models and non-shiftable memory use full-state restore + replay.
   const auto* const model = modelCtx_.model;
   needsRecurrentSnapshot_ =
-      (model != nullptr) &&
-      (llama_model_is_recurrent(model) || llama_model_is_hybrid(model));
+      reasoningCompactionRequiresReplay(model, modelCtx_.lctx);
   compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
 
   // EOS-inside-reasoning recovery is a Qwen3-specific workaround;

@@ -251,3 +251,33 @@ TEST(RecurrentStateSnapshotTest, ReplayFailureAfterPartialChunksReturnsFalse) {
   EXPECT_EQ(chunkSizes[1], 2);
   EXPECT_EQ(chunkSizes[2], 1);
 }
+
+TEST(
+    RecurrentStateSnapshotTest, Dsv4LikeSpanReplaysAnswerAtCorrectedPositions) {
+  constexpr llama_pos kSpanStart = 35;
+  constexpr llama_pos kSpanEnd = 127;
+  constexpr llama_pos kLivePos = 710;
+  constexpr size_t kRetainedTokens = static_cast<size_t>(kLivePos - kSpanEnd);
+  std::vector<llama_token> tokens(kRetainedTokens, 42);
+  llama_pos expectedPos = kSpanStart;
+  auto* fakeCtx = reinterpret_cast<::llama_context*>(static_cast<uintptr_t>(1));
+
+  const bool replayOk = replayTokensThroughDecoderForTesting(
+      fakeCtx,
+      /*seqId=*/0,
+      tokens,
+      kSpanStart,
+      /*outputLogitsForLast=*/false,
+      /*chunkSize=*/64,
+      [&](::llama_context*, llama_batch batch) {
+        for (int32_t i = 0; i < batch.n_tokens; ++i) {
+          EXPECT_EQ(batch.pos[i], expectedPos);
+          ++expectedPos;
+        }
+        return 0;
+      });
+
+  EXPECT_TRUE(replayOk);
+  EXPECT_EQ(kSpanEnd - kSpanStart, 92);
+  EXPECT_EQ(expectedPos, 618);
+}

@@ -88,23 +88,12 @@ void TextLlmContext::initializeCommonState() {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
 
-  // Models with recurrent state (Mamba / RWKV pure-recurrent) or
-  // hybrid SSM + attention (Qwen3.5, Qwen3-Next, Jamba,
-  // Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear) need the snapshot +
-  // replay path in `compactThinkSpan` because the recurrent hidden
-  // state isn't positionally indexed and `seq_rm` on an interior
-  // range silently leaves the SSM inconsistent.
-  //
-  // We deliberately do NOT gate on `llama_memory_can_shift`: that
-  // predicate is about RoPE-based K-shift (position shifting) and
-  // returns `true` for all memory types in fabric today, including
-  // recurrent and hybrid. The real architectural property we care
-  // about is "does this model have a recurrent half?", which is
-  // exactly what these two model predicates report.
+  // Recurrent / hybrid models always use snapshot + replay. Other models
+  // use it when their active memory cannot shift, including DeepSeek V4's
+  // DSV4 cache. Only ordinary shift-capable attention uses seq_rm + seq_add.
   const auto* const model = modelCtx_.model;
   needsRecurrentSnapshot_ =
-      (model != nullptr) &&
-      (llama_model_is_recurrent(model) || llama_model_is_hybrid(model));
+      reasoningCompactionRequiresReplay(model, modelCtx_.lctx);
   compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the

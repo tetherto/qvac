@@ -13,6 +13,15 @@
 
 namespace qvac_lib_inference_addon_llama {
 
+// In-place range removal is safe only when the model has no recurrent state
+// and the active memory implementation supports shifting. The architecture
+// checks intentionally win over memory capability so recurrent / hybrid
+// models keep the full-state restore + replay path.
+[[nodiscard]] bool reasoningCompactionRequiresReplay(
+    bool isRecurrent, bool isHybrid, bool memoryCanShift) noexcept;
+[[nodiscard]] bool reasoningCompactionRequiresReplay(
+    const llama_model* model, llama_context* ctx) noexcept;
+
 // Per-inference reasoning-block compaction lifecycle, shared between
 // `TextLlmContext` and `MtmdLlmContext`. Owns:
 //
