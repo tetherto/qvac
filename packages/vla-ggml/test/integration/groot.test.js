@@ -29,7 +29,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
-const { VlaModel } = require('../..')
+const { VlaModel, ERR_CODES } = require('../..')
 
 // ── Performance reporter (best-effort; same shape as pi05.test.js) ─────────
 let createPerformanceReporter
@@ -669,6 +669,11 @@ test(
         badErr = e
       }
       t.ok(badErr, 'unknown embodiment tag rejected')
+      // A resolver rejection IS a bad request, so it must carry INVALID_CONFIG.
+      // Real I/O faults on the same call carry FAILED_TO_LOAD_WEIGHTS instead
+      // (asserted in the rollback test below) — the two must not collapse into
+      // one code, or a caller cannot tell "fix your config" from "retry".
+      t.is(badErr.code, ERR_CODES.INVALID_CONFIG, 'unknown tag reports INVALID_CONFIG')
 
       let bothErr = null
       try {
@@ -907,6 +912,14 @@ test(
         t.ok(
           rollbackErr && /cannot reopen/.test(rollbackErr.message || ''),
           `switch rejected by the failed row re-read (got: ${rollbackErr && rollbackErr.message})`
+        )
+        // The file went missing — that is not a bad configuration, and telling
+        // the caller it is would point them at the wrong problem (and invite an
+        // SDK to retry a "bad config" forever).
+        t.is(
+          rollbackErr && rollbackErr.code,
+          ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+          'an I/O failure mid-switch reports FAILED_TO_LOAD_WEIGHTS, not INVALID_CONFIG'
         )
         t.is(
           model.hparams.selectedEmbodimentTag,

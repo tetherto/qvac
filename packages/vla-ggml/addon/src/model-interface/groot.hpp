@@ -467,6 +467,13 @@ struct GrootEmbodimentSelection {
 // single-embodiment GGUF asked for a non-baked tag/id; an unknown tag; a cat_id
 // not in the ship set; or a resolved num_cameras that is unknown/invalid (0 or
 // > 64) with no override supplied.
+//
+// PUBLIC ERROR-CODE CONTRACT: every throw here is prefixed
+// "grootResolveEmbodiment:" and the JS wrapper matches that prefix to report
+// INVALID_CONFIG (see NATIVE_ERR_MARKERS in src/index.ts). Rejections from this
+// function are request errors by construction — it runs before any weight I/O,
+// so a failure past it is an I/O/allocation fault and must NOT wear this
+// prefix.
 GrootEmbodimentSelection grootResolveEmbodiment(
     const std::vector<std::string>& tags, const std::vector<int>& catIds,
     const std::vector<int>& storedCatIds,

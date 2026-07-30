@@ -51,9 +51,12 @@ struct VlaHparamsGeneric {
   // `vision_image_size`, so the patch geometry is constant. The JS validator
   // uses this to reject a mis-sized patch buffer before the native memcpy.
   int image_patch_elems = 0;
-  // Multi-embodiment GR00T only: the embodiment tag actually resolved at load
-  // (lets a caller confirm which embodiment a '' default selected). Empty for
-  // single-embodiment GR00T and for SmolVLA / π₀.₅.
+  // GR00T only: the embodiment tag actually resolved at load (lets a caller
+  // confirm which embodiment a '' default selected). Empty for SmolVLA / π₀.₅,
+  // and for a GR00T GGUF that names no embodiment at all. A single-embodiment
+  // (v1) GGUF DOES report its baked tag here, so this is not a "can this model
+  // switch embodiments" predicate — setEmbodiment() rejects such a model
+  // unconditionally. Rank-3 embodiment tensors are what make a GGUF switchable.
   std::string selected_embodiment_tag;
   // The resolved embodiment's numeric id (the checkpoint's `cat_id`), so a
   // caller that selected by id can read back what it got — and one that

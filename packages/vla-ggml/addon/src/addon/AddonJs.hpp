@@ -250,9 +250,12 @@ inline js_value_t* hparamsToJs(js_env_t* env, const VlaHparamsGeneric& hp) {
       hp.image_input_mode == VlaHparamsGeneric::ImageInputMode::Patches
           ? "patches"
           : "pixels");
-  // Multi-embodiment GR00T only — omitted for models that don't resolve one, so
-  // the key's presence signals an embodiment was selected. The cat_id is the
-  // numeric form of the same selection, so a caller can round-trip either way.
+  // GR00T only — omitted for models that resolve no embodiment (SmolVLA, π₀.₅,
+  // or a GR00T GGUF naming none), so the key's presence signals an embodiment
+  // was selected, NOT that it can be changed: a single-embodiment GGUF reports
+  // its baked tag here and still rejects every setEmbodiment(). The cat_id is
+  // the numeric form of the same selection, so a caller can round-trip either
+  // way.
   if (!hp.selected_embodiment_tag.empty()) {
     setStr("selectedEmbodimentTag", hp.selected_embodiment_tag.c_str());
   }

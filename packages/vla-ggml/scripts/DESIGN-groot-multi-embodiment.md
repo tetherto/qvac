@@ -80,13 +80,18 @@ Store the seven MLP tensors keeping the category dim, but only the ship-set rows
 `[n_stored, in, out]` (W) / `[n_stored, out]` (b), row order = `stored_cat_ids`.
 Metadata:
 
-- `groot.embodiment.tags` (str[]) + `groot.embodiment.cat_ids` (u32[]) — the
+All three integer arrays below are `int32[]`, which is what `gguf-py`'s
+`add_array` emits for Python ints. The loader requires exactly that element type
+and reports any other as a corrupt table rather than as an absent one, so a
+producer that writes them as `u32[]` builds a GGUF this runtime refuses to load.
+
+- `groot.embodiment.tags` (str[]) + `groot.embodiment.cat_ids` (int32[]) — the
   FULL tag -> cat_id map (all 52 tags), so the runtime can select by any tag.
-- `groot.embodiment.stored_cat_ids` (u32[]) — which cat_ids are physically
+- `groot.embodiment.stored_cat_ids` (int32[]) — which cat_ids are physically
   stored, in tensor row order. Runtime maps selected tag -> cat_id -> row index
   in this array. Works for any ship set (2, 17, or 32) — never assumes
   row == cat_id.
-- `groot.embodiment.stored_num_cameras` (u32[]) — per stored row; 0 = unknown,
+- `groot.embodiment.stored_num_cameras` (int32[]) — per stored row; 0 = unknown,
   in which case selecting that row requires an explicit `numCameras` from the
   caller (the converter's `--embodiment-cameras TAG=N` can stamp counts instead).
 - `groot.embodiment.count` (u32) = n_stored; `groot.embodiment.default` (str).

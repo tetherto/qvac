@@ -84,6 +84,10 @@ public:
   // and any direct test harness reach the binding without going through it.
   void setEmbodiment(const VlaEmbodimentRequest& embodiment) {
     if (jobsInFlight_.load(std::memory_order_acquire) != 0) {
+      // PUBLIC ERROR-CODE CONTRACT: the JS wrapper matches "an inference job is
+      // in flight" to report JOB_ALREADY_RUNNING rather than blaming the config
+      // (see NATIVE_ERR_MARKERS in src/index.ts) — keep that substring
+      // verbatim.
       throw std::runtime_error(
           "VlaModel::setEmbodiment: an inference job is in flight — await the "
           "in-flight run() response before switching embodiment");

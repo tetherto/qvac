@@ -63,11 +63,16 @@ continuous `state` vector (like SmolVLA), and is **multi-embodiment**: a single
 GGUF can carry many embodiments, one of which is active at a time. Name the one
 you want in `config.embodiment` — a tag string, its numeric `cat_id`, or
 `{ tag | catId, numCameras }`. Omitting it selects the GGUF's own default
-embodiment, and is a no-op for single-embodiment or non-GR00T GGUFs. The number
+embodiment, and is a no-op for single-embodiment or non-GR00T GGUFs; naming one
+explicitly on a SmolVLA or π₀.₅ GGUF is rejected rather than ignored, since a
+caller who asked for an embodiment by name has almost certainly pointed `files`
+at the wrong model. The number
 of cameras follows the selected embodiment (LIBERO 2, DROID 4), so read
 `hparams.numCameras` after `load()` rather than hard-coding it;
 `hparams.selectedEmbodimentTag` / `hparams.selectedEmbodimentCatId` report what
-was resolved. Many tags share one `cat_id` — all `oxe_droid_*` are 24 — so an
+was resolved — on every GR00T GGUF, including a single-embodiment one, which
+reports its baked tag and still rejects `setEmbodiment()`. Neither field is a
+"can this switch" check. Many tags share one `cat_id` — all `oxe_droid_*` are 24 — so an
 id-based selection reports that id's canonical tag, which may be a different
 alias than the one you would have passed; the id is the stable identity.
 

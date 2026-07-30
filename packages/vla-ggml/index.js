@@ -36,6 +36,37 @@ const MAX_NUM_CAMERAS = 64;
 // binding would otherwise have to narrow a JS number to int32, and 2**32 narrows
 // to 0 — silently selecting a different embodiment instead of failing.
 const MAX_EMBODIMENT_CAT_ID = 31;
+// Native error-message prefixes the wrapper classifies on. The C++ throw sites
+// carry these verbatim and are marked with a comment naming this contract, so
+// rewording one there is a visible break rather than a silent change of a
+// public error code.
+const NATIVE_ERR_MARKERS = Object.freeze({
+    // Embodiment resolution — runs before any weight I/O, so every rejection is
+    // about the request, not the file.
+    resolve: "grootResolveEmbodiment:",
+    // An embodiment named on an architecture that has none — also a request
+    // error, but raised by the factory before any model exists to resolve on.
+    archMismatch: "config.embodiment is GR00T-only",
+    // setEmbodiment refused because an inference job is dispatched but unawaited.
+    inFlight: "an inference job is in flight",
+});
+// Map a native throw out of the embodiment paths onto a public error code.
+// Only the resolver's rejections are configuration errors; a switch can also
+// fail because the GGUF moved, a read came up short, or an allocation failed,
+// and reporting those as INVALID_CONFIG points the caller at the wrong problem
+// (and invites an SDK to retry a "bad config" forever). Those are the same
+// weight-read failures the load path reports, so they get the same code.
+function classifyEmbodimentError(err) {
+    const message = typeof err.message === "string" ? err.message : "";
+    if (message.includes(NATIVE_ERR_MARKERS.inFlight)) {
+        return ERR_CODES.JOB_ALREADY_RUNNING;
+    }
+    if (message.includes(NATIVE_ERR_MARKERS.resolve) ||
+        message.includes(NATIVE_ERR_MARKERS.archMismatch)) {
+        return ERR_CODES.INVALID_CONFIG;
+    }
+    return ERR_CODES.FAILED_TO_LOAD_WEIGHTS;
+}
 // Normalize the three accepted spellings of an embodiment selection into
 // { tag, catId, numCameras }: a tag string, a numeric cat_id, or an object
 // carrying either plus an optional camera-count override. `requireSelection`
@@ -510,16 +541,11 @@ class VlaModel {
             // An unresolvable embodiment is a bad config, not a bad weights file — it
             // is rejected before any weight I/O happens. Without this, the SAME root
             // cause reported INVALID_CONFIG through setEmbodiment() and
-            // FAILED_TO_LOAD_WEIGHTS through the constructor. The resolver tags every
-            // one of its rejections with this prefix (grootResolveEmbodiment in
-            // groot.cpp) precisely so it can be told apart here.
-            const message = loadError.message;
-            const isEmbodimentError = typeof message === "string" &&
-                message.includes("grootResolveEmbodiment:");
+            // FAILED_TO_LOAD_WEIGHTS through the constructor. Everything else on this
+            // path is already FAILED_TO_LOAD_WEIGHTS, which is what the shared
+            // classifier falls back to.
             throw new QvacErrorAddonVla({
-                code: isEmbodimentError
-                    ? ERR_CODES.INVALID_CONFIG
-                    : ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+                code: classifyEmbodimentError(loadError),
                 adds: loadError.message,
                 cause: loadError,
             });
@@ -591,13 +617,9 @@ class VlaModel {
             // reachable when a caller mixes the wrapper with binding.runJob directly,
             // which bumps the native count and no JS flag. Same cause as the check
             // above, so report the same code rather than blaming the config.
-            const message = err.message;
-            const inFlight = typeof message === "string" && message.includes("job is in flight");
             throw new QvacErrorAddonVla({
-                code: inFlight
-                    ? ERR_CODES.JOB_ALREADY_RUNNING
-                    : ERR_CODES.INVALID_CONFIG,
-                adds: message,
+                code: classifyEmbodimentError(err),
+                adds: err.message,
                 cause: err,
             });
         }

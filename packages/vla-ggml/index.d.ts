@@ -98,9 +98,14 @@ declare namespace VlaModel {
          */
         imagePatchElems?: number;
         /**
-         * Multi-embodiment GR00T only: the embodiment tag resolved at load, so a
-         * caller can confirm which embodiment a default selection picked. Absent
-         * for single-embodiment GR00T and for SmolVLA / π₀.₅.
+         * GR00T only: the embodiment tag resolved at load, so a caller can confirm
+         * which embodiment a default selection picked. Absent for SmolVLA / π₀.₅,
+         * and for a GR00T GGUF that names no embodiment.
+         *
+         * Present is not the same as switchable: a single-embodiment GR00T GGUF
+         * reports its baked tag here and still rejects every {@link
+         * VlaModel.setEmbodiment} call, so do not use this field as a capability
+         * check.
          */
         selectedEmbodimentTag?: string;
         /**

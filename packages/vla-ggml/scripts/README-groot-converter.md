@@ -183,7 +183,11 @@ checkpoint that actually trained it). Cost is ~20 MB F16 per stored row
 ### Metadata written
 
 Multi mode emits a `groot.embodiment.*` table plus the v1 back-compat keys, so
-old loaders and the multi table agree on the default:
+the metadata and the multi table agree on the default. Those keys do NOT make a
+multi GGUF loadable by a pre-multi loader: the `embodiment.*` tensors are rank-3,
+and a loader without slicing code loads the file and then aborts on `GGML_ASSERT`
+at the first `run()`. Multi files are a separate model family, not a drop-in
+replacement for a v1 GGUF.
 
 | Key | Meaning |
 |---|---|
