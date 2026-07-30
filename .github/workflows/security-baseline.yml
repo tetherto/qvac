@@ -16,6 +16,10 @@ on:
     branches:
       - main
   pull_request:
+  schedule:
+    # Weekly full scan (QVAC-19056 rollout). Mondays 07:00 UTC; crons are
+    # staggered across weekdays per repo to spread scheduled-run load.
+    - cron: "0 7 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -37,15 +41,17 @@ jobs:
       actions: read
     with:
       # Explicit language list: CodeQL autodetect frequently misses C/C++ in
-      # mixed repos. C/C++ coverage is intentionally deferred for this first
-      # rollout (CodeQL autobuild needs the clang/vcpkg/bare-make toolchain) and
-      # is tracked as a follow-up; this caller covers the JS/TS + Python surface.
-      languages: javascript-typescript,python
+      # mixed repos, so we name every scanned surface (JS/TS + Python + C/C++).
+      languages: c-cpp,javascript-typescript,python
       severity-threshold: high
       # qvac uses GitHub "Default setup" for code scanning, which rejects SARIF
       # from advanced workflows. Skip the upload here; the severity gate and
       # TruffleHog still run (SARIF is written locally for the gate to read).
       codeql-upload: never
+      # Buildless C/C++ extraction (no compilation / submodule checkout), so the
+      # scan doesn't need qvac's clang/vcpkg/bare-make toolchain. Uniform with
+      # the Tier-1 C/C++ callers; requires qvac-actions >= 0.2.0.
+      codeql-build-mode: none
 
   # Repo-local CI trust-policy + label-gate regression tests (fork CI
   # hardening). Kept here instead of a dedicated workflow so the coverage

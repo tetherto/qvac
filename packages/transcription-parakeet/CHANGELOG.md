@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the `parakeet-cpp` `version>=` floors from `2026-07-23` to `2026-07-29` and the registry baseline to `292a5c2` (registry PR [tetherto/qvac-registry-vcpkg#267](https://github.com/tetherto/qvac-registry-vcpkg/pull/267)), and switched this package to the renamed CMake package: `find_package(parakeet-cpp)` + `parakeet::parakeet` → `find_package(qvac-parakeet CONFIG)` + `qvac::parakeet`. Upstream whisper.cpp v1.9.1+ ships its own `parakeet` library and CMake package, so the two vcpkg ports collided on `lib/parakeet.lib` and could not share a prefix; the engine's installable artifacts moved to the `qvac-parakeet` namespace (`libqvac-parakeet.*`, `lib/cmake/qvac-parakeet`, plus a new `qvac-parakeet.pc`) to make `parakeet-cpp` and `whisper-cpp` co-installable ([tetherto/qvac-ext-lib-whisper.cpp#106](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/106)). Build-level change only — no addon or JavaScript API change, and the C++ `parakeet::` namespace and `include/parakeet/` headers are unchanged. The same engine change also fixes two latent packaging defects the rename exposed: the exported target now carries `cxx_std_17` (consumers that set no `CMAKE_CXX_STANDARD` previously failed to compile the headers), and the package config resolves OpenMP when the build used it.
+
 ### Added
 
 - `getBackendInfo()` now reports which compute backend ran the FastConformer encoder: `encoderBackend` (`'coreml'` when the Apple Neural Engine Core ML sidecar drives the encoder, else mirrors `backendName`) and `encoderOnCoreml` (boolean). `RuntimeStats` gains `encoderOnCoreml` (0/1). Off Apple, or whenever the Core ML sidecar is absent, both report the ggml backend; the TDT/CTC decoder always runs on ggml.

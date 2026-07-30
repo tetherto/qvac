@@ -116,4 +116,4 @@ try {
   fs.rmSync(path.join(SDK_DIR, 'dist'), { recursive: true, force: true })
 } catch {}
 run(path.join(SDK_DIR, 'node_modules', '.bin', 'tsc'), ['--project', 'tsconfig.json'])
-run('node', ['scripts/resolve-aliases.mjs'])
+run(path.join(SDK_DIR, 'node_modules', '.bin', 'tsc-alias'), ['-p', 'tsconfig.alias.json'])
