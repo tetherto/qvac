@@ -274,7 +274,7 @@ function normalizeReport (report, sourceFile, source) {
     backend: normalizeBackend(platformName, useGPU, backendHint),
     // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
     // to them — the probe stamps the GPU name onto every report regardless of
-    // whether that run used it (QVAC-21618).
+    // whether that run used it.
     gpuModel: useGPU
       ? ((report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null)
       : null,
@@ -429,7 +429,7 @@ function normalizeMobileRecords (report, sourceFile) {
     // Mobile runs can report real_time_factor as null (the mobile inference
     // stats don't always carry it), which left the RTF/P50/P95 columns empty and
     // made the Android/iOS rows look unpopulated. Derive RTF from the wall time
-    // over the audio duration when the explicit value is missing (QVAC-21618).
+    // over the audio duration when the explicit value is missing.
     const rtf = typeof metrics.real_time_factor === 'number'
       ? metrics.real_time_factor
       : (typeof metrics.wall_time_ms === 'number' &&
