@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.39.1] - 2026-07-29
+
+Extends LoRA finetuning to the b9840 model families: Qwen3.5/3.6 and Gemma-4, dense and
+mixture-of-experts. These architectures were previously rejected outright — `finetune()` threw
+`Finetuning is not supported for architecture: <arch>`. MoE models additionally need their expert FFN
+tensors targeted, so four expert LoRA target modules are now accepted. Complements the fabric-side
+training fixes already pinned via `qvac-fabric` 9840.0.1.
+
+### Added
+
+- Qwen3.5/3.6 dense (`qwen35`), Qwen3.x MoE (`qwen35moe`) and Gemma-4 (`gemma4`) are now supported
+  finetuning architectures — the allowlist grows from `gemma3`, `qwen3`, `bitnet` to six entries.
+- Four MoE expert LoRA target modules accepted in `loraModules`: `ffn_gate_exps`, `ffn_up_exps`,
+  `ffn_down_exps`, `ffn_gate_up_exps`. Required to train MoE experts at all — targeting only the dense
+  FFN names leaves expert weights untouched.
+- Integration coverage: `finetuning-archs` finetunes Qwen3.5-0.8B (desktop + mobile) and Gemma-4-E2B
+  (desktop), plus a pause/resume cycle on the new dense architecture; `finetuning-moe` covers
+  Qwen3.6-35B-A3B and Gemma-4-26B-A4B, opt-in behind `QVAC_RUN_MOE_FINETUNE=true` because those models
+  are ~20–27 GB. C++ unit tests lock backend selection for the new architectures and the expert-target
+  bit mapping.
+- `QVAC_QWEN35_MTMD_SIZE` (`0.8b` | `2b`) selects the model size for the Qwen3.5 multimodal
+  cache-stress test.
+
+### Changed
+
+- `docs/finetuning.md` model-format requirements now list the real architecture allowlist and document
+  the MoE expert LoRA targets.
+
+### Pull Requests
+
+- [#3509](https://github.com/tetherto/qvac/pull/3509) - b9840 finetuning (Qwen3.5/3.6 + Gemma-4, dense + MoE)
+
 ## [0.39.0] - 2026-07-28
 
 ### Changed

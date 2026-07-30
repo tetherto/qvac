@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 # Never run two promotions at once; do not cancel an in-flight promotion.
 concurrency:
@@ -37,9 +37,9 @@ jobs:
           # between docs-production and main.
           fetch-depth: 0
           persist-credentials: true
-          # docs-production only accepts updates through this workflow; the push
-          # runs as PAT_TOKEN, the identity allowed to update the branch.
-          token: ${{ secrets.PAT_TOKEN }}
+          # docs-production only accepts updates through this workflow. The push
+          # runs as the GitHub Actions app (GITHUB_TOKEN), the sole bypass
+          # identity on the docs-production ruleset (github-ops).
 
       - name: Fast-forward docs-production to origin/main
         shell: bash
