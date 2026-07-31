@@ -13,6 +13,7 @@ export const PLUGIN_ADDONS = new Set([
   "@qvac/tts-ggml",
   "@qvac/ocr-ggml",
   "@qvac/diffusion-cpp",
+  "@qvac/audiogen-ggml",
   "@qvac/vla-ggml",
   "@qvac/classification-ggml",
 ]);
