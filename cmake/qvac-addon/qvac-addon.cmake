@@ -34,7 +34,7 @@ set(QVAC_ADDON_CMAKE_VERSION "0.1.0")
 macro(qvac_addon_preproject)
   option(BUILD_TESTING "Build tests" OFF)
   option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
-  option(BUILD_FUZZING "Build fuzz targets (FuzzTest via FetchContent)" OFF)
+  option(BUILD_FUZZING "Build fuzz targets (Google FuzzTest, from vcpkg)" OFF)
   if(BUILD_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
   endif()
@@ -340,112 +340,48 @@ endfunction()
 # ---------------------------------------------------------------------------
 # FuzzTest integration (Google FuzzTest).
 #
-# FuzzTest has no vcpkg port (upstream request microsoft/vcpkg#36901 was closed
-# as not-planned: it ships no install() rules), so FuzzTest ITSELF is consumed
-# via CMake FetchContent pinned to a commit. Pinned source built through the
-# normal CMake dep flow is allowed by the dependency-pinning rule; this is NOT
-# remote code execution. Bump the pin when moving to a newer FuzzTest release.
+# The whole fuzz dependency stack — FuzzTest, Abseil, RE2, GoogleTest and the
+# ANTLR4 C++ runtime — comes from vcpkg, so the shared binary cache serves it
+# instead of every build tree cloning and compiling it, and a fuzz configure
+# needs no network access of its own. Two of those are QVAC ports in
+# qvac-registry-vcpkg for reasons upstream won't fix: `re2` installs the
+# internal headers FuzzTest's regexp domains include, and `fuzztest` supplies
+# the install() rules FuzzTest ships none of. Both are pinned to what one
+# FuzzTest release expects and move together.
 #
-# Abseil, RE2, GoogleTest and the ANTLR4 C++ runtime come from vcpkg instead of
-# FuzzTest's own FetchContent declarations, so the shared binary cache serves
-# them rather than every build tree compiling them: qvac_addon_enable_fuzztest()
-# redirects those declarations at find_package(). The most valuable consequence
-# is that the unit tests and the fuzz targets link ONE GoogleTest — the vcpkg one
-# — so there is no target-name collision to design the build around. FuzzTest
-# itself is the only thing still compiled from source. See
-# docs/architecture/ADDON-FUZZING.md.
+# The consequence worth knowing: the unit tests and the fuzz targets link ONE
+# GoogleTest — the vcpkg one — so there is no target-name collision to design
+# the build around. See docs/architecture/ADDON-FUZZING.md.
 # ---------------------------------------------------------------------------
-set(QVAC_ADDON_FUZZTEST_GIT_REPOSITORY "https://github.com/google/fuzztest.git")
-# Release 2026-06-29.
-set(QVAC_ADDON_FUZZTEST_GIT_TAG "704efb341c23011cab2a750efcdd16ad04882c80")
-
-# ---------------------------------------------------------------------------
-# _qvac_addon_force_cxx_standard(<dir> <standard>)
-#
-# Recursively set CXX_STANDARD on every non-interface target under <dir>.
-#
-# FuzzTest hard-sets `set(CMAKE_CXX_STANDARD 17)` for its own subtree, but our
-# addon TUs need C++20 (std::span) and a fuzz driver instantiates FuzzTest
-# templates over types those TUs define, so the two halves must agree on the
-# standard. vcpkg's Abseil is built at C++20 for the same reason (see the
-# `abseil` port in qvac-registry-vcpkg), and propagates cxx_std_20 to its
-# dependents. We lift
-# the fetched subtree to C++20 after creation to keep one consistent ABI.
-# Applied after FetchContent so it wins over FuzzTest's in-scope set().
-# ---------------------------------------------------------------------------
-function(_qvac_addon_force_cxx_standard dir standard)
-  get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
-  foreach(_t ${_targets})
-    get_target_property(_type ${_t} TYPE)
-    if(NOT _type STREQUAL "INTERFACE_LIBRARY")
-      set_target_properties(${_t} PROPERTIES
-        CXX_STANDARD ${standard} CXX_STANDARD_REQUIRED ON)
-    endif()
-  endforeach()
-  get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
-  foreach(_sd ${_subdirs})
-    _qvac_addon_force_cxx_standard("${_sd}" ${standard})
-  endforeach()
-endfunction()
 
 # ---------------------------------------------------------------------------
 # qvac_addon_enable_fuzztest()
 #
-# Fetch + build FuzzTest once per configure, resolving its dependencies from
-# vcpkg. Defines the link_fuzztest() and fuzztest_setup_fuzzing_flags()
-# functions in global scope. Idempotent: the guard makes a second call a no-op
-# so several fuzz targets can share one build.
+# Resolve FuzzTest and its dependencies from vcpkg. Defines the link_fuzztest()
+# and link_fuzztest_core() functions in global scope (the `fuzztest` port
+# installs FuzzTest's own AddFuzzTest.cmake and its config includes it).
+# Idempotent: the guard makes a second call a no-op so several fuzz targets can
+# share one resolution.
 #
 # Requires the "fuzz" vcpkg manifest feature, which qvac_addon_preproject()
 # enables whenever BUILD_FUZZING is on.
 #
 # Pass -DFUZZTEST_FUZZING_MODE=ON at configure time for coverage-guided fuzzing
 # mode; the default (OFF) is FuzzTest's unit-test mode, which runs each
-# FUZZ_TEST as a bounded GoogleTest.
+# FUZZ_TEST as a bounded GoogleTest. That flag drives only the fuzz target's own
+# coverage instrumentation — see qvac_addon_add_fuzz_target() — because the
+# fuzzer needs feedback from the code under test, not from FuzzTest's machinery.
 # ---------------------------------------------------------------------------
 macro(qvac_addon_enable_fuzztest)
   if(NOT DEFINED _QVAC_ADDON_FUZZTEST_READY)
-    include(FetchContent)
-    if(POLICY CMP0135)
-      cmake_policy(SET CMP0135 NEW)
-      set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
-    endif()
-
-    # Resolve the vcpkg-supplied dependencies up front, so a manifest missing the
-    # "fuzz" feature fails here naming the package instead of later with an
-    # unresolved absl:: link target.
+    # fuzztest's own config find_dependency()s the other four, but they are
+    # named explicitly so a manifest missing the "fuzz" feature fails here
+    # naming the package instead of later with an unresolved absl:: link target.
     find_package(absl CONFIG REQUIRED)
     find_package(re2 CONFIG REQUIRED)
     find_package(GTest CONFIG REQUIRED)
     find_package(antlr4-runtime CONFIG REQUIRED)
-
-    # FetchContent honours the FIRST declaration for a given name, so these win
-    # over the ones in FuzzTest's cmake/BuildDependencies.cmake. FIND_PACKAGE_ARGS
-    # (CMake >= 3.24) makes FetchContent_MakeAvailable() satisfy the dependency
-    # with the vcpkg package found above rather than cloning and building it.
-    # Deliberately no download fallback: a silent fall back to a source build
-    # would reintroduce the duplicate GoogleTest these declarations exist to
-    # prevent, so an unresolvable dependency must fail loudly.
-    #
-    # RE2 is redirected like the rest, which only works because the `re2` port in
-    # qvac-registry-vcpkg also installs the internal headers FuzzTest's regexp
-    # domains include (re2/prog.h, re2/regexp.h and their closure) — upstream
-    # installs only the four public ones. That port is pinned to the same RE2 tag
-    # FuzzTest pins, since private headers carry no stability promise.
-    FetchContent_Declare(abseil-cpp FIND_PACKAGE_ARGS NAMES absl)
-    FetchContent_Declare(re2 FIND_PACKAGE_ARGS NAMES re2)
-    FetchContent_Declare(googletest FIND_PACKAGE_ARGS NAMES GTest)
-    FetchContent_Declare(antlr_cpp FIND_PACKAGE_ARGS NAMES antlr4-runtime)
-
-    message(STATUS
-      "qvac-addon: fetching FuzzTest ${QVAC_ADDON_FUZZTEST_GIT_TAG}")
-    FetchContent_Declare(
-      fuzztest
-      GIT_REPOSITORY "${QVAC_ADDON_FUZZTEST_GIT_REPOSITORY}"
-      GIT_TAG "${QVAC_ADDON_FUZZTEST_GIT_TAG}"
-    )
-    FetchContent_MakeAvailable(fuzztest)
-    _qvac_addon_force_cxx_standard("${fuzztest_SOURCE_DIR}" 20)
+    find_package(fuzztest CONFIG REQUIRED)
     set(_QVAC_ADDON_FUZZTEST_READY ON)
   endif()
 endmacro()
