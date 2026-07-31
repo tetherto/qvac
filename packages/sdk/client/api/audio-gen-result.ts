@@ -43,6 +43,7 @@ export function createAudioGenResult(
   const pcmChunks: Uint8Array[] = []
   let sampleRate: number | undefined
   let channels: number | undefined
+  let bitsPerSample: number | undefined
   let progressDone = false
   let progressError: Error | undefined
   let progressResolve: (() => void) | undefined
@@ -91,6 +92,7 @@ export function createAudioGenResult(
           pcmChunks.push(decodeBase64(chunk.data))
           sampleRate = chunk.sampleRate
           channels = chunk.channels
+          bitsPerSample = chunk.bitsPerSample
         }
 
         if (chunk.done) {
@@ -101,13 +103,14 @@ export function createAudioGenResult(
             rejectStats(error)
             break
           }
-          if (sampleRate === undefined || channels === undefined) {
+          if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
             throw new InvalidResponseError('audioGenStream audio chunk')
           }
           resolveAudio({
             pcm: concatenateChunks(pcmChunks),
             sampleRate,
-            channels
+            channels,
+            bitsPerSample
           })
           resolveStats(chunk.stats)
           break

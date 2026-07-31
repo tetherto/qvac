@@ -24,7 +24,7 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * for await (const progress of run.progressStream) {
  *   console.log(progress.stage, progress.step, progress.total);
  * }
- * const { pcm, sampleRate, channels } = await run.audio;
+ * const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
  * const stats = await run.stats;
  * ```
  */

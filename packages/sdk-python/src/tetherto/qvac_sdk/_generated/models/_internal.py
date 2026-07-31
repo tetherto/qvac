@@ -79,6 +79,9 @@ class AudioGenStreamResponse(GeneratedBaseModel):
         int | None, Field(alias="sampleRate", gt=0, le=9007199254740991)
     ] = None
     channels: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    bits_per_sample: Annotated[
+        int | None, Field(alias="bitsPerSample", gt=0, le=9007199254740991)
+    ] = None
     done: bool
     stop_reason: Annotated[
         AudioGenStreamResponseStopReason | None,

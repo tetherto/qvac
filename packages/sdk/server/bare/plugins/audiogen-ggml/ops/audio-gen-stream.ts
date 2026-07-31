@@ -60,7 +60,7 @@ export async function* audioGenStream(
     await cancelPromise
   })
 
-  let response: Awaited<ReturnType<AudioGen['run']>> | undefined
+  let response!: Awaited<ReturnType<AudioGen['run']>>
   try {
     if (!ctx.signal.aborted) {
       response = await candidate.run(request.caption, {
@@ -95,6 +95,7 @@ export async function* audioGenStream(
           data: Buffer.from(pcm).toString('base64'),
           sampleRate: chunk.sampleRate,
           channels: chunk.channels,
+          bitsPerSample: Int16Array.BYTES_PER_ELEMENT * 8,
           done: false
         }
       }
@@ -112,7 +113,6 @@ export async function* audioGenStream(
     return
   }
 
-  if (!response) return
   const stats = audioGenStatsSchema.parse(await response.await())
   yield {
     type: 'audioGenStream',

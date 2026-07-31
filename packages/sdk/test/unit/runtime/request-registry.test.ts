@@ -3,7 +3,6 @@ import {
   createRequestRegistry,
   __requestRegistryTestHooks
 } from '@/server/bare/runtime/request-registry'
-import { getRequestRegistry } from '@/server/bare/runtime/request-registry-singleton'
 import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/utils/errors-server'
 
 // -----------------------------------------------------------------------------
@@ -622,8 +621,13 @@ function keyStateProbe(r: ReturnType<typeof createRequestRegistry>): {
   return r as unknown as { __keyStateSize: () => number }
 }
 
-test('singleton policy: a second same-model AudioGen request waits FIFO', async (t) => {
-  const r = getRequestRegistry()
+test('policy: a second same-model AudioGen request waits FIFO', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({
+    kind: 'audiogen',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue'
+  })
   const first = await r.begin({
     requestId: 'audiogen-policy-r-1',
     kind: 'audiogen',

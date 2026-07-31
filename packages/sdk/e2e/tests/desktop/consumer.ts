@@ -40,7 +40,11 @@ import {
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  BCI_WINDOWED
+  BCI_WINDOWED,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_VAE_BF16
 } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -443,16 +447,14 @@ resources.define('diffusion', {
   }
 })
 
-const audioGenRegistryPrefix = 'registry://s3/qvac_models_compiled/ggml/acestep/2026-07-22'
-
 resources.define('audiogen-turbo', {
   type: 'audiogen-ggml',
   skipPreDownload: true,
   config: {
-    textEncModelSrc: `${audioGenRegistryPrefix}/Qwen3-Embedding-0.6B-Q8_0.gguf`,
-    lmModelSrc: `${audioGenRegistryPrefix}/acestep-5Hz-lm-0.6B-Q8_0.gguf`,
-    ditModelSrc: `${audioGenRegistryPrefix}/acestep-v15-turbo-Q4_K_M.gguf`,
-    vaeModelSrc: `${audioGenRegistryPrefix}/vae-BF16.gguf`,
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
     useGPU: true,
     inferenceSteps: 8
   }

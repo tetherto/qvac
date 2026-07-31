@@ -57,10 +57,10 @@ try {
   }
 
   const [audio, stats] = await Promise.all([run.audio, run.stats])
-  const wav = createWav(audio.pcm, audio.sampleRate, audio.channels)
+  const wav = createWav(audio.pcm, audio.sampleRate, audio.channels, audio.bitsPerSample)
   writeFileSync(outputPath, wav)
 
-  const samplesPerChannel = audio.pcm.byteLength / Int16Array.BYTES_PER_ELEMENT / audio.channels
+  const samplesPerChannel = audio.pcm.byteLength / (audio.bitsPerSample / 8) / audio.channels
   console.log(
     `▸ Generated ${samplesPerChannel} samples per channel at ` +
       `${audio.sampleRate} Hz (${audio.channels} channels)`
@@ -84,10 +84,9 @@ try {
   process.exit(1)
 }
 
-function createWav(pcm: Uint8Array, sampleRate: number, channels: number) {
+function createWav(pcm: Uint8Array, sampleRate: number, channels: number, bitsPerSample: number) {
   const header = new ArrayBuffer(44)
   const view = new DataView(header)
-  const bitsPerSample = 16
   const blockAlign = channels * (bitsPerSample / 8)
 
   writeAscii(view, 0, 'RIFF')

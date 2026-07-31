@@ -9,6 +9,7 @@ import {
 } from '../../audio-gen-tests.js'
 
 type AudioGenParams = Omit<AudioGenClientParams, 'modelId'>
+const VALIDATION_MUST_PRECEDE_RPC_MODEL_ID = 'must-not-reach-audiogen-model-lookup'
 
 export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests> {
   pattern = /^audio-gen-/
@@ -29,11 +30,12 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
       const run = audioGen({ modelId, ...params })
       const progressPromise = collect(run.progressStream)
       const [audio, stats, progress] = await Promise.all([run.audio, run.stats, progressPromise])
-      const sampleCount = audio.pcm.byteLength / (Int16Array.BYTES_PER_ELEMENT * audio.channels)
+      const sampleCount = audio.pcm.byteLength / ((audio.bitsPerSample / 8) * audio.channels)
       const valid =
         sampleCount > 0 &&
         audio.sampleRate > 0 &&
         audio.channels > 0 &&
+        audio.bitsPerSample > 0 &&
         progress.length > 0 &&
         stats !== undefined
 
@@ -64,11 +66,20 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
     expectation: Expectation
   ): Promise<TestResult> {
     try {
-      const run = audioGen({ modelId: 'validation-only', ...params })
+      const run = audioGen({ modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID, ...params })
       await run.audio
       return { passed: false, output: 'Expected AudioGen validation to fail' }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (
+        !message.toLowerCase().includes('caption') ||
+        message.includes(VALIDATION_MUST_PRECEDE_RPC_MODEL_ID)
+      ) {
+        return {
+          passed: false,
+          output: `Expected client caption validation before model lookup, received: ${message}`
+        }
+      }
       return ValidationHelpers.validate(message, expectation)
     }
   }

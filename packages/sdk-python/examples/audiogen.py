@@ -34,10 +34,12 @@ from tetherto.qvac_sdk.models import (
 from tetherto.qvac_sdk.schemas import AudioGenStreamRequest
 
 
-def write_wav(pcm: bytes, sample_rate: int, channels: int, path: str) -> None:
+def write_wav(
+    pcm: bytes, sample_rate: int, channels: int, bits_per_sample: int, path: str
+) -> None:
     with wave.open(path, "wb") as output:
         output.setnchannels(channels)
-        output.setsampwidth(2)
+        output.setsampwidth(bits_per_sample // 8)
         output.setframerate(sample_rate)
         output.writeframes(pcm)
 
@@ -89,6 +91,7 @@ async def main() -> int:
             pcm_chunks: list[bytes] = []
             sample_rate: int | None = None
             channels: int | None = None
+            bits_per_sample: int | None = None
             stats = None
 
             async for response in audio_gen_stream(transport, request):
@@ -99,6 +102,7 @@ async def main() -> int:
                     pcm_chunks.append(base64.b64decode(response.data))
                     sample_rate = response.sample_rate
                     channels = response.channels
+                    bits_per_sample = response.bits_per_sample
                 if response.done:
                     stats = response.stats
                     if (
@@ -109,12 +113,18 @@ async def main() -> int:
                         return 1
                     break
 
-            if sample_rate is None or channels is None or not pcm_chunks:
+            if (
+                sample_rate is None
+                or channels is None
+                or bits_per_sample is None
+                or bits_per_sample % 8 != 0
+                or not pcm_chunks
+            ):
                 raise RuntimeError("AudioGen stream ended without audio data")
 
             pcm = b"".join(pcm_chunks)
-            write_wav(pcm, sample_rate, channels, args.output)
-            samples_per_channel = len(pcm) // 2 // channels
+            write_wav(pcm, sample_rate, channels, bits_per_sample, args.output)
+            samples_per_channel = len(pcm) // (bits_per_sample // 8) // channels
             print(
                 f"▸ Generated {samples_per_channel} samples per channel at "
                 f"{sample_rate} Hz ({channels} channels)"

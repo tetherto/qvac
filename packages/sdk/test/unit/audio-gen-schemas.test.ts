@@ -93,7 +93,8 @@ test('audioGenStreamResponseSchema accepts progress, PCM, and terminal frames', 
       type: 'audioGenStream',
       data: 'AAECAw==',
       sampleRate: 44100,
-      channels: 2
+      channels: 2,
+      bitsPerSample: 16
     }).success
   )
   const terminal = audioGenStreamResponseSchema.parse({

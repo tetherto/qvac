@@ -12,7 +12,7 @@ Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/t
 
 - `requestId` — a synchronous identifier for targeted cancellation.
 - `progressStream` — stage and step updates while generation runs.
-- `audio` — a promise resolving to interleaved Int16 PCM, its sample rate, and channel count.
+- `audio` — a promise resolving to interleaved PCM, its sample rate, channel count, and `bitsPerSample`.
 - `stats` — a promise resolving to timing statistics.
 
 <Callout type="info">
@@ -117,7 +117,7 @@ for await (const progress of run.progressStream) {
   console.log(`${progress.stage}: ${progress.step}/${progress.total}`);
 }
 
-const [{ pcm, sampleRate, channels }, stats] = await Promise.all([
+const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all([
   run.audio,
   run.stats,
 ]);
@@ -125,7 +125,7 @@ const [{ pcm, sampleRate, channels }, stats] = await Promise.all([
 
 Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical controls are inferred from the caption.
 
-The SDK returns raw interleaved Int16 PCM rather than a WAV file. Add a WAV header or use an audio encoder before saving or playing it. The complete example below includes a dependency-free WAV writer.
+The SDK returns raw interleaved PCM rather than a WAV file. Use `bitsPerSample` when calculating sample counts or constructing a WAV header so consumers remain correct if the addon changes sample width. The complete example below includes a dependency-free WAV writer.
 
 ## Cancellation
 

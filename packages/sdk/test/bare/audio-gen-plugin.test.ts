@@ -9,6 +9,7 @@ import {
 } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry } from '@/server/bare/runtime'
 import { ModelType } from '@/schemas'
+import { ModelOperationNotSupportedError } from '@/utils/errors-server'
 
 type AudioGenResponse = Awaited<ReturnType<AudioGen['run']>>
 
@@ -49,6 +50,35 @@ function registerAudioGenModel(modelId: string, model: AudioGen) {
     modelType: ModelType.audiogenGgml
   })
 }
+
+test('audioGen plugin operation rejects a model from another plugin', async (t) => {
+  const modelId = 'audio-gen-operation-wrong-model'
+  registerModel(modelId, {
+    model: {} as AnyModel,
+    path: '',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-wrong-model',
+    modelId,
+    caption: 'ambient electronic music'
+  })
+
+  try {
+    await stream.next()
+    t.fail('expected a model/plugin mismatch error')
+  } catch (error) {
+    t.ok(error instanceof ModelOperationNotSupportedError)
+    t.is((error as ModelOperationNotSupportedError).operation, 'audioGenStream')
+  }
+  t.is(getRequestRegistry().get('audio-gen-request-wrong-model'), null)
+})
 
 test('audioGen plugin operation streams progress, PCM, and terminal stats', async (t) => {
   const modelId = 'audio-gen-operation-success'
@@ -94,6 +124,7 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
   })
   t.is(frames[1]?.sampleRate, 44100)
   t.is(frames[1]?.channels, 2)
+  t.is(frames[1]?.bitsPerSample, 16)
   t.ok(frames[1]?.data !== undefined)
   t.alike(frames[2], {
     type: 'audioGenStream',

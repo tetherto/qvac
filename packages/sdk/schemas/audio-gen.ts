@@ -1,13 +1,7 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 
-const base64Schema = z
-  .string()
-  .min(1)
-  .refine(
-    (value) => value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(value),
-    'Invalid base64 data'
-  )
+const base64Schema = z.string().min(1)
 
 export const audioGenRuntimeConfigSchema = z
   .object({
@@ -72,6 +66,7 @@ export const audioGenStreamResponseSchema = z
     data: base64Schema.optional(),
     sampleRate: z.number().int().positive().optional(),
     channels: z.number().int().positive().optional(),
+    bitsPerSample: z.number().int().positive().optional(),
     done: z.boolean().default(false),
     stopReason: z.enum(['completed', 'cancelled']).optional(),
     stats: audioGenStatsSchema.optional()
@@ -90,6 +85,7 @@ export interface AudioGenAudio {
   pcm: Uint8Array
   sampleRate: number
   channels: number
+  bitsPerSample: number
 }
 
 export interface AudioGenResult {

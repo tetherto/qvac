@@ -41,13 +41,15 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
         type: 'audioGenStream',
         data: 'AAE=',
         sampleRate: 44100,
-        channels: 2
+        channels: 2,
+        bitsPerSample: 16
       },
       {
         type: 'audioGenStream',
         data: 'AgM=',
         sampleRate: 44100,
-        channels: 2
+        channels: 2,
+        bitsPerSample: 16
       },
       {
         type: 'audioGenStream',
@@ -74,6 +76,7 @@ test('audioGen client collects progress, PCM, stats, and requestId', async (t) =
   t.alike(Array.from(audio.pcm), [0, 1, 2, 3])
   t.is(audio.sampleRate, 44100)
   t.is(audio.channels, 2)
+  t.is(audio.bitsPerSample, 16)
   t.alike(stats, {
     audioDurationMs: 10,
     totalTimeMs: 5,
