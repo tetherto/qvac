@@ -81,6 +81,23 @@ TEST(LoadConfigHandlers_Aliases, SimultaneousSpellingsAreDeterministic) {
   EXPECT_TRUE(map.empty());
 }
 
+// Disclosed behavior change: when both spellings of image-max/min-tokens are
+// supplied, the registry now reads both (the later underscore entry wins) and
+// consumes both, instead of forwarding the second spelling to llama.cpp. Pins
+// that deterministic outcome.
+TEST(LoadConfigHandlers_Aliases, SimultaneousImageTokenSpellingsAreDeterministic) {
+  common_params params;
+  std::unordered_map<std::string, std::string> map{
+      {"image-max-tokens", "1024"},
+      {"image_max_tokens", "512"},
+      {"image-min-tokens", "16"},
+      {"image_min_tokens", "8"}};
+  applyLoadConfigHandlers(params, map);
+  EXPECT_EQ(params.image_max_tokens, 512);
+  EXPECT_EQ(params.image_min_tokens, 8);
+  EXPECT_TRUE(map.empty());
+}
+
 TEST(LoadConfigHandlers_ImageTokens, RejectsNonInteger) {
   common_params params;
   std::unordered_map<std::string, std::string> map{{"image-max-tokens", "big"}};
