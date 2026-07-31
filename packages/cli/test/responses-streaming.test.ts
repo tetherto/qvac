@@ -142,7 +142,7 @@ describe('writeStreamingResponse', () => {
     }
     assert.ok(completedEvent)
     assert.equal(completedEvent.response.output[0]!.id, msgIdFromDelta)
-    assert.equal(completedEvent.response.usage.output_tokens, 5)
+    assert.equal(completedEvent.response.usage.output_tokens, 2)
   })
 
   it('uses fc item ids and distinct output_index per tool call in SSE and final output', async () => {

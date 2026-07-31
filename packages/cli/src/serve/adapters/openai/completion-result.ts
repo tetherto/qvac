@@ -16,7 +16,11 @@ export interface DrainedCompletion {
    * throws on both (502 for error, `InferenceCancelledError` for cancelled).
    */
   stopReason: string | undefined
-  /** `stats.generatedTokens` when the SDK reports it, else a whitespace word count. */
+  /**
+   * Tokens delivered on the OpenAI content / reasoning channels (one per
+   * `contentDelta` / `thinkingDelta`), falling back to SDK
+   * `stats.generatedTokens` or a whitespace word count.
+   */
   completionTokens: number
   /** OpenAI `finish_reason`: `tool_calls` wins, then `length` on truncation, else `stop`. */
   finishReason: OpenAiFinishReason
@@ -41,6 +45,7 @@ export async function drainCompletion(
 ): Promise<DrainedCompletion> {
   let text = ''
   let thinking = ''
+  let deliveredPieces = 0
   const toolCalls: ToolCall[] = []
   let stats: CompletionStats | undefined
   let stopReason: string | undefined
@@ -48,9 +53,11 @@ export async function drainCompletion(
   for await (const event of result.events) {
     if (event.type === 'contentDelta') {
       text += event.text
+      deliveredPieces++
       onToken?.(event.text)
     } else if (event.type === 'thinkingDelta') {
       thinking += event.text
+      deliveredPieces++
       onThinking?.(event.text)
     } else if (event.type === 'toolCall') {
       toolCalls.push(event.call)
@@ -70,17 +77,29 @@ export async function drainCompletion(
     await result.final
   }
 
-  const completionTokens = completionTokensFromStats(text, stats)
+  const completionTokens = completionTokensFromStats(text, stats, deliveredPieces)
   const finishReason: OpenAiFinishReason =
     toolCalls.length > 0 ? 'tool_calls' : stopReason === 'length' ? 'length' : 'stop'
 
   return { text, thinking, toolCalls, stats, stopReason, completionTokens, finishReason }
 }
 
+/**
+ * OpenAI `usage.completion_tokens` for a drained run.
+ *
+ * Prefer the number of content/thinking deltas actually delivered on the
+ * wire. Addon `stats.generatedTokens` tracks `llama_perf` `n_eval`, which
+ * can equal the predict / `max_tokens` budget when fewer tokens were
+ * streamed (inline recovery inflation, stripped protocol markers).
+ */
 export function completionTokensFromStats(
   text: string,
-  stats: CompletionStats | undefined
+  stats: CompletionStats | undefined,
+  deliveredPieces?: number
 ): number {
+  if (typeof deliveredPieces === 'number' && deliveredPieces > 0) {
+    return deliveredPieces
+  }
   if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
     return stats.generatedTokens
   }

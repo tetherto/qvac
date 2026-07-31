@@ -39,3 +39,20 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
 
   return normalized
 }
+
+/**
+ * Prefer the count of non-empty pieces the addon streamed over
+ * `llama_perf` `n_eval`. Inline reasoning-recovery decodes inflate
+ * `n_eval` (and therefore raw `generatedTokens`) up toward the predict
+ * budget even when fewer tokens were actually emitted.
+ */
+export function withEmittedGeneratedTokens(
+  stats: CompletionStats | undefined,
+  emittedPieces: number
+): CompletionStats | undefined {
+  if (emittedPieces <= 0) return stats
+  return {
+    ...(stats ?? {}),
+    generatedTokens: emittedPieces
+  }
+}

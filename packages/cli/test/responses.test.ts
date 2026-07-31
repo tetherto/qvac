@@ -245,7 +245,7 @@ function fakeCompletion(opts: {
 }
 
 describe('writeBlockingResponse', () => {
-  it('returns JSON with usage from stats.generatedTokens', async () => {
+  it('returns JSON with usage from delivered content deltas', async () => {
     let status = 0
     let bodyStr = ''
     let sent = false
@@ -272,9 +272,11 @@ describe('writeBlockingResponse', () => {
 
     const obj = await writeBlockingResponse(res, p, result)
     assert.equal(status, 200)
-    assert.equal((obj['usage'] as { output_tokens: number }).output_tokens, 42)
+    // One contentDelta was delivered; usage follows delivered pieces, not the
+    // inflated stats.generatedTokens predict-cap echo.
+    assert.equal((obj['usage'] as { output_tokens: number }).output_tokens, 1)
     const parsed = JSON.parse(bodyStr) as { usage: { output_tokens: number } }
-    assert.equal(parsed.usage.output_tokens, 42)
+    assert.equal(parsed.usage.output_tokens, 1)
   })
 
   it('includes required_action when tool calls present', async () => {
