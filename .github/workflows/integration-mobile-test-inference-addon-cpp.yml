@@ -1,0 +1,41 @@
+name: Mobile Integration Tests (inference-addon-cpp)
+
+# BOOTSTRAP ANCHOR — MANUAL DISPATCH ONLY. Temporary; superseded by QVAC-22948.
+#
+# Why this file exists: GitHub only registers a `workflow_dispatch` workflow when
+# the file is present on the DEFAULT branch, so until something lives at this path
+# on main there is no "Run workflow" button at all. The real inference-addon-cpp
+# mobile pipeline is still under review and its branch cannot be selected as a
+# dispatch ref, so the on-device (AWS Device Farm) leg has never been exercised.
+#
+# Landing this stub registers the workflow PATH. Dispatching it while selecting a
+# feature branch then runs THAT branch's version of this same path — the full
+# pipeline — because a dispatch resolves the workflow definition from the selected
+# ref. That lets the device leg be proven before any PR-triggered wiring exists.
+#
+# Deliberately has NO pull_request_target / pull_request / push / schedule /
+# workflow_call trigger: it must never start on its own, must never spend Device
+# Farm minutes, and must never appear as a check on anyone's PR.
+#
+# The full pipeline replaces this file wholesale at the same path. Do not add jobs
+# here, and do not add triggers here.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  anchor:
+    name: Dispatch anchor (no-op)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Explain
+        run: |
+          echo "Dispatch anchor on the default branch — nothing to do here."
+          echo
+          echo "To run the real inference-addon-cpp mobile pipeline, dispatch this"
+          echo "workflow again and select a feature branch that carries it. The"
+          echo "selected ref supplies the workflow definition, so the branch's"
+          echo "full pipeline runs instead of this placeholder."
