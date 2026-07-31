@@ -892,6 +892,52 @@ test('on-pr context outputs resolve PR ref from head SHA, never head.ref', () =>
   assert.deepEqual(offenders, [])
 })
 
+test('infer-base changes reach the required merge-guard status check', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  assert.match(
+    source,
+    /\n\s+infer-base:\n\s+- "packages\/infer-base\/\*\*"/,
+    'merge guard filters on packages/infer-base',
+  )
+
+  const guard = jobBlock(source, 'qvac-merge-guard')
+  assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
+  assert.match(
+    guard,
+    /sanity-checks-status:\s*\$\{\{\s*needs\.sanity-checks\.result/,
+    'merge guard reports the sanity-checks result',
+  )
+})
+
+test('infer-base publish jobs are gated on generated-artifact validation', () => {
+  const source = read('.github/workflows/trigger-reusable-infer-base.yml')
+
+  const validate = jobBlock(source, 'validate-artifacts')
+  assert.match(validate, /working-directory: packages\/infer-base/)
+  assert.match(validate, /npm run test:types/)
+
+  for (const job of [
+    'publish-main-gpr-dev',
+    'publish-release-npm',
+    'publish-feature-gpr',
+    'publish-tmp-gpr',
+  ]) {
+    const block = jobBlock(source, job)
+    assert.match(
+      block,
+      /needs:[\s\S]*?- validate-artifacts/,
+      `'${job}' declares validate-artifacts as a dependency`,
+    )
+    // Asserted explicitly rather than relying on implicit needs-failure
+    // skipping, which an always() in the same condition would defeat.
+    assert.match(
+      block,
+      /needs\.validate-artifacts\.result == 'success'/,
+      `'${job}' if-gates on validate-artifacts success`,
+    )
+  }
+})
+
 test('merge guards accept intentionally skipped optional prebuilds', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const offenders = readdirSync(workflowDirectory)
