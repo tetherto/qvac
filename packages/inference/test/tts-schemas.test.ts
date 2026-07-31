@@ -2,11 +2,14 @@ import test from 'brittle'
 import {
   ttsRequestSchema,
   ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
   textToSpeechStreamResponseSchema,
   ttsConfigSchema,
   ttsChatterboxRuntimeConfigSchema,
+  ttsParlerRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
   TTS_CHATTERBOX_LANGUAGES,
+  TTS_PARLER_EMOTIONS,
   TTS_SUPERTONIC_LANGUAGES,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
 } from '@/schemas/text-to-speech'
@@ -81,13 +84,14 @@ test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
   })
   t.is(r.success, true)
   if (r.success) {
-    t.is(r.data['streamChunkTokens'], 25)
-    t.is(r.data['streamFirstChunkTokens'], 10)
-    t.is(r.data['cfmSteps'], 1)
-    t.is(r.data['cfgRate'], 0.7)
-    t.is(r.data['threads'], 8)
-    t.is(r.data['nGpuLayers'], 99)
-    t.is(r.data['seed'], 42)
+    const data = r.data as Record<string, unknown>
+    t.is(data['streamChunkTokens'], 25)
+    t.is(data['streamFirstChunkTokens'], 10)
+    t.is(data['cfmSteps'], 1)
+    t.is(data['cfgRate'], 0.7)
+    t.is(data['threads'], 8)
+    t.is(data['nGpuLayers'], 99)
+    t.is(data['seed'], 42)
   }
 })
 
@@ -147,8 +151,9 @@ test('ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (supe
   })
   t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.outputSampleRate, 24000)
-    t.is(r.data.vulkanCacheDir, '/data/qvac/vulkan-cache')
+    const data = r.data as Record<string, unknown>
+    t.is(data['outputSampleRate'], 24000)
+    t.is(data['vulkanCacheDir'], '/data/qvac/vulkan-cache')
   }
 })
 
@@ -193,6 +198,110 @@ test('ttsConfigSchema: accepts GGML supertonic load config', (t) => {
     voice: 'F1'
   })
   t.is(r.success, true)
+})
+
+test('ttsConfigSchema: accepts the full Parler load-time config surface', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    voice: 'Rohit',
+    emotion: 'happy',
+    pitch: 'high',
+    pace: 'slow',
+    expressivity: 'expressive',
+    noise: 'clear',
+    reverb: 'close',
+    quality: 'very high',
+    useGPU: true,
+    outputSampleRate: 44100,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20,
+    threads: 2,
+    nGpuLayers: 99,
+    seed: 7,
+    temperature: 0.9,
+    topK: 40,
+    topP: 0.95,
+    maxFrames: 860,
+    minNewTokens: -1,
+    normalizeNumbers: false
+  })
+
+  t.is(r.success, true)
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['emotion'], 'happy')
+    t.is(data['outputSampleRate'], 44100)
+    t.is(data['maxFrames'], 860)
+  }
+})
+
+test('ttsConfigSchema: accepts a free-text Parler voice description', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    voiceDescription: 'A calm female voice with very clear audio.'
+  })
+
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: rejects conflicting Parler description and template fields', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    description: 'A calm female voice.',
+    emotion: 'happy'
+  })
+
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'emotion')
+  }
+})
+
+test('ttsParlerRuntimeConfigSchema: validates Parler option ranges', (t) => {
+  const invalidConfigs = [
+    { emotion: 'angry' },
+    { emotion: 'HAPPY' },
+    { temperature: -0.1 },
+    { topK: -1 },
+    { topP: 0 },
+    { topP: 1.1 },
+    { maxFrames: 9 },
+    { minNewTokens: -2 },
+    { outputSampleRate: 7999 },
+    { outputSampleRate: 16000, streamChunkTokens: 43 },
+    { streamChunkTokens: 2147483648 },
+    { streamFirstChunkTokens: 2147483648 },
+    { threads: 2147483648 },
+    { nGpuLayers: -2147483649 },
+    { seed: 2147483648 },
+    { topK: 2147483648 },
+    { maxFrames: 2147483648 },
+    { minNewTokens: 2147483648 }
+  ]
+
+  for (const invalidConfig of invalidConfigs) {
+    const r = ttsParlerRuntimeConfigSchema.safeParse({
+      ttsEngine: 'parler',
+      ...invalidConfig
+    })
+    t.is(r.success, false, JSON.stringify(invalidConfig))
+  }
+})
+
+test('ttsParlerRuntimeConfigSchema: allows resampling with only first-chunk tuning', (t) => {
+  const r = ttsParlerRuntimeConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    outputSampleRate: 16000,
+    streamFirstChunkTokens: 20
+  })
+
+  t.is(r.success, true)
+})
+
+test('TTS_PARLER_EMOTIONS: exposes all 12 trained styles', (t) => {
+  t.is(TTS_PARLER_EMOTIONS.length, 12)
+  t.ok(TTS_PARLER_EMOTIONS.includes('proper noun'))
+  t.ok(TTS_PARLER_EMOTIONS.includes('surprise'))
 })
 
 test('TTS_CHATTERBOX_LANGUAGES: exposes all 23 supported languages', (t) => {
@@ -366,6 +475,51 @@ test('ttsRequestSchema: accepts sentenceStream options', (t) => {
     t.is(r.data.sentenceStreamLocale, 'en-US')
     t.is(r.data.sentenceStreamMaxChunkScalars, 200)
   }
+})
+
+test('ttsRequestSchema: accepts per-call Parler voice conditioning', (t) => {
+  const r = ttsRequestSchema.safeParse({
+    type: 'textToSpeech',
+    modelId: 'parler',
+    text: 'Hello.',
+    stream: false,
+    voice: 'Laura',
+    emotion: 'news'
+  })
+
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.voice, 'Laura')
+    t.is(r.data.emotion, 'news')
+  }
+})
+
+test('ttsRequestSchema: rejects conflicting per-call Parler descriptions', (t) => {
+  const conflicts = [
+    { description: 'A calm voice.', emotion: 'happy' },
+    { description: 'A calm voice.', voiceDescription: 'A second description.' }
+  ]
+
+  for (const conflict of conflicts) {
+    const r = ttsRequestSchema.safeParse({
+      type: 'textToSpeech',
+      modelId: 'parler',
+      text: 'Hello.',
+      ...conflict
+    })
+    t.is(r.success, false, JSON.stringify(conflict))
+  }
+})
+
+test('textToSpeechStreamRequestSchema: rejects conflicting Parler descriptions', (t) => {
+  const r = textToSpeechStreamRequestSchema.safeParse({
+    type: 'textToSpeechStream',
+    modelId: 'parler',
+    description: 'A calm voice.',
+    pace: 'fast'
+  })
+
+  t.is(r.success, false)
 })
 
 test('ttsResponseSchema: accepts optional chunk metadata', (t) => {
