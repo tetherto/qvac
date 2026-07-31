@@ -715,6 +715,7 @@ test('public-pr: trusted non-PR calls do not require verified', () => {
 test('all ci-router callers re-run when a draft becomes ready', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const workflowNames = [
+    'on-pr-asr-ggml.yml',
     'on-pr-bci-whispercpp.yml',
     'on-pr-classification-ggml.yml',
     'on-pr-decoder-audio.yml',
@@ -723,10 +724,7 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-fabric.yml',
     'on-pr-llm-llamacpp.yml',
     'on-pr-ocr-ggml.yml',
-    'on-pr-ocr-onnx.yml',
     'on-pr-onnx.yml',
-    'on-pr-transcription-parakeet.yml',
-    'on-pr-transcription-whispercpp.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
     'on-pr-vla.yml',
@@ -772,9 +770,8 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
     /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
   )
   for (const path of [
+    '.github/workflows/on-pr-asr-ggml.yml',
     '.github/workflows/on-pr-tts-ggml.yml',
-    '.github/workflows/on-pr-transcription-parakeet.yml',
-    '.github/workflows/on-pr-transcription-whispercpp.yml',
   ]) {
     const block = jobBlock(read(path), 'coload-smoke-mobile')
     assert.match(
@@ -894,6 +891,52 @@ test('on-pr context outputs resolve PR ref from head SHA, never head.ref', () =>
   assert.deepEqual(offenders, [])
 })
 
+test('infer-base changes reach the required merge-guard status check', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  assert.match(
+    source,
+    /\n\s+infer-base:\n\s+- "packages\/infer-base\/\*\*"/,
+    'merge guard filters on packages/infer-base',
+  )
+
+  const guard = jobBlock(source, 'qvac-merge-guard')
+  assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
+  assert.match(
+    guard,
+    /sanity-checks-status:\s*\$\{\{\s*needs\.sanity-checks\.result/,
+    'merge guard reports the sanity-checks result',
+  )
+})
+
+test('infer-base publish jobs are gated on generated-artifact validation', () => {
+  const source = read('.github/workflows/trigger-reusable-infer-base.yml')
+
+  const validate = jobBlock(source, 'validate-artifacts')
+  assert.match(validate, /working-directory: packages\/infer-base/)
+  assert.match(validate, /npm run test:types/)
+
+  for (const job of [
+    'publish-main-gpr-dev',
+    'publish-release-npm',
+    'publish-feature-gpr',
+    'publish-tmp-gpr',
+  ]) {
+    const block = jobBlock(source, job)
+    assert.match(
+      block,
+      /needs:[\s\S]*?- validate-artifacts/,
+      `'${job}' declares validate-artifacts as a dependency`,
+    )
+    // Asserted explicitly rather than relying on implicit needs-failure
+    // skipping, which an always() in the same condition would defeat.
+    assert.match(
+      block,
+      /needs\.validate-artifacts\.result == 'success'/,
+      `'${job}' if-gates on validate-artifacts success`,
+    )
+  }
+})
+
 test('merge guards accept intentionally skipped optional prebuilds', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const offenders = readdirSync(workflowDirectory)
@@ -914,4 +957,108 @@ test('merge guards accept intentionally skipped optional prebuilds', () => {
       )
     })
   assert.deepEqual(offenders, [])
+})
+
+// --- fork-ci environment gating (QVAC-22799) --------------------------------
+// Every pull_request_target workflow that gates any job on the fork-trust
+// surface — label-gate.outputs.authorised OR authorize.outputs.allowed — must
+// ALSO carry the fork-ci environment gate: a `fork-approval` job bound to the
+// fork-ci environment (PR-from-fork conditional), and every trust-gated job must
+// depend on it. This runs the environment approval alongside the SHA-bound
+// label-gate / authorize-pr. Derived (not a hardcoded list) so a newly-added
+// privileged pull_request_target workflow is automatically required to carry the
+// gate — including a job gated on authorize alone (no label-gate reference).
+
+const FORK_CI_ENV_RE =
+  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
+const FORK_CI_GATE_JOBS = new Set([
+  'label-gate',
+  'authorize',
+  'ci-router',
+  'fork-approval',
+])
+
+function eachJob(source) {
+  const jobsIdx = source.search(/^jobs:\s*$/m)
+  if (jobsIdx === -1) return []
+  const lines = source.slice(jobsIdx).split('\n')
+  const jobs = []
+  let cur = null
+  for (const line of lines) {
+    const m = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/)
+    if (m) {
+      if (cur) jobs.push(cur)
+      cur = { name: m[1], text: '' }
+      continue
+    }
+    if (/^\S/.test(line) && cur) {
+      jobs.push(cur)
+      cur = null
+    }
+    if (cur) cur.text += line + '\n'
+  }
+  if (cur) jobs.push(cur)
+  return jobs
+}
+
+function forkCiTargets() {
+  const dir = join(root, '.github/workflows')
+  return readdirSync(dir)
+    .filter((n) => /\.ya?ml$/.test(n))
+    .map((n) => `.github/workflows/${n}`)
+    .filter((p) => {
+      const src = read(p)
+      const onIdx = src.search(/^on:\s*$/m)
+      const head = onIdx === -1 ? '' : src.slice(onIdx, onIdx + 1200)
+      return (
+        /pull_request_target:/.test(head) &&
+        (src.includes('label-gate.outputs.authorised') ||
+          src.includes('authorize.outputs.allowed'))
+      )
+    })
+}
+
+test('fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job', () => {
+  const targets = forkCiTargets()
+  assert.ok(targets.length >= 20, `found ${targets.length} fork-ci target workflows`)
+  for (const path of targets) {
+    const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
+    assert.ok(gate, `${path}: must define a fork-approval gate job`)
+    assert.match(
+      gate.text,
+      FORK_CI_ENV_RE,
+      `${path}: fork-approval must gate on the fork-ci environment (fork-only conditional)`,
+    )
+  }
+})
+
+test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
+  for (const path of forkCiTargets()) {
+    for (const job of eachJob(read(path))) {
+      if (FORK_CI_GATE_JOBS.has(job.name)) continue
+      if (
+        !job.text.includes('label-gate.outputs.authorised') &&
+        !job.text.includes('authorize.outputs.allowed')
+      )
+        continue
+      assert.match(
+        job.text,
+        /needs:[\s\S]*?\bfork-approval\b/,
+        `${path}: job '${job.name}' gates on the fork-trust surface (label-gate or authorize) but does not depend on fork-approval (fail-open)`,
+      )
+    }
+  }
+})
+
+// Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
+// privileged context), so it deliberately carries no label-gate/authorize and
+// needs no SHA-bound fork coverage. Lock in that it is NOT a pull_request_target
+// workflow, so a future edit can't quietly reintroduce a secret-bearing
+// untrusted-checkout surface.
+test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {
+  const entry = read('.github/workflows/on-pr-shared-ci-infra.yml')
+  assert.match(entry, /^on:\n\s*pull_request:/m)
+  assert.doesNotMatch(entry, /pull_request_target/)
+  assert.doesNotMatch(entry, /secrets:\s*inherit/)
+  assert.doesNotMatch(entry, /HF_TOKEN/)
 })

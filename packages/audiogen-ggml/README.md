@@ -66,13 +66,18 @@ for await (const item of response.iterate()) {
     // these chunks as they stream in.
   }
 }
-const stats = await response.await() // { audioDurationMs, totalTimeMs, realTimeFactor }
+const stats = await response.await()
+// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId }
+// backendDevice: 0 = CPU, 1 = GPU
+// backendId:     0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 
 await gen.destroy()
 ```
 
 > The audio arrives as PCM chunks over the `QvacResponse` stream; `await()`
-> resolves with the run stats once generation completes.
+> resolves with the run stats once generation completes. `backendDevice` /
+> `backendId` report the backend the engine *resolved to*, not the one requested,
+> so a `useGPU: true` run that fell back to the CPU is detectable.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm
@@ -177,6 +182,7 @@ runnable end-to-end script (`npm run example`).
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
+| `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped package). Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.

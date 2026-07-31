@@ -46,12 +46,6 @@ export const customTree: Node[] = [
     icon: resolveIcon('Package'),
   },
   {
-    name: 'Python SDK',
-    url: '/python-sdk',
-    type: 'page',
-    icon: resolveIcon('Code2'),
-  },
-  {
     name: 'Configuration',
     type: 'folder',
     icon: resolveIcon('SlidersHorizontal'),

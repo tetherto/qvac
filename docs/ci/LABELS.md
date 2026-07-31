@@ -44,7 +44,6 @@ The label-gated addon PR workflows use a shared **[`ci-router`](../../.github/ac
 - `on-pr-transcription-whispercpp.yml`
 - `on-pr-classification-ggml.yml`
 - `on-pr-bci-whispercpp.yml`
-- `on-pr-ocr-onnx.yml`
 - `on-pr-onnx.yml`
 - `on-pr-decoder-audio.yml`
 - `on-pr-fabric.yml`
@@ -131,4 +130,5 @@ If you previously thought "review" was a label, it's not — it's an issue/PR co
 - [`docs/ci/SELF-HOSTED-RUNNERS.md`](SELF-HOSTED-RUNNERS.md) — Manual Workspace Cleanup, `working-directory: .`, and `runner.environment` on `qvac-*` workflows.
 - [`docs/ci/TEAMS.md`](TEAMS.md) — who is in `qvac-internal-dev` / `merge` / `release` / `qvac-external`, and what they can do.
 - [`.github/actions/label-gate/README.md`](../../.github/actions/label-gate/README.md) — full `label-gate` trust model and configuration reference.
+- [`docs/ci/MERGE-GUARD.md`](MERGE-GUARD.md) — how a new job/workflow ties into the `qvac-merge-guard / validate-pr` required status check.
 - [`docs/gitflow.md`](../gitflow.md) — branch model and release flow.

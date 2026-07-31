@@ -48,8 +48,15 @@ holds:
   release git tags, not an external registry).
 - It is the **head or base of an open / unmerged PR** (active until the PR is merged or
   closed).
-- It is under **active branch protection** or is used as a **required CI status
-  target** (detected via the branch's `protected` flag / branch-protection rules).
+- It is a **non-release** branch under **active branch protection** or used as a
+  **required CI status target** (detected via the branch's `protected` flag /
+  branch-protection rules). **Release branches are the exception:** many repos use a
+  ruleset that marks *every* `release-*` branch protected purely for merge governance
+  (PR review / status checks). That protection does **not** exempt an out-of-window
+  release line from the [semver-window trim](#release-branches-nested-semver-retention)
+  — those branches are tag-backed and safe to delete, so they are governed by the
+  release rule (plus the latest-published / open-PR safelist), not by the `protected`
+  flag. Deletion works because the merge-governance ruleset carries no *deletion* rule.
 - It is flagged **WIP**.
 
 > **WIP naming caveat.** Git ref names cannot contain `[` or `]`, so a literal
@@ -164,6 +171,13 @@ deleted without warning:
 - **Issues must be enabled** (the tracking issue is the grace-period ledger). If Issues
   are disabled in a repo, the workflow runs in **report-only mode** — it logs the
   candidate list but deletes nothing.
+
+> **This repo runs a tighter window than the portable defaults.** The `tetherto/qvac`
+> caller overrides the reusable defaults to keep the latest **2 minor** release lines
+> per package (not 3), and to treat branches as stale sooner (`adhoc_inactivity_days:
+> 14`, `feature`/`tmp` `_inactivity_days: 30`). The reusable workflow keeps the looser
+> defaults documented above for other consuming repos. All overrides remain gated by
+> the ~7-day grace ledger, so owners still get a warning window before deletion.
 
 Implementation lives in:
 

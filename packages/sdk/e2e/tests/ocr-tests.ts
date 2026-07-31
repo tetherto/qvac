@@ -6,7 +6,7 @@ const createOcrTest = (
   expectation:
     | { validation: 'contains-all' | 'contains-any'; contains: string[] }
     | { validation: 'type'; expectedType: 'array' },
-  options?: { streaming?: boolean; paragraph?: boolean },
+  options?: { streaming?: boolean; paragraph?: boolean; resource?: string },
   estimatedDurationMs: number = 30000,
   suites?: string[]
 ): TestDefinition => ({
@@ -14,7 +14,7 @@ const createOcrTest = (
   params: { imageFileName, timeout: 300000, ...options },
   expectation,
   ...(suites && { suites }),
-  metadata: { category: 'ocr', dependency: 'ocr', estimatedDurationMs }
+  metadata: { category: 'ocr', dependency: options?.resource ?? 'ocr', estimatedDurationMs }
 })
 
 export const ocrBasicPng = createOcrTest(
@@ -200,6 +200,32 @@ export const ocrParagraphStreaming = createOcrTest(
   60000
 )
 
+// DocTR pipeline coverage (QVAC-22514): every other OCR test runs the
+// EasyOCR `ocr` resource (OCR_LATIN), which was the only pipeline with e2e
+// coverage when the DocTR load path shipped broken in @qvac/sdk 0.15.0.
+// These run against the `doctr` resource — OCR_DOCTR with no explicit
+// pipelineType/detectorModelSrc — so the auto pipelineType inference and
+// DBNet detector derivation stay exercised end to end.
+export const ocrDoctrBasicPng = createOcrTest(
+  'ocr-doctr-basic-png',
+  'ocr-simple-test-png.png',
+  {
+    validation: 'contains-any',
+    contains: ['OCR', 'text', 'testing', 'implementation', 'recognize', 'Type', 'enter']
+  },
+  { resource: 'doctr' },
+  90000,
+  ['smoke']
+)
+
+export const ocrDoctrBlockStructure = createOcrTest(
+  'ocr-doctr-block-structure',
+  'ocr-simple-test-png.png',
+  { validation: 'type', expectedType: 'array' },
+  { resource: 'doctr' },
+  60000
+)
+
 export const ocrTests = [
   ocrBasicPng,
   ocrBasicJpg,
@@ -227,5 +253,7 @@ export const ocrTests = [
   ocrStreamingBlockStructure,
   ocrLogoBlockStructure,
   ocrParagraphBlockStructure,
-  ocrParagraphStreaming
+  ocrParagraphStreaming,
+  ocrDoctrBasicPng,
+  ocrDoctrBlockStructure
 ]

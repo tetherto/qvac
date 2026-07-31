@@ -13,6 +13,8 @@
 import { createJobHandler, type JobHandler, type QvacResponse } from '@qvac/infer-base'
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 import QvacLogger = require('@qvac/logging')
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
+import path = require('bare-path')
 
 import {
   AudioGenInterface,
@@ -52,6 +54,13 @@ export interface AudioGenRuntimeConfig {
   nGpuLayers?: number
   /** 0 = engine auto-picks. */
   threads?: number
+  /**
+   * Override the prebuilds root the native engine scans for dlopen'd ggml
+   * backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped
+   * package); only set this for a non-standard prebuilds layout. Needed on
+   * arm64, where the CPU backend is a set of per-microarch MODULE .so files.
+   */
+  backendsDir?: string
 }
 
 export interface AudioGenOptions {
@@ -102,13 +111,22 @@ export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk
 /**
  * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
  * what the native `AcestepModel::runtimeStats()` emits — `totalTimeMs`,
- * `realTimeFactor` and `audioDurationMs`. Sample rate and channel count are NOT
- * here: they ride on each PCM chunk instead (see `AudiogenPcmChunk`).
+ * `realTimeFactor`, `audioDurationMs` and the resolved backend. Sample rate and
+ * channel count are NOT here: they ride on each PCM chunk instead (see
+ * `AudiogenPcmChunk`).
+ *
+ * `backendDevice` / `backendId` describe the backend the engine actually ran
+ * on, not the one requested, so a `useGPU: true` run that fell back to the CPU
+ * is detectable. Codes match @qvac/tts-ggml.
  */
 export interface AudiogenStats {
   audioDurationMs?: number
   totalTimeMs?: number
   realTimeFactor?: number
+  /** 0 = CPU, 1 = GPU. */
+  backendDevice?: number
+  /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
+  backendId?: number
 }
 
 /** Raw shape of the native output-callback payload. */
@@ -120,6 +138,8 @@ interface NativeAudiogenData {
   audioDurationMs?: number
   totalTimeMs?: number
   realTimeFactor?: number
+  backendDevice?: number
+  backendId?: number
   progressStage?: string
   progressStep?: number
   progressTotal?: number
@@ -201,7 +221,12 @@ export class AudioGen {
       shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
       useGPU: useGpu,
       nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
-      threads: requireFiniteNumber(config.threads ?? 0, 'threads', true)
+      threads: requireFiniteNumber(config.threads ?? 0, 'threads', true),
+      // Where the native engine dlopens the ggml backend modules staged next to
+      // the `.bare`. Default to the package's own prebuilds dir; the C++ side
+      // appends the per-target BACKENDS_SUBDIR. Required on arm64 (per-microarch
+      // MODULE CPU backends); harmless on static desktop / Apple builds.
+      backendsDir: config.backendsDir ?? path.join(__dirname, 'prebuilds')
     }
 
     this.addon = null
@@ -353,7 +378,9 @@ export class AudioGen {
       const stats: AudiogenStats = {
         ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
         ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
-        ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {})
+        ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
+        ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
+        ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
       }
       this._job.end(stats, stats)
     }
