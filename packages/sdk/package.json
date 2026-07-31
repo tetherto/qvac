@@ -224,7 +224,7 @@
     "bare-crypto": "^1.15.0",
     "bare-env": "^3.0.0",
     "bare-fetch": "^3.0.1",
-    "bare-fs": "^4.7.4",
+    "bare-fs": "^4.5.1",
     "bare-gpu-info": "0.1.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
