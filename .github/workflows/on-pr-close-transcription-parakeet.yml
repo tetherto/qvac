@@ -1,12 +1,17 @@
-name: On PR Close (Parakeet)
+# RETIRED FAMILY — dispatch-only cleanup stub.
+#
+# packages/transcription-parakeet and the rest of its workflow family were
+# retired when the addon was merged into packages/asr-ggml (@qvac/asr-ggml).
+# This file survives on purpose: ephemeral `@tetherto/transcription-parakeet-mono`
+# PR versions published by the retired on-merge/prebuild lanes are still in GPR
+# and must stay deletable from main during the cleanup window (QIP PR-2 note).
+#
+# The `pull_request` trigger is gone — nothing publishes those versions any more.
+# Delete this file in the post-release cleanup once the leaked -mono versions are
+# purged.
+name: On PR Close (Parakeet) [retired — dispatch-only cleanup]
 
 on:
-  pull_request:
-    types:
-      - closed
-    paths:
-      - "packages/transcription-parakeet/**"
-      - ".github/workflows/*parakeet*.yml"
   workflow_dispatch:
     inputs:
       version:
@@ -32,7 +37,7 @@ on:
         default: true
 
 run-name: >-
-  Delete NPM Versions (parakeet) v=${{ inputs.version }} pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }} dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+  Delete NPM Versions (parakeet, retired) v=${{ inputs.version }} pr=${{ inputs.pr-number }} dry=${{ inputs.dry-run }}
 
 permissions:
   contents: read
@@ -78,10 +83,10 @@ jobs:
     uses: ./.github/workflows/public-delete-npm-versions.yml
     with:
       version: ${{ inputs.version }}
-      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+      pr-number: ${{ inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages || 'transcription-parakeet' }}
-      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+      dry-run: ${{ inputs.dry-run }}
     needs:
       - label-gate
     if: needs.label-gate.outputs.authorised == 'true'

@@ -1,13 +1,5 @@
-// Type-level consumer test: CommonJS `import ... = require(...)` shape.
-//
-// This is the shape a plain TypeScript CommonJS consumer uses. Before the
-// `export =` / namespace-merging rewrite, `module.exports = VlaModel` was an
-// untyped cast in the authored source, invisible to the declaration emitter,
-// so this file failed with TS2351 ("This expression is not constructable").
-//
-// Compiled with `tsc --noEmit -p test/types/tsconfig.cjs.json` via
-// `npm run test:types`. No runtime component — it must never be executed,
-// only type-checked, because it does not load the native addon.
+// Type-level consumer test: CommonJS `import ... = require(...)` must see a
+// construct signature. Type-checked only (via test:types) — never executed.
 
 import VlaModel = require("../../index");
 

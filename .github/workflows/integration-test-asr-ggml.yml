@@ -1,0 +1,562 @@
+name: Integration Tests (ASR GGML)
+
+# Desktop integration + RTF benchmark leg for the unified @qvac/asr-ggml
+# addon. One matrix mechanism: each runner row carries a benchmark_matrix_json
+# default that concatenates the whisper entries (engine: whisper) and the
+# parakeet entries (engine: parakeet); the package-level matrix runner
+# dispatches per-entry on entry.engine and stamps `engine` into each report.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/asr-ggml@0.1.0)"
+        required: true
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-asr-ggml-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
+      pin_model_manifest:
+        description: "Stage models once and upload a manifest with pinned bytes/sha256"
+        required: false
+        type: boolean
+        default: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/asr-ggml"
+  workflow_call:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/asr-ggml@0.1.0)"
+        type: string
+        required: false
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        type: boolean
+        required: false
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-asr-ggml-* artifacts)"
+        type: boolean
+        required: false
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        type: string
+        required: false
+      pin_model_manifest:
+        description: "Stage models once and upload a manifest with pinned bytes/sha256"
+        type: boolean
+        required: false
+        default: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        required: false
+        default: "packages/asr-ggml"
+        type: string
+
+jobs:
+  # Dispatch-only: stage the parakeet GGUF set once and upload a manifest with
+  # pinned bytes/sha256 (carried over from the parakeet family).
+  pin-model-manifest:
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    timeout-minutes: 120
+    runs-on: ${{ 'qvac-ubuntu2404-x64' }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Restore ASR GGML model cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: asr-ggml
+          paths: packages/asr-ggml/models
+          warm: 'false'
+          enable-cross-os: 'false'
+
+      - name: Stage and verify complete model set
+        shell: bash
+        working-directory: packages/asr-ggml
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: node scripts/stage-integration-models.mjs
+
+      - name: Generate and check integrity pins
+        shell: bash
+        working-directory: packages/asr-ggml
+        run: |
+          node scripts/generate-model-manifest.mjs
+          node scripts/generate-model-manifest.mjs --check
+
+      - name: Upload pinned model manifest
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: asr-ggml-model-manifest
+          path: packages/asr-ggml/test/integration/parakeet-models.manifest.json
+          if-no-files-found: error
+
+  run-integration-tests:
+    if: ${{ !inputs.pin_model_manifest }}
+    # Longer than the default budget: the RTF benchmark leg sweeps both
+    # engines — six whisper model files plus three parakeet quants across five
+    # model types — and GPU runners run both CPU and Vulkan/Metal legs, each
+    # with warmup + runs.
+    timeout-minutes: 120
+    continue-on-error: true
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ (matrix.no_gpu != 'true' || matrix.no_gpu_whisper == 'false') && '-gpu' || '' }}-integration-tests
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # Job-wide GPU gate. Governs the parakeet suites (parakeet-gpu-smoke,
+      # parakeet-multiple-transcriptions). The whisper-only GPU step overrides
+      # it with matrix.no_gpu_whisper where the two parents differed.
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
+
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64-gpu
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
+            platform: darwin
+            arch: arm64
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"metal"}]
+          # darwin-x64 is the union of both parents' settings, NOT parakeet's
+          # alone: the whisper parent ran this row with Metal enabled (no
+          # no_gpu key, six useGPU:true metal benchmark entries) and it is the
+          # only lane that covers the Intel-macOS Metal path; the parakeet
+          # parent set no_gpu:'true' here and never exercised parakeet on x64
+          # Metal. So keep `no_gpu: 'true'` (parakeet's suites, incl.
+          # parakeet-gpu-smoke, stay CPU-only exactly as before) and add
+          # `no_gpu_whisper: 'false'`, which the whisper-only
+          # `test:integration:gpu` steps use to re-enable the Metal assertion.
+          # The RTF leg needs no knob — it selects GPU purely from the
+          # useGPU/backendHint fields of benchmark_matrix_json below, so the
+          # six whisper metal entries are back while parakeet stays CPU-only.
+          # Enabling parakeet GPU here would be new, never-run coverage and
+          # belongs in its own change.
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+            no_gpu: 'true'
+            no_gpu_whisper: 'false'
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64-gpu
+            benchmark_matrix_json: >-
+              [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          npm install
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/prebuilds-staging
+          merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          mkdir -p ${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/
+          echo "Prebuilds moved from staging area"
+          ls -la ${{ inputs.workdir }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
+      # source path becomes invalid and the copy silently no-ops. Use
+      # PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ inputs.workdir }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
+
+      - name: Download prebuilds from package (Unix)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          find prebuilds -type f -name 'tetherto__*' | while read f; do
+            mv "$f" "${f/tetherto__/qvac__}"
+          done
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
+          New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+          # Extract from inside the temp dir with a RELATIVE archive name. The
+          # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
+          # reads the "C:" in an absolute -f/-C argument as a remote host and
+          # aborts, so the extract silently no-ops and the addon is never staged.
+          Push-Location "${{ runner.temp }}\tmp"
+          tar -xzf $tgz.Name
+          Pop-Location
+          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
+            $newName = $_.Name -replace 'tetherto__', 'qvac__'
+            Rename-Item -Path $_.FullName -NewName $newName
+          }
+
+      - name: Install gh cli for ubuntu-24.04-arm
+        if: matrix.os == 'ubuntu-24.04-arm'
+        shell: bash
+        run: |
+          (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
+            && sudo mkdir -p -m 755 /etc/apt/keyrings \
+                  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+                  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+            && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+            && sudo apt update \
+            && sudo apt install gh -y
+          gh --version
+        continue-on-error: true
+
+      - name: Linux arm64 - install dependencies
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+          # Add whisper.cpp dependencies for integration tests
+          sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
+
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      # Runner enumerates the Intel iGPU at index 0 and the NVIDIA card at
+      # index 1; pin ggml to the NVIDIA device (re-check if the image changes).
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Pin ggml Vulkan to the NVIDIA GPU on Windows
+        run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # ONE cache-models step covers both engines: whisper models self-download
+      # at test runtime via test/integration/helpers.js (HuggingFace) and
+      # parakeet GGUFs are staged from S3 via the manifest, but both engines
+      # land in packages/asr-ggml/models, so one cache covers both. The key is
+      # keyed on the engines' model manifests. `warm: false` because parakeet
+      # models come from S3 (staged below), not from HuggingFace URLs.
+      - name: Cache integration test models
+        id: model-cache
+        if: runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: asr-ggml
+          paths: packages/asr-ggml/models
+          # MUST stay a single line: cache-models writes this straight into
+          # $GITHUB_OUTPUT as `glob=<value>`, so a multi-line value produces
+          # "Invalid format" and fails the step. The glob covers every engine's
+          # manifest, so neither model set can drift without churning the key.
+          hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
+          warm: 'false'
+          enable-cross-os: 'false'
+
+      # Stage every desktop quantisation the parakeet RTF benchmark matrix
+      # sweeps (f16 + q8_0 + q4_0). The staged set + its S3 paths are declared
+      # once in test/integration/parakeet-models.manifest.json (also part of
+      # the cache-key source); the script copies each object from
+      # s3://$MODEL_S3_BUCKET/<s3Path>. Whisper models need no staging step:
+      # the whisper tests download them at runtime (and they persist in the
+      # same cached models/ directory).
+      - name: Stage Parakeet GGUFs from QVAC registry (manifest-driven)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          node scripts/stage-integration-models.mjs
+          ls -lh models/
+
+      - name: Run integration test (Unix)
+        if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          # ggml backend .so/.dylib files load transitively from the prebuilds
+          # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
+
+      # test:integration:gpu is WHISPER-only (test/integration/gpu.test.js), so
+      # it takes the whisper-specific GPU gate: `no_gpu_whisper` overrides the
+      # job-level `no_gpu` that governs the parakeet suites. Only darwin-x64
+      # sets it today (whisper covered Intel-macOS Metal, parakeet never did).
+      - name: Run integration GPU test (Unix)
+        if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:integration:gpu
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Run integration GPU test (Windows)
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: npm run test:integration:gpu
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
+
+      - name: Run Vulkan GPU smoke test
+        if: matrix.runner == 'qvac-ubuntu2404-x64-gpu'
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:stand-alone:gpu
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      # RTF benchmark leg (run_rtf_benchmarks=true, set by
+      # benchmark-performance-asr-ggml.yml). The matrix runner dispatches each
+      # entry on entry.engine (whisper: modelFile; parakeet: modelType+quant),
+      # writes per-config JSON under benchmarks/results/ and stamps a
+      # top-level `engine` field into every report for the aggregator.
+      - name: Run RTF benchmark (Unix)
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu || 'false' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          QVAC_ASR_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_ASR_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+
+      - name: Run RTF benchmark (Windows)
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NO_GPU: ${{ matrix.no_gpu || 'false' }}
+          QVAC_ASR_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_ASR_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+
+      # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
+      # model/backend shouldn't sink the whole leg). But a run that produced
+      # ZERO artifacts means every entry failed and must still fail loudly.
+      - name: Verify RTF benchmark output exists
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          # Count via a bash glob rather than `find`: on the Windows runner
+          # `find` resolves to C:\Windows\System32\find.exe (a text-search
+          # tool), which rejects the POSIX args and exits 2 — failing the step
+          # under `set -o pipefail` even though the artifacts exist. nullglob
+          # makes the array empty (not a literal pattern) when nothing matches.
+          shopt -s nullglob
+          rtf_files=("$results_dir"/rtf-benchmark-*.json)
+          rtf_count=${#rtf_files[@]}
+          echo "rtf-benchmark-*.json produced: $rtf_count"
+          ls -la "$results_dir" || true
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on ${{ matrix.runner || matrix.os }}. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
+            exit 1
+          fi
+
+      # Runner-qualified artifact name: two same-platform runners (e.g.
+      # qvac-ubuntu2204-x64 cpu-only and qvac-ubuntu2204-x64-gpu) would
+      # otherwise collide on one artifact name.
+      - name: Upload RTF benchmark results
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-asr-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/asr-ggml/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Print run state (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          ls -la prebuilds || true
+          tree prebuilds || true
+        continue-on-error: true
+
+      - name: Print run state (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          Get-ChildItem prebuilds -ErrorAction SilentlyContinue
+          tree prebuilds /F 2>$null
+        continue-on-error: true
