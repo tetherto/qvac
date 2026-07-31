@@ -53,7 +53,6 @@ jobs:
     permissions:
       statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
-    secrets: inherit
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest

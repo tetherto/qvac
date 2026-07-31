@@ -49,7 +49,6 @@ jobs:
     permissions:
       statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
-    secrets: inherit
   authorize:
     needs: [fork-approval]
     runs-on: ubuntu-latest

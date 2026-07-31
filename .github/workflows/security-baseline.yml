@@ -107,7 +107,6 @@ jobs:
           curl -sSfL -o "$RUNNER_TEMP/actionlint.tgz" \
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Lint changed workflows with actionlint
         if: github.event_name == 'pull_request' && steps.changed-workflows.outputs.count != '0'
@@ -115,6 +114,6 @@ jobs:
           set -euo pipefail
           mapfile -t files < "$RUNNER_TEMP/changed-workflows.txt"
           # actionlint exits 1 when it reports findings; lint-workflows.mjs decides pass/fail.
-          actionlint -oneline -shellcheck= -pyflakes= "${files[@]}" \
+          "$RUNNER_TEMP/actionlint" -oneline -shellcheck= -pyflakes= "${files[@]}" \
             > "$RUNNER_TEMP/actionlint.txt" || true
           node .github/scripts/lint-workflows.mjs --input "$RUNNER_TEMP/actionlint.txt"

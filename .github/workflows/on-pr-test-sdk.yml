@@ -34,7 +34,6 @@ jobs:
     permissions:
       statuses: write
     uses: ./.github/workflows/reusable-fork-approval.yml
-    secrets: inherit
   resolve-config:
     needs: [fork-approval]
     permissions:
