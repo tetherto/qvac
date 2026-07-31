@@ -85,7 +85,9 @@ TEST(LoadConfigHandlers_Aliases, SimultaneousSpellingsAreDeterministic) {
 // supplied, the registry now reads both (the later underscore entry wins) and
 // consumes both, instead of forwarding the second spelling to llama.cpp. Pins
 // that deterministic outcome.
-TEST(LoadConfigHandlers_Aliases, SimultaneousImageTokenSpellingsAreDeterministic) {
+TEST(
+    LoadConfigHandlers_Aliases,
+    SimultaneousImageTokenSpellingsAreDeterministic) {
   common_params params;
   std::unordered_map<std::string, std::string> map{
       {"image-max-tokens", "1024"},
