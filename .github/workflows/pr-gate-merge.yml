@@ -98,6 +98,9 @@ jobs:
             pkg-any:
               - "packages/**"
               - ".github/workflows/prebuilds-*.yml"
+            asr-ggml:
+              - "packages/asr-ggml/**"
+              - ".github/workflows/prebuilds-asr-ggml.yml"
             bci-whispercpp:
               - "packages/bci-whispercpp/**"
               - ".github/workflows/prebuilds-bci-whispercpp.yml"
@@ -112,6 +115,11 @@ jobs:
             embed-llamacpp:
               - "packages/embed-llamacpp/**"
               - ".github/workflows/prebuilds-embed-llamacpp.yml"
+            # Pure-JS/TS package (no prebuilds). Listed so its lint, typecheck,
+            # declaration and generated-artifact checks run under sanity-checks
+            # and reach the required qvac-merge-guard status.
+            infer-base:
+              - "packages/infer-base/**"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
               - ".github/workflows/prebuilds-llm-llamacpp.yml"
@@ -121,12 +129,6 @@ jobs:
             onnx:
               - "packages/onnx/**"
               - ".github/workflows/prebuilds-onnx.yml"
-            transcription-parakeet:
-              - "packages/transcription-parakeet/**"
-              - ".github/workflows/prebuilds-transcription-parakeet.yml"
-            transcription-whispercpp:
-              - "packages/transcription-whispercpp/**"
-              - ".github/workflows/prebuilds-transcription-whispercpp.yml"
             translation-nmtcpp:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/prebuilds-translation-nmtcpp.yml"

@@ -1,16 +1,6 @@
-// Type-level consumer test: ES-module named-import shape.
-//
-// Mirrors how packages/sdk consumes this addon
-// (`packages/sdk/server/bare/plugins/ggml-vla/plugin.ts`):
-//
-//   import { VlaModel } from '@qvac/vla-ggml'
-//   function wrapVlaModel(inner: VlaModel, ...): VlaModel & VlaModelWrapper
-//
-// so `VlaModel` must resolve as BOTH a value and a type through the named
-// import, even though the package's declarations use `export =`. Compiled
-// with the SDK's module settings (ES2022 + bundler resolution +
-// verbatimModuleSyntax) so a regression here is caught in this package's CI
-// rather than in the SDK.
+// Type-level consumer test: the SDK's named-import shape (ggml-vla plugin).
+// `VlaModel` must resolve as both a value and a type; compiled with the SDK's
+// module settings. Type-checked only — never executed.
 
 import { VlaModel } from "../../index";
 import type {
@@ -46,9 +36,8 @@ const options: VlaModelOptions = {
 const model = new VlaModel(options);
 void wrapVlaModel(model);
 
-// The SDK plugin's literal construction call, including the conditional
-// spread — kept here so `exactOptionalPropertyTypes` regressions in
-// VlaModelOptions surface in this package rather than in the SDK build.
+// The SDK plugin's literal construction call, including the conditional spread
+// (guards `exactOptionalPropertyTypes` compatibility of VlaModelOptions).
 declare const modelPath: string;
 declare const verbosity: number | undefined;
 declare const streamLogger: {
