@@ -145,10 +145,9 @@ jobs:
       # Linux: ONE configure+build of the build/ tree produces both addon-test
       # and the bounded fuzz target, sharing the vcpkg GoogleTest, so we pay the
       # CMake configure cost once instead of configuring two trees separately.
-      # FuzzTest plus RE2 (which FuzzTest needs as a source tree, for its
-      # internal headers) are pulled via CMake FetchContent at pinned commits, so
-      # this needs github.com egress; the rest of its dependency stack comes from
-      # the vcpkg binary cache configured by setup-vcpkg above, Abseil included.
+      # FuzzTest is pulled via CMake FetchContent at a pinned commit, so this
+      # needs github.com egress; its whole dependency stack comes from the vcpkg
+      # binary cache configured by setup-vcpkg above, Abseil and RE2 included.
       # See docs/architecture/ADDON-FUZZING.md.
       - name: Build C++ tests + fuzz targets
         if: matrix.platform == 'linux'

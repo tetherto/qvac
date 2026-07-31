@@ -22,7 +22,14 @@
           ]
         },
         "antlr4",
-        "gtest"
+        "gtest",
+        {
+          "name": "re2",
+          "version>=": "2025-11-05",
+          "features": [
+            "asan"
+          ]
+        }
       ]
     },
     "tests": {

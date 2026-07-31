@@ -346,14 +346,14 @@ endfunction()
 # normal CMake dep flow is allowed by the dependency-pinning rule; this is NOT
 # remote code execution. Bump the pin when moving to a newer FuzzTest release.
 #
-# Abseil, GoogleTest and the ANTLR4 C++ runtime come from vcpkg instead of
+# Abseil, RE2, GoogleTest and the ANTLR4 C++ runtime come from vcpkg instead of
 # FuzzTest's own FetchContent declarations, so the shared binary cache serves
 # them rather than every build tree compiling them: qvac_addon_enable_fuzztest()
 # redirects those declarations at find_package(). The most valuable consequence
 # is that the unit tests and the fuzz targets link ONE GoogleTest — the vcpkg one
-# — so there is no target-name collision to design the build around. FuzzTest and
-# RE2 are the only things still compiled from source (RE2 has to be: FuzzTest
-# includes its internal headers). See docs/architecture/ADDON-FUZZING.md.
+# — so there is no target-name collision to design the build around. FuzzTest
+# itself is the only thing still compiled from source. See
+# docs/architecture/ADDON-FUZZING.md.
 # ---------------------------------------------------------------------------
 set(QVAC_ADDON_FUZZTEST_GIT_REPOSITORY "https://github.com/google/fuzztest.git")
 # Release 2026-06-29.
@@ -415,6 +415,7 @@ macro(qvac_addon_enable_fuzztest)
     # "fuzz" feature fails here naming the package instead of later with an
     # unresolved absl:: link target.
     find_package(absl CONFIG REQUIRED)
+    find_package(re2 CONFIG REQUIRED)
     find_package(GTest CONFIG REQUIRED)
     find_package(antlr4-runtime CONFIG REQUIRED)
 
@@ -426,12 +427,13 @@ macro(qvac_addon_enable_fuzztest)
     # would reintroduce the duplicate GoogleTest these declarations exist to
     # prevent, so an unresolvable dependency must fail loudly.
     #
-    # RE2 is NOT redirected: FuzzTest's regexp domains include RE2's internal
-    # re2/prog.h + re2/regexp.h, which no RE2 install ships (upstream installs
-    # only the four public headers). FuzzTest's own declaration builds it from
-    # source against the vcpkg Abseil found above — one Abseil in the link, and
-    # Abseil's propagated cxx_std_20 keeps RE2 on the same standard.
+    # RE2 is redirected like the rest, which only works because the `re2` port in
+    # qvac-registry-vcpkg also installs the internal headers FuzzTest's regexp
+    # domains include (re2/prog.h, re2/regexp.h and their closure) — upstream
+    # installs only the four public ones. That port is pinned to the same RE2 tag
+    # FuzzTest pins, since private headers carry no stability promise.
     FetchContent_Declare(abseil-cpp FIND_PACKAGE_ARGS NAMES absl)
+    FetchContent_Declare(re2 FIND_PACKAGE_ARGS NAMES re2)
     FetchContent_Declare(googletest FIND_PACKAGE_ARGS NAMES GTest)
     FetchContent_Declare(antlr_cpp FIND_PACKAGE_ARGS NAMES antlr4-runtime)
 

@@ -19,12 +19,13 @@ phase.
 > Pinned source built through the normal CMake dep flow is allowed by the
 > dependency-pinning rule and is **not** remote code execution.
 >
-> Of the four dependencies FuzzTest would otherwise `FetchContent` itself,
-> **Abseil, GoogleTest and the ANTLR4 C++ runtime are redirected at vcpkg** — see
-> "Dependency sourcing" below for how, and for why RE2 structurally cannot be.
-> The reason this matters beyond build time: there is now exactly **one**
-> GoogleTest in play (the vcpkg one), which is what retired the whole
-> target-name-collision workaround the first iteration needed.
+> **All four dependencies FuzzTest would otherwise `FetchContent` itself —
+> Abseil, RE2, GoogleTest and the ANTLR4 C++ runtime — are redirected at
+> vcpkg**; see "Dependency sourcing" below. RE2 takes a dated port in
+> `qvac-registry-vcpkg` that installs the internal headers FuzzTest needs, which
+> no other RE2 install ships. The reason this matters beyond build time: there is
+> now exactly **one** GoogleTest in play (the vcpkg one), which is what retired
+> the whole target-name-collision workaround the first iteration needed.
 
 > **This effort rides on the shared CMake template + fabric migration.** As of
 > the `qvac-addon` CMake template
@@ -204,15 +205,20 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
 
 ### Accepted trade-offs
 
-- FuzzTest and RE2 still compile from source (see "Dependency sourcing"), scoped
+- FuzzTest still compiles from source (see "Dependency sourcing"), scoped
   behind `BUILD_FUZZING=OFF` so normal builds and the existing coverage job are
   unaffected. It is a dedicated build, never on the default path.
-- **A newer `abseil` port in `qvac-registry-vcpkg`.** The version FuzzTest requires
-  is newer than any registry served, so the registry gained a dated `abseil`
-  `20260526.0` (see "The `abseil` registry port"). That is one more pinned
-  third-party dependency to maintain, in exchange for retiring both the
-  FetchContent'd Abseil and the abseil#2091 declaration override the first
-  iteration needed.
+- **Two ports in `qvac-registry-vcpkg` to maintain.** The Abseil version FuzzTest
+  requires is newer than any registry served, so the registry gained a dated
+  `abseil` `20260526.0` (see "The `abseil` registry port"); RE2 needed a port of
+  its own because no upstream install ships the internal headers FuzzTest
+  includes (see "The `re2` registry port"). In exchange, the whole dependency
+  stack is binary-cached, and the FetchContent'd Abseil plus the abseil#2091
+  declaration override the first iteration needed are retired.
+- **The `re2` port is pinned to FuzzTest's own RE2 tag.** Private headers carry
+  no stability promise, so a FuzzTest bump means re-checking the include closure
+  and moving the port with it — a coupling `FetchContent` handled implicitly by
+  building whatever FuzzTest pinned.
 - **Fetched subtree forced to C++20.** FuzzTest hard-sets `CMAKE_CXX_STANDARD 17`
   for its subtree, but our addon TUs need C++20 (`std::span`) and a fuzz driver
   instantiates FuzzTest templates over types those TUs define, so both halves
@@ -310,7 +316,7 @@ without patching FuzzTest.
 | GoogleTest `v1.17.0` | **vcpkg** (`gtest`, same version) | Also removes the second GoogleTest, and with it the target-name collision. |
 | ANTLR4 C++ runtime `4.13.2` | **vcpkg** (`antlr4`, same version) | Pulls `libuuid` transitively. |
 | Abseil `20260526.0` | **vcpkg** (`abseil`, `qvac-registry-vcpkg`, same version) | Upstream vcpkg is on `20260107.1` (still, on vcpkg master as of 2026-07-29), which predates the `absl/random/mocking_access.h` that `fuzztest::fuzzing_bit_gen` needs, and this registry's `abseil` was pinned to `20240722.0` for onnxruntime — so the registry gained a dated `20260526.0` port. See below. |
-| RE2 `2025-11-05` | FetchContent | **Structural, not version skew.** `fuzztest/internal/domains/regexp_dfa.cc` includes RE2's internal `re2/prog.h` + `re2/regexp.h` to walk a compiled regex into a DFA. Upstream RE2 installs only its four public headers, so no RE2 *install* — vcpkg or otherwise — can satisfy FuzzTest. It has to be a source tree. |
+| RE2 `2025-11-05` | **vcpkg** (`re2`, `qvac-registry-vcpkg`, same version) | Needed a port of its own, for a structural reason rather than version skew: `fuzztest/internal/domains/regexp_dfa.cc` includes RE2's internal `re2/prog.h` + `re2/regexp.h` to walk a compiled regex into a DFA, and every stock RE2 install ships only the four public headers. The registry port installs the internal ones. See below. |
 
 The vcpkg packages are declared in the package manifest's `fuzz` feature
 (`vcpkg.json`); the ones resolved from Microsoft are listed in that registry's
@@ -321,10 +327,11 @@ feature fails naming the package rather than with an unresolved link target. The
 declarations deliberately carry no download fallback — silently falling back to a
 source GoogleTest would reintroduce the duplicate the redirect exists to prevent.
 
-Mixing a vcpkg Abseil with a source-built RE2 is safe in this direction and only
-this direction: RE2's source build binds to the imported `absl::` targets, so
-there is one Abseil in the link. The reverse (vcpkg RE2 + source Abseil) would
-put two Abseils in one link, because vcpkg's `re2` links vcpkg's `abseil`.
+Everything except FuzzTest itself now comes from one place, which is what keeps a
+single Abseil in the link: vcpkg's `re2` links vcpkg's `abseil`, and FuzzTest's
+subtree binds to the same imported `absl::` targets. Sourcing any of the four
+from FetchContent while the rest come from vcpkg is what would put two Abseils in
+one link.
 
 ### The `abseil` registry port
 
@@ -376,11 +383,44 @@ validated at `20260526.0`) is that `onnxruntime` constrains Abseil with
 `version>= "onnxruntime#1"`: a non-comparable scheme, so resolving it *together*
 with the dated version is a hard error rather than an implicit bump.
 
-> **Pending:** `vcpkg-configuration.json` currently points `default-registry` at a
-> fork of `qvac-registry-vcpkg`, because the port is still in review
-> ([qvac-registry-vcpkg#271](https://github.com/tetherto/qvac-registry-vcpkg/pull/271)).
-> Flip it back to `tetherto/qvac-registry-vcpkg` at the post-merge baseline before
-> this lands.
+### The `re2` registry port
+
+`ports/re2/` in `qvac-registry-vcpkg`, at version-date `2025-11-05`. Same source
+and version as upstream `microsoft/vcpkg`'s `re2` — the SHA512 is upstream's,
+unchanged — with two additions:
+
+- **It installs the internal headers.** RE2 lists four headers in `RE2_HEADERS`
+  (`filtered_re2.h`, `re2.h`, `set.h`, `stringpiece.h`); FuzzTest needs
+  `prog.h` and `regexp.h`, which pull in `pod_array.h`, `sparse_array.h`,
+  `sparse_set.h` and `util/utf.h`. Those six are the complete closure — the
+  three array/set headers include only each other and `utf.h` includes nothing.
+  `util/utf.h` is installed at `include/re2/util/utf.h`, beside `regexp.h`,
+  rather than at `include/util/utf.h`: `regexp.h` includes it with quotes, and a
+  quoted include is searched relative to the including file first, so this
+  resolves without adding a generic `util/` directory to the shared include root
+  where it would be a collision risk against every other port.
+- **An `asan` feature**, which pulls `abseil[asan]` with it and which the `fuzz`
+  manifest feature requests. RE2 uses absl containers internally (`dfa.cc`,
+  `re2.cc`, `regexp.cc`, `compile.cc`, `onepass.cc`, `prefilter_tree.h`), so it
+  is subject to the same swisstable generations ABI split described above — an
+  uninstrumented RE2 on an ASan Abseil is the mismatched half of that pair.
+
+The port's version and FuzzTest's RE2 pin have to move together, because private
+headers carry no stability promise. A FuzzTest bump should re-check the closure
+above (`rg '#include "(re2|util)/' fuzztest-src/fuzztest/`) before bumping the
+port.
+
+Nothing else resolves `re2` from this registry: `packages/onnx` and
+`packages/translation-nmtcpp` both route it to the Microsoft registry through
+their `vcpkg-configuration.json` allowlists.
+
+> **Pending:** the port is still in review
+> ([qvac-registry-vcpkg#275](https://github.com/tetherto/qvac-registry-vcpkg/pull/275)),
+> so `vcpkg-configuration.json`'s `default-registry` baseline
+> (`231a017`) predates it and the fuzz build cannot resolve `re2` from the
+> registry yet. Until it merges, build with
+> `VCPKG_OVERLAY_PORTS=<path to a dir containing the port>`. Bump the baseline to
+> the post-merge commit before this lands.
 
 ## Implementation phases
 
@@ -451,10 +491,10 @@ addons at once.
   runner self-applies the relaxed fabric-boundary options while the fuzz runner
   keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
   `test:cpp` path (no fuzzing). It reuses the caller's existing
-  SHA-bound fork gate (no new trust wiring). Still open: what remains on
-  FetchContent (FuzzTest, RE2) runs cold each job because Manual Workspace
-  Cleanup wipes `build/`, so cache the pinned sources/build (Abseil is already
-  vcpkg-served; RE2 cannot be — see "Dependency sourcing"). Then add a separate scheduled
+  SHA-bound fork gate (no new trust wiring). Still open: FuzzTest, the one
+  dependency left on FetchContent, runs cold each job because Manual Workspace
+  Cleanup wipes `build/`, so cache its pinned source/build (everything else is
+  vcpkg-served — see "Dependency sourcing"). Then add a separate scheduled
   / `workflow_dispatch` fuzzing job that builds with `-DFUZZTEST_FUZZING_MODE=ON`
   and runs `--fuzz_for=<duration>` (coverage-guided, time-boxed) with a
   wall-clock budget per target on a self-hosted `qvac-*` Linux runner, applying
@@ -484,12 +524,14 @@ addons at once.
   in-process model produces false crashes. Keeping targets to pure
   parse/transform functions (not `runJob`) avoids this — and is the same choice
   that lets most targets skip the fabric link.
-- **Build-time cost.** Abseil, GoogleTest and ANTLR4 come from the vcpkg binary
-  cache; FuzzTest + RE2 are still fetched and compiled, only under
+- **Build-time cost.** Abseil, RE2, GoogleTest and ANTLR4 come from the vcpkg
+  binary cache; FuzzTest is still fetched and compiled, only under
   `BUILD_FUZZING=ON`, so normal builds and coverage are unaffected. The fuzz
-  configure therefore still needs network access for those two pinned sources —
-  fine for the local/scheduled fuzz job, and reducible only by caching them (RE2
-  cannot move to vcpkg, see "Dependency sourcing").
+  configure therefore still needs network access for that one pinned source, and
+  FuzzTest's ~30 static libraries remain the bulk of a cold fuzz build — fine for
+  the local/scheduled fuzz job, and reducible only by caching them. A `fuzztest`
+  port would fix that, at the price of maintaining install rules FuzzTest itself
+  doesn't ship (see "Dependency sourcing").
 - **Upstream-pin maintenance.** The FuzzTest commit and the C++20 subtree forcing
   are workarounds for the current FuzzTest release, as is the abseil#2091 patch
   the registry port carries. Each is documented at its definition in
