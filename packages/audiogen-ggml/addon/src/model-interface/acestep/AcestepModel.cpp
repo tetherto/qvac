@@ -2,9 +2,11 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 #include "audiogen-cpp/acestep/engine.h"
@@ -17,6 +19,29 @@ int16_t f32ToI16(float x) {
   if (v > 32767.0F) v = 32767.0F;
   if (v < -32768.0F) v = -32768.0F;
   return static_cast<int16_t>(v);
+}
+
+constexpr int64_t BACKEND_DEVICE_CPU = 0;
+constexpr int64_t BACKEND_DEVICE_GPU = 1;
+
+// Mirrors tts-ggml's BackendUtils.hpp mapping so the codes the two addons
+// report cannot drift apart. Metal registers as "MTL" on newer ggml.
+int64_t backendIdFromName(const std::string& name) {
+  if (name == "CPU")
+    return 0;
+  if (name.rfind("Metal", 0) == 0 || name.rfind("MTL", 0) == 0)
+    return 1;
+  if (name.rfind("CUDA", 0) == 0)
+    return 2;
+  if (name.rfind("Vulkan", 0) == 0)
+    return 3;
+  if (name.rfind("OpenCL", 0) == 0)
+    return 4;
+  return 99;
+}
+
+int64_t backendDeviceFromName(const std::string& name) {
+  return name == "CPU" ? BACKEND_DEVICE_CPU : BACKEND_DEVICE_GPU;
 }
 }  // namespace
 
@@ -196,6 +221,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   stats.emplace_back("totalTimeMs", totalTime_);
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
+  // The *resolved* backend, so a useGPU request that silently fell back to the
+  // CPU is visible to callers (gpu-smoke.test.js asserts on these).
+  stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
+  stats.emplace_back("backendId", backendIdFromName(backendName_));
   return stats;
 }
 
