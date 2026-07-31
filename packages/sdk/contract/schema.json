@@ -377,6 +377,12 @@
             },
             "realTimeFactor": {
               "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
             }
           },
           "additionalProperties": false,

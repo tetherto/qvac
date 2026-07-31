@@ -63,7 +63,13 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
           channels: 2
         }
       ],
-      { audioDurationMs: 10, totalTimeMs: 5, realTimeFactor: 0.5 }
+      {
+        audioDurationMs: 10,
+        totalTimeMs: 5,
+        realTimeFactor: 0.5,
+        backendDevice: 1,
+        backendId: 1
+      }
     )
   )
   registerAudioGenModel(modelId, model)
@@ -93,7 +99,13 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
     type: 'audioGenStream',
     done: true,
     stopReason: 'completed',
-    stats: { audioDurationMs: 10, totalTimeMs: 5, realTimeFactor: 0.5 }
+    stats: {
+      audioDurationMs: 10,
+      totalTimeMs: 5,
+      realTimeFactor: 0.5,
+      backendDevice: 1,
+      backendId: 1
+    }
   })
   t.is(getRequestRegistry().get(requestId), null)
 })

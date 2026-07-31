@@ -61,6 +61,8 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
     total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
 
 
 class AudioGenStreamResponse(GeneratedBaseModel):

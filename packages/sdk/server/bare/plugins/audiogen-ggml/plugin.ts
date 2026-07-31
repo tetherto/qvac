@@ -21,6 +21,8 @@ export const audioGenPlugin = definePlugin({
   displayName: 'Audio Generation (GGML / ACE-Step)',
   addonPackage: ADDON_AUDIOGEN,
   loadConfigSchema: audioGenConfigSchema,
+  // AudioGen's primary `modelSrc` is intentionally empty: all required
+  // weights are config-owned artifacts resolved from the four model sources.
   skipPrimaryModelPathValidation: true,
 
   resolveConfig: resolveAudioGenConfig,

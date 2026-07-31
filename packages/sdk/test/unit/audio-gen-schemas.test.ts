@@ -96,18 +96,25 @@ test('audioGenStreamResponseSchema accepts progress, PCM, and terminal frames', 
       channels: 2
     }).success
   )
-  t.ok(
-    audioGenStreamResponseSchema.safeParse({
-      type: 'audioGenStream',
-      done: true,
-      stopReason: 'completed',
-      stats: {
-        audioDurationMs: 10000,
-        totalTimeMs: 5000,
-        realTimeFactor: 0.5
-      }
-    }).success
-  )
+  const terminal = audioGenStreamResponseSchema.parse({
+    type: 'audioGenStream',
+    done: true,
+    stopReason: 'completed',
+    stats: {
+      audioDurationMs: 10000,
+      totalTimeMs: 5000,
+      realTimeFactor: 0.5,
+      backendDevice: 1,
+      backendId: 1
+    }
+  })
+  t.alike(terminal.stats, {
+    audioDurationMs: 10000,
+    totalTimeMs: 5000,
+    realTimeFactor: 0.5,
+    backendDevice: 1,
+    backendId: 1
+  })
   t.ok(
     audioGenStreamResponseSchema.safeParse({
       type: 'audioGenStream',

@@ -121,13 +121,6 @@ async function resolveBatchPrompts(prompts: BatchPromptParams[]): Promise<Resolv
   return { prompts: resolvedPrompts, handlers: resolvedHandlers }
 }
 
-/**
- * Runs multiple completion prompts through one loaded model and exposes
- * aggregate events, per-prompt runs, final results, and stats.
- *
- * @param params - Model ID, prompts, optional concurrency, and RPC options.
- * @returns A batch run with a synchronous request ID and asynchronous result handles.
- */
 export function batchCompletion(params: BatchCompletionParams): BatchCompletionRun {
   return createBatchCompletionRun(params, streamRpc)
 }

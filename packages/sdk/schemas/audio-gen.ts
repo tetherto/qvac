@@ -60,7 +60,9 @@ export const audioGenProgressSchema = z.object({
 export const audioGenStatsSchema = z.object({
   audioDurationMs: z.number().optional(),
   totalTimeMs: z.number().optional(),
-  realTimeFactor: z.number().optional()
+  realTimeFactor: z.number().optional(),
+  backendDevice: z.number().optional(),
+  backendId: z.number().optional()
 })
 
 export const audioGenStreamResponseSchema = z
