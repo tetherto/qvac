@@ -230,3 +230,4 @@ exports.default = ImageClassifier;
 const cjsExports = ImageClassifier;
 cjsExports.ImageClassifier = ImageClassifier;
 module.exports = cjsExports;
+// tmp-poc-test-3: verify-against-registry mode
