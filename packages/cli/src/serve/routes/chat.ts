@@ -138,13 +138,12 @@ never appears in \`content\`.
 
 **Token accounting**: \`usage.prompt_tokens\` and
 \`prompt_tokens_details.cached_tokens\` come from \`CompletionStats\` when the SDK
-provides them. \`completion_tokens\` prefers the count of delivered
-\`contentDelta\` / \`thinkingDelta\` pieces (so stripped protocol markers and
-inflated \`n_eval\` stats cannot echo the \`max_tokens\` / predict budget), and
-falls back to \`stats.generatedTokens\` or a whitespace split of the output.
-When streaming, \`usage\` is emitted only if
-\`stream_options: { include_usage: true }\` is set, as a final chunk with an
-empty \`choices\` array (OpenAI compatibility).
+provides them. \`completion_tokens\` prefers \`stats.emittedTokens\` (non-empty
+addon stream pieces) over \`stats.generatedTokens\` (decode / \`n_eval\` count,
+which inline recovery can inflate toward the \`max_tokens\` / predict budget),
+and falls back to a whitespace split of the output. When streaming, \`usage\`
+is emitted only if \`stream_options: { include_usage: true }\` is set, as a
+final chunk with an empty \`choices\` array (OpenAI compatibility).
 `.trim()
 }
 

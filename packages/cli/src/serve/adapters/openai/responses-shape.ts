@@ -36,11 +36,11 @@ export interface BuildResponseObjectParams {
   messageItemId?: string
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
-  /** From SDK completion stats; `generatedTokens` maps to `usage.output_tokens`. */
+  /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
   stats?: CompletionStats
   /**
-   * When set (from `drainCompletion`), wins over `stats.generatedTokens` so
-   * `usage.output_tokens` matches delivered content/thinking pieces.
+   * When set (from `drainCompletion`), wins over stats-derived usage so
+   * streaming and blocking Responses stay aligned.
    */
   completionTokens?: number
   /**

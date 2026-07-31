@@ -41,18 +41,20 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
 }
 
 /**
- * Prefer the count of non-empty pieces the addon streamed over
- * `llama_perf` `n_eval`. Inline reasoning-recovery decodes inflate
- * `n_eval` (and therefore raw `generatedTokens`) up toward the predict
- * budget even when fewer tokens were actually emitted.
+ * Attach the count of non-empty pieces the addon streamed without
+ * overwriting `generatedTokens` (`llama_perf` `n_eval`). Length / KV-cache
+ * decisions keep the decode count; usage reporting prefers `emittedTokens`.
+ * Zero is attached explicitly so inflated `n_eval` cannot be used as usage
+ * when nothing was streamed.
  */
-export function withEmittedGeneratedTokens(
+export function withEmittedTokens(
   stats: CompletionStats | undefined,
   emittedPieces: number
 ): CompletionStats | undefined {
-  if (emittedPieces <= 0) return stats
+  const emittedTokens = emittedPieces > 0 ? emittedPieces : 0
+  if (!stats && emittedTokens === 0) return undefined
   return {
     ...(stats ?? {}),
-    generatedTokens: emittedPieces
+    emittedTokens
   }
 }

@@ -2,7 +2,7 @@ import test from 'brittle'
 import { completionStatsSchema } from '@/schemas'
 import {
   normalizeCompletionStats,
-  withEmittedGeneratedTokens
+  withEmittedTokens
 } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
 import type { LlmStats } from '@/server/bare/types/addon-responses'
 
@@ -35,29 +35,30 @@ test('normalizeCompletionStats: returns undefined when no finite stats remain', 
   t.is(normalized, undefined)
 })
 
-test('withEmittedGeneratedTokens: overrides inflated n_eval with streamed piece count', (t) => {
+test('withEmittedTokens: attaches streamed piece count without overwriting decode count', (t) => {
   const normalized = normalizeCompletionStats({
     TTFT: 12,
     generatedTokens: 512,
     backendDevice: 'gpu'
   })
 
-  const adjusted = withEmittedGeneratedTokens(normalized, 113)
+  const adjusted = withEmittedTokens(normalized, 113)
 
   t.alike(adjusted, {
     timeToFirstToken: 12,
-    generatedTokens: 113,
+    generatedTokens: 512,
+    emittedTokens: 113,
     backendDevice: 'gpu'
   })
   t.is(completionStatsSchema.safeParse(adjusted).success, true)
 })
 
-test('withEmittedGeneratedTokens: leaves stats alone when nothing was emitted', (t) => {
-  const normalized = normalizeCompletionStats({ generatedTokens: 0 })
-  t.alike(withEmittedGeneratedTokens(normalized, 0), { generatedTokens: 0 })
-  t.is(withEmittedGeneratedTokens(undefined, 0), undefined)
+test('withEmittedTokens: records zero emission so inflated n_eval is not used for usage', (t) => {
+  const normalized = normalizeCompletionStats({ generatedTokens: 512 })
+  t.alike(withEmittedTokens(normalized, 0), { generatedTokens: 512, emittedTokens: 0 })
+  t.is(withEmittedTokens(undefined, 0), undefined)
 })
 
-test('withEmittedGeneratedTokens: synthesizes stats when only the stream count exists', (t) => {
-  t.alike(withEmittedGeneratedTokens(undefined, 4), { generatedTokens: 4 })
+test('withEmittedTokens: synthesizes stats when only the stream count exists', (t) => {
+  t.alike(withEmittedTokens(undefined, 4), { emittedTokens: 4 })
 })

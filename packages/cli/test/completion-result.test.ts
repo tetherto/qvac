@@ -37,12 +37,15 @@ function fakeRun(opts: {
 }
 
 describe('completionTokensFromStats', () => {
-  it('prefers delivered content/thinking pieces over stats.generatedTokens', () => {
-    assert.equal(completionTokensFromStats('a b c', { generatedTokens: 256 }, 113), 113)
-    assert.equal(completionTokensFromStats('', { generatedTokens: 512 }, 0), 512)
+  it('prefers emittedTokens over inflated generatedTokens', () => {
+    assert.equal(
+      completionTokensFromStats('a b c', { generatedTokens: 256, emittedTokens: 113 }),
+      113
+    )
+    assert.equal(completionTokensFromStats('', { generatedTokens: 512, emittedTokens: 0 }), 0)
   })
 
-  it('prefers finite stats.generatedTokens when nothing was delivered', () => {
+  it('prefers finite stats.generatedTokens when emittedTokens is absent', () => {
     assert.equal(completionTokensFromStats('a b c', { generatedTokens: 10 }), 10)
     assert.equal(completionTokensFromStats('a b c', { generatedTokens: 0 }), 0)
   })
@@ -84,46 +87,34 @@ describe('drainCompletion', () => {
     assert.equal(r.toolCalls.length, 1)
   })
 
-  it('completion tokens match delivered deltas, not an inflated predict-cap stats value', async () => {
+  it('completion tokens prefer emittedTokens over inflated generatedTokens', async () => {
     const r = await drainCompletion(
-      fakeRun({ tokens: ['a', 'b'], stats: { generatedTokens: 256 } })
+      fakeRun({
+        tokens: ['a', 'b'],
+        stats: { generatedTokens: 256, emittedTokens: 2 }
+      })
     )
     assert.equal(r.completionTokens, 2)
   })
 
-  it('counts thinking deltas toward completion tokens with content', async () => {
+  it('does not treat contentDelta event counts as tokens', async () => {
     const r = await drainCompletion(
       fakeRun({
-        thinking: ['reason1', 'reason2', 'reason3'],
-        tokens: ['ans'],
-        stats: { generatedTokens: 512 }
+        tokens: ['Hello, world!'],
+        stats: { generatedTokens: 512, emittedTokens: 4 }
       })
     )
     assert.equal(r.completionTokens, 4)
-    assert.equal(r.thinking, 'reason1reason2reason3')
   })
 
-  it('reports thinking-only delivery when content is empty (not the predict cap)', async () => {
-    const r = await drainCompletion(
-      fakeRun({
-        thinking: Array.from({ length: 7 }, (_, i) => `t${i}`),
-        tokens: [],
-        stats: { generatedTokens: 512 }
-      })
-    )
-    assert.equal(r.text, '')
-    assert.equal(r.completionTokens, 7)
-  })
-
-  it('completion tokens use stats when no content or thinking deltas were delivered', async () => {
+  it('completion tokens use generatedTokens when emittedTokens is absent', async () => {
     const r = await drainCompletion(fakeRun({ tokens: [], stats: { generatedTokens: 7 } }))
     assert.equal(r.completionTokens, 7)
   })
 
-  it('completion tokens fall back to whitespace word count without stats or deltas', async () => {
+  it('completion tokens fall back to whitespace word count without stats', async () => {
     const r = await drainCompletion(fakeRun({ tokens: ['one two ', 'three'] }))
-    // Two content deltas were delivered, so piece count wins over whitespace.
-    assert.equal(r.completionTokens, 2)
+    assert.equal(r.completionTokens, 3)
   })
 
   it('throws HttpError(502) on errorDone', async () => {

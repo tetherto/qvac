@@ -17,9 +17,9 @@ export interface DrainedCompletion {
    */
   stopReason: string | undefined
   /**
-   * Tokens delivered on the OpenAI content / reasoning channels (one per
-   * `contentDelta` / `thinkingDelta`), falling back to SDK
-   * `stats.generatedTokens` or a whitespace word count.
+   * OpenAI `usage.completion_tokens`: prefers SDK `stats.emittedTokens`
+   * (addon-streamed pieces), then `stats.generatedTokens` (decode count),
+   * then a whitespace word count.
    */
   completionTokens: number
   /** OpenAI `finish_reason`: `tool_calls` wins, then `length` on truncation, else `stop`. */
@@ -45,7 +45,6 @@ export async function drainCompletion(
 ): Promise<DrainedCompletion> {
   let text = ''
   let thinking = ''
-  let deliveredPieces = 0
   const toolCalls: ToolCall[] = []
   let stats: CompletionStats | undefined
   let stopReason: string | undefined
@@ -53,11 +52,9 @@ export async function drainCompletion(
   for await (const event of result.events) {
     if (event.type === 'contentDelta') {
       text += event.text
-      deliveredPieces++
       onToken?.(event.text)
     } else if (event.type === 'thinkingDelta') {
       thinking += event.text
-      deliveredPieces++
       onThinking?.(event.text)
     } else if (event.type === 'toolCall') {
       toolCalls.push(event.call)
@@ -77,7 +74,7 @@ export async function drainCompletion(
     await result.final
   }
 
-  const completionTokens = completionTokensFromStats(text, stats, deliveredPieces)
+  const completionTokens = completionTokensFromStats(text, stats)
   const finishReason: OpenAiFinishReason =
     toolCalls.length > 0 ? 'tool_calls' : stopReason === 'length' ? 'length' : 'stop'
 
@@ -87,18 +84,18 @@ export async function drainCompletion(
 /**
  * OpenAI `usage.completion_tokens` for a drained run.
  *
- * Prefer the number of content/thinking deltas actually delivered on the
- * wire. Addon `stats.generatedTokens` tracks `llama_perf` `n_eval`, which
- * can equal the predict / `max_tokens` budget when fewer tokens were
- * streamed (inline recovery inflation, stripped protocol markers).
+ * Prefer SDK `emittedTokens` (non-empty addon stream pieces) over
+ * `generatedTokens` (`llama_perf` `n_eval`), which can equal the predict /
+ * `max_tokens` budget when fewer tokens were streamed. Normalized
+ * `contentDelta` / `thinkingDelta` event counts are not used — those are
+ * chunk boundaries, not tokenizer tokens.
  */
 export function completionTokensFromStats(
   text: string,
-  stats: CompletionStats | undefined,
-  deliveredPieces?: number
+  stats: CompletionStats | undefined
 ): number {
-  if (typeof deliveredPieces === 'number' && deliveredPieces > 0) {
-    return deliveredPieces
+  if (typeof stats?.emittedTokens === 'number' && Number.isFinite(stats.emittedTokens)) {
+    return stats.emittedTokens
   }
   if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
     return stats.generatedTokens

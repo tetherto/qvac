@@ -45,7 +45,7 @@ import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/server/bare/types/addon-responses'
 import {
   normalizeCompletionStats,
-  withEmittedGeneratedTokens
+  withEmittedTokens
 } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
 import fs from 'bare-fs'
 
@@ -350,7 +350,7 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats
-  const stats = withEmittedGeneratedTokens(
+  const stats = withEmittedTokens(
     normalizeCompletionStats(responseWithStats.stats),
     emittedPieces
   )

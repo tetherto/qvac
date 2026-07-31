@@ -124,7 +124,7 @@ describe('writeStreamingResponse', () => {
       tokens: ['x', 'y'],
       toolCalls: [],
       text: 'xy',
-      stats: { generatedTokens: 5 }
+      stats: { generatedTokens: 5, emittedTokens: 2 }
     })
 
     const completed = await writeStreamingResponse(holder.res, p, result)

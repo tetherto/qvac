@@ -137,7 +137,11 @@ describe('chat completions (blocking)', () => {
     // happened in either channel rather than requiring visible content.
     const produced = (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
     assert.ok(produced > 0)
-    assert.equal(body.usage.completion_tokens, 8)
+    // Usage prefers addon-streamed pieces (`emittedTokens`); decode count can
+    // be one higher than streamed pieces around budget stops, so assert the
+    // budget was respected rather than requiring an exact echo of 8.
+    assert.ok(body.usage.completion_tokens > 0)
+    assert.ok(body.usage.completion_tokens <= 8)
     assert.equal(body.choices[0].finish_reason, 'length')
   })
 
