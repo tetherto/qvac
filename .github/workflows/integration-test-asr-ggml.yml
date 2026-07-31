@@ -368,11 +368,9 @@ jobs:
       # ONE cache-models step covers both engines: whisper models self-download
       # at test runtime via test/integration/helpers.js (HuggingFace) and
       # parakeet GGUFs are staged from S3 via the manifest, but both engines
-      # land in packages/asr-ggml/models. The cache key folds in BOTH the
-      # whisper download logic (helpers.js) and the parakeet staging set
-      # (parakeet-models.manifest.json) so neither engine's set can drift
-      # without churning the key. `warm: false` because parakeet models come
-      # from S3 (staged below), not from HuggingFace URLs.
+      # land in packages/asr-ggml/models, so one cache covers both. The key is
+      # keyed on the engines' model manifests. `warm: false` because parakeet
+      # models come from S3 (staged below), not from HuggingFace URLs.
       - name: Cache integration test models
         id: model-cache
         if: runner.environment != 'github-hosted'
@@ -380,9 +378,11 @@ jobs:
         with:
           package: asr-ggml
           paths: packages/asr-ggml/models
-          hash-files-glob: |
-            packages/asr-ggml/test/integration/helpers.js
-            packages/asr-ggml/test/integration/parakeet-models.manifest.json
+          # MUST stay a single line: cache-models writes this straight into
+          # $GITHUB_OUTPUT as `glob=<value>`, so a multi-line value produces
+          # "Invalid format" and fails the step. The glob covers every engine's
+          # manifest, so neither model set can drift without churning the key.
+          hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
           warm: 'false'
           enable-cross-os: 'false'
 

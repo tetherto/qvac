@@ -115,6 +115,11 @@ jobs:
             embed-llamacpp:
               - "packages/embed-llamacpp/**"
               - ".github/workflows/prebuilds-embed-llamacpp.yml"
+            # Pure-JS/TS package (no prebuilds). Listed so its lint, typecheck,
+            # declaration and generated-artifact checks run under sanity-checks
+            # and reach the required qvac-merge-guard status.
+            infer-base:
+              - "packages/infer-base/**"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
               - ".github/workflows/prebuilds-llm-llamacpp.yml"
