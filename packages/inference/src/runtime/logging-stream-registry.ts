@@ -8,7 +8,7 @@
  */
 
 import type { LogLevel } from '@qvac/logging'
-import { ALL_LOG_ID } from '../logging/namespaces.ts'
+import { ALL_LOG_ID } from '@/logging/namespaces'
 
 // `sourceId` is the id the log was emitted under (a model id, LOG_ID, a RAG
 // workspace key, …). It usually equals the subscription id, but for the global

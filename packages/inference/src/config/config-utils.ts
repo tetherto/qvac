@@ -1,6 +1,6 @@
-import { qvacConfigSchema, type QvacConfig } from '../schemas/index.ts'
-import { ConfigValidationFailedError } from '../errors/index.ts'
-import { formatZodError } from '../utils/zod-error.ts'
+import { qvacConfigSchema, type QvacConfig } from '@/schemas/index'
+import { ConfigValidationFailedError } from '@/errors/index'
+import { formatZodError } from '@/utils/zod-error'
 
 export type { QvacConfig }
 

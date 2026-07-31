@@ -1,9 +1,9 @@
 import { Readable } from 'bare-stream'
 import fs from 'bare-fs'
 import Buffer from 'bare-buffer'
-import { needsDecoding, decodeAudioToStream } from './audio/decoder.ts'
-import type { AudioInput, AudioFormat } from '../schemas/index.ts'
-import { AudioFileNotFoundError, InvalidAudioChunkError } from '../errors/index.ts'
+import { needsDecoding, decodeAudioToStream } from '@/utils/audio/decoder'
+import type { AudioInput, AudioFormat } from '@/schemas/index'
+import { AudioFileNotFoundError, InvalidAudioChunkError } from '@/errors/index'
 
 /**
  * Converts an AudioInput (base64 or filePath) into a Readable stream,

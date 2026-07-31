@@ -138,11 +138,12 @@
     "format:fix": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "compile": "tsc -p tsconfig.build.json",
-    "rewrite-dts-ext": "bare scripts/fix-dts-extensions.ts dist",
-    "build": "npm run compile && npm run rewrite-dts-ext",
+    "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
+    "build": "npm run compile && npm run postcompile:aliases",
     "prepare": "npm run build",
-    "test": "brittle-bare 'test/**/*.test.ts'",
-    "test:bare": "bun run test"
+    "build:test": "tsc -p test/tsconfig.build.json && tsc-alias -p test/tsconfig.alias.json",
+    "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
+    "test:bare": "npm run test"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -252,6 +253,7 @@
     "lunte": "^1.8.4",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
+    "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3"
   }
 }

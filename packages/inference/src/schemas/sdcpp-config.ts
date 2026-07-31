@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { modelSrcInputSchema } from './model-src-utils.ts'
+import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 

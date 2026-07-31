@@ -1,7 +1,7 @@
 import test from 'brittle'
-import type { CompletionEvent, ToolCall } from '../src/schemas'
-import { aggregateEvents, buildFinalFromEvents } from '../src/utils/aggregate-events'
-import type { ToolHandlerMap } from '../src/utils/tool-helpers'
+import type { CompletionEvent, ToolCall } from '@/schemas'
+import { aggregateEvents, buildFinalFromEvents } from '@/utils/aggregate-events'
+import type { ToolHandlerMap } from '@/utils/tool-helpers'
 
 // --- aggregateEvents ---
 

@@ -2,12 +2,12 @@ import { RAG, HyperDBAdapter, type EmbeddingFunction } from '@qvac/rag'
 import Corestore from 'corestore'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getConfiguredCacheDir } from '../runtime/state.ts'
-import { RAGWorkspaceModelMismatchError, RAGWorkspaceNotOpenError } from '../errors/index.ts'
-import { validateAndJoinPath } from '../utils/path-security.ts'
-import { createStreamLogger, getEngineLogger, RAG_NAMESPACE } from '../logging/index.ts'
-import { cancelAllRagOperations } from './rag-operation-manager.ts'
-import { registerCorestore, unregisterCorestore } from '../runtime/runtime-lifecycle.ts'
+import { getConfiguredCacheDir } from '@/runtime/state'
+import { RAGWorkspaceModelMismatchError, RAGWorkspaceNotOpenError } from '@/errors/index'
+import { validateAndJoinPath } from '@/utils/path-security'
+import { createStreamLogger, getEngineLogger, RAG_NAMESPACE } from '@/logging/index'
+import { cancelAllRagOperations } from '@/rag/rag-operation-manager'
+import { registerCorestore, unregisterCorestore } from '@/runtime/runtime-lifecycle'
 
 const logger = getEngineLogger()
 

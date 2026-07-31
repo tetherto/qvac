@@ -1,11 +1,11 @@
-import { getModel } from '../../../../runtime/model-registry.ts'
+import { getModel } from '@/runtime/model-registry'
 import Buffer from 'bare-buffer'
 import {
   classifyRequestSchema,
   type ClassifyRequest,
   type ClassificationResult
-} from '../../../../schemas/index.ts'
-import { nowMs } from '../../../../profiling/index.ts'
+} from '@/schemas/index'
+import { nowMs } from '@/profiling/index'
 
 type ClassifierModel = {
   classify(

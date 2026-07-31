@@ -1,6 +1,6 @@
 import type { z } from 'zod'
-import { toolSchema, type Tool, type ToolCall, type ToolCallWithCall } from '../schemas/tools.ts'
-import { InvalidToolsArrayError, InvalidToolSchemaError } from '../errors/index.ts'
+import { toolSchema, type Tool, type ToolCall, type ToolCallWithCall } from '@/schemas/tools'
+import { InvalidToolsArrayError, InvalidToolSchemaError } from '@/errors/index'
 
 type ZodObjectType = z.ZodObject<z.ZodRawShape>
 type JsonSchemaEnumValue = string | number | boolean | null

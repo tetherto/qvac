@@ -1,5 +1,5 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { RagRequest, RagResponse, RagProgressUpdate } from '../schemas/index.ts'
+import type { RagRequest, RagResponse, RagProgressUpdate } from '@/schemas/index'
 import {
   chunk,
   ingest,
@@ -14,15 +14,11 @@ import {
   getActiveRagRequest,
   setActiveRagRequest,
   clearActiveRagRequest
-} from './index.ts'
-import {
-  getRequestRegistry,
-  withRequestContext,
-  type ManagedRequestContext
-} from '../runtime/index.ts'
-import { generateRandomRequestId } from '../runtime/request-id.ts'
-import { getEngineLogger } from '../logging/index.ts'
-import { profileReplyHandler, registerOperationMetrics } from '../profiling/index.ts'
+} from '@/rag/index'
+import { getRequestRegistry, withRequestContext, type ManagedRequestContext } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
+import { getEngineLogger } from '@/logging/index'
+import { profileReplyHandler, registerOperationMetrics } from '@/profiling/index'
 
 type ProgressOperation = 'ingest' | 'saveEmbeddings' | 'reindex'
 

@@ -3,10 +3,10 @@ import {
   type UpscaleClientParams,
   type UpscaleStats,
   type UpscaleStreamRequest
-} from '../schemas/sdcpp-config.ts'
-import { stream as streamRpc } from '../dispatch.ts'
-import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
-import { StreamEndedError } from '../errors/index.ts'
+} from '@/schemas/sdcpp-config'
+import { stream as streamRpc } from '@/dispatch'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+import { StreamEndedError } from '@/errors/index'
 
 interface UpscaleResult {
   outputs: Promise<Uint8Array[]>

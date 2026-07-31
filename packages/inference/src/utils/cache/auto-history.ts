@@ -1,5 +1,5 @@
-import { normalizeAssistantCacheContent } from '../cache-normalize.ts'
-import type { CacheMessage } from './types.ts'
+import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
+import type { CacheMessage } from '@/utils/cache/types'
 
 function normalizeCacheMessage(message: CacheMessage): CacheMessage {
   const { attachments, ...normalized } = message

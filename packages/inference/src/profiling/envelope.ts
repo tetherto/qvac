@@ -6,7 +6,7 @@ import {
   PROFILING_KEY,
   type ProfilingRequestMeta,
   type ProfilingResponseMeta
-} from '../schemas/index.ts'
+} from '@/schemas/index'
 
 export function createProfilingMeta(
   profileId: string,

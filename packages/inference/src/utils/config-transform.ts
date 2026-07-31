@@ -3,7 +3,7 @@ import {
   type ModelTypeInput,
   normalizeModelType,
   ModelType
-} from '../schemas/index.ts'
+} from '@/schemas/index'
 
 export function transformConfigForReload(modelType: ModelTypeInput, config: unknown) {
   const canonicalType = normalizeModelType(modelType)

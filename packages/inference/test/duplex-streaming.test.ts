@@ -5,17 +5,17 @@ import {
   defineHandler,
   defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema
-} from '../src/schemas/plugin'
+} from '@/schemas/plugin'
 import {
   transcribeRequestSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   type TranscribeStreamResponse,
   type TranscribeStreamSession
-} from '../src/schemas/transcription'
-import type { BciTranscribeStreamSession } from '../src/schemas/bci'
-import { createErrorResponse } from '../src/schemas/error'
-import { textToSpeechStreamRequestSchema } from '../src/schemas/text-to-speech'
+} from '@/schemas/transcription'
+import type { BciTranscribeStreamSession } from '@/schemas/bci'
+import { createErrorResponse } from '@/schemas/error'
+import { textToSpeechStreamRequestSchema } from '@/schemas/text-to-speech'
 
 // =============================================================================
 // defineDuplexHandler — type-safe definition without unsafe casts

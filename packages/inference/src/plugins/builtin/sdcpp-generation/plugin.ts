@@ -24,14 +24,14 @@ import {
   type ResolveContext,
   type ResolveResult,
   type SdcppConfig
-} from '../../../schemas/index.ts'
-import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging/index.ts'
-import { ModelLoadFailedError } from '../../../errors/index.ts'
-import { isMobile } from '../../../runtime/state.ts'
-import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile.ts'
-import { diffusion } from './ops/diffusion.ts'
-import { markLtxVideoModel, video } from './ops/video.ts'
-import { upscale } from './ops/upscale.ts'
+} from '@/schemas/index'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
+import { ModelLoadFailedError } from '@/errors/index'
+import { isMobile } from '@/runtime/state'
+import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
+import { diffusion } from '@/plugins/builtin/sdcpp-generation/ops/diffusion'
+import { markLtxVideoModel, video } from '@/plugins/builtin/sdcpp-generation/ops/video'
+import { upscale } from '@/plugins/builtin/sdcpp-generation/ops/upscale'
 
 type DiffusionArtifactKey =
   | 'clipLModelPath'

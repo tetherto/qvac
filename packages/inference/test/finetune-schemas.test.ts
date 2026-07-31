@@ -4,7 +4,7 @@ import {
   finetuneRequestSchema,
   finetuneResponseSchema,
   finetuneValidationSchema
-} from '../src/schemas'
+} from '@/schemas'
 
 test('finetuneValidationSchema: defaults split validation fraction', (t) => {
   const result = finetuneValidationSchema.parse({

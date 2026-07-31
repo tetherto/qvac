@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
-import { modelSrcInputSchema, type ModelSrcInput } from './model-src-utils.ts'
+import { modelSrcInputSchema, type ModelSrcInput } from '@/schemas/model-src-utils'
 
 // Chatterbox multilingual supported languages (23). The engines support
 // different language sets, so the language enum is validated per engine.

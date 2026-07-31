@@ -1,4 +1,4 @@
-import { send, stream as streamRpc } from '../dispatch.ts'
+import { send, stream as streamRpc } from '@/dispatch'
 import {
   finetuneRunParamsSchema,
   finetuneRunRequestSchema,
@@ -14,9 +14,9 @@ import {
   type FinetuneRunParams,
   type FinetuneStopParams,
   type RPCOptions
-} from '../schemas/index.ts'
-import { InvalidResponseError, StreamEndedError } from '../errors/index.ts'
-import { parseClientInput } from './parse-input.ts'
+} from '@/schemas/index'
+import { InvalidResponseError, StreamEndedError } from '@/errors/index'
+import { parseClientInput } from '@/api/parse-input'
 
 export interface FinetuneHandle {
   progressStream: AsyncGenerator<FinetuneProgress>

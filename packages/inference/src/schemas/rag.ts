@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { safePathComponent } from './path-validation.ts'
+import { safePathComponent } from '@/schemas/path-validation'
 import type {
   Doc,
   EmbeddedDoc,

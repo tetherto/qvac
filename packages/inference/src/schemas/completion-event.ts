@@ -1,6 +1,11 @@
 import { z } from 'zod'
-import { toolCallSchema, toolCallErrorSchema, type Tool, type ToolCallWithCall } from './tools.ts'
-import type { ToolDialect } from './completion-stream.ts'
+import {
+  toolCallSchema,
+  toolCallErrorSchema,
+  type Tool,
+  type ToolCallWithCall
+} from '@/schemas/tools'
+import type { ToolDialect } from '@/schemas/completion-stream'
 
 export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),

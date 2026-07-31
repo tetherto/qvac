@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { modelSrcInputSchema } from './model-src-utils.ts'
+import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 
 // === Shared ===
 

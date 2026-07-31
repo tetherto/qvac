@@ -1,6 +1,6 @@
-import { getRagInstance } from '../rag-workspace-manager.ts'
-import { embed } from '../../plugins/ops/embed.ts'
-import { ragIngestParamsSchema, type RagIngestParams } from '../../schemas/index.ts'
+import { getRagInstance } from '@/rag/rag-workspace-manager'
+import { embed } from '@/plugins/ops/embed'
+import { ragIngestParamsSchema, type RagIngestParams } from '@/schemas/index'
 import type { AbortSignal } from 'bare-abort-controller'
 import type { IngestOpts, IngestStage } from '@qvac/rag'
 

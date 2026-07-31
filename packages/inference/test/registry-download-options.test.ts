@@ -3,7 +3,7 @@ import { AbortController } from 'bare-abort-controller'
 import {
   DEFAULT_REGISTRY_STREAM_TIMEOUT_MS,
   buildRegistryClientOptions
-} from '../src/handlers/load-model/registry-client-options'
+} from '@/handlers/load-model/registry-client-options'
 
 const outputFile = '/tmp/model.bin'
 

@@ -1,8 +1,8 @@
 import test from 'brittle'
-import { resolveOcrConfig } from '../src/plugins/builtin/ggml-ocr/resolve-config.ts'
-import { OCR_CRAFT, OCR_DOCTR, OCR_DOCTR_1, OCR_LATIN } from '../src/models/registry/index.ts'
-import type { ModelSrcInput, OCRConfig, ResolveContext } from '../src/schemas/index.ts'
-import { ModelLoadFailedError, PluginNotFoundError } from '../src/errors/index.ts'
+import { resolveOcrConfig } from '@/plugins/builtin/ggml-ocr/resolve-config'
+import { OCR_CRAFT, OCR_DOCTR, OCR_DOCTR_1, OCR_LATIN } from '@/models/registry/index'
+import type { ModelSrcInput, OCRConfig, ResolveContext } from '@/schemas/index'
+import { ModelLoadFailedError, PluginNotFoundError } from '@/errors/index'
 
 interface MockResolveCall {
   src: ModelSrcInput

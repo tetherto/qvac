@@ -59,12 +59,12 @@ export {
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
   type FinetuneHandle
-} from './api/index.ts'
+} from '@/api/index'
 
 // Engine lifecycle and explicit plugin assembly. No plugins are registered by
 // default: an app assembles the engines it needs via `plugins([...])` or the
 // `registerPlugin`/`registerPlugins` primitives, then calls the operations.
-export { close } from './dispatch.ts'
+export { close } from '@/dispatch'
 export {
   plugins,
   registerPlugin,
@@ -73,7 +73,7 @@ export {
   hasPlugin,
   getAllPlugins,
   unregisterPlugin
-} from './plugins/index.ts'
+} from '@/plugins/index'
 
 // The value-clean surface (also published as `@qvac/inference/surface`).
-export * from './surface.ts'
+export * from '@/surface'

@@ -21,12 +21,12 @@ import {
   type TtsRuntimeConfig,
   type TtsChatterboxRuntimeConfig,
   type TtsSupertonicRuntimeConfig
-} from '../../../schemas/index.ts'
-import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
-import { TtsArtifactsRequiredError, LegacyTtsModelDeprecatedError } from '../../../errors/index.ts'
-import { textToSpeech } from './ops/text-to-speech.ts'
-import { textToSpeechStream } from './ops/text-to-speech-stream.ts'
-import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
+} from '@/schemas/index'
+import { createStreamLogger, registerAddonLogger } from '@/logging/index'
+import { TtsArtifactsRequiredError, LegacyTtsModelDeprecatedError } from '@/errors/index'
+import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
+import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
+import { attachModelExecutionMs } from '@/profiling/model-execution'
 
 function rejectLegacyOnnxFields(cfg: object) {
   const record = cfg as Record<string, unknown>

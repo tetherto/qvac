@@ -1,2 +1,2 @@
-export { handleLoadModel } from './handler.ts'
-export { resolveModelPath } from './resolve.ts'
+export { handleLoadModel } from '@/handlers/load-model/handler'
+export { resolveModelPath } from '@/handlers/load-model/resolve'

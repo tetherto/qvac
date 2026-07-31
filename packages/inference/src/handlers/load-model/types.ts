@@ -1,6 +1,6 @@
-import type { SourceType } from '../../schemas/index.ts'
+import type { SourceType } from '@/schemas/index'
 import type { AbortSignal } from 'bare-abort-controller'
-import type { DisposableScope } from '../../runtime/disposable-scope.ts'
+import type { DisposableScope } from '@/runtime/disposable-scope'
 
 export interface DownloadStats {
   downloadTimeMs?: number

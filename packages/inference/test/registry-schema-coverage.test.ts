@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { registry } from '../src/registry'
-import { requestSchema } from '../src/schemas'
+import { registry } from '@/registry'
+import { requestSchema } from '@/schemas'
 
 // `dispatch` validates every request against `requestSchema` before running a
 // handler, so a registered request type with no matching schema is rejected at

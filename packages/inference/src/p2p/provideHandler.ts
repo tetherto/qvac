@@ -1,2 +1,2 @@
 // Re-export the provideHandler from the refactored provideHandler modules
-export { provideHandler } from './provideHandler/handler.ts'
+export { provideHandler } from '@/p2p/provideHandler/handler'

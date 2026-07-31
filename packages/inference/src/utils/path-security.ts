@@ -1,5 +1,5 @@
 import path from 'bare-path'
-import { PathTraversalError } from '../errors/index.ts'
+import { PathTraversalError } from '@/errors/index'
 
 /**
  * Sanitize a path component that will be joined to a base directory.

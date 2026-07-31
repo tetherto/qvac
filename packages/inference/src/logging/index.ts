@@ -7,19 +7,19 @@ export {
   setGlobalConsoleOutput,
   registerLogger,
   unregisterLogger
-} from './logger.ts'
-export type { Logger, LoggerOptions, LogTransport } from './types.ts'
+} from '@/logging/logger'
+export type { Logger, LoggerOptions, LogTransport } from '@/logging/types'
 export {
   RAG_NAMESPACE,
   LOG_ID,
   ALL_LOG_ID,
   LOG_NAMESPACE,
   type AddonNamespace
-} from './namespaces.ts'
+} from '@/logging/namespaces'
 export {
   registerAddonLogger,
   unregisterAddonLogger,
   createAddonLoggerCallback,
   clearAllAddonLoggers
-} from './addon.ts'
-export { summarizeRequest } from './utils.ts'
+} from '@/logging/addon'
+export { summarizeRequest } from '@/logging/utils'

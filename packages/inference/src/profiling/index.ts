@@ -12,14 +12,14 @@
  * ```
  */
 
-import * as controller from './controller.ts'
-import * as exporters from './exporters.ts'
+import * as controller from '@/profiling/controller'
+import * as exporters from '@/profiling/exporters'
 import type {
   ProfilerRuntimeOptions,
   ProfilingEvent,
   ProfilerExport,
   AggregatedStats
-} from './types.ts'
+} from '@/profiling/types'
 
 export const profiler = {
   /**
@@ -99,9 +99,9 @@ export type {
   ProfilerExport,
   AggregatedStats,
   ProfilingEventKind
-} from './types.ts'
-export type { ProfilerMode } from '../schemas/index.ts'
-export { nowMs } from './clock.ts'
+} from '@/profiling/types'
+export type { ProfilerMode } from '@/schemas/index'
+export { nowMs } from '@/profiling/clock'
 export {
   enable,
   disable,
@@ -115,16 +115,16 @@ export {
   getEffectiveConfig,
   onRecord,
   type ResolvedProfilerConfig
-} from './controller.ts'
-export { recordEvent, clearAggregator } from './aggregator.ts'
-export { exportJSON, exportTable, exportSummary } from './exporters.ts'
+} from '@/profiling/controller'
+export { recordEvent, clearAggregator } from '@/profiling/aggregator'
+export { exportJSON, exportTable, exportSummary } from '@/profiling/exporters'
 export {
   createProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,
   stripProfilingMeta
-} from './envelope.ts'
+} from '@/profiling/envelope'
 export {
   recordPhase,
   recordFailure,
@@ -132,14 +132,14 @@ export {
   recordDelegationBreakdownPhases,
   type BaseTimings,
   type BaseEvent
-} from './events.ts'
-export { createServerProfiler, type ServerProfiler } from './profiler.ts'
-export { profileReplyHandler, profileStreamHandler } from './operation-wrappers.ts'
+} from '@/profiling/events'
+export { createServerProfiler, type ServerProfiler } from '@/profiling/profiler'
+export { profileReplyHandler, profileStreamHandler } from '@/profiling/operation-wrappers'
 export {
   registerOperationMetrics,
   buildOperationEvent,
   type OperationMetricsConfig
-} from './operation-metrics.ts'
+} from '@/profiling/operation-metrics'
 export {
   shouldProfileDelegation,
   createDelegationTimings,
@@ -154,4 +154,4 @@ export {
   type DelegationTimings,
   type DelegationStreamTimings,
   type DelegatedHandlerOptions
-} from './delegation-profiler.ts'
+} from '@/profiling/delegation-profiler'

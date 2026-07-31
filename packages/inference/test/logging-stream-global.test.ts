@@ -1,12 +1,12 @@
 import test from 'brittle'
-import { ALL_LOG_ID, LOG_ID } from '../src/logging'
+import { ALL_LOG_ID, LOG_ID } from '@/logging'
 import {
   registerLoggingStream,
   unregisterLoggingStream,
   sendLogToStreams,
   startLogBuffering,
   clearAllLoggingStreams
-} from '../src/runtime/logging-stream-registry'
+} from '@/runtime/logging-stream-registry'
 
 test('global stream receives logs from every source id', (t) => {
   clearAllLoggingStreams()

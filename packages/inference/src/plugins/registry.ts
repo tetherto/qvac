@@ -2,16 +2,16 @@ import {
   pluginDefinitionRuntimeSchema,
   type QvacPlugin,
   type PluginHandlerDefinition
-} from '../schemas/plugin.ts'
-import { isModelTypeAlias } from '../schemas/index.ts'
+} from '@/schemas/plugin'
+import { isModelTypeAlias } from '@/schemas/index'
 import {
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginLoggingInvalidError,
   PluginModelTypeReservedError
-} from '../errors/index.ts'
-import { createAddonLoggerCallback } from '../logging/addon.ts'
-import { formatZodError } from '../utils/zod-error.ts'
+} from '@/errors/index'
+import { createAddonLoggerCallback } from '@/logging/addon'
+import { formatZodError } from '@/utils/zod-error'
 
 const plugins = new Map<string, QvacPlugin>()
 

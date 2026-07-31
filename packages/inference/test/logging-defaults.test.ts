@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { getAppLogger, createBaseLogger } from '../src/logging/logger'
-import { logLevelSchema } from '../src/schemas/logging-stream'
+import { getAppLogger, createBaseLogger } from '@/logging/logger'
+import { logLevelSchema } from '@/schemas/logging-stream'
 
 test('logLevelSchema: accepts off alongside the standard levels', (t) => {
   for (const level of ['error', 'warn', 'info', 'debug', 'off']) {

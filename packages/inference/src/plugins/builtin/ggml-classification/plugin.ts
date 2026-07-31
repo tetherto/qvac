@@ -10,9 +10,9 @@ import {
   type ClassificationConfig,
   type CreateModelParams,
   type PluginModelResult
-} from '../../../schemas/index.ts'
-import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
-import { classify } from './ops/classify.ts'
+} from '@/schemas/index'
+import { createStreamLogger, registerAddonLogger } from '@/logging/index'
+import { classify } from '@/plugins/builtin/ggml-classification/ops/classify'
 
 export const classificationPlugin = definePlugin({
   modelType: ModelType.ggmlClassification,

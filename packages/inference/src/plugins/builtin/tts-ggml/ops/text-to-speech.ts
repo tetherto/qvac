@@ -1,14 +1,10 @@
-import { getModel } from '../../../../runtime/model-registry.ts'
-import { ttsRequestSchema, type TtsRequest, type TtsStats } from '../../../../schemas/index.ts'
-import { nowMs } from '../../../../profiling/index.ts'
-import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
-import type { TtsResponse } from '../../../../utils/addon-responses.ts'
-import { TextToSpeechFailedError } from '../../../../errors/index.ts'
-import {
-  type TtsStreamChunk,
-  type TtsOpYield,
-  collectTtsStats
-} from '../../../../utils/tts-stats.ts'
+import { getModel } from '@/runtime/model-registry'
+import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/index'
+import { nowMs } from '@/profiling/index'
+import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
+import type { TtsResponse } from '@/utils/addon-responses'
+import { TextToSpeechFailedError } from '@/errors/index'
+import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '@/utils/tts-stats'
 
 type RunStreamModel = {
   runStream: (

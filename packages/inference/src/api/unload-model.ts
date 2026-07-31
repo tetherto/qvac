@@ -1,8 +1,8 @@
-import { type UnloadModelRequest, type UnloadModelParams } from '../schemas/index.ts'
-import { send, close } from '../dispatch.ts'
-import { stopLoggingStreamForModel } from './logging-stream-registry.ts'
-import { InvalidResponseError, ModelUnloadFailedError } from '../errors/index.ts'
-import { getAppLogger } from '../logging/index.ts'
+import { type UnloadModelRequest, type UnloadModelParams } from '@/schemas/index'
+import { send, close } from '@/dispatch'
+import { stopLoggingStreamForModel } from '@/api/logging-stream-registry'
+import { InvalidResponseError, ModelUnloadFailedError } from '@/errors/index'
+import { getAppLogger } from '@/logging/index'
 
 const logger = getAppLogger()
 

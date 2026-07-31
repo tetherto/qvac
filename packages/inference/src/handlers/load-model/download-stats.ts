@@ -1,10 +1,15 @@
-import type { ModelProgressUpdate } from '../../schemas/index.ts'
-import type { DownloadStats, DownloadResult, DownloadHooks, ResolveResult } from './types.ts'
-import type { ExplicitRegistryMetadata } from './registry-metadata.ts'
-import { downloadModelFromHttp } from './http.ts'
-import { downloadModelFromRegistry } from './registry.ts'
-import { downloadModelFromHyperdrive } from './hyperdrive.ts'
-import { nowMs } from '../../profiling/index.ts'
+import type { ModelProgressUpdate } from '@/schemas/index'
+import type {
+  DownloadStats,
+  DownloadResult,
+  DownloadHooks,
+  ResolveResult
+} from '@/handlers/load-model/types'
+import type { ExplicitRegistryMetadata } from '@/handlers/load-model/registry-metadata'
+import { downloadModelFromHttp } from '@/handlers/load-model/http'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
+import { downloadModelFromHyperdrive } from '@/handlers/load-model/hyperdrive'
+import { nowMs } from '@/profiling/index'
 
 interface StatsCollector {
   maxBytesDownloaded: number

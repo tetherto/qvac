@@ -1,12 +1,12 @@
 import { z } from 'zod'
-import type { NmtLanguage } from './translation-config.ts'
+import type { NmtLanguage } from '@/schemas/translation-config'
 import {
   nmtModelTypeSchema,
   llmModelTypeSchema,
   normalizeModelType,
   type NmtModelTypeInput,
   type LlmModelTypeInput
-} from './model-types.ts'
+} from '@/schemas/model-types'
 
 const translateParamsNmtSchema = z.object({
   modelId: z.string().describe('The identifier of the NMT translation model to use.'),

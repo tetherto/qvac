@@ -1,16 +1,16 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { clearPlugins, registerPlugin, getPlugin, hasPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
-import { handlePluginInvoke, handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
+import { clearPlugins, registerPlugin, getPlugin, hasPlugin } from '@/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import { handlePluginInvoke, handlePluginInvokeStream } from '@/handlers/plugin-invoke'
 import {
   ModelIsDelegatedError,
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,
   PluginResponseValidationFailedError
-} from '../src/errors'
-import { ERROR_CODES, ModelType, type QvacPlugin } from '../src/schemas'
+} from '@/errors'
+import { ERROR_CODES, ModelType, type QvacPlugin } from '@/schemas'
 
 let idCounter = 0
 function makeId(prefix: string) {
