@@ -43,8 +43,9 @@ export async function* audioGenStream(
     return
   }
 
+  let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
-    candidate.cancel().catch((error: unknown) => {
+    cancelPromise ??= candidate.cancel().catch((error: unknown) => {
       logger.warn(
         `[cancel] model.cancel() rejected during abort for modelId=${request.modelId}: ${
           error instanceof Error ? error.message : String(error)
@@ -54,8 +55,9 @@ export async function* audioGenStream(
   }
   ctx.signal.addEventListener('abort', onAbort, { once: true })
   if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
+  ctx.scope.defer(async () => {
     ctx.signal.removeEventListener('abort', onAbort)
+    await cancelPromise
   })
 
   let response: Awaited<ReturnType<AudioGen['run']>> | undefined

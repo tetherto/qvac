@@ -214,3 +214,78 @@ test('cancelling a queued AudioGen request does not cancel the active run', asyn
   t.is(getRequestRegistry().get(activeRequestId), null)
   t.is(getRequestRegistry().get(queuedRequestId), null)
 })
+
+test('queued AudioGen run waits for active native cancellation to settle', async (t) => {
+  const modelId = 'audio-gen-operation-deferred-cancel'
+  const activeRequestId = 'audio-gen-request-deferred-active'
+  const queuedRequestId = 'audio-gen-request-deferred-queued'
+  const response = createResponse(
+    [
+      { progress: { stage: 'dit', step: 1, total: 2 } },
+      { progress: { stage: 'dit', step: 2, total: 2 } }
+    ],
+    {}
+  )
+  let resolveCancel: (() => void) | undefined
+  const cancelGate = new Promise<void>((resolve) => {
+    resolveCancel = resolve
+  })
+  let runCalls = 0
+  let cancelCalls = 0
+  const model = createModel(response)
+  model.run = async function () {
+    runCalls++
+    return response
+  }
+  model.cancel = async function () {
+    cancelCalls++
+    await cancelGate
+  }
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const activeStream = audioGenStream({
+    type: 'audioGenStream',
+    requestId: activeRequestId,
+    modelId,
+    caption: 'active generation'
+  })
+  t.is((await activeStream.next()).value?.progress?.step, 1)
+  t.is(runCalls, 1)
+
+  const queuedStream = audioGenStream({
+    type: 'audioGenStream',
+    requestId: queuedRequestId,
+    modelId,
+    caption: 'queued generation'
+  })
+  let queuedResolved = false
+  const queuedFirstPromise = queuedStream.next().then((result) => {
+    queuedResolved = true
+    return result
+  })
+  await new Promise((resolve) => setTimeout(resolve, 5))
+
+  t.is(getRequestRegistry().cancel({ requestId: activeRequestId }), 1)
+  t.is((await activeStream.next()).value?.stopReason, 'cancelled')
+  const activeDonePromise = activeStream.next()
+  await new Promise((resolve) => setTimeout(resolve, 5))
+
+  t.is(cancelCalls, 1)
+  t.is(runCalls, 1, 'queued run has not touched the addon')
+  t.is(queuedResolved, false, 'queued run still waits for native cancellation')
+
+  resolveCancel?.()
+  t.ok((await activeDonePromise).done)
+
+  const queuedFirst = await queuedFirstPromise
+  t.is(queuedFirst.value?.progress?.step, 1)
+  t.is(runCalls, 2, 'queued run starts after native cancellation settles')
+  t.is((await queuedStream.next()).value?.progress?.step, 2)
+  t.is((await queuedStream.next()).value?.stopReason, 'completed')
+  t.ok((await queuedStream.next()).done)
+  t.is(getRequestRegistry().get(activeRequestId), null)
+  t.is(getRequestRegistry().get(queuedRequestId), null)
+})
