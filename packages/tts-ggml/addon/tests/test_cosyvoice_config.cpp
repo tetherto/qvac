@@ -29,7 +29,8 @@ using qvac_errors::StatusError;
 namespace {
 
 std::string envOrEmpty(const char* name) {
-  if (const char* v = std::getenv(name)) return v;
+  if (const char* v = std::getenv(name))
+    return v;
   return "";
 }
 
@@ -37,8 +38,8 @@ std::string envOrEmpty(const char* name) {
 // only validates the directory exists) succeeds, but load() must fail because
 // the engine can't resolve the LM/flow/HiFT/voice/tokenizer components.
 std::filesystem::path emptyModelDir() {
-  auto dir = std::filesystem::temp_directory_path() /
-             "qvac-tts-ggml-cosyvoice-tests";
+  auto dir =
+      std::filesystem::temp_directory_path() / "qvac-tts-ggml-cosyvoice-tests";
   std::filesystem::create_directories(dir);
   return dir;
 }
@@ -120,7 +121,8 @@ TEST(CosyvoiceModelLifecycle, ProcessRejectsWrongAnyInputType) {
 
 TEST(CosyvoiceRealGguf, ConstructLoadSynthesizeUnload) {
   const auto dir = envOrEmpty("QVAC_TEST_COSYVOICE_MODEL_DIR");
-  if (dir.empty()) GTEST_SKIP() << "Set QVAC_TEST_COSYVOICE_MODEL_DIR to enable.";
+  if (dir.empty())
+    GTEST_SKIP() << "Set QVAC_TEST_COSYVOICE_MODEL_DIR to enable.";
 
   CosyvoiceConfig cfg;
   cfg.modelDir = dir;
@@ -144,12 +146,13 @@ TEST(CosyvoiceRealGguf, ConstructLoadSynthesizeUnload) {
 
 TEST(CosyvoiceRealGguf, StreamingDeliversChunks) {
   const auto dir = envOrEmpty("QVAC_TEST_COSYVOICE_MODEL_DIR");
-  if (dir.empty()) GTEST_SKIP() << "Set QVAC_TEST_COSYVOICE_MODEL_DIR to enable.";
+  if (dir.empty())
+    GTEST_SKIP() << "Set QVAC_TEST_COSYVOICE_MODEL_DIR to enable.";
 
   CosyvoiceConfig cfg;
   cfg.modelDir = dir;
-  cfg.streamChunkTokens = 25;       // ~1 s hops
-  cfg.streamFirstChunkTokens = 10;  // smaller first chunk
+  cfg.streamChunkTokens = 25;      // ~1 s hops
+  cfg.streamFirstChunkTokens = 10; // smaller first chunk
   CosyvoiceModel m(cfg);
   m.load();
 
@@ -162,16 +165,19 @@ TEST(CosyvoiceRealGguf, StreamingDeliversChunks) {
     EXPECT_EQ(idx, chunks);
     streamedSamples += pcm.size();
     ++chunks;
-    if (isLast) sawLast = true;
+    if (isLast)
+      sawLast = true;
   };
 
   std::any out;
   ASSERT_NO_THROW(out = m.process(std::any(std::move(input))));
   EXPECT_GT(chunks, 1) << "expected multiple streaming chunks";
   EXPECT_TRUE(sawLast);
+  EXPECT_GT(streamedSamples, 0u) << "chunks carried PCM";
 
-  // The returned batch PCM must equal the concatenation of streamed chunks.
-  const auto* full = std::any_cast<std::vector<int16_t>>(&out);
-  ASSERT_NE(full, nullptr);
-  EXPECT_EQ(full->size(), streamedSamples);
+  // Streaming publishes its audio via the chunk callback; process() must NOT
+  // also return a full buffer (that would duplicate as a final outputArray
+  // event). The returned std::any is empty.
+  EXPECT_FALSE(out.has_value())
+      << "streaming process() returns no batch buffer";
 }

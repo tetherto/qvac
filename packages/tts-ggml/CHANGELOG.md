@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matching → CausalHiFT vocoder (24 kHz), on CPU, numerically validated
   bit-for-bit against the PyTorch reference (flow mel cosine 1.0, LM greedy
   trajectory 200/200, HiFT waveform corr 0.92). Instruct2 control (dialect /
-  accent / emotion / speed / volume) via the `instruct` option, and baked-voice
+  emotion / speed / volume / style) via the `instruct` option, and baked-voice
   timbre selection. Plumbed through `CosyvoiceConfig`/`CosyvoiceModel` →
   `JSAdapter` → `EngineOptions`, with the JS/TS surface (`index.d.ts`,
   `src/index.ts`), an example, C++ config unit tests, and a JS inference test.

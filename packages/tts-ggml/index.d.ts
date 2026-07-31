@@ -140,7 +140,12 @@ interface TTSGgmlFiles {
     cangjieTsv?: string;
 }
 interface TTSGgmlRuntimeConfig {
-    /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
+    /**
+     * Language code; default "en". Chatterbox MTL accepts
+     * es/fr/de/pt/it/zh/ja/ko/... CosyVoice3: reserved / not yet effective — the
+     * text-normalization frontend is not yet integrated, so it is accepted but
+     * not acted on.
+     */
     language?: string;
     /**
      * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
@@ -206,7 +211,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     lazySessionLoading?: boolean;
     /** Explicit engine selection. Auto-detected from `files` when omitted. */
     engine?: EngineType;
-    /** Chatterbox: voice-cloning reference audio path (wav). */
+    /**
+     * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3: reserved
+     * / not yet effective — zero-shot cloning needs the native S3 tokenizer +
+     * CAM++ (not ported yet), so the engine falls back to the baked voice.
+     */
     referenceAudio?: string;
     /** Chatterbox: directory of baked voice-conditioning tensors. */
     voiceDir?: string;
@@ -239,7 +248,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     streamFirstChunkTokens?: number;
     /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
     streamLeftContextTokens?: number;
-    /** Chatterbox-only CFM Euler step count. */
+    /**
+     * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet
+     * effective — the engine runs a fixed 10-step schedule and ignores this.
+     */
     cfmSteps?: number;
     /**
      * Chatterbox-only S3Gen classifier-free-guidance rate. The diffusion loop
@@ -258,7 +270,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
      * the selected voice's timbre; one control takes effect per synthesis.
      */
     instruct?: string | CosyvoiceInstruct;
-    /** Supertonic voice id baked into the GGUF, such as `F1` or `M1`. */
+    /**
+     * Supertonic voice id baked into the GGUF, such as `F1` or `M1`. CosyVoice3:
+     * reserved / not yet effective — named-voice selection is not yet wired.
+     */
     voice?: string;
     /** Alias for `voice` for compatibility with `@qvac/tts-onnx`. */
     voiceName?: string;

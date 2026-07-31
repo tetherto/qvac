@@ -11,7 +11,6 @@
 
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
-
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 
 namespace tts_cpp::cosyvoice {
@@ -68,7 +67,14 @@ public:
   int sampleRate() const { return sampleRate_; }
 
 private:
-  Output synthesize(const std::string& text, const ChunkCallback& onChunk);
+  // Mirrors ParlerModel::SynthResult: on streaming, chunks are emitted via
+  // onChunk and `pcm` is empty / `wasStreaming` true so process() returns an
+  // empty std::any instead of a duplicated final buffer.
+  struct SynthResult {
+    Output pcm;
+    bool wasStreaming = false;
+  };
+  SynthResult synthesize(const std::string& text, const ChunkCallback& onChunk);
   static void validateConfig(const CosyvoiceConfig& cfg);
 
   void loadLocked();

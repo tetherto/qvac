@@ -118,10 +118,29 @@ interface CosyvoiceInstruct {
 }
 
 /**
+ * Look up a structured-instruct control value, throwing a clear error for an
+ * invalid key instead of letting an `undefined` render into the instruction
+ * string.
+ */
+function cosyvoiceInstructValue(
+  map: Record<string, string>,
+  key: string,
+  kind: string,
+): string {
+  const value = map[key];
+  if (value == null) {
+    throw new Error(
+      `Invalid CosyVoice instruct ${kind} "${key}". Valid ${kind}s: ${Object.keys(map).join(", ")}.`,
+    );
+  }
+  return value;
+}
+
+/**
  * Render a CosyVoice3 `instruct` option to the trained instruction string.
  * A raw string passes through (trimmed); the structured form emits exactly one
  * control by precedence dialect > emotion > speed > volume > style. Returns ""
- * for no instruction (zero-shot).
+ * for no instruction (zero-shot). An invalid structured key throws.
  */
 function renderCosyvoiceInstruct(
   instruct: string | CosyvoiceInstruct | undefined,
@@ -129,12 +148,24 @@ function renderCosyvoiceInstruct(
   if (instruct == null) return "";
   if (typeof instruct === "string") return instruct.trim();
   if (instruct.dialect) {
-    return `请用${COSYVOICE_DIALECTS[instruct.dialect]}表达。`;
+    return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
   }
-  if (instruct.emotion) return COSYVOICE_EMOTIONS[instruct.emotion];
-  if (instruct.speed) return COSYVOICE_SPEEDS[instruct.speed];
-  if (instruct.volume) return COSYVOICE_VOLUMES[instruct.volume];
-  if (instruct.style) return COSYVOICE_STYLES[instruct.style];
+  if (instruct.emotion) {
+    return cosyvoiceInstructValue(
+      COSYVOICE_EMOTIONS,
+      instruct.emotion,
+      "emotion",
+    );
+  }
+  if (instruct.speed) {
+    return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
+  }
+  if (instruct.volume) {
+    return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
+  }
+  if (instruct.style) {
+    return cosyvoiceInstructValue(COSYVOICE_STYLES, instruct.style, "style");
+  }
   return "";
 }
 
@@ -252,7 +283,12 @@ interface TTSGgmlFiles {
 }
 
 interface TTSGgmlRuntimeConfig {
-  /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
+  /**
+   * Language code; default "en". Chatterbox MTL accepts
+   * es/fr/de/pt/it/zh/ja/ko/... CosyVoice3: reserved / not yet effective — the
+   * text-normalization frontend is not yet integrated, so it is accepted but
+   * not acted on.
+   */
   language?: string;
   /**
    * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
@@ -322,7 +358,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
   lazySessionLoading?: boolean;
   /** Explicit engine selection. Auto-detected from `files` when omitted. */
   engine?: EngineType;
-  /** Chatterbox: voice-cloning reference audio path (wav). */
+  /**
+   * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3: reserved
+   * / not yet effective — zero-shot cloning needs the native S3 tokenizer +
+   * CAM++ (not ported yet), so the engine falls back to the baked voice.
+   */
   referenceAudio?: string;
   /** Chatterbox: directory of baked voice-conditioning tensors. */
   voiceDir?: string;
@@ -355,7 +395,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
   streamFirstChunkTokens?: number;
   /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
   streamLeftContextTokens?: number;
-  /** Chatterbox-only CFM Euler step count. */
+  /**
+   * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet
+   * effective — the engine runs a fixed 10-step schedule and ignores this.
+   */
   cfmSteps?: number;
   /**
    * Chatterbox-only S3Gen classifier-free-guidance rate. The diffusion loop
@@ -374,7 +417,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
    * the selected voice's timbre; one control takes effect per synthesis.
    */
   instruct?: string | CosyvoiceInstruct;
-  /** Supertonic voice id baked into the GGUF, such as `F1` or `M1`. */
+  /**
+   * Supertonic voice id baked into the GGUF, such as `F1` or `M1`. CosyVoice3:
+   * reserved / not yet effective — named-voice selection is not yet wired.
+   */
   voice?: string;
   /** Alias for `voice` for compatibility with `@qvac/tts-onnx`. */
   voiceName?: string;
@@ -1836,6 +1882,15 @@ class TTSGgml {
     }
     if (this._instruct) parameters.instruct = this._instruct;
     if (this._voice) parameters.voice = this._voice;
+    // CosyVoice3 outputs no LavaSR-supported signal; reject enhancer/denoiser
+    // before _assignCommonNativeParams wires their paths (mirrors the parler
+    // rejection in _assertParlerOptionConsistency).
+    if (this._enhancerGgufPath || this._denoiserGgufPath) {
+      throw new Error(
+        "tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
+          "Drop lavasrEnhancer / lavasrDenoiser.",
+      );
+    }
     this._assignCommonNativeParams(parameters);
     if (this._cfmSteps != null) parameters.cfmSteps = this._cfmSteps | 0;
     if (this._streamChunkTokens != null) {

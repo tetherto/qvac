@@ -9,9 +9,9 @@ const process = require('bare-process')
 
 global.process = process
 
-// CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B) — iteration 1 scaffold. These unit
-// tests exercise the JS wiring (engine detection, param building, mocked
-// synthesis) without the native addon; the C++ scaffold + real inference are
+// CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B). These unit tests exercise the JS
+// wiring (engine detection, param building, mocked synthesis) without the
+// native addon; the C++ config validation + real inference round-trips are
 // covered by addon/tests/test_cosyvoice_config.cpp.
 
 function createMockedCosyvoiceModel({
@@ -149,7 +149,9 @@ test('CosyVoice3: instruct renders structured control to the trained instruction
   const raw = createMockedCosyvoiceModel({ extra: { instruct: '请用四川话表达。' } })
   t.is(raw._buildTtsParams().instruct, '请用四川话表达。', 'raw string passes through')
 
-  const precedence = createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'sichuan', emotion: 'sad' } } })
+  const precedence = createMockedCosyvoiceModel({
+    extra: { instruct: { dialect: 'sichuan', emotion: 'sad' } }
+  })
   t.is(precedence._buildTtsParams().instruct, '请用四川话表达。', 'dialect wins over emotion')
 
   const none = createMockedCosyvoiceModel({})

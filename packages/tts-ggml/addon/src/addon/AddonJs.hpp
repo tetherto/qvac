@@ -116,7 +116,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     auto cfg = adapter.buildCosyvoiceConfig(configurationParams, env);
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto cvm = make_unique<CosyvoiceModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : cvm->sampleRate();  // native 24 kHz
+    sampleRate = outSr > 0 ? outSr : cvm->sampleRate(); // native 24 kHz
     model = std::move(cvm);
   } else if (engineType == EngineType::Parler) {
     auto cfg = adapter.buildParlerConfig(configurationParams, env);
@@ -169,17 +169,20 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   if (dynamic_cast<CosyvoiceModel*>(&instance.addonCpp->model.get())) {
-    // CosyVoice3 is a native token-by-token streaming model: wire the same
+    // CosyVoice3 emits PCM progressively in per-chunk hops: wire the same
     // per-chunk PCM sink Chatterbox uses so streamChunkTokens delivers chunks
-    // through the JS streaming output handler.
+    // through the JS streaming output handler. NOTE: the engine currently
+    // computes the full audio then slices it into chunks — chunks arrive
+    // progressively but first-audio latency is not yet reduced (true
+    // token2wav low-latency streaming is reserved in tts-cpp).
     CosyvoiceModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
     auto outputQueue = instance.addonCpp->outputQueue;
-    modelInput.chunkCallback = [outputQueue](
-        std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
-      StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
-      outputQueue->queueResult(std::any(std::move(chunk)));
-    };
+    modelInput.chunkCallback =
+        [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
+          StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
+          outputQueue->queueResult(std::any(std::move(chunk)));
+        };
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -264,8 +267,7 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
     return js::JsAsyncTask::run(
         env,
         [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
-          auto* cvm =
-              dynamic_cast<CosyvoiceModel*>(&addonCpp->model.get());
+          auto* cvm = dynamic_cast<CosyvoiceModel*>(&addonCpp->model.get());
           if (cvm == nullptr) {
             throw qvac_errors::StatusError(
                 qvac_errors::general_error::InternalError,

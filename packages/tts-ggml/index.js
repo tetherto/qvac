@@ -78,10 +78,22 @@ const COSYVOICE_STYLES = {
     robot: "你可以尝试用机器人的方式解答吗？",
 };
 /**
+ * Look up a structured-instruct control value, throwing a clear error for an
+ * invalid key instead of letting an `undefined` render into the instruction
+ * string.
+ */
+function cosyvoiceInstructValue(map, key, kind) {
+    const value = map[key];
+    if (value == null) {
+        throw new Error(`Invalid CosyVoice instruct ${kind} "${key}". Valid ${kind}s: ${Object.keys(map).join(", ")}.`);
+    }
+    return value;
+}
+/**
  * Render a CosyVoice3 `instruct` option to the trained instruction string.
  * A raw string passes through (trimmed); the structured form emits exactly one
  * control by precedence dialect > emotion > speed > volume > style. Returns ""
- * for no instruction (zero-shot).
+ * for no instruction (zero-shot). An invalid structured key throws.
  */
 function renderCosyvoiceInstruct(instruct) {
     if (instruct == null)
@@ -89,16 +101,20 @@ function renderCosyvoiceInstruct(instruct) {
     if (typeof instruct === "string")
         return instruct.trim();
     if (instruct.dialect) {
-        return `请用${COSYVOICE_DIALECTS[instruct.dialect]}表达。`;
+        return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
     }
-    if (instruct.emotion)
-        return COSYVOICE_EMOTIONS[instruct.emotion];
-    if (instruct.speed)
-        return COSYVOICE_SPEEDS[instruct.speed];
-    if (instruct.volume)
-        return COSYVOICE_VOLUMES[instruct.volume];
-    if (instruct.style)
-        return COSYVOICE_STYLES[instruct.style];
+    if (instruct.emotion) {
+        return cosyvoiceInstructValue(COSYVOICE_EMOTIONS, instruct.emotion, "emotion");
+    }
+    if (instruct.speed) {
+        return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
+    }
+    if (instruct.volume) {
+        return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
+    }
+    if (instruct.style) {
+        return cosyvoiceInstructValue(COSYVOICE_STYLES, instruct.style, "style");
+    }
     return "";
 }
 // Parler GGUFs ship per quant tier with the quant in the filename
@@ -1068,6 +1084,13 @@ class TTSGgml {
             parameters.instruct = this._instruct;
         if (this._voice)
             parameters.voice = this._voice;
+        // CosyVoice3 outputs no LavaSR-supported signal; reject enhancer/denoiser
+        // before _assignCommonNativeParams wires their paths (mirrors the parler
+        // rejection in _assertParlerOptionConsistency).
+        if (this._enhancerGgufPath || this._denoiserGgufPath) {
+            throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
+                "Drop lavasrEnhancer / lavasrDenoiser.");
+        }
         this._assignCommonNativeParams(parameters);
         if (this._cfmSteps != null)
             parameters.cfmSteps = this._cfmSteps | 0;

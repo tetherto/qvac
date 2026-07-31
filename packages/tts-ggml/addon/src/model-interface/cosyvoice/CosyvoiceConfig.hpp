@@ -6,13 +6,15 @@
 namespace qvac::ttsggml::cosyvoice {
 
 /**
- * Configuration for the CosyVoice3 engine wrapping tts-cpp::tts-cpp.
+ * Configuration for the CosyVoice3 engine wrapping tts-cpp's CosyVoice3
+ * implementation.
  *
- * ITERATION 1 (SCAFFOLD): maps 1:1 into `tts_cpp::cosyvoice::EngineOptions`
- * via {@link CosyvoiceModel::load}. The underlying tts-cpp engine is the
- * wiring skeleton — synthesize() returns placeholder audio until the real CPU
- * graphs (Qwen2 LM -> S3 tokenizer -> DiT flow -> HiFT vocoder) land. The
- * option surface here is intended to stay stable across that work.
+ * Maps 1:1 into `tts_cpp::cosyvoice::EngineOptions` via
+ * {@link CosyvoiceModel::load} and drives the real CosyVoice3 engine end to
+ * end: Qwen2.5 LM (text -> speech tokens) -> DiT conditional-flow-matching
+ * (tokens -> mel) -> CausalHiFT vocoder (mel -> 24 kHz PCM), on CPU. Some
+ * fields below are plumbed for API stability but are not yet acted on by the
+ * engine; those are flagged "reserved / not yet effective" individually.
  */
 struct CosyvoiceConfig {
   /**
@@ -22,16 +24,25 @@ struct CosyvoiceConfig {
    */
   std::string modelDir;
 
-  std::string llmModelPath;       // Qwen2.5 LM (text -> speech tokens)
-  std::string flowModelPath;      // DiT conditional-flow-matching (tokens -> mel)
-  std::string hiftModelPath;      // CausalHiFT vocoder (mel -> 24 kHz PCM)
-  std::string s3tokModelPath;     // supervised S3 speech tokenizer (zero-shot)
-  std::string campplusModelPath;  // CAM++ speaker encoder (zero-shot)
+  std::string llmModelPath;   // Qwen2.5 LM (text -> speech tokens)
+  std::string flowModelPath;  // DiT conditional-flow-matching (tokens -> mel)
+  std::string hiftModelPath;  // CausalHiFT vocoder (mel -> 24 kHz PCM)
+  std::string s3tokModelPath; // supervised S3 speech tokenizer (zero-shot)
+  std::string campplusModelPath; // CAM++ speaker encoder (zero-shot)
 
-  /** Zero-shot voice cloning: reference wav + its transcript. */
+  /**
+   * Zero-shot voice cloning: reference wav + its transcript. RESERVED / not
+   * yet effective — the native path needs the S3 speech tokenizer + CAM++
+   * speaker encoder, which are not ported yet; the engine warns and falls back
+   * to the baked voice. Plumbed for API stability.
+   */
   std::string referenceAudio;
   std::string promptText;
-  /** Or a voice baked into voices.gguf (reference audio wins when both set). */
+  /**
+   * A voice baked into voices.gguf (reference audio wins when both set).
+   * RESERVED / not yet effective — named-voice selection is not yet wired in
+   * the engine. Plumbed for API stability.
+   */
   std::string voice;
 
   /**
@@ -44,7 +55,11 @@ struct CosyvoiceConfig {
    */
   std::string instruct;
 
-  /** Language hint for the multilingual text frontend. */
+  /**
+   * Language hint for the multilingual text frontend. RESERVED / not yet
+   * effective — the text-normalization frontend is not yet integrated, so this
+   * is accepted but not acted on. Plumbed for API stability.
+   */
   std::string language = "en";
 
   std::optional<int> seed;
@@ -64,17 +79,24 @@ struct CosyvoiceConfig {
    * engine's native 24 kHz.
    */
   std::optional<int> outputSampleRate;
-  /** Flow-matching Euler steps. Unset/0 = model default (10). */
+  /**
+   * Flow-matching Euler steps. RESERVED / not yet effective — the engine runs
+   * a fixed 10-step schedule and currently ignores this value. Plumbed for API
+   * stability.
+   */
   std::optional<int> cfmSteps;
 
   /**
-   * Native streaming controls. CosyVoice3 is a token-by-token streaming model
-   * (the LM emits speech tokens, token2wav vocodes them in hops). When
-   * `streamChunkTokens > 0` and the job passes a chunk callback, the engine
-   * runs the chunked loop and emits PCM per chunk. 0 = batch synthesis.
+   * Streaming controls. When `streamChunkTokens > 0` and the job passes a chunk
+   * callback, the engine emits PCM progressively in per-chunk hops. NOTE: the
+   * engine currently computes the full audio and then slices it into chunks, so
+   * chunks are emitted progressively but first-audio latency is NOT yet reduced
+   * (true token2wav low-latency streaming is reserved in tts-cpp). 0 = batch
+   * synthesis.
    */
   std::optional<int> streamChunkTokens;
-  /** Smaller first chunk for low first-audio latency. 0 = same as streamChunkTokens. */
+  /** Smaller first chunk for low first-audio latency. 0 = same as
+   * streamChunkTokens. */
   std::optional<int> streamFirstChunkTokens;
   /** Left context carried into each chunk (bounds per-chunk cost). */
   std::optional<int> streamLeftContextTokens;
