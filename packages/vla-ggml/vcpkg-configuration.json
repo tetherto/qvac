@@ -1,7 +1,4 @@
 {
-  "overlay-ports": [
-    "./vcpkg/ports"
-  ],
   "default-registry": {
     "kind": "git",
     "baseline": "f04e244701f462c4c8fead7b50bcaffa52c052ac",
