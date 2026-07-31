@@ -159,7 +159,12 @@ export const sdcppConfigSchema = z.object({
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
     .optional()
-    .describe('High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models'),
+    .describe(
+      'High-noise diffusion expert — required for Wan 2.2 A14B ' +
+        'mixture-of-experts video models, and the only thing that enables the ' +
+        'high_noise_* / moe_boundary request fields. Omit for single-expert ' +
+        'models such as Wan 2.1 and Wan 2.2 TI2V-5B.'
+    ),
   uncondModelSrc: modelSrcInputSchema
     .optional()
     .describe(
@@ -558,8 +563,10 @@ const videoGenerationBaseSchema = z.object({
     .multipleOf(16)
     .optional()
     .describe(
-      'Video width in pixels (must be a multiple of 16). LTX-2 additionally ' +
-        'requires a multiple of 32, validated against the loaded model before generation.'
+      'Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 ' +
+        'TI2V-5B additionally require a multiple of 32. LTX-2 is validated ' +
+        'against the loaded model before generation; the TI2V requirement is ' +
+        'enforced natively, derived from the loaded GGUF rather than its filename.'
     ),
   height: z
     .number()
@@ -568,8 +575,10 @@ const videoGenerationBaseSchema = z.object({
     .multipleOf(16)
     .optional()
     .describe(
-      'Video height in pixels (must be a multiple of 16). LTX-2 additionally ' +
-        'requires a multiple of 32, validated against the loaded model before generation.'
+      'Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 ' +
+        'TI2V-5B additionally require a multiple of 32. LTX-2 is validated ' +
+        'against the loaded model before generation; the TI2V requirement is ' +
+        'enforced natively, derived from the loaded GGUF rather than its filename.'
     ),
   video_frames: z
     .number()
@@ -613,24 +622,46 @@ const videoGenerationBaseSchema = z.object({
     .int()
     .positive()
     .optional()
-    .describe('Wan 2.2 high-noise expert step count.'),
+    .describe(
+      'Wan 2.2 A14B high-noise expert step count. Requires a model loaded ' +
+        'with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. ' +
+        'Omit to let native routing derive the split from moe_boundary.'
+    ),
   high_noise_sampler: samplingMethodSchema
     .optional()
-    .describe('Wan 2.2 high-noise expert sampler.'),
+    .describe(
+      'Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with ' +
+        'modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
+    ),
   high_noise_scheduler: scheduleTypeSchema
     .optional()
-    .describe('Wan 2.2 high-noise expert scheduler.'),
-  high_noise_cfg_scale: z.number().optional().describe('Wan 2.2 high-noise expert CFG scale.'),
+    .describe(
+      'Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with ' +
+        'modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
+    ),
+  high_noise_cfg_scale: z
+    .number()
+    .optional()
+    .describe(
+      'Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with ' +
+        'modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
+    ),
   high_noise_flow_shift: z
     .number()
     .optional()
-    .describe('Wan 2.2 high-noise expert flow shift override.'),
+    .describe(
+      'Wan 2.2 A14B high-noise expert flow shift override. Requires a model ' +
+        'loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
+    ),
   moe_boundary: z
     .number()
     .min(0)
     .max(1)
     .optional()
-    .describe('Wan 2.2 mixture-of-experts boundary in [0, 1].'),
+    .describe(
+      'Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model ' +
+        'loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.'
+    ),
   vace_strength: z.number().min(0).max(1).optional().describe('Control-frame guidance strength.'),
   control_frames: z
     .array(base64StringSchema)
@@ -743,6 +774,39 @@ function refineLtxVideoRequest(
 }
 
 export const ltxVideoRequestSchema = videoRequestSchema.superRefine(refineLtxVideoRequest)
+
+const wan22MoeMask = {
+  high_noise_steps: true,
+  high_noise_sampler: true,
+  high_noise_scheduler: true,
+  high_noise_cfg_scale: true,
+  high_noise_flow_shift: true,
+  moe_boundary: true
+} as const
+const wan22MoeSchema = videoGenerationBaseSchema.pick(wan22MoeMask)
+const wan22MoeFields = Object.keys(wan22MoeMask) as (keyof typeof wan22MoeMask)[]
+
+function refineSingleExpertVideoRequest(
+  data: z.infer<typeof wan22MoeSchema>,
+  ctx: z.RefinementCtx
+) {
+  for (const field of wan22MoeFields) {
+    if (data[field] === undefined) continue
+    ctx.addIssue({
+      code: 'custom',
+      path: [field],
+      message:
+        `${field} is a Wan 2.2 A14B mixture-of-experts parameter and the loaded ` +
+        'model has no high-noise expert. Only a model loaded with ' +
+        'modelConfig.highNoiseDiffusionModelSrc routes to a second expert; ' +
+        'single-expert layouts (Wan 2.1, Wan 2.2 TI2V-5B, LTX-2) do not.'
+    })
+  }
+}
+
+export const singleExpertVideoRequestSchema = wan22MoeSchema.superRefine(
+  refineSingleExpertVideoRequest
+)
 
 export type VideoRequest = z.input<typeof videoRequestSchema>
 

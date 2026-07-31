@@ -30,7 +30,11 @@ import { ModelLoadFailedError } from '@/errors/index'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { diffusion } from '@/plugins/builtin/sdcpp-generation/ops/diffusion'
-import { markLtxVideoModel, video } from '@/plugins/builtin/sdcpp-generation/ops/video'
+import {
+  markLtxVideoModel,
+  markMoeCapableVideoModel,
+  video
+} from '@/plugins/builtin/sdcpp-generation/ops/video'
 import { upscale } from '@/plugins/builtin/sdcpp-generation/ops/upscale'
 
 type DiffusionArtifactKey =
@@ -107,6 +111,20 @@ export const diffusionPlugin = definePlugin({
       throw new ModelLoadFailedError(
         'modelConfig.uncondModelSrc selects the Ideogram 4 layout and requires ' +
           'modelConfig.llmModelSrc (Qwen3-VL) and modelConfig.vaeModelSrc.'
+      )
+    }
+    // A high-noise expert only has somewhere to go in the Wan 2.2 A14B video
+    // layout: every other mode builds a model with no second-expert slot, and
+    // embeddingsConnectorsModelSrc selects LTX-2 instead. Check it ahead of the
+    // upscale early-return so a wrong layout fails loudly rather than
+    // downloading a multi-gigabyte expert and dropping it in createModel.
+    const isWan22MoeLayout = cfg.mode === 'video' && !cfg.embeddingsConnectorsModelSrc
+    if (cfg.highNoiseDiffusionModelSrc && !isWan22MoeLayout) {
+      throw new ModelLoadFailedError(
+        'modelConfig.highNoiseDiffusionModelSrc selects the Wan 2.2 A14B ' +
+          "mixture-of-experts video layout. It requires mode: 'video' and " +
+          'cannot be combined with modelConfig.embeddingsConnectorsModelSrc ' +
+          '(which selects the LTX-2 layout).'
       )
     }
 
@@ -349,6 +367,7 @@ export const diffusionPlugin = definePlugin({
         opts: { stats: true }
       })
       if (embeddingsConnectorsModelPath) markLtxVideoModel(model)
+      if (files.highNoiseDiffusionModel) markMoeCapableVideoModel(model)
       return { model }
     }
 
