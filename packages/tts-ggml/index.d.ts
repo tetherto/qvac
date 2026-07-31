@@ -2,8 +2,62 @@ import { type QvacResponse } from "@qvac/infer-base";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
+declare const ENGINE_COSYVOICE3 = "cosyvoice3";
 declare const ENGINE_PARLER = "parler";
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_PARLER;
+declare const COSYVOICE_DIALECTS: {
+    readonly cantonese: "广东话";
+    readonly northeastern: "东北话";
+    readonly gansu: "甘肃话";
+    readonly guizhou: "贵州话";
+    readonly henan: "河南话";
+    readonly hubei: "湖北话";
+    readonly hunan: "湖南话";
+    readonly jiangxi: "江西话";
+    readonly minnan: "闽南话";
+    readonly ningxia: "宁夏话";
+    readonly shanxi: "山西话";
+    readonly shaanxi: "陕西话";
+    readonly shandong: "山东话";
+    readonly shanghai: "上海话";
+    readonly sichuan: "四川话";
+    readonly tianjin: "天津话";
+    readonly yunnan: "云南话";
+};
+declare const COSYVOICE_EMOTIONS: {
+    readonly happy: "请非常开心地说一句话。";
+    readonly sad: "请非常伤心地说一句话。";
+    readonly angry: "请非常生气地说一句话。";
+};
+declare const COSYVOICE_SPEEDS: {
+    readonly slow: "请用尽可能慢地语速说一句话。";
+    readonly fast: "请用尽可能快地语速说一句话。";
+};
+declare const COSYVOICE_VOLUMES: {
+    readonly loud: "Please say a sentence as loudly as possible.";
+    readonly soft: "Please say a sentence in a very soft voice.";
+};
+declare const COSYVOICE_STYLES: {
+    readonly peppa: "我想体验一下小猪佩奇风格，可以吗？";
+    readonly robot: "你可以尝试用机器人的方式解答吗？";
+};
+/**
+ * Structured CosyVoice3 control. Exactly one field takes effect per synthesis,
+ * resolved by precedence dialect > emotion > speed > volume > style. Pass a raw
+ * string instead for an arbitrary instruction (advanced escape hatch).
+ */
+interface CosyvoiceInstruct {
+    /** Chinese dialect; renders "请用{dialect}表达。". */
+    dialect?: keyof typeof COSYVOICE_DIALECTS;
+    /** Emotion. */
+    emotion?: keyof typeof COSYVOICE_EMOTIONS;
+    /** Speaking speed. */
+    speed?: keyof typeof COSYVOICE_SPEEDS;
+    /** Loudness. */
+    volume?: keyof typeof COSYVOICE_VOLUMES;
+    /** Playful style preset. */
+    style?: keyof typeof COSYVOICE_STYLES;
+}
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -34,6 +88,23 @@ interface TTSGgmlFiles {
     parlerModel?: string;
     parlerModelPath?: string;
     parler?: string;
+    /**
+     * CosyVoice3 model directory holding the sub-model GGUFs
+     * (`cosyvoice3-{llm,flow,hift,s3tok,campplus,voices}-*.gguf`). Routes to the
+     * CosyVoice3 engine. Falls back to the shared `modelDir` when unset.
+     */
+    cosyvoiceModelDir?: string;
+    /** CosyVoice3 per-component GGUF paths (override discovery under the model dir). */
+    cosyvoiceLlmModel?: string;
+    cosyvoiceLlmModelPath?: string;
+    cosyvoiceFlowModel?: string;
+    cosyvoiceFlowModelPath?: string;
+    cosyvoiceHiftModel?: string;
+    cosyvoiceHiftModelPath?: string;
+    cosyvoiceS3tokModel?: string;
+    cosyvoiceS3tokModelPath?: string;
+    cosyvoiceCampplusModel?: string;
+    cosyvoiceCampplusModelPath?: string;
     /**
      * LavaSR enhancer GGUF: single-file Vocos bandwidth extension produced by
      * tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. When supplied, output
@@ -166,6 +237,8 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     streamChunkTokens?: number;
     /** Chatterbox-only smaller first chunk for low first-audio-out latency. */
     streamFirstChunkTokens?: number;
+    /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
+    streamLeftContextTokens?: number;
     /** Chatterbox-only CFM Euler step count. */
     cfmSteps?: number;
     /**
@@ -175,6 +248,16 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
      * model's baked rate. Omit it to retain the baked rate.
      */
     cfgRate?: number;
+    /** CosyVoice3: transcript of `referenceAudio` for zero-shot voice cloning (conditions the LM prompt). */
+    promptText?: string;
+    /**
+     * CosyVoice3: natural-language control (instruct2) — Chinese dialect, emotion,
+     * speed, volume, or style. Pass a structured object (e.g. `{ dialect:
+     * 'cantonese' }`, `{ emotion: 'happy' }`) which renders to the trained
+     * instruction, or a raw string for an arbitrary instruction. Applied on top of
+     * the selected voice's timbre; one control takes effect per synthesis.
+     */
+    instruct?: string | CosyvoiceInstruct;
     /** Supertonic voice id baked into the GGUF, such as `F1` or `M1`. */
     voice?: string;
     /** Alias for `voice` for compatibility with `@qvac/tts-onnx`. */
@@ -315,6 +398,7 @@ declare class TTSGgml {
     };
     static readonly ENGINE_CHATTERBOX = "chatterbox";
     static readonly ENGINE_SUPERTONIC = "supertonic";
+    static readonly ENGINE_COSYVOICE3 = "cosyvoice3";
     static readonly ENGINE_PARLER = "parler";
     opts: object;
     exclusiveRun: boolean;
@@ -333,6 +417,12 @@ declare class TTSGgml {
     private _supertonicModelPath?;
     private _t3ModelPath?;
     private _s3genModelPath?;
+    private _cosyvoiceModelDir?;
+    private _cosyvoiceLlmModelPath?;
+    private _cosyvoiceFlowModelPath?;
+    private _cosyvoiceHiftModelPath?;
+    private _cosyvoiceS3tokModelPath?;
+    private _cosyvoiceCampplusModelPath?;
     private _mecabDictPath?;
     private _cangjieTsvPath?;
     private _referenceAudio?;
@@ -344,8 +434,11 @@ declare class TTSGgml {
     private _threads?;
     private _streamChunkTokens?;
     private _streamFirstChunkTokens?;
+    private _streamLeftContextTokens?;
     private _cfmSteps?;
     private _cfgRate?;
+    private _promptText?;
+    private _instruct?;
     private _voice?;
     private _steps?;
     private _speed?;
@@ -416,6 +509,7 @@ declare class TTSGgml {
     private _sentenceStreamDriveBody;
     private _load;
     private _buildTtsParams;
+    private _buildCosyvoiceParams;
     private _buildChatterboxParams;
     private _buildSupertonicParams;
     private _buildParlerParams;
