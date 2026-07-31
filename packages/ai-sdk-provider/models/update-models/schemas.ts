@@ -14,6 +14,7 @@
 export const CANONICAL_ENGINES = [
   'llamacpp-completion',
   'whispercpp-transcription',
+  'bci-whispercpp-transcription',
   'llamacpp-embedding',
   'nmtcpp-translation',
   'onnx-tts',
@@ -32,6 +33,7 @@ export type ModelRegistryEngine = (typeof CANONICAL_ENGINES)[number]
 export const REGISTRY_ADDONS = [
   'llm',
   'whisper',
+  'bci',
   'embeddings',
   'nmt',
   'vad',
@@ -51,6 +53,7 @@ export type ModelRegistryEntryAddon = (typeof REGISTRY_ADDONS)[number]
 export const ENGINE_TO_ADDON = {
   'llamacpp-completion': 'llm',
   'whispercpp-transcription': 'whisper',
+  'bci-whispercpp-transcription': 'bci',
   'llamacpp-embedding': 'embeddings',
   'nmtcpp-translation': 'nmt',
   'onnx-tts': 'tts',
@@ -69,6 +72,7 @@ export const ENGINE_TO_ADDON = {
 const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   llm: 'llamacpp-completion',
   whisper: 'whispercpp-transcription',
+  bci: 'bci-whispercpp-transcription',
   embeddings: 'llamacpp-embedding',
   nmt: 'nmtcpp-translation',
   tts: 'tts-ggml',
@@ -84,6 +88,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   classification: 'ggml-classification',
   '@qvac/llm-llamacpp': 'llamacpp-completion',
   '@qvac/transcription-whispercpp': 'whispercpp-transcription',
+  '@qvac/bci-whispercpp': 'bci-whispercpp-transcription',
   '@qvac/embed-llamacpp': 'llamacpp-embedding',
   '@qvac/translation-nmtcpp': 'nmtcpp-translation',
   '@qvac/translation-llamacpp': 'nmtcpp-translation',
@@ -91,6 +96,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   '@qvac/tts': 'tts-ggml',
   '@qvac/tts-onnx': 'tts-ggml',
   '@qvac/tts-ggml': 'tts-ggml',
+  '@qvac/ocr-ggml': 'ggml-ocr',
   // Pre-GGML package / tag names from the ONNX era — resolve to the GGML engine.
   '@qvac/ocr-onnx': 'ggml-ocr',
   'onnx-ocr': 'ggml-ocr',
@@ -124,8 +130,9 @@ export const DEFAULT_REGISTRY_CORE_KEY = 'uf1fm44uzockp6azhcdiqt1esjgm65fwtimsh9
 
 // Addon → OpenAI-style endpoint category. Mirrors `ENDPOINT_CATEGORY` from
 // packages/cli/src/serve/config.ts, restricted to the addon keys (the CLI map
-// also accepts the legacy engine aliases). `vad` and `other` have no endpoint
-// in the OpenAI-shaped surface today and are filtered out at codegen time.
+// also accepts the legacy engine aliases). `vad`, `bci`, and `other` have no
+// endpoint in the OpenAI-shaped surface today and are filtered out at codegen
+// time.
 //
 // Update both this table and packages/cli/src/serve/config.ts together when a
 // new addon ships a new endpoint category.
