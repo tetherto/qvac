@@ -8,3 +8,7 @@ linkWorkspacePackages: true
 blockExoticSubdeps: false
 minimumReleaseAgeExclude:
   - '@qvac/fabric@0.3.1'
+
+allowBuilds:
+  nx: true
+  unrs-resolver: true
