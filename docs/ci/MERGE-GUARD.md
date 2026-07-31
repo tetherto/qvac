@@ -82,7 +82,7 @@ general-checks-status: ${{ (needs.sdk-pod-checks.result == 'success' || needs.sd
 
 ### 2. A repeated, growing family of similarly-shaped jobs — build a caller workflow
 
-**Don't reach for this with only one target.** If today there's exactly one thing to gate on (e.g. only `ocr-onnx` needs an integration-test job right now), that's pattern 1 or pattern 3, not this one — wire that single job in directly, no caller workflow. A caller workflow's entire value is dispatching to *multiple* targets from one place; with one target it's pure indirection for zero benefit (an extra file, an extra `uses:` hop, nothing gained). Build the caller **later**, when a second target actually shows up — refactoring one direct job into a one-job caller at that point is a small, mechanical change, not a reason to build it preemptively.
+**Don't reach for this with only one target.** If today there's exactly one thing to gate on (e.g. only `ocr-ggml` needs an integration-test job right now), that's pattern 1 or pattern 3, not this one — wire that single job in directly, no caller workflow. A caller workflow's entire value is dispatching to *multiple* targets from one place; with one target it's pure indirection for zero benefit (an extra file, an extra `uses:` hop, nothing gained). Build the caller **later**, when a second target actually shows up — refactoring one direct job into a one-job caller at that point is a small, mechanical change, not a reason to build it preemptively.
 
 Use this pattern only once you're actually adding **more than one or two** near-identical jobs that only differ by which thing they target — one per addon package, one per platform, one per service, one per whatever. The naming pattern doesn't matter (`integration-*`, `lint-*`, `deploy-*`, anything) — what matters is "this is a family that will keep growing as new targets get added," not "this looks like it structurally resembles `prebuilds-caller.yml`."
 
@@ -114,9 +114,9 @@ on:
         type: string
 
 jobs:
-  ocr-onnx-build:
-    if: contains(fromJSON(inputs.changed-packages), 'ocr-onnx')
-    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
+  ocr-ggml-build:
+    if: contains(fromJSON(inputs.changed-packages), 'ocr-ggml')
+    uses: ./.github/workflows/prebuilds-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ inputs.repository }}
