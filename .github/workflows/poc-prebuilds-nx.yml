@@ -1,0 +1,91 @@
+# POC: consolidates the 2 native-addon prebuilds files in this branch's scope
+# (prebuilds-classification-ggml.yml, prebuilds-fabric.yml) into one nx-affected
+# matrix, same pattern as the full prebuilds-nx.yml built for all 15 addons
+# elsewhere: both are thin wrappers around reusable-prebuilds.yml differing
+# only in `with:` data, so this calls reusable-prebuilds.yml directly instead
+# of the redundant per-package middle layer. logging/infer-base are pure-JS
+# libs with no prebuilds step, so they're not part of this family - they still
+# show up in the nx-affected output, they just don't have a config row here.
+# Additive only - does not touch or replace prebuilds-classification-ggml.yml
+# or prebuilds-fabric.yml.
+name: "POC - Prebuilds (nx affected)"
+
+on:
+  pull_request:
+    paths:
+      - "packages/classification-ggml/**"
+      - "packages/fabric/**"
+      - "packages/infer-base/**"
+      - "packages/logging/**"
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages + build matrix (nx affected, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      any: ${{ steps.matrix.outputs.any }}
+    env:
+      PREBUILDS_CONFIG: |
+        - package: classification-ggml
+          workdir: packages/classification-ggml
+          artifactNamePrefix: classification-ggml-
+          includeVulkanSdk: true
+        - package: fabric
+          workdir: packages/fabric
+          artifactNamePrefix: fabric-
+          includeVulkanSdk: true
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: nx
+        uses: ./.github/actions/nx-affected
+        with:
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+
+      - id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG_JSON=$(yq -o=json -I=0 e '.' <<< "$PREBUILDS_CONFIG")
+          MATRIX=$(jq -c --argjson affected '${{ steps.nx.outputs.affected }}' \
+            '[.[] | select(.package as $p | $affected | index($p) != null)]' <<< "$CONFIG_JSON")
+          echo "Matrix (config ∩ affected): $MATRIX"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "any=$([ "$MATRIX" != "[]" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    name: Prebuild (${{ matrix.package }})
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ matrix.workdir }}
+      artifact-name-prefix: ${{ matrix.artifactNamePrefix }}
+      include-vulkan-sdk: ${{ matrix.includeVulkanSdk == true }}
+    secrets: inherit

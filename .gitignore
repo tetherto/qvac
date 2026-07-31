@@ -10,6 +10,7 @@ reset_history.sh
 confirmed.txt
 /node_modules
 packages/**/node_modules/
+.nx/
 packages/**/package-lock.json
 packages/**/.npmrc
 packages/sdk/bun.lock

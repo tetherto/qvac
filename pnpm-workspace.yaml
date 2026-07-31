@@ -1,0 +1,10 @@
+packages:
+  - "packages/classification-ggml"
+  - "packages/fabric"
+  - "packages/infer-base"
+  - "packages/logging"
+
+linkWorkspacePackages: true
+blockExoticSubdeps: false
+minimumReleaseAgeExclude:
+  - '@qvac/fabric@0.3.1'

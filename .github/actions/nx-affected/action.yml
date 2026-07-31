@@ -1,0 +1,46 @@
+name: Nx Affected
+description: >
+  Installs the pnpm workspace and computes the set of nx-affected projects
+  for the current event. Base/head resolution uses nrwl/nx-set-shas (Nx's
+  own official action) for real PR/push events - correct merge-base for
+  pull_request, last-successful-run-on-main for push. workflow_dispatch has
+  no such event context, so it falls back to the base-ref/head-ref inputs.
+
+inputs:
+  base-ref:
+    description: "Base ref/sha to diff from (workflow_dispatch fallback only)"
+    required: false
+    default: "main"
+  head-ref:
+    description: "Head ref/sha to diff to (workflow_dispatch fallback only)"
+    required: false
+    default: "HEAD"
+
+outputs:
+  affected:
+    description: "JSON array of affected project names (@qvac/ prefix stripped)"
+    value: ${{ steps.affected.outputs.affected }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      with:
+        node-version: lts/*
+    - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+    - shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - if: github.event_name != 'workflow_dispatch'
+      uses: nrwl/nx-set-shas@v4
+
+    - id: affected
+      shell: bash
+      run: |
+        set -euo pipefail
+        BASE="${NX_BASE:-${{ inputs.base-ref }}}"
+        HEAD="${NX_HEAD:-${{ inputs.head-ref }}}"
+        AFFECTED=$(pnpm exec nx show projects --affected --base="$BASE" --head="$HEAD" --json \
+          | jq -c 'map(sub("^@qvac/"; ""))')
+        echo "Affected (transitive, base=$BASE head=$HEAD): $AFFECTED"
+        echo "affected=$AFFECTED" >> "$GITHUB_OUTPUT"
