@@ -350,10 +350,7 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats
-  const stats = withEmittedTokens(
-    normalizeCompletionStats(responseWithStats.stats),
-    emittedPieces
-  )
+  const stats = withEmittedTokens(normalizeCompletionStats(responseWithStats.stats), emittedPieces)
 
   return {
     ...buildStreamResult(modelExecutionMs, stats),
