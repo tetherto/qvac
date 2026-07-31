@@ -1,6 +1,6 @@
 # inference-addon-cpp Architecture Documentation
 
-**Version:** 1.3.0
+**Version:** 1.3.3
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
@@ -502,6 +502,14 @@ Destruction upholds two guarantees:
 
 - **Every admitted job ends with exactly one terminal event.** `~AddonCpp` destroys the scheduler before stopping the output callback, so the terminal errors the scheduler queues for still-admitted jobs ("Job cancelled: scheduler destroyed") are notified while the callback can still deliver them.
 - **Teardown is bounded by cancel latency, not job duration.** A scheduler destructor fires the model's cancel hook before joining its workers, so a worker inside a long `process()` call returns promptly. The cancel only fires while a job is actually in flight; an idle scheduler never touches the model.
+
+#### Async JS Tasks and Env Teardown
+
+`JsAsyncTask` (`JsUtils.hpp`) backs every binding that hands JavaScript a Promise for blocking native work — `cancel()` is the one that matters in practice. Its ordering contract is what keeps an awaited `cancel()` safe to follow with `destroyInstance()`, and it is easy to break by accident:
+
+- **The work functor is loop-owned, never worker-owned.** It lives in the task's `CallbackData` on the JavaScript loop; the detached worker thread only *runs* it. Its captures are commonly the last `shared_ptr` to the `AddonCpp`, whose destructors are JS-facing, so a worker-owned copy would be destroyed after `uv_async_send` — off-loop, racing an env that may already be gone.
+- **Captures are released before the Promise settles.** Completion destroys the work functor first, then settles. Otherwise an awaiting caller can proceed into `destroyInstance()` while the finished task still owns the addon and the (potentially multi-gigabyte) model it holds, deferring the free until a later libuv close callback. The close callback still clears the functor as a fallback for paths where completion never runs, such as a worker thread that failed to start.
+- **Env teardown is deferred, not raced.** A dying env (worklet terminate, unload) marks the task's env dead but deliberately does not finish the deferred teardown; the loop keeps running until the worker is done and the close callback finishes the handshake. Once the env is marked dead, completion skips every JS operation and abandons the Promise — its env is going away with it.
 
 ### Bare Runtime Integration
 
