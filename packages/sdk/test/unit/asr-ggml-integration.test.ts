@@ -5,6 +5,7 @@ import {
   buildWhisperEngineConfig,
   buildWhisperReloadConfig
 } from '@/server/bare/plugins/asr-ggml/config'
+import { createAsrModelLogger } from '@/server/bare/plugins/asr-ggml/logging'
 import {
   isEndOfTurnEvent,
   isVadEvent,
@@ -14,6 +15,11 @@ import {
 import { ADDON_ASR, ADDON_PARAKEET, ADDON_WHISPER } from '@/schemas/plugin'
 import { LEGACY_ENGINE_TO_CANONICAL } from '@/schemas/engine-addon-map'
 import { ModelType } from '@/schemas/model-types'
+import { clearAllAddonLoggers, createAddonLoggerCallback, unregisterAddonLogger } from '@/logging'
+import {
+  clearAllLoggingStreams,
+  registerLoggingStream
+} from '@/server/bare/registry/logging-stream-registry'
 
 test('ASR addon constants preserve legacy engine mappings', (t) => {
   t.is(ADDON_ASR, '@qvac/asr-ggml')
@@ -50,6 +56,20 @@ test('buildWhisperEngineConfig creates strict unified addon config', (t) => {
   })
 })
 
+test('Whisper config maps detect_language to the unified auto language mode', (t) => {
+  t.alike(buildWhisperEngineConfig({ language: 'fr', detect_language: true }), {
+    engine: 'whisper',
+    whisperConfig: {
+      language: 'auto'
+    }
+  })
+  t.alike(buildWhisperReloadConfig({ language: 'fr', detect_language: false }), {
+    whisperConfig: {
+      language: 'fr'
+    }
+  })
+})
+
 test('buildParakeetEngineConfig removes undefined addon fields', (t) => {
   const config = buildParakeetEngineConfig({
     useGPU: true,
@@ -82,6 +102,39 @@ test('ASR reload config builders keep engine-specific wrappers', (t) => {
       streamingChunkMs: 480
     }
   })
+})
+
+test('ASR model loggers isolate Whisper and Parakeet streams', (t) => {
+  const whisperModelId = 'asr-whisper-logging-test'
+  const parakeetModelId = 'asr-parakeet-logging-test'
+  const whisperLogs: string[] = []
+  const parakeetLogs: string[] = []
+
+  clearAllAddonLoggers()
+  clearAllLoggingStreams()
+  t.teardown(() => {
+    unregisterAddonLogger(whisperModelId)
+    unregisterAddonLogger(parakeetModelId)
+    clearAllAddonLoggers()
+    clearAllLoggingStreams()
+  })
+
+  registerLoggingStream(whisperModelId, (_level, _namespace, message) => {
+    whisperLogs.push(message)
+  })
+  registerLoggingStream(parakeetModelId, (_level, _namespace, message) => {
+    parakeetLogs.push(message)
+  })
+
+  const whisperLogger = createAsrModelLogger(whisperModelId, ModelType.whispercppTranscription)
+  const parakeetLogger = createAsrModelLogger(parakeetModelId, ModelType.parakeetTranscription)
+
+  whisperLogger.info('whisper-only')
+  parakeetLogger.info('parakeet-only')
+  createAddonLoggerCallback(ADDON_ASR)(2, 'shared-native-log')
+
+  t.alike(whisperLogs, ['whisper-only'])
+  t.alike(parakeetLogs, ['parakeet-only'])
 })
 
 test('ASR event adapters preserve the public SDK event contract', (t) => {

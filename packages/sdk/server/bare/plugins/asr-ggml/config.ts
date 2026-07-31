@@ -5,11 +5,21 @@ function omitUndefined<T extends Record<string, unknown>>(config: T) {
   return Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined))
 }
 
-export function buildWhisperEngineConfig(config: WhisperConfig) {
+function buildWhisperConfig(config: WhisperConfig) {
   const whisperConfig = omitUndefined(config)
   delete whisperConfig['contextParams']
   delete whisperConfig['miscConfig']
   delete whisperConfig['vadModelSrc']
+  const detectLanguage = whisperConfig['detect_language']
+  delete whisperConfig['detect_language']
+  if (detectLanguage === true) {
+    whisperConfig['language'] = 'auto'
+  }
+  return whisperConfig
+}
+
+export function buildWhisperEngineConfig(config: WhisperConfig) {
+  const whisperConfig = buildWhisperConfig(config)
   return {
     engine: 'whisper',
     whisperConfig: whisperConfig as ASRGgml.WhisperConfig,
@@ -28,10 +38,7 @@ export function buildParakeetEngineConfig(config: ParakeetConfig) {
 }
 
 export function buildWhisperReloadConfig(config: WhisperConfig) {
-  const whisperConfig = omitUndefined(config)
-  delete whisperConfig['contextParams']
-  delete whisperConfig['miscConfig']
-  delete whisperConfig['vadModelSrc']
+  const whisperConfig = buildWhisperConfig(config)
   return {
     whisperConfig,
     ...(config.miscConfig && {

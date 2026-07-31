@@ -17,7 +17,6 @@ import {
   type PluginModelResult,
   type ResolveResult
 } from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
 import {
   ModelLoadFailedError,
   TranscriptionFailedError,
@@ -26,6 +25,7 @@ import {
 import { transcribe, transcribeStream } from '@/server/bare/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { buildParakeetEngineConfig } from '@/server/bare/plugins/asr-ggml/config'
+import { createAsrModelLogger } from '@/server/bare/plugins/asr-ggml/logging'
 
 function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
   const cfgRecord = cfg as unknown as Record<string, unknown>
@@ -46,8 +46,7 @@ function createParakeetModel(params: CreateModelParams): PluginModelResult {
     throw new ModelLoadFailedError('Parakeet requires a GGUF model source')
   }
 
-  const logger = createStreamLogger(params.modelId, ADDON_ASR)
-  registerAddonLogger(params.modelId, ADDON_ASR, logger)
+  const logger = createAsrModelLogger(params.modelId, ModelType.parakeetTranscription)
 
   const model = new ASRGgml({
     files: { model: modelPath },

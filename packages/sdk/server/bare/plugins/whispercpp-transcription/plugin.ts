@@ -17,10 +17,10 @@ import {
   type TranscribeSegment,
   type WhisperConfig
 } from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
 import { transcribe, transcribeStream } from '@/server/bare/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { buildWhisperEngineConfig } from '@/server/bare/plugins/asr-ggml/config'
+import { createAsrModelLogger } from '@/server/bare/plugins/asr-ggml/logging'
 
 function createWhisperModel(
   modelId: string,
@@ -28,8 +28,7 @@ function createWhisperModel(
   whisperConfig: WhisperConfig,
   vadModelPath?: string
 ) {
-  const logger = createStreamLogger(modelId, ADDON_ASR)
-  registerAddonLogger(modelId, ADDON_ASR, logger)
+  const logger = createAsrModelLogger(modelId, ModelType.whispercppTranscription)
 
   const model = new ASRGgml({
     files: {
