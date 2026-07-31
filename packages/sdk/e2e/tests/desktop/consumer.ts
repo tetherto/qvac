@@ -449,7 +449,6 @@ resources.define('diffusion', {
 
 resources.define('audiogen-turbo', {
   type: 'audiogen-ggml',
-  skipPreDownload: true,
   config: {
     textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
     lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,

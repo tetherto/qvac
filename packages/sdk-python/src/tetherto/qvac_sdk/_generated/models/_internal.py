@@ -35,7 +35,13 @@ class AudioGenStreamRequest(GeneratedBaseModel):
     bpm: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
     keyscale: Annotated[str | None, Field(min_length=1)] = None
     timesignature: Annotated[str | None, Field(min_length=1)] = None
-    duration: Annotated[float | None, Field(gt=0.0)] = None
+    duration: Annotated[
+        float | None,
+        Field(
+            description="Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+            gt=0.0,
+        ),
+    ] = None
     type: Literal["audioGenStream"] = "audioGenStream"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 

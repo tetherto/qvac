@@ -5,11 +5,17 @@ import { resolveModelConfigWithContext } from '@/server/bare/registry/model-conf
 
 test('AudioGen plugin resolves all config-owned model sources', async (t) => {
   const resolvedSources: ModelSrcInput[] = []
+  let activeResolutions = 0
+  let maxActiveResolutions = 0
   const context: ResolveContext = {
     modelSrc: '',
     modelType: 'audiogen-ggml',
     resolveModelPath: async function (source) {
+      activeResolutions++
+      maxActiveResolutions = Math.max(maxActiveResolutions, activeResolutions)
+      await new Promise((resolve) => setTimeout(resolve, 1))
       resolvedSources.push(source)
+      activeResolutions--
       return `/resolved/${typeof source === 'string' ? source : source.src}`
     }
   }
@@ -27,6 +33,7 @@ test('AudioGen plugin resolves all config-owned model sources', async (t) => {
   )
 
   t.alike(resolvedSources, ['text-encoder.gguf', 'lm.gguf', 'dit.gguf', 'vae.gguf'])
+  t.is(maxActiveResolutions, 1, 'large AudioGen artifacts resolve sequentially')
   t.alike(result.config, { useGPU: true, inferenceSteps: 8 })
   t.alike(result.artifacts, {
     textEncModelPath: '/resolved/text-encoder.gguf',

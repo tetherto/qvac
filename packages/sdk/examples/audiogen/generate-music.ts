@@ -17,6 +17,8 @@ const caption =
 const outputPath = process.argv[3] ?? 'audiogen-output.wav'
 
 let modelId: string | undefined
+const lastLoggedPercentageByDownload = new Map<string, number>()
+const completedDownloads = new Set<string>()
 
 try {
   console.log('▸ Loading ACE-Step AudioGen models...')
@@ -32,11 +34,27 @@ try {
     },
     onProgress: (progress: ModelProgressUpdate) => {
       const mb = (bytes: number) => (bytes / 1e6).toFixed(1)
+      const label = getDownloadLabel(progress.downloadKey)
       const line =
-        `▸ Downloading ${progress.percentage.toFixed(0)}% ` +
+        `▸ Downloading ${label}: ${progress.percentage.toFixed(0)}% ` +
         `(${mb(progress.downloaded)}/${mb(progress.total)} MB)`
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
-      if (progress.percentage >= 100) process.stderr.write('\n')
+
+      if (process.stderr.isTTY) {
+        process.stderr.write(`\r${line}`)
+        if (progress.percentage >= 100 && !completedDownloads.has(progress.downloadKey)) {
+          completedDownloads.add(progress.downloadKey)
+          process.stderr.write('\n')
+        }
+        return
+      }
+
+      const percentageBucket = Math.floor(progress.percentage / 5) * 5
+      const lastLogged = lastLoggedPercentageByDownload.get(progress.downloadKey)
+      const isNewCompletion = progress.percentage >= 100 && lastLogged !== 100
+      if (lastLogged === undefined || percentageBucket > lastLogged || isNewCompletion) {
+        lastLoggedPercentageByDownload.set(progress.downloadKey, percentageBucket)
+        process.stderr.write(`${line}\n`)
+      }
     }
   })
 
@@ -82,6 +100,10 @@ try {
   }
   console.error('✖', error)
   process.exit(1)
+}
+
+function getDownloadLabel(downloadKey: string) {
+  return downloadKey.split('/').pop() ?? downloadKey
 }
 
 function createWav(pcm: Uint8Array, sampleRate: number, channels: number, bitsPerSample: number) {

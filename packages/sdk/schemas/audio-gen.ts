@@ -32,7 +32,13 @@ const audioGenParamsShape = {
   bpm: z.number().int().positive().optional(),
   keyscale: z.string().min(1).optional(),
   timesignature: z.string().min(1).optional(),
-  duration: z.number().positive().optional()
+  duration: z
+    .number()
+    .positive()
+    .optional()
+    .describe(
+      'Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.'
+    )
 }
 
 export const audioGenClientParamsSchema = z.object(audioGenParamsShape).strict()

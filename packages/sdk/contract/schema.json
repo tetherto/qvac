@@ -299,6 +299,7 @@
           "minLength": 1
         },
         "duration": {
+          "description": "Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
           "type": "number",
           "exclusiveMinimum": 0
         },
