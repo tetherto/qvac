@@ -2,7 +2,7 @@
 
 This guide covers all steps needed for an ONNX-based consumer addon to depend on and use `@qvac/onnx`. It uses `@qvac/ocr-onnx` as a concrete reference implementation throughout.
 
-> **Note:** the reference package `@qvac/ocr-onnx` (`packages/ocr-onnx`) was retired and removed from the monorepo (QVAC-22515) — OCR now runs on the GGML backend via `packages/ocr-ggml`. The integration snippets below remain valid as a worked example; browse the removed package in git history (tag `ocr-onnx-v0.7.2`) or use `packages/transcription-parakeet` / `packages/tts-onnx` as living ONNX consumers.
+> **Note:** the reference package `@qvac/ocr-onnx` (`packages/ocr-onnx`) was retired and removed from the monorepo (QVAC-22515) — OCR now runs on the GGML backend via `packages/ocr-ggml`. The integration snippets below remain valid as the worked example for future ONNX consumers; browse the removed package in git history (tag `ocr-onnx-v0.7.2`).
 
 ## Overview
 
