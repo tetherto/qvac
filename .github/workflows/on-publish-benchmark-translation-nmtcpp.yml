@@ -55,8 +55,7 @@ jobs:
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
           echo "🎯 Released Bergamot model pairs: $pairs"
 
-    needs:
-      benchmark-bergamot:
+  benchmark-bergamot:
     permissions:
       contents: read
       packages: read
@@ -77,7 +76,7 @@ jobs:
       use_batch: false
       hyperparams: 'fast'
 
-      summary:
+  summary:
     needs: [prepare, benchmark-bergamot]
     runs-on: ubuntu-latest
     if: always()

@@ -426,4 +426,3 @@ jobs:
         shell: bash
         run: node scripts/smoke-test-client.js --file=./data/models.prod.json
         timeout-minutes: 5
-    

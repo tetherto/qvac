@@ -39,8 +39,7 @@ concurrency:
 
 jobs:
   delete-npm-versions-trigger:
-    needs:
-        permissions:
+    permissions:
       packages: write
     uses: ./.github/workflows/public-delete-npm-versions.yml
     with:

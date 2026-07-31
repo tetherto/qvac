@@ -459,5 +459,3 @@ jobs:
             ${{ inputs.workdir }}/benchmarks/server/server.log
             ${{ inputs.workdir }}/logs/
           retention-days: 90
-    needs:
-    

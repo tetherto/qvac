@@ -86,8 +86,7 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
-    needs:
-      release-merge-guard:
+  release-merge-guard:
     name: Release Merge Guard
     if: >-
       ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-'))
@@ -107,7 +106,6 @@ jobs:
           package-json-path: packages/fabric/package.json
           changelog-path: packages/fabric/CHANGELOG.md
 
-    needs:
   build:
     needs:
       - publish-logic

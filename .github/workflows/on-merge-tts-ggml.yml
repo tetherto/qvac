@@ -47,8 +47,7 @@ jobs:
       - id: logic
         uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
 
-    needs:
-      release-merge-guard:
+  release-merge-guard:
     name: Release Merge Guard
     if: >-
       ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-'))
@@ -68,7 +67,6 @@ jobs:
           package-json-path: packages/tts-ggml/package.json
           changelog-path: packages/tts-ggml/CHANGELOG.md
 
-    needs:
   build:
     needs:
       - publish-logic

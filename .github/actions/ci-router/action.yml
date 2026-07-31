@@ -36,7 +36,6 @@ runs:
         EVENT_NAME: ${{ github.event_name }}
         PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        BASE_REPO: ${{ github.repository }}
         IS_DRAFT: ${{ github.event.pull_request.draft }}
       run: |
         if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
@@ -73,14 +72,17 @@ runs:
         MOBILE=false
         COLOAD=false
 
+        # Routing is deliberately NOT a trust decision — it only selects which
+        # stages a PR is eligible for. Fork and same-repo PRs route identically
+        # because every secret-bearing job additionally declares
+        # `needs: fork-approval`, which gates external forks on the fork-ci
+        # environment. A job gated on these outputs ALONE would be fail-open for
+        # forks; ci-trust-policy.test.mjs enforces the fork-approval dependency.
+        # An unset HEAD_REPO fails closed; drafts route nothing.
         IS_AUTHORIZED=false
-        shopt -s nocasematch
-        if [[ -n "$HEAD_REPO" && "$HEAD_REPO" == "$BASE_REPO" && "$IS_DRAFT" != "true" ]]; then
-          IS_AUTHORIZED=true
-        elif [[ -n "$HEAD_REPO" && "$HEAD_REPO" != "$BASE_REPO" && "$IS_DRAFT" != "true" ]]; then
+        if [ -n "$HEAD_REPO" ] && [ "$IS_DRAFT" != "true" ]; then
           IS_AUTHORIZED=true
         fi
-        shopt -u nocasematch
 
         if [ "$IS_AUTHORIZED" = "true" ]; then
           VERIFIED=true

@@ -47,4 +47,3 @@ jobs:
           event-type: readme-changed
           client-payload: >
             {"repo_url":"https://github.com/${{ github.repository }}"}
-    needs:

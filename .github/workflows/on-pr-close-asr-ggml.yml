@@ -61,5 +61,3 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages || 'asr-ggml' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
-    needs:
-    

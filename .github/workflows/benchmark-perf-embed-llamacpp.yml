@@ -116,7 +116,7 @@ jobs:
   stamp-version:
     needs:
       - context
-    if: !inputs.summarize_only
+    if: ${{ !inputs.summarize_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

@@ -357,8 +357,8 @@ jobs:
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+      - authorize
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
     secrets: inherit
     with:

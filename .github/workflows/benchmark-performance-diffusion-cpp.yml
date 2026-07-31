@@ -58,7 +58,7 @@ jobs:
   prebuild:
     needs:
       - context
-    if: !inputs.prebuild_package
+    if: ${{ !inputs.prebuild_package }}
     permissions:
       contents: write
       packages: write

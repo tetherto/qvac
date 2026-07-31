@@ -67,7 +67,6 @@ jobs:
               repo: context.repo.repo,
               body: `${status} Tests completed for langdetect-text-cld2`
             })
-    needs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-

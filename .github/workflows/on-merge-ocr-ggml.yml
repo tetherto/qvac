@@ -42,8 +42,7 @@ concurrency:
 
 jobs:
   publish-logic:
-    needs:
-        runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: release
     outputs:
@@ -58,7 +57,6 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
-    needs:
     if: >-
       ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-'))
     runs-on: ubuntu-latest
@@ -230,7 +228,7 @@ jobs:
     needs:
       - publish-gpr
       - publish-npm
-    if: !cancelled()
+    if: ${{ !cancelled() }}
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
     steps:

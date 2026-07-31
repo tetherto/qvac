@@ -72,7 +72,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-    if: !inputs.prebuild_package
+    if: ${{ !inputs.prebuild_package }}
 
   desktop-benchmarks:
     needs:

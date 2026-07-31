@@ -59,5 +59,3 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages }}
       dry-run: ${{ inputs.dry-run || true }}
-    needs:
-    

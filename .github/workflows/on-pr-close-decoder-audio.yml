@@ -61,5 +61,3 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages || 'decoder-audio' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
-    needs:
-    
