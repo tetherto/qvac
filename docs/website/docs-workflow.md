@@ -326,17 +326,22 @@ hosting provider's build the same way.
 ### Production (manual promotion)
 
 ```
-Staging is verified and ready
+Staging is verified and ready at a known commit
     │
     ▼
-Manually run the "Promote docs to production" workflow (workflow_dispatch)
+Manually run the "Promote docs to production" workflow (workflow_dispatch),
+passing that commit as the `commit` input
     │
     ▼
-Job pauses for docs-production environment approval
+Preflight job (ungated) validates the commit and publishes the
+commit list to the run summary
+    │  (fails here if the commit is not on main, or the ff is not possible)
+    ▼
+Promote job pauses for docs-production environment approval
     │  (required reviewer: qvac-internal-release)
     ▼
-Workflow fast-forwards docs-production to origin/main (--ff-only)
-    │  (fails if docs-production has diverged from main)
+Workflow fast-forwards docs-production to the commit (--ff-only)
+    │
     ▼
 Push to docs-production (GitHub Actions app / GITHUB_TOKEN)
     │
@@ -350,11 +355,29 @@ Hosting provider builds the static site and deploys to production
 Production is promoted by manually running the **Promote docs to
 production** workflow (`.github/workflows/promote-docs-production.yml`),
 never by merging a PR into `docs-production`. The workflow advances
-`docs-production` to the current `main` commit using **fast-forward-only**
-semantics: if the branches have diverged it fails instead of creating a
-merge commit, so `docs-production` stays a pure pointer into `main`'s
-history. A `docs-production` environment required-reviewer gate pauses the
-job until a `qvac-internal-release` member approves.
+`docs-production` to the commit given in the required `commit` input,
+using **fast-forward-only** semantics: if the branches have diverged it
+fails instead of creating a merge commit, so `docs-production` stays a
+pure pointer into `main`'s history. A `docs-production` environment
+required-reviewer gate pauses the job until a `qvac-internal-release`
+member approves.
+
+The target is an explicit input rather than "whatever `main` points at"
+because the approval gate introduces an unbounded delay between dispatch
+and push. Resolving `main` after the approval would promote commits that
+landed while the run waited — commits nobody verified on staging. Naming
+the commit pins the promotion to the state the operator actually
+inspected, and makes the run self-documenting: the target appears in the
+run title, so the approver sees what they are approving.
+
+The validation runs in a separate ungated `preflight` job for the same
+reason. An environment gate pauses a job before any of its steps run, so
+a single-job workflow can only discover a bad input *after* someone has
+been asked to approve it. Splitting the work means every rejectable
+condition fails while the run is still unattended, and the reviewer is
+only ever paged for a promotion that is known to be valid. Preflight also
+writes the resolved SHA and the exact list of commits being promoted to
+the run summary, which is what the reviewer reads before approving.
 
 The person promoting is responsible for confirming staging is healthy and
 that the docs PR Checks have passed on `main` before running the workflow.
@@ -398,13 +421,32 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
 
 **Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
 
-**What it does:**
-- Pauses for approval on the `docs-production` environment (`qvac-internal-release` required reviewers)
-- Checks out `docs-production` (full history) using `GITHUB_TOKEN` — the GitHub Actions app is the sole bypass identity on the `docs-production` ruleset
-- Fetches `origin/main` and runs `git merge --ff-only origin/main`
-- Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
+**Inputs:**
 
-**Fails when:** `docs-production` has diverged from `main` (the `--ff-only` merge is rejected). This is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
+| Input | Required | Description |
+|---|---|---|
+| `commit` | Yes | The commit to promote. Any revision already merged to `main` (a full SHA is recommended; the resolved SHA is echoed in the log). |
+
+**What it does:**
+
+`preflight` (ungated, read-only checkout):
+- Resolves `commit` and verifies it is contained in `origin/main`
+- Rejects a commit behind `docs-production`, and divergence that makes the fast-forward impossible
+- Writes the resolved SHA and the list of commits being promoted to the run summary
+- Skips the promotion entirely (no approval requested) when `docs-production` is already at the requested commit
+
+`promote` (gated on the `docs-production` environment, `qvac-internal-release` required reviewers):
+- Checks out `docs-production` (full history) using `GITHUB_TOKEN` — the GitHub Actions app is the sole bypass identity on the `docs-production` ruleset
+- Re-asserts the checks against the current branch state, since the approval wait is unbounded
+- Runs `git merge --ff-only <commit>` and pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
+
+**Fails when:**
+- `commit` is not a commit this repository knows
+- `commit` is not contained in `main` — production only ever receives reviewed, already-merged code
+- `commit` is behind `docs-production` — the workflow only moves the branch forward; a rollback is a deliberate operation performed outside it
+- `docs-production` has diverged from `main` (the `--ff-only` merge is rejected)
+
+Divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`. Promoting the commit `docs-production` already points at is a no-op that exits cleanly.
 
 **Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
 
