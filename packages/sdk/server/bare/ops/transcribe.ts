@@ -14,6 +14,7 @@ import {
   type AudioFormat,
   type ParakeetStreamingRunConfig
 } from '@/schemas'
+import type ASRGgml from '@qvac/asr-ggml'
 import { createAudioStream } from '@/server/bare/utils/audio-input'
 import { getServerLogger } from '@/logging'
 import { TranscriptionFailedError } from '@/utils/errors-server'
@@ -27,18 +28,17 @@ import {
 } from '@/server/bare/utils/transcribe-metadata'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
+import {
+  isEndOfTurnEvent,
+  isVadEvent,
+  toEndOfTurnEvent,
+  toVadStateEvent
+} from '@/server/bare/utils/asr-events'
 
 export { assertMetadataSupported, toTranscribeSegment, type WhisperAddonSegment }
 
-type StreamingSegment = WhisperAddonSegment & {
-  isEndOfTurn?: boolean
-  startsWord?: boolean
-}
-type StreamingModelOutput =
-  | StreamingSegment[]
-  | StreamingSegment
-  | { type: 'vad'; speaking: boolean; probability: number }
-  | { type: 'endOfTurn'; silenceDurationMs: number }
+type StreamingSegment = ASRGgml.TranscriptionSegment
+type StreamingModelOutput = ASRGgml.ASRStreamOutput
 
 interface StreamingModelResponse {
   iterate(): AsyncIterable<StreamingModelOutput>
@@ -370,22 +370,20 @@ export async function* transcribeStream(
     requestLogger.debug('Live Transcription Update:', output)
 
     if (!Array.isArray(output)) {
-      if ('type' in output) {
-        if (output.type === 'vad') {
-          yield {
-            type: 'vad',
-            speaking: output.speaking,
-            probability: output.probability
-          }
-          continue
+      if (isVadEvent(output)) {
+        yield {
+          type: 'vad',
+          ...toVadStateEvent(output)
         }
-        if (output.type === 'endOfTurn') {
+        continue
+      }
+      if (isEndOfTurnEvent(output)) {
+        const event = toEndOfTurnEvent(output)
+        if (event) {
           yield {
             type: 'endOfTurn',
-            source: 'whisper',
-            silenceDurationMs: output.silenceDurationMs
+            ...event
           }
-          continue
         }
         continue
       }
@@ -405,23 +403,14 @@ function* emitSegment(
   silenceMarker: string
 ): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
   if (!segment.text) {
-    if (segment.isEndOfTurn) {
-      yield { type: 'endOfTurn', source: 'parakeet' }
-    }
     return
   }
   if (silenceMarker && segment.text.includes(silenceMarker)) {
-    if (segment.isEndOfTurn) {
-      yield { type: 'endOfTurn', source: 'parakeet' }
-    }
     return
   }
   if (metadata) {
     yield toTranscribeSegment(segment)
   } else if (segment.text.trim()) {
     yield segment.text
-  }
-  if (segment.isEndOfTurn) {
-    yield { type: 'endOfTurn', source: 'parakeet' }
   }
 }
