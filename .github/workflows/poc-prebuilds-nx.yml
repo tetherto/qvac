@@ -8,6 +8,13 @@
 # show up in the nx-affected output, they just don't have a config row here.
 # Additive only - does not touch or replace prebuilds-classification-ggml.yml
 # or prebuilds-fabric.yml.
+#
+# Supports both linking modes from one file: put "[verify-registry]" anywhere
+# in the PR title or body (or set the verify-against-registry input on a
+# manual dispatch) to resolve internal deps from the registry instead of
+# local workspace source for that run. A label could trigger this instead,
+# but that needs creating one - a title/body marker needs no setup, so it's
+# what this POC uses for now.
 name: "POC - Prebuilds (nx affected)"
 
 on:
@@ -27,6 +34,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      verify-against-registry:
+        description: "Resolve internal deps from the registry instead of local workspace source"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,11 +66,29 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Text marker in the PR title/body instead of a dedicated label - avoids
+      # having to create a new repo label just for this. Case-insensitive.
+      - id: verify-mode
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.verify-against-registry }}" = "true" ]; then
+            echo "verify=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -qiF '[verify-registry]'; then
+            echo "verify=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "verify=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - id: nx
         uses: ./.github/actions/nx-affected
         with:
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          verify-against-registry: ${{ steps.verify-mode.outputs.verify }}
 
       - id: matrix
         shell: bash

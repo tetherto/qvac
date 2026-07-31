@@ -15,6 +15,18 @@ inputs:
     description: "Head ref/sha to diff to (workflow_dispatch fallback only)"
     required: false
     default: "HEAD"
+  verify-against-registry:
+    description: >
+      When 'true', drops the committed pnpm-lock.yaml before install and
+      resolves with linkWorkspacePackages=false, so internal deps come from
+      the real registry instead of local workspace source. Deliberately
+      re-resolves from scratch rather than passing --config.link-workspace-packages
+      alone - a --frozen-lockfile install just replays the committed lockfile's
+      existing link: entries regardless of that flag (confirmed real pnpm
+      behavior, not something the flag alone can override). Never writes back
+      to the committed lockfile - this only affects this one ephemeral job.
+    required: false
+    default: "false"
 
 outputs:
   affected:
@@ -28,7 +40,18 @@ runs:
       with:
         node-version: lts/*
     - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-    - shell: bash
+
+    - if: inputs.verify-against-registry == 'true'
+      shell: bash
+      run: |
+        echo "verify-against-registry: dropping pnpm-lock.yaml for this job only (never committed back)"
+        rm -f pnpm-lock.yaml
+    - if: inputs.verify-against-registry == 'true'
+      shell: bash
+      run: pnpm install --config.link-workspace-packages=false
+
+    - if: inputs.verify-against-registry != 'true'
+      shell: bash
       run: pnpm install --frozen-lockfile
 
     - if: github.event_name != 'workflow_dispatch'
@@ -40,7 +63,11 @@ runs:
         set -euo pipefail
         BASE="${NX_BASE:-${{ inputs.base-ref }}}"
         HEAD="${NX_HEAD:-${{ inputs.head-ref }}}"
+        # pnpm exec can print its own install/sync chatter to stdout ahead of
+        # nx's actual output (seen after a fresh resolve with no lockfile) -
+        # the JSON array is always the last line, so only parse that.
         AFFECTED=$(pnpm exec nx show projects --affected --base="$BASE" --head="$HEAD" --json \
+          | tail -n1 \
           | jq -c 'map(sub("^@qvac/"; ""))')
         echo "Affected (transitive, base=$BASE head=$HEAD): $AFFECTED"
         echo "affected=$AFFECTED" >> "$GITHUB_OUTPUT"
