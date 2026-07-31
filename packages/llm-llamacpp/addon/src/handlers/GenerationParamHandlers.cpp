@@ -1,5 +1,6 @@
 #include "handlers/GenerationParamHandlers.hpp"
 
+#include <optional>
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
