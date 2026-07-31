@@ -21,8 +21,23 @@
 #include "model-interface/SdModel.hpp"
 #include "utils/BackendLoader.hpp"
 #include "utils/BackendSelection.hpp"
+#include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_sd {
+
+inline js_value_t*
+destroyInstance(js_env_t* env, js_callback_info_t* info) try {
+  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+
+  QLOG_IF(Priority::INFO, "Diffusion destroyInstance: native teardown starting");
+  js_value_t* result =
+      qvac_lib_inference_addon_cpp::JsInterface::destroyInstance(env, info);
+  QLOG_IF(
+      Priority::INFO,
+      "Diffusion destroyInstance: native teardown returned to JavaScript");
+  return result;
+}
+JSCATCH
 
 inline int parseStandaloneUpscaleRepeats(const std::string& paramsJson) {
   picojson::value v;

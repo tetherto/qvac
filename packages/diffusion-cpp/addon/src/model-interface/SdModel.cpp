@@ -16,6 +16,7 @@
 #include <picojson/picojson.h>
 
 #include "utils/AviWriter.hpp"
+#include "utils/AppleMemoryTelemetry.hpp"
 #include "utils/BackendLoader.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ImageCodec.hpp"
@@ -65,6 +66,16 @@ thread_local ProgressCtx g_progressCtx;
 // g_progressCtx for progress.  Avoids relying on the process-global
 // sd_abort_cb_data when multiple SdModel instances could coexist.
 thread_local const SdModel* g_abortModel = nullptr;
+
+bool logAppleMemory(const std::string& stage) {
+  const auto snapshot = qvac_lib_inference_addon_sd::apple_memory::capture();
+  if (!snapshot.available)
+    return false;
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      qvac_lib_inference_addon_sd::apple_memory::describe(stage, snapshot));
+  return true;
+}
 
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
@@ -266,7 +277,41 @@ SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
 // Destructor -- releases the sd_ctx and all associated GPU/CPU memory
 // ---------------------------------------------------------------------------
 
-SdModel::~SdModel() = default;
+SdModel::~SdModel() {
+  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+
+  QLOG_IF(
+      Priority::INFO,
+      "SdModel teardown: destructor entered; sd_ctx_loaded=" +
+          std::string(sdCtx_ != nullptr ? "true" : "false"));
+  const bool appleTelemetryAvailable =
+      logAppleMemory("SdModel destructor before free_sd_ctx");
+
+  const auto freeStart = std::chrono::steady_clock::now();
+  sdCtx_.reset();
+  const auto freeElapsedMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - freeStart)
+          .count();
+
+  QLOG_IF(
+      Priority::INFO,
+      "SdModel teardown: free_sd_ctx completed in " +
+          std::to_string(freeElapsedMs) + " ms");
+  logAppleMemory("SdModel destructor after free_sd_ctx");
+
+  if (appleTelemetryAvailable) {
+    const std::size_t relievedBytes =
+        qvac_lib_inference_addon_sd::apple_memory::requestPressureRelief();
+    QLOG_IF(
+        Priority::INFO,
+        "SdModel teardown: malloc_zone_pressure_relief returned bytes=" +
+            std::to_string(relievedBytes));
+    logAppleMemory("SdModel destructor after pressure relief");
+  }
+
+  QLOG_IF(Priority::INFO, "SdModel teardown: destructor body completed");
+}
 
 // ---------------------------------------------------------------------------
 // load() -- maps SdCtxConfig -> sd_ctx_params_t, then calls new_sd_ctx()
@@ -277,6 +322,10 @@ void SdModel::load() {
     return;
 
   const auto tLoadStart = std::chrono::steady_clock::now();
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "SdModel load: new_sd_ctx starting");
+  logAppleMemory("SdModel load before new_sd_ctx");
 
   sd_ctx_params_t params{};
   sd_ctx_params_init(&params);
@@ -404,6 +453,7 @@ void SdModel::load() {
   }
 
   sdCtx_.reset(raw);
+  logAppleMemory("SdModel load after new_sd_ctx");
 
   // LTX-2 is identified by the embeddings-connectors input, which no other
   // model family uses. Its temporal shape is used for per-job validation.

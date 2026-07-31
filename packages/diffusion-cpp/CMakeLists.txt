@@ -30,6 +30,17 @@ set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/tri
 
 project(inference-addon-sd C CXX)
 
+if(APPLE)
+  enable_language(OBJCXX)
+  set(APPLE_MEMORY_TELEMETRY_SOURCE
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/AppleMemoryTelemetry.mm)
+  find_library(METAL_FRAMEWORK Metal REQUIRED)
+  find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+else()
+  set(APPLE_MEMORY_TELEMETRY_SOURCE
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/AppleMemoryTelemetry.cpp)
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
   add_link_options(-stdlib=libc++ -static-libstdc++)
@@ -102,6 +113,7 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
+    ${APPLE_MEMORY_TELEMETRY_SOURCE}
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
@@ -132,6 +144,15 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     PRIVATE
       stable-diffusion::stable-diffusion
   )
+
+  if(APPLE)
+    target_link_libraries(
+      ${inference-addon-sd}
+      PRIVATE
+        ${METAL_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+    )
+  endif()
 
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)

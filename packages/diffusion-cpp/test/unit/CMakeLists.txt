@@ -28,6 +28,7 @@ add_executable(
   test_avi_writer.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+  ${APPLE_MEMORY_TELEMETRY_SOURCE}
   ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
@@ -103,6 +104,15 @@ target_link_libraries(
     GTest::gtest_main
     GTest::gmock_main
 )
+
+if(APPLE)
+  target_link_libraries(
+    addon-test
+    PRIVATE
+      ${METAL_FRAMEWORK}
+      ${FOUNDATION_FRAMEWORK}
+  )
+endif()
 
 if(NOT WIN32 AND NOT APPLE)
   target_link_libraries(

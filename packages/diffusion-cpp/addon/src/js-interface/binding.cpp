@@ -25,8 +25,7 @@ js_value_t* qvacLibInferenceAddonSdExports(js_env_t* env, js_value_t* exports) {
   V("activate", qvac_lib_inference_addon_sd::activate)
   V("activateUpscaler", qvac_lib_inference_addon_sd::activateUpscaler)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
-  V("destroyInstance",
-    qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
+  V("destroyInstance", qvac_lib_inference_addon_sd::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
   V("getExpectedEsrganBackendDevice",
