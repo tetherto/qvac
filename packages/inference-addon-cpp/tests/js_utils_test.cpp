@@ -184,13 +184,14 @@ TEST(JsUtilsTest, JsAsyncTaskEnvTeardownDuringBlockedWorker) {
 }
 
 // The work functor commonly captures the last shared_ptr to the addon, and
-// its destructors are JS-facing. They must run before the deferred teardown
-// is finished — after the finish, env teardown proceeds and the env can be
-// gone. Today the detached worker lambda owns the functor and destroys it
-// after uv_async_send, i.e. after the loop may already have finished the
-// teardown: the exact off-loop use-after-free window this guard exists to
-// close.
-TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
+// its destructors are JS-facing. It must be destroyed on the loop before the
+// promise settles: an awaiter may immediately destroy the JS instance, and
+// retaining the shared_ptr until the later uv close callback can keep a large
+// native model alive through that teardown. It must also die before deferred
+// teardown finishes, after which the env can be gone.
+TEST(
+    JsUtilsTest,
+    JsAsyncTaskDestroysWorkCapturesBeforeSettlementAndFinishingTeardown) {
   js_env_t env;
 
   mock_js::lastCreatedDeferred = nullptr;
@@ -199,11 +200,16 @@ TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
   mock_js::lastDeferredTeardownHandle = nullptr;
 
   std::atomic<bool> probeDestroyed{false};
+  std::atomic<bool> promiseSettledFirst{false};
   std::atomic<bool> teardownFinishedFirst{false};
   struct Probe {
     std::atomic<bool>* destroyed;
+    std::atomic<bool>* settledFirst;
     std::atomic<bool>* finishedFirst;
     ~Probe() {
+      settledFirst->store(
+          mock_js::lastCreatedDeferred != nullptr &&
+          mock_js::lastCreatedDeferred->settled.load());
       finishedFirst->store(
           mock_js::lastDeferredTeardownHandle != nullptr &&
           mock_js::lastDeferredTeardownHandle->finished.load());
@@ -211,7 +217,8 @@ TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
     }
   };
   std::shared_ptr<Probe> probe(
-      new Probe{&probeDestroyed, &teardownFinishedFirst});
+      new Probe{
+          &probeDestroyed, &promiseSettledFirst, &teardownFinishedFirst});
 
   js_value_t* promise = js::JsAsyncTask::run(&env, [probe]() {});
   EXPECT_NE(promise, nullptr);
@@ -223,6 +230,10 @@ TEST(JsUtilsTest, JsAsyncTaskDestroysWorkCapturesBeforeFinishingTeardown) {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
   ASSERT_TRUE(probeDestroyed.load()) << "work captures were never destroyed";
+  EXPECT_FALSE(promiseSettledFirst.load())
+      << "work captures were retained until after promise settlement: an "
+         "awaiter can proceed into teardown while the task still owns heavy "
+         "native resources";
   EXPECT_FALSE(teardownFinishedFirst.load())
       << "work captures were destroyed after the deferred teardown finished: "
          "their (JS-facing) destructors ran off-loop against an env that "
