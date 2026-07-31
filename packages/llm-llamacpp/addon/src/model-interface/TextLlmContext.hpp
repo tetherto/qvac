@@ -162,6 +162,10 @@ public:
   [[nodiscard]] std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() override;
 
+  void setUserVisiblePerf(const llama_perf_context_data& perf) override {
+    userVisiblePerf_ = perf;
+  }
+
   void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] bool supportsSliding() const override { return true; }

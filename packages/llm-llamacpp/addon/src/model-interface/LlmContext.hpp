@@ -395,6 +395,15 @@ public:
   }
 
   /**
+   * Publish a corrected perf snapshot for `runtimeStats()` to consume via
+   * `takeUserVisiblePerfSnapshot()`. Overridden by the contexts that own a
+   * `userVisiblePerf_` slot; no-op elsewhere. Used by the speculative loop to
+   * repair the eval/prompt split that llama's own counters get wrong under
+   * speculation (see specPublishPerf).
+   */
+  virtual void setUserVisiblePerf(const llama_perf_context_data& /*perf*/) {}
+
+  /**
    * Wall-clock milliseconds spent in the vision encoder (mtmd/CLIP ViT
    * forward + projection) during the most recent inference. 0 for
    * text-only contexts, which never run a vision encoder.
@@ -542,6 +551,15 @@ protected:
   // Drafts are capped to the target's bounded partial-seq_rm capacity so a
   // rejected draft is always a plain seq_rm.
   common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
+  // Perf counters captured right after prefill, before the speculative loop
+  // runs. Baseline for specPublishPerf(), which rebuilds the prompt/eval split
+  // that llama's `n_queued_tokens == 1` heuristic gets wrong once decode
+  // batches carry drafts.
+  llama_perf_context_data specPerfBase_{};
+  // Same baseline for the draft context, so its share of the decode cost can
+  // be added back in (it is invisible to the target's counters).
+  llama_perf_context_data specPerfBaseDraft_{};
+  bool specPerfBaseValid_ = false;
   int64_t draftAccepted_ = 0;
   int64_t draftTotal_ = 0;
   std::atomic<bool> stopGeneration_ = false;
@@ -654,6 +672,56 @@ protected:
     return specPos() + needed <= specCtxCeiling();
   }
 
+  // Repair the user-visible perf split for a speculative generation.
+  //
+  // llama only counts a decode as *generation* when the batch holds exactly
+  // one token (`if (n_queued_tokens == 1) { t_eval_us += ...; n_eval++; }` in
+  // llama-context.cpp); anything larger is booked as PROMPT eval. Every MTP
+  // verify batch is id_last + drafts, i.e. > 1 token, so with speculation on:
+  //   - n_eval collapses to ~1 and TPS to ~0 (the addon reports "1 token
+  //     generated" for a full answer),
+  //   - n_p_eval / t_p_eval absorb the whole decode phase, so promptTokens and
+  //     TTFT balloon (measured: TTFT 154ms -> 3070ms, promptTokens 49 -> 451
+  //     for the same 1337-character answer).
+  // None of that is a fabric bug — the heuristic is simply meaningless once
+  // decode batches are multi-token.
+  //
+  // Rebuild the split from a baseline captured after prefill: prompt figures
+  // are the baseline's (real prefill only), generated tokens are the addon's
+  // own count, and decode time is ALL eval time accrued since the baseline in
+  // either bucket — which is exactly the generation phase.
+  void specPublishPerf(unsigned generated) {
+    if (!specPerfBaseValid_) {
+      return;
+    }
+    const llama_perf_context_data now = llama_perf_context(getCtx());
+    llama_perf_context_data fixed = now;
+    fixed.n_p_eval = specPerfBase_.n_p_eval;
+    fixed.t_p_eval_ms = specPerfBase_.t_p_eval_ms;
+    fixed.n_eval = static_cast<int32_t>(generated);
+    fixed.t_eval_ms = (now.t_p_eval_ms - specPerfBase_.t_p_eval_ms) +
+                      (now.t_eval_ms - specPerfBase_.t_eval_ms);
+    // Add the DRAFT context's compute. The MTP drafter runs its forward passes
+    // in ctx_dft, a separate llama_context, so none of that time reaches the
+    // target's counters — yet the caller pays it on every generated token.
+    // Omitting it makes TPS report target-side throughput and can claim
+    // speculation is faster when it is a net loss (measured on a CPU box:
+    // TPS 66.5 vs 56.2 non-spec, while wall-clock was 6385ms vs 4148ms —
+    // i.e. actually ~1.5x SLOWER). Counting both contexts keeps TPS honest.
+    if (ctxDraft_) {
+      const llama_perf_context_data nowDraft =
+          llama_perf_context(ctxDraft_.get());
+      fixed.t_eval_ms +=
+          (nowDraft.t_p_eval_ms - specPerfBaseDraft_.t_p_eval_ms) +
+          (nowDraft.t_eval_ms - specPerfBaseDraft_.t_eval_ms);
+    }
+    if (fixed.t_eval_ms < 0.0) {
+      fixed.t_eval_ms = 0.0;
+    }
+    setUserVisiblePerf(fixed);
+    specPerfBaseValid_ = false;
+  }
+
   // Single success-exit for runSpeculativeGeneration. Consumes a stop that
   // landed too late for the entry / loop-top checks — during the final round's
   // body, in the pre-loop first-token window, or once the budget was exhausted.
@@ -664,11 +732,17 @@ protected:
   // MUST go through here — an earlier version had the check only after the
   // while loop, and the two pre-loop first-token exits silently bypassed it.
   GenerateResponseResult specFinishRespectingStop(
-      const std::function<void(const std::string&)>& outputCallback) {
+      const std::function<void(const std::string&)>& outputCallback,
+      unsigned generated) {
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
       return specCancel(outputCallback);
     }
+    // Before specFinish: compaction may take its own snapshot inside
+    // onGenerationFinished and only sets it when the slot is still empty, so
+    // publishing first keeps the corrected figures (which already exclude the
+    // replay decodes, being taken before finish runs).
+    specPublishPerf(generated);
     return specFinish(outputCallback, /*ok=*/true);
   }
 
@@ -680,9 +754,11 @@ protected:
   // the stateless-mode path, where clearing would swallow a legitimate
   // cancel), so without this a stop racing the failure would leak into the
   // next request as a spurious cancellation.
-  GenerateResponseResult
-  specFail(const std::function<void(const std::string&)>& outputCallback) {
+  GenerateResponseResult specFail(
+      const std::function<void(const std::string&)>& outputCallback,
+      unsigned generated) {
     stopGeneration_.store(false);
+    specPublishPerf(generated);
     return specFinish(outputCallback, /*ok=*/false);
   }
 
@@ -692,6 +768,15 @@ protected:
   GenerateResponseResult runSpeculativeGeneration(
       const std::function<void(const std::string&)>& outputCallback) {
     specBeginGeneration(outputCallback);
+
+    // Baseline for specPublishPerf(): taken after prefill and before any
+    // verify batch, so it holds the true prompt-eval figures. Everything
+    // llama books as "prompt" from here on is really decode.
+    specPerfBase_ = llama_perf_context(getCtx());
+    if (ctxDraft_) {
+      specPerfBaseDraft_ = llama_perf_context(ctxDraft_.get());
+    }
+    specPerfBaseValid_ = true;
 
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
@@ -769,7 +854,7 @@ protected:
       }
       // Same inline-decode headroom requirement as the in-loop recovery below.
       if (!specEnsureRecoveryHeadroom()) {
-        return specFail(outputCallback);
+        return specFail(outputCallback, generated);
       }
       specRecoverReasoning(idLast, specBatch, outputCallback);
       const llama_token next = specSampleAndAccept(-1);
@@ -777,7 +862,7 @@ protected:
           next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
       idLast = step.token;
       if (step.finished) {
-        return specFinishRespectingStop(outputCallback);
+        return specFinishRespectingStop(outputCallback, generated);
       }
     } else {
       // NOTE: the first token is not decoded here — it is decoded as id_last in
@@ -790,7 +875,7 @@ protected:
           idLast, sampled, ++generated, outputCallback, nullptr);
       idLast = step.token;
       if (step.finished) {
-        return specFinishRespectingStop(outputCallback);
+        return specFinishRespectingStop(outputCallback, generated);
       }
     }
 
@@ -813,7 +898,7 @@ protected:
         // riskier than the benign lag fabric's begin() already handles.
         specApplyContextDiscard();
         if (specPos() + 1 > specCtxCeiling()) {
-          return specFail(outputCallback);
+          return specFail(outputCallback, generated);
         }
       }
 
@@ -915,7 +1000,7 @@ protected:
           // Recovery decodes inline (outside the clamped verify batch), so make
           // room for it or stop gracefully instead of hitting FailedToDecode.
           if (!specEnsureRecoveryHeadroom()) {
-            return specFail(outputCallback);
+            return specFail(outputCallback, generated);
           }
           specRecoverReasoning(tok, specBatch, outputCallback);
           const llama_token next = specSampleAndAccept(-1);
@@ -963,7 +1048,7 @@ protected:
       }
     }
 
-    return specFinishRespectingStop(outputCallback);
+    return specFinishRespectingStop(outputCallback, generated);
   }
 
   // Context-specific pieces of the MTP loop. The cursor is `nPast_` on

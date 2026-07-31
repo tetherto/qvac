@@ -197,6 +197,10 @@ public:
   [[nodiscard]] std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() override;
 
+  void setUserVisiblePerf(const llama_perf_context_data& perf) override {
+    userVisiblePerf_ = perf;
+  }
+
   /**
    * The load media method. It loads the media from memory buffer.
    *
