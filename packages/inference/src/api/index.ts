@@ -29,6 +29,7 @@ export {
 export { textToSpeech, textToSpeechStream } from '@/api/text-to-speech'
 export { getModelInfo } from '@/api/get-model-info'
 export { getLoadedModelInfo } from '@/api/get-loaded-model-info'
+export { getSystemResources } from '@/api/get-system-resources'
 export { ocr } from '@/api/ocr'
 export { invokePlugin, invokePluginStream } from '@/api/invoke-plugin'
 export { diffusion, type DiffusionProgressTick } from '@/api/diffusion'

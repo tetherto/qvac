@@ -75,6 +75,7 @@ export {
 } from '@/schemas/profiling'
 export { runtimeContextSchema, type RuntimeContext } from '@/schemas/runtime-context'
 export * from '@/schemas/model-info'
+export * from '@/schemas/system-resources'
 export * from '@/schemas/model-src-utils'
 export * from '@/schemas/json-schema'
 export { type McpClient, type McpClientInput } from '@/schemas/mcp-adapter'

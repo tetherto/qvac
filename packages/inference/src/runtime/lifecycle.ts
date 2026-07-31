@@ -12,6 +12,8 @@ import {
 import { clearAllAddonLoggers, getEngineLogger, LOG_ID, ALL_LOG_ID } from '@/logging/index'
 import { clearPlugins } from '@/plugins/index'
 import { acquireCacheLock, releaseCacheLock } from '@/runtime/cache-lock'
+import { nativeResourceCollectorDependencies } from '@/resources/native'
+import { destroyResourceCollector, initializeResourceCollector } from '@/resources/instance'
 
 // The host application owns the Bare runtime lifecycle: this module sets up the
 // shared engine state and tears it back down on `close()`, but never claims
@@ -35,6 +37,7 @@ export function initialize(): void {
 
   initEnv()
   acquireCacheLock()
+  initializeResourceCollector(nativeResourceCollectorDependencies)
 
   // A `subscribeServerLogs` consumer can attach right away. Bound the global
   // startup buffer the same way model-load buffering is bounded: if nothing
@@ -66,6 +69,7 @@ function clearRegistries(): void {
 async function runCleanup(): Promise<void> {
   if (cleanupRan) return
   cleanupRan = true
+  destroyResourceCollector()
   clearRegistries()
   await Promise.allSettled([
     destroySwarm(),

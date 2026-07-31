@@ -34,6 +34,7 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  getSystemResources,
   loggingStream,
   subscribeServerLogs,
   type ServerLogHandler,

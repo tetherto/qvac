@@ -15,6 +15,7 @@ import { handleDeleteCache } from '@/handlers/delete-cache'
 import { handleDownloadAsset } from '@/handlers/download-asset'
 import { handleGetModelInfo } from '@/handlers/get-model-info'
 import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
+import { handleGetSystemResources } from '@/handlers/get-system-resources'
 import { handleHeartbeat } from '@/handlers/heartbeat'
 import { handleHeartbeatDelegated } from '@/p2p/heartbeat-delegated'
 import { handleFinetune } from '@/handlers/finetune'
@@ -118,6 +119,7 @@ export const registry: Record<string, HandlerEntry> = {
   deleteCache: { type: 'reply', handler: handleDeleteCache },
   getModelInfo: { type: 'reply', handler: handleGetModelInfo },
   getLoadedModelInfo: { type: 'reply', handler: handleGetLoadedModelInfo },
+  getSystemResources: { type: 'reply', handler: handleGetSystemResources },
   pluginInvoke: { type: 'reply', handler: handlePluginInvoke },
   modelRegistryList: { type: 'reply', handler: handleModelRegistryList },
   modelRegistrySearch: { type: 'reply', handler: handleModelRegistrySearch },
