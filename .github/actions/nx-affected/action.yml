@@ -59,10 +59,13 @@ runs:
 
     - id: affected
       shell: bash
+      env:
+        INPUT_BASE_REF: ${{ inputs.base-ref }}
+        INPUT_HEAD_REF: ${{ inputs.head-ref }}
       run: |
         set -euo pipefail
-        BASE="${NX_BASE:-${{ inputs.base-ref }}}"
-        HEAD="${NX_HEAD:-${{ inputs.head-ref }}}"
+        BASE="${NX_BASE:-$INPUT_BASE_REF}"
+        HEAD="${NX_HEAD:-$INPUT_HEAD_REF}"
         # pnpm exec can print its own install/sync chatter to stdout ahead of
         # nx's actual output (seen after a fresh resolve with no lockfile) -
         # the JSON array is always the last line, so only parse that.

@@ -6,6 +6,15 @@ packages:
 
 linkWorkspacePackages: true
 blockExoticSubdeps: false
+
+# Registry timeouts are tighter than a fresh full resolve can need on a
+# flaky connection - real failure hit in CI once already (verify-registry
+# mode drops the lockfile, so it has to re-resolve ~500 packages from
+# scratch). Same fix the full migration's pnpm-workspace.yaml already needed.
+fetchTimeout: 300000
+fetchRetries: 5
+fetchRetryMaxtimeout: 120000
+
 minimumReleaseAgeExclude:
   - '@qvac/fabric@0.3.1'
 

@@ -73,9 +73,10 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          INPUT_VERIFY: ${{ inputs.verify-against-registry }}
         run: |
           set -euo pipefail
-          if [ "${{ inputs.verify-against-registry }}" = "true" ]; then
+          if [ "$INPUT_VERIFY" = "true" ]; then
             echo "verify=true" >> "$GITHUB_OUTPUT"
           elif printf '%s\n%s' "$PR_TITLE" "$PR_BODY" | grep -qiF '[verify-registry]'; then
             echo "verify=true" >> "$GITHUB_OUTPUT"
@@ -92,10 +93,12 @@ jobs:
 
       - id: matrix
         shell: bash
+        env:
+          AFFECTED_JSON: ${{ steps.nx.outputs.affected }}
         run: |
           set -euo pipefail
           CONFIG_JSON=$(yq -o=json -I=0 e '.' <<< "$PREBUILDS_CONFIG")
-          MATRIX=$(jq -c --argjson affected '${{ steps.nx.outputs.affected }}' \
+          MATRIX=$(jq -c --argjson affected "$AFFECTED_JSON" \
             '[.[] | select(.package as $p | $affected | index($p) != null)]' <<< "$CONFIG_JSON")
           echo "Matrix (config ∩ affected): $MATRIX"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"

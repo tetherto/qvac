@@ -68,6 +68,18 @@ Restore the default (loose) state afterwards:
 pnpm install
 ```
 
+## 4. Real CI: a workflow consolidation proving both ideas together
+
+`.github/workflows/poc-prebuilds-nx.yml` merges `prebuilds-classification-ggml.yml` +
+`prebuilds-fabric.yml` (both are otherwise identical thin wrappers around
+`reusable-prebuilds.yml`) into one `nx affected`-driven matrix, `pull_request`-triggered.
+
+It supports running against either linking mode from the same file. Default is loose (as
+committed). To resolve against the registry instead for one run, put this exact text anywhere in
+the PR title or body: `[verify-registry]` — or set the `verify-against-registry` input on a manual
+`workflow_dispatch`. (Don't repeat that exact bracketed text in a PR description that isn't meant to
+trigger it — the check does a plain substring match against title+body.)
+
 ## Why this scope, why this approach
 
 - "Loose" linking (`linkWorkspacePackages`) was chosen over the stricter `workspace:` protocol,
