@@ -153,3 +153,64 @@ test('audioGen plugin operation hard-cancels and frees its registry entry', asyn
   t.ok(completed.done)
   t.is(getRequestRegistry().get(requestId), null)
 })
+
+test('cancelling a queued AudioGen request does not cancel the active run', async (t) => {
+  const modelId = 'audio-gen-operation-queued-cancel'
+  const activeRequestId = 'audio-gen-request-active'
+  const queuedRequestId = 'audio-gen-request-queued'
+  let cancelCalls = 0
+  const model = createModel(
+    createResponse(
+      [
+        { progress: { stage: 'dit', step: 1, total: 2 } },
+        { progress: { stage: 'dit', step: 2, total: 2 } }
+      ],
+      {}
+    ),
+    function onCancel() {
+      cancelCalls++
+    }
+  )
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const activeStream = audioGenStream({
+    type: 'audioGenStream',
+    requestId: activeRequestId,
+    modelId,
+    caption: 'active generation'
+  })
+  const activeFirst = await activeStream.next()
+  t.is(activeFirst.value?.progress?.step, 1)
+
+  const queuedStream = audioGenStream({
+    type: 'audioGenStream',
+    requestId: queuedRequestId,
+    modelId,
+    caption: 'queued generation'
+  })
+  const queuedFirstPromise = queuedStream.next()
+  await new Promise((resolve) => setTimeout(resolve, 5))
+
+  t.is(getRequestRegistry().cancel({ requestId: queuedRequestId }), 1)
+  const queuedFirst = await queuedFirstPromise
+  t.alike(queuedFirst.value, {
+    type: 'audioGenStream',
+    done: true,
+    stopReason: 'cancelled'
+  })
+  t.is(cancelCalls, 0, 'queued cancellation did not touch the active addon job')
+
+  const activeSecond = await activeStream.next()
+  t.is(activeSecond.value?.progress?.step, 2, 'active generation continues')
+  const activeTerminal = await activeStream.next()
+  t.is(activeTerminal.value?.stopReason, 'completed')
+  t.is(cancelCalls, 0)
+
+  t.ok((await queuedStream.next()).done)
+  t.ok((await activeStream.next()).done)
+  t.is(getRequestRegistry().get(activeRequestId), null)
+  t.is(getRequestRegistry().get(queuedRequestId), null)
+})

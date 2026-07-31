@@ -31,6 +31,18 @@ export async function* audioGenStream(
     )
   }
 
+  // A queued request can resume from begin() already aborted. It never owned
+  // the model slot, so calling the model-scoped cancel here would interrupt
+  // the earlier same-model generation that still owns it.
+  if (Boolean(ctx.signal.aborted)) {
+    yield {
+      type: 'audioGenStream',
+      done: true,
+      stopReason: 'cancelled'
+    }
+    return
+  }
+
   const onAbort = () => {
     candidate.cancel().catch((error: unknown) => {
       logger.warn(
