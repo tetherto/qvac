@@ -50,7 +50,9 @@ Other OpenAI routes may be added over time; this file is updated when they ship.
 
 `serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant
 names, including fields inside nested objects. The CLI resolves those names to
-the same `ModelConstant` objects accepted by the SDK:
+the same `ModelConstant` objects accepted by the SDK. The snake-case
+`upscaler.model_src` field follows the same rules except in video mode, where
+the SDK ignores the entire `upscaler` block and the CLI leaves it unchanged:
 
 ```json
 {
