@@ -183,6 +183,11 @@ jobs:
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           npm install --ignore-scripts
+          # The native sources are generated and gitignored, and jobs do not share
+          # workspaces — so this fresh checkout has none. Any job that runs bare-make
+          # must generate first, or CMake fails with "Generated native sources are
+          # missing".
+          npm run test:mobile:generate
           bare-make generate --platform android --arch arm64 -D ANDROID_STL=c++_shared
           bare-make build
           bare-make install
@@ -230,6 +235,9 @@ jobs:
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
           npm install --ignore-scripts
+          # See prebuild-android: generated sources are gitignored and jobs do not
+          # share workspaces, so this job must generate before bare-make.
+          npm run test:mobile:generate
           bare-make generate --platform ios --arch arm64
           bare-make build
           bare-make install

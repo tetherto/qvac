@@ -15,8 +15,13 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_bare_module(inference_addon_cpp_mobile_tests EXPORTS)
 
 # All C++ is GENERATED from the desktop bindings (tests/integration_js/*), so it
-# cannot drift; the generator also emits the source list. On a fresh clone the tree
-# does not exist yet — run `npm run test:mobile:generate` before configuring.
+# cannot drift; the generator also emits the source list. The tree is gitignored,
+# so it does not exist in a fresh checkout.
+#
+# INVARIANT: every context that runs bare-make MUST run `npm run test:mobile:generate`
+# first. Locally that means before configuring; in CI it means EVERY job that builds
+# (host-test, prebuild-android, prebuild-ios) — jobs do not share workspaces, so
+# generating in one does not help another.
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/native/sources.cmake")
   message(FATAL_ERROR
     "Generated native sources are missing.\n"
