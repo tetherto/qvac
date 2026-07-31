@@ -45,6 +45,9 @@ importers:
       cmake-bare:
         specifier: ^1.7.5
         version: 1.8.0
+      cmake-npm:
+        specifier: ^1.1.0
+        version: 1.1.2
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -78,6 +81,9 @@ importers:
       cmake-bare:
         specifier: ^1.7.5
         version: 1.8.0
+      cmake-npm:
+        specifier: ^1.1.0
+        version: 1.1.2
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -131,6 +137,9 @@ importers:
         specifier: ^3.0.0
         version: 3.0.1
     devDependencies:
+      bare-process:
+        specifier: ^4.4.1
+        version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       brittle:
         specifier: ^3.15.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))

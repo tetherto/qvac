@@ -63,6 +63,7 @@
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
+    "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
