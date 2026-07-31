@@ -75,12 +75,17 @@ void ReasoningRollbackState::clearPostReasoning() noexcept {
   postReasoningTokens_.clear();
   seededPostReasoningCount_ = 0;
   capturingPostReasoning_ = false;
+  forceReplayFailureForTesting_ = false;
 }
 
 bool ReasoningRollbackState::replayPostReasoning(
     ::llama_context* ctx, llama_seq_id seqId) {
   if (postReasoningTokens_.empty()) {
     return true;
+  }
+  if (forceReplayFailureForTesting_) {
+    forceReplayFailureForTesting_ = false;
+    return false;
   }
   return replayTokensThroughDecoder(
       ctx, seqId, postReasoningTokens_, reasoningBoundary_.nPast);
@@ -92,6 +97,7 @@ void ReasoningRollbackState::reset() noexcept {
   postReasoningTokens_.clear();
   seededPostReasoningCount_ = 0;
   capturingPostReasoning_ = false;
+  forceReplayFailureForTesting_ = false;
 }
 
 void ReasoningRollbackState::seedReasoningBoundaryForTesting(

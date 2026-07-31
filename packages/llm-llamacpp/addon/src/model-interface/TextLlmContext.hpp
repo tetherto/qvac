@@ -238,6 +238,15 @@ public:
   void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
     forcePrefillEntryRestoreFailureForTesting_ = value;
   }
+  void forceReasoningReplayFailureForTesting(bool value) noexcept {
+    rollbackState_.forceReplayFailureForTesting(value);
+  }
+  [[nodiscard]] bool reasoningRollbackStateEmptyForTesting() const noexcept {
+    return !rollbackState_.hasPrefillEntry() &&
+           !rollbackState_.hasReasoningBoundary() &&
+           rollbackState_.postReasoningTokenCount() == 0 &&
+           !rollbackState_.isCapturingPostReasoning();
+  }
 
 private:
   /// Hook fired exactly once per slot, immediately before the policy

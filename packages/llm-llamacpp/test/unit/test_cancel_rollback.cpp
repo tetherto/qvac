@@ -1086,6 +1086,105 @@ TEST(
 
 TEST(
     TextLlmContextCancelDuringGenerationTest,
+    SinglePromptRetainedAnswerReplayFailureSkipsCacheSave) {
+  const std::string modelPath = qwen3PureAttentionModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "16";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+
+  std::string mp = modelPath;
+  std::string proj;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(mp), std::move(proj), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("single-replay-failure-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".ggsq");
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt seed;
+  seed.input = R"([{"role":"user","content":"Remember this clean cache."}])";
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  const std::vector<uint8_t> before = readBinaryFile(cachePath);
+  ASSERT_FALSE(before.empty());
+
+  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(baseCtx, nullptr);
+  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
+  ASSERT_NE(textCtx, nullptr);
+
+  bool injectedReplayFailure = false;
+  LlamaModel::Prompt failing;
+  failing.input =
+      R"([{"role":"user","content":"Answer after a short reasoning block."}])";
+  failing.cacheKey = cachePath.string();
+  failing.saveCacheToDisk = true;
+  failing.generationParams.remove_thinking_from_context = true;
+  failing.outputCallback = [&](const std::string&) {
+    if (injectedReplayFailure) {
+      return;
+    }
+    const llama_pos pos = textCtx->getNPast();
+    if (pos <= 2) {
+      return;
+    }
+
+    auto& compactor = textCtx->compactorForTesting();
+    compactor.setRemoveThinkingFromContext(true);
+    compactor.setReasoningEnabled(true);
+    ASSERT_NO_THROW(compactor.snapshotAtPrefillBoundary(
+        textCtx->getCtx(), /*seqId=*/0, pos, "[Test]"));
+    compactor.setOpenSpan(pos - 2);
+    ASSERT_TRUE(compactor.hasOpenSpan());
+    compactor.recordCloseMarkerForReplay(/*id=*/1);
+    compactor.requestCloseCapture();
+    compactor.onCloseCommitted(pos - 1);
+    ASSERT_TRUE(compactor.hasCapturedCloseSpanForTesting());
+    compactor.recordPostReasoningToken(/*id=*/2);
+    textCtx->forceReasoningReplayFailureForTesting(true);
+    injectedReplayFailure = true;
+  };
+
+  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
+  ASSERT_TRUE(injectedReplayFailure)
+      << "test did not reach streaming callback to inject replay failure";
+  EXPECT_FALSE(textCtx->compactorForTesting().hasOpenSpan());
+  EXPECT_TRUE(textCtx->reasoningRollbackStateEmptyForTesting())
+      << "failed replay must clear snapshots and retained-answer state";
+
+  const std::vector<uint8_t> after = readBinaryFile(cachePath);
+  EXPECT_EQ(after, before)
+      << "failed retained-answer replay must preserve known-good cache";
+
+  LlamaModel::Prompt uncached;
+  uncached.input =
+      R"([{"role":"user","content":"Run after retained replay failure."}])";
+  ASSERT_NO_THROW(model->processPrompt(uncached));
+  EXPECT_EQ(readBinaryFile(cachePath), before)
+      << "failed replay must invalidate the active cache session";
+
+  fs::remove(cachePath);
+}
+
+TEST(
+    TextLlmContextCancelDuringGenerationTest,
     SinglePromptHybridPrefillCancelRollbackFailureInvalidatesCacheSession) {
   const std::string modelPath = qwen35HybridModelPath();
   if (!fs::exists(modelPath)) {
@@ -1327,7 +1426,7 @@ TEST(
 
 TEST(
     TextLlmContextCancelDuringGenerationTest,
-    SinglePromptOpenReasoningSpanFailureSkipsCacheSave) {
+    SinglePromptOpenReasoningCutoffRollsBackWithoutSavingCache) {
   const std::string modelPath = qwen3PureAttentionModelPath();
   if (!fs::exists(modelPath)) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -1399,14 +1498,17 @@ TEST(
     injectedOpenSpan = true;
   };
 
-  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
+  EXPECT_NO_THROW((void)model->processPrompt(failing));
   ASSERT_TRUE(injectedOpenSpan)
       << "test did not reach streaming callback to seed the open span";
+  EXPECT_FALSE(textCtx->compactorForTesting().hasOpenSpan())
+      << "successful cutoff rollback must clear the injected open span";
+  EXPECT_TRUE(textCtx->reasoningRollbackStateEmptyForTesting())
+      << "cutoff rollback must consume both snapshots and replay state";
 
   const std::vector<uint8_t> after = readBinaryFile(cachePath);
   EXPECT_EQ(after, before)
-      << "open reasoning span cleanup failure must not persist reasoning "
-         "state over the last known-good cache";
+      << "open reasoning cutoff must not overwrite the last known-good cache";
 
   LlamaModel::Prompt uncached;
   uncached.input =
@@ -1416,7 +1518,7 @@ TEST(
   const std::vector<uint8_t> afterUncachedTransition =
       readBinaryFile(cachePath);
   EXPECT_EQ(afterUncachedTransition, before)
-      << "open-span failure must invalidate the active cache session; "
+      << "open-span cutoff must invalidate the active cache session; "
          "otherwise a later prompt without cacheKey saves recovery state "
          "over the old cache";
 

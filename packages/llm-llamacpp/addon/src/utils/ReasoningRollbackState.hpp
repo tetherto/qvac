@@ -137,6 +137,9 @@ public:
   // `hasPrefillEntry()` succeeds. Production code MUST use
   // `capturePrefillEntry` instead.
   void seedPrefillEntryForTesting(llama_pos nPast) noexcept;
+  void forceReplayFailureForTesting(bool value) noexcept {
+    forceReplayFailureForTesting_ = value;
+  }
 
 private:
   RecurrentStateSnapshot prefillEntry_;
@@ -148,6 +151,7 @@ private:
   // cleared.
   size_t seededPostReasoningCount_ = 0;
   bool capturingPostReasoning_ = false;
+  bool forceReplayFailureForTesting_ = false;
 };
 
 } // namespace utils
