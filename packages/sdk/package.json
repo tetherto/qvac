@@ -206,14 +206,13 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/audiogen-ggml": "../audiogen-ggml",
+    "@qvac/audiogen-ggml": "^0.1.0",
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.13.0",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.17.0",
     "@qvac/embed-llamacpp": "^0.28.0",
     "@qvac/error": "^0.1.1",
-    "@qvac/infer-base": "0.4.2",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.38.0",
     "@qvac/logging": "^0.1.0",
@@ -286,7 +285,8 @@
     "tsc-alias": "^1.8.17",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.39.0"
+    "typescript-eslint": "^8.39.0",
+    "@qvac/infer-base": "0.4.2"
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
