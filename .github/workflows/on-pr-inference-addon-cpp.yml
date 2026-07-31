@@ -103,7 +103,11 @@ jobs:
       - fork-approval
       - label-gate
       - ci-router
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
+    # fork-approval.result is checked EXPLICITLY: always() overrides GitHub's
+    # needs-success rule, so listing fork-approval in `needs:` alone would let a
+    # rejected/failed fork-ci environment approval fall through into this
+    # secret-bearing workflow (fail-open).
+    if: always() && !cancelled() && needs.fork-approval.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
     permissions:
       contents: read
       packages: read
