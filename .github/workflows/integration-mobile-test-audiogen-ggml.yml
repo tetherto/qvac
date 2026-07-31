@@ -1,0 +1,198 @@
+name: Mobile Integration Tests (AudioGen GGML)
+
+# On-device (AWS Device Farm) integration smoke for @qvac/audiogen-ggml, built on
+# the shared .github/actions/run-mobile-integration-tests composite (same layer
+# tts-ggml / parakeet / the other mobile addons use).
+#
+# The on-device test/mobile/test.cjs downloads the turbo-q4 ACE-Step GGUFs from
+# the registry at runtime (no host-side adb prestage), so there is no benchmark /
+# manifest / prestage machinery here. Device Farm project + iOS pool fall back to
+# the shared ONNX_TTS ARNs until dedicated audiogen ARNs are provisioned.
+
+on:
+  workflow_call:
+    inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/audiogen-ggml@0.1.0). Empty = artifact-first."
+        type: string
+        required: false
+        default: ""
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/audiogen-ggml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package_spec:
+        description: "Package to test (name@version). Use @qvac/audiogen-ggml@... for npm, @tetherto/audiogen-ggml@... for GPR"
+        type: string
+        required: false
+        default: "@qvac/audiogen-ggml@latest"
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/audiogen-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  # NOTE: continue-on-error: true matches the sibling mobile addons
+  # (tts-ggml / parakeet). on-pr-audiogen-ggml.yml's merge-guard treats
+  # `success || skipped` as a pass, so a hard Device Farm failure does not
+  # gate merge today. Tighten once the on-device provisioning + Device Farm
+  # pool is stable (and the ~3 GB on-device model download is proven feasible).
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
+          # iOS re-enabled in QVAC-22955. The engine now loads the ACE-Step stages
+          # sequentially (each loaded right before its step, freed right after), so
+          # the load-time peak is a single stage instead of all six at once and
+          # create() no longer jetsam-OOMs on a non-entitled iPhone during the
+          # ~3 GB load. Verified on-device (iPhone 12 Pro Max, 6 GB, entitlement-free:
+          # create() survives + generation renders real audio). Non-blocking
+          # (continue-on-error) like Android until the Device Farm pool is stable.
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/audiogen-ggml' }}
+          addon-npm-name: '@qvac/audiogen-ggml'
+          prebuild-artifact-prefix: 'audiogen-ggml-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          # workflow_call passes prebuild_package; workflow_dispatch passes package_spec.
+          package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
+          force-npm-prebuild: ${{ (inputs.prebuild_package || inputs.package_spec) != '' && 'true' || 'false' }}
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/audiogen-ggml' }}
+          addon-npm-name: '@qvac/audiogen-ggml'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/audiogen-ggml' }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+          # Empty => the action auto-detects test-groups.json (functional tests).
+          test-groups: ''
+          enables-perf: 'false'
+          # Model load + diffusion of the ~3 GB turbo-q4 set plus a ~3 GB on-device
+          # registry download; give it a generous per-test budget.
+          mocha-timeout-ms: '3600000'
+          wdio-waitfor-timeout-ms: '600000'
+
+      - name: Schedule Device Farm test runs
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_AUDIOGEN_GGML || secrets.IOS_DEVICE_POOL_ARN_ONNX_TTS }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Monitor Device Farm test runs
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: '@qvac/audiogen-ggml'
+          enables-perf: 'false'
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Comment results on PR
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: '@qvac/audiogen-ggml'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
