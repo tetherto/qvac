@@ -18,6 +18,12 @@ on:
       - ".github/workflows/*llm-llamacpp*.yml"
 
   workflow_dispatch:
+    inputs:
+      run_mtp_bench:
+        description: "Run the opt-in MTP speculative-decoding speed benchmark (mtp-speedup.test.js) as part of the desktop integration tests."
+        type: boolean
+        required: false
+        default: false
   workflow_call:
 
 permissions:
@@ -347,6 +353,11 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      # Off for PR events; settable only on a manual dispatch of this workflow,
+      # so the opt-in MTP speed benchmark can be exercised on demand without
+      # adding its cost (two contexts of one model, several timed generations)
+      # to every PR.
+      run_mtp_bench: ${{ inputs.run_mtp_bench || false }}
 
   run-mobile-integration-tests:
     permissions:

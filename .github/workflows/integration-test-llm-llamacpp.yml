@@ -29,6 +29,11 @@ on:
         type: boolean
         required: false
         default: false
+      run_mtp_bench:
+        description: "If true, run the opt-in MTP speculative-decoding speed benchmark (mtp-speedup.test.js). Skipped by default: it loads two contexts of the same model and times several generations."
+        type: boolean
+        required: false
+        default: false
 
   workflow_dispatch:
     inputs:
@@ -53,6 +58,11 @@ on:
         default: ""
       qvac_perf_only:
         description: "If true, run only the perf-emitting tests."
+        type: boolean
+        required: false
+        default: false
+      run_mtp_bench:
+        description: "If true, run the opt-in MTP speculative-decoding speed benchmark (mtp-speedup.test.js)."
         type: boolean
         required: false
         default: false
@@ -299,6 +309,7 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
+          QVAC_RUN_MTP_BENCH: ${{ inputs.run_mtp_bench && 'true' || '' }}
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
@@ -327,6 +338,7 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
+          QVAC_RUN_MTP_BENCH: ${{ inputs.run_mtp_bench && 'true' || '' }}
 
       - name: Generate HTML performance report
         if: ${{ always() && !cancelled() }}

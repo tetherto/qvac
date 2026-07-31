@@ -106,7 +106,12 @@ function validateGroups(functionNames) {
   // test_groups override, and are deliberately absent from test-groups.json
   // so normal mobile integration runs never trigger the heavy benchmark.
   // Exclude them from the group-coverage requirement.
-  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest'
+  // `runMtpSpeedupTest` is the same kind of exception: an opt-in timing
+  // benchmark (QVAC_RUN_MTP_BENCH) that loads two contexts of the same model
+  // to measure a within-run speculative-decoding speedup ratio. It is
+  // desktop/manual only and must never be scheduled into a mobile group.
+  const isOverrideOnly = (n) =>
+    n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest' || n === 'runMtpSpeedupTest'
 
   const coveredByFamily = new Map()
   for (const [platform, splits] of Object.entries(groups)) {

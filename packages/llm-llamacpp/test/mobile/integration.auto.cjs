@@ -491,6 +491,11 @@ async function runMtpMtmdTest (options = {}) { // eslint-disable-line no-unused-
   return runIntegrationModule('../integration/mtp-mtmd.test.js', options)
 }
 
+async function runMtpSpeedupTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMtpSpeedupTest')) return __FILTERED
+  return runIntegrationModule('../integration/mtp-speedup.test.js', options)
+}
+
 async function runMtpTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMtpTest')) return __FILTERED
   return runIntegrationModule('../integration/mtp.test.js', options)
