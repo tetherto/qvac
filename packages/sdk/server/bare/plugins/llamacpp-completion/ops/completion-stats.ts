@@ -51,7 +51,7 @@ export function withEmittedTokens(
   stats: CompletionStats | undefined,
   emittedPieces: number
 ): CompletionStats | undefined {
-  const emittedTokens = emittedPieces > 0 ? emittedPieces : 0
+  const emittedTokens = emittedPieces
   if (!stats && emittedTokens === 0) return undefined
   return {
     ...(stats ?? {}),

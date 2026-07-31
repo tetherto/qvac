@@ -10,7 +10,6 @@ import { HttpError } from '../src/serve/lib/http-error.js'
 
 function fakeRun(opts: {
   tokens?: string[]
-  thinking?: string[]
   toolCalls?: ToolCall[]
   stats?: CompletionStats
   stopReason?: string
@@ -18,7 +17,6 @@ function fakeRun(opts: {
 }): CompletionRun {
   async function* events(): AsyncGenerator<unknown> {
     let seq = 0
-    for (const t of opts.thinking ?? []) yield { type: 'thinkingDelta', seq: seq++, text: t }
     for (const t of opts.tokens ?? []) yield { type: 'contentDelta', seq: seq++, text: t }
     for (const call of opts.toolCalls ?? []) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
