@@ -46,7 +46,7 @@ jobs:
       authorised: ${{ steps.gate.outputs.authorised }}
     steps:
       - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/label-gate
@@ -67,7 +67,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-publish-logic@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
 
     needs:
       - label-gate
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -124,7 +124,7 @@ jobs:
       PKG_DIR: packages/translation-nmtcpp
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -137,7 +137,7 @@ jobs:
       # Rebuild the TypeScript wrapper before publishing so the generated
       # JavaScript and declaration files are present in the published tarball.
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 20
 
@@ -189,7 +189,7 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.PAT_TOKEN }}
 
@@ -202,7 +202,7 @@ jobs:
       # Rebuild the TypeScript wrapper before publishing so the generated
       # JavaScript and declaration files are present in the published tarball.
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 20
 
@@ -216,14 +216,14 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
         with:
           workdir: ${{ env.PKG_DIR }}
           tag: ${{ inputs.npm_tag }}
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
         with:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.PKG_DIR }}
