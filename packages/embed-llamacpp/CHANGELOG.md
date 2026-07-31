@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.1] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+
 ## [0.30.0] - 2026-07-28
 
 ### Changed

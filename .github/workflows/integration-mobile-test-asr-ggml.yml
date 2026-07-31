@@ -1,0 +1,440 @@
+name: Mobile Integration Tests (ASR GGML)
+
+# Unified whisper + parakeet mobile lane for @qvac/asr-ggml.
+#
+# Functional runs (default matrix) build ONE app and run the whole mobile suite
+# in single-spec mode — this package ships no test/mobile/test-groups.json, so
+# every runner in test/mobile/integration.auto.cjs executes, functional AND
+# mobile-perf, exactly as in both parent lanes. Perf collection is therefore
+# unconditional (enables-perf: 'true'), and so is Android model pre-staging.
+#
+# Benchmark runs (run_rtf_benchmarks=true) narrow each matrix row to the single
+# mobile-perf runner registered in test/mobile/perf-tests.json that matches the
+# row's engine + model/model_type + use_gpu: whisper tiny CPU/GPU, parakeet
+# ctc/tdt CPU+GPU and eou/sortformer CPU, per platform.
+#
+# Android pre-stages models on the Device Farm host (presigned URLs + adb push);
+# iOS resolves them from the registry on-device.
+
+on:
+  workflow_call:
+    inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/asr-ggml@1.0.0). Empty = artifact-first (unchanged)."
+        type: string
+        required: false
+        default: ""
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/asr-ggml"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package_spec:
+        description: "Package to test (name@version). Use @qvac/asr-ggml@... for npm, @tetherto/asr-ggml@... for GPR"
+        type: string
+        required: false
+        default: "@qvac/asr-ggml@latest"
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/asr-ggml"
+      run_rtf_benchmarks:
+        description: "Run on-device RTF benchmarks (extracts metrics from Device Farm logs post-run)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # NOTE: continue-on-error: true matches the parent families' workflows.
+  # on-pr-asr-ggml.yml's merge-guard treats `success || skipped` as a pass, so
+  # a hard Device Farm failure does not gate merge today. Tighten once the
+  # Device Farm provisioning + signing + runner pool is stable.
+  build-and-test:
+    name: Build ${{ matrix.platform }} (${{ matrix.engine && format('{0} {1} {2}', matrix.engine, matrix.model || matrix.model_type, matrix.use_gpu && 'gpu' || 'cpu') || 'functional' }}) and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      # Benchmark matrix (run_rtf_benchmarks=true) sweeps engine x model x
+      # backend on Android + iOS: whisper ggml-tiny CPU/GPU (the old whisper
+      # mobile perf lanes), parakeet ctc/tdt CPU+GPU and eou/sortformer CPU.
+      # `use_gpu:true` selects Vulkan on Android / Metal on iOS. Parakeet GPU
+      # eou/sortformer lanes are omitted to bound the Device Farm run count
+      # (16 total). The default (non-benchmark) matrix runs both engines'
+      # suites in one app per platform.
+      #
+      # There is deliberately no `vad` axis either: the whisper perf runner
+      # (test/integration/mobile-perf-runner.js) does not configure VAD at all,
+      # so a `vad` matrix key would only mislabel the artifact.
+      #
+      # There is deliberately NO `quant` axis: each parakeet perf runner sweeps
+      # q4_0/q8_0/f16 itself on device (test/integration/parakeet-mobile-perf-runner.js
+      # recurses over `quants` when no explicit quant is passed) and emits one
+      # perf record per quant, so a workflow-level quant key would only
+      # mislabel an artifact that already contains all three.
+      #
+      # engine/model/use_gpu DO reach the device: the "Resolve benchmark
+      # test-groups" step below maps each row to the single runner function in
+      # test/mobile/perf-tests.json that is hard-parameterised for exactly that
+      # combination, and passes it as the Mocha grep.
+      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+
+    steps:
+      - name: Validate Dispatch Inputs
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package_spec
+        run: |
+          if [[ ! "${{ github.event.inputs.package_spec }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
+            exit 1
+          fi
+
+      # Fail fast on the unified family's Device Farm secrets instead of dying
+      # deep inside `aws devicefarm create-upload --project-arn ""` after a full
+      # 30+ minute app build. These two secrets are NEW for @qvac/asr-ggml (the
+      # parents used the _WHISPERCPP / _PARAKEET pairs, which are deliberately
+      # NOT reused here: repointing another family's project would silently
+      # change its device coverage) and are an out-of-repo infra prerequisite —
+      # see docs/QIP-asr-ggml.md.
+      #
+      # Device Farm identity: this lane resolves the ASR_GGML secret names when
+      # they exist and otherwise falls back to the retiring
+      # transcription-parakeet project + iOS device pool. Secrets are not scoped
+      # to a package, so reusing parakeet's costs nothing and needs no new
+      # provisioning; the `||` keeps that a migration rather than a permanent
+      # coupling -- add AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML /
+      # IOS_DEVICE_POOL_ARN_ASR_GGML later and they win automatically, with no
+      # workflow change.
+      #
+      # Consequence to respect when retiring parakeet: DO NOT delete
+      # AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET / IOS_DEVICE_POOL_ARN_PARAKEET until
+      # the ASR_GGML pair exists, or this lane loses its Device Farm identity.
+      #
+      # The whispercpp pair is deliberately not the fallback: bci-whispercpp still
+      # runs against that project, so we would be sharing its concurrency.
+      #
+      # Scope of the pool swap, precisely: this lane passes one spec and no
+      # scheduling-mode, so schedule-test-run takes its default dual-flagship
+      # path. There, Android schedules two filter-based runs (Samsung + Pixel,
+      # hardcoded in the shared action) and iOS schedules one pool-based run plus
+      # one iPhone-17 filter run. Filters are project-independent, so only that
+      # single iOS pool run is affected by borrowing parakeet's project -- three
+      # of the four runs are identical either way. The collected Device Farm logs
+      # name the device that ran, so a mismatch is visible on the first iOS run;
+      # the fix would be a union pool inside the same project (a child resource,
+      # no new project or IAM). No android-device-pool-arn is needed here: the
+      # ANDROID_DEVICE_POOL_ARN_* secrets serve packages that run in the sharded
+      # or single-pool modes, which this lane does not use.
+      - name: Verify Device Farm secrets are provisioned
+        shell: bash
+        env:
+          DEVICE_FARM_PROJECT_ARN: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
+          IOS_DEVICE_POOL_ARN: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML || secrets.IOS_DEVICE_POOL_ARN_PARAKEET }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          missing=""
+          [ -z "$DEVICE_FARM_PROJECT_ARN" ] && missing="$missing AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML (or _PARAKEET)"
+          if [ "$PLATFORM" = "iOS" ] && [ -z "$IOS_DEVICE_POOL_ARN" ]; then
+            missing="$missing IOS_DEVICE_POOL_ARN_ASR_GGML (or _PARAKEET)"
+          fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Device Farm secret(s):$missing. This lane reads the ASR_GGML names if present and otherwise falls back to the retiring transcription-parakeet pair, so it needs no new secrets while those still exist. If both are gone, add the ASR_GGML pair to the 'release' environment with the parakeet project + iOS pool ARNs."
+            exit 1
+          fi
+          echo "Device Farm secrets present."
+
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
+        run: npm run test:mobile:validate || true
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/asr-ggml' }}
+          addon-npm-name: '@qvac/asr-ggml'
+          prebuild-artifact-prefix: 'asr-ggml-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          package-version: ${{ inputs.prebuild_package }}
+          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+
+      # Always configure OIDC — parakeet models need presigning even on
+      # functional runs.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Presigns the PARAKEET GGUF URLs and stores a local manifest consumed by
+      # generate-prestage-block.js below. Whisper models are NOT in the manifest
+      # and are not pre-staged: whisper's mobile tests resolve ggml-tiny
+      # on-device via helpers.ensureWhisperModel(), exactly as in the whisper
+      # parent lane. Runs on every mobile run (functional and benchmark).
+      - name: Generate ASR GGML mobile model manifest
+        working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
+        shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          node scripts/generate-mobile-model-manifest.js
+          ls -lh test/mobile/testAssets/
+
+      # Android mirrors the LLM mobile pattern: Device Farm's host downloads
+      # the models from presigned URLs and adb-pushes them to /data/local/tmp,
+      # so the phone does not rely on flaky large downloads and Metro never
+      # bundles the models into the app.
+      #
+      # UNCONDITIONAL for Android, matching the parakeet parent. It must not be
+      # gated on run_rtf_benchmarks: packages/asr-ggml/test/mobile has no
+      # test-groups.json, so a normal PR run executes EVERY runner in
+      # integration.auto.cjs — including the 12 parakeet perf runners, which
+      # would otherwise fall through parakeet-helpers.prestagedModelDir() === null
+      # into per-model on-device downloads of 600 MB-class GGUFs inside the
+      # 45-minute mocha budget.
+      #
+      # The prestage block derives its model list from the deployed wdio
+      # config's grep, looked up in the manifest by RUNNER FUNCTION NAME, so
+      # scripts/generate-mobile-model-manifest.js must key TEST_MODELS with the
+      # names exported by test/mobile/integration.auto.cjs. With an empty grep
+      # (functional runs) it stages every model in the manifest.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: ${{ matrix.platform == 'Android' }}
+        working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/asr-ggml' }}
+          addon-npm-name: '@qvac/asr-ggml'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Benchmark runs (run_rtf_benchmarks=true): run ONLY the one on-device
+      # benchmark runner that matches this matrix row, instead of the whole
+      # suite. The row's engine + model/model_type + use_gpu map deterministically
+      # onto a single runner exported by test/mobile/integration.auto.cjs (the
+      # runners are hard-parameterised per file — there is no env-var axis), and
+      # that name must be registered in test/mobile/perf-tests.json, which
+      # scripts/validate-mobile-tests.js keeps in sync with the mobile-perf test
+      # files. An unmapped or unregistered row fails here with a named error
+      # rather than silently benchmarking the wrong thing.
+      #
+      # On a normal (non-benchmark) run this step is skipped, the output is
+      # empty, and the action falls back to auto-detecting test-groups.json —
+      # which this package does not have, so it runs the full suite in
+      # single-spec mode, exactly as both parent lanes did.
+      - name: Resolve benchmark test-groups from perf-tests.json
+        id: perf_groups
+        if: ${{ inputs.run_rtf_benchmarks }}
+        working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
+        env:
+          ENGINE: ${{ matrix.engine }}
+          MODEL: ${{ matrix.model || '' }}
+          MODEL_TYPE: ${{ matrix.model_type || '' }}
+          BACKEND_TAG: ${{ matrix.use_gpu && 'Gpu' || 'Cpu' }}
+        run: |
+          PERF_FILE=test/mobile/perf-tests.json
+          if [ ! -f "$PERF_FILE" ]; then
+            echo "::error::$PERF_FILE is missing — the mobile benchmark lane resolves its Mocha grep from it. Run 'npm run test:mobile:validate' locally."
+            exit 1
+          fi
+
+          RUNNER=""
+          case "$ENGINE" in
+            whisper)
+              case "$MODEL" in
+                ggml-tiny) RUNNER="runMobilePerfTiny${BACKEND_TAG}Test" ;;
+                sweep) RUNNER="runMobilePerfSweep${BACKEND_TAG}Test" ;;
+              esac
+              ;;
+            parakeet)
+              case "$MODEL_TYPE" in
+                ctc) RUNNER="runParakeetMobilePerfCtc${BACKEND_TAG}Test" ;;
+                tdt) RUNNER="runParakeetMobilePerfTdt${BACKEND_TAG}Test" ;;
+                eou) RUNNER="runParakeetMobilePerfEou${BACKEND_TAG}Test" ;;
+                sortformer) RUNNER="runParakeetMobilePerfSortformer${BACKEND_TAG}Test" ;;
+                sortformer-streaming) RUNNER="runParakeetMobilePerfSortformerStreaming${BACKEND_TAG}Test" ;;
+              esac
+              ;;
+          esac
+
+          if [ -z "$RUNNER" ]; then
+            echo "::error::No on-device benchmark runner maps to engine='$ENGINE' model='$MODEL' model_type='$MODEL_TYPE'. Add the mapping here and the runner to $PERF_FILE."
+            exit 1
+          fi
+
+          if ! jq -e --arg runner "$RUNNER" 'index($runner) != null' "$PERF_FILE" > /dev/null; then
+            echo "::error::$RUNNER is not registered in $PERF_FILE (engine='$ENGINE' model='$MODEL' model_type='$MODEL_TYPE')."
+            exit 1
+          fi
+
+          echo "Benchmark grep: $RUNNER"
+          printf 'groups=[{"name":"perf","grep":"%s"}]\n' "$RUNNER" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/asr-ggml' }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          # Resolves the ASR_GGML project secret when it exists, else the
+          # retiring transcription-parakeet one -- see the note on the secret
+          # verification step above. Not the whisper/BCI-shared project: that one
+          # still has a live tenant.
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
+          # Empty on normal runs => action auto-detects test-groups.json
+          # (functional tests). Set on benchmark runs => only the benchmarks.
+          test-groups: ${{ steps.perf_groups.outputs.groups }}
+          # Always 'true', matching both parent lanes. It must NOT be gated on
+          # run_rtf_benchmarks: this package has no test-groups.json, so a normal
+          # run executes every runner in integration.auto.cjs — including the 14
+          # mobile-perf runners, which emit [PERF_REPORT_START] blocks. With
+          # enables-perf false, perf-extract.js is never deployed and those
+          # measurements are thrown away, leaving on-pr-asr-ggml.yml's unified
+          # performance report with zero mobile rows on every PR.
+          enables-perf: 'true'
+          mocha-timeout-ms: '2700000'
+          wdio-waitfor-timeout-ms: '600000'
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+
+      - name: Schedule Device Farm test runs
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML || secrets.IOS_DEVICE_POOL_ARN_PARAKEET }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Monitor Device Farm test runs
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: '@qvac/asr-ggml'
+          # Unconditional, for the same reason as the upload step above.
+          enables-perf: 'true'
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      # merge=true unions per-device performance-report.json payloads (Android
+      # pools can run more than one device). unzip-customer-artifacts=true is
+      # required for iOS: its [PERF_REPORT_START] markers print to
+      # bare_console.log, which on iOS Device Farm is wrapped inside
+      # Customer_Artifacts.zip; without unzipping, extract-from-log.js never
+      # scans it and the iOS perf report comes back empty. Both parent ASR
+      # families needed this. The artifact name is what
+      # benchmark-performance-asr-ggml.yml's summarize job downloads
+      # (pattern perf-report-asr-ggml-*).
+      # Runs on EVERY mobile run, matching both parent lanes — the mobile-perf
+      # runners execute on normal PRs too (see the enables-perf note above), so
+      # gating this on run_rtf_benchmarks would discard the only mobile rows
+      # on-pr-asr-ggml.yml's unified performance report ever gets. The engine /
+      # model / backend suffix is present only on benchmark rows, where the
+      # matrix defines those keys; functional rows fall back to the parents'
+      # perf-report-asr-ggml-<platform>-<run_number> shape.
+      - name: Extract and report ASR GGML performance
+        if: always() && !cancelled() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          filter: ''
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
+          step-summary-title: "Mobile Performance: asr-ggml (${{ matrix.platform }}${{ matrix.engine && format(', {0} {1} {2}', matrix.engine, matrix.model || matrix.model_type, matrix.use_gpu && 'gpu' || 'cpu') || '' }})"
+          artifact-name: perf-report-asr-ggml-${{ matrix.platform }}${{ matrix.engine && format('-{0}-{1}-{2}', matrix.engine, matrix.model || matrix.model_type, matrix.use_gpu && 'gpu' || 'cpu') || '' }}-${{ github.run_number }}
+
+      - name: Comment results on PR
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: '@qvac/asr-ggml'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

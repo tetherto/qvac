@@ -11398,7 +11398,7 @@
                       ]
                     },
                     "highNoiseDiffusionModelSrc": {
-                      "description": "High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
+                      "description": "High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the high_noise_* / moe_boundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -15198,14 +15198,14 @@
           "type": "string"
         },
         "width": {
-          "description": "Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+          "description": "Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "multipleOf": 16
         },
         "height": {
-          "description": "Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+          "description": "Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
@@ -15283,13 +15283,13 @@
           "type": "number"
         },
         "high_noise_steps": {
-          "description": "Wan 2.2 high-noise expert step count.",
+          "description": "Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moe_boundary.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
         "high_noise_sampler": {
-          "description": "Wan 2.2 high-noise expert sampler.",
+          "description": "Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "string",
           "enum": [
             "euler",
@@ -15310,7 +15310,7 @@
           "title": "VideoStreamRequestHighNoiseSampler"
         },
         "high_noise_scheduler": {
-          "description": "Wan 2.2 high-noise expert scheduler.",
+          "description": "Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "string",
           "enum": [
             "discrete",
@@ -15328,15 +15328,15 @@
           "title": "VideoStreamRequestHighNoiseScheduler"
         },
         "high_noise_cfg_scale": {
-          "description": "Wan 2.2 high-noise expert CFG scale.",
+          "description": "Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "number"
         },
         "high_noise_flow_shift": {
-          "description": "Wan 2.2 high-noise expert flow shift override.",
+          "description": "Wan 2.2 A14B high-noise expert flow shift override. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "number"
         },
         "moe_boundary": {
-          "description": "Wan 2.2 mixture-of-experts boundary in [0, 1].",
+          "description": "Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "number",
           "minimum": 0,
           "maximum": 1

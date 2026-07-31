@@ -715,6 +715,7 @@ test('public-pr: trusted non-PR calls do not require verified', () => {
 test('all ci-router callers re-run when a draft becomes ready', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const workflowNames = [
+    'on-pr-asr-ggml.yml',
     'on-pr-bci-whispercpp.yml',
     'on-pr-classification-ggml.yml',
     'on-pr-decoder-audio.yml',
@@ -723,10 +724,7 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-fabric.yml',
     'on-pr-llm-llamacpp.yml',
     'on-pr-ocr-ggml.yml',
-    'on-pr-ocr-onnx.yml',
     'on-pr-onnx.yml',
-    'on-pr-transcription-parakeet.yml',
-    'on-pr-transcription-whispercpp.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
     'on-pr-vla.yml',
@@ -772,9 +770,8 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
     /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
   )
   for (const path of [
+    '.github/workflows/on-pr-asr-ggml.yml',
     '.github/workflows/on-pr-tts-ggml.yml',
-    '.github/workflows/on-pr-transcription-parakeet.yml',
-    '.github/workflows/on-pr-transcription-whispercpp.yml',
   ]) {
     const block = jobBlock(read(path), 'coload-smoke-mobile')
     assert.match(
@@ -892,6 +889,52 @@ test('on-pr context outputs resolve PR ref from head SHA, never head.ref', () =>
       )
     })
   assert.deepEqual(offenders, [])
+})
+
+test('infer-base changes reach the required merge-guard status check', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  assert.match(
+    source,
+    /\n\s+infer-base:\n\s+- "packages\/infer-base\/\*\*"/,
+    'merge guard filters on packages/infer-base',
+  )
+
+  const guard = jobBlock(source, 'qvac-merge-guard')
+  assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
+  assert.match(
+    guard,
+    /sanity-checks-status:\s*\$\{\{\s*needs\.sanity-checks\.result/,
+    'merge guard reports the sanity-checks result',
+  )
+})
+
+test('infer-base publish jobs are gated on generated-artifact validation', () => {
+  const source = read('.github/workflows/trigger-reusable-infer-base.yml')
+
+  const validate = jobBlock(source, 'validate-artifacts')
+  assert.match(validate, /working-directory: packages\/infer-base/)
+  assert.match(validate, /npm run test:types/)
+
+  for (const job of [
+    'publish-main-gpr-dev',
+    'publish-release-npm',
+    'publish-feature-gpr',
+    'publish-tmp-gpr',
+  ]) {
+    const block = jobBlock(source, job)
+    assert.match(
+      block,
+      /needs:[\s\S]*?- validate-artifacts/,
+      `'${job}' declares validate-artifacts as a dependency`,
+    )
+    // Asserted explicitly rather than relying on implicit needs-failure
+    // skipping, which an always() in the same condition would defeat.
+    assert.match(
+      block,
+      /needs\.validate-artifacts\.result == 'success'/,
+      `'${job}' if-gates on validate-artifacts success`,
+    )
+  }
 })
 
 test('merge guards accept intentionally skipped optional prebuilds', () => {
