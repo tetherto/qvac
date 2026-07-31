@@ -2,6 +2,7 @@
   "name": "qvac-poc-classification-linking-root",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@11.17.0",
   "devDependencies": {
     "nx": "23.1.0"
   }
