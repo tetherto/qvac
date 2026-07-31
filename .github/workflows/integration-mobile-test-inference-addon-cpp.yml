@@ -519,12 +519,12 @@ jobs:
       # Stop billing on cancellation AND on failure: a monitor/upload error would
       # otherwise leave scheduled runs executing on real devices.
       #
-      # LIMITATION: schedule-test-run publishes run-arns only after its whole
-      # sharded loop, so if scheduling fails PART WAY (group 1 created, group 2
-      # errors) there is no ARN here to cancel and group 1 keeps running. Fixing
-      # that needs the shared composite to roll back created runs on failure (or
-      # emit ARNs incrementally) — it affects every sharded addon (llm, embed, ocr,
-      # tts, vla, audiogen), so it is tracked as a separate fleet-wide change.
+      # Complements the scheduler's own rollback (QVAC-22948): schedule-test-run
+      # publishes run-arns only after its whole loop, so a PARTIAL scheduling
+      # failure or a cancellation mid-loop is cleaned up inside that composite
+      # (including a by-name sweep for runs whose ARN never came back). This step
+      # covers the other window — once the ARNs are published, anything that fails
+      # or is cancelled downstream (upload, monitor) is ours to stop.
       - name: Cancel Device Farm runs on cancellation or failure
         if: (cancelled() || failure()) && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
         uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
