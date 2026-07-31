@@ -158,19 +158,22 @@ test('cancelling a queued AudioGen request does not cancel the active run', asyn
   const modelId = 'audio-gen-operation-queued-cancel'
   const activeRequestId = 'audio-gen-request-active'
   const queuedRequestId = 'audio-gen-request-queued'
-  let cancelCalls = 0
-  const model = createModel(
-    createResponse(
-      [
-        { progress: { stage: 'dit', step: 1, total: 2 } },
-        { progress: { stage: 'dit', step: 2, total: 2 } }
-      ],
-      {}
-    ),
-    function onCancel() {
-      cancelCalls++
-    }
+  const response = createResponse(
+    [
+      { progress: { stage: 'dit', step: 1, total: 2 } },
+      { progress: { stage: 'dit', step: 2, total: 2 } }
+    ],
+    {}
   )
+  let runCalls = 0
+  let cancelCalls = 0
+  const model = createModel(response, function onCancel() {
+    cancelCalls++
+  })
+  model.run = async function () {
+    runCalls++
+    return response
+  }
   registerAudioGenModel(modelId, model)
   t.teardown(() => {
     unregisterModel(modelId)
@@ -184,6 +187,7 @@ test('cancelling a queued AudioGen request does not cancel the active run', asyn
   })
   const activeFirst = await activeStream.next()
   t.is(activeFirst.value?.progress?.step, 1)
+  t.is(runCalls, 1)
 
   const queuedStream = audioGenStream({
     type: 'audioGenStream',
@@ -202,6 +206,7 @@ test('cancelling a queued AudioGen request does not cancel the active run', asyn
     stopReason: 'cancelled'
   })
   t.is(cancelCalls, 0, 'queued cancellation did not touch the active addon job')
+  t.is(runCalls, 1, 'queued-and-cancelled request never invoked the addon')
 
   const activeSecond = await activeStream.next()
   t.is(activeSecond.value?.progress?.step, 2, 'active generation continues')
