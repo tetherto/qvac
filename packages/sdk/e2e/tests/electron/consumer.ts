@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import * as os from 'node:os'
 import mqtt from 'mqtt'
 import {
@@ -561,7 +560,7 @@ export async function startElectronConsumer() {
     mqttConfig.brokerUrl = mqttBrokerOverride
   }
 
-  const consumerId = `consumer-${platform}-${os.hostname()}-${randomUUID()}`
+  const consumerId = `consumer-${platform}-${os.hostname()}-${Date.now()}`
   const mqttOptions = buildMqttOptions(mqttConfig, configDir)
   mqttOptions.clientId = consumerId
   mqttOptions.clean = false
@@ -574,7 +573,11 @@ export async function startElectronConsumer() {
     console.log('📈 Profiling enabled')
   }
 
-  let memoryPoller: ReturnType<typeof startNodeMemoryPoller>
+  const memoryPoller = startNodeMemoryPoller({ client, runId, consumerId, platform })
+  if (memoryPoller) {
+    console.log('📈 Memory poller enabled (publishing rss to qvac/app-memory)')
+  }
+
   const consumer = new ConsumerBase(
     client,
     consumerId,
@@ -589,17 +592,6 @@ export async function startElectronConsumer() {
     },
     testDefinitions
   )
-
-  memoryPoller = startNodeMemoryPoller({
-    client,
-    runId,
-    consumerId,
-    sessionId: consumer.getSessionId(),
-    platform
-  })
-  if (memoryPoller) {
-    console.log('📈 Memory poller enabled (publishing rss to qvac/app-memory)')
-  }
 
   consumer.setupMqttHandlers()
   client.connect()
