@@ -2,6 +2,7 @@
 
 #include <any>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -15,7 +16,8 @@
 
 namespace tts_cpp::cosyvoice {
 class Engine;
-}
+struct SynthesisResult;
+} // namespace tts_cpp::cosyvoice
 
 namespace qvac::ttsggml::cosyvoice {
 
@@ -61,7 +63,7 @@ public:
       const std::string&,
       std::unique_ptr<std::basic_streambuf<char>>&&) override {}
 
-  void setConfig(CosyvoiceConfig config) { cfg_ = std::move(config); }
+  void setConfig(CosyvoiceConfig config);
   const CosyvoiceConfig& config() const { return cfg_; }
 
   int sampleRate() const { return sampleRate_; }
@@ -75,6 +77,10 @@ private:
     bool wasStreaming = false;
   };
   SynthResult synthesize(const std::string& text, const ChunkCallback& onChunk);
+  void recordSynthesisStats(
+      const tts_cpp::cosyvoice::SynthesisResult& result,
+      std::chrono::steady_clock::time_point t0,
+      std::chrono::steady_clock::time_point t1);
   static void validateConfig(const CosyvoiceConfig& cfg);
 
   void loadLocked();
@@ -101,5 +107,10 @@ private:
   bool gpuUnsupported_ = false;
   std::string backendName_ = "CPU";
 };
+
+// Streaming is requested when the config asks for chunked output and the job
+// provides a chunk sink. Free function so the contract is unit-testable without
+// weights (see test_cosyvoice_config.cpp).
+bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback);
 
 } // namespace qvac::ttsggml::cosyvoice

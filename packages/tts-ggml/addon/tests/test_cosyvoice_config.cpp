@@ -24,6 +24,7 @@
 
 using qvac::ttsggml::cosyvoice::CosyvoiceConfig;
 using qvac::ttsggml::cosyvoice::CosyvoiceModel;
+using qvac::ttsggml::cosyvoice::streamingRequested;
 using qvac_errors::StatusError;
 
 namespace {
@@ -80,6 +81,46 @@ TEST(CosyvoiceValidate, UseGpuNGpuLayersConflictRejected) {
   cfg.useGpu = true;
   cfg.nGpuLayers = 0;
   EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+TEST(CosyvoiceValidate, NegativeStreamTokensRejected) {
+  auto base = configWithExistingDir();
+
+  auto chunk = base;
+  chunk.streamChunkTokens = -1;
+  EXPECT_THROW(CosyvoiceModel{chunk}, StatusError);
+
+  auto first = base;
+  first.streamFirstChunkTokens = -1;
+  EXPECT_THROW(CosyvoiceModel{first}, StatusError);
+
+  auto left = base;
+  left.streamLeftContextTokens = -1;
+  EXPECT_THROW(CosyvoiceModel{left}, StatusError);
+}
+
+TEST(CosyvoiceValidate, StreamingNonNativeOutputRateRejected) {
+  auto cfg = configWithExistingDir();
+  cfg.streamChunkTokens = 25;
+  cfg.outputSampleRate = 16000; // non-native while streaming
+  EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+// Ungated coverage of the wasStreaming decision (the double-emit fix):
+// streaming requires BOTH streamChunkTokens>0 and a chunk sink. No weights
+// needed.
+TEST(CosyvoiceStreaming, StreamingRequestedContract) {
+  CosyvoiceConfig cfgWithChunks;
+  cfgWithChunks.streamChunkTokens = 25;
+  EXPECT_TRUE(streamingRequested(cfgWithChunks, true));
+  EXPECT_FALSE(streamingRequested(cfgWithChunks, false));
+
+  CosyvoiceConfig cfgNoChunks;
+  EXPECT_FALSE(streamingRequested(cfgNoChunks, true));
+
+  CosyvoiceConfig cfgZeroChunks;
+  cfgZeroChunks.streamChunkTokens = 0;
+  EXPECT_FALSE(streamingRequested(cfgZeroChunks, true));
 }
 
 TEST(CosyvoiceValidate, ConfigDefaultsAreCpuFriendly) {

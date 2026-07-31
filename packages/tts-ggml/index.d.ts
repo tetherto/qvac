@@ -90,8 +90,9 @@ interface TTSGgmlFiles {
     parler?: string;
     /**
      * CosyVoice3 model directory holding the sub-model GGUFs
-     * (`cosyvoice3-{llm,flow,hift,s3tok,campplus,voices}-*.gguf`). Routes to the
-     * CosyVoice3 engine. Falls back to the shared `modelDir` when unset.
+     * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
+     * `merges.txt`. Routes to the CosyVoice3 engine. Falls back to the shared
+     * `modelDir` when unset.
      */
     cosyvoiceModelDir?: string;
     /** CosyVoice3 per-component GGUF paths (override discovery under the model dir). */
@@ -242,9 +243,15 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     kvCacheType?: "f32" | "f16" | "q8_0";
     /** Override `std::thread::hardware_concurrency()`. */
     threads?: number;
-    /** Chatterbox-only speech tokens per native streaming chunk. 0 disables. */
+    /**
+     * Chatterbox / CosyVoice3 speech tokens per native streaming chunk.
+     * 0 disables.
+     */
     streamChunkTokens?: number;
-    /** Chatterbox-only smaller first chunk for low first-audio-out latency. */
+    /**
+     * Chatterbox / CosyVoice3 smaller first chunk for low first-audio-out
+     * latency.
+     */
     streamFirstChunkTokens?: number;
     /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
     streamLeftContextTokens?: number;
@@ -483,6 +490,7 @@ declare class TTSGgml {
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
     private _assertParlerOptionConsistency;
+    private _assertCosyvoiceOptionConsistency;
     /**
      * Extract + validate the per-call parler description/template fields from a
      * run input or streaming options. Returns undefined when none are present.

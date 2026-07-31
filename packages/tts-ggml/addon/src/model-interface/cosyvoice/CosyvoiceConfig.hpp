@@ -5,6 +5,11 @@
 
 namespace qvac::ttsggml::cosyvoice {
 
+// Native output sample rate (Hz) of CosyVoice3's CausalHiFT vocoder. Shared so
+// the model and AddonJs can't disagree on the native rate.
+// NOLINTNEXTLINE(readability-identifier-naming)
+inline constexpr int kCosyvoiceNativeSampleRate = 24000;
+
 /**
  * Configuration for the CosyVoice3 engine wrapping tts-cpp's CosyVoice3
  * implementation.
@@ -19,8 +24,9 @@ namespace qvac::ttsggml::cosyvoice {
 struct CosyvoiceConfig {
   /**
    * Directory holding the standard CosyVoice3 GGUFs
-   * (cosyvoice3-{llm,flow,hift,s3tok,campplus,voices}-*.gguf). Either set
-   * this, or set the per-component paths below (explicit paths win).
+   * (cosyvoice3-{llm,flow,hift}-*.gguf) plus voice.gguf, vocab.json and
+   * merges.txt. Either set this, or set the per-component paths below (explicit
+   * paths win).
    */
   std::string modelDir;
 

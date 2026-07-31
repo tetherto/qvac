@@ -158,6 +158,38 @@ test('CosyVoice3: instruct renders structured control to the trained instruction
   t.absent(none._buildTtsParams().instruct, 'no instruct -> field absent')
 })
 
+test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'nope' } } }),
+    /Valid dialects|Invalid CosyVoice instruct/,
+    'invalid dialect value throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialekt: 'cantonese' } } }),
+    /Invalid CosyVoice instruct key/,
+    'unknown structured key throws instead of silently zero-shot'
+  )
+})
+
+test('CosyVoice3: LavaSR enhancer/denoiser rejected at construction', (t) => {
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        files: { cosyvoiceModelDir: './models/cv3', lavasrEnhancer: './e.gguf' }
+      }),
+    /LavaSR/,
+    'enhancer rejected at construction'
+  )
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        files: { cosyvoiceModelDir: './models/cv3', lavasrDenoiser: './d.gguf' }
+      }),
+    /LavaSR/,
+    'denoiser rejected at construction'
+  )
+})
+
 test('CosyVoice3: streamChunkTokens is NOT rejected (native streaming model)', (t) => {
   // Unlike Supertonic, CosyVoice3 supports native sub-utterance chunk streaming.
   t.execution(

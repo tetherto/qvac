@@ -14,8 +14,9 @@ const { platform } = bareOs;
 const ENGINE_CHATTERBOX = "chatterbox";
 const ENGINE_SUPERTONIC = "supertonic";
 // CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B). Ships as a small set of GGUFs
-// (cosyvoice3-{llm,flow,hift,s3tok,campplus,voices}-*.gguf); a modelDir holding
-// them (or an explicit `files.cosyvoiceModelDir`) routes here.
+// (cosyvoice3-{llm,flow,hift}-*.gguf) plus voice.gguf, vocab.json and
+// merges.txt; a modelDir holding them (or an explicit
+// `files.cosyvoiceModelDir`) routes here.
 const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
@@ -100,6 +101,14 @@ function renderCosyvoiceInstruct(instruct) {
         return "";
     if (typeof instruct === "string")
         return instruct.trim();
+    // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)
+    // before the precedence chain, which would otherwise fall through to "".
+    const supportedControls = ["dialect", "emotion", "speed", "volume", "style"];
+    const unknownKeys = Object.keys(instruct).filter((key) => !supportedControls.includes(key));
+    if (unknownKeys.length > 0) {
+        throw new Error(`Invalid CosyVoice instruct key(s): ${unknownKeys.join(", ")}. ` +
+            "Valid keys: dialect, emotion, speed, volume, style.");
+    }
     if (instruct.dialect) {
         return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
     }
@@ -673,6 +682,7 @@ class TTSGgml {
         // Parler option consistency runs between the supertonic and denoiser
         // streaming guards, matching the pre-migration single-method throw order.
         this._assertParlerOptionConsistency();
+        this._assertCosyvoiceOptionConsistency();
         if (this._denoiserGgufPath &&
             (this._streamChunkTokens != null ||
                 this._streamFirstChunkTokens != null)) {
@@ -729,6 +739,16 @@ class TTSGgml {
         if (parlerOnly.length > 0) {
             throw new Error(`tts-ggml: ${parlerOnly.join(", ")} are parler-only options ` +
                 `(engine is ${this._engineType})`);
+        }
+    }
+    _assertCosyvoiceOptionConsistency() {
+        if (this._engineType !== ENGINE_COSYVOICE3)
+            return;
+        // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
+        // denoiser at construction (mirrors the parler rejection).
+        if (this._enhancerGgufPath || this._denoiserGgufPath) {
+            throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
+                "Drop lavasrEnhancer / lavasrDenoiser.");
         }
     }
     /**
@@ -1084,13 +1104,6 @@ class TTSGgml {
             parameters.instruct = this._instruct;
         if (this._voice)
             parameters.voice = this._voice;
-        // CosyVoice3 outputs no LavaSR-supported signal; reject enhancer/denoiser
-        // before _assignCommonNativeParams wires their paths (mirrors the parler
-        // rejection in _assertParlerOptionConsistency).
-        if (this._enhancerGgufPath || this._denoiserGgufPath) {
-            throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
-                "Drop lavasrEnhancer / lavasrDenoiser.");
-        }
         this._assignCommonNativeParams(parameters);
         if (this._cfmSteps != null)
             parameters.cfmSteps = this._cfmSteps | 0;

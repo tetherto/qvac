@@ -27,7 +27,6 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
-// Shared float->int16 PCM conversion (same mapping across all engines).
 using qvac::ttsggml::pcmFloatToInt16;
 
 tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
@@ -79,6 +78,20 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   return opts;
 }
 
+// Batch-only output-rate conversion (the tts-cpp engine ignores
+// output_sample_rate; streaming is validated to the native rate). No-op unless
+// a non-native outputSampleRate was requested. Runs before stats so
+// sampleRate_/duration reflect the emitted rate.
+void resampleBatchOutput(
+    const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result) {
+  if (cfg.outputSampleRate.has_value() && *cfg.outputSampleRate > 0 &&
+      *cfg.outputSampleRate != result.sample_rate) {
+    result.pcm = OutputResampler::resample(
+        result.pcm, result.sample_rate, *cfg.outputSampleRate);
+    result.sample_rate = *cfg.outputSampleRate;
+  }
+}
+
 } // namespace
 
 CosyvoiceModel::CosyvoiceModel(CosyvoiceConfig config)
@@ -116,6 +129,35 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         general_error::InvalidArgument,
         "outputSampleRate must be 0 or in [8000, 192000]");
   }
+  if (cfg.streamChunkTokens.has_value() && *cfg.streamChunkTokens < 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "streamChunkTokens must be >= 0 (0 = non-streaming)");
+  }
+  if (cfg.streamFirstChunkTokens.has_value() &&
+      *cfg.streamFirstChunkTokens < 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "streamFirstChunkTokens must be >= 0 (0 = same as streamChunkTokens)");
+  }
+  if (cfg.streamLeftContextTokens.has_value() &&
+      *cfg.streamLeftContextTokens < 0) {
+    throw StatusError(
+        general_error::InvalidArgument, "streamLeftContextTokens must be >= 0");
+  }
+  // CosyVoice emits its native 24 kHz per chunk while streaming; addon-side
+  // per-chunk resampling would break the seams, so reject a non-native output
+  // rate while streaming (batch output is resampled instead). AddonJs always
+  // installs a chunkCallback for CosyVoice, so streaming == streamChunkTokens>0
+  // at construction.
+  if (cfg.streamChunkTokens.value_or(0) > 0 &&
+      cfg.outputSampleRate.has_value() && *cfg.outputSampleRate != 0 &&
+      *cfg.outputSampleRate != kCosyvoiceNativeSampleRate) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "CosyVoice native streaming emits at 24000 Hz; drop outputSampleRate "
+        "or disable streaming (streamChunkTokens) for resampled batch output.");
+  }
   // useGPU / nGpuLayers conflict check — mirrors the sibling engines so the
   // option surface behaves identically even though iteration 1 runs CPU-only.
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
@@ -132,6 +174,15 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
               "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
     }
   }
+}
+
+void CosyvoiceModel::setConfig(CosyvoiceConfig config) {
+  validateConfig(config);
+  cfg_ = std::move(config);
+}
+
+bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback) {
+  return cfg.streamChunkTokens.value_or(0) > 0 && hasChunkCallback;
 }
 
 void CosyvoiceModel::load() {
@@ -202,21 +253,7 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
 
   textLength_ = text.size();
 
-  const bool streaming =
-      cfg_.streamChunkTokens.value_or(0) > 0 && static_cast<bool>(onChunk);
-
-  // CosyVoice emits its native 24 kHz per chunk while streaming; addon-side
-  // per-chunk resampling would break the seams, so reject a non-native output
-  // rate while streaming (batch output is resampled below instead).
-  constexpr int kNativeSampleRate = 24000;
-  if (streaming && cfg_.outputSampleRate.has_value() &&
-      *cfg_.outputSampleRate != 0 &&
-      *cfg_.outputSampleRate != kNativeSampleRate) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "CosyVoice native streaming emits at 24000 Hz; drop outputSampleRate "
-        "or disable streaming (streamChunkTokens) for resampled batch output.");
-  }
+  const bool streaming = streamingRequested(cfg_, static_cast<bool>(onChunk));
 
   const auto t0 = std::chrono::steady_clock::now();
   tts_cpp::cosyvoice::SynthesisResult result;
@@ -240,19 +277,20 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
         std::string("cosyvoice.synthesize: ") + e.what());
   }
 
-  // Batch-only output-rate conversion (streaming is validated to the native
-  // rate above; the tts-cpp engine ignores output_sample_rate). Resample before
-  // computing stats so sampleRate_/duration reflect the emitted rate.
-  if (!streaming && cfg_.outputSampleRate.has_value() &&
-      *cfg_.outputSampleRate > 0 &&
-      *cfg_.outputSampleRate != result.sample_rate) {
-    result.pcm = OutputResampler::resample(
-        result.pcm, result.sample_rate, *cfg_.outputSampleRate);
-    result.sample_rate = *cfg_.outputSampleRate;
-  }
-
+  resampleBatchOutput(cfg_, result);
   const auto t1 = std::chrono::steady_clock::now();
+  recordSynthesisStats(result, t0, t1);
 
+  if (streaming) {
+    return {Output{}, true}; // chunks already emitted via onChunk
+  }
+  return {pcmFloatToInt16(result.pcm.data(), result.pcm.size()), false};
+}
+
+void CosyvoiceModel::recordSynthesisStats(
+    const tts_cpp::cosyvoice::SynthesisResult& result,
+    std::chrono::steady_clock::time_point t0,
+    std::chrono::steady_clock::time_point t1) {
   sampleRate_ = result.sample_rate;
   totalSamples_ = static_cast<int64_t>(result.pcm.size());
   audioDurationMs_ =
@@ -266,11 +304,6 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
       audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
   tokensPerSecond_ =
       totalTime_ > 0.0 ? static_cast<double>(textLength_) / totalTime_ : 0.0;
-
-  if (streaming) {
-    return {Output{}, true}; // chunks already emitted via onChunk
-  }
-  return {pcmFloatToInt16(result.pcm.data(), result.pcm.size()), false};
 }
 
 std::any CosyvoiceModel::process(const std::any& input) {
