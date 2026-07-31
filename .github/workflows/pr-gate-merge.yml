@@ -126,9 +126,6 @@ jobs:
             ocr-ggml:
               - "packages/ocr-ggml/**"
               - ".github/workflows/prebuilds-ocr-ggml.yml"
-            ocr-onnx:
-              - "packages/ocr-onnx/**"
-              - ".github/workflows/prebuilds-ocr-onnx.yml"
             onnx:
               - "packages/onnx/**"
               - ".github/workflows/prebuilds-onnx.yml"
@@ -212,6 +209,7 @@ jobs:
     if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: read
+      packages: read
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
   qvac-merge-guard:

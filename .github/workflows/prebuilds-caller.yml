@@ -139,22 +139,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
-  ocr-onnx-build:
-    if: contains(fromJSON(inputs.changed-packages), 'ocr-onnx')
-    concurrency:
-      group: prebuilds-ocr-onnx-${{ github.event.pull_request.head.sha || inputs.ref }}
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-
   onnx-build:
     if: contains(fromJSON(inputs.changed-packages), 'onnx')
     concurrency:
