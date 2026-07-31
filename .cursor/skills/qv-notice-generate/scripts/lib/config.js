@@ -27,7 +27,19 @@ const ENGINE_MAP = {
   '@qvac/llm-llamacpp': 'llm-llamacpp',
   '@qvac/translation-nmtcpp': 'translation-nmtcpp',
   '@qvac/tts-onnx': 'tts-onnx',
-  '@qvac/transcription-whispercpp': 'transcription-whispercpp',
+  // The whisper + parakeet engines were unified into packages/asr-ggml, so
+  // packages/transcription-whispercpp no longer exists. models.prod.json still
+  // names the retired `@qvac/transcription-whispercpp` engine (the SDK/registry
+  // repoint to `@qvac/asr-ggml` lands in a later PR), so keep BOTH keys aimed
+  // at the surviving directory: the old one so the model attributions keep
+  // landing in packages/asr-ggml/NOTICE today, the new one so they keep landing
+  // after the repoint.
+  // NOTE: `@qvac/transcription-parakeet` is deliberately absent — it was never
+  // in this map, so parakeet's models were never attributed in the parakeet
+  // NOTICE either. Adding it now would introduce NOTICE drift that has to be
+  // regenerated and reviewed as its own change.
+  '@qvac/transcription-whispercpp': 'asr-ggml',
+  '@qvac/asr-ggml': 'asr-ggml',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
   '@qvac/ocr-onnx': 'ocr-onnx',
   '@qvac/diffusion-cpp': 'diffusion-cpp'
@@ -85,7 +97,12 @@ const PYTHON_DEP_PATHS = {
     'benchmarks/client/requirements.txt',
     'benchmarks/client/pyproject.toml'
   ],
-  'transcription-whispercpp': [
+  // Renamed from 'transcription-whispercpp' when whisper + parakeet were
+  // unified. Keys here are package DIRECTORY names (getPackageList enumerates
+  // packages/), so a stale key silently drops the package's Python
+  // attributions instead of failing — packages/asr-ggml/benchmarks/client's
+  // pyproject.toml now carries both engines' benchmark-client deps.
+  'asr-ggml': [
     'benchmarks/ci/requirements-conversion.txt',
     'benchmarks/client/pyproject.toml'
   ],
