@@ -3,7 +3,6 @@
   "findings": [
     ".github/workflows/benchmark-performance-ocr-ggml.yml: input \"qvac_perf_runs\" is not defined in \"./.github/workflows/integration-mobile-test-ocr-ggml.yml\" reusable workflow. defined inputs are \"prebuild_package\", \"ref\", \"repository\", \"workdir\" [workflow-call]",
     ".github/workflows/benchmark-performance-ocr-ggml.yml: input \"qvac_perf_runs\" is not defined in \"./.github/workflows/integration-test-ocr-ggml.yml\" reusable workflow. defined inputs are \"model\", \"prebuild_package\", \"ref\", \"repository\", \"workdir\" [workflow-call]",
-    ".github/workflows/benchmark-transcription-parakeet.yml: property \"streaming_chunk_size\" is not defined in object type {max_samples: string; model_type: string} [expression]",
     ".github/workflows/benchmark-translation-nmtcpp.yml: property \"is_quantized_model\" is not defined in object type {dataset_conversational_phrases: bool; dataset_flores_devtest: bool; hyperparams: string; metric_chrfpp: bool; metric_comet: bool; pairs: string; translators: string; use_batch: bool; use_pivot: bool} [expression]",
     ".github/workflows/benchmark-translation-nmtcpp.yml: property \"qvac_needed\" is not defined in object type {datasets: string; datasets_cache_key: string; matrix: string} [expression]",
     ".github/workflows/on-merge-classification-ggml.yml: input \"npm-token\" is not defined in action \"GPR Publish\" defined at \"./.github/actions/publish-library-to-gpr\". available inputs are \"name-suffix\", \"pat-token\", \"path\", \"release\", \"secret-token\", \"tag\", \"workdir\" [action]",
@@ -14,8 +13,6 @@
     ".github/workflows/on-merge-llm-llamacpp.yml: property \"npm_published_version\" is not defined in object type {gpr_published_version: string} [expression]",
     ".github/workflows/on-merge-ocr-ggml.yml: property \"npm_published_version\" is not defined in object type {gpr_published_version: string} [expression]",
     ".github/workflows/on-merge-ocr-ggml.yml: string should not be empty [syntax-check]",
-    ".github/workflows/on-merge-ocr-onnx.yml: property \"npm_published_version\" is not defined in object type {gpr_published_version: string} [expression]",
-    ".github/workflows/on-merge-ocr-onnx.yml: string should not be empty [syntax-check]",
     ".github/workflows/on-merge-onnx.yml: property \"npm_published_version\" is not defined in object type {gpr_published_version: string} [expression]",
     ".github/workflows/on-merge-onnx.yml: string should not be empty [syntax-check]",
     ".github/workflows/on-merge-translation-nmtcpp.yml: property \"npm_published_version\" is not defined in object type {gpr_published_version: string} [expression]",

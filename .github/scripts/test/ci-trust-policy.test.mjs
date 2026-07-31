@@ -631,7 +631,6 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-fabric.yml',
     'on-pr-llm-llamacpp.yml',
     'on-pr-ocr-ggml.yml',
-    'on-pr-ocr-onnx.yml',
     'on-pr-onnx.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
@@ -927,9 +926,9 @@ test('fork-ci: every pull_request_target verified-surface workflow has the fork-
   // Floor, not an exact count: it only guards against the discovery globbing
   // silently matching nothing (which would make every assertion below vacuous).
   // Lower it deliberately when workflow families are retired or consolidated —
-  // this dropped from 20 when transcription-whispercpp and transcription-parakeet
-  // merged into asr-ggml.
-  assert.ok(targets.length >= 19, `found ${targets.length} fork-ci target workflows`)
+  // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
+  // ocr-onnx CI was retired on main.
+  assert.ok(targets.length >= 18, `found ${targets.length} fork-ci target workflows`)
   for (const path of targets) {
     const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
     assert.ok(gate, `${path}: must define a fork-approval gate job`)
