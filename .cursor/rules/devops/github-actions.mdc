@@ -167,23 +167,23 @@ Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workfl
 
 ## Linting workflows (actionlint)
 
-Every PR runs `actionlint` over `.github/workflows/` from the `policy-tests` job
-in `security-baseline.yml`. Run it locally before pushing workflow edits:
+Every PR that edits `.github/workflows/` or `.github/actions/` runs actionlint on
+**only the changed files** from the `policy-tests` job in
+`security-baseline.yml`. Run it locally before pushing:
 
 ```bash
-node .github/scripts/lint-workflows.mjs
+git diff --name-only origin/main -- '.github/workflows/*.yml' '.github/actions/*' \
+  | xargs node .github/scripts/lint-workflows.mjs
 ```
 
-- The repo carries known actionlint debt, recorded in
-  `.github/actionlint-baseline.json`. The gate fails only on findings that are
-  **not** in the baseline, so new breakage is caught while the backlog is
-  deferred. Shrink the baseline; never grow it to silence a finding you
-  introduced. Regenerate with `--update` only after genuinely fixing something.
-- `shellcheck` and `pyflakes` are disabled: they lint the contents of `run:`
-  blocks rather than workflow structure, and they are not present in every
-  environment (which would make the baseline non-deterministic).
+- There is no checked-in baseline file. Only **structural** actionlint findings
+  in files your PR edits fail the check (unparseable YAML, dangling `needs`,
+  duplicate keys, empty `if:` from a bare leading `!`). Pre-existing debt such
+  as dead `npm-token` action inputs in untouched semantics is ignored.
+- `shellcheck` and `pyflakes` are disabled in CI: they lint the contents of
+  `run:` blocks rather than workflow structure.
 - New self-hosted runner labels must be added to `.github/actionlint.yaml` or
-  every `runs-on` using them reports "label is unknown".
+  every `runs-on` using them reports "label is unknown" in local full-tree runs.
 
 This gate exists because bulk edits to workflows can silently destroy a job
 graph: a mis-indented key swallows the following job, a dangling `needs:` entry

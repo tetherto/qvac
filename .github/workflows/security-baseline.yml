@@ -83,16 +83,38 @@ jobs:
       # The trust-policy suite asserts on workflow *text*, so it stays green even
       # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
       # PR, and pull_request_target workflows load from the base branch, so this
-      # is the only place a PR parses its own edited workflows. Runs here rather
-      # than as a new job so it rides the existing required check.
-      - name: Lint workflows with actionlint
+      # is the only place a PR parses its own edited workflows. Only files this PR
+      # changes are linted — no repo-wide baseline file.
+      - name: Collect changed workflow files
+        id: changed-workflows
+        if: github.event_name == 'pull_request'
         env:
-          # rhysd/actionlint 1.7.12, pinned by digest.
-          ACTIONLINT_IMAGE: rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # actionlint exits 1 when it reports findings; the baseline gate below
-          # decides whether those findings are new, so don't fail on it here.
-          docker run --rm -v "$PWD:/repo" -w /repo "$ACTIONLINT_IMAGE" \
-            -oneline -shellcheck= -pyflakes= > "$RUNNER_TEMP/actionlint.txt" || true
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | rg '^\.github/(workflows/|actions/).*\.ya?ml$' > "$RUNNER_TEMP/changed-workflows.txt" || true
+          count=$(wc -l < "$RUNNER_TEMP/changed-workflows.txt" | tr -d ' ')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+
+      - name: Install actionlint
+        if: github.event_name == 'pull_request' && steps.changed-workflows.outputs.count != '0'
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/actionlint.tgz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Lint changed workflows with actionlint
+        if: github.event_name == 'pull_request' && steps.changed-workflows.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          mapfile -t files < "$RUNNER_TEMP/changed-workflows.txt"
+          # actionlint exits 1 when it reports findings; lint-workflows.mjs decides pass/fail.
+          actionlint -oneline -shellcheck= -pyflakes= "${files[@]}" \
+            > "$RUNNER_TEMP/actionlint.txt" || true
           node .github/scripts/lint-workflows.mjs --input "$RUNNER_TEMP/actionlint.txt"

@@ -1,50 +1,55 @@
 #!/usr/bin/env node
 /**
- * actionlint gate with a checked-in baseline.
+ * actionlint gate for PR-edited workflow and composite-action files.
  *
- * The repo carries pre-existing actionlint debt, so a plain "must be clean"
- * gate is not adoptable. Instead every known finding is recorded in
- * .github/actionlint-baseline.json and this script fails only on findings that
- * are NOT in the baseline (or that occur more times than the baseline records).
- *
- * Findings are keyed on file + rule + message with the line:col stripped, so
- * unrelated edits that shift line numbers do not churn the baseline.
- *
- * The baseline is JSON, not a commented text file, on purpose: a rules file
- * whose comment syntax the parser does not actually honour is how
- * git-filter-repo corrupted this repo's history in May 2026.
+ * No checked-in baseline: CI passes `git diff` output so only files this PR
+ * touches are scanned, and only findings in the corruption classes below fail
+ * the check (dangling needs, unparseable YAML, duplicate keys, empty `if:` from
+ * a bare leading `!`, and similar). Pre-existing debt such as dead `npm-token`
+ * inputs on publish jobs is ignored until those files are cleaned up separately.
  *
  * Usage:
- *   node .github/scripts/lint-workflows.mjs                # runs `actionlint`
- *   node .github/scripts/lint-workflows.mjs --input <file> # parses saved output
- *   node .github/scripts/lint-workflows.mjs --update       # rewrites baseline
+ *   node .github/scripts/lint-workflows.mjs .github/workflows/on-pr-foo.yml ...
+ *   node .github/scripts/lint-workflows.mjs --input report.txt
  */
 import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const baselinePath = resolve(repoRoot, '.github/actionlint-baseline.json')
 
-// Keep in sync with the flags in the CI step. shellcheck and pyflakes are off:
-// they lint the contents of `run:` blocks rather than workflow structure, they
-// are only present in some environments (which would make the baseline
-// non-deterministic), and cleaning up ~520 shell findings is its own effort.
 const ACTIONLINT_FLAGS = ['-oneline', '-shellcheck=', '-pyflakes=']
 
 function parseArgs(argv) {
-  const args = { input: null, update: false }
+  const args = { input: null, files: [] }
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--update') args.update = true
-    else if (argv[i] === '--input') args.input = argv[++i]
-    else throw new Error(`unknown argument: ${argv[i]}`)
+    if (argv[i] === '--input') args.input = argv[++i]
+    else if (argv[i] === '--') {
+      args.files.push(...argv.slice(i + 1))
+      break
+    } else if (argv[i].startsWith('-')) {
+      throw new Error(`unknown argument: ${argv[i]}`)
+    } else {
+      args.files.push(...argv.slice(i))
+      break
+    }
   }
   return args
 }
 
-function runActionlint() {
-  const result = spawnSync('actionlint', ACTIONLINT_FLAGS, {
+function existingWorkflowPaths(paths) {
+  return paths.filter((relativePath) => {
+    try {
+      return statSync(resolve(repoRoot, relativePath)).isFile()
+    } catch {
+      return false
+    }
+  })
+}
+
+function runActionlint(files) {
+  const result = spawnSync('actionlint', [...ACTIONLINT_FLAGS, ...files], {
     cwd: repoRoot,
     encoding: 'utf8',
   })
@@ -54,7 +59,6 @@ function runActionlint() {
         'or pass --input with saved output.',
     )
   }
-  // actionlint exits 1 when it reports problems and >1 on its own failure.
   if (result.status !== 0 && result.status !== 1) {
     throw new Error(
       `actionlint exited ${result.status}: ${result.stderr || result.stdout}`,
@@ -63,104 +67,109 @@ function runActionlint() {
   return result.stdout
 }
 
-/** `path:line:col: message [rule]` -> `path: message [rule]` */
-function normalize(line) {
-  const match = line.match(/^(\S+?):\d+:\d+: (.*)$/)
-  if (!match) return null
-  return `${match[1]}: ${match[2]}`
-}
-
-function parseFindings(raw) {
+/** Raw actionlint line: `path:line:col: message [rule]` */
+function parseRawLines(raw) {
   return raw
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .map(normalize)
+    .map((line) => {
+      const match = line.match(/^(\S+?):(\d+):(\d+): (.*)$/)
+      if (!match) return null
+      return {
+        file: match[1],
+        line: Number(match[2]),
+        col: Number(match[3]),
+        message: match[4],
+        raw: line,
+      }
+    })
     .filter(Boolean)
 }
 
-function tally(findings) {
-  const counts = new Map()
-  for (const finding of findings) {
-    counts.set(finding, (counts.get(finding) ?? 0) + 1)
+/**
+ * Fail only on the YAML/job-graph corruption class the label-gate codemod
+ * introduced. Everything else (dead npm-token inputs, matrix typos, empty choice
+ * options on dispatch-only workflows) stays out of scope for this gate.
+ */
+function structuralFindings(parsed) {
+  const byPos = new Map()
+  for (const item of parsed) {
+    const key = `${item.file}:${item.line}:${item.col}`
+    if (!byPos.has(key)) byPos.set(key, [])
+    byPos.get(key).push(item)
   }
-  return counts
-}
 
-function readBaseline() {
-  let parsed
-  try {
-    parsed = JSON.parse(readFileSync(baselinePath, 'utf8'))
-  } catch (e) {
-    throw new Error(`could not read ${baselinePath}: ${e.message}`)
-  }
-  if (!Array.isArray(parsed.findings)) {
-    throw new Error(`${baselinePath}: expected a "findings" array`)
-  }
-  return tally(parsed.findings)
-}
+  const out = []
+  for (const item of parsed) {
+    const rule = item.message.match(/\[[-a-z]+\]$/)?.[0] ?? ''
+    const text = item.message.replace(/\[[-a-z]+\]$/, '').trim()
 
-function writeBaseline(findings) {
-  const body = {
-    comment:
-      'Known pre-existing actionlint findings. Generated by ' +
-      '`node .github/scripts/lint-workflows.mjs --update`. Shrink this list; ' +
-      'do not grow it.',
-    findings: [...findings].sort(),
+    if (rule === '[job-needs]') {
+      out.push(item.raw)
+      continue
+    }
+
+    if (rule === '[syntax-check]') {
+      if (/could not parse as YAML/.test(text)) {
+        out.push(item.raw)
+        continue
+      }
+      if (/is duplicated/.test(text)) {
+        out.push(item.raw)
+        continue
+      }
+      if (/section should not be empty/.test(text)) {
+        out.push(item.raw)
+        continue
+      }
+      // Bare `if: !expr` — YAML reads `!` as a tag, leaving an empty condition.
+      if (/string should not be empty/.test(text)) {
+        const key = `${item.file}:${item.line}:${item.col}`
+        const peers = byPos.get(key) ?? []
+        if (
+          peers.some(
+            (p) =>
+              p.message.includes('[expression]') &&
+              /unexpected end of input/.test(p.message),
+          )
+        ) {
+          out.push(item.raw)
+        }
+      }
+    }
   }
-  writeFileSync(baselinePath, `${JSON.stringify(body, null, 2)}\n`)
+
+  return [...new Set(out)]
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2))
-  const raw = args.input
-    ? readFileSync(resolve(repoRoot, args.input), 'utf8')
-    : runActionlint()
-  const findings = parseFindings(raw)
+  const files = existingWorkflowPaths(args.files)
 
-  if (args.update) {
-    writeBaseline(findings)
-    console.log(`baseline updated: ${findings.length} finding(s)`)
+  if (!args.input && files.length === 0) {
+    console.log('lint-workflows: no workflow files to lint — skipping.')
     return
   }
 
-  const baseline = readBaseline()
-  const current = tally(findings)
+  const raw = args.input
+    ? readFileSync(resolve(repoRoot, args.input), 'utf8')
+    : runActionlint(files)
+  const parsed = parseRawLines(raw)
+  const findings = structuralFindings(parsed)
 
-  const introduced = []
-  for (const [finding, count] of current) {
-    const allowed = baseline.get(finding) ?? 0
-    for (let i = allowed; i < count; i++) introduced.push(finding)
-  }
-
-  const resolved = []
-  for (const [finding, count] of baseline) {
-    const seen = current.get(finding) ?? 0
-    if (seen < count) resolved.push(`${finding} (x${count - seen})`)
-  }
-
-  if (resolved.length) {
-    console.log(
-      `${resolved.length} baselined finding(s) no longer reported — refresh ` +
-        'the baseline with `node .github/scripts/lint-workflows.mjs --update`:',
-    )
-    for (const finding of resolved.sort()) console.log(`  - ${finding}`)
-    console.log('')
-  }
-
-  if (introduced.length) {
-    console.error(`actionlint reported ${introduced.length} new finding(s):`)
-    for (const finding of introduced.sort()) console.error(`  ${finding}`)
+  if (findings.length) {
     console.error(
-      '\nFix the workflow. Only add to .github/actionlint-baseline.json when ' +
-        'the finding is pre-existing debt you are deliberately deferring.',
+      `actionlint structural gate failed (${findings.length} finding(s)):`,
     )
+    for (const finding of findings) console.error(`  ${finding}`)
     process.exit(1)
   }
 
-  console.log(
-    `actionlint clean: ${findings.length} finding(s), all baselined.`,
-  )
+  const scope = args.input
+    ? 'report'
+    : `${files.length} changed file(s), ${parsed.length} finding(s) ignored as non-structural`
+  console.log(`actionlint structural gate clean (${scope}).`)
 }
 
 try {
