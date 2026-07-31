@@ -130,8 +130,8 @@ async def main() -> int:
                 try:
                     await unload_model(transport, model_id)
                     print("▸ Model unloaded")
-                except Exception:
-                    pass
+                except Exception as unload_error:
+                    print(f"✖ Failed to unload model: {unload_error}", file=sys.stderr)
 
     return 0
 
