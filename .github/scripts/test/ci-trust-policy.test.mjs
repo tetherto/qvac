@@ -724,7 +724,6 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-fabric.yml',
     'on-pr-llm-llamacpp.yml',
     'on-pr-ocr-ggml.yml',
-    'on-pr-ocr-onnx.yml',
     'on-pr-onnx.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',

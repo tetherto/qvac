@@ -126,9 +126,6 @@ jobs:
             ocr-ggml:
               - "packages/ocr-ggml/**"
               - ".github/workflows/prebuilds-ocr-ggml.yml"
-            ocr-onnx:
-              - "packages/ocr-onnx/**"
-              - ".github/workflows/prebuilds-ocr-onnx.yml"
             onnx:
               - "packages/onnx/**"
               - ".github/workflows/prebuilds-onnx.yml"
