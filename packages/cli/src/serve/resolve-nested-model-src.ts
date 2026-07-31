@@ -19,16 +19,18 @@ export function resolveNestedModelSrcConstants(
   context?: string
 ): Record<string, unknown> {
   const constants = loadModelConstants()
-  return walk(config, constants, context ?? 'config')
+  return walk(config, constants, context ?? 'config', config['mode'] === 'video')
 }
 
 function walk(
   obj: Record<string, unknown>,
   constants: Map<string, ModelConstant>,
-  path: string
+  path: string,
+  skipUpscaler = false
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...obj }
   for (const [key, value] of Object.entries(out)) {
+    if (skipUpscaler && key === 'upscaler') continue
     const childPath = `${path}.${key}`
     if (isModelSrcKey(key) && typeof value === 'string') {
       out[key] = resolveModelSrcString(value, constants, childPath)

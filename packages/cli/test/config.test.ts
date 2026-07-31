@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { FLUX_2_KLEIN_4B_VAE, TTS_S3GEN_EN_CHATTERBOX, WHISPER_EN_TINY_Q8_0 } from '@qvac/sdk'
 import {
-  FLUX_2_KLEIN_4B_VAE,
-  TTS_S3GEN_EN_CHATTERBOX,
-  WHISPER_EN_TINY_Q8_0
-} from '@qvac/sdk'
-import { parseServeConfig, resolveExplicitServeModel, resolveModelConstant } from '../src/serve/config.js'
+  parseServeConfig,
+  resolveExplicitServeModel,
+  resolveModelConstant
+} from '../src/serve/config.js'
 import { resolveNestedModelSrcConstants } from '../src/serve/resolve-nested-model-src.js'
 
 describe('resolveExplicitServeModel', () => {
@@ -171,5 +171,32 @@ describe('parseServeConfig nested companions', () => {
     assert.equal(wan.endpointCategory, 'video')
     assert.equal(wan.config['mode'], 'video')
     assert.equal(wan.config['t5XxlModelSrc'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
+  it('leaves the ignored upscaler block unchanged for video entries', () => {
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            wan: {
+              src: 'placeholder',
+              type: 'sdcpp-video',
+              config: {
+                upscaler: {
+                  type: 'esrgan',
+                  model_src: 'IGNORED_VALUE'
+                }
+              }
+            }
+          }
+        }
+      },
+      {}
+    )
+    const wan = cfg.models.get('wan')!
+    assert.deepEqual(wan.config['upscaler'], {
+      type: 'esrgan',
+      model_src: 'IGNORED_VALUE'
+    })
   })
 })
