@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.19.2
+**Package:** `@qvac/llm-llamacpp` v0.39.2
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -68,7 +68,7 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥1.3.0): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
+- inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + serialized admission)
 - @qvac/logging: `QvacLogger` wrapper

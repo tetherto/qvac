@@ -316,7 +316,7 @@ JS-facing ids in input order.
 
 Streaming works as follows:
 
-1. `processPromptBatch` returns `{accepted: true, ids: ["batch-1","batch-2","batch-3"]}` for plain `Message[]` inputs, or caller-provided ids such as `["fruit","country"]` for `BatchPrompt` inputs.
+1. The batch `runJob` binding returns `{accepted: true, id, ids: ["batch-1","batch-2","batch-3"]}` for plain `Message[]` inputs, or caller-provided ids such as `["fruit","country"]` for `BatchPrompt` inputs. `id` is the native group id minted at admission; `ids` are the JS-facing per-prompt ids.
 2. `BatchHandler` stores these as `response.ids` on the `BatchResponse`.
 3. Each token from the native side fires a `BatchOutput` event carrying `{id, output}`, where `id` is the JS-facing id rather than the native slot index.
 4. `index.js` routes this to `batchHandler.onOutput(data)`, which calls `job.output({ id: data.id, chunk: data.output })`.
@@ -389,19 +389,25 @@ Every completed job emits one `JobEnded` event whose payload is the stats
 JSON below. The keys are ALWAYS the same; what changes per mode is where the
 values come from:
 
-- Untagged / generic snapshot (`runtimeStats()`, no job id): whole-model
-  aggregate over everything in flight — the current default, including
-  `avgConcurrentSeq`.
-- Tagged job (multi-job scheduler, `parallel >= 2`): the job's terminal
+Every job is tagged — the model is always driven through the multi-job
+scheduler, so even at `parallel: 1` admission mints a job id. What differs is
+whether a per-job stats source exists for that id:
+
+- Generic snapshot (`runtimeStats()`): whole-model aggregate over everything
+  in flight, including `avgConcurrentSeq`. This is what a job's `JobEnded`
+  carries when nothing recorded per-job figures for it — the single-prompt
+  path (`parallel: 1`) never does.
+- Per-job override (the job ran through the batch engine): the job's terminal
   snapshot starts from that same aggregate, then `TTFT`, `TPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
   observed figures. All other keys (`ppTPS`, `CacheTokens`, `contextSlides`,
   `thinkingBlockDiscards`, `avgConcurrentSeq`, `backendDevice`) stay
   model-level.
 
-Four variants for tagged job:
+Four variants:
 
-1. `parallel = 1` single → generic snapshot only, no per-job entry
+1. `parallel = 1` single → tagged, but the single-prompt path records no
+   per-job figures, so the payload is the generic snapshot
 2. multiple singles → per-job override (same keys), aggregate == sum of jobs
 3. multiple batched groups (micro-batch < parallel) → per-group avg-of-active / summed counts, groups isolated
 4. full-width batch (== parallel) → same legacy engine path; group counts equal the aggregate exactly, `avgConcurrentSeq` > 1

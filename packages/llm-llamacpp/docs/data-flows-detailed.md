@@ -172,10 +172,14 @@ flowchart TD
 
 | Event | When | Data | Purpose |
 |-------|------|------|---------|
-| JobStarted | First input processed | {jobId, timestamp} | Track start |
-| Output | Each token generated | {jobId, output: string, isPartial: true} | Stream text |
-| JobEnded | All input processed | {jobId, stats: RuntimeStats} | Track completion |
-| Error | Processing fails | {jobId, error: string} | Error handling |
+| Output | Each token generated | token string, tagged with the job id | Stream text |
+| BatchOutput | Each token of a batch sequence | {id, output} — `id` is the JS-facing per-prompt id | Stream text per sequence |
+| BatchResult | All sequences of a batch group finished | ordered per-sequence outputs | Resolve `await()` |
+| JobEnded | All input processed | RuntimeStats, tagged with the job id | Track completion |
+| Error | Processing fails | error, tagged with the job id | Error handling |
+
+The job id is a separate callback argument, not a payload field: the output
+callback is invoked as `(handle, eventType, data, error, jobId)`.
 
 **Performance Characteristics:**
 

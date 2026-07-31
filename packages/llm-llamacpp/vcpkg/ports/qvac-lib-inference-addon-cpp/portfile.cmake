@@ -1,4 +1,4 @@
-# Dev overlay: build qvac-lib-inference-addon-cpp 1.3.2 from PR #3564
+# Dev overlay: build qvac-lib-inference-addon-cpp 1.3.3 from PR #3564
 # (tetherto/qvac @ fe64ee07) instead of the published registry version.
 # This validates the JsAsyncTask release-before-settlement fix across every
 # consumer addon. Same REF/SHA512 across every consumer on this branch.
