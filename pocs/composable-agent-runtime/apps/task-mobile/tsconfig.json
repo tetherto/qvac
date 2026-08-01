@@ -9,11 +9,8 @@
   "include": [
     "*.ts",
     "*.tsx",
-    "scripts/**/*.ts",
     "src/**/*.ts",
-    "worklets/**/*.ts",
-    "generated/**/*.d.ts",
-    "vendor.d.ts",
+    "src/**/*.tsx",
     "../../packages/sync/vendor.d.ts"
   ]
 }

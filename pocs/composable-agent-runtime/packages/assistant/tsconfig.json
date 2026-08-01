@@ -8,6 +8,8 @@
   },
   "include": [
     "index.ts",
+    "react-native.ts",
+    "expo-plugin.ts",
     "lib/**/*.ts",
     "test/**/*.ts",
     "../sync/vendor.d.ts",

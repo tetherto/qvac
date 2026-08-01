@@ -1,0 +1,59 @@
+import test from 'brittle'
+import { createSyncMobileEntry } from '../mobile-entry.ts'
+import {
+  WORKLET_ARGV_LAYOUT,
+  createSyncWorkletArgv,
+  parseSyncWorkletArgv
+} from '../lib/react-native-argv.ts'
+
+test('sync mobile entry resolves argv at start time', async (t) => {
+  let argv = ['bare', 'sync.bundle', '{"storagePath":"/tmp/start-a"}']
+  const storages: string[] = []
+  const entry = createSyncMobileEntry({
+    readArgv() {
+      return argv
+    },
+    markerExists: async () => true,
+    createCore(options) {
+      storages.push(options.storagePath)
+      return {
+        writable: true,
+        async ready() {},
+        connect() {},
+        async close() {}
+      }
+    },
+    createStream() {
+      return {
+        once() {},
+        on() {},
+        write() {
+          return true
+        },
+        destroy() {}
+      } as never
+    },
+    ensureStorage: async () => {},
+    writeMarker: async () => {}
+  })
+
+  await entry({} as never)
+  argv = ['bare', 'sync.bundle', '{"storagePath":"/tmp/start-b"}']
+  await entry({} as never)
+
+  t.alike(storages, ['/tmp/start-a', '/tmp/start-b'])
+})
+
+test('sync worklet argv layout round-trips launcher to entry parser', async (t) => {
+  const argv = createSyncWorkletArgv({
+    storagePath: '/tmp/roundtrip',
+    invite: '-_8AAQ'
+  })
+  t.is(argv[WORKLET_ARGV_LAYOUT.runtime], 'react-native-bare-kit')
+  t.is(argv[WORKLET_ARGV_LAYOUT.entry], 'sync.js')
+  const parsed = parseSyncWorkletArgv(argv)
+  t.alike(parsed, {
+    storagePath: '/tmp/roundtrip',
+    invite: '-_8AAQ'
+  })
+})

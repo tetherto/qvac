@@ -16,6 +16,9 @@
   "include": [
     "index.ts",
     "child-entry.ts",
+    "mobile-entry.ts",
+    "react-native-launcher.ts",
+    "react-native-stow.ts",
     "deterministic-sdk-entry.ts",
     "qwen-sdk-entry.ts",
     "lib/**/*.ts",

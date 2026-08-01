@@ -2,6 +2,7 @@ const scripts = [
   'typecheck',
   'lint:supervisor',
   'test',
+  'test:artifacts',
   'test:subsets',
   'test:pack'
 ]

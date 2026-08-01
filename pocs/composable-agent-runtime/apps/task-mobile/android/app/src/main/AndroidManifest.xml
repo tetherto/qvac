@@ -21,6 +21,6 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
-    <service android:name=".BareRuntimeService" android:process=":qvac_sdk" android:exported="false"/>
+    <uses-native-library android:name="libOpenCL.so"/>
   </application>
 </manifest>

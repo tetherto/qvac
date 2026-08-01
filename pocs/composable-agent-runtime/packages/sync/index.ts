@@ -22,6 +22,7 @@ export const SYNC_HANDSHAKE = {
 
 export { SyncClient } from './lib/client.ts'
 export { SyncCore, type SyncCoreOptions } from './lib/core.ts'
+export { createReactNativeSyncLauncher, createSyncRuntimeArgs } from './lib/react-native-launcher.ts'
 export {
   spawnSync,
   SpawnedSyncClient,

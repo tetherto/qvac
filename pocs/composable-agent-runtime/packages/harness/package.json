@@ -6,7 +6,15 @@
   "main": "./index.ts",
   "exports": {
     ".": "./index.ts",
+    "./package": "./package.json",
+    "./connect": "./lib/connect.ts",
+    "./mobile-sdk-transport": "./lib/mobile-sdk-transport.ts",
+    "./logger": "./lib/logger.ts",
+    "./types": "./lib/types.ts",
     "./child-entry": "./child-entry.ts",
+    "./mobile-entry": "./mobile-entry.ts",
+    "./react-native-launcher": "./react-native-launcher.ts",
+    "./react-native-stow": "./react-native-stow.ts",
     "./sdk-direct-adapter": "./lib/sdk-direct-adapter.ts"
   },
   "imports": {
@@ -17,6 +25,7 @@
   },
   "scripts": {
     "build:schema": "bare schema/build.ts",
+    "build:react-native": "bun -e \"import { buildHarnessReactNativeBundle } from './lib/react-native-stow.ts'; await buildHarnessReactNativeBundle()\"",
     "test": "bun test/run.ts",
     "test:fast": "bun test/all.ts",
     "test:bare": "brittle-bare test/all.ts",
@@ -33,20 +42,30 @@
     "b4a": "^1.8.1",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.1",
+    "bare-bundle": "^1.10.0",
     "bare-events": "^2.9.1",
-    "bare-sidecar": "^0.5.2",
     "bare-fs": "^4.7.2",
     "bare-os": "^3.9.1",
     "bare-path": "^3.0.1",
-    "bare-process": "^4.4.1",
+    "bare-process": "4.5.0",
+    "bare-sidecar": "^0.5.2",
+    "bare-stow": "0.1.5",
+    "bare-stow-target-react-native": "0.1.1",
     "bare-stream": "^2.13.3",
-    "bare-stow": "^0.1.4",
     "bare-url": "^2.4.5",
     "compact-encoding": "^3.3.0",
     "hrpc": "^4.3.0",
     "hyperschema": "^1.21.0",
     "streamx": "^2.28.0",
     "teex": "^1.0.1"
+  },
+  "peerDependencies": {
+    "react-native-bare-kit": "^0.14.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-bare-kit": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "brittle": "^4.0.2",

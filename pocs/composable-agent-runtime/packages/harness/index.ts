@@ -11,6 +11,11 @@ export { createMemoryStateAdapter } from './lib/memory-state.ts'
 export { createSdkDirectAdapter } from './lib/sdk-direct-adapter.ts'
 export { createSupervisedSdkPort } from './lib/supervised-sdk-port.ts'
 export {
+  createHostSdkTransportServer,
+  createWorkerSdkRuntimePort,
+  type PublicSdkLike
+} from './lib/mobile-sdk-transport.ts'
+export {
   spawnHarness,
   type HarnessSidecarExit,
   type SpawnedHarness,

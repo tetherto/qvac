@@ -1,15 +1,15 @@
 import type {
-  MobileSyncSnapshot,
-  MobileSyncState,
-  MobileSyncTask
-} from './mobile-sync-client.ts'
+  TaskControllerSnapshot,
+  TaskControllerState,
+  TaskControllerTask
+} from './task-controller.ts'
 
 interface ConnectionCopy {
   readonly label: string
   readonly detail: string
 }
 
-export function connectionCopy(snapshot: MobileSyncSnapshot): ConnectionCopy {
+export function connectionCopy(snapshot: TaskControllerSnapshot): ConnectionCopy {
   if (snapshot.state === 'idle') {
     return {
       label: 'Not paired',
@@ -47,7 +47,7 @@ export function connectionCopy(snapshot: MobileSyncSnapshot): ConnectionCopy {
 }
 
 export function taskFormError(
-  state: MobileSyncState,
+  state: TaskControllerState,
   title: string,
   prompt: string
 ) {
@@ -59,7 +59,7 @@ export function taskFormError(
   return null
 }
 
-export function taskStatusCopy(status: MobileSyncTask['status']) {
+export function taskStatusCopy(status: TaskControllerTask['status']) {
   if (status === 'pending') return 'Pending'
   if (status === 'running') return 'Running'
   if (status === 'completed') return 'Completed'
@@ -67,6 +67,6 @@ export function taskStatusCopy(status: MobileSyncTask['status']) {
   return 'Cancelled'
 }
 
-export function visibleTasks(tasks: readonly MobileSyncTask[]) {
+export function visibleTasks(tasks: readonly TaskControllerTask[]) {
   return [...tasks].sort((left, right) => right.updatedAt - left.updatedAt)
 }

@@ -1,15 +1,12 @@
 import {
   argvForLogging,
   spawnHarness,
-  type HarnessEvent,
-  type HarnessStateAdapter,
   type HarnessRuntime
 } from '@qvac/harness'
 import {
   spawnSync,
   type SyncCoreOptions
 } from '@qvac/sync'
-import type { ComponentHandshake } from './compatibility.ts'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
@@ -21,53 +18,8 @@ import type {
   AssistantStateEndpoint,
   AssistantSyncComponent
 } from './contracts.ts'
-
-const BUILD_VERSION = '0.0.0-poc'
-
-export function syncHandshake(): ComponentHandshake {
-  return {
-    contract: 'qvac.sync',
-    protocolVersion: 1,
-    capabilities: [
-      'local-profile',
-      'tasks',
-      'task-watches',
-      'passive-replication',
-      'writer-pairing'
-    ],
-    requiredPeerCapabilities: [],
-    buildVersion: BUILD_VERSION
-  }
-}
-
-export function harnessHandshake(): ComponentHandshake {
-  return {
-    contract: 'qvac.harness',
-    protocolVersion: 1,
-    capabilities: ['execution.run', 'state.sync'],
-    requiredPeerCapabilities: [],
-    buildVersion: BUILD_VERSION
-  }
-}
-
-export function expectedSyncHandshake(): ComponentHandshake {
-  return {
-    ...syncHandshake(),
-    requiredPeerCapabilities: [
-      'local-profile',
-      'tasks',
-      'task-watches',
-      'writer-pairing'
-    ]
-  }
-}
-
-export function expectedHarnessHandshake(): ComponentHandshake {
-  return {
-    ...harnessHandshake(),
-    requiredPeerCapabilities: ['execution.run', 'state.sync']
-  }
-}
+import { handshakeFrom } from './handshakes.ts'
+import { createRunStateAdapter } from './run-state.ts'
 
 export async function startSyncComponent(
   options: SyncCoreOptions
@@ -98,11 +50,10 @@ export async function startSyncComponent(
 export async function startHarnessComponent(
   state: AssistantStateEndpoint,
   inference: AssistantInference,
-  onSdkStart: () => void,
   logging?: CreateAssistantOptions['logging']
 ): Promise<AssistantHarnessComponent> {
   const bundles = acquireBundleLease()
-  const stateAdapter = createSyncStateAdapter(state)
+  const stateAdapter = createRunStateAdapter(state)
   try {
     const harnessEntry = await bundles.entry(
       'harness',
@@ -123,18 +74,20 @@ export async function startHarnessComponent(
     ]
     const remote = spawnHarness({ entry: harnessEntry, args })
     let identity = await remote.describeRuntime()
-    let sdkStarted = false
-    const close = closeWithRelease(() => remote.close(), bundles.release)
+    const close = closeWithRelease(async () => {
+      await stateAdapter.close()
+      await remote.close()
+    }, bundles.release)
     const harness: HarnessRuntime = {
       async *run(input) {
-        for await (const event of remote.run(input)) {
-          await stateAdapter.append(input.runId, event)
-          yield event
-        }
-        identity = await remote.describeRuntime()
-        if (!sdkStarted && identity.sdkIdentity) {
-          sdkStarted = true
-          onSdkStart()
+        try {
+          for await (const event of remote.run(input)) {
+            await stateAdapter.append(input.runId, event)
+            yield event
+          }
+          identity = await remote.describeRuntime()
+        } finally {
+          await stateAdapter.finish(input.runId)
         }
       },
       close
@@ -218,21 +171,6 @@ function closeWithRelease(
   }
 }
 
-function handshakeFrom(identity: {
-  readonly contract: string
-  readonly protocolVersion: number
-  readonly capabilities: readonly string[]
-  readonly buildVersion: string
-}): ComponentHandshake {
-  return {
-    contract: identity.contract,
-    protocolVersion: identity.protocolVersion,
-    capabilities: [...identity.capabilities],
-    requiredPeerCapabilities: [],
-    buildVersion: identity.buildVersion
-  }
-}
-
 async function buildBundle(
   directoryPromise: Promise<string>,
   name: string,
@@ -279,70 +217,4 @@ function runStow(args: readonly string[]) {
       )
     })
   })
-}
-
-function createSyncStateAdapter(
-  state: AssistantStateEndpoint
-): HarnessStateAdapter {
-  return {
-    async append(runId, event) {
-      const id = runStateId(runId)
-      const current = await state.getTask({ id })
-      const events = current.task?.result ? parseEvents(current.task.result) : []
-      events.push(event)
-      if (!current.task) {
-        await state.createTask({
-          id,
-          title: `Harness run ${runId}`,
-          input: runId
-        })
-      }
-      await state.updateTask({
-        id,
-        status: eventStatus(event),
-        result: JSON.stringify(events)
-      })
-    },
-    async read(runId) {
-      const result = await state.getTask({ id: runStateId(runId) })
-      return result.task?.result ? parseEvents(result.task.result) : []
-    },
-    async close() {}
-  }
-}
-
-function runStateId(runId: string) {
-  return `@harness/${runId}`
-}
-
-function eventStatus(event: HarnessEvent) {
-  if (event.type === 'error') return 'failed' as const
-  if (event.type === 'aborted') return 'cancelled' as const
-  return 'running' as const
-}
-
-function parseEvents(serialized: string): HarnessEvent[] {
-  const parsed = JSON.parse(serialized)
-  if (!Array.isArray(parsed) || !parsed.every(isHarnessEvent)) {
-    throw new Error('Invalid persisted Harness event stream')
-  }
-  return parsed
-}
-
-function isHarnessEvent(
-  value: object | string | number | boolean | null
-): value is HarnessEvent {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const type = Reflect.get(value, 'type')
-  return (
-    type === 'content' ||
-    type === 'thinking' ||
-    type === 'tool-call' ||
-    type === 'tool-result' ||
-    type === 'metrics' ||
-    type === 'error' ||
-    type === 'aborted'
-  )
 }

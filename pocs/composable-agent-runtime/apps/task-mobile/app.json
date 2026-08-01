@@ -16,14 +16,7 @@
       "package": "com.qvac.poc.composableruntime"
     },
     "plugins": [
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "minSdkVersion": 29
-          }
-        }
-      ]
+      "@qvac/assistant/expo-plugin"
     ]
   }
 }

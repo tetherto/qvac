@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { MobileSyncTask } from './mobile-sync-client.ts'
+import type { TaskControllerTask } from './task-controller.ts'
 import {
   connectionCopy,
   taskFormError,
@@ -49,15 +49,15 @@ describe('mobile task UI helpers', () => {
 })
 
 function task(
-  override: Partial<MobileSyncTask> & Pick<MobileSyncTask, 'id'>
-): MobileSyncTask {
+  override: Partial<TaskControllerTask> & Pick<TaskControllerTask, 'id'>
+): TaskControllerTask {
   return {
     title: 'Task',
     input: 'Prompt',
     status: 'pending',
     createdAt: 1,
     updatedAt: 1,
-    originDeviceId: new Uint8Array([1]),
+    originDeviceId: Buffer.from([1]),
     ...override
   }
 }

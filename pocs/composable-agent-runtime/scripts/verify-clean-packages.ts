@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -30,6 +30,7 @@ const temporary = await mkdtemp(join(tmpdir(), 'qvac-agent-runtime-pack-'))
 
 try {
   const tarballs = await packPackages()
+  await verifyMobileConsumer(tarballs)
   for (const [name, dependencies] of subsets) {
     await verifySubset(name, dependencies, tarballs)
   }
@@ -80,6 +81,78 @@ async function verifySubset(
   )
   await run(['npm', 'install', '--ignore-scripts'], directory)
   await run(['bun', 'run', 'smoke.ts'], directory)
+}
+
+async function verifyMobileConsumer(tarballs: ReadonlyMap<string, string>) {
+  const directory = join(temporary, 'mobile-consumer')
+  await mkdir(directory, { recursive: true })
+  const localPackages = Object.fromEntries(
+    packageNames.map((packageName) => {
+      const tarball = tarballs.get(packageName)
+      if (!tarball) throw new Error(`missing tarball for ${packageName}`)
+      return [packageName, `file:${tarball}`]
+    })
+  )
+  await writeFile(
+    join(directory, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'clean-assistant-mobile-consumer',
+        private: true,
+        version: '0.0.0',
+        main: 'index.ts',
+        dependencies: {
+          ...localPackages,
+          '@qvac/sdk': '^0.15.0',
+          'bare-link': '^3.3.0',
+          expo: '^54.0.33',
+          'expo-build-properties': '~1.0.10',
+          react: '19.1.0',
+          'react-native': '0.81.5',
+          'react-native-bare-kit': '^0.14.0'
+        },
+        overrides: {
+          'bare-process': '4.5.0',
+          'bare-tty': '5.1.1'
+        }
+      },
+      null,
+      2
+    )}\n`
+  )
+  await writeFile(
+    join(directory, 'app.json'),
+    `${JSON.stringify(
+      {
+        expo: {
+          name: 'Clean Assistant Consumer',
+          slug: 'clean-assistant-consumer',
+          android: {
+            package: 'com.qvac.poc.cleanassistant'
+          },
+          plugins: ['@qvac/assistant/expo-plugin']
+        }
+      },
+      null,
+      2
+    )}\n`
+  )
+  await writeFile(
+    join(directory, 'index.ts'),
+    "import { registerRootComponent } from 'expo'\nimport App from './App'\nregisterRootComponent(App)\n"
+  )
+  await writeFile(
+    join(directory, 'App.tsx'),
+    "import { Text } from 'react-native'\nexport default function App() { return <Text>Clean consumer</Text> }\n"
+  )
+  await run(['npm', 'install', '--ignore-scripts'], directory)
+  await run(
+    ['npx', 'expo', 'prebuild', '--clean', '--platform', 'android', '--no-install'],
+    directory
+  )
+  await access(join(directory, 'android'))
+  await access(join(directory, 'qvac', 'assistant-stack.manifest.json'))
+  await access(join(directory, 'qvac', 'assistant-stack.validation.json'))
 }
 
 async function run(command: readonly string[], cwd: string) {

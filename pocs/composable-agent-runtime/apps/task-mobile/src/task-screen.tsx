@@ -6,10 +6,10 @@ import {
   View
 } from 'react-native'
 import type {
-  MobileSyncSnapshot,
-  MobileSyncState,
-  MobileSyncTask
-} from './mobile-sync-client.ts'
+  TaskControllerSnapshot,
+  TaskControllerState,
+  TaskControllerTask
+} from './task-controller.ts'
 import { taskScreenStyles as styles } from './task-screen.styles.ts'
 import {
   connectionCopy,
@@ -18,7 +18,7 @@ import {
 } from './task-ui.ts'
 
 interface ConnectionPanelProps {
-  readonly snapshot: MobileSyncSnapshot
+  readonly snapshot: TaskControllerSnapshot
   readonly pairingUri: string
   readonly pairingError: string | null
   readonly onPairingUriChange: (value: string) => void
@@ -93,7 +93,7 @@ export function ConnectionPanel(props: ConnectionPanelProps) {
 }
 
 interface TaskComposerProps {
-  readonly state: MobileSyncState
+  readonly state: TaskControllerState
   readonly title: string
   readonly prompt: string
   readonly error: string | null
@@ -146,9 +146,11 @@ export function TaskComposer(props: TaskComposerProps) {
 }
 
 export function TaskFeed({
-  tasks
+  tasks,
+  onCancelTask
 }: {
-  readonly tasks: readonly MobileSyncTask[]
+  readonly tasks: readonly TaskControllerTask[]
+  readonly onCancelTask: (taskId: string) => void
 }) {
   return (
     <View style={styles.feed}>
@@ -167,13 +169,21 @@ export function TaskFeed({
           </Text>
         </View>
       ) : (
-        tasks.map((task) => <TaskCard key={task.id} task={task} />)
+        tasks.map((task) => (
+          <TaskCard key={task.id} task={task} onCancelTask={onCancelTask} />
+        ))
       )}
     </View>
   )
 }
 
-function TaskCard({ task }: { readonly task: MobileSyncTask }) {
+function TaskCard({
+  task,
+  onCancelTask
+}: {
+  readonly task: TaskControllerTask
+  readonly onCancelTask: (taskId: string) => void
+}) {
   return (
     <View style={styles.taskCard}>
       <View style={styles.taskHeader}>
@@ -199,6 +209,12 @@ function TaskCard({ task }: { readonly task: MobileSyncTask }) {
             : 'Waiting for Qwen output...'}
         </Text>
       )}
+      {task.status === 'running' ? (
+        <SecondaryButton
+          label="Cancel task"
+          onPress={() => onCancelTask(task.id)}
+        />
+      ) : null}
     </View>
   )
 }
@@ -245,14 +261,14 @@ function PrimaryButton({
   )
 }
 
-function connectionDotStyle(state: MobileSyncState) {
+function connectionDotStyle(state: TaskControllerState) {
   if (state === 'writable') return styles.onlineDot
   if (state === 'error') return styles.failureDot
   if (state === 'offline' || state === 'idle') return styles.offlineDot
   return styles.waitingDot
 }
 
-function taskBadgeStyle(status: MobileSyncTask['status']) {
+function taskBadgeStyle(status: TaskControllerTask['status']) {
   if (status === 'running') return styles.runningTask
   if (status === 'completed') return styles.completedTask
   if (status === 'failed') return styles.failedTask

@@ -2,7 +2,7 @@ import type {
   HarnessEvent,
   HarnessMessage,
   HarnessRuntime
-} from '@qvac/harness'
+} from '@qvac/harness/types'
 import type { LogLevel } from '@qvac/logging'
 import type {
   SyncCoreOptions,

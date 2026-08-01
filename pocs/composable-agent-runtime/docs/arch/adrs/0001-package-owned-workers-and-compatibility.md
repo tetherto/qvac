@@ -171,6 +171,43 @@ Peer dependencies, aliases, or global overrides can force incompatible
 libraries into one version. Singleton enforcement should be limited to
 packages or native artifacts that genuinely share one execution realm.
 
+## Android packaging PoC evidence
+
+Measured on 2026-07-29:
+
+- A clean consumer installed packed Assistant, Sync, Harness, Agents, and
+  Supervisor packages, configured only `@qvac/assistant/expo-plugin`, and
+  completed `expo prebuild --clean --platform android`.
+- The composed plugin built package-owned Sync and Harness Worklets, delegated
+  SDK packaging to the existing SDK Expo plugin, merged native addon
+  inventories, and emitted package, protocol, bundle, and addon metadata.
+- Package-realm validation passed during prebuild. Final-artifact validation
+  passed for an Android debug APK and a staged desktop native distribution.
+- On a physical arm64 Android device, Sync and Harness reached readiness, the
+  app remained writable after restart, cancellation reached the running task,
+  and a real Qwen 3.5 4B completion streamed through Harness to the SDK public
+  client and completed.
+- Device execution exposed one Bare compatibility defect that unit tests had
+  missed: the Harness SDK transport used web `TextEncoder` and `TextDecoder`
+  globals. Replacing newline framing with ASCII-safe JSON bytes removed that
+  runtime dependency. A Unicode round-trip regression test now covers the
+  transport.
+- A clean npm install also exposed native dependency drift in published SDK
+  0.15. Its `bare-process` range permits 4.5.1, which moved to
+  `bare-signals` 5 while SDK still requires `bare-signals` 4.
+  `bare-tty` 5.1.2 creates the same split through `bare-stdio`. The PoC pins
+  `bare-process` 4.5.0 and `bare-tty` 5.1.1 at the application root so
+  validation remains strict. Production packaging needs aligned dependency
+  releases that resolve this without consumer overrides.
+
+This evidence supports the package-owned worker and one-plugin composition
+model, but it does not satisfy all acceptance criteria. The ADR remains
+Proposed because minimum and latest semver matrix coverage, absent-plugin
+initialization coverage, every supported language distribution, release AAB
+validation, the SDK native dependency alignment, and production release-install
+testing remain open. iOS packaging and Android process isolation were explicit
+PoC non-goals.
+
 ## Acceptance criteria
 
 Change this ADR to Accepted only after:

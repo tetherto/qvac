@@ -29,7 +29,6 @@ public class AppDelegate: ExpoAppDelegate {
       launchOptions: launchOptions)
 #endif
 
-    IsolationProbeHost.runIfRequested()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

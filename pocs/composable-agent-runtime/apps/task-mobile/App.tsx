@@ -1,47 +1,46 @@
 import { useEffect, useState } from 'react'
+import { File, Paths } from 'expo-file-system'
 import { SafeAreaView, ScrollView, StyleSheet, Text } from 'react-native'
-import { LifecycleDiagnostics } from './src/lifecycle-diagnostics'
 import type {
-  MobileSyncSnapshot,
-  MobileSyncTask
-} from './src/mobile-sync-client'
+  TaskControllerSnapshot,
+  TaskControllerTask
+} from './src/task-controller'
 import { parsePairingUri } from './src/pairing-uri'
-import { createRunnerBroker } from './src/runner-broker'
+import { createTaskController } from './src/task-controller'
 import {
-  createPersistentMobileSyncClient,
-  hasPersistentMobileSyncSession
-} from './src/sync-client'
+  mobileSyncMarkerUri,
+  mobileSyncStoragePath
+} from './src/storage-path'
 import {
   ConnectionPanel,
   TaskComposer,
   TaskFeed
 } from './src/task-screen'
-import { taskFormError, visibleTasks } from './src/task-ui'
+import { taskFormError } from './src/task-ui'
 
 export default function App() {
-  const [, setRevision] = useState(0)
-  const [broker] = useState(() =>
-    createRunnerBroker(() => setRevision((revision) => revision + 1))
-  )
-  const [syncSnapshot, setSyncSnapshot] = useState<MobileSyncSnapshot>({
+  const [syncSnapshot, setSyncSnapshot] = useState<TaskControllerSnapshot>({
     state: 'idle',
     error: null
   })
   const [syncClient] = useState(() =>
-    createPersistentMobileSyncClient(setSyncSnapshot)
+    createTaskController({
+      storagePath: mobileSyncStoragePath(Paths.document.uri),
+      hasPersistentPairing: () =>
+        new File(mobileSyncMarkerUri(Paths.document.uri)).exists,
+      onState: setSyncSnapshot
+    })
   )
   const [pairingUri, setPairingUri] = useState('')
   const [pairingError, setPairingError] = useState<string | null>(null)
-  const [tasks, setTasks] = useState<readonly MobileSyncTask[]>([])
+  const [tasks, setTasks] = useState<readonly TaskControllerTask[]>([])
   const [title, setTitle] = useState('')
   const [prompt, setPrompt] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    if (hasPersistentMobileSyncSession()) {
-      void syncClient.reconnect().catch(() => {})
-    }
+    void syncClient.reconnect().catch(() => {})
     return () => {
       void syncClient.disconnect()
     }
@@ -50,7 +49,7 @@ export default function App() {
   useEffect(() => {
     if (syncSnapshot.state !== 'writable') return
     return syncClient.watchTasks((nextTasks) => {
-      setTasks(visibleTasks(nextTasks))
+      setTasks(nextTasks)
     })
   }, [syncClient, syncSnapshot.state])
 
@@ -60,6 +59,8 @@ export default function App() {
       parsePairingUri(candidate)
       setPairingError(null)
       await syncClient.connect(candidate)
+      const marker = new File(mobileSyncMarkerUri(Paths.document.uri))
+      marker.write('paired')
     } catch (error) {
       setPairingError(errorMessage(error))
     }
@@ -97,7 +98,7 @@ export default function App() {
         input: prompt.trim()
       })
       setTasks((current) =>
-        visibleTasks([created, ...current.filter((task) => task.id !== created.id)])
+        [created, ...current.filter((task) => task.id !== created.id)]
       )
       setTitle('')
       setPrompt('')
@@ -105,6 +106,14 @@ export default function App() {
       setCreateError(errorMessage(error))
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function cancelTask(taskId: string) {
+    try {
+      await syncClient.cancelTask(taskId, 'Cancelled from the mobile app')
+    } catch (error) {
+      setCreateError(errorMessage(error))
     }
   }
 
@@ -136,8 +145,10 @@ export default function App() {
           onPromptChange={setPrompt}
           onCreate={() => void createTask()}
         />
-        <TaskFeed tasks={tasks} />
-        <LifecycleDiagnostics broker={broker} snapshots={broker.snapshots()} />
+        <TaskFeed
+          tasks={tasks}
+          onCancelTask={(taskId) => void cancelTask(taskId)}
+        />
       </ScrollView>
     </SafeAreaView>
   )

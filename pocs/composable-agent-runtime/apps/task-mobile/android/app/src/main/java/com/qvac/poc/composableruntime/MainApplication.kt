@@ -24,7 +24,7 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
-              add(QvacRuntimeBridgePackage())
+              // add(MyReactNativePackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
@@ -40,8 +40,6 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    if (isRuntimeProcess()) return
-
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
@@ -53,14 +51,6 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    if (isRuntimeProcess()) return
     ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
-  }
-
-  private fun isRuntimeProcess() =
-      Application.getProcessName().endsWith(RUNTIME_PROCESS_SUFFIX)
-
-  companion object {
-    private const val RUNTIME_PROCESS_SUFFIX = ":qvac_sdk"
   }
 }

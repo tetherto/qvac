@@ -12,6 +12,9 @@
   "include": [
     "index.ts",
     "sidecar-entry.ts",
+    "mobile-entry.ts",
+    "react-native-launcher.ts",
+    "react-native-stow.ts",
     "*.d.ts",
     "lib/**/*.ts",
     "schema/**/*.ts",
