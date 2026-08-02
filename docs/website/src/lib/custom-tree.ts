@@ -296,7 +296,6 @@ export const customTree: Node[] = [
       { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
       { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
       { name: 'tts-ggml', url: '/addons/tts-ggml', type: 'page' },
-      { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
       { name: 'diffusion-cpp', url: '/addons/diffusion-cpp', type: 'page' },
     ],
   },

@@ -55,7 +55,7 @@ function pairedAggregated () {
 // Aggregated shape with only CPU rows (non-GPU host / single-backend addon).
 function cpuOnlyAggregated () {
   return {
-    addon: 'ocr-onnx',
+    addon: 'ocr-ggml',
     generated_at: new Date().toISOString(),
     run_numbers: [1],
     devices: {
