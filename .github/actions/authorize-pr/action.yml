@@ -1,11 +1,13 @@
 name: Authorize PR
 description: >
   Security gate for pull_request_target workflows. Same-repo PRs are trusted.
-  External fork PRs require a SHA-bound qvac/fork-verified commit status (recorded
-  by fork-approval after fork-ci environment approval) unless the actor has
-  write-or-higher permission. Optional label input adds a pod-specific label gate
-  (e.g. safe-to-test). Draft PRs are blocked. Run only after fork-approval and
-  checkout authorize-pr from the default branch — never from the PR merge ref.
+  Every external fork PR requires a SHA-bound qvac/fork-verified commit status
+  (recorded by fork-approval after fork-ci environment approval) — write-or-higher
+  permission on the actor does NOT exempt a fork, because the actor who triggers a
+  synchronize is not necessarily the author of the commit being run. Optional label
+  input adds a pod-specific label gate (e.g. safe-to-test) on top of that approval.
+  Draft PRs are blocked. Run only after fork-approval and checkout authorize-pr
+  from the default branch — never from the PR merge ref.
 inputs:
   label:
     description: "When set, external fork PRs must carry this label in addition to SHA-bound fork-ci approval."

@@ -49,9 +49,6 @@ jobs:
     steps:
       - name: Check tests status
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPO: ${{ github.repository }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
         run: |
           failed=0

@@ -82,7 +82,7 @@ jobs:
             exit 0
           fi
 
-          echo "::notice::JS tests require 'run-desktop-addon-tests'; external forks also require a SHA-bound fork-ci approval (`qvac/fork-verified`) on the current commit."
+          echo "::notice::JS tests require 'run-desktop-addon-tests'; external forks also require a SHA-bound fork-ci approval (\`qvac/fork-verified\`) on the current commit. Approving fork-ci does not restart this run — approve first, then apply the label, or re-run this workflow if the label is already present. See docs/ci/LABELS.md."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
   run-js-tests:
