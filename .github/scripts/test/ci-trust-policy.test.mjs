@@ -905,21 +905,106 @@ function eachJob(source) {
   return jobs
 }
 
-function forkCiTargets() {
+/**
+ * The `on:` block only. Selecting on a character window after `on:` (or on a
+ * bare substring match) also catches prose in comments — several workflows
+ * mention `pull_request_target` only to say they deliberately avoid it.
+ */
+function onBlock(source) {
+  const match = source.match(/^on:[ \t]*$/m)
+  if (!match) {
+    const inline = source.match(/^on:.*$/m)
+    return inline ? inline[0] : ''
+  }
+  const start = source.indexOf(match[0]) + match[0].length
+  const lines = source.slice(start).split('\n')
+  const block = []
+  for (const line of lines) {
+    if (/^\S/.test(line)) break
+    block.push(line)
+  }
+  return block.join('\n')
+}
+
+function pullRequestTargetWorkflows() {
   const dir = join(root, '.github/workflows')
   return readdirSync(dir)
     .filter((n) => /\.ya?ml$/.test(n))
     .map((n) => `.github/workflows/${n}`)
-    .filter((p) => {
-      const src = read(p)
-      const onIdx = src.search(/^on:\s*$/m)
-      const head = onIdx === -1 ? '' : src.slice(onIdx, onIdx + 1200)
-      return (
-        /pull_request_target:/.test(head) &&
-        src.includes('authorize.outputs.allowed')
-      )
-    })
+    .filter((p) => /^\s{2}pull_request_target:/m.test(onBlock(read(p))))
 }
+
+/**
+ * `pull_request_target` workflows that legitimately carry no fork-ci gate,
+ * each with the reason it cannot execute fork-controlled code. Adding an entry
+ * is a trust decision: it must be true that a fork PR cannot get code of its
+ * own to run here, no matter what it puts in the branch.
+ *
+ * Anything not listed here must gate on fork-approval — see the exhaustiveness
+ * test below, which is what forces a new workflow to be classified rather than
+ * silently escaping every assertion in this section.
+ */
+const FORK_CI_EXEMPT = new Map([
+  [
+    '.github/workflows/check-approvals.yml',
+    'No checkout: runs the published @qvac/ci against PR metadata over the API. ' +
+      'Also a required status check on main/release — gating it on fork-ci would ' +
+      'deadlock fork PRs, since approval cannot complete until the check reports.',
+  ],
+  [
+    '.github/workflows/on-pr-community-label.yml',
+    'No checkout: actions/github-script applies a label via the API only.',
+  ],
+  [
+    '.github/workflows/pr-validation-sdk-pod.yml',
+    'Checks out the base branch (no ref: on a pull_request_target checkout) and ' +
+      'runs a base-branch validator over PR title/body passed via env. No secrets.',
+  ],
+])
+
+function forkCiTargets() {
+  return pullRequestTargetWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p))
+}
+
+test('fork-ci: every pull_request_target workflow is either gated or explicitly exempt', () => {
+  const unclassified = pullRequestTargetWorkflows().filter((p) => {
+    if (FORK_CI_EXEMPT.has(p)) return false
+    return !read(p).includes('reusable-fork-approval.yml')
+  })
+  assert.deepEqual(
+    unclassified,
+    [],
+    'new pull_request_target workflow with no fork-ci gate: add `needs: fork-approval` ' +
+      'or, if it genuinely cannot run fork code, add it to FORK_CI_EXEMPT with a reason',
+  )
+})
+
+test('fork-ci: exempt workflows never check out fork-controlled code', () => {
+  const offenders = []
+  for (const path of FORK_CI_EXEMPT.keys()) {
+    const source = read(path)
+    // The exemptions rest on these workflows never materialising the fork's
+    // tree. An explicit head ref would break that and re-open pwn-request.
+    if (/ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/.test(source)) {
+      offenders.push(`${path}: checks out PR head while exempt from fork-ci`)
+    }
+  }
+  assert.deepEqual(offenders, [])
+})
+
+test('fork-ci: every exempt workflow still exists and carries a reason', () => {
+  const known = new Set(pullRequestTargetWorkflows())
+  const stale = []
+  for (const [path, reason] of FORK_CI_EXEMPT) {
+    if (!known.has(path)) {
+      stale.push(`${path}: exempt but no longer a pull_request_target workflow — drop the entry`)
+    }
+    if (!reason || reason.length < 20) {
+      stale.push(`${path}: exemption needs a substantive reason`)
+    }
+  }
+  assert.deepEqual(stale, [])
+})
 
 test('fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job', () => {
   const targets = forkCiTargets()
