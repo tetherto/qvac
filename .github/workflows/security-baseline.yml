@@ -108,8 +108,19 @@ jobs:
           # so a PR that deletes a workflow would otherwise lint nothing and pass.
           git diff --name-only --diff-filter=ACMRT "$BASE_SHA...$HEAD_SHA" \
             > "$RUNNER_TEMP/changed-all.txt"
-          rg --no-filename '^\.github/(workflows/|actions/).*\.ya?ml$' \
-            "$RUNNER_TEMP/changed-all.txt" > "$RUNNER_TEMP/changed-workflows.txt" || true
+          # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and
+          # a blanket `|| true` turned that `command not found` into count=0 —
+          # the gate reported success while linting nothing. grep exits 1 for
+          # "no matches" (fine) and >1 for a real failure (must not be silent).
+          set +e
+          grep -E '^\.github/(workflows|actions)/.*\.ya?ml$' \
+            "$RUNNER_TEMP/changed-all.txt" > "$RUNNER_TEMP/changed-workflows.txt"
+          filter_status=$?
+          set -e
+          if [ "$filter_status" -gt 1 ]; then
+            echo "::error title=Could not determine changed workflow files::grep exited ${filter_status}"
+            exit 1
+          fi
           count=$(wc -l < "$RUNNER_TEMP/changed-workflows.txt" | tr -d ' ')
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           echo "actionlint scope: ${count} changed workflow/action file(s)"
