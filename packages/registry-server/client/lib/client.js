@@ -15,6 +15,8 @@ const fs = require('#fs')
 
 const DEFAULT_DOWNLOAD_MAX_RETRIES = 3
 const RETRIABLE_DOWNLOAD_CODES = ['REQUEST_TIMEOUT']
+const INFLIGHT_DRAIN_TIMEOUT_MS = 5000
+const INFLIGHT_DRAIN_POLL_MS = 10
 
 // While the app is backgrounded the swarm is suspended; a retry must wait for
 // resume rather than burn its (small) retry budget timing out against a dead
@@ -515,10 +517,11 @@ class QVACRegistryClient extends ReadyResource {
   }
 
   async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
-    // Stop replication before clearing to prevent blocks from being refetched.
+    // Hypercore can commit in-flight responses after a range is destroyed.
     if (rangeDownload) rangeDownload.destroy()
 
     if (core && blockStart !== undefined) {
+      if (rangeDownload) await this._waitForInflightBlocks(core)
       await this._clearBlobBlocks(core, blockStart, blockEnd)
     }
     if (blobs) {
@@ -537,6 +540,28 @@ class QVACRegistryClient extends ReadyResource {
     }
 
     this.logger.debug('Blob resources released')
+  }
+
+  async _waitForInflightBlocks(core) {
+    if (!Array.isArray(core.peers)) return
+
+    const timeoutMs = this._inflightDrainTimeoutMs ?? INFLIGHT_DRAIN_TIMEOUT_MS
+    const pollMs = this._inflightDrainPollMs ?? INFLIGHT_DRAIN_POLL_MS
+    const deadline = Date.now() + timeoutMs
+    while (core.peers.some((peer) => peer.inflight > 0 || peer.dataProcessing > 0)) {
+      if (Date.now() >= deadline) {
+        this.logger.warn('Timed out waiting for in-flight blob blocks before clearing', {
+          timeoutMs,
+          peers: core.peers.map((peer, index) => ({
+            peer: index,
+            inflight: peer.inflight,
+            dataProcessing: peer.dataProcessing
+          }))
+        })
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
+    }
   }
 
   async _clearBlobBlocks(core, start, end) {
