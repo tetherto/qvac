@@ -105,7 +105,7 @@ declare namespace TranslationNmtcpp {
          *
          * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`)
          * and is the primary key. `useGPU` is the camelCase alias matching the
-         * `ocr-onnx` convention (caps acronym). Both forms are accepted; if
+         * sibling-addon convention (caps acronym). Both forms are accepted; if
          * both are set, `use_gpu` takes precedence.
          * @default false
          */
@@ -118,7 +118,7 @@ declare namespace TranslationNmtcpp {
          * An explicit "opencl" bypasses the build-time USE_OPENCL guard.
          *
          * `gpu_backend` mirrors the C-struct field and is the primary key.
-         * `gpuBackend` is the camelCase alias matching the `ocr-onnx` convention.
+         * `gpuBackend` is the camelCase alias matching the sibling-addon convention.
          * Both forms are accepted; if both are set, `gpu_backend` takes precedence.
          */
         gpu_backend?: string;
