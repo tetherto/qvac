@@ -307,7 +307,7 @@ Before reporting done:
 
 - Script entry: `packages/sdk/package.json` → `update-models` / `check-models`
 - Implementation: `packages/sdk/models/update-models/`
-- Knowledge: `packages/ocr-onnx/.agent/knowledge/registry-models.md` (Step 4)
+- Knowledge: `packages/ocr-ggml/.agent/knowledge/registry-models.md` (Step 4)
 - Model constants docs: `.cursor/rules/sdk/docs/model-constants-and-sources.mdc`
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - PR create: `.cursor/skills/qv-sdk-pr-create/SKILL.md`

@@ -182,6 +182,7 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: read
+      packages: read
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
   qvac-merge-guard:

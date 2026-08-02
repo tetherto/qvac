@@ -20,6 +20,9 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   'tts-ggml': 'speech',
   'onnx-tts': 'speech',
   ocr: 'ocr',
+  'ggml-ocr': 'ocr',
+  // Legacy model type from the ONNX era — route to the OCR endpoint so the
+  // SDK's migration error surfaces instead of a category-less 400.
   'onnx-ocr': 'ocr',
   diffusion: 'image',
   'sdcpp-generation': 'image'

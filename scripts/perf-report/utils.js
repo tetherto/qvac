@@ -1124,7 +1124,7 @@ function generateHtmlReport (aggregated, opts) {
   if (image_paths) {
     const fs = require('fs')
     const path = require('path')
-    const fallbackDir = path.resolve(__dirname, '..', '..', 'packages', 'ocr-onnx', 'test', 'images')
+    const fallbackDir = path.resolve(__dirname, '..', '..', 'packages', 'ocr-ggml', 'test', 'images')
     for (const [testKey, imgPath] of Object.entries(image_paths)) {
       try {
         let resolved = path.resolve(imgPath)
