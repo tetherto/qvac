@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "4dbe15d8c3a181d691289739c9531a09d46eae27",
+    "baseline": "55a95cf257f295bd621647adff1454cacfd0aa76",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -16,13 +16,6 @@
         "vulkan-loader",
         "spirv-headers"
       ]
-    },
-    {
-      "kind": "git",
-      "reference": "QVAC-21598/parler-tts-vulkan-pixel9",
-      "baseline": "341484547d2a305f3e42368fce440e8c8852990f",
-      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
-      "packages": ["tts-cpp"]
     }
   ]
 }
