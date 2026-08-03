@@ -77,6 +77,46 @@ the coincidence disappears the moment either test is moved to another group, so
 entries must stand on their own. Expect some duplication between entries; that
 is the point.
 
+### Models that come from a shared helper (`prestage-set`)
+
+Several tests never name their models: `image-mmproj-gpu.test.js` gets its VLM
+pair from `setupMultimodalInference()`'s default in `_image-common.js`, and the
+`*-image-*-perf.test.js` files get theirs from `_vlm-image-perf.js`. Scraping
+every `.gguf` out of a helper is not an option — a helper defines several model
+tables and each test loads one of them, so that would push gigabytes of unused
+weights to every device (the mistake the retired `generate-model-manifest.js`
+made).
+
+Instead the helper **labels** each model table, and the test declares **which
+label** it consumes:
+
+```js
+// _image-common.js
+// prestage-set: multimodal-default
+const MULTIMODAL_MODEL_CONFIG = { llmModel: { modelName: 'SmolVLM2-…' }, … }
+```
+
+```js
+// image-mmproj-gpu.test.js
+// prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
+```
+
+The validator reads the file names **out of the helper**, so changing the
+helper's model changes the expected set and mismatches the manifest entry — a
+hard failure instead of a silent on-device download. The test never restates a
+file name, which is what keeps it from going stale alongside the manifest.
+
+Consequences worth knowing:
+
+- A grouped test that names no model **and** declares no set is an error. An
+  entry nothing can check is the blind spot, not a pass.
+- A `prestage-uses` naming an undefined set is an error (catches typos), as is a
+  label that resolves to no known models (catches a label drifting away from the
+  table it was meant to sit above).
+- A label no test declares is an error — an unconsumed set checks nothing.
+- Both markers require a reason after the `—`; for `prestage-uses` that reason is
+  the only place the indirection is written down.
+
 When a model is referenced but must deliberately *not* be pre-staged
 (desktop-only, opt-in behind an env flag, too large for a phone), say so at the
 declaration:

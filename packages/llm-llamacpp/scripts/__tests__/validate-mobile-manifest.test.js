@@ -8,6 +8,8 @@ const path = require('node:path')
 const {
   modelNamesInSource,
   prestageIgnores,
+  prestageSetDefs,
+  prestageUses,
   repinUrls,
   toFunctionName,
   validate
@@ -18,9 +20,10 @@ const mobileManifest = require('../../test/mobile/model-manifest.json')
 const testGroups = require('../../test/mobile/test-groups.json')
 const integrationManifest = require('../../test/integration/models.manifest.json')
 
+// Every .js, not just *.test.js — pre-stage sets are defined in the helpers.
 function realSources() {
   const sources = {}
-  for (const file of fs.readdirSync(integrationDir).filter((f) => f.endsWith('.test.js'))) {
+  for (const file of fs.readdirSync(integrationDir).filter((f) => f.endsWith('.js'))) {
     sources[file] = fs.readFileSync(path.join(integrationDir, file), 'utf8')
   }
   return sources
@@ -30,6 +33,38 @@ const PINNED = 'https://huggingface.co/o/r/resolve/01234567890123456789012345678
 const OTHER_PINNED =
   'https://huggingface.co/o/r/resolve/0123456789012345678901234567890123456789/other.gguf'
 const stubManifest = { models: { 'm.gguf': { urls: [PINNED] } } }
+const twoModelManifest = {
+  models: { 'm.gguf': { urls: [PINNED] }, 'other.gguf': { urls: [OTHER_PINNED] } }
+}
+
+// A helper that defines two model tables, the shape of _image-common.js.
+function helper(smallModel = 'm.gguf', bigModel = 'other.gguf') {
+  return [
+    '// prestage-set: small',
+    `const SMALL = { llmModel: { modelName: '${smallModel}' } }`,
+    '// prestage-set: big',
+    `const BIG = { llmModel: { modelName: '${bigModel}' } }`
+  ].join('\n')
+}
+
+// grammar uses `small`, reasoning uses `big`; both entries match. Neither test
+// names a model in its own source — everything comes from the helper.
+function helperBacked(overrides = {}) {
+  return {
+    mobileManifest: {
+      runGrammarTest: [{ name: 'm.gguf', url: PINNED }],
+      runReasoningTest: [{ name: 'other.gguf', url: OTHER_PINNED }]
+    },
+    testGroups: { android: { shardA: ['runGrammarTest', 'runReasoningTest'] } },
+    integrationManifest: twoModelManifest,
+    sources: {
+      '_helper.js': helper(),
+      'grammar.test.js': "// prestage-uses: small — helper default\nrequire('./_helper.js')",
+      'reasoning.test.js': "// prestage-uses: big — passed explicitly\nrequire('./_helper.js')"
+    },
+    ...overrides
+  }
+}
 
 test('the committed mobile manifest is a valid pre-stage map', () => {
   const errors = validate({
@@ -96,7 +131,7 @@ test('a model the test names but its own entry omits is reported', () => {
     sources: { 'grammar.test.js': "const MODEL = { modelName: 'm.gguf' }" }
   })
   assert.ok(
-    errors.some((e) => /references m\.gguf but its own manifest entry does not stage it/.test(e))
+    errors.some((e) => /runGrammarTest does not stage m\.gguf, which it names directly/.test(e))
   )
 })
 
@@ -111,16 +146,14 @@ test('a sibling test in the same shard does NOT satisfy coverage', () => {
       runReasoningTest: [{ name: 'm.gguf', url: PINNED }]
     },
     testGroups: { android: { shardA: ['runGrammarTest', 'runReasoningTest'] } },
-    integrationManifest: {
-      models: { 'm.gguf': { urls: [PINNED] }, 'other.gguf': { urls: [OTHER_PINNED] } }
-    },
+    integrationManifest: twoModelManifest,
     sources: {
       'grammar.test.js': "const MODEL = { modelName: 'm.gguf' }",
       'reasoning.test.js': "const MODEL = { modelName: 'm.gguf' }"
     }
   })
   assert.equal(errors.length, 1)
-  assert.match(errors[0], /^runGrammarTest references m\.gguf but its own manifest entry/)
+  assert.match(errors[0], /^runGrammarTest does not stage m\.gguf/)
 })
 
 test('splitting a shard cannot regress coverage that already passed', () => {
@@ -150,7 +183,95 @@ test('splitting a shard cannot regress coverage that already passed', () => {
   assert.deepEqual(split, [])
 })
 
-test('a prestage-ignore marker suppresses the shard-coverage error', () => {
+test('models reached through a labelled helper set count as covered', () => {
+  assert.deepEqual(validate(helperBacked()), [])
+})
+
+test('changing the helper model without the manifest is reported', () => {
+  // gianni-cor's review: the helper swaps its model, the entry is not updated,
+  // and Device Farm pre-stages the old file while the phone fetches the new
+  // one. The names are read out of the helper, so this cannot stay green.
+  const sources = helperBacked().sources
+  const errors = validate(
+    helperBacked({ sources: { ...sources, '_helper.js': helper('other.gguf') } })
+  )
+  assert.equal(errors.length, 1)
+  assert.match(
+    errors[0],
+    /^runGrammarTest does not stage other\.gguf, which it reaches through pre-stage set "small"/
+  )
+})
+
+test('a set the test does not declare is not demanded of it', () => {
+  // The over-staging failure mode: reading every model out of a shared helper
+  // would push the `big` pair onto every device that runs grammar.
+  const errors = validate(helperBacked())
+  assert.ok(!errors.some((e) => /other\.gguf/.test(e)))
+})
+
+test('an entry anchored to nothing in the code is reported', () => {
+  // The blind spot itself: no model names in the test, no set declared, but an
+  // entry exists — so no rule could check it.
+  const errors = validate({
+    mobileManifest: { runGrammarTest: [{ name: 'm.gguf', url: PINNED }] },
+    testGroups: { android: { shardA: ['runGrammarTest'] } },
+    integrationManifest: stubManifest,
+    sources: { 'grammar.test.js': "require('./_helper.js')" }
+  })
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /runGrammarTest stages 1 model\(s\) but names none of them/)
+})
+
+test('a prestage-uses naming an unknown set is reported', () => {
+  const errors = validate({
+    mobileManifest: { runGrammarTest: [{ name: 'm.gguf', url: PINNED }] },
+    testGroups: { android: { shardA: ['runGrammarTest'] } },
+    integrationManifest: stubManifest,
+    sources: { 'grammar.test.js': '// prestage-uses: nope — typo\n' }
+  })
+  assert.ok(errors.some((e) => /names an unknown pre-stage set/.test(e)))
+  // ...and the entry is treated as unanchored, not as covered.
+  assert.ok(errors.some((e) => /but names none of them/.test(e)))
+})
+
+test('a set label that resolves to no models is reported', () => {
+  const errors = validate({
+    mobileManifest: { runGrammarTest: [{ name: 'm.gguf', url: PINNED }] },
+    testGroups: { android: { shardA: ['runGrammarTest'] } },
+    integrationManifest: stubManifest,
+    sources: {
+      '_helper.js': '// prestage-set: small\nconst OTHER = { a: 1 }',
+      'grammar.test.js': '// prestage-uses: small — detached label\n'
+    }
+  })
+  assert.ok(errors.some((e) => /pre-stage set "small" resolves to no known models/.test(e)))
+})
+
+test('a set defined twice is reported', () => {
+  const errors = validate({
+    mobileManifest: {},
+    testGroups: {},
+    integrationManifest: stubManifest,
+    sources: {
+      '_a.js': "// prestage-set: small\nconst A = { modelName: 'm.gguf' }",
+      '_b.js': "// prestage-set: small\nconst B = { modelName: 'm.gguf' }",
+      'grammar.test.js': '// prestage-uses: small — x\n'
+    }
+  })
+  assert.ok(errors.some((e) => /pre-stage set "small" is defined twice/.test(e)))
+})
+
+test('a set no test declares is reported', () => {
+  const errors = validate({
+    mobileManifest: {},
+    testGroups: {},
+    integrationManifest: stubManifest,
+    sources: { '_helper.js': "// prestage-set: small\nconst A = { modelName: 'm.gguf' }" }
+  })
+  assert.ok(errors.some((e) => /"small" is defined but no test declares it/.test(e)))
+})
+
+test('a prestage-ignore marker suppresses the coverage error', () => {
   const src = "// prestage-ignore: m.gguf — desktop only\nconst M = { modelName: 'm.gguf' }"
   const errors = validate({
     mobileManifest: { runGrammarTest: [{ name: 'm.gguf', url: PINNED }] },
@@ -169,6 +290,18 @@ test('a prestage-ignore marker without a reason is rejected', () => {
     sources: { 'grammar.test.js': '// prestage-ignore: m.gguf' }
   })
   assert.ok(errors.some((e) => /needs a reason/.test(e)))
+})
+
+test('a prestage-uses marker without a reason is rejected', () => {
+  const errors = validate(
+    helperBacked({
+      sources: {
+        ...helperBacked().sources,
+        'grammar.test.js': '// prestage-uses: small\n'
+      }
+    })
+  )
+  assert.ok(errors.some((e) => /prestage-uses for "small" needs a reason/.test(e)))
 })
 
 test('a stale manifest key with no test file is reported', () => {
@@ -194,6 +327,21 @@ test('prestageIgnores collects markers with reasons', () => {
   const ignored = prestageIgnores('// prestage-ignore: big.gguf — 27 GB', 'runX', errors)
   assert.deepEqual([...ignored], ['big.gguf'])
   assert.deepEqual(errors, [])
+})
+
+test('prestageUses collects markers with reasons', () => {
+  const errors = []
+  const uses = prestageUses('// prestage-uses: small — helper default', 'runX', errors)
+  assert.deepEqual([...uses], ['small'])
+  assert.deepEqual(errors, [])
+})
+
+test('prestageSetDefs scopes a label to the literal beneath it', () => {
+  const errors = []
+  const sets = prestageSetDefs({ '_helper.js': helper() }, errors)
+  assert.deepEqual(errors, [])
+  assert.deepEqual([...modelNamesInSource(sets.get('small').block)], ['m.gguf'])
+  assert.deepEqual([...modelNamesInSource(sets.get('big').block)], ['other.gguf'])
 })
 
 test('repinUrls rewrites to the integration manifest url', () => {
