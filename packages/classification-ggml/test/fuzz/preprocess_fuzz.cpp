@@ -15,8 +15,8 @@ using qvac_errors::StatusError;
 
 // Property: preprocessToTensor() must never crash or trip a sanitizer on
 // arbitrary input bytes. Malformed input is rejected with StatusError — the
-// expected, non-buggy outcome — so we swallow only that error and let unexpected
-// exceptions or memory-safety failures abort the run. Passing
+// expected, non-buggy outcome — so we swallow only that error and let
+// unexpected exceptions or memory-safety failures abort the run. Passing
 // declaredWidth/Height/Channels = 0 routes through magic-byte detection + the
 // stb_image decode path, i.e. the real untrusted-input surface.
 //
