@@ -301,7 +301,7 @@ Before reporting done:
 - Does not sync `bare-sdk` deps (only relevant if `package.json` deps change —
   not part of a pure model regen).
 - Does not modify naming / companion / shard codegen.
-- Does not auto-apply `verified` on fork PRs.
+- Does not approve the `fork-ci` environment on fork PRs.
 
 ## References
 
