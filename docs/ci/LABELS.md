@@ -17,8 +17,22 @@ Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`for
 | **Internal PRs** | Same-repo PRs skip the environment gate (empty environment) and run without an approval prompt. |
 | **Implementation** | `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) from each privileged workflow. The `authorize` / `resolve-config` job runs **after** `fork-approval`, checks out `authorize-pr` from the **default branch only**, and `authorize-pr` reads the `qvac/fork-verified` status on the current head SHA as belt-and-suspenders. |
 | **Ops verification** | Run `node .github/scripts/verify-fork-ci-environment.mjs` (requires `gh` auth with environments read) to confirm required reviewers are configured on the `fork-ci` environment. |
+| **Bulk approval** | A fork PR spreads across several runs, each with its own prompt. `node scripts/ci/approve-fork-ci.mjs <pr>` approves them in one go — see [Approving several runs at once](#approving-several-runs-at-once). |
 
 There is **no self-service path** for external contributors — a merge/release team member must approve the workflow run.
+
+### Approving several runs at once
+
+GitHub scopes environment approval to a single workflow run, so a fork PR touching several packages puts a separate prompt on each of its runs — 7 is typical here. They all encode the same per-commit decision, so walking them by hand costs minutes and adds nothing.
+
+```bash
+node scripts/ci/approve-fork-ci.mjs <pr-number>          # list what is pending
+node scripts/ci/approve-fork-ci.mjs <pr-number> --sha <commit> --yes
+```
+
+The first form is a dry run: it prints every pending `fork-ci` deployment and hands you the pinned command to run next. `--yes` requires `--sha` naming the commit you reviewed, and refuses if the fork has pushed since — the head SHA is resolved when the command runs, so without that pin a commit that landed mid-review would be approved sight-unseen. It approves all runs or none, so a PR can never end up with some privileged jobs run and others silently skipped.
+
+This only replaces the clicking. GitHub still enforces required-reviewer membership and `prevent_self_review` server-side, so the script can do nothing you could not do by hand in the Actions UI.
 
 ### Ordering matters: approve `fork-ci` **before** applying stage labels
 
