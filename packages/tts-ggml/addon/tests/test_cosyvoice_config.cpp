@@ -28,6 +28,7 @@
 using qvac::ttsggml::cosyvoice::CosyvoiceConfig;
 using qvac::ttsggml::cosyvoice::CosyvoiceModel;
 using qvac::ttsggml::cosyvoice::resampleBatchOutput;
+using qvac::ttsggml::cosyvoice::resolveEmittedAudio;
 using qvac::ttsggml::cosyvoice::streamingRequested;
 using qvac_errors::StatusError;
 
@@ -203,6 +204,42 @@ TEST(CosyvoiceStreaming, StreamingRequestedContract) {
   CosyvoiceConfig cfgZeroChunks;
   cfgZeroChunks.streamChunkTokens = 0;
   EXPECT_FALSE(streamingRequested(cfgZeroChunks, true));
+}
+
+// The stats are read off whatever actually reached the caller. Only the
+// streaming+enhancer path diverges from the engine's SynthesisResult, and
+// getting it wrong understates totalSamples or reports the wrong rate without
+// failing anything, so pin all four combinations.
+TEST(CosyvoiceStreaming, EmittedAudioFollowsWhatTheCallerReceived) {
+  constexpr std::size_t kStreamed = 96000;
+  constexpr std::size_t kBatch = 48000;
+  constexpr int kFinalRate = 16000;
+  constexpr int kBatchRate = 24000;
+
+  const auto batchPlain = resolveEmittedAudio(
+      false, false, kFinalRate, kStreamed, kBatch, kBatchRate);
+  EXPECT_EQ(batchPlain.samples, kBatch);
+  EXPECT_EQ(batchPlain.sampleRate, kBatchRate);
+
+  // Batch enhancement rewrites SynthesisResult in place, so the batch rate is
+  // already the emitted one and the enhancer flag changes nothing.
+  const auto batchEnhanced =
+      resolveEmittedAudio(false, true, kFinalRate, kStreamed, kBatch, 48000);
+  EXPECT_EQ(batchEnhanced.samples, kBatch);
+  EXPECT_EQ(batchEnhanced.sampleRate, 48000);
+
+  const auto streamPlain = resolveEmittedAudio(
+      true, false, kFinalRate, kStreamed, kBatch, kBatchRate);
+  EXPECT_EQ(streamPlain.samples, kStreamed);
+  EXPECT_EQ(streamPlain.sampleRate, kBatchRate)
+      << "unenhanced streaming emits at the engine's native rate";
+
+  const auto streamEnhanced = resolveEmittedAudio(
+      true, true, kFinalRate, kStreamed, kBatch, kBatchRate);
+  EXPECT_EQ(streamEnhanced.samples, kStreamed);
+  EXPECT_EQ(streamEnhanced.sampleRate, kFinalRate)
+      << "the enhanced stream is emitted at the enhancer's final rate, not the "
+         "native rate the SynthesisResult still reports";
 }
 
 TEST(CosyvoiceValidate, ConfigDefaultsAreCpuFriendly) {

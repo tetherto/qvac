@@ -403,6 +403,14 @@ bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback) {
   return cfg.streamChunkTokens.value_or(0) > 0 && hasChunkCallback;
 }
 
+EmittedAudio resolveEmittedAudio(
+    bool streaming, bool enhanced, int streamFinalRate,
+    std::size_t streamedSamples, std::size_t batchSamples, int batchRate) {
+  if (!streaming)
+    return {batchSamples, batchRate};
+  return {streamedSamples, enhanced ? streamFinalRate : batchRate};
+}
+
 void CosyvoiceModel::load() {
   std::lock_guard lk(engineMu_);
   loadLocked();
@@ -528,14 +536,15 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
   }
   const auto t1 = std::chrono::steady_clock::now();
 
-  // On the streaming+enhancer path chunks are emitted at streamFinalRate while
-  // result.sample_rate stays native; elsewhere result.sample_rate is already
-  // the emitted rate (batch enhance/resample updates it in place).
-  const int emittedRate =
-      (streaming && enhancer) ? rates.streamFinalRate : result.sample_rate;
-  const std::size_t emittedSamples =
-      streaming ? streamedSamples : result.pcm.size();
-  recordSynthesisStats(emittedSamples, emittedRate, result.duration_s, t0, t1);
+  const EmittedAudio emitted = resolveEmittedAudio(
+      streaming,
+      static_cast<bool>(enhancer),
+      rates.streamFinalRate,
+      streamedSamples,
+      result.pcm.size(),
+      result.sample_rate);
+  recordSynthesisStats(
+      emitted.samples, emitted.sampleRate, result.duration_s, t0, t1);
 
   if (streaming) {
     return {Output{}, true}; // chunks already emitted via onChunk
