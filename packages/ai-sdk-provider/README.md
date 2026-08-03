@@ -384,7 +384,7 @@ type EndpointCategory =
   | 'image'
 ```
 
-The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`onnx-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
+The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`ggml-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
 
 ```bash
 npm run update-models     # writes src/models/constants.ts + models/history/<sha>.txt

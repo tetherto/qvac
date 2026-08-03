@@ -1,6 +1,6 @@
 # inference-addon-cpp
 
-**Version:** 1.1.0  
+**Version:** 1.3.3  
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
@@ -64,8 +64,8 @@ This is a header-only library. Include it in your addon's `vcpkg.json`:
 {
   "dependencies": [
     {
-      "name": "inference-addon-cpp",
-      "version>=": "1.1.0"
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.3.3"
     }
   ]
 }
@@ -168,8 +168,10 @@ addon.activate(handle)
 // Run a job
 addon.runJob(handle, { type: 'text', input: 'Hello world' })
 
-// Cancel current job (returns a Promise)
-await addon.cancelJob(handle)
+// Cancel (returns a Promise that resolves once the cancelled jobs are gone).
+// No id cancels every job live at the moment of the call; pass an id to
+// cancel just that one on the multi-job path.
+await addon.cancel(handle)
 
 // Cleanup
 addon.destroyInstance(handle)
@@ -262,7 +264,7 @@ Apps may suspend during processing:
 
 ```javascript
 process.on('suspend', async () => {
-  await addon.cancelJob(handle)
+  await addon.cancel(handle)
 })
 ```
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.3] - 2026-07-31
+
+### Fixed
+- `JsAsyncTask` now releases its work captures on the JavaScript loop before settling its Promise. This lets an awaiting unload release large native models before the next load begins, while preserving the existing environment-teardown safety.
+- Calling `cancel()` with no live jobs now uses a capture-free asynchronous task. The cancellation remains asynchronous without unnecessarily retaining `AddonCpp` and the model it owns.
+
 ## [1.3.2] - 2026-07-29
 
 ### Fixed

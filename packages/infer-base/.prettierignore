@@ -5,6 +5,9 @@ prebuilds
 coverage
 package-lock.json
 **/*.auto.cjs
+index.js
+src/**/*.js
+src/**/*.d.ts
 test/unit/all.js
 test/integration/all.js
 test/results

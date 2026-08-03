@@ -26,7 +26,7 @@ This must return **only** `pr-gate-merge.yml`. If it returns more than one file,
 
 ```mermaid
 flowchart LR
-    LG[label-gate] --> QMG[qvac-merge-guard]
+    FA[fork-approval] --> QMG[qvac-merge-guard]
     AUTH[authorize] --> QMG
     AUTH --> CHANGES[changes<br/>dorny/paths-filter, per-package]
     CHANGES --> SC[sanity-checks<br/>matrix]
@@ -42,7 +42,7 @@ The final job in `pr-gate-merge.yml`:
 
 ```yaml
 qvac-merge-guard:
-  needs: [authorize, label-gate, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
+  needs: [authorize, fork-approval, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
   if: |
     always() && !cancelled() &&
     (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -56,7 +56,7 @@ qvac-merge-guard:
     general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}
 ```
 
-`public-pr.yml`'s single job (`validate-pr`) fails the check if the `verified` label is missing on an external fork PR (see [`LABELS.md`](LABELS.md)), or if any of the boolean inputs it receives is `false`. Its check name — `qvac-merge-guard / validate-pr` — is the *only* thing the ruleset requires. It also already accepts two boolean inputs `pr-gate-merge.yml` doesn't use yet: `integration-tests-status` and `build-with-model-status` — see the caller-workflow pattern below for how to use the spare `integration-tests-status` slot instead of inventing a new one.
+`public-pr.yml`'s single job (`validate-pr`) fails the check if any of the boolean inputs it receives is `false` (sanity checks, builds, integration tests, etc.). External fork secret-bearing jobs are gated upstream by the `fork-ci` environment (`fork-approval` job); see [`LABELS.md`](LABELS.md). Its check name — `qvac-merge-guard / validate-pr` — is the *only* thing the ruleset requires. It also already accepts two boolean inputs `pr-gate-merge.yml` doesn't use yet: `integration-tests-status` and `build-with-model-status` — see the caller-workflow pattern below for how to use the spare `integration-tests-status` slot instead of inventing a new one.
 
 ### Gotcha: `sdk-pod-checks` reports under two check names
 
@@ -82,7 +82,7 @@ general-checks-status: ${{ (needs.sdk-pod-checks.result == 'success' || needs.sd
 
 ### 2. A repeated, growing family of similarly-shaped jobs — build a caller workflow
 
-**Don't reach for this with only one target.** If today there's exactly one thing to gate on (e.g. only `ocr-onnx` needs an integration-test job right now), that's pattern 1 or pattern 3, not this one — wire that single job in directly, no caller workflow. A caller workflow's entire value is dispatching to *multiple* targets from one place; with one target it's pure indirection for zero benefit (an extra file, an extra `uses:` hop, nothing gained). Build the caller **later**, when a second target actually shows up — refactoring one direct job into a one-job caller at that point is a small, mechanical change, not a reason to build it preemptively.
+**Don't reach for this with only one target.** If today there's exactly one thing to gate on (e.g. only `ocr-ggml` needs an integration-test job right now), that's pattern 1 or pattern 3, not this one — wire that single job in directly, no caller workflow. A caller workflow's entire value is dispatching to *multiple* targets from one place; with one target it's pure indirection for zero benefit (an extra file, an extra `uses:` hop, nothing gained). Build the caller **later**, when a second target actually shows up — refactoring one direct job into a one-job caller at that point is a small, mechanical change, not a reason to build it preemptively.
 
 Use this pattern only once you're actually adding **more than one or two** near-identical jobs that only differ by which thing they target — one per addon package, one per platform, one per service, one per whatever. The naming pattern doesn't matter (`integration-*`, `lint-*`, `deploy-*`, anything) — what matters is "this is a family that will keep growing as new targets get added," not "this looks like it structurally resembles `prebuilds-caller.yml`."
 
@@ -93,7 +93,7 @@ Use this pattern only once you're actually adding **more than one or two** near-
 
 If your new family's job body is uniform across targets, default to a matrix and skip the caller workflow entirely. Only reach for the caller-with-individual-jobs shape when the targets' jobs genuinely diverge enough that a single matrix body would hurt readability.
 
-**Don't** wire each member of the family individually into `qvac-merge-guard`'s `needs:` array one at a time — that's how the array becomes an unreadable, ever-growing list, and it's the same anti-pattern as the 15 legacy `on-pr-<pkg>.yml` workflows the org is trying to move away from (see `packages/ocr-onnx/.agent/knowledge/ci-validation.md`). Whichever shape (matrix or caller) you land on, it's still exactly one job in `qvac-merge-guard`'s `needs:`.
+**Don't** wire each member of the family individually into `qvac-merge-guard`'s `needs:` array one at a time — that's how the array becomes an unreadable, ever-growing list, and it's the same anti-pattern as the 15 legacy `on-pr-<pkg>.yml` workflows the org is trying to move away from (see `packages/ocr-ggml/.agent/knowledge/ci-validation.md`). Whichever shape (matrix or caller) you land on, it's still exactly one job in `qvac-merge-guard`'s `needs:`.
 
 Instead, follow the exact precedent already in this repo: **`prebuilds-caller.yml`**. It's a reusable `workflow_call` workflow with one job per target, each gated on a membership check against a JSON list of what changed/applies:
 
@@ -114,9 +114,9 @@ on:
         type: string
 
 jobs:
-  ocr-onnx-build:
-    if: contains(fromJSON(inputs.changed-packages), 'ocr-onnx')
-    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
+  ocr-ggml-build:
+    if: contains(fromJSON(inputs.changed-packages), 'ocr-ggml')
+    uses: ./.github/workflows/prebuilds-ocr-ggml.yml
     secrets: inherit
     with:
       repository: ${{ inputs.repository }}
@@ -132,8 +132,8 @@ To wire any such family in the same shape (worked example below uses a hypotheti
 2. Add exactly one job to `pr-gate-merge.yml`:
    ```yaml
    integration-tests-caller:
-     needs: [authorize, label-gate, changes]
-     if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+     needs: [authorize, fork-approval, changes]
+     if: needs.authorize.outputs.allowed == 'true'
      permissions:
        contents: read
      uses: ./.github/workflows/integration-tests-caller.yml
@@ -168,6 +168,6 @@ Never give a new job its own top-level `pull_request_target` trigger with no `ne
 
 ## See also
 
-- [`docs/ci/LABELS.md`](LABELS.md) — the `verified` label this check also enforces.
-- [`docs/ci/TEAMS.md`](TEAMS.md) — who can apply `verified`.
+- [`docs/ci/LABELS.md`](LABELS.md) — fork-ci environment and retired `verified` label.
+- [`docs/ci/TEAMS.md`](TEAMS.md) — who can approve the `fork-ci` environment.
 - `qv-merge-guard-wire` skill (`.cursor/skills/qv-merge-guard-wire/`) — this doc's content as an actionable Claude/Cursor skill.

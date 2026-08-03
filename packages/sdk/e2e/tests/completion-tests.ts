@@ -99,17 +99,17 @@ export const completionMultiTurn = createCompletionTest(
   'completion-multi-turn',
   {
     history: [
-      { role: 'user', content: 'Remember this number: 42.' },
-      { role: 'assistant', content: "I'll remember that the number is 42." },
+      { role: 'user', content: 'Name a tropical fruit using one lowercase word.' },
+      { role: 'assistant', content: 'papaya' },
       {
         role: 'user',
-        content: 'What number did I tell you to remember? Answer with just the number.'
+        content: 'Repeat your previous answer exactly. Output only that lowercase word.'
       }
     ],
     stream: false,
     generationParams: DETERMINISTIC
   },
-  { validation: 'contains-all', contains: ['42'] },
+  { validation: 'contains-all', contains: ['papaya'] },
   { suites: ['smoke'] }
 )
 

@@ -1,6 +1,6 @@
 # PR Validation and Post-Merge Staging Sync
 #
-# On PR: validates models.prod.json and runs tests (with 'verified' label).
+# On PR: validates models.prod.json and runs tests (fork-ci gates external forks).
 # On merge to main: syncs models to staging registry and runs smoke test.
 
 name: PR Validation and Staging Sync (Registry-server)
@@ -42,52 +42,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
-  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
-  # merge/release-team approval before ANY privileged job runs; a new push spawns
-  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
-  # to an empty environment and run with no gate. Standalone gate job so it composes
-  # with jobs that call reusable workflows (uses:) or already declare an environment.
-  # Runs ALONGSIDE the SHA-bound label-gate during migration.
   fork-approval:
-    name: Fork approval gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
-    steps:
-      - name: Approved
-        run: echo "fork PR authorised to run privileged jobs"
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -95,14 +71,12 @@ jobs:
           github-token: ${{ github.token }}
 
   detect-changes:
-    needs: [authorize, label-gate, fork-approval]
+    needs: [authorize, fork-approval]
     runs-on: ubuntu-latest
     # Fork PR code (checkout + git diff, and downstream npm install / tests)
     # only runs once BOTH gates pass: authorize-pr (draft / same-repo / fork
-    # synchronize safety) AND label-gate (verified applied by a merge/release
-    # team member). Gating on authorize alone let an external org member run
-    # unreviewed fork code without verified — closed here.
-    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    # synchronize safety) AND fork-approval (fork-ci environment approval).
+    if: needs.authorize.outputs.allowed == 'true'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
@@ -176,9 +150,8 @@ jobs:
           fi
 
   validate-json:
-    needs: [authorize, label-gate, detect-changes, fork-approval]
+    needs: [authorize, detect-changes, fork-approval]
     if: |
-      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.models_changed == 'true'
     runs-on: ubuntu-latest
@@ -203,9 +176,8 @@ jobs:
         run: node scripts/validate-models-json.js --file=./data/models.prod.json
 
   test:
-    needs: [authorize, label-gate, detect-changes, fork-approval]
+    needs: [authorize, detect-changes, fork-approval]
     if: |
-      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.other_changed == 'true'
     runs-on: ubuntu-latest
@@ -255,9 +227,8 @@ jobs:
   # uses bare indices so they never appear in job names either. Fails loudly if
   # unset so a misconfiguration blocks the deploy rather than silently skipping.
   resolve-deploy-targets:
-    needs: [authorize, detect-changes, label-gate, fork-approval]
+    needs: [authorize, detect-changes, fork-approval]
     if: |-
-      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -294,10 +265,9 @@ jobs:
       - detect-changes
       - validate-json
       - test
-      - label-gate
       - resolve-deploy-targets
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') && (needs.validate-json.result == 'success' || needs.validate-json.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.resolve-deploy-targets.result == 'success')
+      (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') && (needs.validate-json.result == 'success' || needs.validate-json.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.resolve-deploy-targets.result == 'success')
     runs-on: qvac-ubuntu2204-x64
     timeout-minutes: 15
     environment: release
@@ -365,10 +335,9 @@ jobs:
       - detect-changes
       - validate-json
       - test
-      - label-gate
       - deploy-staging
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.deploy-staging.result == 'success' && (github.event.inputs.deploy_mode == '' || github.event.inputs.deploy_mode == 'live'))
+      (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.deploy-staging.result == 'success' && (github.event.inputs.deploy_mode == '' || github.event.inputs.deploy_mode == 'live'))
     runs-on: ubuntu-latest
     environment: release
     env:
@@ -420,7 +389,6 @@ jobs:
     needs:
       - fork-approval
       - sync-staging
-      - label-gate
     runs-on: ubuntu-latest
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
@@ -457,4 +425,3 @@ jobs:
         shell: bash
         run: node scripts/smoke-test-client.js --file=./data/models.prod.json
         timeout-minutes: 5
-    if: needs.label-gate.outputs.authorised == 'true'
