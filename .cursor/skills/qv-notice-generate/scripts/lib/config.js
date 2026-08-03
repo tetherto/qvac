@@ -41,7 +41,10 @@ const ENGINE_MAP = {
   '@qvac/transcription-whispercpp': 'asr-ggml',
   '@qvac/asr-ggml': 'asr-ggml',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
-  '@qvac/ocr-onnx': 'ocr-onnx',
+  // The retired `@qvac/ocr-onnx` entry carried the OCR model attributions;
+  // with that package removed the registry's live GGUF OCR models must land
+  // in packages/ocr-ggml/NOTICE instead (picked up on the next regen).
+  '@qvac/ocr-ggml': 'ocr-ggml',
   '@qvac/diffusion-cpp': 'diffusion-cpp'
 }
 
@@ -105,9 +108,6 @@ const PYTHON_DEP_PATHS = {
   'asr-ggml': [
     'benchmarks/ci/requirements-conversion.txt',
     'benchmarks/client/pyproject.toml'
-  ],
-  'ocr-onnx': [
-    'benchmarks/quality_eval/requirements.txt'
   ],
   'onnx-vad': [
     'benchmarks/client/pyproject.toml'
