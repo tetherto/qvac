@@ -8202,7 +8202,7 @@
     "quantization": "iq2_xxs",
     "params": "35B",
     "licenseId": "Apache-2.0",
-    "tags": ["generation", "instruct", "moe", "kat-coder", "coding"],
+    "tags": ["generation", "instruct", "moe", "kat-coder"],
     "notes": "",
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
   }
