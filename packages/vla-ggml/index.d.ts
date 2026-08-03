@@ -4,6 +4,7 @@ import errorModule = require("./lib/error");
 interface VlaConfig {
     verbosity?: number;
     backendsDir?: string;
+    embodiment?: VlaModel.VlaEmbodimentSelector;
     [key: string]: unknown;
 }
 interface VlaModelState {
@@ -38,6 +39,8 @@ declare class VlaModel {
     private _load;
     get hparams(): VlaModel.VlaHparams | null;
     get backendName(): string | null;
+    setEmbodiment(embodiment: VlaModel.VlaEmbodimentSelector): Promise<VlaModel.VlaHparams>;
+    private _setEmbodimentInternal;
     run(input: VlaModel.VlaRunInput): Promise<VlaModel.QvacResponse>;
     private _runInternal;
     pause(): Promise<void>;
@@ -94,7 +97,46 @@ declare namespace VlaModel {
          * `imageInputMode === 'patches'`. Optional for back-compat.
          */
         imagePatchElems?: number;
+        /**
+         * GR00T only: the embodiment tag resolved at load, so a caller can confirm
+         * which embodiment a default selection picked. Absent for SmolVLA / π₀.₅,
+         * and for a GR00T GGUF that names no embodiment.
+         *
+         * Present is not the same as switchable: a single-embodiment GR00T GGUF
+         * reports its baked tag here and still rejects every {@link
+         * VlaModel.setEmbodiment} call, so do not use this field as a capability
+         * check.
+         */
+        selectedEmbodimentTag?: string;
+        /**
+         * The resolved embodiment's numeric id (the checkpoint's `cat_id`) — the
+         * value to pass back to select the same embodiment by id. Absent when no
+         * embodiment was resolved (SmolVLA / π₀.₅).
+         *
+         * Many tags map to one `cat_id`, so selecting by id reports that id's
+         * canonical tag (the first in the GGUF's tag map), which may differ from the
+         * alias a tag-based selection was made with. The id is the stable identity.
+         */
+        selectedEmbodimentCatId?: number;
     }
+    /**
+     * How an embodiment is named when selecting one: a tag string, its numeric
+     * `cat_id` in `0..31`, or an object carrying either plus a camera-count
+     * override. `cat_id` indexes GR00T's CategorySpecificLinear bank, whose
+     * category dim the architecture fixes at 32, so ids outside that range are
+     * rejected rather than resolved.
+     *
+     * `numCameras` overrides the count stored in the GGUF for that embodiment. It
+     * is required to select a row whose count was unknown at conversion time
+     * (`num_cameras` is a data-config property, not a checkpoint tensor), and it
+     * also covers a rig whose view count differs from the stored one. Passing both
+     * `tag` and `catId` is an error.
+     */
+    type VlaEmbodimentSelector = string | number | {
+        tag?: string;
+        catId?: number;
+        numCameras?: number;
+    };
     interface VlaRunInput {
         images: Float32Array[];
         imgWidth?: number;
