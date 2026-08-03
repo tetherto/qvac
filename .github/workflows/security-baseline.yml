@@ -63,7 +63,11 @@ jobs:
   policy-tests:
     name: policy-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The job's own work is ~10s; the budget exists almost entirely to absorb
+    # checkout latency, which is not ours to control — the same --depth=1 fetch
+    # of this repo has been observed at both 7s and 97s. A cap this close to
+    # external variance buys nothing and turns a slow morning into a red main.
+    timeout-minutes: 10
     permissions:
       contents: read
       # Reads the changed-file list from the pull request files API.
