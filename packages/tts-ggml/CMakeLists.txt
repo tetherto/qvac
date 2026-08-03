@@ -67,49 +67,15 @@ endif()
 # `tts_cpp::{chatterbox,supertonic}::EngineOptions::backends_dir`
 # field (calls `ggml_backend_load_all_from_path()` against it) once
 # the JS / C++ wiring lands. The C++ define below tells the addon
-# what relative subdir to scan under that root.
+# what relative subdir the addon-local backend loader scans under that root.
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message(STATUS "Building tts-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-# Collect every dynamically-loadable ggml backend the ggml-speech port
-# produced ($CURRENT_PACKAGES_DIR/lib/libqvac-speech-ggml-*.so on
-# Android; nothing on Apple/static-only platforms). cmake-bare's
-# `add_bare_module(... EXPORTS INSTALL TARGET <tgt>)` bundles each
-# IMPORTED `ggml::<backend>` target into the per-arch prebuilds folder
-# next to the `.bare` module. Mirrors qvac/packages/transcription-
-# parakeet/CMakeLists.txt's BACKEND_DL_LIBS path.
-#
-# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android with
-# GGML_BACKEND_DL=ON + GGML_CPU_STATIC=ON, so only the CPU backend
-# ships as a static archive AND as an IMPORTED `ggml::ggml-cpu` target;
-# Vulkan / OpenCL get built as MODULE .so files at
-# `${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-{vulkan,opencl}.so`
-# but ggml-config.cmake.in deliberately leaves them out of
-# `GGML_AVAILABLE_BACKENDS`' IMPORTED set (the loader is expected to
-# find them via `ggml_backend_load_all_from_path()` at runtime). We
-# pick those up with an explicit `install(FILES ...)` below so the
-# runtime scan against BACKENDS_SUBDIR actually finds them next to
-# the .bare module.
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-# Loose-file pickup for MODULE backends that aren't surfaced as
-# IMPORTED targets by find_package(ggml). On Android this is what
-# actually delivers Vulkan + OpenCL into the prebuilds folder; we
-# do the same on Linux as a fallback for any future hybrid build
-# there. Glob runs at configure time -- the .so files come from
-# ggml-speech's `file(INSTALL ...)` step in its portfile, which has
-# already completed by the time vcpkg hands control back to us. Apple
-# / Windows static-only configs return an empty list and skip the
-# install rule below.
+# Collect every dynamically-loadable backend produced by ggml-speech. The glob
+# runs after vcpkg has installed the CPU variants and GPU modules into lib/.
+# Apple and Windows static-only builds return no files.
 set(BACKEND_DL_LOOSE_SOS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
   if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
@@ -126,21 +92,28 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endif()
 endif()
 
-add_bare_module(tts-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(tts-ggml)
 
 # Stage every loose MODULE backend (Vulkan / OpenCL on Android, ...)
 # into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
-# branch uses for IMPORTED targets (see cmake-bare.cmake's
-# `DESTINATION ${host}/${name}` -- e.g. `android-arm64/qvac__tts-ggml`).
-# Keeping the destinations identical means
-# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
-# on the C++ side discovers IMPORTED-target CPU and loose-file
-# GPU backends with a single scan.
+# branch uses. Give every backend a TTS-specific basename so Android APK
+# packaging cannot overwrite it with asr-ggml's independently built backend.
+# The addon-local BackendLoader loads these exact filenames; the ggml-speech
+# port's compiled-in `qvac-speech-` discovery prefix is intentionally bypassed.
 if(BACKEND_DL_LOOSE_SOS)
-  install(
-    FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
-  )
+  foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
+    get_filename_component(_backend_name "${_lib}" NAME)
+    string(REPLACE
+      "libqvac-speech-ggml-"
+      "libqvac-tts-ggml-"
+      _isolated_backend_name
+      "${_backend_name}")
+    install(
+      FILES "${_lib}"
+      DESTINATION ${bare_target_value}/${module_name}
+      RENAME "${_isolated_backend_name}"
+    )
+  endforeach()
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -152,6 +125,7 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/chatterbox/ChatterboxModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parler/ParlerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/supertonic/SupertonicModel.cpp
@@ -323,6 +297,7 @@ if(BUILD_TESTING)
       addon/tests/test_output_resampler.cpp
       addon/tests/test_pcm_conversion.cpp
       addon/tests/AddonCppTest.cpp
+      addon/src/model-interface/BackendLoader.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
       addon/src/model-interface/parler/ParlerModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp
@@ -340,6 +315,8 @@ if(BUILD_TESTING)
       GTest::gmock_main
       tts-cpp::tts-cpp
   )
+  target_compile_definitions(tts_ggml_tests PRIVATE
+    BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
   if(ENABLE_COVERAGE)
     # LLVM source-based coverage (clang).  Same flag set parakeet uses.
     target_compile_options(tts_ggml_tests PRIVATE

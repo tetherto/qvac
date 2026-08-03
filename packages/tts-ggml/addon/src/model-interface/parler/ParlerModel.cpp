@@ -16,6 +16,7 @@
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendLoader.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/OutputResampler.hpp"
 
@@ -48,6 +49,9 @@ tts_cpp::parler::DescriptionSpec toSpec(const ParlerDescriptionFields& d) {
 }
 
 tts_cpp::parler::EngineOptions toEngineOptions(const ParlerConfig& cfg) {
+#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir);
+#endif
   tts_cpp::parler::EngineOptions opts;
   opts.model_gguf_path = cfg.modelGgufPath;
   opts.default_description = ParlerModel::resolveDescription(cfg.desc);

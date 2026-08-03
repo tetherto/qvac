@@ -17,6 +17,7 @@
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendLoader.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
@@ -44,6 +45,9 @@ using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
 tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) {
+#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir);
+#endif
   tts_cpp::supertonic::EngineOptions opts;
   opts.model_gguf_path = cfg.modelGgufPath;
   opts.voice           = cfg.voice;

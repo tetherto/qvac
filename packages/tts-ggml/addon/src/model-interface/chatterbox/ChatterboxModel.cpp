@@ -18,6 +18,7 @@
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendLoader.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
@@ -67,6 +68,9 @@ constexpr int DEFAULT_N_CTX = 4096;
 constexpr const char* DEFAULT_KV_CACHE_TYPE = "f16";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
+#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir);
+#endif
   tts_cpp::chatterbox::EngineOptions opts;
   opts.t3_gguf_path    = cfg.t3ModelPath;
   opts.s3gen_gguf_path = cfg.s3genModelPath;

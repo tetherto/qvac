@@ -21,6 +21,7 @@
 #include "ggml.h"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/BackendLoader.hpp"
 
 namespace qvac::asrggml::parakeet {
 
@@ -477,6 +478,9 @@ void ParakeetModel::load() {
 
   modelLoadMs_ = measureMs([&] {
     const fs::path ggufPath = resolveGgufPath();
+#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+    qvac::asrggml::backend::ensureLoaded(cfg_.backendsDir);
+#endif
     const pkt::EngineOptions eopts = buildEngineOptions(cfg_, ggufPath);
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine_ = std::make_unique<pkt::Engine>(eopts);

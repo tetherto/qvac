@@ -67,45 +67,17 @@ endif()
 # `android-arm64/qvac__asr-ggml`) and installs the .so / .dll / .dylib
 # backend files there. The runtime resolves the directory via the same
 # shape on the JS side (`path.join(__dirname, 'prebuilds')`), then the
-# engine-config backendsDir is forwarded to the model layer which calls
-# `ggml_backend_load_all_from_path()` against it. The C++ define below
-# tells the addon what relative subdir to scan under that root.
+# engine-config backendsDir is forwarded to the addon-local backend loader. The
+# C++ define below tells it what relative subdir to scan under that root.
 bare_target(bare_target_value)
 bare_module_target("." _unused_target NAME module_name VERSION _unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message(STATUS "Building asr-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-# Collect every dynamically-loadable ggml backend that the `ggml-speech`
-# port produced, as IMPORTED targets. Both whisper-cpp and parakeet-cpp
-# resolve the single ggml-speech install tree, so one staging pass serves
-# both engines. Two branches:
-#   1. IMPORTED targets that `find_package(ggml)` already surfaced
-#      (CPU on Android, all backends on Linux desktop).
-#   2. Loose `libqvac-speech-ggml-*.so` MODULE files that ggml-config
-#      deliberately omits from GGML_AVAILABLE_BACKENDS' IMPORTED set
-#      (Vulkan + OpenCL on Android — the loader picks them up at
-#      runtime via `ggml_backend_load_all_from_path()`).
-# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android with
-# GGML_BACKEND_DL=ON + GGML_CPU_STATIC=ON, so only the CPU backend
-# ships as a static archive AND as an IMPORTED ggml::ggml-cpu target;
-# the GPU MODULE .so files are staged by the loose-glob below so the
-# engine can select Vulkan/OpenCL per ggml's Adreno-tier policy when
-# useGPU=true; ggml falls back to CPU on devices it can't drive.
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-# Loose-file pickup for MODULE backends that aren't surfaced as
-# IMPORTED targets by find_package(ggml). Glob runs at configure time —
-# the .so files come from ggml-speech's `file(INSTALL ...)` step in its
-# portfile, which has already completed by the time vcpkg hands control
-# back to us. Apple / Windows static-only configs return an empty list
-# and skip the install rule.
+# Collect every dynamically-loadable backend produced by ggml-speech. Both
+# engines resolve one install tree, so one renamed staging pass serves Whisper
+# and Parakeet. The glob runs after vcpkg has installed the CPU variants and
+# GPU modules into lib/. Apple and Windows static-only builds return no files.
 set(BACKEND_DL_LOOSE_SOS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
   if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
@@ -122,18 +94,28 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endif()
 endif()
 
-add_bare_module(asr-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(asr-ggml)
 
 # Stage every loose MODULE backend selected above into the same
 # per-host/per-module subdir cmake-bare's INSTALL TARGET branch uses for
-# IMPORTED targets — keeping destinations identical so
-# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
-# discovers IMPORTED-target CPU + loose-file GPU backends in one scan.
+# IMPORTED targets. Give every backend an ASR-specific basename so Android APK
+# packaging cannot overwrite it with tts-ggml's independently built backend.
+# The addon-local BackendLoader loads these exact filenames; the ggml-speech
+# port's compiled-in `qvac-speech-` discovery prefix is intentionally bypassed.
 if(BACKEND_DL_LOOSE_SOS)
-  install(
-    FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
-  )
+  foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
+    get_filename_component(_backend_name "${_lib}" NAME)
+    string(REPLACE
+      "libqvac-speech-ggml-"
+      "libqvac-asr-ggml-"
+      _isolated_backend_name
+      "${_backend_name}")
+    install(
+      FILES "${_lib}"
+      DESTINATION ${bare_target_value}/${module_name}
+      RENAME "${_isolated_backend_name}"
+    )
+  endforeach()
 endif()
 
 target_sources(
@@ -141,6 +123,7 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/StreamingProcessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ParakeetStreamingProcessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper/WhisperConfig.cpp
@@ -170,9 +153,9 @@ target_link_libraries(
 target_compile_definitions(${asr-ggml} PUBLIC JS_LOGGER)
 # Same value the JS side appends to the host-provided `backendsDir`
 # default (`path.join(__dirname, 'prebuilds', <subdir>)`). The consumers
-# of this define are the `#ifdef BACKENDS_SUBDIR` blocks in
-# WhisperModel.cpp / ParakeetModel.cpp — the define must be present on
-# EVERY target that compiles those translation units (this module target
+# of this define are the `#ifdef BACKENDS_SUBDIR` blocks in BackendLoader.cpp
+# and the engine option builders. The define must be present on EVERY target
+# that compiles those translation units (this module target
 # and asr_ggml_tests below), or the #ifdef silently compiles out and the
 # engine scans the prebuilds root instead of
 # `<backendsDir>/<bare-target>/<module-name>` ("no CPU device registered"
@@ -394,6 +377,7 @@ if(BUILD_TESTING)
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_config_and_audio.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/ParakeetAddonCppTest.cpp
     # engine cores recompiled for coverage instrumentation (tts-ggml pattern)
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/StreamingProcessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ParakeetStreamingProcessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper/WhisperConfig.cpp
@@ -420,7 +404,7 @@ if(BUILD_TESTING)
     ggml::ggml
   )
 
-  # asr_ggml_tests recompiles WhisperModel.cpp / ParakeetModel.cpp, whose
+  # asr_ggml_tests recompiles BackendLoader.cpp and the model sources, whose
   # `#ifdef BACKENDS_SUBDIR` blocks must see the same define as the module
   # target — see the note above the module-target define.
   target_compile_definitions(asr_ggml_tests PRIVATE
