@@ -35,52 +35,28 @@ env:
   NAME_SUFFIX: "-mono"
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
-  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
-  # merge/release-team approval before ANY privileged job runs; a new push spawns
-  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
-  # to an empty environment and run with no gate. Standalone gate job so it composes
-  # with jobs that call reusable workflows (uses:) or already declare an environment.
-  # Runs ALONGSIDE the SHA-bound label-gate during migration.
   fork-approval:
-    name: Fork approval gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
-    steps:
-      - name: Approved
-        run: echo "fork PR authorised to run privileged jobs"
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -129,10 +105,9 @@ jobs:
     needs:
       - fork-approval
       - authorize
-      - label-gate
     runs-on: ubuntu-latest
     environment: release
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: (needs.authorize.outputs.allowed == 'true')
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
@@ -249,9 +224,8 @@ jobs:
       - authorize
       - detect-changes
       - publish-logic
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -288,9 +262,8 @@ jobs:
       - detect-changes
       - publish-logic
       - release-merge-guard-schema
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped'))
+      (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -366,9 +339,8 @@ jobs:
       - fork-approval
       - authorize
       - detect-changes
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true')
+      (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true')
     permissions:
       contents: read
       packages: read
@@ -440,9 +412,8 @@ jobs:
       - detect-changes
       - publish-logic
       - lint-and-test
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -482,9 +453,8 @@ jobs:
       - publish-logic
       - lint-and-test
       - release-merge-guard-client
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped'))
+      (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:

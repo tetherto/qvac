@@ -10,7 +10,6 @@ on:
         type: choice
         required: true
         options:
-          - ocr-onnx
           - nmtcpp
           - llamacpp-llm
           - vlm
@@ -21,8 +20,6 @@ on:
         type: choice
         required: true
         options:
-          - "Integration Tests (OCR)"
-          - "Mobile Integration Tests (OCR)"
           - "Integration Tests (NMTCPP)"
           - "Integration Tests (LLM)"
           - "Mobile Integration Tests (LLM)"
@@ -88,24 +85,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p reports
-
-          echo "=== OCR (Desktop) ==="
-          node scripts/perf-report/aggregate.js \
-            --addon ocr-onnx \
-            --workflow "Integration Tests (OCR)" \
-            --runs 6 \
-            --output reports/ocr-onnx-performance.md \
-            --output-json reports/ocr-onnx-performance.json \
-            --output-html reports/ocr-onnx-performance.html || true
-
-          echo "=== OCR (Mobile) ==="
-          node scripts/perf-report/aggregate.js \
-            --addon ocr-onnx \
-            --workflow "Mobile Integration Tests (OCR)" \
-            --runs 6 \
-            --output reports/ocr-onnx-mobile-performance.md \
-            --output-json reports/ocr-onnx-mobile-performance.json \
-            --output-html reports/ocr-onnx-mobile-performance.html || true
 
           echo "=== Translation ==="
           node scripts/perf-report/aggregate.js \
