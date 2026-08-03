@@ -19,6 +19,11 @@ using qvac_errors::StatusError;
 // exceptions or memory-safety failures abort the run. Passing
 // declaredWidth/Height/Channels = 0 routes through magic-byte detection + the
 // stb_image decode path, i.e. the real untrusted-input surface.
+//
+// Before triaging an OOM or std::bad_alloc reproducer: a header-legal
+// 16384x16384 image is permitted and peaks near 1.5 GiB, above libFuzzer's
+// default RSS limit. See "Resource exhaustion reads as a crash" in
+// docs/architecture/ADDON-FUZZING.md.
 void PreprocessDecodedNeverCrashes(const std::vector<uint8_t>& bytes) {
   try {
     (void)preprocessToTensor(

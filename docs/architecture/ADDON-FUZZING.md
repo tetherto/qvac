@@ -259,7 +259,8 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
   one side is an ODR violation.
 - Continuous-fuzzing mode is Linux/clang-first. Fuzzing is treated as a
   **Linux-only** CI concern, consistent with the existing `if(NOT WIN32)` ASan
-  gating.
+  gating. Instrumented Windows fuzz builds are not supported: prior attempts
+  exposed toolchain issues, and resolving them is outside the current scope.
 - Fuzz binaries that link `@qvac/fabric` inherit the limited-ASan boundary
   (`detect_leaks=0`), so leak findings require either not linking fabric
   (preferred, see Finding 3) or a dedicated ASan-instrumented-fabric fuzz job.
@@ -605,6 +606,31 @@ addons at once.
   Decide per family whether those are in-scope (guard at the QVAC boundary) or
   reported upstream, so the corpus does not fill with known-upstream crashes.
   Default posture: fuzz the **QVAC wrapper**, triage upstream hits separately.
+- **Resource exhaustion reads as a crash.** A fuzz target's property function
+  swallows the addon's "invalid input" error (`StatusError`) and lets everything
+  else fail the run, but *allocating a lot of memory* is allowed behavior for a
+  decoder, not a defect. `preprocess-fuzz` is the worked example:
+  `MAX_IMAGE_DIMENSION` (16384) permits a 768 MiB decoded RGB buffer, and
+  `decodeToRgb()` copies stb's buffer into a `std::vector` **before** freeing it,
+  so a header-legal maximum image peaks near 1.5 GiB before ASan's shadow map and
+  quarantine — over libFuzzer's default `-rss_limit_mb=2048`, which reports
+  `out-of-memory` and writes a reproducer that reproduces forever. Bounding the
+  input domain's byte count does not help: the allocation is driven by the
+  *declared* dimensions, so a ~50-byte PNG `IHDR` claiming 16384×16384 with a
+  truncated `IDAT` passes `stbi_info_from_memory()` and the dimension guard, and
+  makes `stbi_load_from_memory()` allocate the full output buffer before it
+  discovers the data is truncated. Expect this once Phase 5's continuous job runs
+  against a real image corpus; bounded per-PR mode is unlikely to synthesize a
+  valid header by chance. Fixes are deferred, and the tempting one — a
+  `catch (const std::bad_alloc&)` in the property — is the wrong one: that same
+  path holds a **real defect** (the `std::vector` copy throws with stb's buffer
+  still owned by nobody, leaking it), and a blanket catch would mask that plus any
+  future integer-overflow bug that surfaces as an absurd allocation size. The
+  options worth weighing when it comes up: give the stb buffer RAII ownership
+  (fixes the leak), pass an explicit `--rss_limit_mb` / `--malloc_limit_mb` budget
+  sized above the legal worst case (so runaway allocation still trips), apply a
+  fuzz-only lower dimension cap to keep the target on parsing logic rather than
+  the allocator, or drop the double allocation in `decodeToRgb()` entirely.
 - **Limited ASan at the fabric boundary.** A fuzz binary that links
   `@qvac/fabric` inherits `alloc_dealloc_mismatch=0:detect_leaks=0`, so it loses
   LeakSanitizer coverage and part of the alloc/dealloc check — the same boundary
