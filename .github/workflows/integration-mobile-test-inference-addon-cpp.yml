@@ -112,10 +112,24 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
+      # `package-manager-cache: false` on EVERY setup-node in this workflow (here and
+      # in both prebuild jobs and device-farm) — do not drop it.
+      #
+      # setup-node caching is opt-OUT, not opt-in: the input defaults to true and
+      # activates automatically when a package.json declares `packageManager` or
+      # `devEngines.packageManager`. Nothing declares that today, so no cache is
+      # written — but this workflow is reached via pull_request_target and runs fork
+      # code here and in the prebuild jobs, so an unrelated future edit adding
+      # `packageManager` to a manifest would silently start writing the DEFAULT-BRANCH
+      # cache scope from an untrusted job, and device-farm would restore it. Setting
+      # this explicitly makes "no Actions cache" a property of the workflow rather
+      # than a side effect of manifest contents.
+      # Flagged by CodeQL actions/cache-poisoning/poisonable-step.
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
+          package-manager-cache: false
       - name: Install Bare tooling
         run: npm install -g --force bare bare-make
       - name: Build and test on host
@@ -188,6 +202,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
+          package-manager-cache: false
 
       - name: Install Bare tooling
         run: npm install -g --force bare bare-make
@@ -233,6 +248,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
+          package-manager-cache: false
 
       - name: Install Bare tooling
         run: npm install -g --force bare bare-make
@@ -478,6 +494,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
+          package-manager-cache: false
 
       # Overlay the data onto the CLEAN framework. upload-to-devicefarm then runs
       # `npm install` against the trusted e2e/package.json — an injected script in
