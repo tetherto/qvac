@@ -404,6 +404,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
+  // Transaction checkpoint before request preparation can mutate memory.
+  driver->snapshotPreRequestCursor();
+  driver->snapshotPreRequestRollbackAnchor();
+
   PrefillPlan plan = driver->preparePrefill(
       request.chatMsgs,
       request.tools,
@@ -411,15 +415,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       request.mediaPlan,
       isCacheLoaded,
       request.prefill);
-
-  // Anchored post-`preparePrefill` so a pure-attention in-prefill slide
-  // is reflected here; see `TextLlmContext::evalMessageWithTools` for
-  // the full rationale. Recurrent throws on slide, so the ordering is
-  // equivalent for that path.
-  driver->snapshotPreRequestCursor();
-  // Hybrid / recurrent full-state disk snapshot for cancel rollback
-  // (their memory rejects partial `seq_rm`). No-op for pure-attention.
-  driver->snapshotPreRequestRollbackAnchor();
 
   const auto promptSize = static_cast<unsigned>(driver->getNPast()) +
                           static_cast<unsigned>(plan.totalPositions());

@@ -449,6 +449,19 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // block the new snapshot via `snapshotForRecurrentRollback`'s
   // `!empty()` early-return.
   rollbackState_.reset();
+  snapshotPreRequestCursor();
+  const ContextUsage prefillEntryUsage = current_;
+  if (!rollbackState_.capturePrefillEntry(
+          modelCtx_.lctx, seqId_, current_.pos)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        string_format(
+            "[MtmdLlm] mandatory pre-request checkpoint capture failed "
+            "(pos=%d, seqId=%d)",
+            current_.pos,
+            seqId_));
+  }
   forcedTokens_.clear();
   // Set BEFORE `tokenizeChat` so `configureReasoningTags` can suppress
   // the "will hard-fail" preemptive warning for cache-warm requests that
@@ -533,38 +546,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     }
   }
 
-  // Captured AFTER the inline prefill slide above so a pure-attention
-  // slide that lowered `current_.pos` is reflected in `preRequestUsage_`.
-  // See `TextLlmContext::evalMessageWithTools` for the full ordering
-  // rationale; recurrent never reaches this line after a slide because
-  // `trySlidePrefill` returns `MemoryOperationFailed` and throws above.
-  snapshotPreRequestCursor();
-
   size_t nChunks = mtmd_input_chunks_size(chunksPtr);
   if (nChunks == 0) {
     const char* errorMsg = "[MtmdLlm] Unable to eval prompt\n";
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
-  }
-
-  // Capture a rollback anchor only when reasoning removal is requested.
-  // It is restored in one shot on cancel. This is required because
-  // `llama_memory_seq_pos_max` does not report image-chunk extended
-  // metadata (Qwen3VL M-RoPE x/y), so a metadata-only resync cannot
-  // recover the exact pre-cancel position between mtmd chunks.
-  const ContextUsage prefillEntryUsage = current_;
-  if (removeThinkingFromContext_) {
-    if (!rollbackState_.capturePrefillEntry(
-            modelCtx_.lctx, seqId_, current_.pos)) {
-      // Capture failed: cancel will fall back to the no-op
-      // `removeLastNTokens` path. This is cancel-path bookkeeping,
-      // not part of the `remove_thinking_from_context` cleanup
-      // contract, so we degrade to a warning rather than hard-failing
-      // the request.
-      QLOG_IF(
-          Priority::WARNING,
-          "[MtmdLlm] failed to capture prefill-entry recurrent snapshot; "
-          "mid-prefill cancel will not roll back recurrent state\n");
-    }
   }
 
   llama_pos nPastLocal = current_.pos;
@@ -588,12 +573,8 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
           current_ = prefillEntryUsage;
           refreshCurrentCacheTokensFromMemory();
         } else {
-          // Restore underflowed: the recurrent half is in an undefined
-          // state. The fallback below is best-effort only; recurrent
-          // memory does not honour `removeLastNTokens`. Report
-          // rollbackOk=false so processPromptImpl resets live state and
-          // invalidates the active cache session before any later save
-          // can persist it.
+          // Restore underflowed after mutation. Clear memory and report
+          // rollbackOk=false so cache/session save is invalidated.
           QLOG_IF(
               Priority::WARNING,
               string_format(
@@ -604,21 +585,16 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                   nPastLocal,
                   restoredPos,
                   seqId_));
-          const llama_pos totalDelta = nPastLocal - current_.pos;
-          current_.pos = nPastLocal;
-          removeLastNTokens(totalDelta);
-          current_ = prefillEntryUsage;
+          clearMemoryForRecovery(modelCtx_.lctx, seqId_);
+          current_ = {};
+          protectedPrefix_ = {};
           rollbackOk = false;
         }
       } else {
-        const llama_pos totalDelta = nPastLocal - current_.pos;
-        current_.pos = nPastLocal;
-        removeLastNTokens(totalDelta);
-        if (removeThinkingFromContext_ &&
-            current_.pos > prefillEntryUsage.pos) {
-          current_ = prefillEntryUsage;
-          rollbackOk = false;
-        }
+        clearMemoryForRecovery(modelCtx_.lctx, seqId_);
+        current_ = {};
+        protectedPrefix_ = {};
+        rollbackOk = false;
       }
       stopGeneration_.store(false);
       return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
@@ -724,7 +700,6 @@ bool MtmdLlmContext::cancelGenerationCleanup(
       .labelTag = "[MtmdLlm]",
       .ctx = modelCtx_.lctx,
       .seqId = seqId_,
-      .reasoningRemovalEnabled = removeThinkingFromContext_,
       .currentPos = current_.pos,
       .preRequestPos = preRequestUsage_.pos,
       .rollback = rollbackState_,
@@ -734,27 +709,16 @@ bool MtmdLlmContext::cancelGenerationCleanup(
             current_.pos = restoredPos;
             refreshCurrentCacheTokensFromMemory();
           },
-      .onSnapshotRestoreFailed =
-          [this](llama_pos restoredPos) {
-            current_ = preRequestUsage_;
-            current_.pos = restoredPos;
-            current_.cacheTokens = restoredPos;
-          },
-      .onMissingSnapshotAdvanced =
+      .onCheckpointFailure =
           [this]() {
-            current_ = preRequestUsage_;
-            current_.cacheTokens = preRequestUsage_.pos;
-          },
-      .removeLastNTokens =
-          [this](llama_pos delta) { removeLastNTokens(delta); },
-      .onTokensRolledBack =
-          [this]() {
-            current_ = preRequestUsage_;
-            refreshCurrentCacheTokensFromMemory();
+            current_ = {};
+            protectedPrefix_ = {};
           },
   });
 
-  protectedPrefix_ = preRequestProtectedPrefix_;
+  if (rollbackOk) {
+    protectedPrefix_ = preRequestProtectedPrefix_;
+  }
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -1058,13 +1022,7 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   //     `snapshotForRecurrentRollback` wrapper here restores the
   //     pre-prompt checkpoint (or wipes the sequence on restore
   //     underflow), resets local positional accounting, and re-throws.
-  //   - Pure-attention `seq_rm + seq_add` rejection: primitive is
-  //     all-or-nothing so live KV is unchanged; the compactor returns
-  //     `FailedKvIntact` and `compactThinkSpan` drops
-  //     `[preRequestUsage_.pos, current_.pos)` from live memory via
-  //     `removeLastNTokens`, restores the pre-request cursor +
-  //     protected prefix, and throws.
-  //   - Hybrid restore/replay failure: the compactor best-effort
+  //   - Restore/replay failure: the compactor best-effort
   //     wipes the sequence memory and returns `FailedKvWiped`;
   //     `compactThinkSpan` zeroes positional / protected-prefix
   //     bookkeeping to match the cleared sequence and throws, so the
@@ -1345,19 +1303,6 @@ void MtmdLlmContext::compactThinkSpan() {
                 current_.pos = result.newPos;
                 refreshCurrentCacheTokensFromMemory();
                 compacted = true;
-              },
-          .onFailedKvIntact =
-              [this]() {
-                const llama_pos delta = current_.pos - preRequestUsage_.pos;
-                if (delta > 0) {
-                  removeLastNTokens(delta);
-                  current_ = preRequestUsage_;
-                  refreshCurrentCacheTokensFromMemory();
-                }
-                protectedPrefix_ = preRequestProtectedPrefix_;
-                pendingBatchFirstMsg_ = false;
-                rollbackState_.reset();
-                compactor_.reset();
               },
           .onFailedKvWiped =
               [this]() {
@@ -1735,6 +1680,9 @@ void MtmdLlmContext::onPrefillComplete(
         current_.pos -
         static_cast<llama_pos>(reasoningState_.forcedOpenTokenCount));
     reasoningState_.inside_reasoning = true;
+  }
+  if (isPrefillOnlyRequest_) {
+    rollbackState_.clearPrefillEntry();
   }
 }
 
@@ -2115,26 +2063,16 @@ void MtmdLlmContext::snapshotPreRequestCursor() {
 }
 
 void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {
-  // Pure-attention MTMD drivers roll back via `removeLastNTokens` in
-  // `cancelGenerationCleanup`; no snapshot needed. The single-prompt
-  // path takes its own capture after tokenize/slide in
-  // `evalMessageWithTools` — this hook exists so the batch path, which
-  // never runs that site, has an equivalent rollback anchor.
-  if (!removeThinkingFromContext_) {
-    return;
-  }
+  // Batch transaction checkpoint, captured before request memory mutation.
   if (!rollbackState_.capturePrefillEntry(
           modelCtx_.lctx, seqId_, current_.pos)) {
-    // Silent failure would make `hasPrefillEntry()` false at cancel
-    // time, turn `cancelGenerationCleanup`'s rollback into a no-op,
-    // and let peak positions leak back into `CacheTokens`. This is
-    // cancel-path bookkeeping, unrelated to
-    // `remove_thinking_from_context` cleanup, so we log a warning
-    // rather than hard-failing the request.
-    QLOG_IF(
-        Priority::WARNING,
-        "[MtmdLlm] failed to capture prefill-entry recurrent snapshot at "
-        "batch admission; cancel rollback will be a no-op and CacheTokens "
-        "may report the transient peak\n");
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        string_format(
+            "[MtmdLlm] mandatory batch checkpoint capture failed "
+            "(pos=%d, seqId=%d)",
+            current_.pos,
+            seqId_));
   }
 }

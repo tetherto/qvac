@@ -7,6 +7,8 @@
 - Reasoning-block removal now always restores the pre-generation state and
   replays retained answer tokens for every model, avoiding in-place cache
   sliding and preserving coherent state for subsequent turns.
+- Cancellation now restores a mandatory pre-request transaction checkpoint
+  for every model instead of removing a partial token tail.
 
 ## [0.39.2] - 2026-07-30
 

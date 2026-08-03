@@ -320,9 +320,7 @@ class TextLlmContextCancelTest : public ::testing::Test {};
 
 // Cancel signalled before `evalMessageWithTools` runs must:
 //   * return false (inference did not complete),
-//   * leave nPast at 0 (the snapshot at function entry is restored on the
-//     hybrid path; on the pure-attention path `removeLastNTokens(0)` is a
-//     no-op).
+//   * leave nPast at 0 by restoring the mandatory transaction checkpoint.
 TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
   auto model = loadTextModel(qwen35HybridModelPath());
   if (!model) {
@@ -333,6 +331,7 @@ TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
   ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  driver.setRemoveThinkingFromContext(false);
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -358,6 +357,7 @@ TEST_F(
   ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  driver.setRemoveThinkingFromContext(false);
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -369,6 +369,36 @@ TEST_F(
   EXPECT_TRUE(result.rollbackOk);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1);
+  EXPECT_TRUE(driver.reasoningRollbackStateEmptyForTesting())
+      << "successful cancellation must release the transaction checkpoint";
+}
+
+TEST_F(
+    TextLlmContextCancelTest,
+    MandatoryCheckpointCaptureFailureAbortsBeforeMutation) {
+  auto model = loadTextModel(qwen3PureAttentionModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  LlmModelContext shared = makeShared(*model);
+  ToolsCompactController tools(std::nullopt);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  driver.setRemoveThinkingFromContext(false);
+  const llama_pos beforePos = driver.getNPast();
+  const llama_pos beforeSeqMax = seqPosMax(*model);
+  driver.forcePrefillEntryCaptureFailureForTesting(true);
+
+  EXPECT_THROW(
+      (void)driver.evalMessageWithTools(
+          {makeMsg("user", "This request must not mutate memory")},
+          {},
+          /*isCacheLoaded=*/false,
+          /*prefill=*/false),
+      qvac_errors::StatusError);
+  EXPECT_EQ(driver.getNPast(), beforePos);
+  EXPECT_EQ(seqPosMax(*model), beforeSeqMax);
 }
 
 // After a cancelled prefill, the same context must be usable for the next
@@ -409,6 +439,8 @@ TEST_F(
   EXPECT_TRUE(result.rollbackOk);
   EXPECT_GT(driver2.getNPast(), 0)
       << "post-cancel prefill must successfully decode tokens";
+  EXPECT_TRUE(driver2.reasoningRollbackStateEmptyForTesting())
+      << "successful prefill-only completion must release its checkpoint";
 }
 
 // `onCancel` on a hybrid driver with `remove_thinking_from_context: true`:
@@ -467,12 +499,8 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   }
 }
 
-// Pure-attention `onCancel` must now also roll back to the pre-request
-// cursor via `removeLastNTokens` (no recurrent snapshot is taken on
-// this path). The previous behavior — chain into `onGenerationFinished`
-// which leaves the cancelled prompt in the cache — violated the
-// "request never happened" cancel semantics and left an orphaned
-// `<think>` opener for templates that force-open the reasoning channel.
+// Pure-attention `onCancel` restores the mandatory pre-request transaction
+// checkpoint even when reasoning removal is disabled.
 TEST_F(
     TextLlmContextCancelTest,
     OnCancelOnPureAttentionRollsBackToPreRequestCursor) {
@@ -485,7 +513,7 @@ TEST_F(
   ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(true);
+  driver.setRemoveThinkingFromContext(false);
 
   const llama_pos preRequestNPast = driver.getNPast();
 
@@ -500,139 +528,11 @@ TEST_F(
 
   bool rollbackOk = false;
   EXPECT_NO_THROW(rollbackOk = driver.onCancel([](const std::string&) {}));
-  EXPECT_TRUE(rollbackOk) << "pure-attention onCancel must report rollback-ok "
-                             "(no recurrent restore involved)";
+  EXPECT_TRUE(rollbackOk)
+      << "pure-attention onCancel must report checkpoint restore success";
 
   EXPECT_EQ(driver.getNPast(), preRequestNPast)
-      << "onCancel on pure-attention must roll the cache back to the "
-         "PRE-REQUEST cursor via `removeLastNTokens`, matching the "
-         "hybrid cancel semantics";
-}
-
-// PR #2813 fix regression: on a pure-attention driver, the pre-request
-// rollback anchor MUST be captured AFTER `preparePrefill`. If captured
-// before, an in-prefill `trySlidePrefill` lowers `nPast_` but leaves
-// `preRequestNPast_` at the stale pre-slide cursor; a subsequent cancel
-// then under-trims `removeLastNTokens` and leaves `discard` tokens of
-// the cancelled prompt live in KV under the previous turn's
-// `firstMsgTokens_` bookkeeping — silent contamination of the next turn.
-TEST_F(
-    TextLlmContextCancelTest,
-    OnCancelAfterPrefillSlideRollsBackToPostSlideCursor) {
-  // Small ctx_size so the slide trigger is reachable without decoding
-  // thousands of tokens per turn.
-  const std::string modelPath = qwen3PureAttentionModelPath();
-  if (!modelFileExists(modelPath)) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "512";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "8";
-  config["backendsDir"] = test_common::getTestBackendsDir().string();
-  std::string mp = modelPath;
-  std::string proj;
-  auto model = std::make_unique<LlamaModel>(
-      std::move(mp), std::move(proj), std::move(config));
-  model->waitForLoadInitialization();
-  ASSERT_TRUE(model->isLoaded());
-
-  LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
-  // Non-zero discard budget so overflow slides instead of throwing.
-  driver.setNDiscarded(128);
-
-  auto repeat = [](const std::string& unit, size_t times) {
-    std::string out;
-    out.reserve(unit.size() * times);
-    for (size_t i = 0; i < times; ++i) {
-      out += unit;
-    }
-    return out;
-  };
-
-  // Turn 1 (small opener) keeps `firstMsgTokens_` modest so turn 3's
-  // slide budget is not dominated by the protected prefix.
-  const LlmContext::EvalMessageResult turn1Result = driver.evalMessageWithTools(
-      {makeMsg("user", "Hi")},
-      {},
-      /*isCacheLoaded=*/false,
-      /*prefill=*/true);
-  ASSERT_TRUE(turn1Result.ok);
-  EXPECT_FALSE(turn1Result.cancelled);
-  EXPECT_TRUE(turn1Result.rollbackOk);
-
-  // Turn 2 fills context toward the ceiling (~350 tokens on Qwen3).
-  const std::string bulk = repeat("The quick brown fox jumps. ", /*times=*/65);
-  const LlmContext::EvalMessageResult turn2Result = driver.evalMessageWithTools(
-      {makeMsg("user", bulk)},
-      {},
-      /*isCacheLoaded=*/false,
-      /*prefill=*/true);
-  ASSERT_TRUE(turn2Result.ok);
-  EXPECT_FALSE(turn2Result.cancelled);
-  EXPECT_TRUE(turn2Result.rollbackOk);
-  const llama_pos preRequestNPast = driver.getNPast();
-  const llama_pos preRequestFirstMsg = driver.getFirstMsgTokens();
-  ASSERT_GT(preRequestNPast, preRequestFirstMsg)
-      << "turn 2 must have advanced past the first-message prefix";
-  const int32_t preRequestSlides = driver.getNSlides();
-  const llama_pos ctxSize =
-      static_cast<llama_pos>(llama_n_ctx(model->getContext()));
-  ASSERT_GT(preRequestNPast, ctxSize / 2)
-      << "turn 2 did not consume enough context to force a slide on "
-         "turn 3; increase the bulk repeat count. nPast="
-      << preRequestNPast << " ctxSize=" << ctxSize;
-
-  // Turn 3 sized so `preRequestNPast + nTokens > ctx_size` forces
-  // `trySlidePrefill` to run before decode.
-  const std::string overflow = repeat("Please describe. ", /*times=*/50);
-  const LlmContext::EvalMessageResult turn3Result = driver.evalMessageWithTools(
-      {makeMsg("user", overflow)},
-      {},
-      /*isCacheLoaded=*/false,
-      /*prefill=*/true);
-  ASSERT_TRUE(turn3Result.ok);
-  EXPECT_FALSE(turn3Result.cancelled);
-  EXPECT_TRUE(turn3Result.rollbackOk);
-  ASSERT_GT(driver.getNSlides(), preRequestSlides)
-      << "turn 3 must have triggered a context slide in preparePrefill "
-         "for the regression assertion to be meaningful. preRequestNPast="
-      << preRequestNPast << " ctxSize=" << ctxSize;
-
-  bool rollbackOk = false;
-  EXPECT_NO_THROW(rollbackOk = driver.onCancel([](const std::string&) {}));
-  EXPECT_TRUE(rollbackOk)
-      << "pure-attention onCancel after a slide must still report rollback-ok";
-
-  const llama_pos postCancelNPast = driver.getNPast();
-  EXPECT_LT(postCancelNPast, preRequestNPast)
-      << "onCancel after a prefill slide must restore to the POST-slide "
-         "cursor. With the pre-fix ordering (anchor captured before "
-         "`preparePrefill`) the anchor would still be `preRequestNPast` "
-         "and rollback would under-trim, leaving `discard` cancelled "
-         "prompt tokens live in KV.";
-  EXPECT_EQ(driver.getFirstMsgTokens(), preRequestFirstMsg)
-      << "the slide does not touch the first-message prefix; the "
-         "rollback must preserve `firstMsgTokens_`";
-  EXPECT_EQ(seqPosMax(*model), postCancelNPast - 1)
-      << "live KV must be trimmed to match the restored cursor after "
-         "cancel — any leftover cells past `postCancelNPast - 1` are "
-         "contamination of the next turn";
-
-  const LlmContext::EvalMessageResult recoveryResult =
-      driver.evalMessageWithTools(
-          {makeMsg("user", "Recovery ping")},
-          {},
-          /*isCacheLoaded=*/false,
-          /*prefill=*/true);
-  EXPECT_TRUE(recoveryResult.ok)
-      << "post-cancel prefill must succeed on the rolled-back cache";
-  EXPECT_FALSE(recoveryResult.cancelled);
-  EXPECT_TRUE(recoveryResult.rollbackOk);
+      << "onCancel on pure-attention must restore the PRE-REQUEST checkpoint";
 }
 
 // ============================================================================
@@ -731,6 +631,7 @@ TEST_F(MtmdLlmContextCancelTest, CancelDuringPrefillLeavesHybridMtmdUsable) {
     {"role":"user","content":"Cancel target: a moderately long prompt that gives the worker a chance to start prefill before cancel fires."}
   ])";
   cancelTargetPrompt.prefill = true;
+  cancelTargetPrompt.generationParams.remove_thinking_from_context = false;
 
   std::atomic<bool> done{false};
   std::thread worker([&] {
@@ -789,6 +690,7 @@ TEST_F(
       R"( {"role": "user", "content": "Describe this image in detail with as much length as possible to give the cancel signal a wide mid-prefill window."}])";
   prompt.media.push_back(readBinaryFile(imagePath));
   prompt.prefill = true;
+  prompt.generationParams.remove_thinking_from_context = false;
 
   std::atomic<bool> done{false};
   std::thread worker([&] {
@@ -851,6 +753,7 @@ TEST_F(
     {"role":"user","content":"Cancel target: a moderately long prompt for the pure-attention multimodal cancel path."}
   ])";
   cancelTargetPrompt.prefill = true;
+  cancelTargetPrompt.generationParams.remove_thinking_from_context = false;
 
   std::atomic<bool> done{false};
   std::thread worker([&] {
@@ -923,14 +826,9 @@ TEST(
     longPrompt.input = R"([
       {"role":"user","content":"Write a long story about a dragon."}
     ])";
-    // `remove_thinking_from_context` does NOT gate the cancel-restore
-    // path anymore — that path now uses the `prefillEntry` snapshot,
-    // which is captured unconditionally for hybrid / recurrent models.
-    // We leave the flag enabled so this test also exercises the
-    // `reasoningBoundary` capture lifecycle alongside the cancel path,
-    // catching regressions where the two snapshots interfere with each
-    // other.
-    longPrompt.generationParams.remove_thinking_from_context = true;
+    // Cancellation checkpoints are mandatory even when reasoning removal is
+    // disabled and remain independent from the reasoning replay boundary.
+    longPrompt.generationParams.remove_thinking_from_context = false;
     longPrompt.outputCallback = [&](const std::string&) {
       const unsigned seen = callbackCount.fetch_add(1) + 1;
       if (seen >= 2 && !cancelIssued.exchange(true)) {

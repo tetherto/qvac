@@ -111,52 +111,22 @@ TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
 
 TEST(
     ReasoningSnapshotRecovery,
-    DisabledRemovalUsesTokenRollbackWithoutSnapshot) {
+    CancellationMissingCheckpointFailsWithoutTailRemoval) {
   ReasoningRollbackState rollback;
-  llama_pos removed = 0;
-  bool tokenRollbackCompleted = false;
+  bool checkpointFailureReported = false;
   const bool ok = rollbackCancelledRequest({
       .labelTag = "[Test]",
       .ctx = nullptr,
       .seqId = 0,
-      .reasoningRemovalEnabled = false,
       .currentPos = 10,
       .preRequestPos = 5,
       .rollback = rollback,
       .onSnapshotRestored = [](llama_pos) {},
-      .onSnapshotRestoreFailed = [](llama_pos) {},
-      .onMissingSnapshotAdvanced = []() {},
-      .removeLastNTokens = [&](llama_pos delta) { removed = delta; },
-      .onTokensRolledBack = [&]() { tokenRollbackCompleted = true; },
-  });
-
-  EXPECT_TRUE(ok);
-  EXPECT_EQ(removed, 5);
-  EXPECT_TRUE(tokenRollbackCompleted);
-}
-
-TEST(ReasoningSnapshotRecovery, EnabledRemovalMissingSnapshotFailsSafely) {
-  ReasoningRollbackState rollback;
-  bool missingSnapshotReported = false;
-  bool tokenRollbackAttempted = false;
-  const bool ok = rollbackCancelledRequest({
-      .labelTag = "[Test]",
-      .ctx = nullptr,
-      .seqId = 0,
-      .reasoningRemovalEnabled = true,
-      .currentPos = 10,
-      .preRequestPos = 5,
-      .rollback = rollback,
-      .onSnapshotRestored = [](llama_pos) {},
-      .onSnapshotRestoreFailed = [](llama_pos) {},
-      .onMissingSnapshotAdvanced = [&]() { missingSnapshotReported = true; },
-      .removeLastNTokens = [&](llama_pos) { tokenRollbackAttempted = true; },
-      .onTokensRolledBack = []() {},
+      .onCheckpointFailure = [&]() { checkpointFailureReported = true; },
   });
 
   EXPECT_FALSE(ok);
-  EXPECT_TRUE(missingSnapshotReported);
-  EXPECT_FALSE(tokenRollbackAttempted);
+  EXPECT_TRUE(checkpointFailureReported);
 }
 
 TEST(ReasoningRollbackStateAppend, AppendsRegardlessOfCaptureFlag) {

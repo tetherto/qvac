@@ -238,6 +238,9 @@ public:
   void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
     forcePrefillEntryRestoreFailureForTesting_ = value;
   }
+  void forcePrefillEntryCaptureFailureForTesting(bool value) noexcept {
+    forcePrefillEntryCaptureFailureForTesting_ = value;
+  }
   void forceReasoningReplayFailureForTesting(bool value) noexcept {
     rollbackState_.forceReplayFailureForTesting(value);
   }
@@ -351,6 +354,7 @@ private:
   llama_pos firstMsgTokens_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
   bool forcePrefillEntryRestoreFailureForTesting_ = false;
+  bool forcePrefillEntryCaptureFailureForTesting_ = false;
   // Snapshot of `nPast_` / `firstMsgTokens_` at `evalMessageWithTools`
   // entry. Restored by `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;

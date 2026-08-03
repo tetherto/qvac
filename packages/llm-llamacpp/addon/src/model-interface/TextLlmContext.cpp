@@ -434,6 +434,21 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   // ran) would otherwise block the new snapshot via the
   // `!snapshot.empty()` early-return in `snapshotForRecurrentRollback`.
   rollbackState_.reset();
+  snapshotPreRequestCursor();
+  const bool forceCheckpointCaptureFailure =
+      forcePrefillEntryCaptureFailureForTesting_;
+  forcePrefillEntryCaptureFailureForTesting_ = false;
+  if (forceCheckpointCaptureFailure ||
+      !rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        string_format(
+            "[TextLlm] mandatory pre-request checkpoint capture failed "
+            "(nPast=%d, seqId=%d)",
+            nPast_,
+            seqId_));
+  }
 
   // Drop any stale user-visible perf snapshot from a prior turn so this
   // inference's `runtimeStats()` read sees either the new snapshot
@@ -445,32 +460,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       preparePrefill(chatMsgs, tools, {}, {}, isCacheLoaded, prefill).tokens;
   const auto nTokens = static_cast<llama_pos>(inputTokens.size());
 
-  // Captured AFTER `preparePrefill` so a pure-attention in-prefill
-  // slide (which lowers `nPast_` via `trySlidePrefill`) is reflected
-  // in the anchor. Earlier capture would leave `preRequestNPast_` at
-  // the pre-slide cursor and `removeLastNTokens` under-trims on
-  // rollback, leaking cancelled prompt tokens into live KV. Recurrent
-  // preparePrefill throws instead of sliding, so the ordering matches
-  // for that path. The scheduler admission takes the same anchor
-  // after its own `preparePrefill`.
-  snapshotPreRequestCursor();
   LlamaBatch textBatch(params_.n_batch, 0, 1);
-
-  // Capture a rollback anchor only when reasoning removal is requested.
-  if (removeThinkingFromContext_) {
-    if (!rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
-      // Capture failed: the cancel path will be unable to roll back the
-      // recurrent half of the cache. This is auxiliary bookkeeping for
-      // cancel-time rollback, not part of the `remove_thinking_from_
-      // context` cleanup contract, so we degrade to a warning rather
-      // than hard-failing the request; cancel then falls back to the
-      // no-op `removeLastNTokens` path.
-      QLOG_IF(
-          Priority::WARNING,
-          "[TextLlm] failed to capture prefill-entry recurrent snapshot; "
-          "mid-prefill cancel will not roll back recurrent state\n");
-    }
-  }
 
   // Snapshot boundary for the recurrent-rollback path. -1 disables
   // the snapshot (pure-attention memory, feature off, no reasoning
@@ -490,10 +480,6 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
       if (rollbackState_.hasPrefillEntry()) {
-        // Recurrent / hybrid path: full-state restore is the only way
-        // to drop partially decoded tokens; `removeLastNTokens` is a
-        // no-op on recurrent memory and `seq_rm` over a partial tail
-        // is rejected by the recurrent module.
         const llama_pos restoredNPast = rollbackState_.prefillEntryNPast();
         const bool forceRestoreFailure =
             forcePrefillEntryRestoreFailureForTesting_;
@@ -502,31 +488,25 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
             rollbackState_.restorePrefillEntry(modelCtx_.lctx, seqId_)) {
           nPast_ = restoredNPast;
         } else {
-          // Restore underflowed: the recurrent half is in an undefined
-          // state. The fallback below is best-effort only and does not
-          // touch recurrent memory; report rollbackOk=false so
-          // processPromptImpl resets live state and invalidates the
-          // active cache session before any later save can persist it.
           QLOG_IF(
               Priority::WARNING,
               string_format(
                   "[TextLlm] prefill-entry recurrent snapshot restore "
                   "failed on cancel (tokenIndex=%d, snapshotNPast=%d, "
-                  "seqId=%d); recurrent state may be inconsistent until "
-                  "the next full reset\n",
+                  "seqId=%d); clearing memory and invalidating cache\n",
                   tokenIndex,
                   restoredNPast,
                   seqId_));
-          removeLastNTokens(tokenIndex);
-          nPast_ = restoredNPast;
+          clearMemoryForRecovery(modelCtx_.lctx, seqId_);
+          nPast_ = 0;
+          firstMsgTokens_ = 0;
           rollbackOk = false;
         }
       } else {
-        removeLastNTokens(tokenIndex);
-        if (removeThinkingFromContext_ && nPast_ > preRequestNPast_) {
-          nPast_ = preRequestNPast_;
-          rollbackOk = false;
-        }
+        clearMemoryForRecovery(modelCtx_.lctx, seqId_);
+        nPast_ = 0;
+        firstMsgTokens_ = 0;
+        rollbackOk = false;
       }
       stopGeneration_.store(false);
       pendingBatchFirstMsg_ = false;
@@ -726,6 +706,9 @@ void TextLlmContext::onPrefillComplete(
     setOpenThinkSpan(
         nPast_ - static_cast<llama_pos>(reasoningState_.forcedOpenTokenCount));
     reasoningState_.inside_reasoning = true;
+  }
+  if (isPrefillOnlyRequest_) {
+    rollbackState_.clearPrefillEntry();
   }
 }
 
@@ -1138,21 +1121,19 @@ bool TextLlmContext::rollbackCurrentRequest(
       .labelTag = "[TextLlm]",
       .ctx = modelCtx_.lctx,
       .seqId = seqId_,
-      .reasoningRemovalEnabled = removeThinkingFromContext_,
       .currentPos = nPast_,
       .preRequestPos = preRequestNPast_,
       .rollback = rollbackState_,
       .onSnapshotRestored =
           [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
-      .onSnapshotRestoreFailed =
-          [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
-      .onMissingSnapshotAdvanced = [this]() { nPast_ = preRequestNPast_; },
-      .removeLastNTokens =
-          [this](llama_pos delta) { removeLastNTokens(delta); },
-      .onTokensRolledBack = [this]() { nPast_ = preRequestNPast_; },
+      .onCheckpointFailure =
+          [this]() {
+            nPast_ = 0;
+            firstMsgTokens_ = 0;
+          },
   });
 
-  firstMsgTokens_ = preRequestFirstMsgTokens_;
+  firstMsgTokens_ = rollbackOk ? preRequestFirstMsgTokens_ : 0;
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -1363,19 +1344,6 @@ void TextLlmContext::compactThinkSpan() {
                   firstMsgTokens_ = compacted.keptPrefixEnd;
                 }
               },
-          .onFailedKvIntact =
-              [this]() {
-                const llama_pos delta = nPast_ - preRequestNPast_;
-                if (delta > 0) {
-                  removeLastNTokens(delta);
-                }
-                nPast_ = preRequestNPast_;
-                firstMsgTokens_ = preRequestFirstMsgTokens_;
-                generationStarted_ = false;
-                assistantOutput_.clear();
-                rollbackState_.reset();
-                compactor_.reset();
-              },
           .onFailedKvWiped =
               [this]() {
                 nPast_ = 0;
@@ -1427,14 +1395,7 @@ void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   //     `snapshotForRecurrentRollback` wrapper catches, restores the
   //     pre-prompt checkpoint (or wipes the sequence and resets
   //     positional accounting on restore underflow), and rethrows.
-  //   - Pure-attention `seq_rm + seq_add` rejection — the compactor
-  //     returns `Outcome::Kind::FailedKvIntact`. The primitive is
-  //     all-or-nothing so live KV is unchanged; `compactThinkSpan`
-  //     drops `[preRequestNPast_, nPast_)` from live memory via
-  //     `removeLastNTokens`, restores `nPast_` / `firstMsgTokens_`
-  //     to the pre-request cursor, resets per-inference reasoning
-  //     bookkeeping, and throws.
-  //   - Hybrid restore/replay failure — the compactor best-effort
+  //   - Restore/replay failure — the compactor best-effort
   //     wipes the sequence memory and returns
   //     `Outcome::Kind::FailedKvWiped`. `compactThinkSpan` resets
   //     positional bookkeeping to zero to match the cleared
@@ -1621,26 +1582,16 @@ void TextLlmContext::snapshotPreRequestCursor() {
 }
 
 void TextLlmContext::snapshotPreRequestRollbackAnchor() {
-  // Pure-attention drivers rely on `removeLastNTokens` in `onCancel`;
-  // no snapshot needed. The single-prompt path takes its own capture
-  // after `preparePrefill` (see the mid-`evalMessageWithTools` site) —
-  // this hook exists specifically so the batch path, which never runs
-  // that site, has an equivalent rollback anchor.
-  if (!removeThinkingFromContext_) {
-    return;
-  }
+  // Batch transaction checkpoint, captured before request memory mutation.
   if (!rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
-    // Silent failure would make `hasPrefillEntry()` false at cancel
-    // time, turn `onCancel`'s rollback into a no-op, and let peak
-    // `nPast` leak back into `CacheTokens`. This is cancel-path
-    // bookkeeping, unrelated to `remove_thinking_from_context`
-    // cleanup, so we log a warning rather than hard-failing the
-    // request.
-    QLOG_IF(
-        Priority::WARNING,
-        "[TextLlm] failed to capture prefill-entry recurrent snapshot at "
-        "batch admission; cancel rollback will be a no-op and CacheTokens "
-        "may report the transient peak\n");
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        string_format(
+            "[TextLlm] mandatory batch checkpoint capture failed "
+            "(nPast=%d, seqId=%d)",
+            nPast_,
+            seqId_));
   }
 }
 

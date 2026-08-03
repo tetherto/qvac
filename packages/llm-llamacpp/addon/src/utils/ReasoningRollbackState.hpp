@@ -10,12 +10,10 @@
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
-// Shared per-inference rollback state for recurrent / hybrid SSM models.
-// Owns the duplicated snapshot lifecycle that previously lived on both
-// `TextLlmContext` and `MtmdLlmContext`:
+// Shared per-inference transaction and reasoning-replay state.
 //
-//   * a prefill-entry full-state snapshot, restored on cancellation
-//     that fires before prefill finishes;
+//   * a mandatory pre-request transaction checkpoint, restored whenever
+//     cancellation or request failure occurs;
 //   * an end-of-prefill full-state snapshot, restored both by
 //     thinking-block compaction and by cancellation during generation;
 //   * the post-reasoning token capture buffer used to replay the
@@ -28,8 +26,8 @@ namespace utils {
 // end-of-prefill reasoning-boundary capture site
 // (`ReasoningBlockCompactor::snapshotAtPrefillBoundary`) throws
 // `qvac_errors::StatusError` on underflow, and hybrid restore/replay
-// failures inside `compact()` also throw. Auxiliary cancel-path
-// captures (`capturePrefillEntry`) log a warning and continue.
+// failures inside `compact()` also throw. Transaction checkpoint capture
+// failures abort before request memory mutation.
 //
 // Lifetime: per-inference. `reset()` MUST be called at the start of
 // each `evalMessageWithTools` so leftover state from a cancelled prior
@@ -38,9 +36,8 @@ class ReasoningRollbackState {
 public:
   // ---- Prefill-entry snapshot (cancel during prefill) ----
   //
-  // Captures the full sequence state at `nPast` so a mid-prefill cancel
-  // can restore the pre-prefill cursor in one call. Caller should
-  // gate on the active reasoning-removal request first.
+  // Captures the full sequence state at `nPast` before request mutation so
+  // any cancellation path can restore the exact prior checkpoint.
   bool capturePrefillEntry(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos nPast);
   // No-op when no snapshot is held. Returns false only when a held

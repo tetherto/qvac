@@ -221,9 +221,7 @@ public:
       // Feature off, no span captured, degenerate span, or the live cursor is
       // already before the reasoning span when compaction runs.
       NoOp,
-      CompactedAttention,
       CompactedRecurrent,
-      FailedKvIntact,
       // Compaction failed and live KV was best-effort wiped; caller
       // must reset positional accounting to zero before rethrowing.
       FailedKvWiped,
