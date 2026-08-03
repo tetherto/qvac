@@ -93,7 +93,6 @@ public:
   struct TrimDecision {
     bool trim = false;
     llama_pos tokensToRemoveFromTail = 0;
-    bool clampFirstMsgTokensToNPast = false;
   };
 
   /// Determines whether to trim tool tokens after generation completes.

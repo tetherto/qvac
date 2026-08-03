@@ -1444,31 +1444,6 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
 void MtmdLlmContext::resetMedia() { bitmaps_.entries.clear(); }
 
-llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
-  // Validate input
-  if (count <= 0) {
-    return 0;
-  }
-
-  // Calculate how many tokens we can actually remove
-  llama_pos tokensToRemove = std::min(count, current_.pos);
-
-  if (tokensToRemove == 0) {
-    return 0;
-  }
-
-  clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
-
-  current_.pos -= tokensToRemove;
-  refreshCurrentCacheTokensFromMemory();
-
-  // Note: The sampler doesn't have an "undo" function, so we leave it as is.
-  // The sampler maintains its own history, but the removed tokens won't affect
-  // future sampling since they're no longer in the KV cache.
-
-  return tokensToRemove;
-}
-
 llama_pos MtmdLlmContext::ctxCeiling() const {
   return perSeqCtxCeiling_ > 0
              ? perSeqCtxCeiling_

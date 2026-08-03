@@ -279,16 +279,12 @@ export interface RunOptions {
    *   - Any batch error-recovery path (e.g. decode failure, per-slot
    *     failure with `SaveCachePolicy::Skip`, or a
    *     `remove_thinking_from_context` hard-fail).
-   *   - Graceful cancel of a hybrid / recurrent request whose driver
-   *     cannot roll live memory back to the pre-request cursor —
-   *     either the recurrent full-state restore was refused, or no
-   *     pre-request snapshot exists yet the driver advanced past the
-   *     pre-request cursor. Cancels that roll back cleanly still save.
+   *   - Cancellation whose mandatory transaction checkpoint cannot be
+   *     restored. Cancels that restore cleanly still save.
    *
    * On both skip paths the sequence's in-memory KV is still cleared, so
    * subsequent requests decode from a coherent baseline; only the
-   * on-disk cache is untouched. Pure-attention drivers always roll back
-   * via `removeLastNTokens` and therefore save on cancel as usual.
+   * on-disk cache is untouched.
    */
   saveCacheToDisk?: boolean
 }

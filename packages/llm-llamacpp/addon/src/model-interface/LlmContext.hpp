@@ -447,16 +447,6 @@ public:
   virtual void resetState(bool resetStats) = 0;
 
   /**
-   * Remove the last N tokens from the model context.
-   * This decrements nPast and removes the tokens from the KV cache.
-   *
-   * @param count - the number of tokens to remove
-   * @return the actual number of tokens removed (may be less than requested if
-   * not enough tokens exist)
-   */
-  virtual llama_pos removeLastNTokens(llama_pos count) = 0;
-
-  /**
    * The reset media method. It resets the media.
    *
    */

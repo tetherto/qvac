@@ -2103,9 +2103,8 @@ private:
 } // namespace
 
 /// cancel(seqId) acquires the scheduler mutex that the worker releases
-/// across llama_decode, then mutates the shared llama_context
-/// (onCancel -> removeLastNTokens, llama_memory_seq_rm). Applied
-/// mid-decode that is a data race on the context. The safe contract:
+/// across llama_decode, then restores the shared llama_context checkpoint.
+/// Applied mid-decode that is a data race on the context. The safe contract:
 /// the call may only REQUEST cancellation; the slot must stay occupied
 /// until the worker applies it after the in-flight step.
 TEST_F(

@@ -1425,13 +1425,9 @@ void TextLlmContext::onGenerationCompletePolicy(
   const auto decision =
       tools_.onGenerationComplete(assistantOutput, nPast_, firstMsgTokens_);
   if (decision.trim) {
-    // Safe here: dynamic tools are only supported by Qwen3, which does not
-    // use recurrent memory, so tail removal does not hit the recurrent
-    // rollback limitation.
-    removeLastNTokens(decision.tokensToRemoveFromTail);
-    if (decision.clampFirstMsgTokensToNPast && firstMsgTokens_ > nPast_) {
-      firstMsgTokens_ = nPast_;
-    }
+    // Tools tail trimming is intentionally disabled pending removal of
+    // tools_compact. Keep cache positions and metadata unchanged.
+    // removeLastNTokens(decision.tokensToRemoveFromTail);
   }
 }
 
@@ -1696,31 +1692,6 @@ llama_pos TextLlmContext::getNDiscarded() const {
 
 int32_t TextLlmContext::getNSlides() const { return shifter_.slides(); }
 void TextLlmContext::resetNSlides() { shifter_.resetSlides(); }
-
-llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
-  // Validate input
-  if (count <= 0) {
-    return 0;
-  }
-
-  // Calculate how many tokens we can actually remove
-  llama_pos tokensToRemove = std::min(count, nPast_);
-
-  if (tokensToRemove == 0) {
-    return 0;
-  }
-
-  clearSequenceMemory(modelCtx_.lctx, nPast_ - tokensToRemove, -1);
-
-  // Decrement the token count by the number of tokens removed
-  nPast_ -= tokensToRemove;
-
-  // Note: The sampler doesn't have an "undo" function, so we leave it as is.
-  // The sampler maintains its own history, but the removed tokens won't affect
-  // future sampling since they're no longer in the KV cache.
-
-  return tokensToRemove;
-}
 
 bool TextLlmContext::handleReasoningEOS(
     llama_token& tokenId, std::string& tokenStr, llama_batch& batch,

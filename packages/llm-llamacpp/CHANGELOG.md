@@ -9,6 +9,8 @@
   sliding and preserving coherent state for subsequent turns.
 - Cancellation now restores a mandatory pre-request transaction checkpoint
   for every model instead of removing a partial token tail.
+- Tools output tail removal is disabled while `tools_compact` is pending
+  removal.
 
 ## [0.39.2] - 2026-07-30
 

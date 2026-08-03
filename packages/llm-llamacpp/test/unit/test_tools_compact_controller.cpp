@@ -371,7 +371,6 @@ TEST(ToolsCompactControllerTest, GenerationCompleteNoopWhenDisabled) {
   auto decision = controller.onGenerationComplete("done", 10, 5);
   EXPECT_FALSE(decision.trim);
   EXPECT_EQ(decision.tokensToRemoveFromTail, 0);
-  EXPECT_FALSE(decision.clampFirstMsgTokensToNPast);
 }
 
 TEST(
@@ -463,7 +462,7 @@ TEST(
 
 TEST(
     ToolsCompactControllerTest,
-    GenerationCompleteTrimDecisionAndResetWhenChainDone) {
+    GenerationCompleteDecisionDoesNotReportDisabledTrim) {
   ToolsCompactController controller(makeQwen3Profile());
   constexpr llama_pos firstMsgTokens = 50;
   controller.onTokenize(140, 80);
@@ -472,11 +471,10 @@ TEST(
       controller.onGenerationComplete("final answer", 130, firstMsgTokens);
   EXPECT_TRUE(decision.trim);
   EXPECT_EQ(decision.tokensToRemoveFromTail, 50);
-  EXPECT_TRUE(decision.clampFirstMsgTokensToNPast);
   EXPECT_EQ(controller.anchor(), -1);
   auto snapshot = controller.debugSnapshot();
   EXPECT_EQ(snapshot.nPastBeforeTools, 80);
-  EXPECT_TRUE(snapshot.lastToolsTrimmed);
+  EXPECT_FALSE(snapshot.lastToolsTrimmed);
 }
 
 TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
@@ -491,14 +489,14 @@ TEST(ToolsCompactControllerTest, DebugSnapshotStaysConsistentAcrossReset) {
 
   auto snapshotBeforeReset = controller.debugSnapshot();
   EXPECT_EQ(snapshotBeforeReset.nPastBeforeTools, 80);
-  EXPECT_TRUE(snapshotBeforeReset.lastToolsTrimmed);
+  EXPECT_FALSE(snapshotBeforeReset.lastToolsTrimmed);
 
   controller.reset();
   EXPECT_EQ(controller.anchor(), -1);
 
   auto snapshotAfterReset = controller.debugSnapshot();
   EXPECT_EQ(snapshotAfterReset.nPastBeforeTools, 80);
-  EXPECT_TRUE(snapshotAfterReset.lastToolsTrimmed);
+  EXPECT_FALSE(snapshotAfterReset.lastToolsTrimmed);
 }
 
 TEST(

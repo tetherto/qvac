@@ -254,8 +254,9 @@ ToolsCompactController::onGenerationComplete(
   // Chain complete - prepare trim decision
   decision.trim = true;
   decision.tokensToRemoveFromTail = nPast - nPastBeforeTools_;
-  decision.clampFirstMsgTokensToNPast = true;
-  lastRunInfo_.trimmed = true;
+  // The caller currently leaves the cache untouched while tools_compact is
+  // pending removal, so debug telemetry must not report a completed trim.
+  lastRunInfo_.trimmed = false;
 
   // Reset state after trim decision
   reset();

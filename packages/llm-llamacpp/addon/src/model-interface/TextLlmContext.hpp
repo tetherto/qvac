@@ -171,16 +171,6 @@ public:
    */
   void resetState(bool resetStats) override;
 
-  /**
-   * Remove the last N tokens from the model context.
-   * This decrements n_past and removes the tokens from the KV cache.
-   *
-   * @param count - the number of tokens to remove
-   * @return the actual number of tokens removed (may be less than requested if
-   * not enough tokens exist)
-   */
-  llama_pos removeLastNTokens(llama_pos count) override;
-
   PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools,
