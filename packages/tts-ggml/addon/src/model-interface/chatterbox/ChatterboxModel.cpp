@@ -69,7 +69,7 @@ constexpr const char* DEFAULT_KV_CACHE_TYPE = "f16";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
 #if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
-  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir);
+  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir, cfg.openclCacheDir);
 #endif
   tts_cpp::chatterbox::EngineOptions opts;
   opts.t3_gguf_path    = cfg.t3ModelPath;

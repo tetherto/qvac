@@ -46,7 +46,7 @@ namespace general_error = qvac_errors::general_error;
 
 tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) {
 #if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
-  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir);
+  qvac::ttsggml::backend::ensureLoaded(cfg.backendsDir, cfg.openclCacheDir);
 #endif
   tts_cpp::supertonic::EngineOptions opts;
   opts.model_gguf_path = cfg.modelGgufPath;

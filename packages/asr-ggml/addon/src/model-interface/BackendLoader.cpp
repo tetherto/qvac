@@ -4,8 +4,11 @@
 #include <array>
 #include <cctype>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
+#include <limits>
 #include <mutex>
+#include <regex>
 #include <string>
 #include <system_error>
 
@@ -54,37 +57,63 @@ fs::path prebuildsDirFromAddonLocation() {
 }
 
 bool loadBackend(const fs::path& directory, const std::string& name) {
-  const fs::path path = directory / (std::string(BACKEND_PREFIX) + name + ".so");
+  const std::string filename = std::string(BACKEND_PREFIX) + name + ".so";
+  const fs::path path = directory / filename;
   std::error_code ec;
-  if (!fs::exists(path, ec)) {
-    return false;
+  if (fs::exists(path, ec)) {
+    return ggml_backend_load(path.string().c_str()) != nullptr;
   }
-  return ggml_backend_load(path.string().c_str()) != nullptr;
+#if defined(__ANDROID__)
+  // Android may keep native libraries compressed inside the APK. In that
+  // layout there is no filesystem path, but bionic can resolve the uniquely
+  // named library directly from the APK by basename.
+  return ggml_backend_load(filename.c_str()) != nullptr;
+#else
+  return false;
+#endif
 }
 
-bool hasAdrenoGpu() {
-  for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
-    ggml_backend_dev_t device = ggml_backend_dev_get(index);
-    if (device == nullptr) {
-      continue;
-    }
-    const char* description = ggml_backend_dev_description(device);
-    if (description == nullptr) {
-      continue;
-    }
-    std::string normalized(description);
-    std::transform(
-        normalized.begin(),
-        normalized.end(),
-        normalized.begin(),
-        [](unsigned char character) {
-          return static_cast<char>(std::tolower(character));
-        });
-    if (normalized.find("adreno") != std::string::npos) {
-      return true;
+int adrenoVersionFromDescription(const std::string& description) {
+  std::string normalized = description;
+  std::transform(
+      normalized.begin(),
+      normalized.end(),
+      normalized.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+  if (normalized.find("dreno") == std::string::npos) {
+    return -1;
+  }
+  static const std::regex adrenoRegex(R"(dreno\D*?(\d{3,4}))");
+  std::smatch matches;
+  if (std::regex_search(normalized, matches, adrenoRegex) &&
+      matches.size() > 1) {
+    try {
+      return std::stoi(matches[1].str());
+    } catch (const std::exception&) {
+      return -3;
     }
   }
-  return false;
+  return -3;
+}
+
+int minimumAdrenoVersion(ggml_backend_reg_t backend) {
+  if (backend == nullptr) {
+    return -2;
+  }
+  int minimum = std::numeric_limits<int>::max();
+  for (size_t index = 0; index < ggml_backend_reg_dev_count(backend); ++index) {
+    ggml_backend_dev_t device = ggml_backend_reg_dev_get(backend, index);
+    const char* description =
+        device != nullptr ? ggml_backend_dev_description(device) : nullptr;
+    const int version =
+        adrenoVersionFromDescription(description != nullptr ? description : "");
+    if (version > 0) {
+      minimum = std::min(minimum, version);
+    }
+  }
+  return minimum < std::numeric_limits<int>::max() ? minimum : -1;
 }
 
 bool loadCpuBackend(const fs::path& directory) {
@@ -110,17 +139,36 @@ bool loadCpuBackend(const fs::path& directory) {
   return false;
 }
 
-void loadBackendsFromRoot(const fs::path& root) {
+void loadBackendsFromRoot(
+    const fs::path& root, const std::string& openclCacheDir) {
   const fs::path directory = joinBackendsSubdir(root);
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       std::string("loading isolated ASR ggml backends from: ") +
           directory.string());
 
+  if (!openclCacheDir.empty()) {
+    setenv("GGML_OPENCL_CACHE_DIR", openclCacheDir.c_str(), 1);
+  }
+
+  ggml_backend_reg_t vulkanBackend = nullptr;
   if (std::getenv("GGML_DISABLE_VULKAN") == nullptr) {
     loadBackend(directory, "vulkan");
+    vulkanBackend = ggml_backend_reg_by_name("vulkan");
   }
-  if (hasAdrenoGpu() || std::getenv("GGML_OPENCL_FORCE_LOAD") != nullptr) {
+
+  const int adrenoVersion = minimumAdrenoVersion(vulkanBackend);
+  bool loadOpencl = adrenoVersion > 700;
+  if (adrenoVersion > 0 && adrenoVersion <= 700 &&
+      vulkanBackend != nullptr) {
+    // Match ggml-speech's policy: Adreno 700 and older use CPU because neither
+    // Vulkan nor OpenCL is stable there.
+    ggml_backend_unload(vulkanBackend);
+  }
+  if (std::getenv("GGML_OPENCL_FORCE_LOAD") != nullptr) {
+    loadOpencl = true;
+  }
+  if (loadOpencl) {
     loadBackend(directory, "opencl");
   }
 
@@ -136,12 +184,13 @@ void loadBackendsFromRoot(const fs::path& root) {
 } // namespace
 #endif
 
-void ensureLoaded(const std::string& backendsRoot) {
+void ensureLoaded(
+    const std::string& backendsRoot, const std::string& openclCacheDir) {
 #if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
   static std::once_flag flag;
   std::call_once(flag, [&]() {
     if (!backendsRoot.empty()) {
-      loadBackendsFromRoot(fs::path(backendsRoot));
+      loadBackendsFromRoot(fs::path(backendsRoot), openclCacheDir);
       return;
     }
 
@@ -149,9 +198,14 @@ void ensureLoaded(const std::string& backendsRoot) {
     std::error_code ec;
     if (!selfLocatedRoot.empty() &&
         fs::exists(joinBackendsSubdir(selfLocatedRoot), ec)) {
-      loadBackendsFromRoot(selfLocatedRoot);
+      loadBackendsFromRoot(selfLocatedRoot, openclCacheDir);
       return;
     }
+
+#if defined(__ANDROID__)
+    loadBackendsFromRoot(fs::path{}, openclCacheDir);
+    return;
+#endif
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -161,6 +215,7 @@ void ensureLoaded(const std::string& backendsRoot) {
   });
 #else
   static_cast<void>(backendsRoot);
+  static_cast<void>(openclCacheDir);
 #endif
 }
 

@@ -479,7 +479,8 @@ void ParakeetModel::load() {
   modelLoadMs_ = measureMs([&] {
     const fs::path ggufPath = resolveGgufPath();
 #if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
-    qvac::asrggml::backend::ensureLoaded(cfg_.backendsDir);
+    qvac::asrggml::backend::ensureLoaded(
+        cfg_.backendsDir, cfg_.openclCacheDir);
 #endif
     const pkt::EngineOptions eopts = buildEngineOptions(cfg_, ggufPath);
     std::lock_guard<std::mutex> lk(engine_mutex_);

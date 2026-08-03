@@ -7,7 +7,8 @@ namespace qvac::asrggml::backend {
 
 // Loads this addon's uniquely named dynamic GGML backends once. backendsRoot
 // is the package prebuilds directory; BACKENDS_SUBDIR is appended internally.
-void ensureLoaded(const std::string& backendsRoot);
+void ensureLoaded(
+    const std::string& backendsRoot, const std::string& openclCacheDir = {});
 
 } // namespace qvac::asrggml::backend
 
