@@ -66,6 +66,7 @@ declare module 'bare-fs' {
     options?: { encoding?: BufferEncoding; withFileTypes?: boolean }
   ): string[] | Buffer[]
   export function renameSync(oldPath: string, newPath: string): void
+  export function utimesSync(path: string, atime: number | Date, mtime: number | Date): void
   export function createReadStream(path: string, options?: ReadStreamOptions): ReadStream
   export function createWriteStream(path: string, options?: WriteStreamOptions): WriteStream
   export function mkdtempSync(prefix: string): string
@@ -91,5 +92,6 @@ declare module 'bare-fs' {
       options?: { encoding?: BufferEncoding; withFileTypes?: boolean }
     ): Promise<string[] | Buffer[]>
     rename(oldPath: string, newPath: string): Promise<void>
+    utimes(path: string, atime: number | Date, mtime: number | Date): Promise<void>
   }
 }
