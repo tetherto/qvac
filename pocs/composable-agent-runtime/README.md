@@ -13,9 +13,11 @@ Composable Agent Runtime QIP. It is evidence, not a production package source.
 - `@qvac/supervisor` supplies lifecycle mechanics without product policy.
 
 Sync and Harness are siblings in Assistant's package and artifact hierarchy.
-Their mobile worker entries, React Native launchers, and generated harnesses
-remain package-owned. The Assistant Expo plugin composes those packages with
-the existing SDK Expo plugin without reimplementing SDK bundling.
+Each exposes a standalone Expo plugin (`@qvac/sync/expo-plugin`,
+`@qvac/harness/expo-plugin`) that packages its own worker, writes a contribution
+manifest, and can finalize its own linker artifacts. The Assistant Expo plugin
+composes those packages in contributor mode with the existing SDK Expo plugin
+without reimplementing SDK bundling.
 
 ## Run the desktop slice
 
@@ -43,7 +45,8 @@ bun run verify
 
 `apps/task-mobile` configures only `@qvac/assistant/expo-plugin`. It owns
 pairing input, storage path, and UI state, not worker packaging, native linking,
-or process isolation.
+or process isolation. Apps that need Sync or Harness alone can instead configure
+only that package's Expo plugin.
 
 SDK 0.15 currently permits `bare-process@4.5.1`, whose native
 `bare-signals@5` conflicts with SDK's `bare-signals@4`. `bare-tty@5.1.2`
@@ -62,6 +65,10 @@ The Android packaging PoC passed clean prebuild, debug APK validation, and a
 physical arm64 device run on 2026-07-29. The device run covered Sync and
 Harness readiness, restart, continued Sync writability, cancellation, and a
 real Qwen completion through the Harness-to-SDK bridge.
+
+`bun run test:pack` packs the current packages and verifies three independent
+clean Expo Android consumers from tarballs: Sync-only, Harness-only, and the
+Assistant one-plugin full stack.
 
 After prebuild, validate the recorded execution realms and merged addon set:
 

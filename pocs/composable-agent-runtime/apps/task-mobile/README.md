@@ -5,10 +5,14 @@ application owns only product input: its Sync storage location, a pairing URI,
 and task UI lifecycle.
 
 `@qvac/assistant/expo-plugin` is the only Expo plugin configured by the app. It
-packages the package-owned Sync and Harness workers, delegates standard SDK
-packaging to `@qvac/sdk/expo-plugin`, and links the merged native addon set.
-The app has no local worker bundles, Metro asset rules, linker scripts, or
-native process-isolation integration.
+packages the package-owned Sync and Harness workers via their contributor-mode
+plugins, delegates standard SDK packaging to `@qvac/sdk/expo-plugin`, and links
+the merged native addon set. The app has no local worker bundles, Metro asset
+rules, linker scripts, or native process-isolation integration.
+
+Standalone Sync or Harness apps configure only `@qvac/sync/expo-plugin` or
+`@qvac/harness/expo-plugin` instead. Those plugins own their worker packaging
+and linker finalization without Assistant composition.
 
 ## Run
 

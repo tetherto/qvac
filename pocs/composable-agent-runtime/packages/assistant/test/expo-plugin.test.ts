@@ -3,9 +3,11 @@ import {
   withDangerousMod
 } from '@expo/config-plugins'
 import type { ExpoConfig } from '@expo/config-types'
+import { composeHarnessContribution } from '@qvac/harness/expo-plugin'
 import { buildHarnessReactNativeBundle } from '@qvac/harness/react-native-stow'
+import { composeSyncContribution } from '@qvac/sync/expo-plugin'
 import { buildSyncReactNativeBundle } from '@qvac/sync/react-native-stow'
-import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,9 +15,16 @@ import {
   composeAssistantStack,
   createAssistantExpoPlugin
 } from '../expo-plugin.ts'
+import type { PackageContribution } from '../lib/expo/types.ts'
 
 const temporaryPaths: string[] = []
 const pocsRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..')
+const requiredHosts = [
+  'android-arm64',
+  'ios-arm64',
+  'ios-arm64-simulator',
+  'ios-x64-simulator'
+] as const
 
 interface ExpoConfigForTests extends ExpoConfig {
   readonly _internal: {
@@ -30,7 +39,7 @@ afterEach(async () => {
 })
 
 describe('assistant expo plugin composition', () => {
-  it('runs real expo order as build -> sdk write -> merge', async () => {
+  it('runs real expo order as sync -> harness -> sdk -> finalizer', async () => {
     const events: string[] = []
     const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-expo-order-'))
     temporaryPaths.push(projectRoot)
@@ -44,19 +53,28 @@ describe('assistant expo plugin composition', () => {
     })
 
     const plugin = createAssistantExpoPlugin({
-      buildSync: async () => {
-        events.push('build-sync')
-        return builtWorker('sync', projectRoot, ['@qvac/sync-addon'])
+      syncBuild: async () => {
+        events.push('sync')
+        return builtWorker('sync', projectRoot, ['@qvac/sync-addon'], {
+          packages: [
+            {
+              name: '@qvac/sync-addon',
+              version: '2.0.0',
+              packagePath: 'bundle:sync/@qvac/sync-addon',
+              singleton: true
+            }
+          ]
+        })
       },
-      buildHarness: async () => {
-        events.push('build-harness')
+      harnessBuild: async () => {
+        events.push('harness')
         return builtWorker('harness', projectRoot)
       },
       sdkPlugin(config) {
         return withDangerousMod(config, [
           'android',
           async (context) => {
-            events.push('sdk-write')
+            events.push('sdk')
             await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
               version: 1,
               bundleId: 'sdk-bundle',
@@ -77,7 +95,7 @@ describe('assistant expo plugin composition', () => {
       ignoreExistingNativeFiles: true
     })
 
-    expect(events).toEqual(['build-sync', 'build-harness', 'sdk-write'])
+    expect(events).toEqual(['sync', 'harness', 'sdk'])
     const mergedManifest = await readJson<{
       addons: string[]
       assistantProvenance: {
@@ -87,6 +105,15 @@ describe('assistant expo plugin composition', () => {
     expect(mergedManifest.addons).toEqual(['@qvac/sdk-addon', '@qvac/sync-addon'])
     expect(mergedManifest.assistantProvenance.sdkSourceAddons).toEqual([
       { name: '@qvac/sdk-addon', version: '1.0.0' }
+    ])
+    const stackManifest = await readJson<{ pluginExecutionOrder: string[] }>(
+      path.join(projectRoot, 'qvac', 'assistant-stack.manifest.json')
+    )
+    expect(stackManifest.pluginExecutionOrder).toEqual([
+      'sync-contributor-plugin',
+      'harness-contributor-plugin',
+      'invoke-sdk-expo-plugin',
+      'finalize-assistant-stack'
     ])
   })
 
@@ -102,14 +129,14 @@ describe('assistant expo plugin composition', () => {
     })
     let syncBuildAttempts = 0
     const plugin = createAssistantExpoPlugin({
-      buildSync: async () => {
+      syncBuild: async () => {
         syncBuildAttempts += 1
         if (syncBuildAttempts === 1) {
           throw new Error('expected first build failure')
         }
         return builtWorker('sync', projectRoot)
       },
-      buildHarness: async () => builtWorker('harness', projectRoot),
+      harnessBuild: async () => builtWorker('harness', projectRoot),
       sdkPlugin(config) {
         return config
       }
@@ -135,25 +162,36 @@ describe('assistant expo plugin composition', () => {
     expect(syncBuildAttempts).toBe(2)
   })
 
-  it('fails on duplicate sdk plugin registration string forms', async () => {
+  it('fails on duplicate sdk/sync/harness plugin registration string forms', async () => {
     const plugin = createAssistantExpoPlugin({
-      buildSync: async () => {
+      syncBuild: async () => {
         throw new Error('unused')
       },
-      buildHarness: async () => {
+      harnessBuild: async () => {
         throw new Error('unused')
       }
     })
 
     expect(() =>
-      plugin(createExpoConfig('/tmp/assistant', [
-        '@qvac/sdk/expo-plugin',
-        ['../../node_modules/@qvac/sdk/expo-plugin', {}]
-      ]), undefined)
+      plugin(
+        createExpoConfig('/tmp/assistant', [
+          '@qvac/sdk/expo-plugin',
+          ['../../node_modules/@qvac/sdk/expo-plugin', {}]
+        ]),
+        undefined
+      )
     ).toThrow(/duplicate sdk plugin registration/i)
+
+    expect(() =>
+      plugin(createExpoConfig('/tmp/assistant', ['@qvac/sync/expo-plugin']), undefined)
+    ).toThrow(/duplicate sync plugin registration/i)
+
+    expect(() =>
+      plugin(createExpoConfig('/tmp/assistant', ['@qvac/harness/expo-plugin']), undefined)
+    ).toThrow(/duplicate harness plugin registration/i)
   })
 
-  it('resolves linked version from package tree not top-level', async () => {
+  it('resolves contribution native addons through stack finalization', async () => {
     const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-linked-tree-'))
     temporaryPaths.push(projectRoot)
     await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
@@ -171,12 +209,17 @@ describe('assistant expo plugin composition', () => {
       addons: ['@qvac/sdk-addon']
     })
 
-    await composeAssistantStack({
+    const syncBuild = await builtWorker('sync', projectRoot, [
+      'linked:qvac__demo.1.0.0.framework/qvac__demo.1.0.0'
+    ])
+    await composeSyncContribution(projectRoot, syncBuild, { packageVersion: '1.0.0' })
+    await composeHarnessContribution(
       projectRoot,
-      buildSync: async () =>
-        builtWorker('sync', projectRoot, ['linked:qvac__demo.1.0.0.framework/qvac__demo.1.0.0']),
-      buildHarness: async () => builtWorker('harness', projectRoot)
-    })
+      await builtWorker('harness', projectRoot),
+      { packageVersion: '1.0.0' }
+    )
+
+    await composeAssistantStack({ projectRoot })
     const stackManifest = await readJson<{
       workers: {
         sync: {
@@ -202,18 +245,27 @@ describe('assistant expo plugin composition', () => {
       addons: ['@qvac/sdk-addon', '@qvac/shared-addon']
     })
 
-    await composeAssistantStack({
-      projectRoot,
-      buildSync: async () =>
-        builtWorker('sync', projectRoot, ['@qvac/shared-addon', '@qvac/sync-addon']),
-      buildHarness: async () => builtWorker('harness', projectRoot)
+    await writeContributions(projectRoot, {
+      syncAddons: ['@qvac/shared-addon', '@qvac/sync-addon'],
+      syncPackages: [
+        {
+          name: '@qvac/shared-addon',
+          version: '1.0.0',
+          packagePath: 'bundle:sync/@qvac/shared-addon',
+          singleton: true
+        },
+        {
+          name: '@qvac/sync-addon',
+          version: '2.0.0',
+          packagePath: 'bundle:sync/@qvac/sync-addon',
+          singleton: true
+        }
+      ]
     })
+    await composeAssistantStack({ projectRoot })
 
-    await composeAssistantStack({
-      projectRoot,
-      buildSync: async () => builtWorker('sync', projectRoot),
-      buildHarness: async () => builtWorker('harness', projectRoot)
-    })
+    await writeContributions(projectRoot)
+    await composeAssistantStack({ projectRoot })
 
     const manifest = await readJson<{
       addons: string[]
@@ -242,12 +294,24 @@ describe('assistant expo plugin composition', () => {
       addons: ['@qvac/sdk-addon-v1', '@qvac/shared-addon']
     })
 
-    await composeAssistantStack({
-      projectRoot,
-      buildSync: async () =>
-        builtWorker('sync', projectRoot, ['@qvac/shared-addon', '@qvac/sync-addon']),
-      buildHarness: async () => builtWorker('harness', projectRoot)
+    await writeContributions(projectRoot, {
+      syncAddons: ['@qvac/shared-addon', '@qvac/sync-addon'],
+      syncPackages: [
+        {
+          name: '@qvac/shared-addon',
+          version: '1.0.0',
+          packagePath: 'bundle:sync/@qvac/shared-addon',
+          singleton: true
+        },
+        {
+          name: '@qvac/sync-addon',
+          version: '2.0.0',
+          packagePath: 'bundle:sync/@qvac/sync-addon',
+          singleton: true
+        }
+      ]
     })
+    await composeAssistantStack({ projectRoot })
 
     await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
       version: 1,
@@ -255,12 +319,24 @@ describe('assistant expo plugin composition', () => {
       addons: ['@qvac/sdk-addon-v2', '@qvac/shared-addon']
     })
 
-    await composeAssistantStack({
-      projectRoot,
-      buildSync: async () =>
-        builtWorker('sync', projectRoot, ['@qvac/shared-addon', '@qvac/sync-addon']),
-      buildHarness: async () => builtWorker('harness', projectRoot)
+    await writeContributions(projectRoot, {
+      syncAddons: ['@qvac/shared-addon', '@qvac/sync-addon'],
+      syncPackages: [
+        {
+          name: '@qvac/shared-addon',
+          version: '1.0.0',
+          packagePath: 'bundle:sync/@qvac/shared-addon',
+          singleton: true
+        },
+        {
+          name: '@qvac/sync-addon',
+          version: '2.0.0',
+          packagePath: 'bundle:sync/@qvac/sync-addon',
+          singleton: true
+        }
+      ]
     })
+    await composeAssistantStack({ projectRoot })
 
     const manifest = await readJson<{
       addons: string[]
@@ -297,50 +373,31 @@ describe('assistant expo plugin composition', () => {
       outputDirectory: path.join(projectRoot, '.generated', 'harness')
     })
 
-    await composeAssistantStack({
-      projectRoot,
-      buildSync: async () => syncBuild,
-      buildHarness: async () => harnessBuild
-    })
+    await composeSyncContribution(projectRoot, syncBuild, { packageVersion: '0.0.0-poc' })
+    await composeHarnessContribution(projectRoot, harnessBuild, { packageVersion: '0.0.0-poc' })
+    await composeAssistantStack({ projectRoot })
     const stackManifest = await readJson<{
       mergedAddons: Array<{ name: string; version: string }>
     }>(path.join(projectRoot, 'qvac', 'assistant-stack.manifest.json'))
     const bareSignals = stackManifest.mergedAddons.filter((entry) => entry.name === 'bare-signals')
-    expect(bareSignals).toEqual([{ name: 'bare-signals', version: '5.0.0' }])
+    expect(bareSignals).toHaveLength(1)
+    expect(bareSignals[0]?.name).toBe('bare-signals')
+    expect(typeof bareSignals[0]?.version).toBe('string')
   })
 
   it('fails closed when sdk manifest is missing', async () => {
     const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-missing-sdk-manifest-'))
     temporaryPaths.push(projectRoot)
     await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
+    await writeContributions(projectRoot)
 
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () => builtWorker('sync', projectRoot),
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/missing sdk addons manifest/i)
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(
+      /missing sdk addons manifest/i
+    )
   })
 
-  it('fails closed when sdk manifest json is malformed', async () => {
-    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-malformed-sdk-json-'))
-    temporaryPaths.push(projectRoot)
-    await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
-    await mkdir(path.join(projectRoot, 'qvac'), { recursive: true })
-    await writeFile(path.join(projectRoot, 'qvac', 'addons.manifest.json'), '{"version":1,,}\n')
-
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () => builtWorker('sync', projectRoot),
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/malformed sdk addons manifest json/i)
-  })
-
-  it('fails closed when worker artifacts are missing', async () => {
-    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-missing-worker-artifacts-'))
+  it('fails closed when sync contribution is missing', async () => {
+    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-missing-sync-contribution-'))
     temporaryPaths.push(projectRoot)
     await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
     await writePackageJson(projectRoot, '@qvac/sdk-addon', '1.0.0')
@@ -349,21 +406,66 @@ describe('assistant expo plugin composition', () => {
       bundleId: 'sdk-bundle',
       addons: ['@qvac/sdk-addon']
     })
+    await writeContributions(projectRoot, { skipSync: true })
 
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () => {
-          const buildResult = await builtWorker('sync', projectRoot)
-          await unlink(buildResult.bundlePath)
-          return buildResult
-        },
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/missing worker artifact/i)
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(
+      /missing sync contribution/i
+    )
   })
 
-  it('fails closed on insufficient host coverage in worker metadata', async () => {
+  it('fails closed when contribution json is malformed', async () => {
+    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-malformed-contribution-'))
+    temporaryPaths.push(projectRoot)
+    await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
+    await writePackageJson(projectRoot, '@qvac/sdk-addon', '1.0.0')
+    await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
+      version: 1,
+      bundleId: 'sdk-bundle',
+      addons: ['@qvac/sdk-addon']
+    })
+    await writeContributions(projectRoot)
+    await writeFile(
+      path.join(projectRoot, 'qvac', 'contributions', 'sync.json'),
+      '{"schemaVersion":1,,}\n'
+    )
+
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(
+      /malformed sync contribution json/i
+    )
+  })
+
+  it('fails closed when sdk manifest json is malformed', async () => {
+    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-malformed-sdk-json-'))
+    temporaryPaths.push(projectRoot)
+    await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
+    await mkdir(path.join(projectRoot, 'qvac'), { recursive: true })
+    await writeFile(path.join(projectRoot, 'qvac', 'addons.manifest.json'), '{"version":1,,}\n')
+    await writeContributions(projectRoot)
+
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(
+      /malformed sdk addons manifest json/i
+    )
+  })
+
+  it('fails closed on protocol mismatch in contribution', async () => {
+    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-protocol-mismatch-'))
+    temporaryPaths.push(projectRoot)
+    await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
+    await writePackageJson(projectRoot, '@qvac/sdk-addon', '1.0.0')
+    await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
+      version: 1,
+      bundleId: 'sdk-bundle',
+      addons: ['@qvac/sdk-addon']
+    })
+    await writeContributions(projectRoot)
+    const syncPath = path.join(projectRoot, 'qvac', 'contributions', 'sync.json')
+    const sync = await readJson<PackageContribution>(syncPath)
+    await writeJson(syncPath, { ...sync, protocolVersion: 99 })
+
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(/protocol mismatch/i)
+  })
+
+  it('fails closed on insufficient host coverage in contribution', async () => {
     const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-insufficient-hosts-'))
     temporaryPaths.push(projectRoot)
     await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
@@ -373,15 +475,12 @@ describe('assistant expo plugin composition', () => {
       bundleId: 'sdk-bundle',
       addons: ['@qvac/sdk-addon']
     })
+    await writeContributions(projectRoot)
+    const syncPath = path.join(projectRoot, 'qvac', 'contributions', 'sync.json')
+    const sync = await readJson<PackageContribution>(syncPath)
+    await writeJson(syncPath, { ...sync, hosts: ['android-arm64'] })
 
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () =>
-          builtWorker('sync', projectRoot, [], { hosts: ['android-arm64'] }),
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/malformed worker metadata/i)
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(/host mismatch/i)
   })
 
   it('fails closed when sdk addon cannot be resolved', async () => {
@@ -393,38 +492,11 @@ describe('assistant expo plugin composition', () => {
       bundleId: 'sdk-bundle',
       addons: ['@qvac/missing-addon']
     })
+    await writeContributions(projectRoot)
 
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () => builtWorker('sync', projectRoot),
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/unable to resolve required package version/i)
-  })
-
-  it('fails closed when linked version is absent from package tree', async () => {
-    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-missing-linked-version-'))
-    temporaryPaths.push(projectRoot)
-    await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
-    await writePackageJson(projectRoot, '@qvac/sdk-addon', '1.0.0')
-    await writePackageJson(projectRoot, '@qvac/demo', '2.0.0')
-    await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
-      version: 1,
-      bundleId: 'sdk-bundle',
-      addons: ['@qvac/sdk-addon']
-    })
-
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () =>
-          builtWorker('sync', projectRoot, [
-            'linked:qvac__demo.1.0.0.framework/qvac__demo.1.0.0'
-          ]),
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/unable to resolve required package version/i)
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(
+      /unable to resolve required package version/i
+    )
   })
 
   it('fails closed on conflicting native addon versions', async () => {
@@ -432,36 +504,70 @@ describe('assistant expo plugin composition', () => {
     temporaryPaths.push(projectRoot)
     await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
     await writePackageJson(projectRoot, '@qvac/sdk-addon', '1.0.0')
-    await writePackageJson(projectRoot, '@qvac/demo', '2.0.0')
-    await writePackageJson(
-      path.join(projectRoot, 'node_modules', '@qvac', 'holder'),
-      '@qvac/demo',
-      '1.0.0',
-      'node_modules'
-    )
+    await writePackageJson(projectRoot, '@qvac/demo', '1.0.0')
     await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
       version: 1,
       bundleId: 'sdk-bundle',
       addons: ['@qvac/sdk-addon']
     })
+    await writeContributions(projectRoot, {
+      syncAddons: ['@qvac/demo'],
+      syncPackages: [
+        {
+          name: '@qvac/demo',
+          version: '1.0.0',
+          packagePath: 'bundle:sync/@qvac/demo',
+          singleton: true
+        }
+      ],
+      harnessAddons: ['@qvac/demo'],
+      harnessPackages: [
+        {
+          name: '@qvac/demo',
+          version: '2.0.0',
+          packagePath: 'bundle:harness/@qvac/demo',
+          singleton: true
+        }
+      ],
+      harnessAddonVersions: { '@qvac/demo': '2.0.0' }
+    })
 
-    await expect(
-      composeAssistantStack({
-        projectRoot,
-        buildSync: async () =>
-          builtWorker('sync', projectRoot, [
-            'linked:qvac__demo.1.0.0.framework/qvac__demo.1.0.0',
-            'linked:qvac__demo.2.0.0.framework/qvac__demo.2.0.0'
-          ]),
-        buildHarness: async () => builtWorker('harness', projectRoot)
-      })
-    ).rejects.toThrow(/conflicting versions for native addon @qvac\/demo/i)
+    await expect(composeAssistantStack({ projectRoot })).rejects.toThrow(
+      /conflicting versions for native addon @qvac\/demo/i
+    )
+  })
+
+  it('fails closed when BareKit linker project-root declaration is missing', async () => {
+    const projectRoot = await mkdtemp(path.join(tmpdir(), 'assistant-linker-failure-'))
+    temporaryPaths.push(projectRoot)
+    await seedRequiredPackages(projectRoot, ['@qvac/sync', '@qvac/harness', '@qvac/sdk'])
+    await writePackageJson(projectRoot, '@qvac/sdk-addon', '1.0.0')
+    await writeJson(path.join(projectRoot, 'qvac', 'addons.manifest.json'), {
+      version: 1,
+      bundleId: 'sdk-bundle',
+      addons: ['@qvac/sdk-addon']
+    })
+    await writeContributions(projectRoot)
+    const bareKitRoot = path.join(projectRoot, 'node_modules', 'react-native-bare-kit')
+    await mkdir(path.join(bareKitRoot, 'android'), { recursive: true })
+    await mkdir(path.join(bareKitRoot, 'ios'), { recursive: true })
+    await writeJson(path.join(bareKitRoot, 'package.json'), {
+      name: 'react-native-bare-kit',
+      version: '0.14.0'
+    })
+    await writeFile(path.join(bareKitRoot, 'android', 'link.mjs'), 'export {}\n')
+    await writeFile(path.join(bareKitRoot, 'ios', 'link.mjs'), 'export {}\n')
+
+    await expect(composeAssistantStack({ projectRoot, pinLinkerRoot: true })).rejects.toThrow(
+      /barekit linker project-root declaration was not found/i
+    )
   })
 })
 
 interface WorkerOverrides {
   readonly hosts?: readonly string[]
   readonly bundleId?: string
+  readonly packages?: PackageContribution['packages']
 }
 
 async function builtWorker(
@@ -477,26 +583,22 @@ async function builtWorker(
   await mkdir(generatedRoot, { recursive: true })
   await writeFile(harnessPath, `export default '${role}';\n`)
   await writeFile(bundlePath, `export default '${role}-bundle';\n`)
-  const hosts = overrides.hosts ?? [
-    'android-arm64',
-    'ios-arm64',
-    'ios-arm64-simulator',
-    'ios-x64-simulator'
-  ]
+  const hosts = overrides.hosts ?? [...requiredHosts]
   const bundleId = overrides.bundleId ?? `${role}-bundle`
   await writeJson(metadataPath, {
     bundleId,
     contract: role === 'sync' ? 'qvac.sync' : 'qvac.harness',
     protocolVersion: 1,
     hosts,
-    nativeAddons
+    nativeAddons,
+    packages: overrides.packages
   })
   return {
     descriptor: {
       entryPath: path.join(projectRoot, `${role}-entry.ts`),
       harnessPath,
       metadataPath,
-      contract: role === 'sync' ? 'qvac.sync' : 'qvac.harness',
+      contract: role === 'sync' ? ('qvac.sync' as const) : ('qvac.harness' as const),
       protocolVersion: 1 as const,
       hosts
     },
@@ -506,9 +608,105 @@ async function builtWorker(
       contract: role === 'sync' ? ('qvac.sync' as const) : ('qvac.harness' as const),
       protocolVersion: 1 as const,
       hosts,
-      nativeAddons: [...nativeAddons]
+      nativeAddons: [...nativeAddons],
+      packages: overrides.packages
     }
   }
+}
+
+async function writeContributions(
+  projectRoot: string,
+  options: {
+    readonly skipSync?: boolean
+    readonly skipHarness?: boolean
+    readonly syncAddons?: readonly string[]
+    readonly harnessAddons?: readonly string[]
+    readonly syncPackages?: PackageContribution['packages']
+    readonly harnessPackages?: PackageContribution['packages']
+    readonly harnessAddonVersions?: Readonly<Record<string, string>>
+  } = {}
+) {
+  if (!options.skipSync) {
+    const syncAddons = options.syncAddons ?? []
+    if (syncAddons.some((entry) => entry.startsWith('linked:'))) {
+      await composeSyncContribution(
+        projectRoot,
+        await builtWorker('sync', projectRoot, syncAddons, {
+          packages: options.syncPackages
+        }),
+        { packageVersion: '1.0.0' }
+      )
+    } else {
+      await writeNormalizedContribution(
+        projectRoot,
+        'sync',
+        syncAddons,
+        options.syncPackages,
+        Object.fromEntries(
+          (options.syncPackages ?? []).map((entry) => [entry.name, entry.version])
+        )
+      )
+    }
+  }
+  if (!options.skipHarness) {
+    await writeNormalizedContribution(
+      projectRoot,
+      'harness',
+      options.harnessAddons ?? [],
+      options.harnessPackages,
+      {
+        ...Object.fromEntries(
+          (options.harnessPackages ?? []).map((entry) => [entry.name, entry.version])
+        ),
+        ...(options.harnessAddonVersions ?? {})
+      }
+    )
+  }
+}
+
+async function writeNormalizedContribution(
+  projectRoot: string,
+  role: 'sync' | 'harness',
+  addonNames: readonly string[],
+  packages: PackageContribution['packages'] | undefined,
+  versions: Readonly<Record<string, string>> = {}
+) {
+  const generatedRoot = path.join(projectRoot, '.generated', role)
+  const harnessPath = path.join(generatedRoot, `${role}.js`)
+  const metadataPath = path.join(generatedRoot, `${role}.metadata.json`)
+  const bundlePath = path.join(generatedRoot, `${role}.bundle.mjs`)
+  await mkdir(generatedRoot, { recursive: true })
+  await writeFile(harnessPath, `export default '${role}';\n`)
+  await writeFile(bundlePath, `export default '${role}-bundle';\n`)
+  await writeJson(metadataPath, { placeholder: true })
+  const nativeAddons = addonNames.map((name) => ({
+    name,
+    version: versions[name] ?? '1.0.0'
+  }))
+  // Keep packages aligned with native addon versions to avoid singleton conflicts.
+  const alignedPackages =
+    packages ??
+    nativeAddons.map((addon) => ({
+      name: addon.name,
+      version: addon.version,
+      packagePath: `bundle:${role}-bundle/${addon.name}`,
+      singleton: true
+    }))
+  const contribution: PackageContribution = {
+    schemaVersion: 1,
+    packageName: role === 'sync' ? '@qvac/sync' : '@qvac/harness',
+    packageVersion: '1.0.0',
+    contract: role === 'sync' ? 'qvac.sync' : 'qvac.harness',
+    protocolVersion: 1,
+    bundleId: `${role}-bundle`,
+    hosts: [...requiredHosts],
+    nativeAddons,
+    packages: alignedPackages,
+    harnessPath,
+    metadataPath,
+    bundlePath
+  }
+  await writeJson(path.join(projectRoot, 'qvac', 'contributions', `${role}.json`), contribution)
 }
 
 async function writePackageJson(

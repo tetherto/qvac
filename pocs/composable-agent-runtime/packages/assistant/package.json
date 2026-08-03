@@ -12,7 +12,7 @@
     "./expo-plugin": "./dist/expo-plugin.js"
   },
   "scripts": {
-    "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=@qvac/sdk --external=bare-bundle --external=bare-stow --external=bare-stow-target-react-native --external=react-native-bare-kit",
+    "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=@qvac/sdk --external=@qvac/sync --external=@qvac/harness --external=bare-bundle --external=react-native-bare-kit",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

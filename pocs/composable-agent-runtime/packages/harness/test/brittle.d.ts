@@ -3,6 +3,7 @@ declare module 'brittle' {
     alike<T>(actual: T, expected: T, message?: string): void
     is<T>(actual: T, expected: T, message?: string): void
     ok(value: boolean, message?: string): void
+    exception<T>(promise: PromiseLike<T>, expected: RegExp): Promise<void>
     timeout(milliseconds: number): void
   }
 

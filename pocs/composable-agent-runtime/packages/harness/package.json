@@ -15,7 +15,8 @@
     "./mobile-entry": "./mobile-entry.ts",
     "./react-native-launcher": "./react-native-launcher.ts",
     "./react-native-stow": "./react-native-stow.ts",
-    "./sdk-direct-adapter": "./lib/sdk-direct-adapter.ts"
+    "./sdk-direct-adapter": "./lib/sdk-direct-adapter.ts",
+    "./expo-plugin": "./dist/expo-plugin.js"
   },
   "imports": {
     "#abort-controller": {
@@ -26,6 +27,7 @@
   "scripts": {
     "build:schema": "bare schema/build.ts",
     "build:react-native": "bun -e \"import { buildHarnessReactNativeBundle } from './lib/react-native-stow.ts'; await buildHarnessReactNativeBundle()\"",
+    "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=bare-* --external=react-native-bare-kit",
     "test": "bun test/run.ts",
     "test:fast": "bun test/all.ts",
     "test:bare": "brittle-bare test/all.ts",
@@ -60,6 +62,7 @@
     "teex": "^1.0.1"
   },
   "peerDependencies": {
+    "@expo/config-plugins": "^54.0.4",
     "react-native-bare-kit": "^0.14.0"
   },
   "peerDependenciesMeta": {
@@ -68,6 +71,8 @@
     }
   },
   "devDependencies": {
+    "@expo/config-plugins": "^54.0.4",
+    "@expo/config-types": "^54.0.0",
     "brittle": "^4.0.2",
     "typescript": "^5.9.3"
   }

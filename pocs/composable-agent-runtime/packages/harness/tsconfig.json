@@ -17,6 +17,7 @@
     "index.ts",
     "child-entry.ts",
     "mobile-entry.ts",
+    "expo-plugin.ts",
     "react-native-launcher.ts",
     "react-native-stow.ts",
     "deterministic-sdk-entry.ts",

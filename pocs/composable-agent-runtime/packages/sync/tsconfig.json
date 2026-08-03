@@ -13,6 +13,7 @@
     "index.ts",
     "sidecar-entry.ts",
     "mobile-entry.ts",
+    "expo-plugin.ts",
     "react-native-launcher.ts",
     "react-native-stow.ts",
     "*.d.ts",
