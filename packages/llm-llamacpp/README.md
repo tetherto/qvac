@@ -334,6 +334,8 @@ The following table describes the expected behavior of `run` and `cancel` depend
 | run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
 | run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
 
+Explicit cancellation restores the pre-request model-memory checkpoint. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. Other thrown prefill, decode, or replay errors reset live model state, invalidate the active cache session, and preserve the last known-good on-disk cache.
+
 When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
 - `"Cannot set new job: a job is already set or being processed"`
 
