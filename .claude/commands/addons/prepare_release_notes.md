@@ -45,7 +45,6 @@ Create `release-notes/vX.Y.Z.md` with these guidelines:
    - `translation-nmtcpp`: `NMT Addon`
    - `tts-onnx`: `TTS ONNX Addon`
    - `transcription-whispercpp`: `Transcription Whisper Addon`
-   - `ocr-onnx`: `OCR Addon`
 
 2. **Introduction**: Write a brief 2-3 sentence summary of what this release brings
 

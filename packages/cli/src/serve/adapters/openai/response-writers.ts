@@ -46,7 +46,7 @@ export async function writeBlockingResponse(
   p: ResponsesHandlerParams,
   result: CompletionRun
 ): Promise<Record<string, unknown>> {
-  const { text, toolCalls, stats, stopReason } = await drainCompletion(result)
+  const { text, toolCalls, stats, stopReason, completionTokens } = await drainCompletion(result)
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -61,6 +61,7 @@ export async function writeBlockingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    completionTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
@@ -125,17 +126,20 @@ export async function writeStreamingResponse(
     response_id: p.rid
   })
 
-  const { toolCalls, stats, stopReason } = await drainCompletion(result, (token) => {
-    fullText += token
-    sendSSE(res, {
-      type: 'response.output_text.delta',
-      item_id: msgId,
-      output_index: 0,
-      content_index: 0,
-      delta: token,
-      response_id: p.rid
-    })
-  })
+  const { toolCalls, stats, stopReason, completionTokens } = await drainCompletion(
+    result,
+    (token) => {
+      fullText += token
+      sendSSE(res, {
+        type: 'response.output_text.delta',
+        item_id: msgId,
+        output_index: 0,
+        content_index: 0,
+        delta: token,
+        response_id: p.rid
+      })
+    }
+  )
   const hasToolCalls = toolCalls.length > 0
 
   sendSSE(res, {
@@ -233,6 +237,7 @@ export async function writeStreamingResponse(
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
     messageItemId: msgId,
+    completionTokens,
     ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
