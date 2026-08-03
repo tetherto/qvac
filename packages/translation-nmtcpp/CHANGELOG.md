@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Affected Cortex-A53/A55/A72/A76, Neoverse N1 and Ampere Altra. The rebuilt
   artifact audits clean.
 
-  Registry baseline `1b499699` → `568e30ab`
+  Pulled in as a `marian-dev` `1.0.0#1` override rather than a registry baseline
+  bump, so nothing else moves
   ([qvac-registry-vcpkg#278](https://github.com/tetherto/qvac-registry-vcpkg/pull/278)).
 
   Trade-off: SVE autovectorization is no longer available in Marian's CPU
