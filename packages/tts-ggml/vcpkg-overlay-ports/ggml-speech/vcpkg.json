@@ -1,0 +1,57 @@
+{
+  "name": "ggml-speech",
+  "version-date": "2026-08-03",
+  "description": "THROWAWAY CI OVERLAY - do not merge. Speech-stack ggml flavour (tetherto/qvac-ext-ggml@speech) with REF repointed to the unmerged cosyvoice-opencl branch (PR #50): the Adreno fused IM2COL->GEMM path previously demanded M % 4 == 0 and silently declined every other shape, so a conv whose output length is not a multiple of 4 fell back to the slow local-memory GEMM. It now builds A into a scratch buffer padded to a multiple of 4 rows and passes that stride to the kernel separately from dst's, with a row-aware store epilogue. A generic backend fix. The version-date is bumped past the published port so the addon prebuild cache misses and CI actually rebuilds against this REF.",
+  "homepage": "https://github.com/tetherto/qvac-ext-ggml/tree/speech",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU backend"
+    },
+    "metal": {
+      "description": "Enable Metal GPU backend (macOS/iOS)"
+    },
+    "metal-fuse-mv-bias": {
+      "description": "Compile in the Q-variant mul_mv + ADD(bias) [+ ADD(residual)] fusion in ggml-metal. Off by default: empirically produces zero tokens on parakeet's EOU q8_0 joint network. Opt in only after Metal A/B-validating your model against the fused path."
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend",
+      "dependencies": [
+        "opencl"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        {
+          "name": "spirv-headers",
+          "version>=": "1.4.341.0"
+        }
+      ]
+    }
+  }
+}
