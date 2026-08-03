@@ -560,7 +560,8 @@ export async function* completion(
     aborted: signal.aborted,
     producedTokens: result.producedTokens,
     generatedTokens: result.stats?.generatedTokens,
-    predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict
+    predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict,
+    stoppedAtContextBoundary: result.stoppedAtContextBoundary
   })
 
   if (typeof kvCache === 'string') {

@@ -418,9 +418,8 @@ export const llmPlugin = definePlugin({
           const cancelled = ctx.signal.aborted
           // EOS tokens are not decoded by llama_decode, so n_eval (and
           // therefore stats.generatedTokens) counts only real decode calls.
-          // When generatedTokens >= effectivePredict the run exhausted its
-          // token budget without hitting EOS — emit stopReason "length".
-          // -1 (unlimited) and -2 (context fill) must never trigger this.
+          // Positive prediction-budget exhaustion and a full context window
+          // both map to stopReason "length"; cancellation takes precedence.
           const effectivePredict =
             request.generationParams?.predict ?? (modelCfg as LlmConfig).predict
           const lengthStop = stoppedByLength({

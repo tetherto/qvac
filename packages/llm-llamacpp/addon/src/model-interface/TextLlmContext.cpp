@@ -1135,19 +1135,16 @@ bool TextLlmContext::onCancel(
 }
 
 bool TextLlmContext::shouldRollbackKnownReasoningCutoff() const {
-  const bool knownTruncation =
-      generationStopReason_ == GenerationStopReason::PredictionLimit ||
-      generationStopReason_ == GenerationStopReason::SequenceLimit;
-  return knownTruncation && needsRecurrentSnapshot_ &&
-         removeThinkingFromContext_ && reasoningEnabled_ &&
-         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
-         !compactor_.hasCapturedCloseSpan();
+  return isKnownReasoningTruncation(generationStopReason_) &&
+         needsRecurrentSnapshot_ && removeThinkingFromContext_ &&
+         reasoningEnabled_ && reasoningState_.inside_reasoning &&
+         compactor_.hasOpenSpan() && !compactor_.hasCapturedCloseSpan();
 }
 
 bool TextLlmContext::rollbackCurrentRequest(
     const std::function<void(const std::string&)>& outputCallback) {
   // Rollback = "request never happened": roll back to the pre-request
-  // cursor for both cancellation and n_predict truncation inside reasoning.
+  // cursor for cancellation or a known truncation inside reasoning.
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
@@ -1183,7 +1180,7 @@ bool TextLlmContext::rollbackCurrentRequest(
   compactor_.clearSpan();
   assistantOutput_.clear();
   generationStarted_ = false;
-  generationStopReason_ = GenerationStopReason::None;
+  generationStopReason_ = stopReasonAfterRequestRollback(generationStopReason_);
   // The sampled tokens were accepted before rollback; clear sampler history so
   // the next clean request cannot inherit a request that "never happened".
   common_sampler_reset(smpl_.get());
