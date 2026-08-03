@@ -343,11 +343,12 @@ endfunction()
 # The whole fuzz dependency stack — FuzzTest, Abseil, RE2, GoogleTest and the
 # ANTLR4 C++ runtime — comes from vcpkg, so the shared binary cache serves it
 # instead of every build tree cloning and compiling it, and a fuzz configure
-# needs no network access of its own. Two of those are QVAC ports in
-# qvac-registry-vcpkg for reasons upstream won't fix: `re2` installs the
-# internal headers FuzzTest's regexp domains include, and `fuzztest` supplies
-# the install() rules FuzzTest ships none of. Both are pinned to what one
-# FuzzTest release expects and move together.
+# needs no network access of its own. Three of those are QVAC ports in
+# qvac-registry-vcpkg for reasons upstream won't fix: `abseil` supplies the
+# newer release FuzzTest requires, `re2` installs the internal headers
+# FuzzTest's regexp domains include, and `fuzztest` supplies the install() rules
+# FuzzTest ships none of. The RE2 and FuzzTest ports are pinned to compatible
+# releases and move together.
 #
 # The consequence worth knowing: the unit tests and the fuzz targets link ONE
 # GoogleTest — the vcpkg one — so there is no target-name collision to design

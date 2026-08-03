@@ -5,10 +5,11 @@ testing to QVAC's native (C++) inference addons. It is the reference for
 maintainers and agents implementing, reviewing, or extending fuzz coverage
 across the addon fleet.
 
-Status: **Phase 0 landed for `classification-ggml`** (template fuzz helper +
-first `FUZZ_TEST`); remaining phases not yet started. Chosen framework:
-**Google FuzzTest** (backed by libFuzzer), with OSS-Fuzz as an optional later
-phase.
+Status: **Phase 0 implemented for `classification-ggml`** (template fuzz
+helper + first `FUZZ_TEST`), including bounded Linux CI coverage. Fleet rollout,
+seed corpora, scheduled continuous fuzzing, and optional OSS-Fuzz onboarding
+remain future phases. Chosen framework: **Google FuzzTest** (backed by
+libFuzzer).
 
 > **The entire fuzz dependency stack comes from vcpkg — FuzzTest included.**
 > FuzzTest, Abseil, RE2, GoogleTest and the ANTLR4 C++ runtime all resolve
@@ -129,7 +130,7 @@ Two consequences for fuzzing, both important:
   targets that don't need it.** The image, text, audio-buffer, and config
   parsers are pure CPU code with no ggml dependency — compiling only those TUs
   into the fuzz binary (no `qvac_addon_link_fabric` / no
-  `qvac_addon_stage_fabric_for_test`) keeps **full** ASan + UBSan + LSan and
+  `qvac_addon_stage_fabric_for_test`) keeps **full** ASan + LSan and
   avoids the boundary entirely.
 - **Targets that genuinely need the runtime** (e.g. a GGUF loader that calls
   into ggml/gguf through fabric) pay the same limited-ASan cost as `addon-test`,
@@ -199,7 +200,7 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
    integer/struct domains) express the image-dimension, GGUF-header, and
    text-parser targets far more precisely than raw byte buffers.
 4. **No toolchain churn.** Uses the already-pinned clang-22 and composes with
-   the ASan/UBSan already in the build.
+   the ASan already used by the native test harness.
 
 ### Accepted trade-offs
 
@@ -505,11 +506,12 @@ addons at once.
 
 - **Phase 0 — template fuzz helper + spike (`classification-ggml`). ✅ Done.**
   Added the `BUILD_FUZZING` option in `qvac_addon_preproject`, the
-  `qvac_addon_enable_fuzztest()` + `qvac_addon_add_fuzz_target()` helpers (pinned
-  FuzzTest via `FetchContent`, C++20 subtree forcing) to
+  `qvac_addon_enable_fuzztest()` + `qvac_addon_add_fuzz_target()` helpers to
   `cmake/qvac-addon/qvac-addon.cmake`, a `test/fuzz` `FUZZ_TEST` over
   `preprocessToTensor` built **without** `LINK_FABRIC` (full ASan + LSan), and
-  `fuzz*` npm scripts + `scripts/run-cpp-fuzz.js`.
+  `fuzz*` npm scripts + `scripts/run-cpp-fuzz.js`. FuzzTest and its dependency
+  stack resolve from vcpkg; the registry ports own the pins and C++20 build
+  requirements.
 - **Phase 0 follow-up — dependencies from vcpkg. ✅ Done.** GoogleTest, ANTLR4 and
   (via the registry's dated port) Abseil moved off FetchContent — see "Dependency
   sourcing". Two bugs surfaced while validating this, both worth knowing about
@@ -629,16 +631,17 @@ addons at once.
 ## References
 
 - `cmake/qvac-addon/qvac-addon.cmake` — the shared addon build template; home of
-  `BUILD_FUZZING`, `qvac_addon_enable_fuzztest()`, `qvac_addon_add_fuzz_target()`
-  (with the FuzzTest pin and the C++20 subtree forcing) and the existing
+  `BUILD_FUZZING`, `qvac_addon_enable_fuzztest()`,
+  `qvac_addon_add_fuzz_target()`, and the existing
   `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
 - `packages/classification-ggml/test/fuzz/` — Phase 0 reference: the
   `CMakeLists.txt` fuzz wiring and `preprocess_fuzz.cpp` (`FUZZ_TEST` over
   `preprocessToTensor`, no fabric link).
 - `packages/classification-ggml/vcpkg.json` /
   `packages/classification-ggml/vcpkg-configuration.json` — the `fuzz` manifest
-  feature (`abseil[asan]` with its version floor, `antlr4`, `gtest`) and the
-  `microsoft/vcpkg` allowlist entries that back the latter two.
+  feature (`abseil[asan]`, `re2[asan]`, and `fuzztest[asan]` with version
+  floors, plus `antlr4` and `gtest`) and the `microsoft/vcpkg` allowlist entries
+  for `antlr4`, `gtest`, and transitive `libuuid`.
 - `packages/classification-ggml/scripts/run-cpp-fuzz.js` — bounded /
   `--continuous` fuzz runner (full ASan + LSan, no `ASAN_OPTIONS` relaxation);
   wired via the `fuzz`, `fuzz:build`, `fuzz:run`, `fuzz:continuous` npm scripts

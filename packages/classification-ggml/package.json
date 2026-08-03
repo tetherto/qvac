@@ -37,7 +37,7 @@
     "test:cpp:fuzz:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=ON -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target addon-test && bare-make build --target preprocess-fuzz",
     "test:cpp:fuzz:run": "npm run test:scripts && node scripts/run-cpp-tests.js && node scripts/run-cpp-fuzz.js",
     "test:cpp:fuzz": "npm run test:cpp:fuzz:build && npm run test:cpp:fuzz:run",
-    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js",
+    "test:scripts": "node --test scripts/__tests__/*.test.js",
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
