@@ -3,9 +3,9 @@ import {
   type DiffusionStreamRequest,
   type DiffusionClientParams,
   type DiffusionStats
-} from '../schemas/index.ts'
-import { stream as streamRpc } from '../dispatch.ts'
-import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
+} from '@/schemas/index'
+import { stream as streamRpc } from '@/dispatch'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 export interface DiffusionProgressTick {
   step: number

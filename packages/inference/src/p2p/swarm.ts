@@ -1,10 +1,10 @@
 import env from 'bare-env'
 import Hyperswarm from 'hyperswarm'
 import crypto from 'bare-crypto'
-import { envSchema, type FirewallConfig } from '../schemas/provide.ts'
-import { getConfig } from '../runtime/state.ts'
-import { registerSwarm, unregisterSwarm } from '../runtime/runtime-lifecycle.ts'
-import { getEngineLogger } from '../logging/index.ts'
+import { envSchema, type FirewallConfig } from '@/schemas/provide'
+import { getConfig } from '@/runtime/state'
+import { registerSwarm, unregisterSwarm } from '@/runtime/runtime-lifecycle'
+import { getEngineLogger } from '@/logging/index'
 import { Buffer } from 'bare-buffer'
 
 const logger = getEngineLogger()

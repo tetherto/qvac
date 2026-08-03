@@ -1,18 +1,18 @@
-import { getModel } from '../../../../runtime/model-registry.ts'
+import { getModel } from '@/runtime/model-registry'
 import {
   textToSpeechStreamRequestSchema,
   type TextToSpeechStreamRequest,
   type TtsStats
-} from '../../../../schemas/index.ts'
+} from '@/schemas/index'
 import Buffer from 'bare-buffer'
-import { nowMs } from '../../../../profiling/index.ts'
-import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
-import { TextToSpeechStreamFailedError } from '../../../../errors/index.ts'
+import { nowMs } from '@/profiling/index'
+import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
+import { TextToSpeechStreamFailedError } from '@/errors/index'
+import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '@/utils/tts-stats'
 import {
-  type TtsStreamChunk,
-  type TtsOpYield,
-  collectTtsStats
-} from '../../../../utils/tts-stats.ts'
+  assertParlerJobOptionsSupported,
+  getParlerJobOptions
+} from '@/plugins/builtin/tts-ggml/ops/parler-options'
 
 type RunStreamingModel = {
   runStreaming: (
@@ -81,7 +81,10 @@ async function* buffersToUtf8Fragments(
   }
 }
 
-function buildRunStreamingOptions(request: TextToSpeechStreamRequest) {
+function buildRunStreamingOptions(
+  request: TextToSpeechStreamRequest,
+  parlerJobOptions: ReturnType<typeof getParlerJobOptions>
+) {
   const o: Record<string, unknown> = {}
   if (request.accumulateSentences !== undefined) {
     o['accumulateSentences'] = request.accumulateSentences
@@ -95,7 +98,7 @@ function buildRunStreamingOptions(request: TextToSpeechStreamRequest) {
   if (request.flushAfterMs !== undefined) {
     o['flushAfterMs'] = request.flushAfterMs
   }
-  return o
+  return { ...o, ...parlerJobOptions }
 }
 
 export async function* textToSpeechStream(
@@ -105,6 +108,8 @@ export async function* textToSpeechStream(
   const request = textToSpeechStreamRequestSchema.parse(params)
 
   const model = getModel(request.modelId)
+  const parlerJobOptions = getParlerJobOptions(request)
+  assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
   const modelStart = nowMs()
 
   if (!hasRunStreaming(model)) {
@@ -114,7 +119,7 @@ export async function* textToSpeechStream(
   }
 
   const textSource = buffersToUtf8Fragments(inputStream)
-  const streamOpts = buildRunStreamingOptions(request)
+  const streamOpts = buildRunStreamingOptions(request, parlerJobOptions)
   const response = await model.runStreaming(
     textSource,
     Object.keys(streamOpts).length > 0 ? streamOpts : undefined

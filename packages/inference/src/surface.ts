@@ -62,6 +62,18 @@ export {
   type GetModelInfoParams,
   type GetLoadedModelInfoParams,
   type LoadedModelInfo,
+  type GetSystemResourcesInput,
+  type ResourceScope,
+  type ResourceProvenance,
+  type ResourceMetric,
+  type GraphicsDriver,
+  type GraphicsDriverCapabilities,
+  type CPUResourceCapabilities,
+  type GPUResourceCapabilities,
+  type SystemResourceCapabilities,
+  type GPUResourceSample,
+  type SystemResourceSample,
+  type SystemResources,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
@@ -120,17 +132,17 @@ export {
   type FinetuneResult,
   MODEL_TYPES,
   ModelType
-} from './schemas/index.ts'
+} from '@/schemas/index'
 
-export { type ToolInput, type ToolHandler } from './utils/tool-helpers.ts'
+export { type ToolInput, type ToolHandler } from '@/utils/tool-helpers'
 
 // The full value-clean schema, profiling, and constant barrels: the @qvac/sdk client
 // and worker source every internal schema/const/profiling name from here, so it
 // carries no duplicate copies. All value-clean (only erased `import type` touches
 // `bare-*`), so this stays Node-safe.
-export * from './schemas/index.ts'
-export * from './profiling/index.ts'
-export * from './constants/index.ts'
+export * from '@/schemas/index'
+export * from '@/profiling/index'
+export * from '@/constants/index'
 
 // Value-clean helpers @qvac/sdk's registry codegen and server-side profiler reach
 // for; not part of either barrel, so re-exported explicitly here.
@@ -139,20 +151,20 @@ export {
   resolveCanonicalEngine,
   ENGINE_TO_ADDON,
   LEGACY_ENGINE_TO_CANONICAL
-} from './schemas/engine-addon-map.ts'
-export { generateProfileId } from './profiling/clock.ts'
-export { readModelExecutionMs } from './profiling/model-execution.ts'
+} from '@/schemas/engine-addon-map'
+export { generateProfileId } from '@/profiling/clock'
+export { readModelExecutionMs } from '@/profiling/model-execution'
 export {
   PUBLIC_MODEL_TYPES,
   ModelTypeAliases,
   modelTypeInputSchema,
   modelTypeSchema
-} from './schemas/model-types.ts'
+} from '@/schemas/model-types'
 
 // Model registry constants
-export * from './models/registry/index.ts'
+export * from '@/models/registry/index'
 
-export { SUPPORTED_AUDIO_FORMATS } from './constants/audio.ts'
+export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 
 // Error classes consumers need for `instanceof` checks: on rejected promises,
 // and on the synchronous throws of `plugins()` / `registerPlugin` (the plugin
@@ -170,13 +182,13 @@ export {
   PluginModelTypeReservedError,
   PluginAlreadyRegisteredError,
   PluginLoggingInvalidError
-} from './errors/index.ts'
-export type { InferenceCancelledPartial } from './errors/index.ts'
+} from '@/errors/index'
+export type { InferenceCancelledPartial } from '@/errors/index'
 
 // Logging
-export { getLogger, LOG_ID, ALL_LOG_ID } from './logging/index.ts'
-export type { Logger, LogTransport, LoggerOptions } from './logging/index.ts'
+export { getLogger, LOG_ID, ALL_LOG_ID } from '@/logging/index'
+export type { Logger, LogTransport, LoggerOptions } from '@/logging/index'
 
 // Profiler
-export { profiler } from './profiling/index.ts'
-export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling/index.ts'
+export { profiler } from '@/profiling/index'
+export type { ProfilerRuntimeOptions, ProfilerExport } from '@/profiling/index'

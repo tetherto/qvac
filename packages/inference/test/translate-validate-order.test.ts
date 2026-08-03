@@ -19,10 +19,10 @@ test('translate: missing LLM `to` fails at schema parse before language detectio
     { detectOne },
     { ZodError }
   ] = await Promise.all([
-    import('../src/runtime/model-registry.ts'),
-    import('../src/schemas/index.ts'),
-    import('../src/plugins/ops/translate.ts'),
-    import('../src/errors/index.ts'),
+    import('@/runtime/model-registry'),
+    import('@/schemas/index'),
+    import('@/plugins/ops/translate'),
+    import('@/errors/index'),
     import('@qvac/langdetect-text'),
     import('zod')
   ])

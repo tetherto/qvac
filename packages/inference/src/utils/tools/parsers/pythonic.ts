@@ -1,5 +1,9 @@
-import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
-import { generateStableToolCallId, validateToolArguments, type ParserResult } from '../shared.ts'
+import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
+import {
+  generateStableToolCallId,
+  validateToolArguments,
+  type ParserResult
+} from '@/utils/tools/shared'
 
 // Pythonic `[name(k=v), ...]` arrays. LFM 2.x is auto-routed; Llama-style
 // tokens are kept for callers that opt in via `completion({ toolDialect:

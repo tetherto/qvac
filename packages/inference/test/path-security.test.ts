@@ -7,8 +7,8 @@ import {
   checkPathWithinBase,
   validateAndJoinPath,
   isPathWithinBase
-} from '../src/utils/path-security'
-import { extractTarStream } from '../src/utils/archive'
+} from '@/utils/path-security'
+import { extractTarStream } from '@/utils/archive'
 
 // ============== sanitizePathComponent ==============
 

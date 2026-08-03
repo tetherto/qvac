@@ -10,11 +10,11 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate
-} from '../schemas/index.ts'
+} from '@/schemas/index'
 import Buffer from 'bare-buffer'
-import { stream as streamRpc, duplex, type DuplexReadable } from '../dispatch.ts'
-import { getAppLogger } from '../logging/index.ts'
-import { TextToSpeechStreamFailedError } from '../errors/index.ts'
+import { stream as streamRpc, duplex, type DuplexReadable } from '@/dispatch'
+import { getAppLogger } from '@/logging/index'
+import { TextToSpeechStreamFailedError } from '@/errors/index'
 
 const logger = getAppLogger()
 

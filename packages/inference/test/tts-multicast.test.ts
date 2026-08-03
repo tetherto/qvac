@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { TtsMulticast } from '../src/api/text-to-speech'
-import type { TtsResponse } from '../src/schemas'
+import { TtsMulticast } from '@/api/text-to-speech'
+import type { TtsResponse } from '@/schemas'
 
 // ---------------------------------------------------------------------------
 // Push-controlled source: the test pushes `TtsResponse` items at deterministic

@@ -1,7 +1,7 @@
 import type RPC from 'bare-rpc'
-import { createErrorResponse, responseSchema } from '../schemas/index.ts'
-import { getEngineLogger } from '../logging/index.ts'
-import { type ServerProfiler } from '../profiling/index.ts'
+import { createErrorResponse, responseSchema } from '@/schemas/index'
+import { getEngineLogger } from '@/logging/index'
+import { type ServerProfiler } from '@/profiling/index'
 
 const logger = getEngineLogger()
 

@@ -1,6 +1,6 @@
-import type { StopProvideResponse } from '../schemas/provide.ts'
-import { unregisterProvider } from './swarm.ts'
-import { getEngineLogger } from '../logging/index.ts'
+import type { StopProvideResponse } from '@/schemas/provide'
+import { unregisterProvider } from '@/p2p/swarm'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

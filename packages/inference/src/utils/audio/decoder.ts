@@ -4,8 +4,8 @@ import { FFmpegDecoder } from '@qvac/decoder-audio'
 import { FORMATS_NEEDING_DECODE } from '@qvac/decoder-audio/constants'
 import { Readable } from 'bare-stream'
 import Buffer from 'bare-buffer'
-import { getEngineLogger } from '../../logging/index.ts'
-import { type AudioFormat } from '../../schemas/index.ts'
+import { getEngineLogger } from '@/logging/index'
+import { type AudioFormat } from '@/schemas/index'
 
 const logger = getEngineLogger()
 

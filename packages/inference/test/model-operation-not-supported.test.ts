@@ -1,10 +1,10 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { clearPlugins, registerPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
-import { dispatchPluginReply } from '../src/handlers/plugin-dispatch'
-import { ModelOperationNotSupportedError } from '../src/errors'
-import { type CanonicalModelType, ERROR_CODES } from '../src/schemas'
+import { clearPlugins, registerPlugin } from '@/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import { dispatchPluginReply } from '@/handlers/plugin-dispatch'
+import { ModelOperationNotSupportedError } from '@/errors'
+import { type CanonicalModelType, ERROR_CODES } from '@/schemas'
 
 let idCounter = 0
 function makeId(prefix: string) {

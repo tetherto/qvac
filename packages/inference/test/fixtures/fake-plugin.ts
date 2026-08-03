@@ -3,8 +3,8 @@
 // stub model and a trivial `ping` handler, so registration, dispatch, and
 // lifecycle can be exercised in-process on Bare with no compiled dependency.
 import { z } from 'zod'
-import { definePlugin, defineHandler } from '../../src/schemas/plugin'
-import type { QvacPlugin } from '../../src/schemas/plugin'
+import { definePlugin, defineHandler } from '@/schemas/plugin'
+import type { QvacPlugin } from '@/schemas/plugin'
 
 export function makeFakePlugin(modelType: string): QvacPlugin {
   return definePlugin({

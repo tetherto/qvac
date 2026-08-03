@@ -10,13 +10,13 @@ import {
   type BciTranscribeStreamMetadataSession,
   type RPCOptions,
   type TranscribeSegment
-} from '../schemas/index.ts'
+} from '@/schemas/index'
 import Buffer from 'bare-buffer'
-import { stream, duplex, type DuplexReadable } from '../dispatch.ts'
-import { getAppLogger } from '../logging/index.ts'
-import { TranscriptionFailedError } from '../errors/index.ts'
-import { decoratePromise } from '../utils/decorate-promise.ts'
-import { generateRequestId } from '../runtime/request-id.ts'
+import { stream, duplex, type DuplexReadable } from '@/dispatch'
+import { getAppLogger } from '@/logging/index'
+import { TranscriptionFailedError } from '@/errors/index'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { generateRequestId } from '@/runtime/request-id'
 
 const logger = getAppLogger()
 

@@ -1,7 +1,7 @@
-import { type HeartbeatRequest, type HeartbeatResponse } from '../schemas/index.ts'
-import type { DelegateBase } from '../schemas/delegate.ts'
-import { send } from '../dispatch.ts'
-import { InvalidResponseError } from '../errors/index.ts'
+import { type HeartbeatRequest, type HeartbeatResponse } from '@/schemas/index'
+import type { DelegateBase } from '@/schemas/delegate'
+import { send } from '@/dispatch'
+import { InvalidResponseError } from '@/errors/index'
 
 /**
  * Checks if a delegated provider is online by sending a heartbeat round-trip.

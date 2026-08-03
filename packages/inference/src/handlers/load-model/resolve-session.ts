@@ -1,9 +1,13 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { ModelProgressUpdate, ResolveContext } from '../../schemas/index.ts'
-import { resolveModelPath, resolveModelPathWithStats } from './resolve.ts'
-import { cancelTransfer } from './download-manager.ts'
-import type { DownloadRequestBinding, ResolveResult, DownloadHooks } from './types.ts'
-import { mergeDownloadStats } from './download-stats.ts'
+import type { ModelProgressUpdate, ResolveContext } from '@/schemas/index'
+import { resolveModelPath, resolveModelPathWithStats } from '@/handlers/load-model/resolve'
+import { cancelTransfer } from '@/handlers/load-model/download-manager'
+import type {
+  DownloadRequestBinding,
+  ResolveResult,
+  DownloadHooks
+} from '@/handlers/load-model/types'
+import { mergeDownloadStats } from '@/handlers/load-model/download-stats'
 
 export interface ResolveSessionOptions {
   progressCallback?: ((update: ModelProgressUpdate) => void) | undefined

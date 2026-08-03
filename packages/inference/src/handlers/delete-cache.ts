@@ -1,6 +1,6 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from '../schemas/index.ts'
-import { deleteKvCacheState } from '../plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts'
-import { getEngineLogger } from '../logging/index.ts'
+import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas/index'
+import { deleteKvCacheState } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

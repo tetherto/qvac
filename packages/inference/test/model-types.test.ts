@@ -7,7 +7,7 @@ import {
   modelTypeSchema,
   normalizeModelType,
   isModelTypeAlias
-} from '../src/schemas/model-types'
+} from '@/schemas/model-types'
 
 test('ModelType contains all canonical values', (t) => {
   t.is(ModelType.llamacppCompletion, 'llamacpp-completion')

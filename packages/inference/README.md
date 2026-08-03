@@ -79,6 +79,29 @@ An operation called before any plugin is registered throws `WorkerPluginsNotRegi
 
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
 
+## System resource diagnostics
+
+Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Like any other operation it runs after the first plugin is registered:
+
+```js
+import { registerPlugin, getSystemResources } from '@qvac/inference'
+import { llmPlugin } from '@qvac/inference/llamacpp-completion/plugin'
+
+registerPlugin(llmPlugin)
+
+const resources = await getSystemResources({ sample: true })
+
+if (resources.capabilities.memory.totalBytes.status === 'supported') {
+  console.log('System memory:', resources.capabilities.memory.totalBytes.value)
+}
+
+if (resources.sample?.cpu.status === 'supported') {
+  console.log('CPU utilization:', resources.sample.cpu.value)
+}
+```
+
+Every metric reports `supported`, `unavailable`, `unverified`, or `failed`. Supported values include their source and scope. These values are diagnostics; they do not reserve memory or guarantee that a model can be loaded.
+
 ## Connection lifecycle
 
 `unloadModel` releases a model but leaves the shared infrastructure — swarm, registry client, corestore — running so a long-lived process survives load/unload cycles. Tear it down explicitly when you are done:

@@ -5,7 +5,7 @@ import {
   defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema,
   type PluginHandlerCancel
-} from '../src/schemas/plugin'
+} from '@/schemas/plugin'
 
 // -----------------------------------------------------------------------------
 // Plugin cancel-capability contract.
@@ -133,16 +133,16 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     { vlaPlugin },
     { classificationPlugin }
   ] = await Promise.all([
-    import('../src/plugins/builtin/llamacpp-completion/plugin'),
-    import('../src/plugins/builtin/llamacpp-embedding/plugin'),
-    import('../src/plugins/builtin/whispercpp-transcription/plugin'),
-    import('../src/plugins/builtin/parakeet-transcription/plugin'),
-    import('../src/plugins/builtin/nmtcpp-translation/plugin'),
-    import('../src/plugins/builtin/tts-ggml/plugin'),
-    import('../src/plugins/builtin/ggml-ocr/plugin'),
-    import('../src/plugins/builtin/sdcpp-generation/plugin'),
-    import('../src/plugins/builtin/ggml-vla/plugin'),
-    import('../src/plugins/builtin/ggml-classification/plugin')
+    import('@/plugins/builtin/llamacpp-completion/plugin'),
+    import('@/plugins/builtin/llamacpp-embedding/plugin'),
+    import('@/plugins/builtin/whispercpp-transcription/plugin'),
+    import('@/plugins/builtin/parakeet-transcription/plugin'),
+    import('@/plugins/builtin/nmtcpp-translation/plugin'),
+    import('@/plugins/builtin/tts-ggml/plugin'),
+    import('@/plugins/builtin/ggml-ocr/plugin'),
+    import('@/plugins/builtin/sdcpp-generation/plugin'),
+    import('@/plugins/builtin/ggml-vla/plugin'),
+    import('@/plugins/builtin/ggml-classification/plugin')
   ])
 
   const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {

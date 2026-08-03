@@ -1,9 +1,9 @@
 import QvacLogger, { type LogLevel } from '@qvac/logging'
 import { LOG_LEVELS } from '@qvac/logging/constants'
-import { sendLogToStreams } from '../runtime/logging-stream-registry.ts'
-import { isLevelEnabled, formatArg } from './utils.ts'
-import { LOG_ID, LOG_NAMESPACE } from './namespaces.ts'
-import type { Logger, LoggerOptions, LogTransport } from './types.ts'
+import { sendLogToStreams } from '@/runtime/logging-stream-registry'
+import { isLevelEnabled, formatArg } from '@/logging/utils'
+import { LOG_ID, LOG_NAMESPACE } from '@/logging/namespaces'
+import type { Logger, LoggerOptions, LogTransport } from '@/logging/types'
 
 // A single instance is shared across every evaluation of this module via
 // globalThis so that log level and console toggles reach all loggers even if

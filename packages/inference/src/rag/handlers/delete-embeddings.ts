@@ -1,9 +1,6 @@
-import { getRagDbAdapter, hasRagWorkspaceStorage } from '../rag-workspace-manager.ts'
-import {
-  ragDeleteEmbeddingsParamsSchema,
-  type RagDeleteEmbeddingsParams
-} from '../../schemas/index.ts'
-import { RAGDeleteFailedError } from '../../errors/index.ts'
+import { getRagDbAdapter, hasRagWorkspaceStorage } from '@/rag/rag-workspace-manager'
+import { ragDeleteEmbeddingsParamsSchema, type RagDeleteEmbeddingsParams } from '@/schemas/index'
+import { RAGDeleteFailedError } from '@/errors/index'
 
 export async function deleteEmbeddings(params: RagDeleteEmbeddingsParams) {
   const { ids, workspace } = ragDeleteEmbeddingsParamsSchema.parse(params)

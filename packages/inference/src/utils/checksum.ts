@@ -1,7 +1,7 @@
 import fs from 'bare-fs'
 import crypto from 'bare-crypto'
-import { nowMs } from '../profiling/index.ts'
-import type { DownloadHooks } from '../handlers/load-model/types.ts'
+import { nowMs } from '@/profiling/index'
+import type { DownloadHooks } from '@/handlers/load-model/types'
 import { type Buffer } from 'bare-buffer'
 
 export async function calculateFileChecksum(filePath: string): Promise<string> {

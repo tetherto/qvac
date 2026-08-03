@@ -1,16 +1,12 @@
-import { getModel } from '../../runtime/model-registry.ts'
-import { type EmbedParams, type EmbedStats, embedParamsSchema } from '../../schemas/index.ts'
-import { buildUnaryResult } from '../../profiling/model-execution.ts'
-import {
-  EmbedNoEmbeddingsError,
-  EmbedFailedError,
-  InferenceCancelledError
-} from '../../errors/index.ts'
-import { nowMs } from '../../profiling/index.ts'
-import type { EmbedResponse } from '../../utils/addon-responses.ts'
-import { getRequestRegistry, withRequestContext } from '../../runtime/index.ts'
-import { generateRandomRequestId } from '../../runtime/request-id.ts'
-import { getEngineLogger } from '../../logging/index.ts'
+import { getModel } from '@/runtime/model-registry'
+import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas/index'
+import { buildUnaryResult } from '@/profiling/model-execution'
+import { EmbedNoEmbeddingsError, EmbedFailedError, InferenceCancelledError } from '@/errors/index'
+import { nowMs } from '@/profiling/index'
+import type { EmbedResponse } from '@/utils/addon-responses'
+import { getRequestRegistry, withRequestContext } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
+import { getEngineLogger } from '@/logging/index'
 
 export interface EmbedResult {
   embedding: number[] | number[][]

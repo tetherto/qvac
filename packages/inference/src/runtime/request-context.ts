@@ -1,10 +1,10 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { DisposableScope } from './disposable-scope.ts'
+import type { DisposableScope } from '@/runtime/disposable-scope'
 import {
   createRequestRegistry as createRegistry,
   type RequestRegistry
-} from './request-registry.ts'
-import type { Logger, LogTransport } from '../logging/types.ts'
+} from '@/runtime/request-registry'
+import type { Logger, LogTransport } from '@/logging/types'
 import type { LogLevel } from '@qvac/logging'
 
 /**

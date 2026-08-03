@@ -1,6 +1,6 @@
-import { send } from '../dispatch.ts'
-import type { LifecycleState } from '../schemas/index.ts'
-import { InvalidResponseError } from '../errors/index.ts'
+import { send } from '@/dispatch'
+import type { LifecycleState } from '@/schemas/index'
+import { InvalidResponseError } from '@/errors/index'
 
 /**
  * Returns the current runtime lifecycle state.

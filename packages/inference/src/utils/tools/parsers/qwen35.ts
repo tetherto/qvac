@@ -1,5 +1,9 @@
-import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
-import { generateStableToolCallId, validateToolArguments, type ParserResult } from '../shared.ts'
+import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
+import {
+  generateStableToolCallId,
+  validateToolArguments,
+  type ParserResult
+} from '@/utils/tools/shared'
 
 // Coerce raw parameter text to the type declared in the tool's JSON schema.
 // String values are raw (not JSON-quoted); arrays/objects are valid JSON.

@@ -4,8 +4,8 @@
   "exclude": ["examples/**/*", "test/**/*"],
   "compilerOptions": {
     "noEmit": false,
+    "allowImportingTsExtensions": false,
     "declaration": true,
-    "rewriteRelativeImportExtensions": true,
     "rootDir": "src",
     "outDir": "dist"
   }

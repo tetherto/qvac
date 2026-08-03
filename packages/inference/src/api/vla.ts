@@ -8,9 +8,9 @@ import {
   type VlaRunResponse,
   vlaHparamsResponseSchema,
   vlaRunResponseSchema
-} from '../schemas/index.ts'
-import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
-import { invokePlugin } from './invoke-plugin.ts'
+} from '@/schemas/index'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+import { invokePlugin } from '@/api/invoke-plugin'
 
 const VLA_RUN_HANDLER = 'vlaRun'
 const VLA_HPARAMS_HANDLER = 'vlaHparams'

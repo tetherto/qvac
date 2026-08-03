@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { initEnv, getValidatedEnv } from '../src/runtime/env'
+import { initEnv, getValidatedEnv } from '@/runtime/env'
 
 function withArgv(argv: string[], fn: () => void) {
   const original = Bare.argv.slice()

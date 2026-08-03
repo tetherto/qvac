@@ -1,4 +1,4 @@
-import { getRequestRegistry } from '../runtime/index.ts'
+import { getRequestRegistry } from '@/runtime/index'
 
 // Sentinel for "no workspace specified". Mirrors the value re-exported
 // from `rag-workspace-manager.ts`; redeclared locally so this module is

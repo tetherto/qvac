@@ -1,8 +1,8 @@
 import test from 'brittle'
-import { plugins, clearPlugins, getAllPlugins, hasPlugin } from '../src/plugins'
-import { ModelType } from '../src/schemas'
-import { PluginDefinitionInvalidError } from '../src/errors'
-import type { QvacPlugin } from '../src/schemas/plugin'
+import { plugins, clearPlugins, getAllPlugins, hasPlugin } from '@/plugins'
+import { ModelType } from '@/schemas'
+import { PluginDefinitionInvalidError } from '@/errors'
+import type { QvacPlugin } from '@/schemas/plugin'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 
 test('plugins([]) returns the host API without registering anything', function (t) {

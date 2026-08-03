@@ -1,5 +1,5 @@
-import type { CompletionStats } from '../../../../schemas/index.ts'
-import type { LlmStats } from '../../../../utils/addon-responses.ts'
+import type { CompletionStats } from '@/schemas/index'
+import type { LlmStats } from '@/utils/addon-responses'
 
 function finiteNumber(value: number | undefined) {
   return value !== undefined && Number.isFinite(value) ? value : undefined
@@ -38,4 +38,23 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
   }
 
   return normalized
+}
+
+/**
+ * Attach the count of non-empty pieces the addon streamed without
+ * overwriting `generatedTokens` (`llama_perf` `n_eval`). Length / KV-cache
+ * decisions keep the decode count; usage reporting prefers `emittedTokens`.
+ * Zero is attached explicitly so inflated `n_eval` cannot be used as usage
+ * when nothing was streamed.
+ */
+export function withEmittedTokens(
+  stats: CompletionStats | undefined,
+  emittedPieces: number
+): CompletionStats | undefined {
+  const emittedTokens = emittedPieces
+  if (!stats && emittedTokens === 0) return undefined
+  return {
+    ...(stats ?? {}),
+    emittedTokens
+  }
 }

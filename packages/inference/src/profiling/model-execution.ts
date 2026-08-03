@@ -2,7 +2,7 @@
  * Helpers for propagating model execution timing via internal symbols.
  */
 
-import { MODEL_EXECUTION_KEY } from '../schemas/index.ts'
+import { MODEL_EXECUTION_KEY } from '@/schemas/index'
 
 export function hasDefinedValues<T extends Record<string, unknown>>(obj: T): boolean {
   return Object.values(obj).some((v) => v !== undefined)

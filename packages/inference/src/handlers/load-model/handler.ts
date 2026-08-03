@@ -3,23 +3,19 @@ import type {
   LoadModelResponse,
   ModelProgressUpdate,
   ReloadConfigRequest
-} from '../../schemas/index.ts'
+} from '@/schemas/index'
 import {
   normalizeModelType,
   PROFILING_KEY,
   OPERATION_EVENT_KEY,
   type OperationEvent
-} from '../../schemas/index.ts'
-import { loadModel } from '../../plugins/ops/load-model.ts'
-import { createResolveSession } from './resolve-session.ts'
-import { nowMs, generateProfileId } from '../../profiling/clock.ts'
-import { getModelEntry, updateModelConfig } from '../../runtime/model-registry.ts'
-import {
-  generateShortHash,
-  canonicalConfigString,
-  transformConfigForReload
-} from '../../utils/index.ts'
-import { buildDownloadProfilingFields } from './types.ts'
+} from '@/schemas/index'
+import { loadModel } from '@/plugins/ops/load-model'
+import { createResolveSession } from '@/handlers/load-model/resolve-session'
+import { nowMs, generateProfileId } from '@/profiling/clock'
+import { getModelEntry, updateModelConfig } from '@/runtime/model-registry'
+import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/utils/index'
+import { buildDownloadProfilingFields } from '@/handlers/load-model/types'
 import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
@@ -29,12 +25,12 @@ import {
   ModelLoadFailedError,
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
-} from '../../errors/index.ts'
-import { getEngineLogger } from '../../logging/index.ts'
-import { formatZodError } from '../../utils/zod-error.ts'
-import { getPlugin } from '../../plugins/index.ts'
-import { getRequestRegistry, withRequestContext } from '../../runtime/index.ts'
-import { generateRandomRequestId } from '../../runtime/request-id.ts'
+} from '@/errors/index'
+import { getEngineLogger } from '@/logging/index'
+import { formatZodError } from '@/utils/zod-error'
+import { getPlugin } from '@/plugins/index'
+import { getRequestRegistry, withRequestContext } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
 
 const logger = getEngineLogger()
 

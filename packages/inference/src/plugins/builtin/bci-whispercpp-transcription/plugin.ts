@@ -15,12 +15,12 @@ import {
   type PluginModelResult,
   type BciConfig,
   type TranscribeSegment
-} from '../../../schemas/index.ts'
-import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
-import { bciTranscribe, bciTranscribeStream } from '../../ops/bci-transcribe.ts'
-import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
-import { buildBciWhispercppArgs } from './args.ts'
-import { resolveBciConfig } from './resolve-config.ts'
+} from '@/schemas/index'
+import { createStreamLogger, registerAddonLogger } from '@/logging/index'
+import { bciTranscribe, bciTranscribeStream } from '@/plugins/ops/bci-transcribe'
+import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { buildBciWhispercppArgs } from '@/plugins/builtin/bci-whispercpp-transcription/args'
+import { resolveBciConfig } from '@/plugins/builtin/bci-whispercpp-transcription/resolve-config'
 
 function createBciModel(
   modelId: string,

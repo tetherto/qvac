@@ -1,11 +1,11 @@
 import test from 'brittle'
-import { orchestrateCompletion, ToolResultReader } from '../src/handlers/completion-orchestrate.ts'
+import { orchestrateCompletion, ToolResultReader } from '@/handlers/completion-orchestrate'
 import type {
   CompletionOrchestrateRequest,
   CompletionOrchestrateResponse,
   CompletionStreamRequest,
   CompletionStreamResponse
-} from '../src/schemas/index.ts'
+} from '@/schemas/index'
 
 function baseRequest(overrides: Partial<CompletionOrchestrateRequest> = {}) {
   return {

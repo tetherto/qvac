@@ -1,38 +1,38 @@
-import { models, getModelByPath } from '../../models/registry/models.ts'
+import { models, getModelByPath } from '@/models/registry/models'
 import {
   hyperdriveUrlSchema,
   registryUrlSchema,
   SUPPORTED_ARCHIVE_EXTENSIONS,
   modelInputToSrcSchema,
   type ModelProgressUpdate
-} from '../../schemas/index.ts'
+} from '@/schemas/index'
 import {
   getModelsCacheDir,
   getShardedModelCacheDir,
   generateShortHash,
   extractAndValidateShardedArchive
-} from '../../utils/index.ts'
+} from '@/utils/index'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { downloadModelFromHttp } from './http.ts'
-import { downloadModelFromHyperdrive } from './hyperdrive.ts'
-import { downloadModelFromRegistry } from './registry.ts'
-import { getExplicitRegistryMetadata } from './registry-metadata.ts'
+import { downloadModelFromHttp } from '@/handlers/load-model/http'
+import { downloadModelFromHyperdrive } from '@/handlers/load-model/hyperdrive'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
+import { getExplicitRegistryMetadata } from '@/handlers/load-model/registry-metadata'
 import {
   downloadModelFromHttpWithStats,
   downloadModelFromHyperdriveWithStats,
   downloadModelFromRegistryWithStats
-} from './download-stats.ts'
-import type { ResolveResult, DownloadResult, DownloadHooks } from './types.ts'
+} from '@/handlers/load-model/download-stats'
+import type { ResolveResult, DownloadResult, DownloadHooks } from '@/handlers/load-model/types'
 import type { AbortSignal } from 'bare-abort-controller'
 import {
   InferenceCancelledError,
   ModelLoadFailedError,
   ModelNotFoundError,
   SeedingNotSupportedError
-} from '../../errors/index.ts'
-import { validateAndJoinPath } from '../../utils/path-security.ts'
-import { getEngineLogger } from '../../logging/index.ts'
+} from '@/errors/index'
+import { validateAndJoinPath } from '@/utils/path-security'
+import { getEngineLogger } from '@/logging/index'
 
 type ResolveMode = 'base' | 'stats'
 

@@ -12,10 +12,10 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type VlaConfig
-} from '../../../schemas/index.ts'
-import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
-import { vlaRun } from './ops/vla-run.ts'
-import { vlaGetHparams } from './ops/vla-hparams.ts'
+} from '@/schemas/index'
+import { createStreamLogger, registerAddonLogger } from '@/logging/index'
+import { vlaRun } from '@/plugins/builtin/ggml-vla/ops/vla-run'
+import { vlaGetHparams } from '@/plugins/builtin/ggml-vla/ops/vla-hparams'
 
 interface VlaLoadOptions {
   backend?: 'auto' | 'cpu'

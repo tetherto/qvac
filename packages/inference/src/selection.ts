@@ -1,5 +1,5 @@
-import type { Request } from './schemas/index.ts'
-import type { HandlerEntry } from './handlers/types.ts'
+import type { Request } from '@/schemas/index'
+import type { HandlerEntry } from '@/handlers/types'
 
 export interface HandlerSelection {
   handler: HandlerEntry['handler']

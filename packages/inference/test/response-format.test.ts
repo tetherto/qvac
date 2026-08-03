@@ -1,9 +1,6 @@
 import test from 'brittle'
-import {
-  responseFormatSchema,
-  completionClientParamsSchema
-} from '../src/schemas/completion-stream'
-import { getResponseFormatJsonSchema } from '../src/utils/response-format'
+import { responseFormatSchema, completionClientParamsSchema } from '@/schemas/completion-stream'
+import { getResponseFormatJsonSchema } from '@/utils/response-format'
 
 test('responseFormatSchema: accepts text', (t) => {
   t.is(responseFormatSchema.safeParse({ type: 'text' }).success, true)

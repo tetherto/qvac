@@ -6,8 +6,8 @@ import {
   getAutoCacheLookupHistory,
   getKVCacheDir,
   validateAndJoinPath
-} from '../../utils/index.ts'
-import { getEngineLogger } from '../../logging/index.ts'
+} from '@/utils/index'
+import { getEngineLogger } from '@/logging/index'
 import { Buffer } from 'bare-buffer'
 
 const logger = getEngineLogger()

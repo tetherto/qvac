@@ -1,7 +1,7 @@
 import test from 'brittle'
-import type { Request, Response } from '../src/schemas'
-import type { HandlerEntry } from '../src/handlers/types'
-import { selectHandler } from '../src/selection'
+import type { Request, Response } from '@/schemas'
+import type { HandlerEntry } from '@/handlers/types'
+import { selectHandler } from '@/selection'
 
 function localHandler() {
   return { type: 'heartbeat' } as Response

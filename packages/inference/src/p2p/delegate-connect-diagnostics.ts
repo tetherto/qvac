@@ -1,5 +1,5 @@
-import { withTimeout } from '../utils/withTimeout.ts'
-import { getEngineLogger } from '../logging/index.ts'
+import { withTimeout } from '@/utils/withTimeout'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

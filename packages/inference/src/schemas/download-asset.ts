@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AbortController } from 'bare-abort-controller'
-import type { ModelProgressUpdate } from './load-model.ts'
-import { modelSrcInputSchema, modelInputToSrcSchema } from './model-src-utils.ts'
+import type { ModelProgressUpdate } from '@/schemas/load-model'
+import { modelSrcInputSchema, modelInputToSrcSchema } from '@/schemas/model-src-utils'
 
 const downloadAssetOptionsBaseSchema = z.object({
   assetSrc: modelSrcInputSchema,

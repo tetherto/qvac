@@ -1,4 +1,4 @@
-import { type CanonicalModelType } from '../schemas/model-types.ts'
+import { type CanonicalModelType } from '@/schemas/model-types'
 
 export const RAG_NAMESPACE = 'rag:hyperdb' as const
 

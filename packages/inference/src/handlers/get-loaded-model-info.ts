@@ -2,12 +2,12 @@ import type {
   GetLoadedModelInfoRequest,
   GetLoadedModelInfoResponse,
   LoadedModelInfo
-} from '../schemas/index.ts'
-import { getModelEntry } from '../runtime/model-registry.ts'
-import { getPlugin } from '../plugins/registry.ts'
-import { detectToolDialectFromName } from '../utils/tools/index.ts'
-import { ModelNotFoundError } from '../errors/index.ts'
-import { getEngineLogger } from '../logging/index.ts'
+} from '@/schemas/index'
+import { getModelEntry } from '@/runtime/model-registry'
+import { getPlugin } from '@/plugins/registry'
+import { detectToolDialectFromName } from '@/utils/tools/index'
+import { ModelNotFoundError } from '@/errors/index'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

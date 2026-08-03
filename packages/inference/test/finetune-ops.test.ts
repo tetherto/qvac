@@ -7,15 +7,15 @@ import {
   registerModel,
   unregisterModel,
   type AnyModel
-} from '../src/runtime/model-registry'
+} from '@/runtime/model-registry'
 import {
   finetune as finetuneOp,
   getFinetuneState,
   getFinetuneStateFromCheckpoints,
   startFinetune
-} from '../src/plugins/builtin/llamacpp-completion/ops/finetune'
-import { ModelType } from '../src/schemas'
-import { CompletionFailedError } from '../src/errors'
+} from '@/plugins/builtin/llamacpp-completion/ops/finetune'
+import { ModelType } from '@/schemas'
+import { CompletionFailedError } from '@/errors'
 
 function createTempCheckpointDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'finetune-op-test-'))

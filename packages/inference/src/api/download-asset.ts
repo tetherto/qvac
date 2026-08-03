@@ -1,17 +1,13 @@
-import { send, stream } from '../dispatch.ts'
+import { send, stream } from '@/dispatch'
 import {
   type DownloadAssetOptions as BaseDownloadAssetOptions,
   type RPCOptions,
   downloadAssetOptionsToRequestSchema
-} from '../schemas/index.ts'
-import {
-  DownloadAssetFailedError,
-  StreamEndedError,
-  InvalidResponseError
-} from '../errors/index.ts'
-import { decoratePromise } from '../utils/decorate-promise.ts'
-import { parseClientInput } from './parse-input.ts'
-import { generateRequestId } from '../runtime/request-id.ts'
+} from '@/schemas/index'
+import { DownloadAssetFailedError, StreamEndedError, InvalidResponseError } from '@/errors/index'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { parseClientInput } from '@/api/parse-input'
+import { generateRequestId } from '@/runtime/request-id'
 
 export type DownloadAssetOptions = BaseDownloadAssetOptions
 

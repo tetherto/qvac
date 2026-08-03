@@ -1,11 +1,11 @@
-import { send, stream } from '../dispatch.ts'
+import { send, stream } from '@/dispatch'
 import type {
   PluginInvokeRequest,
   PluginInvokeStreamRequest,
   PluginInvokeStreamResponse,
   RPCOptions
-} from '../schemas/index.ts'
-import { InvalidResponseError } from '../errors/index.ts'
+} from '@/schemas/index'
+import { InvalidResponseError } from '@/errors/index'
 
 export interface InvokePluginOptions<TParams = unknown> {
   modelId: string

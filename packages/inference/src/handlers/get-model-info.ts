@@ -4,14 +4,14 @@ import type {
   ModelInfo,
   LoadedInstance,
   CacheFileInfo
-} from '../schemas/index.ts'
-import { models, type RegistryItem } from '../models/registry/models.ts'
-import { getAllModelIds, getModelEntry } from '../runtime/model-registry.ts'
-import { generateShortHash } from '../utils/index.ts'
+} from '@/schemas/index'
+import { models, type RegistryItem } from '@/models/registry/models'
+import { getAllModelIds, getModelEntry } from '@/runtime/model-registry'
+import { generateShortHash } from '@/utils/index'
 import { promises as fsPromises } from 'bare-fs'
-import { getShardPath, getModelsCacheDir, getSingleFileCachePath } from '../utils/cache/paths.ts'
-import { validateAndJoinPath } from '../utils/path-security.ts'
-import { ModelNotFoundError } from '../errors/index.ts'
+import { getShardPath, getModelsCacheDir, getSingleFileCachePath } from '@/utils/cache/paths'
+import { validateAndJoinPath } from '@/utils/path-security'
+import { ModelNotFoundError } from '@/errors/index'
 
 type CacheStatusResult = {
   cacheFiles: CacheFileInfo[]

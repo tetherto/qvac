@@ -8,10 +8,10 @@ import {
   registerModel,
   unregisterModel,
   type AnyModel
-} from '../src/runtime/model-registry'
-import { clearPlugins, registerPlugin } from '../src/plugins'
-import { handleFinetune } from '../src/handlers/finetune'
-import { finetune as finetuneOp } from '../src/plugins/builtin/llamacpp-completion/ops/finetune'
+} from '@/runtime/model-registry'
+import { clearPlugins, registerPlugin } from '@/plugins'
+import { handleFinetune } from '@/handlers/finetune'
+import { finetune as finetuneOp } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
 import {
   ModelType,
   defineHandler,
@@ -21,7 +21,7 @@ import {
   type FinetuneProgress,
   type FinetuneRequest,
   type FinetuneResult
-} from '../src/schemas'
+} from '@/schemas'
 
 function registerFinetunePlugin() {
   registerPlugin({

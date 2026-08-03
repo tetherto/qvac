@@ -1,16 +1,16 @@
-import { nowMs } from './clock.ts'
-import { record, shouldProfile } from './controller.ts'
+import { nowMs } from '@/profiling/clock'
+import { record, shouldProfile } from '@/profiling/controller'
 import {
   recordPhase,
   recordServerBreakdownPhases,
   type BaseTimings,
   type BaseEvent
-} from './events.ts'
+} from '@/profiling/events'
 import type {
   ProfilingRequestMeta,
   ProfilingResponseMeta,
   DelegationBreakdown
-} from '../schemas/index.ts'
+} from '@/schemas/index'
 
 export interface DelegatedHandlerOptions {
   profilingMeta?: ProfilingRequestMeta

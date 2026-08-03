@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { createErrorResponse } from '../src/schemas/error'
+import { createErrorResponse } from '@/schemas/error'
 import {
   ContextOverflowError,
   RequestIdConflictError,
@@ -7,7 +7,7 @@ import {
   RequestRejectedByPolicyError,
   InferenceCancelledError,
   ModelNotLoadedError
-} from '../src/errors'
+} from '@/errors'
 
 test('createErrorResponse: RequestRejectedByPolicyError carries its named fields on typedFields', (t) => {
   const err = new RequestRejectedByPolicyError(

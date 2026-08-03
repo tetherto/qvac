@@ -3,11 +3,11 @@ import type {
   CompletionOrchestrateResponse,
   CompletionStreamRequest,
   CompletionStreamResponse
-} from '../schemas/index.ts'
-import { toolCallbackResultSchema, type ToolCallbackResult } from '../schemas/completion-stream.ts'
-import { aggregateEvents } from '../utils/aggregate-events.ts'
-import { CompletionFailedError } from '../errors/index.ts'
-import { dispatchPluginStream } from './plugin-dispatch.ts'
+} from '@/schemas/index'
+import { toolCallbackResultSchema, type ToolCallbackResult } from '@/schemas/completion-stream'
+import { aggregateEvents } from '@/utils/aggregate-events'
+import { CompletionFailedError } from '@/errors/index'
+import { dispatchPluginStream } from '@/handlers/plugin-dispatch'
 
 const DEFAULT_MAX_TOOL_TURNS = 8
 
