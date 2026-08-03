@@ -448,20 +448,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // inference. A stale snapshot from a previous turn would otherwise
   // block the new snapshot via `snapshotForRecurrentRollback`'s
   // `!empty()` early-return.
-  rollbackState_.reset();
+  rollbackState_.clearReasoningBoundary();
+  rollbackState_.clearPostReasoning();
   snapshotPreRequestCursor();
-  const ContextUsage prefillEntryUsage = current_;
-  if (!rollbackState_.capturePrefillEntry(
-          modelCtx_.lctx, seqId_, current_.pos)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(FailedToDecode),
-        string_format(
-            "[MtmdLlm] mandatory pre-request checkpoint capture failed "
-            "(pos=%d, seqId=%d)",
-            current_.pos,
-            seqId_));
-  }
+  const ContextUsage transactionCheckpointUsage = current_;
   forcedTokens_.clear();
   // Set BEFORE `tokenizeChat` so `configureReasoningTags` can suppress
   // the "will hard-fail" preemptive warning for cache-warm requests that
@@ -563,14 +553,16 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       // the cancel path. Finish it before rolling KV/recurrent state back.
       llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
-      if (rollbackState_.hasPrefillEntry()) {
+      if (rollbackState_.hasTransactionCheckpoint()) {
         // Recurrent / hybrid path: restore the pre-prefill snapshot to
         // drop partially decoded chunks (including any committed image
         // KV cells) in one call. `nPastLocal` is discarded because the
         // restore returns the cache to its pre-prefill cursor.
-        const llama_pos restoredPos = rollbackState_.prefillEntryNPast();
-        if (rollbackState_.restorePrefillEntry(modelCtx_.lctx, seqId_)) {
-          current_ = prefillEntryUsage;
+        const llama_pos restoredPos =
+            rollbackState_.transactionCheckpointNPast();
+        if (rollbackState_.restoreTransactionCheckpoint(
+                modelCtx_.lctx, seqId_)) {
+          current_ = transactionCheckpointUsage;
           refreshCurrentCacheTokensFromMemory();
         } else {
           // Restore underflowed after mutation. Clear memory and report
@@ -719,7 +711,7 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   if (rollbackOk) {
     protectedPrefix_ = preRequestProtectedPrefix_;
   }
-  rollbackState_.clearPrefillEntry();
+  rollbackState_.clearTransactionCheckpoint();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   compactor_.clearSpan();
@@ -1240,22 +1232,24 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
     // committed image cells, then re-throw. The batch scheduler's
     // slot cleanup additionally passes `SaveCachePolicy::Skip` so the
     // last known-good on-disk cache is preserved.
-    const bool restoredPrefillEntry = restorePrefillEntryOrClearSequence({
-        .ctx = modelCtx_.lctx,
-        .seqId = seqId_,
-        .rollback = rollbackState_,
-        .onRestored =
-            [this](llama_pos restoredPos) {
-              current_ = preRequestUsage_;
-              current_.pos = restoredPos;
-              refreshCurrentCacheTokensFromMemory();
-            },
-        .onCleared = [this]() { current_ = {}; },
-    });
-    protectedPrefix_ =
-        restoredPrefillEntry ? preRequestProtectedPrefix_ : ContextUsage{};
+    const bool restoredTransactionCheckpoint =
+        restoreTransactionCheckpointOrClearSequence({
+            .ctx = modelCtx_.lctx,
+            .seqId = seqId_,
+            .rollback = rollbackState_,
+            .onRestored =
+                [this](llama_pos restoredPos) {
+                  current_ = preRequestUsage_;
+                  current_.pos = restoredPos;
+                  refreshCurrentCacheTokensFromMemory();
+                },
+            .onCleared = [this]() { current_ = {}; },
+        });
+    protectedPrefix_ = restoredTransactionCheckpoint
+                           ? preRequestProtectedPrefix_
+                           : ContextUsage{};
     pendingBatchFirstMsg_ = false;
-    rollbackState_.clearPrefillEntry();
+    rollbackState_.clearTransactionCheckpoint();
     rollbackState_.clearReasoningBoundary();
     rollbackState_.clearPostReasoning();
     compactor_.reset();
@@ -1657,7 +1651,7 @@ void MtmdLlmContext::onPrefillComplete(
     reasoningState_.inside_reasoning = true;
   }
   if (isPrefillOnlyRequest_) {
-    rollbackState_.clearPrefillEntry();
+    rollbackState_.clearTransactionCheckpoint();
   }
 }
 
@@ -1829,7 +1823,7 @@ bool MtmdLlmContext::onGenerationFinished(
     return cancelGenerationCleanup(outputCallback);
   }
   compactThinkSpan();
-  rollbackState_.clearPrefillEntry();
+  rollbackState_.clearTransactionCheckpoint();
   // `generationStopReason_` intentionally persists: runtime stats read
   // it after generation returns; it is re-initialized at the next
   // generation's entry.
@@ -2037,17 +2031,15 @@ void MtmdLlmContext::snapshotPreRequestCursor() {
   preRequestProtectedPrefix_ = protectedPrefix_;
 }
 
-void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {
-  // Batch transaction checkpoint, captured before request memory mutation.
-  if (!rollbackState_.capturePrefillEntry(
-          modelCtx_.lctx, seqId_, current_.pos)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(FailedToDecode),
-        string_format(
-            "[MtmdLlm] mandatory batch checkpoint capture failed "
-            "(pos=%d, seqId=%d)",
-            current_.pos,
-            seqId_));
-  }
+void MtmdLlmContext::setPersistentTransactionCheckpoint(
+    const std::string& path, llama_pos nPast) {
+  rollbackState_.setPersistentTransactionCheckpoint(path, nPast);
+}
+
+void MtmdLlmContext::setEmptyTransactionCheckpoint() {
+  rollbackState_.setEmptyTransactionCheckpoint();
+}
+
+void MtmdLlmContext::clearTransactionCheckpoint() {
+  rollbackState_.clearTransactionCheckpoint();
 }

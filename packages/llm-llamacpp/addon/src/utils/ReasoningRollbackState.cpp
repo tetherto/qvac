@@ -1,27 +1,51 @@
 #include "ReasoningRollbackState.hpp"
 
 #include <cstddef>
+#include <utility>
 
 #include "RecurrentStateSnapshot.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
-bool ReasoningRollbackState::capturePrefillEntry(
-    ::llama_context* ctx, llama_seq_id seqId, llama_pos nPast) {
-  // Drop any leftover prefill-entry snapshot from a previous request
-  // so a failed capture below cannot leave a stale temp file available
-  // to `restorePrefillEntry`.
-  prefillEntry_.clear();
-  return snapshotRecurrentState(ctx, seqId, nPast, prefillEntry_);
+void ReasoningRollbackState::setPersistentTransactionCheckpoint(
+    std::string path, llama_pos nPast) noexcept {
+  transactionCheckpointKind_ = TransactionCheckpointKind::Persistent;
+  transactionCheckpointPath_ = std::move(path);
+  transactionCheckpointNPast_ = nPast;
 }
 
-bool ReasoningRollbackState::restorePrefillEntry(
+void ReasoningRollbackState::setEmptyTransactionCheckpoint() noexcept {
+  transactionCheckpointKind_ = TransactionCheckpointKind::Empty;
+  transactionCheckpointPath_.clear();
+  transactionCheckpointNPast_ = 0;
+}
+
+void ReasoningRollbackState::clearTransactionCheckpoint() noexcept {
+  transactionCheckpointKind_ = TransactionCheckpointKind::None;
+  transactionCheckpointPath_.clear();
+  transactionCheckpointNPast_ = 0;
+}
+
+bool ReasoningRollbackState::restoreTransactionCheckpoint(
     ::llama_context* ctx, llama_seq_id seqId) {
-  if (prefillEntry_.empty()) {
+  if (ctx == nullptr ||
+      transactionCheckpointKind_ == TransactionCheckpointKind::None) {
     return false;
   }
-  return restoreRecurrentState(ctx, seqId, prefillEntry_);
+  if (transactionCheckpointKind_ == TransactionCheckpointKind::Empty) {
+    auto* mem = llama_get_memory(ctx);
+    return mem != nullptr && llama_memory_seq_rm(mem, seqId, -1, -1);
+  }
+  size_t tokenCount = 0;
+  const size_t loadedBytes = llama_state_seq_load_file(
+      ctx,
+      transactionCheckpointPath_.c_str(),
+      seqId,
+      /*tokens_out=*/nullptr,
+      /*n_token_capacity=*/0,
+      &tokenCount);
+  return loadedBytes != 0;
 }
 
 bool ReasoningRollbackState::captureReasoningBoundary(
@@ -92,7 +116,7 @@ bool ReasoningRollbackState::replayPostReasoning(
 }
 
 void ReasoningRollbackState::reset() noexcept {
-  prefillEntry_.clear();
+  clearTransactionCheckpoint();
   reasoningBoundary_.clear();
   postReasoningTokens_.clear();
   seededPostReasoningCount_ = 0;
@@ -111,11 +135,10 @@ void ReasoningRollbackState::seedReasoningBoundaryForTesting(
       "qvac_test_reasoning_boundary_sentinel.bin", nPast);
 }
 
-void ReasoningRollbackState::seedPrefillEntryForTesting(
+void ReasoningRollbackState::seedTransactionCheckpointForTesting(
     llama_pos nPast) noexcept {
-  // Sentinel path — does not point at a real llama state file. Only
-  // tests should use this to drive restore-failure handling.
-  prefillEntry_.seedForTesting("qvac_test_prefill_entry_sentinel.bin", nPast);
+  setPersistentTransactionCheckpoint(
+      "qvac_test_transaction_checkpoint_sentinel.bin", nPast);
 }
 
 } // namespace utils

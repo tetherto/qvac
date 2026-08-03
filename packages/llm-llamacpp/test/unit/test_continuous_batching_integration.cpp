@@ -2528,7 +2528,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
 /// mid-`evalMessageWithTools`; the batch path never runs that site, so
 /// `snapshotPreRequestRollbackAnchor` (called by the scheduler at admission
 /// right after `snapshotPreRequestCursor`) must take it. If it doesn't,
-/// `hasPrefillEntry()` returns false at cancel time,
+/// `hasTransactionCheckpoint()` returns false at cancel time,
 /// `cancelGenerationCleanup` silently does nothing, and `CacheTokens` still
 /// reports the transient peak — same failure mode as the text case, just
 /// wearing a different mask.

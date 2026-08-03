@@ -23,38 +23,38 @@ await model.run([
 
 ## Transaction checkpoints and cancellation
 
-Every admitted text, multimodal, and continuous-batch request captures a full per-sequence transaction checkpoint. Cache loading or same-key in-memory continuation is resolved first; checkpoint capture then occurs before request tokenization, automatic context sliding, media/text prefill decode, or generation mutates llama model memory.
+Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Explicit prefill or generation cancellation restores this pre-request checkpoint. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block also restores the pre-request checkpoint because there is no retained answer to replay. Successful requests and successful cancellation rollback release the checkpoint.
+Cache resolution happens first. The live baseline is synchronously recommitted through the existing atomic cache-save path and the resulting canonical artifact is pinned without copying it to another temporary file. This guarantees that both freshly loaded and dirty same-key state match the checkpoint before request tokenization, automatic context sliding, media/text prefill decode, or generation mutates llama model memory. Failure to commit aborts before request mutation.
 
-Checkpoint capture failure aborts before request-memory mutation. If restoration fails after mutation, the affected sequence is cleared, its cursor/cache metadata is reset coherently, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
+An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
+
+Explicit prefill or generation cancellation restores the committed cache artifact. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
+
+With `saveCacheToDisk: false`, no pre-request transaction snapshot or file is created. Cancellation clears the affected sequence, resets its cursor/cache metadata, and invalidates unsaved in-memory cache state. Any existing on-disk cache is left untouched and may be loaded by a later request using that key.
+
+If persistent checkpoint restoration fails after mutation, the affected sequence is cleared, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
 
 Arbitrary thrown prefill, decode, or replay errors use a different recovery path: live model state is reset and the active cache session is invalidated instead of restoring the transaction checkpoint.
 
 ### Storage and lifecycle
 
-For a non-empty sequence, the checkpoint is a full state file written with llama.cpp's per-sequence state API. It contains attention KV state and, where present, recurrent/SSM state. The file is stored under the operating system temporary directory with a process/sequence/counter-based name. If resolving the OS temp directory fails, the implementation currently falls back to the process working directory.
+The persistent checkpoint is a non-owning reference to the canonical per-sequence cache artifact. The request does not delete it. Atomic cache promotion prevents restoration from reading a partially written successful save, and successful replacement happens only after the transaction checkpoint is released.
 
-An empty sequence does not create a file. It records an in-memory captured-empty marker; restoration clears that sequence to its empty state.
-
-Checkpoint files are owned by the request rollback state and removed on successful completion, rollback cleanup, replacement, or destruction. Removal is best-effort, so process crashes may leave residue. The files contain sensitive model state. This layer does not promise encryption or explicitly enforce permissions beyond those provided by the platform and llama.cpp file creation.
-
-Checkpointing adds one full sequence-state write per non-empty request. Reasoning removal may add a second full state file at the end-of-prefill boundary because that state differs from the pre-request transaction checkpoint.
+No transaction checkpoint uses the OS temp directory or working-directory fallback. Sensitive temporary state remains relevant to reasoning removal: when reasoning compaction is active, the distinct end-of-prefill reasoning boundary is stored in a temporary full-state file and removed best-effort on completion, rollback cleanup, replacement, or destruction. Process crashes may leave that reasoning snapshot behind. This layer does not promise encryption or explicitly enforce permissions beyond the platform and llama.cpp file creation.
 
 ### Interaction with cache files
 
-- **Freshly loaded `cacheKey`:** the validated cache is loaded first, then the same live sequence is serialized again as the transaction checkpoint. The implementation does not currently reuse the canonical cache file.
-- **Dirty same-key continuation:** the live in-memory state may be newer than the on-disk file, so an explicit checkpoint is required.
-- **No existing cache file:** the newly activated in-memory sequence is checkpointed normally.
-- **No `cacheKey`:** caching remains disabled. Empty contexts use the captured-empty marker; non-empty live state still requires a checkpoint.
-- **`saveCacheToDisk`:** controls end-of-request persistence only and does not disable transaction checkpoint capture.
-- **Batch requests:** each admitted sequence owns an independent checkpoint and rollback affects only that sequence.
-
-The canonical disk cache could only serve as a rollback checkpoint if it were validated, immutable, guaranteed to match the live sequence exactly, and pinned for the full request lifetime. Those invariants do not hold for dirty continuation or unsaved state, so current code uses an independent checkpoint.
+- **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the live baseline is atomically recommitted to the canonical path and pinned; no duplicate transaction file is created.
+- **Dirty same-key continuation with `saveCacheToDisk: true`:** the live baseline is committed atomically before mutation, then that committed artifact is pinned.
+- **Missing cache file with an empty baseline:** an in-memory empty marker is used; no file is created until successful persistence.
+- **No `cacheKey`, or `saveCacheToDisk: false`:** there is no transaction checkpoint. Cancellation clears unsaved live state.
+- **Existing disk cache with `saveCacheToDisk: false`:** the request may load it, but cancellation does not promise restoration. The disk artifact remains unchanged and can be reloaded later.
+- **Batch requests:** each admitted sequence owns an independent checkpoint reference and cancellation clears or restores only that sequence. Duplicate cache keys that could overwrite the same artifact are rejected at batch admission.
 
 ### Reasoning replay, sliding, and tools
 
-The transaction checkpoint is separate from the end-of-prefill reasoning boundary. Closed reasoning blocks restore that later boundary and replay only retained answer tokens. Cancellation and reasoning removal do not use partial `seq_rm`, `seq_add`, or context-window sliding.
+The persistent transaction checkpoint is separate from the end-of-prefill reasoning boundary. Closed reasoning blocks still create the required temporary boundary snapshot, restore it, and replay only retained answer tokens. Cancellation and reasoning removal do not use partial `seq_rm`, `seq_add`, or context-window sliding.
 
 General context-window sliding remains a separate pressure-management operation and may shift supported attention memory. `tools_compact` detection remains available, but tools-tail cache removal is currently disabled.
 

@@ -272,7 +272,10 @@ public:
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
-  void snapshotPreRequestRollbackAnchor() override;
+  void setPersistentTransactionCheckpoint(
+      const std::string& path, llama_pos nPast) override;
+  void setEmptyTransactionCheckpoint() override;
+  void clearTransactionCheckpoint() override;
 
 private:
   /**

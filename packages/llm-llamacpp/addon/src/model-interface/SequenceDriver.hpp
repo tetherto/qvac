@@ -120,8 +120,8 @@ struct PrefillPlan {
 /// `TextLlmContext` implements both interfaces.
 ///
 /// Method ordering below mirrors a sequence's lifecycle:
-///   `validatePromptPolicy` -> `loadCache` -> `preparePrefill`
-///   -> `snapshotPreRequestCursor` -> `snapshotPreRequestRollbackAnchor`
+///   `validatePromptPolicy` -> `loadCache` -> transaction checkpoint setup
+///   -> `preparePrefill` -> `snapshotPreRequestCursor`
 ///   -> `onPrefillComplete` -> N x `onLogitsReady`
 ///   -> (`onGenerationFinished` | `onCancel`) -> `onSequenceEnd` ->
 ///   `saveCache`
@@ -269,15 +269,8 @@ public:
   /// Default no-op for drivers whose cancel does not need it.
   virtual void snapshotPreRequestCursor() {}
 
-  /// Capture the batch-path rollback anchor used by `onCancel` on
-  /// drivers whose memory rejects partial `seq_rm` (hybrid / recurrent).
-  /// Writes a full sequence-state snapshot to disk, so it is expensive
-  /// and gated: pure-attention drivers no-op, and single-prompt drivers
-  /// keep their own capture site rather than paying this cost twice.
-  /// This is cancel-path bookkeeping, unrelated to the
-  /// `remove_thinking_from_context` hard-fail contract, so overrides
-  /// that fail the capture must log a warning and continue rather than
-  /// throwing (a silent no-op would leak the peak `nPast` back into
-  /// user-visible `CacheTokens` on a subsequent cancel).
-  virtual void snapshotPreRequestRollbackAnchor() {}
+  virtual void
+  setPersistentTransactionCheckpoint(const std::string&, llama_pos) {}
+  virtual void setEmptyTransactionCheckpoint() {}
+  virtual void clearTransactionCheckpoint() {}
 };

@@ -246,11 +246,16 @@ export interface RunOptions {
    * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
    * later run keyed by the same string can resume without re-prefilling.
    *
-   * Each admitted request captures a pre-request transaction checkpoint after
-   * cache loading and before request memory mutation. Successful cancellation
-   * restores it. If capture fails, the request aborts before mutation; if
-   * restore fails, the affected sequence is cleared and the active cache
-   * session is invalidated.
+   * With `cacheKey` and `saveCacheToDisk: true`, the last committed cache
+   * artifact is pinned as the pre-request transaction checkpoint. A dirty
+   * in-memory baseline is committed atomically before request mutation.
+   * Successful cancellation restores that artifact. If baseline commit fails,
+   * the request aborts before mutation; if restore fails, the affected
+   * sequence is cleared and the active cache session is invalidated.
+   *
+   * With `saveCacheToDisk: false`, no transaction snapshot is created.
+   * Cancellation clears unsaved live state while leaving any existing
+   * last-known-good disk cache untouched for a later keyed reload.
    *
    * The continuous-batch scheduler intentionally SKIPS the save on
    * teardown legs where persistence could corrupt the last known-good

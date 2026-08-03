@@ -7,8 +7,8 @@
 - Reasoning-block removal now always restores the pre-generation state and
   replays retained answer tokens for every model, avoiding in-place cache
   sliding and preserving coherent state for subsequent turns.
-- Cancellation now restores a mandatory pre-request transaction checkpoint
-  for every model instead of removing a partial token tail.
+- Persistent cancellation now restores the last committed cache artifact;
+  non-persistent cancellation clears unsaved sequence state.
 - Tools output tail removal is disabled while `tools_compact` is pending
   removal.
 

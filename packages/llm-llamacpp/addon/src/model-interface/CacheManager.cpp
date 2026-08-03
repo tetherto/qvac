@@ -322,6 +322,28 @@ void CacheManager::saveCache() {
   activeCacheSavedToDisk_ = true;
 }
 
+void CacheManager::prepareTransactionCheckpoint(bool persistent) {
+  llmContext_->clearTransactionCheckpoint();
+  if (!persistent || !hasActiveCache()) {
+    return;
+  }
+  if (llmContext_->getNPast() <= 0) {
+    llmContext_->setEmptyTransactionCheckpoint();
+    return;
+  }
+  // Recommit through atomic promotion so the pinned artifact is guaranteed to
+  // match the current live baseline, including dirty same-key continuation.
+  saveCache();
+  llmContext_->setPersistentTransactionCheckpoint(
+      sessionPath_, llmContext_->getNPast());
+}
+
+void CacheManager::markActiveCacheDirty() {
+  if (hasActiveCache()) {
+    activeCacheSavedToDisk_ = false;
+  }
+}
+
 void CacheManager::saveActiveCacheForTransition() {
   if (discardActiveCacheIfBackingStoreMissing()) {
     return;

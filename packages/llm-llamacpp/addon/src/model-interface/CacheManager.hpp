@@ -41,6 +41,8 @@ public:
 
   bool loadCache();
   void saveCache();
+  void prepareTransactionCheckpoint(bool persistent);
+  void markActiveCacheDirty();
   void invalidate();
   bool isCacheDisabled() const;
   bool hasActiveCache() const;

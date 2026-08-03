@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include <llama.h>
@@ -12,10 +13,10 @@ namespace utils {
 
 // Shared per-inference transaction and reasoning-replay state.
 //
-//   * a mandatory pre-request transaction checkpoint, restored whenever
-//     cancellation or request failure occurs;
-//   * an end-of-prefill full-state snapshot, restored both by
-//     thinking-block compaction and by cancellation during generation;
+//   * an optional persistent transaction checkpoint referencing the last
+//     committed cache artifact;
+//   * an end-of-prefill temporary full-state snapshot restored by
+//     thinking-block compaction;
 //   * the post-reasoning token capture buffer used to replay the
 //     visible answer after restoring the end-of-prefill snapshot.
 //
@@ -26,30 +27,29 @@ namespace utils {
 // end-of-prefill reasoning-boundary capture site
 // (`ReasoningBlockCompactor::snapshotAtPrefillBoundary`) throws
 // `qvac_errors::StatusError` on underflow, and hybrid restore/replay
-// failures inside `compact()` also throw. Transaction checkpoint capture
-// failures abort before request memory mutation.
+// failures inside `compact()` also throw. Persistent baseline commit failures
+// abort before request memory mutation.
 //
-// Lifetime: per-inference. `reset()` MUST be called at the start of
-// each `evalMessageWithTools` so leftover state from a cancelled prior
-// turn cannot block a fresh snapshot.
+// Transaction checkpoint configuration is set before request evaluation and
+// cleared on completion. Reasoning state is independently reset per inference.
 class ReasoningRollbackState {
 public:
-  // ---- Prefill-entry snapshot (cancel during prefill) ----
+  // ---- Pre-request transaction checkpoint ----
   //
-  // Captures the full sequence state at `nPast` before request mutation so
-  // any cancellation path can restore the exact prior checkpoint.
-  bool capturePrefillEntry(
-      ::llama_context* ctx, llama_seq_id seqId, llama_pos nPast);
-  // No-op when no snapshot is held. Returns false only when a held
-  // snapshot fails to restore.
-  bool restorePrefillEntry(::llama_context* ctx, llama_seq_id seqId);
-  [[nodiscard]] bool hasPrefillEntry() const noexcept {
-    return !prefillEntry_.empty();
+  // Persistent requests pin the committed cache artifact. Empty persistent
+  // baselines use an in-memory marker. Non-persistent requests hold no
+  // checkpoint and cancellation clears the affected sequence.
+  void setPersistentTransactionCheckpoint(
+      std::string path, llama_pos nPast) noexcept;
+  void setEmptyTransactionCheckpoint() noexcept;
+  void clearTransactionCheckpoint() noexcept;
+  bool restoreTransactionCheckpoint(::llama_context* ctx, llama_seq_id seqId);
+  [[nodiscard]] bool hasTransactionCheckpoint() const noexcept {
+    return transactionCheckpointKind_ != TransactionCheckpointKind::None;
   }
-  [[nodiscard]] llama_pos prefillEntryNPast() const noexcept {
-    return prefillEntry_.nPast;
+  [[nodiscard]] llama_pos transactionCheckpointNPast() const noexcept {
+    return transactionCheckpointNPast_;
   }
-  void clearPrefillEntry() noexcept { prefillEntry_.clear(); }
 
   // ---- End-of-prefill snapshot (compaction + cancel during generation) ----
   //
@@ -129,17 +129,17 @@ public:
   // `llama_state_seq_load_file` if anything tried to restore from it.
   void seedReasoningBoundaryForTesting(llama_pos nPast) noexcept;
 
-  // Test seam. Seeds the prefill-entry snapshot with a sentinel file
-  // path so unit tests can force `restorePrefillEntry()` to fail after
-  // `hasPrefillEntry()` succeeds. Production code MUST use
-  // `capturePrefillEntry` instead.
-  void seedPrefillEntryForTesting(llama_pos nPast) noexcept;
+  void seedTransactionCheckpointForTesting(llama_pos nPast) noexcept;
   void forceReplayFailureForTesting(bool value) noexcept {
     forceReplayFailureForTesting_ = value;
   }
 
 private:
-  RecurrentStateSnapshot prefillEntry_;
+  enum class TransactionCheckpointKind { None, Empty, Persistent };
+  TransactionCheckpointKind transactionCheckpointKind_ =
+      TransactionCheckpointKind::None;
+  std::string transactionCheckpointPath_;
+  llama_pos transactionCheckpointNPast_ = 0;
   RecurrentStateSnapshot reasoningBoundary_;
   std::vector<llama_token> postReasoningTokens_;
   // Count of structural tokens at the head of `postReasoningTokens_`

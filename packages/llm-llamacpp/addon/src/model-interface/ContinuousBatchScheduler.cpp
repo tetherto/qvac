@@ -404,9 +404,24 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
-  // Transaction checkpoint before request preparation can mutate memory.
+  const bool persistentCheckpoint =
+      request.saveCacheToDisk && !request.cacheKey.empty();
+  if (persistentCheckpoint) {
+    if (driver->getNPast() <= 0) {
+      driver->setEmptyTransactionCheckpoint();
+    } else {
+      if (!isCacheLoaded) {
+        driver->saveCache(request.cacheKey);
+      }
+      driver->setPersistentTransactionCheckpoint(
+          request.cacheKey, driver->getNPast());
+    }
+  } else {
+    driver->clearTransactionCheckpoint();
+  }
+
+  // Capture cursor before request preparation can mutate memory.
   driver->snapshotPreRequestCursor();
-  driver->snapshotPreRequestRollbackAnchor();
 
   PrefillPlan plan = driver->preparePrefill(
       request.chatMsgs,

@@ -209,7 +209,10 @@ public:
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
-  void snapshotPreRequestRollbackAnchor() override;
+  void setPersistentTransactionCheckpoint(
+      const std::string& path, llama_pos nPast) override;
+  void setEmptyTransactionCheckpoint() override;
+  void clearTransactionCheckpoint() override;
 
   // Testing seams: expose the owned `ReasoningBlockCompactor` and the
   // otherwise-private `compactThinkSpan()` entry point so driver-level
@@ -222,20 +225,17 @@ public:
     return compactor_;
   }
   void compactThinkSpanForTesting() { compactThinkSpan(); }
-  void seedPrefillEntryRollbackForTesting(llama_pos nPast) noexcept {
-    rollbackState_.seedPrefillEntryForTesting(nPast);
+  void seedTransactionCheckpointForTesting(llama_pos nPast) noexcept {
+    rollbackState_.seedTransactionCheckpointForTesting(nPast);
   }
-  void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
-    forcePrefillEntryRestoreFailureForTesting_ = value;
-  }
-  void forcePrefillEntryCaptureFailureForTesting(bool value) noexcept {
-    forcePrefillEntryCaptureFailureForTesting_ = value;
+  void forceTransactionCheckpointRestoreFailureForTesting(bool value) noexcept {
+    forceTransactionCheckpointRestoreFailureForTesting_ = value;
   }
   void forceReasoningReplayFailureForTesting(bool value) noexcept {
     rollbackState_.forceReplayFailureForTesting(value);
   }
   [[nodiscard]] bool reasoningRollbackStateEmptyForTesting() const noexcept {
-    return !rollbackState_.hasPrefillEntry() &&
+    return !rollbackState_.hasTransactionCheckpoint() &&
            !rollbackState_.hasReasoningBoundary() &&
            rollbackState_.postReasoningTokenCount() == 0 &&
            !rollbackState_.isCapturingPostReasoning();
@@ -325,7 +325,7 @@ private:
   // hard-fail contract for `remove_thinking_from_context`, unsupported
   // recurrent template shapes and snapshot capture failures propagate
   // as `qvac_errors::StatusError`; the wrapper restores its pre-prompt
-  // checkpoint via `restorePrefillEntry`, resets local positional
+  // checkpoint via `restoreTransactionCheckpoint`, resets local positional
   // accounting, and re-throws so no saveCache path can persist a cache
   // whose header no longer matches live memory.
   void snapshotForRecurrentRollback();
@@ -343,8 +343,7 @@ private:
   llama_pos nPast_ = 0;
   llama_pos firstMsgTokens_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
-  bool forcePrefillEntryRestoreFailureForTesting_ = false;
-  bool forcePrefillEntryCaptureFailureForTesting_ = false;
+  bool forceTransactionCheckpointRestoreFailureForTesting_ = false;
   // Snapshot of `nPast_` / `firstMsgTokens_` at `evalMessageWithTools`
   // entry. Restored by `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;

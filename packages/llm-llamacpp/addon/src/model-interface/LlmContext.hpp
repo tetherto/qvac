@@ -446,6 +446,11 @@ public:
    */
   virtual void resetState(bool resetStats) = 0;
 
+  virtual void setPersistentTransactionCheckpoint(
+      const std::string& path, llama_pos nPast) = 0;
+  virtual void setEmptyTransactionCheckpoint() = 0;
+  virtual void clearTransactionCheckpoint() = 0;
+
   /**
    * The reset media method. It resets the media.
    *

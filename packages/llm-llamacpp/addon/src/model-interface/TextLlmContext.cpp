@@ -433,22 +433,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   // turn was interrupted by `stopGeneration_` before `compactThinkSpan`
   // ran) would otherwise block the new snapshot via the
   // `!snapshot.empty()` early-return in `snapshotForRecurrentRollback`.
-  rollbackState_.reset();
+  rollbackState_.clearReasoningBoundary();
+  rollbackState_.clearPostReasoning();
   snapshotPreRequestCursor();
-  const bool forceCheckpointCaptureFailure =
-      forcePrefillEntryCaptureFailureForTesting_;
-  forcePrefillEntryCaptureFailureForTesting_ = false;
-  if (forceCheckpointCaptureFailure ||
-      !rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(FailedToDecode),
-        string_format(
-            "[TextLlm] mandatory pre-request checkpoint capture failed "
-            "(nPast=%d, seqId=%d)",
-            nPast_,
-            seqId_));
-  }
 
   // Drop any stale user-visible perf snapshot from a prior turn so this
   // inference's `runtimeStats()` read sees either the new snapshot
@@ -479,13 +466,14 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       // never read on the cancel path. Finish it before rolling KV back.
       llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
-      if (rollbackState_.hasPrefillEntry()) {
-        const llama_pos restoredNPast = rollbackState_.prefillEntryNPast();
+      if (rollbackState_.hasTransactionCheckpoint()) {
+        const llama_pos restoredNPast =
+            rollbackState_.transactionCheckpointNPast();
         const bool forceRestoreFailure =
-            forcePrefillEntryRestoreFailureForTesting_;
-        forcePrefillEntryRestoreFailureForTesting_ = false;
-        if (!forceRestoreFailure &&
-            rollbackState_.restorePrefillEntry(modelCtx_.lctx, seqId_)) {
+            forceTransactionCheckpointRestoreFailureForTesting_;
+        forceTransactionCheckpointRestoreFailureForTesting_ = false;
+        if (!forceRestoreFailure && rollbackState_.restoreTransactionCheckpoint(
+                                        modelCtx_.lctx, seqId_)) {
           nPast_ = restoredNPast;
         } else {
           QLOG_IF(
@@ -708,7 +696,7 @@ void TextLlmContext::onPrefillComplete(
     reasoningState_.inside_reasoning = true;
   }
   if (isPrefillOnlyRequest_) {
-    rollbackState_.clearPrefillEntry();
+    rollbackState_.clearTransactionCheckpoint();
   }
 }
 
@@ -1083,7 +1071,7 @@ bool TextLlmContext::onGenerationFinished(
   // Generation completed; cancel cannot fire anymore so the
   // prefill-entry rollback checkpoint is no longer reachable. Drop
   // its temp file now instead of waiting for the next inference.
-  rollbackState_.clearPrefillEntry();
+  rollbackState_.clearTransactionCheckpoint();
   // `generationStopReason_` intentionally persists: runtime stats read
   // it after generateResponse() returns; it is re-initialized at the
   // next generation's entry.
@@ -1134,7 +1122,7 @@ bool TextLlmContext::rollbackCurrentRequest(
   });
 
   firstMsgTokens_ = rollbackOk ? preRequestFirstMsgTokens_ : 0;
-  rollbackState_.clearPrefillEntry();
+  rollbackState_.clearTransactionCheckpoint();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   compactor_.clearSpan();
@@ -1289,16 +1277,18 @@ void TextLlmContext::snapshotForRecurrentRollback() {
     // tokens, then re-throw. The batch scheduler's slot cleanup
     // additionally passes `SaveCachePolicy::Skip` so the last known-
     // good on-disk cache is preserved.
-    const bool restoredPrefillEntry = restorePrefillEntryOrClearSequence({
-        .ctx = modelCtx_.lctx,
-        .seqId = seqId_,
-        .rollback = rollbackState_,
-        .onRestored =
-            [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
-        .onCleared = [this]() { nPast_ = 0; },
-    });
-    firstMsgTokens_ = restoredPrefillEntry ? preRequestFirstMsgTokens_ : 0;
-    rollbackState_.clearPrefillEntry();
+    const bool restoredTransactionCheckpoint =
+        restoreTransactionCheckpointOrClearSequence({
+            .ctx = modelCtx_.lctx,
+            .seqId = seqId_,
+            .rollback = rollbackState_,
+            .onRestored =
+                [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
+            .onCleared = [this]() { nPast_ = 0; },
+        });
+    firstMsgTokens_ =
+        restoredTransactionCheckpoint ? preRequestFirstMsgTokens_ : 0;
+    rollbackState_.clearTransactionCheckpoint();
     rollbackState_.clearReasoningBoundary();
     rollbackState_.clearPostReasoning();
     compactor_.reset();
@@ -1577,18 +1567,17 @@ void TextLlmContext::snapshotPreRequestCursor() {
   preRequestFirstMsgTokens_ = firstMsgTokens_;
 }
 
-void TextLlmContext::snapshotPreRequestRollbackAnchor() {
-  // Batch transaction checkpoint, captured before request memory mutation.
-  if (!rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(FailedToDecode),
-        string_format(
-            "[TextLlm] mandatory batch checkpoint capture failed "
-            "(nPast=%d, seqId=%d)",
-            nPast_,
-            seqId_));
-  }
+void TextLlmContext::setPersistentTransactionCheckpoint(
+    const std::string& path, llama_pos nPast) {
+  rollbackState_.setPersistentTransactionCheckpoint(path, nPast);
+}
+
+void TextLlmContext::setEmptyTransactionCheckpoint() {
+  rollbackState_.setEmptyTransactionCheckpoint();
+}
+
+void TextLlmContext::clearTransactionCheckpoint() {
+  rollbackState_.clearTransactionCheckpoint();
 }
 
 std::function<void()>

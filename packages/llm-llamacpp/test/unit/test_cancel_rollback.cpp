@@ -332,6 +332,7 @@ TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(false);
+  driver.setEmptyTransactionCheckpoint();
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -366,39 +367,11 @@ TEST_F(
 
   EXPECT_FALSE(result.ok);
   EXPECT_TRUE(result.cancelled);
-  EXPECT_TRUE(result.rollbackOk);
+  EXPECT_FALSE(result.rollbackOk);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1);
   EXPECT_TRUE(driver.reasoningRollbackStateEmptyForTesting())
       << "successful cancellation must release the transaction checkpoint";
-}
-
-TEST_F(
-    TextLlmContextCancelTest,
-    MandatoryCheckpointCaptureFailureAbortsBeforeMutation) {
-  auto model = loadTextModel(qwen3PureAttentionModelPath());
-  if (!model) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(false);
-  const llama_pos beforePos = driver.getNPast();
-  const llama_pos beforeSeqMax = seqPosMax(*model);
-  driver.forcePrefillEntryCaptureFailureForTesting(true);
-
-  EXPECT_THROW(
-      (void)driver.evalMessageWithTools(
-          {makeMsg("user", "This request must not mutate memory")},
-          {},
-          /*isCacheLoaded=*/false,
-          /*prefill=*/false),
-      qvac_errors::StatusError);
-  EXPECT_EQ(driver.getNPast(), beforePos);
-  EXPECT_EQ(seqPosMax(*model), beforeSeqMax);
 }
 
 // After a cancelled prefill, the same context must be usable for the next
@@ -419,6 +392,7 @@ TEST_F(
   common_params params = model->getCommonParams();
   {
     TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+    driver.setEmptyTransactionCheckpoint();
     driver.stop();
     std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
     const LlmContext::EvalMessageResult result = driver.evalMessageWithTools(
@@ -462,6 +436,7 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(true);
+  driver.setEmptyTransactionCheckpoint();
 
   // Pre-request cursor before any prompt is submitted. For a freshly
   // constructed driver this is 0; we capture it explicitly so the
@@ -514,6 +489,7 @@ TEST_F(
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(false);
+  driver.setEmptyTransactionCheckpoint();
 
   const llama_pos preRequestNPast = driver.getNPast();
 
@@ -954,7 +930,7 @@ TEST(
     // prefill-entry gate succeeds. The correct response is to return
     // rollbackOk=false up to processPromptImpl(), which then skips
     // saveCacheToDisk and preserves the existing cache file.
-    textCtx->seedPrefillEntryRollbackForTesting(preRequestNPast);
+    textCtx->seedTransactionCheckpointForTesting(preRequestNPast);
     baseCtx->stop();
   };
 
@@ -1127,7 +1103,7 @@ TEST(
   ASSERT_NE(baseCtx, nullptr);
   auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
   ASSERT_NE(textCtx, nullptr);
-  textCtx->forcePrefillEntryRestoreFailureForTesting(true);
+  textCtx->forceTransactionCheckpointRestoreFailureForTesting(true);
 
   std::string longBody;
   for (int i = 0; i < 220; ++i) {

@@ -897,6 +897,12 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   try {
     ScopeGuard paramsGuard([&] { restore(); });
+    if (state_->cacheManager_.has_value()) {
+      state_->cacheManager_->prepareTransactionCheckpoint(
+          prompt.saveCacheToDisk);
+    } else {
+      state_->llmContext_->clearTransactionCheckpoint();
+    }
 
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()
@@ -971,6 +977,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   if (shouldSaveCache) {
     try {
+      if (state_->cacheManager_.has_value()) {
+        state_->cacheManager_->markActiveCacheDirty();
+      }
       maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
     } catch (...) {
       // The request completed, but the active cache key could not be flushed.
