@@ -10,6 +10,12 @@
 
 namespace qvac::ttsggml {
 
+// Rate every LavaSR enhancer GGUF emits. The models read the real value off the
+// loaded network via Enhancer::output_sample_rate(); this mirror is for callers
+// that must know the emitted rate before any enhancer exists — AddonJs bakes it
+// into the JS output handlers at instance creation, before load() runs.
+inline constexpr int kLavasrEnhancedSampleRate = 48000;
+
 // Outcome of loadEnhancer: the enhancer (null when disabled) plus the
 // runtimeStats backend codes (backendDeviceCode / backendIdFromName), or the
 // kBackend*None sentinels when no enhancer is loaded.
