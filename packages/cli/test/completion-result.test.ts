@@ -35,7 +35,15 @@ function fakeRun(opts: {
 }
 
 describe('completionTokensFromStats', () => {
-  it('prefers finite stats.generatedTokens', () => {
+  it('prefers emittedTokens over inflated generatedTokens', () => {
+    assert.equal(
+      completionTokensFromStats('a b c', { generatedTokens: 256, emittedTokens: 113 }),
+      113
+    )
+    assert.equal(completionTokensFromStats('', { generatedTokens: 512, emittedTokens: 0 }), 0)
+  })
+
+  it('prefers finite stats.generatedTokens when emittedTokens is absent', () => {
     assert.equal(completionTokensFromStats('a b c', { generatedTokens: 10 }), 10)
     assert.equal(completionTokensFromStats('a b c', { generatedTokens: 0 }), 0)
   })
@@ -77,8 +85,28 @@ describe('drainCompletion', () => {
     assert.equal(r.toolCalls.length, 1)
   })
 
-  it('completion tokens come from stats when present', async () => {
-    const r = await drainCompletion(fakeRun({ tokens: ['a', 'b'], stats: { generatedTokens: 7 } }))
+  it('completion tokens prefer emittedTokens over inflated generatedTokens', async () => {
+    const r = await drainCompletion(
+      fakeRun({
+        tokens: ['a', 'b'],
+        stats: { generatedTokens: 256, emittedTokens: 2 }
+      })
+    )
+    assert.equal(r.completionTokens, 2)
+  })
+
+  it('does not treat contentDelta event counts as tokens', async () => {
+    const r = await drainCompletion(
+      fakeRun({
+        tokens: ['Hello, world!'],
+        stats: { generatedTokens: 512, emittedTokens: 4 }
+      })
+    )
+    assert.equal(r.completionTokens, 4)
+  })
+
+  it('completion tokens use generatedTokens when emittedTokens is absent', async () => {
+    const r = await drainCompletion(fakeRun({ tokens: [], stats: { generatedTokens: 7 } }))
     assert.equal(r.completionTokens, 7)
   })
 
