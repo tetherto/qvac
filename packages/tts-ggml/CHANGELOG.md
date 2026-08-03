@@ -48,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
   loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
   so they no longer OOM on non-entitled devices. Output is byte-identical.
+- **`denoiser` with an explicit `streamChunkTokens: 0`.** A zero token count
+  means batch synthesis, but it was still rejected as a streaming request, so
+  passing `0` explicitly disabled the denoiser path. Only a positive count now
+  counts as native chunk streaming, matching the addon.
 
 ### Changed
 

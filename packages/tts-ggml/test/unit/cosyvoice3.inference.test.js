@@ -239,6 +239,15 @@ test('CosyVoice3: cosyvoice3-only options on other engines throw', (t) => {
   )
 })
 
+test('CosyVoice3: LavaSR denoiser + streamChunkTokens 0 is accepted', (t) => {
+  const model = createMockedCosyvoiceModel({
+    files: { cosyvoiceModelDir: './models/cv3', lavasrDenoiser: './d.gguf' },
+    extra: { streamChunkTokens: 0 }
+  })
+  const parameters = model._buildTtsParams()
+  t.is(parameters.lavasrDenoiserPath, './d.gguf', '0 tokens means batch, so the denoiser survives')
+})
+
 test('CosyVoice3: streamChunkTokens is NOT rejected (native streaming model)', (t) => {
   // Unlike Supertonic, CosyVoice3 supports native sub-utterance chunk streaming.
   t.execution(

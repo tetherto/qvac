@@ -495,6 +495,7 @@ declare class TTSGgml {
     private _resolveEngineAndModelPaths;
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
+    private _requestsChunkStreaming;
     private _assertParlerOptionConsistency;
     private _assertCosyvoiceOptionConsistency;
     /**
