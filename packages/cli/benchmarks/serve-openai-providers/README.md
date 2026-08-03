@@ -7,13 +7,25 @@ proxy. `client_output_tps` is completion tokens divided by complete request
 latency, so it includes HTTP, queueing, prompt processing, and first-token time;
 it is not native decode throughput.
 
+Full runs also capture static QVAC route coverage against the OpenAI
+specification. The report highlights consumer-primary and broader primary-AI
+coverage, exact gaps, QVAC extensions, and the specification SHA-256. This is a
+capability-surface metric only: route presence does not prove behavioral
+compatibility. A live specification fetch is attempted once before provider
+execution with a 15-second timeout and falls back to the last validated QVAC
+offline cache. New live bytes are parsed successfully before atomically
+replacing that cache. If neither source is available, performance measurements
+continue and the coverage section is marked unavailable.
+
 Design details: [`design.md`](./design.md). Host/launch checklist: [`environment.md`](./environment.md).
 
 The full sweep verifies the configured GGUF SHA-256 before contacting providers.
 It then starts one provider at a time, runs parity and measurements in the same
 provider session, and always attempts bounded stop cleanup after a start attempt.
 Reports include valid, unavailable, failed, and attempted counts for every
-aggregate.
+aggregate. `results/raw.json` preserves the OpenAI coverage snapshot used by
+`results/report.md`, so rebuilding a report never refetches or changes its
+coverage denominator.
 
 ## CI
 
