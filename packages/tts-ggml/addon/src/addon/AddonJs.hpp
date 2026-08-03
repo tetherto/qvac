@@ -17,6 +17,7 @@
 #include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
@@ -101,8 +102,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   //      enhancer) — always the final emitted rate when set;
   //   2. 48000 when the LavaSR enhancer is active (it always emits 48 kHz);
   //   3. the engine's native rate.
-  constexpr int kLavasrEnhancedSampleRate = 48000;
-
   if (engineType == EngineType::Supertonic) {
     auto cfg = adapter.buildSupertonicConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
