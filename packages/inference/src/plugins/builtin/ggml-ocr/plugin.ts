@@ -11,14 +11,14 @@ import {
   type OCRConfig,
   type ResolveContext,
   type ResolveResult
-} from '../../../schemas/index.ts'
-import { ModelLoadFailedError } from '../../../errors/index.ts'
-import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
+} from '@/schemas/index'
+import { ModelLoadFailedError } from '@/errors/index'
+import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import ocrAddonLogging from '@qvac/ocr-ggml/addonLogging'
 import { OcrGgml } from '@qvac/ocr-ggml'
-import { ocr } from './ops/ocr-stream.ts'
-import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
-import { resolveOcrConfig } from './resolve-config.ts'
+import { ocr } from '@/plugins/builtin/ggml-ocr/ops/ocr-stream'
+import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { resolveOcrConfig } from '@/plugins/builtin/ggml-ocr/resolve-config'
 
 function createOCRModel(
   modelId: string,

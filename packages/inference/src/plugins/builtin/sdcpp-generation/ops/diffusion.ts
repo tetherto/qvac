@@ -1,10 +1,10 @@
-import { getModel } from '../../../../runtime/model-registry.ts'
+import { getModel } from '@/runtime/model-registry'
 import Buffer from 'bare-buffer'
 import type {
   DiffusionRequest,
   DiffusionStreamResponse,
   DiffusionStats
-} from '../../../../schemas/sdcpp-config.ts'
+} from '@/schemas/sdcpp-config'
 
 interface ResponseWithStats {
   stats?: DiffusionStats

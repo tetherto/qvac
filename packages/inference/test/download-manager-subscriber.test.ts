@@ -1,11 +1,8 @@
 import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
-import {
-  startOrJoinDownload,
-  type DownloadContext
-} from '../src/handlers/load-model/download-manager'
-import { createDisposableScope } from '../src/runtime/disposable-scope'
-import { InferenceCancelledError } from '../src/errors'
+import { startOrJoinDownload, type DownloadContext } from '@/handlers/load-model/download-manager'
+import { createDisposableScope } from '@/runtime/disposable-scope'
+import { InferenceCancelledError } from '@/errors'
 
 // -----------------------------------------------------------------------------
 // download-manager: per-`requestId` cancel + content-addressed dedup.

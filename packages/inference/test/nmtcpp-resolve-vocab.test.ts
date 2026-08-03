@@ -5,9 +5,9 @@ import {
   deriveBergamotVocabSources,
   resolveBergamotVocab,
   type PivotModelConfig
-} from '../src/plugins/builtin/nmtcpp-translation/resolve-vocab'
-import type { ModelSrcInput, NmtConfig, ResolveContext } from '../src/schemas'
-import { ModelLoadFailedError } from '../src/errors'
+} from '@/plugins/builtin/nmtcpp-translation/resolve-vocab'
+import type { ModelSrcInput, NmtConfig, ResolveContext } from '@/schemas'
+import { ModelLoadFailedError } from '@/errors'
 
 interface MockResolveCall {
   src: ModelSrcInput

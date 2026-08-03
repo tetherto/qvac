@@ -3,7 +3,7 @@ import {
   getActiveRagRequest,
   setActiveRagRequest,
   clearActiveRagRequest
-} from '../src/rag/rag-operation-manager'
+} from '@/rag/rag-operation-manager'
 
 // -----------------------------------------------------------------------------
 // RAG workspace → requestId map.

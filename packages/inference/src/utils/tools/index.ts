@@ -1,2 +1,2 @@
-export { detectToolDialectFromName } from './dialect.ts'
-export { parseToolCalls } from './parser.ts'
+export { detectToolDialectFromName } from '@/utils/tools/dialect'
+export { parseToolCalls } from '@/utils/tools/parser'

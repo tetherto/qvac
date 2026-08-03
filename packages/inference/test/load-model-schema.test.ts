@@ -1,14 +1,11 @@
 import test from 'brittle'
-import {
-  loadModelOptionsToRequestSchema,
-  loadModelSrcRequestSchema
-} from '../src/schemas/load-model'
-import { llmConfigBaseSchema, ModelType } from '../src/schemas'
+import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
+import { llmConfigBaseSchema, ModelType } from '@/schemas'
 import {
   getExplicitRegistryMetadata,
   resolveRegistryDownloadMetadata
-} from '../src/handlers/load-model/registry-metadata'
-import type { RegistryItem } from '../src/models/registry'
+} from '@/handlers/load-model/registry-metadata'
+import type { RegistryItem } from '@/models/registry'
 
 test('loadModelSrcRequestSchema: rejects unknown top-level keys', (t) => {
   const invalidRequest = {

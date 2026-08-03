@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { toolDialectSchema } from './completion-stream.ts'
+import { toolDialectSchema } from '@/schemas/completion-stream'
 
 // ============== Model info (catalog) ==============
 

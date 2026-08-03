@@ -8,34 +8,45 @@ import type {
   Tool,
   ToolCall,
   ToolDialect
-} from '../../../../schemas/index.ts'
-import { TOOLS_MODE } from '../../../../schemas/tools.ts'
-import { logCacheDisabled, logCacheInit, logCacheSave, logMessagesToAddon } from './cache-logger.ts'
-import { extractSystemPrompt, getCurrentCacheInfo } from '../../../ops/kv-cache-utils.ts'
-import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry.ts'
-import { decideCachedHistorySlice, shouldCommitCachedTurn } from './kv-cache-state.ts'
+} from '@/schemas/index'
+import { TOOLS_MODE } from '@/schemas/tools'
+import {
+  logCacheDisabled,
+  logCacheInit,
+  logCacheSave,
+  logMessagesToAddon
+} from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
+import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
+import {
+  decideCachedHistorySlice,
+  shouldCommitCachedTurn
+} from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
 import {
   createKvCacheSession,
   generateConfigHash,
   type KvCacheSession,
   type TurnHandle
-} from './kv-cache-session.ts'
-import type { DisposableScope } from '../../../../runtime/disposable-scope.ts'
+} from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
+import type { DisposableScope } from '@/runtime/disposable-scope'
 import {
   appendToolsToHistory,
   detectToolDialect,
   prependToolsToHistory
-} from '../../../../utils/tool-integration.ts'
-import { parseToolCalls } from '../../../../utils/tools/index.ts'
-import { getResponseFormatJsonSchema } from '../../../../utils/response-format.ts'
-import { buildAutoCacheSaveHistory, type CacheMessage } from '../../../../utils/index.ts'
-import { getEngineLogger } from '../../../../logging/index.ts'
-import type { Logger } from '../../../../logging/types.ts'
-import { AttachmentNotFoundError } from '../../../../errors/index.ts'
-import { nowMs } from '../../../../profiling/index.ts'
-import { buildStreamResult } from '../../../../profiling/model-execution.ts'
-import type { LlmStats } from '../../../../utils/addon-responses.ts'
-import { normalizeCompletionStats } from './completion-stats.ts'
+} from '@/utils/tool-integration'
+import { parseToolCalls } from '@/utils/tools/index'
+import { getResponseFormatJsonSchema } from '@/utils/response-format'
+import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
+import { getEngineLogger } from '@/logging/index'
+import type { Logger } from '@/logging/types'
+import { AttachmentNotFoundError } from '@/errors/index'
+import { nowMs } from '@/profiling/index'
+import { buildStreamResult } from '@/profiling/model-execution'
+import type { LlmStats } from '@/utils/addon-responses'
+import {
+  normalizeCompletionStats,
+  withEmittedTokens
+} from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import fs from 'bare-fs'
 
 const logger = getEngineLogger()
@@ -315,11 +326,15 @@ async function* processModelResponse(
 
   let accumulatedText = ''
   let producedTokens = false
+  let emittedPieces = 0
   let toolCallsResult: ToolCall[] = []
 
   for await (const token of response.iterate()) {
     const tokenStr = token as string
-    if (tokenStr.length > 0) producedTokens = true
+    if (tokenStr.length > 0) {
+      producedTokens = true
+      emittedPieces++
+    }
     accumulatedText += tokenStr
     yield { token: tokenStr }
   }
@@ -335,7 +350,7 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats
-  const stats = normalizeCompletionStats(responseWithStats.stats)
+  const stats = withEmittedTokens(normalizeCompletionStats(responseWithStats.stats), emittedPieces)
 
   return {
     ...buildStreamResult(modelExecutionMs, stats),

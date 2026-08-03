@@ -3,10 +3,10 @@ import {
   type VideoStreamRequest,
   type VideoClientParams,
   type VideoStats
-} from '../schemas/index.ts'
-import { stream as streamRpc } from '../dispatch.ts'
-import { generateRequestId } from '../runtime/request-id.ts'
-import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
+} from '@/schemas/index'
+import { stream as streamRpc } from '@/dispatch'
+import { generateRequestId } from '@/runtime/request-id'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 export interface VideoProgressTick {
   step: number

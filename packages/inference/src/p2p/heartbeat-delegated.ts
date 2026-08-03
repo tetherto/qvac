@@ -1,9 +1,9 @@
-import type { HeartbeatRequest, HeartbeatResponse } from '../schemas/index.ts'
-import { getEngineLogger } from '../logging/index.ts'
-import { getRPC } from './delegate-client.ts'
-import { send, type DelegateOptions } from './delegate-transport.ts'
-import { DelegateConnectionFailedError } from '../errors/index.ts'
-import type { DelegatedHandlerOptions } from '../profiling/index.ts'
+import type { HeartbeatRequest, HeartbeatResponse } from '@/schemas/index'
+import { getEngineLogger } from '@/logging/index'
+import { getRPC } from '@/p2p/delegate-client'
+import { send, type DelegateOptions } from '@/p2p/delegate-transport'
+import { DelegateConnectionFailedError } from '@/errors/index'
+import type { DelegatedHandlerOptions } from '@/profiling/index'
 
 const logger = getEngineLogger()
 

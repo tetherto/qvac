@@ -3,7 +3,7 @@ import {
   transcribeSegmentSchema,
   transcribeStatsSchema,
   type TranscribeSegment
-} from './transcription.ts'
+} from '@/schemas/transcription'
 
 // Neural-signal binary input. The BCI addon consumes a raw neural buffer
 // (not audio): pass it inline as base64 or point at a local `.bin` file.

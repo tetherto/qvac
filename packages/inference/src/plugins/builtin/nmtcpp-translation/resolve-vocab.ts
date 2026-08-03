@@ -4,8 +4,8 @@ import {
   type NmtConfig,
   type ResolveContext,
   type ResolveResult
-} from '../../../schemas/index.ts'
-import { ModelLoadFailedError } from '../../../errors/index.ts'
+} from '@/schemas/index'
+import { ModelLoadFailedError } from '@/errors/index'
 
 export interface PivotModelConfig {
   modelSrc: string

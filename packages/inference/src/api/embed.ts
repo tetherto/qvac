@@ -1,13 +1,13 @@
-import { send } from '../dispatch.ts'
+import { send } from '@/dispatch'
 import {
   type EmbedParams,
   type EmbedRequest,
   type EmbedStats,
   type RPCOptions
-} from '../schemas/index.ts'
-import { InvalidResponseError } from '../errors/index.ts'
-import { decoratePromise } from '../utils/decorate-promise.ts'
-import { generateRequestId } from '../runtime/request-id.ts'
+} from '@/schemas/index'
+import { InvalidResponseError } from '@/errors/index'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { generateRequestId } from '@/runtime/request-id'
 
 /**
  * Generates embeddings for a single text using a specified model.

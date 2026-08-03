@@ -1,5 +1,5 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { QvacConfig } from '../../schemas/index.ts'
+import type { QvacConfig } from '@/schemas/index'
 
 export const DEFAULT_REGISTRY_STREAM_TIMEOUT_MS = 60_000
 

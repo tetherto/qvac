@@ -4,19 +4,22 @@ import type {
   CompletionStats,
   ResponseFormat,
   Tool
-} from '../../../../schemas/index.ts'
-import { TOOLS_MODE } from '../../../../schemas/tools.ts'
-import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry.ts'
-import type { DisposableScope } from '../../../../runtime/disposable-scope.ts'
-import type { Logger } from '../../../../logging/types.ts'
-import { getEngineLogger } from '../../../../logging/index.ts'
-import { nowMs } from '../../../../profiling/index.ts'
-import { buildStreamResult } from '../../../../profiling/model-execution.ts'
-import type { LlmStats } from '../../../../utils/addon-responses.ts'
-import { getResponseFormatJsonSchema } from '../../../../utils/response-format.ts'
-import { transformMessages, type CompletionGenerationParams } from './completion-stream.ts'
-import { normalizeCompletionStats } from './completion-stats.ts'
-import { appendToolsToHistory, prependToolsToHistory } from '../../../../utils/tool-integration.ts'
+} from '@/schemas/index'
+import { TOOLS_MODE } from '@/schemas/tools'
+import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
+import type { DisposableScope } from '@/runtime/disposable-scope'
+import type { Logger } from '@/logging/types'
+import { getEngineLogger } from '@/logging/index'
+import { nowMs } from '@/profiling/index'
+import { buildStreamResult } from '@/profiling/model-execution'
+import type { LlmStats } from '@/utils/addon-responses'
+import { getResponseFormatJsonSchema } from '@/utils/response-format'
+import {
+  transformMessages,
+  type CompletionGenerationParams
+} from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
+import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
+import { appendToolsToHistory, prependToolsToHistory } from '@/utils/tool-integration'
 
 const logger = getEngineLogger()
 

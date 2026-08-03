@@ -6,33 +6,33 @@ import type {
   ProfilingRequestMeta,
   QvacConfig,
   RPCOptions
-} from './schemas/index.ts'
+} from '@/schemas/index'
 import {
   normalizeModelType,
   PROFILING_KEY,
   createErrorResponse,
   requestSchema
-} from './schemas/index.ts'
+} from '@/schemas/index'
 import { z } from 'zod'
-import { formatZodError } from './utils/zod-error.ts'
+import { formatZodError } from '@/utils/zod-error'
 import os from 'bare-os'
 import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
-import { registry } from './registry.ts'
-import type { HandlerEntry } from './handlers/types.ts'
-import { handlerSupportsProgress, selectHandler } from './selection.ts'
-import { assertLifecycleAllowed } from './runtime/runtime-lifecycle.ts'
-import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from './runtime/state.ts'
-import { initialize, close as closeEngine } from './runtime/lifecycle.ts'
-import { getAllPlugins } from './plugins/index.ts'
-import { resolveConfig } from './config/resolve-config.ts'
-import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from './logging/index.ts'
-import { profileReplyHandler, profileStreamHandler } from './profiling/index.ts'
+import { registry } from '@/registry'
+import type { HandlerEntry } from '@/handlers/types'
+import { handlerSupportsProgress, selectHandler } from '@/selection'
+import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
+import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
+import { initialize, close as closeEngine } from '@/runtime/lifecycle'
+import { getAllPlugins } from '@/plugins/index'
+import { resolveConfig } from '@/config/resolve-config'
+import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from '@/logging/index'
+import { profileReplyHandler, profileStreamHandler } from '@/profiling/index'
 import {
   RPCNoHandlerError,
   PluginsNotRegisteredError,
   RequestValidationFailedError
-} from './errors/index.ts'
+} from '@/errors/index'
 
 // The dispatch seam. Public operations in `api/` build a typed request and call
 // `send`/`stream`/`duplex`; this runs each against the handler registry.

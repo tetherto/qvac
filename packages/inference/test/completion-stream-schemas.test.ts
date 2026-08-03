@@ -4,9 +4,9 @@ import {
   completionStatsSchema,
   generationParamsSchema,
   toolDialectSchema
-} from '../src/schemas/completion-stream'
-import { toolSchema } from '../src/schemas/tools'
-import { REASONING_BUDGET_MAX } from '../src/schemas/llamacpp-config'
+} from '@/schemas/completion-stream'
+import { toolSchema } from '@/schemas/tools'
+import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 
 test("completionStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
   t.is(completionStatsSchema.safeParse({ backendDevice: 'cpu' }).success, true)

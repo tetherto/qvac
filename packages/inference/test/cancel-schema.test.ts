@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { cancelBroadSugarSchema, cancelRequestSchema } from '../src/schemas/cancel'
-import type { RequestKind } from '../src/runtime/request-context'
+import { cancelBroadSugarSchema, cancelRequestSchema } from '@/schemas/cancel'
+import type { RequestKind } from '@/runtime/request-context'
 
 // Compile-time exhaustive map of every server-side `RequestKind`. Adding a
 // new kind to the union without a matching entry here is a TS error, which

@@ -1,4 +1,4 @@
-import type { ModelProgressUpdate, ShardFileMetadata } from '../../schemas/index.ts'
+import type { ModelProgressUpdate, ShardFileMetadata } from '@/schemas/index'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import Corestore from 'corestore'
@@ -7,7 +7,7 @@ import Hyperdrive from 'hyperdrive'
 import type { Entry } from 'hyperdrive'
 import { type Readable, type Writable } from 'bare-stream'
 import type { AbortSignal } from 'bare-abort-controller'
-import { getQvacPath } from '../../utils/qvac-paths.ts'
+import { getQvacPath } from '@/utils/qvac-paths'
 import {
   getModelsCacheDir,
   generateShortHash,
@@ -18,14 +18,14 @@ import {
   measureChecksum,
   extractTensorsFromShards,
   calculatePercentage
-} from '../../utils/index.ts'
-import { getModelBySrc } from '../../models/registry/index.ts'
+} from '@/utils/index'
+import { getModelBySrc } from '@/models/registry/index'
 import {
   createHyperdriveDownloadKey,
   startOrJoinDownload,
   applyJoinedDownloadStats
-} from './download-manager.ts'
-import { getConfig } from '../../runtime/state.ts'
+} from '@/handlers/load-model/download-manager'
+import { getConfig } from '@/runtime/state'
 import {
   FileNotFoundError,
   ChecksumValidationFailedError,
@@ -33,15 +33,15 @@ import {
   HyperdriveDownloadFailedError,
   ModelLoadFailedError,
   NoBlobFoundError
-} from '../../errors/index.ts'
-import { getEngineLogger } from '../../logging/index.ts'
+} from '@/errors/index'
+import { getEngineLogger } from '@/logging/index'
 import {
   registerSwarm,
   unregisterSwarm,
   registerCorestore,
   unregisterCorestore
-} from '../../runtime/runtime-lifecycle.ts'
-import type { DownloadHooks } from './types.ts'
+} from '@/runtime/runtime-lifecycle'
+import type { DownloadHooks } from '@/handlers/load-model/types'
 import { Buffer } from 'bare-buffer'
 
 const logger = getEngineLogger()

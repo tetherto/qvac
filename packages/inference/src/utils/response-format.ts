@@ -1,4 +1,4 @@
-import type { ResponseFormat } from '../schemas/index.ts'
+import type { ResponseFormat } from '@/schemas/index'
 
 // Translates the request-level `responseFormat` into the JSON Schema string
 // that the llama.cpp addon's per-request `generationParams.json_schema`

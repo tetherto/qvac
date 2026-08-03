@@ -1,10 +1,10 @@
-import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
+import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
   generateStableToolCallId,
   isValidToolCall,
   validateToolArguments,
   type ParserResult
-} from '../shared.ts'
+} from '@/utils/tools/shared'
 
 export function parseGemmaFormat(text: string, tools: Tool[]): ParserResult {
   const toolCalls: ToolCall[] = []

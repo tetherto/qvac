@@ -4,7 +4,7 @@ import {
   parakeetConfigSchema,
   parakeetLoadConfigSchema,
   LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS
-} from '../src/schemas/transcription-config'
+} from '@/schemas/transcription-config'
 
 test('parakeetRuntimeConfigSchema: accepts empty config', (t) => {
   const result = parakeetRuntimeConfigSchema.parse({})

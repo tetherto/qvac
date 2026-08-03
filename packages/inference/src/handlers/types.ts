@@ -1,4 +1,4 @@
-import type { Request, Response } from '../schemas/index.ts'
+import type { Request, Response } from '@/schemas/index'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type ReplyHandler = (request: any, ...args: any[]) => Promise<Response> | Response

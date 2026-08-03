@@ -1,4 +1,4 @@
-import type { Tool, ToolCall, ToolCallError } from '../../schemas/index.ts'
+import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 
 export type ParserResult = {
   matched: boolean

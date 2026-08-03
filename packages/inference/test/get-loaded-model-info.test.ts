@@ -1,8 +1,8 @@
 import test from 'brittle'
-import { registerModel, unregisterModel } from '../src/runtime/model-registry'
-import { handleGetLoadedModelInfo } from '../src/handlers/get-loaded-model-info'
-import { ModelNotFoundError } from '../src/errors'
-import { ERROR_CODES } from '../src/schemas'
+import { registerModel, unregisterModel } from '@/runtime/model-registry'
+import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
+import { ModelNotFoundError } from '@/errors'
+import { ERROR_CODES } from '@/schemas'
 
 let idCounter = 0
 function makeId(prefix: string) {

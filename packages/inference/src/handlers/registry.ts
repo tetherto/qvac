@@ -5,14 +5,14 @@ import type {
   ModelRegistryGetModelRequest,
   ModelRegistryGetModelResponse,
   ModelRegistryEntry
-} from '../schemas/index.ts'
+} from '@/schemas/index'
 import Buffer from 'bare-buffer'
 import type { QVACModelEntry } from '@qvac/registry-client'
-import { REGISTRY_ERROR_CODES } from '../schemas/errors.ts'
-import { getAddonFromEngine, resolveCanonicalEngine } from '../schemas/engine-addon-map.ts'
-import { getRegistryClient } from '../runtime/registry-client.ts'
-import { getEngineLogger } from '../logging/index.ts'
-import { ModelRegistryQueryFailedError } from '../errors/index.ts'
+import { REGISTRY_ERROR_CODES } from '@/schemas/errors'
+import { getAddonFromEngine, resolveCanonicalEngine } from '@/schemas/engine-addon-map'
+import { getRegistryClient } from '@/runtime/registry-client'
+import { getEngineLogger } from '@/logging/index'
+import { ModelRegistryQueryFailedError } from '@/errors/index'
 
 interface QvacError extends Error {
   code?: number

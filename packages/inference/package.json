@@ -138,11 +138,12 @@
     "format:fix": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "compile": "tsc -p tsconfig.build.json",
-    "rewrite-dts-ext": "bare scripts/fix-dts-extensions.ts dist",
-    "build": "npm run compile && npm run rewrite-dts-ext",
+    "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
+    "build": "npm run compile && npm run postcompile:aliases",
     "prepare": "npm run build",
-    "test": "brittle-bare 'test/**/*.test.ts'",
-    "test:bare": "bun run test"
+    "build:test": "tsc -p test/tsconfig.build.json && tsc-alias -p test/tsconfig.alias.json",
+    "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
+    "test:bare": "npm run test"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -154,10 +155,12 @@
     "@qvac/registry-client": "^0.6.1",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.2",
+    "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.3",
     "bare-env": "^3.0.1",
     "bare-fetch": "^3.0.1",
     "bare-fs": "^4.7.4",
+    "bare-gpu-info": "0.1.1",
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
     "bare-rpc": "^1.3.8",
@@ -177,7 +180,7 @@
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.13.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.15.0",
+    "@qvac/diffusion-cpp": "^0.17.0",
     "@qvac/embed-llamacpp": "^0.28.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.38.0",
@@ -185,8 +188,8 @@
     "@qvac/transcription-parakeet": "^0.10.0",
     "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.1.0",
-    "@qvac/tts-ggml": "^0.5.0",
-    "@qvac/vla-ggml": "^0.14.0"
+    "@qvac/tts-ggml": "^0.6.0",
+    "@qvac/vla-ggml": "^0.16.2"
   },
   "peerDependenciesMeta": {
     "@qvac/bci-whispercpp": {
@@ -233,7 +236,7 @@
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.13.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.15.0",
+    "@qvac/diffusion-cpp": "^0.17.0",
     "@qvac/embed-llamacpp": "^0.28.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.38.0",
@@ -241,8 +244,8 @@
     "@qvac/transcription-parakeet": "^0.10.0",
     "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.1.0",
-    "@qvac/tts-ggml": "^0.5.0",
-    "@qvac/vla-ggml": "^0.14.0",
+    "@qvac/tts-ggml": "^0.6.0",
+    "@qvac/vla-ggml": "^0.16.2",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
@@ -252,6 +255,7 @@
     "lunte": "^1.8.4",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
+    "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3"
   }
 }

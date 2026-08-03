@@ -1,8 +1,5 @@
-import type { LoggingStreamRequest, LoggingStreamResponse } from '../schemas/index.ts'
-import {
-  registerLoggingStream,
-  unregisterLoggingStream
-} from '../runtime/logging-stream-registry.ts'
+import type { LoggingStreamRequest, LoggingStreamResponse } from '@/schemas/index'
+import { registerLoggingStream, unregisterLoggingStream } from '@/runtime/logging-stream-registry'
 import type { LogLevel } from '@qvac/logging'
 
 export async function* handleLoggingStream(

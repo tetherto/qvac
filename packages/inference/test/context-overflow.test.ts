@@ -2,7 +2,7 @@ import test from 'brittle'
 import {
   isAddonContextOverflowError,
   parseContextOverflowMessage
-} from '../src/plugins/builtin/llamacpp-completion/ops/context-overflow'
+} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 
 // The addon's structured-code format from
 // `qvac_errors::StatusError::codeString()`:

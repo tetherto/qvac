@@ -1,6 +1,6 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from '../schemas/index.ts'
-import { send } from '../dispatch.ts'
-import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '../errors/index.ts'
+import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas/index'
+import { send } from '@/dispatch'
+import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/errors/index'
 
 /**
  * Deletes KV cache files.

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
-import type { ModelSrcInput } from './model-src-utils.ts'
+import type { ModelSrcInput } from '@/schemas/model-src-utils'
 
 /**
  * Granularity at which the addon can cancel.

@@ -1,10 +1,7 @@
 import test from 'brittle'
-import {
-  buildAutoCacheSaveHistory,
-  getAutoCacheLookupHistory
-} from '../src/utils/cache/auto-history'
-import { buildFinalFromEvents } from '../src/utils/aggregate-events'
-import { normalizeAssistantCacheContent } from '../src/utils/cache-normalize'
+import { buildAutoCacheSaveHistory, getAutoCacheLookupHistory } from '@/utils/cache/auto-history'
+import { buildFinalFromEvents } from '@/utils/aggregate-events'
+import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
 
 test('auto kv-cache history: next-turn lookup matches prior saved turn', (t) => {
   const firstTurnHistory = [

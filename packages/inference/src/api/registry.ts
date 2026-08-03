@@ -7,9 +7,9 @@ import type {
   ModelRegistryGetModelResponse,
   ModelRegistryEntry,
   ModelRegistryEntryAddon
-} from '../schemas/index.ts'
-import { send } from '../dispatch.ts'
-import { ModelRegistryQueryFailedError } from '../errors/index.ts'
+} from '@/schemas/index'
+import { send } from '@/dispatch'
+import { ModelRegistryQueryFailedError } from '@/errors/index'
 
 export type { ModelRegistryEntry, ModelRegistryEntryAddon }
 

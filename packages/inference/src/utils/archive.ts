@@ -9,21 +9,21 @@ import {
   generateShardFilenames,
   extractTensorsFromShards,
   validateShardedModelCache
-} from './shard-utils.ts'
+} from '@/utils/shard-utils'
 import {
   ModelLoadFailedError,
   ArchiveExtractionFailedError,
   ArchiveUnsupportedTypeError,
   ArchiveMissingShardsError,
   DownloadCancelledError
-} from '../errors/index.ts'
-import { isPathWithinBase } from './path-security.ts'
-import { getEngineLogger } from '../logging/index.ts'
+} from '@/errors/index'
+import { isPathWithinBase } from '@/utils/path-security'
+import { getEngineLogger } from '@/logging/index'
 import {
   SUPPORTED_ARCHIVE_EXTENSIONS,
   filenameToArchiveTypeSchema,
   type ArchiveType
-} from '../schemas/model-file.ts'
+} from '@/schemas/model-file'
 
 const logger = getEngineLogger()
 

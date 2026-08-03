@@ -24,25 +24,28 @@ import {
   type ToolDialect,
   type LlmConfig,
   type LlmConfigInput
-} from '../../../schemas/index.ts'
-import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging/index.ts'
-import { expandGGUFIntoShards } from '../../../utils/index.ts'
-import { completion } from './ops/completion-stream.ts'
-import { batchCompletion } from './ops/batch-completion-stream.ts'
-import { finetune } from './ops/finetune.ts'
-import { translate } from '../../ops/translate.ts'
-import { transformLlmConfig } from './transform.ts'
-import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
-import { getModelConfig } from '../../../runtime/model-registry.ts'
-import { createCompletionNormalizer } from '../../../utils/completion-normalizer.ts'
-import { detectToolDialect } from '../../../utils/tool-integration.ts'
-import { getRequestRegistry, withRequestContext } from '../../../runtime/index.ts'
-import { generateRandomRequestId } from '../../../runtime/request-id.ts'
-import { ContextOverflowError } from '../../../errors/index.ts'
-import { isAddonContextOverflowError, parseContextOverflowMessage } from './ops/context-overflow.ts'
-import { isAddonCancelledError } from './ops/batch-cancelled.ts'
-import { isMobile } from '../../../runtime/state.ts'
-import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile.ts'
+} from '@/schemas/index'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
+import { expandGGUFIntoShards } from '@/utils/index'
+import { completion } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
+import { batchCompletion } from '@/plugins/builtin/llamacpp-completion/ops/batch-completion-stream'
+import { finetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
+import { translate } from '@/plugins/ops/translate'
+import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
+import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { getModelConfig } from '@/runtime/model-registry'
+import { createCompletionNormalizer } from '@/utils/completion-normalizer'
+import { detectToolDialect } from '@/utils/tool-integration'
+import { getRequestRegistry, withRequestContext } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
+import { ContextOverflowError } from '@/errors/index'
+import {
+  isAddonContextOverflowError,
+  parseContextOverflowMessage
+} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
+import { isAddonCancelledError } from '@/plugins/builtin/llamacpp-completion/ops/batch-cancelled'
+import { isMobile } from '@/runtime/state'
+import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 
 function createLlmModel(
   modelId: string,

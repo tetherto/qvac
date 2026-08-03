@@ -1,10 +1,10 @@
-import type { ModelProgressUpdate } from '../../schemas/index.ts'
+import type { ModelProgressUpdate } from '@/schemas/index'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { DownloadCancelledError, InferenceCancelledError } from '../../errors/index.ts'
-import { getEngineLogger } from '../../logging/index.ts'
-import { getRequestRegistry } from '../../runtime/index.ts'
-import type { DisposableScope } from '../../runtime/disposable-scope.ts'
-import type { DownloadHooks } from './types.ts'
+import { DownloadCancelledError, InferenceCancelledError } from '@/errors/index'
+import { getEngineLogger } from '@/logging/index'
+import { getRequestRegistry } from '@/runtime/index'
+import type { DisposableScope } from '@/runtime/disposable-scope'
+import type { DownloadHooks } from '@/handlers/load-model/types'
 
 const logger = getEngineLogger()
 

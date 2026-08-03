@@ -5,17 +5,14 @@ import {
   type DevicePattern,
   type DeviceMatch,
   type RuntimeContext
-} from '../schemas/index.ts'
-import { llmConfigSchema, embedConfigSchema } from '../schemas/llamacpp-config.ts'
-import {
-  whisperConfigSchema,
-  parakeetRuntimeConfigSchema
-} from '../schemas/transcription-config.ts'
-import { bciConfigSchema } from '../schemas/bci-config.ts'
-import { ocrConfigSchema } from '../schemas/ocr.ts'
-import { sdcppConfigSchema } from '../schemas/sdcpp-config.ts'
-import { vlaConfigSchema } from '../schemas/vla.ts'
-import { classificationConfigSchema } from '../schemas/classification.ts'
+} from '@/schemas/index'
+import { llmConfigSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
+import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
+import { bciConfigSchema } from '@/schemas/bci-config'
+import { ocrConfigSchema } from '@/schemas/ocr'
+import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
+import { vlaConfigSchema } from '@/schemas/vla'
+import { classificationConfigSchema } from '@/schemas/classification'
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: 'llm',

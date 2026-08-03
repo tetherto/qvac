@@ -1,29 +1,30 @@
 import { z } from 'zod'
-import type { Logger } from '../logging/index.ts'
+import type { Logger } from '@/logging/index'
 import {
   llmConfigBaseSchema,
   embedConfigBaseSchema,
   type LlmConfig,
   type EmbedConfig
-} from './llamacpp-config.ts'
-import { whisperConfigSchema, parakeetLoadConfigSchema } from './transcription-config.ts'
-import type { parakeetConfigSchema } from './transcription-config.ts'
-import { bciConfigSchema } from './bci-config.ts'
-import { delegateSchema } from './delegate.ts'
-import { nmtConfigBaseSchema, nmtConfigSchema } from './translation-config.ts'
+} from '@/schemas/llamacpp-config'
+import { whisperConfigSchema, parakeetLoadConfigSchema } from '@/schemas/transcription-config'
+import type { parakeetConfigSchema } from '@/schemas/transcription-config'
+import { bciConfigSchema } from '@/schemas/bci-config'
+import { delegateSchema } from '@/schemas/delegate'
+import { nmtConfigBaseSchema, nmtConfigSchema } from '@/schemas/translation-config'
 import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
+  ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
-} from './text-to-speech.ts'
-import { ocrConfigSchema } from './ocr.ts'
+} from '@/schemas/text-to-speech'
+import { ocrConfigSchema } from '@/schemas/ocr'
 import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
   modelInputToNameSchema,
   type ModelDescriptor
-} from './model-src-utils.ts'
+} from '@/schemas/model-src-utils'
 import {
   llmModelTypeSchema,
   whisperModelTypeSchema,
@@ -41,10 +42,10 @@ import {
   normalizeModelType,
   type CanonicalModelType,
   type ModelTypeInput
-} from './model-types.ts'
-import { sdcppConfigSchema } from './sdcpp-config.ts'
-import { vlaConfigSchema } from './vla.ts'
-import { classificationConfigSchema } from './classification.ts'
+} from '@/schemas/model-types'
+import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
+import { vlaConfigSchema } from '@/schemas/vla'
+import { classificationConfigSchema } from '@/schemas/classification'
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
@@ -52,7 +53,7 @@ const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(M
 export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === 'string' && builtInModelTypes.has(modelType)
 }
-import { reloadConfigRequestSchema } from './reload-config.ts'
+import { reloadConfigRequestSchema } from '@/schemas/reload-config'
 
 const loadModelCommonFields = {
   modelSrc: modelSrcInputSchema,
@@ -88,6 +89,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
     configKeys(
       ttsChatterboxLoadConfigSchema,
       ttsSupertonicLoadConfigSchema,
+      ttsParlerLoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],

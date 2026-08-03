@@ -1,7 +1,7 @@
-import type { ProvideRequest, ProvideResponse } from '../../schemas/provide.ts'
-import { getSwarm, hasActiveProviders, registerProvider } from '../swarm.ts'
-import { setupConnectionHandlers } from './connection.ts'
-import { getEngineLogger } from '../../logging/index.ts'
+import type { ProvideRequest, ProvideResponse } from '@/schemas/provide'
+import { getSwarm, hasActiveProviders, registerProvider } from '@/p2p/swarm'
+import { setupConnectionHandlers } from '@/p2p/provideHandler/connection'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

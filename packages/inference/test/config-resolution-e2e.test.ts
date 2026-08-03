@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { ModelType, type RuntimeContext, type DevicePattern } from '../src/schemas'
-import { LLM_CONFIG_DEFAULTS, EMBED_CONFIG_DEFAULTS } from '../src/schemas/llamacpp-config'
+import { ModelType, type RuntimeContext, type DevicePattern } from '@/schemas'
+import { LLM_CONFIG_DEFAULTS, EMBED_CONFIG_DEFAULTS } from '@/schemas/llamacpp-config'
 import {
   matchesPattern,
   findAllMatchingPatterns,
@@ -9,7 +9,7 @@ import {
   CANONICAL_TO_ALIAS,
   BUILTIN_DEVICE_PATTERNS,
   type ConfigResolutionLog
-} from '../src/runtime/model-config-utils'
+} from '@/runtime/model-config-utils'
 
 test('matchesPattern: matches Pixel device', (t) => {
   const ctx: RuntimeContext = {

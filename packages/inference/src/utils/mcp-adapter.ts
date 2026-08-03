@@ -1,10 +1,10 @@
-import type { Tool } from '../schemas/tools.ts'
-import type { JsonSchema } from '../schemas/json-schema.ts'
-import type { McpClientInput, McpClient } from '../schemas/mcp-adapter.ts'
-import type { ToolHandler } from './tool-helpers.ts'
-import { mapValues } from './object.ts'
+import type { Tool } from '@/schemas/tools'
+import type { JsonSchema } from '@/schemas/json-schema'
+import type { McpClientInput, McpClient } from '@/schemas/mcp-adapter'
+import type { ToolHandler } from '@/utils/tool-helpers'
+import { mapValues } from '@/utils/object'
 
-export type { McpClient, McpClientInput } from '../schemas/mcp-adapter.ts'
+export type { McpClient, McpClientInput } from '@/schemas/mcp-adapter'
 
 export type ToolHandlerMap = Map<string, ToolHandler>
 

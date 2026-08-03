@@ -1,9 +1,9 @@
 import test from 'brittle'
-import type { Tool } from '../src/schemas'
-import { parseToolCalls, detectToolDialectFromName } from '../src/utils/tools'
-import { parseHarmonyFormat } from '../src/utils/tools/parsers/harmony'
-import { parseQwen35Format } from '../src/utils/tools/parsers/qwen35'
-import { parseGemma4NativeFormat } from '../src/utils/tools/parsers/gemma4native'
+import type { Tool } from '@/schemas'
+import { parseToolCalls, detectToolDialectFromName } from '@/utils/tools'
+import { parseHarmonyFormat } from '@/utils/tools/parsers/harmony'
+import { parseQwen35Format } from '@/utils/tools/parsers/qwen35'
+import { parseGemma4NativeFormat } from '@/utils/tools/parsers/gemma4native'
 const weatherTool: Tool = {
   type: 'function',
   name: 'weather',
