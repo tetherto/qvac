@@ -86,10 +86,10 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
 
 } // namespace
 
-// Batch-only output-rate conversion (the tts-cpp engine ignores
-// output_sample_rate; unenhanced streaming is validated to the native rate).
-// No-op unless a non-native outputSampleRate was requested. Runs before stats
-// so sampleRate_/duration reflect the emitted rate.
+// The tts-cpp engine ignores output_sample_rate, so the addon resamples the
+// batch output itself; unenhanced streaming is validated to the native rate
+// instead. Must run before stats so sampleRate_/duration reflect the emitted
+// rate.
 void resampleBatchOutput(
     const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result) {
   if (cfg.outputSampleRate.has_value() && *cfg.outputSampleRate > 0 &&
@@ -102,10 +102,10 @@ void resampleBatchOutput(
 
 namespace {
 
-// Sample rates once the LavaSR enhancer is active: the engine emits its native
-// 24 kHz, the enhancer upsamples to `workRate` (48 kHz), and the streaming path
-// finally emits at `streamFinalRate` (a caller-requested rate, else the work
-// rate). All zero when no enhancer is loaded.
+// Rates once the LavaSR enhancer is active: it upsamples the engine's native
+// 24 kHz to `workRate` (48 kHz), and the streaming path emits at
+// `streamFinalRate` (a caller-requested rate, else the work rate). Both stay
+// zero when no enhancer is loaded.
 struct EnhancerRates {
   int workRate = 0;
   int streamFinalRate = 0;
@@ -122,9 +122,7 @@ EnhancerRates resolveEnhancerRates(
   return {workRate, hasRequestedRate ? *outputSampleRate : workRate};
 }
 
-// Wraps the one-shot enhancer as a streaming stage: enhance at the engine's
-// native rate, then resample to the streaming final rate when they differ.
-// Mirrors ChatterboxModel::makeStreamingEnhancer.
+// Mirrors ChatterboxModel::makeStreamingEnhancer; keep the two in sync.
 std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
     const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer,
     const EnhancerRates& rates) {
@@ -145,9 +143,21 @@ std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
       finalRate);
 }
 
-// LavaSR neural denoiser (batch path). Runs BEFORE the enhancer and preserves
-// the sample rate. Streaming + denoiser is rejected in validateConfig, so this
-// only ever applies to batch synthesis.
+// Mirrors loadEnhancer: an empty path leaves the stage disabled.
+std::shared_ptr<tts_cpp::lavasr::Denoiser>
+loadDenoiser(const std::string& ggufPath, const std::string& errorContext) {
+  if (ggufPath.empty())
+    return nullptr;
+  try {
+    return tts_cpp::lavasr::Denoiser::load(ggufPath);
+  } catch (const std::exception& e) {
+    throw createTTSError(
+        TTSErrorCode::InitializationFailed, errorContext + e.what());
+  }
+}
+
+// Rate-preserving. validateConfig rejects denoiser + streaming, so this only
+// ever runs on the batch path.
 void applyBatchDenoiser(
     tts_cpp::cosyvoice::SynthesisResult& result,
     tts_cpp::lavasr::Denoiser& denoiser) {
@@ -160,9 +170,8 @@ void applyBatchDenoiser(
   }
 }
 
-// LavaSR neural bandwidth extension (batch path). Enhances the whole utterance
-// at once (the streaming path enhances per chunk instead) and updates
-// result.sample_rate to the enhancer's 48 kHz output.
+// Enhances the whole utterance in one pass; the streaming path enhances per
+// chunk through StreamingEnhancer instead.
 void applyBatchEnhancer(
     tts_cpp::cosyvoice::SynthesisResult& result,
     tts_cpp::lavasr::Enhancer& enhancer) {
@@ -176,9 +185,9 @@ void applyBatchEnhancer(
   }
 }
 
-// Batch post-processing chain: denoise (rate-preserving) -> enhance (-> 48 kHz)
-// -> honour outputSampleRate. resampleBatchOutput closes both the enhanced and
-// the unenhanced case, since the enhancer leaves result.sample_rate at 48 kHz.
+// resampleBatchOutput is unconditional because it closes both the enhanced and
+// the unenhanced case: applyBatchEnhancer leaves result.sample_rate at 48 kHz,
+// which still has to be reconciled with any requested outputSampleRate.
 void applyBatchPostProcessing(
     const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result,
     const std::shared_ptr<tts_cpp::lavasr::Denoiser>& denoiser,
@@ -190,9 +199,8 @@ void applyBatchPostProcessing(
   resampleBatchOutput(cfg, result);
 }
 
-// Per-chunk post-processing for the native streaming path: an optional
-// seam-free LavaSR enhancement stage emitting int16 PCM through the caller's
-// callback. Kept as a functor so the engine can call it per chunk.
+// The reference members borrow synthesize()'s locals, so an instance must not
+// outlive the engine->synthesize() call it is handed to.
 struct StreamChunkPostProcessor {
   const CosyvoiceModel::ChunkCallback& emit;
   std::shared_ptr<StreamingEnhancer> streamEnhancer;
@@ -430,11 +438,9 @@ void CosyvoiceModel::loadLocked() {
   backendId_ = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
 
-  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
   // Pass the engine's *resolved* device, not the requested switch: if the
   // engine fell back to CPU, keep the enhancer on CPU too instead of forcing it
-  // onto the GPU. Shared with Chatterbox/Supertonic via loadEnhancer so the
-  // loaders can't drift.
+  // onto the GPU.
   LoadedEnhancer loaded = loadEnhancer(
       cfg_.enhancerGgufPath,
       backendDevice_ == kBackendDeviceGpu,
@@ -443,19 +449,8 @@ void CosyvoiceModel::loadLocked() {
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
 
-  // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
-  if (!cfg_.denoiserGgufPath.empty()) {
-    try {
-      denoiser_ = tts_cpp::lavasr::Denoiser::load(cfg_.denoiserGgufPath);
-    } catch (const std::exception& e) {
-      denoiser_.reset();
-      throw createTTSError(
-          TTSErrorCode::InitializationFailed,
-          std::string("CosyvoiceModel::load: lavasr denoiser: ") + e.what());
-    }
-  } else {
-    denoiser_.reset();
-  }
+  denoiser_ = loadDenoiser(
+      cfg_.denoiserGgufPath, "CosyvoiceModel::load: lavasr denoiser: ");
 }
 
 void CosyvoiceModel::unloadLocked() {
@@ -513,8 +508,6 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
   tts_cpp::cosyvoice::SynthesisResult result;
   try {
     if (streaming) {
-      // Bridge the engine's float chunk callback to the JS int16 sink, running
-      // the seam-free LavaSR stage in between when the enhancer is active.
       result = engine->synthesize(
           text,
           StreamChunkPostProcessor{
