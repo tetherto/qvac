@@ -341,6 +341,10 @@ createWorldInstance(js_env_t* env, js_callback_info_t* info) try {
     config.offloadParamsToCpu = true;
   if (auto v = lookup("frameJpegQuality"); !v.empty())
     config.frameJpegQuality = std::stoi(v);
+  if (auto v = lookup("kvCache"); v == "true")
+    config.kvCache = true;
+  if (auto v = lookup("profile"); v == "true")
+    config.profile = true;
 
   auto model = make_unique<WorldSessionModel>(std::move(config));
 

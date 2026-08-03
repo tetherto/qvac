@@ -58,13 +58,15 @@ void WorldSessionModel::load() {
   params.num_frame_per_block = config_.numFramePerBlock;
   params.local_attn_size = config_.localAttnSize;
   params.offload_params_to_cpu = config_.offloadParamsToCpu;
+  params.kv_cache = config_.kvCache;
+  params.profile = config_.profile;
 
   session_ = sd_abot_session_new(&params);
   if (session_ == nullptr) {
     throw StatusError(
         general_error::InternalError,
-        "failed to create ABot-World walk session (check model/scene paths "
-        "and native logs)");
+        "failed to create ABot-World walk session (check model/scene paths, "
+        "the kvCache/localAttnSize combination, and native logs)");
   }
 
   stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(

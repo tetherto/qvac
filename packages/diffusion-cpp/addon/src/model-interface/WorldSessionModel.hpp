@@ -25,9 +25,14 @@ struct WorldSessionConfig {
   int nThreads = -1;        // -1 = auto-detect physical cores
   int64_t seed = 42;        // walk noise seed
   int numFramePerBlock = 0; // 0 = model default (3)
-  int localAttnSize = 0;    // 0 = config default; latent-frame window
+  int localAttnSize = 0;    // 0 = engine default (8); latent-frame window
   bool offloadParamsToCpu = false;
   int frameJpegQuality = 0; // 0 = lossless PNG frames; 1..100 = JPEG quality
+  // Per-layer history KV cache (~3.7x fewer frame-passes per block). The
+  // engine validates it against localAttnSize at load and fails fast on a
+  // window the compile-time KV ring cannot hold.
+  bool kvCache = false;
+  bool profile = false; // per-stage timing logs from the native session
 };
 
 } // namespace qvac_lib_inference_addon_sd

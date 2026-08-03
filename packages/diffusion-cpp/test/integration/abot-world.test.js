@@ -214,3 +214,92 @@ test(
     await world.unload().catch(() => {})
   }
 )
+
+test(
+  'ABot-World: full world generation - native scene creation + KV-cache walk',
+  { skip, timeout: 2_400_000 },
+  async (t) => {
+    setupJsLogger()
+
+    const dir = overrideDir || path.resolve(__dirname, '../model/abot')
+    if (!overrideDir) {
+      await provisionFromS3(dir)
+    }
+
+    const taehvPath = path.join(dir, TAEHV_NAME)
+    const vaePath = path.join(dir, VAE_NAME)
+    if (!fs.existsSync(taehvPath) || !fs.existsSync(vaePath)) {
+      t.pass(
+        'world-generation lane skipped: taew2_2 / Wan2.2 VAE not provisioned ' +
+          `(need ${TAEHV_NAME} + ${VAE_NAME} in ${dir})`
+      )
+      return
+    }
+
+    // umT5 comes from the pinned models manifest (the same file the Wan tests
+    // use, so it is usually cached on the runner). Scene creation loads the
+    // safetensors directly; the path is gated against the golden PyTorch
+    // extraction (prompt_embeds cosine 0.9973, first_frame_latents 0.9987).
+    const t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
+
+    const image = fs.readFileSync(
+      path.resolve(__dirname, '../../assets/claude-shannon-resized.jpg')
+    )
+    const scenePath = path.join(dir, 'scene-native-e2e.safetensors')
+    if (fs.existsSync(scenePath)) fs.unlinkSync(scenePath)
+
+    const world = new WorldStableDiffusion({
+      files: { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath },
+      // kvCache exercises the params-plumbed KV path end to end; the engine
+      // cross-validates it against localAttnSize and fails fast on a window
+      // the compiled KV ring cannot hold.
+      config: { seed: 42, kvCache: true },
+      logger: console,
+      opts: { stats: true }
+    })
+
+    // 1. Scene pack created natively (umT5 prompt encode + Wan2.2 VAE
+    //    first-frame encode). Standalone: runs before load().
+    const creation = await world.createScene({
+      prompt:
+        '| unknown | A realistic indoor scene with a person at a desk, ' +
+        'natural lighting, detailed textures, stable forward motion.',
+      image,
+      t5: t5Xxl,
+      vae: vaePath,
+      output: scenePath,
+      width: 832,
+      height: 480
+    })
+    let sceneMsg = ''
+    await creation
+      .onUpdate((data) => {
+        if (typeof data === 'string') sceneMsg = data
+      })
+      .await()
+    t.ok(fs.existsSync(scenePath), 'scene pack written by native scene creation')
+    t.ok(/"scene"/.test(sceneMsg), 'scene-creation completion JSON received')
+
+    // 2. Walk the newly created world with the KV cache on.
+    await t.execution(world.load(), 'walk session loads the natively created pack')
+    const frames = []
+    for (const keys of [{}, { W: true }]) {
+      const response = await world.step(keys)
+      await response
+        .onUpdate((data) => {
+          if (data instanceof Uint8Array) frames.push(data)
+        })
+        .await()
+    }
+    t.is(frames.length, 9 + 12, 'two KV-cache blocks stream 21 frames')
+    t.ok(
+      frames.every((frame) => {
+        const dims = readImageDimensions(frame)
+        return dims && dims.width === 832 && dims.height === 480
+      }),
+      'every frame is an 832x480 PNG'
+    )
+
+    await world.unload().catch(() => {})
+  }
+)

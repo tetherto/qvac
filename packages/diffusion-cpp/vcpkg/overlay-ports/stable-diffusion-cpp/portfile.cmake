@@ -13,15 +13,17 @@
 #
 # Body is a verbatim copy of the registry port (2026-07-03, port-version 5)
 # with only REF + SHA512 changed to PR #22's head commit.
-# Engine pinned to PR #22 head (adds native scene creation via
-# sd_abot_scene_create - umT5-XXL prompt encode + Wan2.2 VAE first-frame
-# encode - on top of the bounded-history/KV work, the Mac Metal KV-cache
-# fixes, and the F32-params prefix fix).
+# Engine pinned to PR #22 head (review-hardened final: walk toggles are
+# session params - kv_cache/profile on sd_abot_session_params_t, validated
+# against the KV ring at load; ABOT_* env vars are no longer read by the
+# library - plus the untrusted-input-hardened scene-pack parser with an
+# exception barrier at the C API boundary, native scene creation, text-only
+# packs, KV cache, and the F32-params prefix fix).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 07cee515a29a609d9e9d615376ab56166783bfbf
-    SHA512 2778a213439728db351b3a39e050e25480772dbe01b8900bab8cf9bb07544210abf4278ebc258956da046514d8f19925e076e303bd18e3df24d8f6a13145bc34
+    REF 52b231efbfd2e4ca1b25c4e4bff76e2fd2c16902
+    SHA512 f3781cbb4e9e190df38c3fe7fa80ba69bf6f9dbafb158e0426dd4604f2f1ba794450679005a38d0f9f1dad0696e2f22b8b086b2d7d08a0f99bb4fd3b0f7ed5d8
 )
 
 set(SD_FLASH_ATTN OFF)

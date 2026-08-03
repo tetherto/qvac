@@ -80,7 +80,10 @@ class WorldStableDiffusion {
    *        first-frame latents, reference latents). Absolute path.
    * @param {object} [args.config] - Session config: threads, seed, backend,
    *        numFramePerBlock, localAttnSize, offloadParamsToCpu, backendsDir,
-   *        frameJpegQuality (0 = PNG frames, 1..100 = JPEG at that quality).
+   *        frameJpegQuality (0 = PNG frames, 1..100 = JPEG at that quality),
+   *        kvCache (per-layer history KV cache, ~3.7x fewer frame-passes per
+   *        block; validated against localAttnSize at load), profile (native
+   *        per-stage timing logs).
    * @param {object} [args.logger] - Structured logger for JS wrapper logs.
    * @param {object} [args.opts] - Options ({ stats: true } to receive runtime
    *        stats on stream end).

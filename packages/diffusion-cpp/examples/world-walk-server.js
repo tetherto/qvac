@@ -18,7 +18,9 @@
  *   scene.safetensors                  (or set ABOT_SCENE)
  *
  * Optional env: HOST (127.0.0.1), PORT (8787), ABOT_THREADS, ABOT_SEED,
- * ABOT_BACKEND (e.g. "cpu", "cuda"), ABOT_JPEG_QUALITY (0/unset = PNG
+ * ABOT_BACKEND (e.g. "cpu", "cuda"), ABOT_KV_CACHE=1 (per-layer history KV
+ * cache, the main speed knob - forwarded as the kvCache session param),
+ * ABOT_PROF=1 (native timing logs), ABOT_JPEG_QUALITY (0/unset = PNG
  * frames; 1..100 = JPEG at that quality).
  *
  * Native scene creation (full world-generation workflow): when ABOT_SCENE
@@ -113,7 +115,12 @@ function makeWorld() {
       backend: process.env.ABOT_BACKEND || undefined,
       // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
       // smaller frames, so remote/tunneled browsers stream far less data).
-      frameJpegQuality: process.env.ABOT_JPEG_QUALITY || undefined
+      frameJpegQuality: process.env.ABOT_JPEG_QUALITY || undefined,
+      // The engine takes these as session params now (the native library no
+      // longer reads ABOT_* environment variables); the env names stay as
+      // launcher conveniences and become explicit config here.
+      kvCache: process.env.ABOT_KV_CACHE === '1' || undefined,
+      profile: process.env.ABOT_PROF === '1' || undefined
     },
     opts: { stats: true }
   })
