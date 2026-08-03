@@ -8205,5 +8205,38 @@
     "tags": ["generation", "instruct", "moe", "kat-coder"],
     "notes": "",
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4 Flash 0731 UD-IQ2_M model",
+    "quantization": "UD-IQ2_M",
+    "params": "304B",
+    "licenseId": "MIT",
+    "tags": ["generation", "instruct", "deepseek-v4", "shard"],
+    "notes": "shard 1/3",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00002-of-00003.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4 Flash 0731 UD-IQ2_M model",
+    "quantization": "UD-IQ2_M",
+    "params": "304B",
+    "licenseId": "MIT",
+    "tags": ["generation", "instruct", "deepseek-v4", "shard"],
+    "notes": "shard 2/3",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00003-of-00003.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4 Flash 0731 UD-IQ2_M model",
+    "quantization": "UD-IQ2_M",
+    "params": "304B",
+    "licenseId": "MIT",
+    "tags": ["generation", "instruct", "deepseek-v4", "shard"],
+    "notes": "shard 3/3",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
   }
 ]
