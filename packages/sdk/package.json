@@ -218,7 +218,7 @@
     "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.1.0",
     "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.14.0",
+    "@qvac/vla-ggml": "^0.16.2",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.0",

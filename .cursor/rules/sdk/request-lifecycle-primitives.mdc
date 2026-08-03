@@ -221,7 +221,7 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 | `parakeet-transcription`     | `transcribe`, `transcribeStream`      | `{ scope: "model", hard: true }`  |
 | `nmtcpp-translation`         | `translate`                           | `{ scope: "none" }`               |
 | `onnx-tts`                   | `textToSpeech`, `textToSpeechStream`  | `{ scope: "none" }`               |
-| `onnx-ocr`                   | `ocrStream`                           | `{ scope: "none" }`               |
+| `ggml-ocr`                   | `ocrStream`                           | `{ scope: "none" }`               |
 | `sdcpp-generation`           | `diffusionStream`                     | `{ scope: "model", hard: true }`  |
 | `sdcpp-generation`           | `videoStream`                         | `{ scope: "model", hard: true }`  |
 | `sdcpp-generation`           | `upscaleStream`                       | `{ scope: "none" }`               |

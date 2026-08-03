@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.16.2] - 2026-07-31
+
+This release fixes three regressions introduced by the 0.16.0 TypeScript migration. ESM named imports work again, a `null` config no longer breaks `load()`, and `run()` input validation is consistent for a missing `hparams`. There are no intentional API changes - the named-export surface matches 0.15.x again.
+
+### Fixed
+
+- ESM named imports such as `import { VlaModel } from '@qvac/vla-ggml'` failed at
+  link time on both Node.js and Bare with `SyntaxError: Named export 'VlaModel'
+  not found`. The generated `index.js` attached its exported members through a
+  namespace-merge helper that `cjs-module-lexer` cannot see, so the CommonJS to
+  ESM interop discovered no named exports. The six public members (`VlaModel`,
+  `preprocessImage`, `padState`, `DEFAULT_IMAGE_SIZE`, `QvacErrorAddonVla`,
+  `ERR_CODES`) are now also assigned as top-level `module.exports.X = ...`
+  statements, which the lexer detects. Default imports and `require()` are
+  unchanged. A runtime integration test now guards this, because the type-level
+  consumer tests cannot detect lexer visibility problems.
+- `load()` failed with a `TypeError` reported as `FAILED_TO_LOAD_WEIGHTS` when
+  the model was constructed with `config: null`, instead of falling back to the
+  default configuration: the destructuring default only applies to `undefined`,
+  so the null value survived into the load path. The same failure also left the
+  registered native-logger callback attached, which keeps the Bare event loop
+  alive. The config is now normalized to `{}` at construction, restoring the
+  pre-0.16.0 behaviour.
+- Internal `run()` input validation now treats a missing `hparams` the same way
+  as a `null` one, like every other guard in that function. The patch-mode check
+  tested against `null` only, so a missing value would have thrown a raw
+  `TypeError` instead of falling back to pixel-mode validation. This is a
+  consistency fix rather than a user-visible bug: the validated value is always
+  either `null` or a loaded hparams object, so the raw throw was not reachable
+  through the public API.
+
+### Pull Requests
+
+- [#3519](https://github.com/tetherto/qvac/pull/3519) - QVAC-22177 fix: restore ESM named exports + config null-safety in vla wrapper
+
 ## [0.16.1] - 2026-07-30
 
 ### Changed
