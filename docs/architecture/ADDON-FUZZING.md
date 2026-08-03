@@ -569,11 +569,17 @@ addons at once.
 - **Phase 5 — CI wiring.** Run fuzz targets *bounded* inside the existing
   `cpp-tests-*` workflows (free per-PR regression coverage). **Landed for
   `classification-ggml`:** on **Linux** (matching the `if(NOT WIN32)` ASan gate)
-  `cpp-tests-classification.yml` does a **single** combined configure+build+run
-  — `test:cpp:fuzz:build` then `test:cpp:fuzz:run` — so the CMake configure cost
-  is paid once for both `addon-test` and the bounded fuzz target (sharing
-  the vcpkg GoogleTest) instead of configuring two trees separately. The
-  combined run step sets **no** `ASAN_OPTIONS`: the unit-test
+  `cpp-tests-classification.yml` runs a **single** configure of the `build/`
+  tree (`test:cpp:fuzz:configure`) so the CMake cost is paid once for both
+  `addon-test` and the bounded fuzz target (sharing the vcpkg GoogleTest)
+  instead of configuring two trees. Build and run are then **split per target
+  and ordered unit-tests-first** — `test:cpp:fuzz:build:tests`, `test:cpp:run`,
+  `test:cpp:fuzz:build:fuzz`, `fuzz:run` — so the pre-existing unit-test signal
+  never depends on the newer fuzz stack: a fuzz compile break fails *after*
+  `addon-test` has been built and run, rather than aborting the job before the
+  unit tests start. (The configure remains shared, so a vcpkg failure in the
+  `fuzz` feature still blocks both; that is the price of the single tree.)
+  Neither run step sets `ASAN_OPTIONS`: the unit-test
   runner self-applies the relaxed fabric-boundary options while the fuzz runner
   keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
   `test:cpp` path (no fuzzing). It reuses the caller's existing
@@ -679,8 +685,8 @@ addons at once.
 - `packages/ocr-ggml/addon/src/model-interface/easyocr/gguf_loader.cpp` —
   reference model-file-header target (the kind that may need `LINK_FABRIC`).
 - `.github/workflows/cpp-tests-classification.yml` — reusable per-package C++
-  test workflow; on Linux runs a single combined `test:cpp:fuzz:build` +
-  `test:cpp:fuzz:run` (unit tests + bounded fuzz, one configure), while
-  darwin/win32 keep the `test:cpp` unit-only path.
+  test workflow; on Linux does one configure then builds and runs each target in
+  turn, unit tests before fuzz, while darwin/win32 keep the `test:cpp` unit-only
+  path.
 - `.cursor/rules/devops/github-actions.mdc` — CI trust policy for fork PRs
   (SHA-bound authorization) that any self-hosted fuzz job must follow.
