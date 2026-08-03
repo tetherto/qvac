@@ -57,27 +57,32 @@ async function collectResponse(response) {
   return chunks.join('').trim()
 }
 
-async function loadMtmdMtp(t, overrides = {}) {
+// `withSpec: false` OMITS the spec-type key rather than setting it to undefined
+// — the non-speculative control arm must load exactly as a default config would.
+async function loadMtmdMtp(t, { withSpec = true, ...overrides } = {}) {
   const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name })
   const [projName, projDir] = await ensureModel({ modelName: MMPROJ.name })
   const specLogger = attachSpecLogger({ forwardToConsole: true })
+  const config = {
+    device: useCpu ? 'cpu' : 'gpu',
+    gpu_layers: '999',
+    ctx_size: '4096',
+    n_predict: '48',
+    temp: '0',
+    seed: '42',
+    'reasoning-budget': '0',
+    verbosity: '2',
+    ...overrides
+  }
+  if (withSpec) {
+    config['spec-type'] = 'draft-mtp'
+  }
   const addon = new LlmLlamacpp({
     files: {
       model: [path.join(dirPath, modelName)],
       projectionModel: path.join(projDir, projName)
     },
-    config: {
-      device: useCpu ? 'cpu' : 'gpu',
-      gpu_layers: '999',
-      ctx_size: '4096',
-      n_predict: '48',
-      temp: '0',
-      seed: '42',
-      'reasoning-budget': '0',
-      'spec-type': 'draft-mtp',
-      verbosity: '2',
-      ...overrides
-    },
+    config,
     logger: console,
     opts: { stats: true }
   })
@@ -176,6 +181,108 @@ safeTest(
     t.ok(
       stats.draftAccepted > 0,
       `MTP still drafts after a multi-sub-batch text prefill (draftAccepted=${stats.draftAccepted})`
+    )
+  }
+)
+
+safeTest(
+  'mtmd context: MTP output matches the non-speculative output token-for-token',
+  { timeout: 600_000 },
+  async (t) => {
+    // mtp.test.js pins greedy equivalence for TextLlmContext only. The mtmd path
+    // has its own position accounting (specSetPos / advanceTextSpan, where
+    // cacheTokens can exceed pos because M-RoPE media occupies more KV cells than
+    // positions), so an accept-loop or position bug specific to MtmdLlmContext —
+    // committing the wrong token, an off-by-one accepted prefix, a mis-rolled-back
+    // rejected tail — would still emit fluent text containing "Paris" and pass
+    // every other assertion in this file.
+    //
+    // KNOWN CAVEAT (same as mtp.test.js): llama.cpp logits are not bit-identical
+    // across batch shapes, since the verify batch decodes N+1 positions at once
+    // while the non-spec path decodes one at a time. An exact greedy tie could in
+    // principle break differently. TEXT_PROMPT is a short, high-confidence factual
+    // answer chosen to make that vanishingly unlikely. If this ever flakes, that
+    // is why — and the fix is a lower-variance prompt, NOT deleting the assertion.
+    const specAddon = await loadMtmdMtp(t, { withSpec: true })
+    const specResp = await specAddon.run(TEXT_PROMPT)
+    const specOutput = await collectResponse(specResp)
+
+    const plainAddon = await loadMtmdMtp(t, { withSpec: false })
+    const plainResp = await plainAddon.run(TEXT_PROMPT)
+    const plainOutput = await collectResponse(plainResp)
+
+    console.log(`  spec    : "${specOutput}"`)
+    console.log(`  non-spec: "${plainOutput}"`)
+
+    t.ok(specOutput.length > 0, 'speculative mtmd run produced output')
+    t.is(
+      specOutput,
+      plainOutput,
+      'mtmd MTP produces byte-identical output to non-speculative decoding at temp=0'
+    )
+    // Positive + negative control in one test: speculation demonstrably ran on one
+    // side and demonstrably did not on the other, so the zero below cannot be a
+    // silent config-key regression.
+    t.ok(
+      specResp.stats.draftTotal > 0,
+      `speculative mtmd run really did draft (draftTotal=${specResp.stats.draftTotal})`
+    )
+    t.is(plainResp.stats.draftTotal, 0, 'non-speculative mtmd run drafted nothing (draftTotal=0)')
+  }
+)
+
+safeTest(
+  'mtmd context: an image turn disables speculation for the rest of the session',
+  { timeout: 600_000 },
+  async (t) => {
+    // The disable is SESSION-SCOPED AND PERMANENT, not per-turn. MtmdLlmContext's
+    // image branch does `spec_.reset(); ctxDraft_.reset()` because the vision
+    // decode bypasses the MTP draft context and leaves it misaligned — so every
+    // later turn on this context decodes non-speculatively too, even a pure text
+    // one that would otherwise draft happily.
+    //
+    // The existing image test above only covers the image turn itself. Without
+    // this, a change that re-armed speculation after an image (or moved the reset)
+    // would silently resume drafting against a misaligned draft cache. It is also
+    // why the specSetPos media-KV accounting path is unreachable today: media and
+    // live speculation cannot coexist on one context.
+    const addon = await loadMtmdMtp(t)
+
+    // Turn 1, text only: positive control. If this is 0 the premise is wrong and
+    // the two zeros below prove nothing.
+    const firstResp = await addon.run(TEXT_PROMPT)
+    const firstOutput = await collectResponse(firstResp)
+    console.log(`  turn 1 (text) : draftTotal=${firstResp.stats.draftTotal}`)
+    t.ok(firstOutput.length > 0, 'turn 1 (text) produced output')
+    t.ok(
+      firstResp.stats.draftTotal > 0,
+      `turn 1 (text) drafts, proving speculation was live (draftTotal=${firstResp.stats.draftTotal})`
+    )
+
+    // Turn 2: the image tears the draft context down.
+    const imageBytes = new Uint8Array(fs.readFileSync(getMediaPath('elephant.jpg')))
+    const imageResp = await addon.run([
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', type: 'media', content: imageBytes },
+      { role: 'user', content: 'Describe this image in one sentence.' }
+    ])
+    const imageOutput = await collectResponse(imageResp)
+    console.log(`  turn 2 (image): draftTotal=${imageResp.stats.draftTotal}`)
+    t.ok(imageOutput.length > 0, 'turn 2 (image) produced output')
+    t.is(imageResp.stats.draftTotal, 0, 'turn 2 (image) does not draft')
+
+    // Turn 3, text again: THE GAP. Speculation must stay off.
+    const thirdResp = await addon.run(TEXT_PROMPT)
+    const thirdOutput = await collectResponse(thirdResp)
+    console.log(`  turn 3 (text) : draftTotal=${thirdResp.stats.draftTotal}`)
+    // Asserted separately from draftTotal so a broken session is distinguishable
+    // from a merely non-speculative one.
+    t.ok(thirdOutput.length > 0, 'turn 3 (text) still produces output after the image turn')
+    t.ok(/paris/i.test(thirdOutput), 'turn 3 (text) output is coherent (names the capital)')
+    t.is(
+      thirdResp.stats.draftTotal,
+      0,
+      'turn 3 (text) stays non-speculative — the image disabled MTP for the whole session'
     )
   }
 )
