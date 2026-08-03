@@ -704,6 +704,127 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
   }
 })
 
+const AWS_OIDC_SECRET = 'AWS_OIDC_ROLE_ARN'
+
+const MOBILE_SDK_WORKFLOWS = [
+  './.github/workflows/test-android-sdk.yml',
+  './.github/workflows/test-ios-sdk.yml',
+]
+
+const JOB_SECRETS_KEY_RE = /^ {4}secrets:/
+const SECRETS_ENTRY_RE = /^ {5,}/
+const SECRETS_INHERIT_RE = /^ {4}secrets:[ \t]*inherit[ \t]*$/m
+
+function workflowPaths() {
+  return readdirSync(join(root, '.github/workflows'))
+    .filter((name) => /\.ya?ml$/.test(name))
+    .map((name) => `.github/workflows/${name}`)
+}
+
+function jobsCalling(source, reusable) {
+  return eachJob(source).filter((job) => job.text.includes(`uses: ${reusable}`))
+}
+
+function callersOf(reusable) {
+  return workflowPaths().flatMap((path) =>
+    jobsCalling(read(path), reusable).map((job) => ({ path, job })),
+  )
+}
+
+function withoutComments(block) {
+  return block
+    .split('\n')
+    .map((line) => line.replace(/(^|\s)#.*$/, ''))
+    .join('\n')
+}
+
+function linesUntilDedent(lines) {
+  const end = lines.findIndex(
+    (line) => line.trim() !== '' && !SECRETS_ENTRY_RE.test(line),
+  )
+  return end === -1 ? lines : lines.slice(0, end)
+}
+
+function secretsMapping(jobText) {
+  const lines = jobText.split('\n')
+  const start = lines.findIndex((line) => JOB_SECRETS_KEY_RE.test(line))
+  if (start === -1) return ''
+  return withoutComments(
+    [lines[start], ...linesUntilDedent(lines.slice(start + 1))].join('\n'),
+  )
+}
+
+function forwardsSecret(jobText, secret) {
+  const mapping = secretsMapping(jobText)
+  return (
+    SECRETS_INHERIT_RE.test(mapping) ||
+    new RegExp(`^ {6,}${secret}:`, 'm').test(mapping)
+  )
+}
+
+function workflowCallHeader(source) {
+  const jobsIdx = source.search(/^jobs:\s*$/m)
+  return withoutComments(jobsIdx === -1 ? source : source.slice(0, jobsIdx))
+}
+
+function callLineCount(source, reusable) {
+  return withoutComments(source)
+    .split('\n')
+    .filter((line) => line.trim() === `uses: ${reusable}`).length
+}
+
+function rawCallCount(reusable) {
+  return workflowPaths().reduce(
+    (total, path) => total + callLineCount(read(path), reusable),
+    0,
+  )
+}
+
+function assertDeclaresAwsRole(reusable) {
+  assert.match(
+    workflowCallHeader(read(reusable.replace('./', ''))),
+    new RegExp(`^ {6}${AWS_OIDC_SECRET}:`, 'm'),
+    `${reusable} declares ${AWS_OIDC_SECRET} in on.workflow_call.secrets`,
+  )
+}
+
+function assertEveryCallWasParsed(reusable, callers) {
+  assert.equal(
+    callers.length,
+    rawCallCount(reusable),
+    `every \`uses: ${reusable}\` line resolves to a parsed caller job`,
+  )
+}
+
+function assertForwardsAwsRole(reusable, { path, job }) {
+  assert.ok(
+    forwardsSecret(job.text, AWS_OIDC_SECRET),
+    `${path} job '${job.name}' forwards ${AWS_OIDC_SECRET} to ${reusable}`,
+  )
+}
+
+function assertCallersForwardAwsRole(reusable) {
+  const callers = callersOf(reusable)
+  assertDeclaresAwsRole(reusable)
+  assertEveryCallWasParsed(reusable, callers)
+  callers.forEach((caller) => assertForwardsAwsRole(reusable, caller))
+}
+
+test('mobile SDK callers forward the AWS OIDC role to Device Farm jobs', () => {
+  // test-android-sdk.yml and test-ios-sdk.yml authenticate to Device Farm with
+  // `role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}`. That is a repository
+  // secret, so the `environment: release` jobs cannot resolve it on their own:
+  // a caller that omits it renders an empty role and every Device Farm job dies
+  // on "Could not load credentials".
+  //
+  // Both workflows must declare the secret, otherwise GitHub rejects any caller
+  // that passes it explicitly and `secrets: inherit` becomes the only legal
+  // shape. Caller jobs come from eachJob, which only sees a bare `job-name:`
+  // line, so compare against the raw `uses:` count: a caller the parser cannot
+  // see must fail here rather than silently go unchecked.
+  MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole)
+})
+
 test('npm integration uses a dedicated run label, not verified', () => {
   const source = read('.github/workflows/public-reusable-npm.yml')
   const integrationStep = source.slice(
