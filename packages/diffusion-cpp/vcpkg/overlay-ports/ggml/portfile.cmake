@@ -145,6 +145,15 @@ if(VCPKG_TARGET_IS_ANDROID)
         -DGGML_VULKAN_DISABLE_COOPMAT=ON
         -DGGML_VULKAN_DISABLE_COOPMAT2=ON
     )
+    # This ggml revision's ggml-vulkan.cpp includes spirv/unified1/spirv.hpp
+    # and relies on the Vulkan SDK's include tree to provide it; the Android
+    # NDK's Vulkan headers do not. The spirv-headers feature dependency is
+    # installed by vcpkg but ggml's CMake never adds the installed include
+    # dir, so inject it after project() without disturbing toolchain flags.
+    file(WRITE "${CURRENT_BUILDTREES_DIR}/android-spirv-include.cmake"
+        "include_directories(SYSTEM \"${CURRENT_INSTALLED_DIR}/include\")\n")
+    list(APPEND PLATFORM_OPTIONS
+        "-DCMAKE_PROJECT_INCLUDE=${CURRENT_BUILDTREES_DIR}/android-spirv-include.cmake")
 endif()
 
 # --- Configure & build ---
