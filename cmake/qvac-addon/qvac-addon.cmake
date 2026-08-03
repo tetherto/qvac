@@ -361,8 +361,14 @@ endfunction()
 # Resolve FuzzTest and its dependencies from vcpkg. Defines the link_fuzztest()
 # and link_fuzztest_core() functions in global scope (the `fuzztest` port
 # installs FuzzTest's own AddFuzzTest.cmake and its config includes it).
-# Idempotent: the guard makes a second call a no-op so several fuzz targets can
-# share one resolution.
+# Idempotent per directory scope: a second call from the same CMakeLists, or from
+# a subdirectory of it, is a no-op, so several fuzz targets share one resolution.
+# The guard is an INHERITED DIRECTORY property rather than a variable because the
+# imported absl::/re2::/fuzztest:: targets find_package() creates are themselves
+# visible only in the directory that resolved them plus its subdirectories. A
+# variable would not survive the enclosing function call at all; a GLOBAL property
+# would wrongly suppress the resolve a sibling directory needs; a CACHE entry would
+# survive into the next configure and leave link_fuzztest() undefined.
 #
 # Requires the "fuzz" vcpkg manifest feature, which qvac_addon_preproject()
 # enables whenever BUILD_FUZZING is on.
@@ -373,8 +379,11 @@ endfunction()
 # coverage instrumentation — see qvac_addon_add_fuzz_target() — because the
 # fuzzer needs feedback from the code under test, not from FuzzTest's machinery.
 # ---------------------------------------------------------------------------
+define_property(DIRECTORY PROPERTY _QVAC_ADDON_FUZZTEST_READY INHERITED)
+
 macro(qvac_addon_enable_fuzztest)
-  if(NOT DEFINED _QVAC_ADDON_FUZZTEST_READY)
+  get_property(_qvac_fuzztest_ready DIRECTORY PROPERTY _QVAC_ADDON_FUZZTEST_READY)
+  if(NOT _qvac_fuzztest_ready)
     # fuzztest's own config find_dependency()s the other four, but they are
     # named explicitly so a manifest missing the "fuzz" feature fails here
     # naming the package instead of later with an unresolved absl:: link target.
@@ -383,8 +392,11 @@ macro(qvac_addon_enable_fuzztest)
     find_package(GTest CONFIG REQUIRED)
     find_package(antlr4-runtime CONFIG REQUIRED)
     find_package(fuzztest CONFIG REQUIRED)
-    set(_QVAC_ADDON_FUZZTEST_READY ON)
+    set_property(DIRECTORY PROPERTY _QVAC_ADDON_FUZZTEST_READY ON)
   endif()
+  # A macro body runs in the caller's scope, so drop the probe variable rather
+  # than leaking it into whatever called us.
+  unset(_qvac_fuzztest_ready)
 endmacro()
 
 # ---------------------------------------------------------------------------
