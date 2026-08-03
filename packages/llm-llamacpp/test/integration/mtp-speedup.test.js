@@ -227,6 +227,12 @@ const DRIFT_WARN_PCT = 15
 // investigate, not a precise test.
 const SPILL_TTFT_RATIO = 3
 
+// Ceiling on (implied t_eval / measured decode) for the speculative arm. 1.05
+// leaves headroom over the highest honest value observed (1.014, CPU, ~8-token
+// answer — the addon's span starts a touch before the first chunk is emitted)
+// while still catching the smallest historical over-count (1.09x).
+const TPS_OVERCOUNT_CEILING = 1.05
+
 // Run ONE timed generation for each arm, loading and unloading around each so
 // only one model is ever resident. The arms stay interleaved in time (plain,
 // spec, plain, spec, ...) so thermal ramp is symmetric rather than a systematic
@@ -373,6 +379,43 @@ async function measureCell(t, modelPath, model, prompt) {
       0,
       `[${model.label}/${prompt.label}] non-spec arm drafted nothing`
     )
+
+    // Regression guard for the spec-arm decode clock. Wall-clock is a PHYSICAL
+    // UPPER BOUND on an honest decode duration, so the reported t_eval implied
+    // by generatedTokens/TPS can never meaningfully exceed the measured decode
+    // span. Both values come from the SAME run here, which is what makes the
+    // comparison exact.
+    //
+    // What this catches: specPublishPerf used to build the decode duration by
+    // ADDING the target and draft contexts' internal eval timers. Two
+    // independent per-context timers are not guaranteed to measure disjoint
+    // wall-clock intervals, so the sum over-counted — measured at 1.09-1.10x
+    // from the second generation onward, ~1.8x on ~6-token generations, and
+    // ~2.5x with a second addon co-resident. It also catches the decode clock
+    // being started before prefill instead of after.
+    //
+    // ONE-SIDED on purpose. Under-shoot is legitimate and strongly
+    // backend-dependent: the span includes sampling, detokenization and the
+    // output callback, which llama's t_eval excludes, so the ratio runs 0.97-1.00
+    // on long generations but as low as 0.67 on a fast GPU with a ~6-token
+    // answer. Only the over-count side is a bug, so only that side is bounded.
+    const specTps = Number(lastSpec.stats.TPS)
+    // Asserted, not just guarded against: the first version of this bug reported
+    // TPS exactly 0 (and generatedTokens exactly 1), so skipping the ratio check
+    // on a zero would hide the most blatant form of the regression.
+    t.ok(
+      specTps > 0,
+      `[${model.label}/${prompt.label}] spec arm reports a nonzero TPS (${specTps})`
+    )
+    if (specTps > 0) {
+      const impliedEvalMs = (Number(lastSpec.stats.generatedTokens) / specTps) * 1000
+      const ratio = lastSpec.decodeMs > 0 ? impliedEvalMs / lastSpec.decodeMs : 0
+      t.ok(
+        impliedEvalMs <= lastSpec.decodeMs * TPS_OVERCOUNT_CEILING,
+        `[${model.label}/${prompt.label}] spec TPS implies t_eval ${impliedEvalMs.toFixed(0)}ms <= ` +
+          `${TPS_OVERCOUNT_CEILING}x measured decode ${lastSpec.decodeMs}ms (ratio ${ratio.toFixed(3)})`
+      )
+    }
     return row
   }
 }
@@ -415,9 +458,11 @@ safeTest(
           `${r.backend.padStart(8)}  ${flags}`
       )
     }
-    // spec-TPS is deliberately NOT in this table: it is a known-unreliable
-    // statistic on the speculative path (over-counted t_eval). The ratios above
-    // are wall-clock derived and independent of it.
+    // spec-TPS is deliberately NOT in this table: the ratios above are
+    // wall-clock derived and independent of anything the addon reports, which is
+    // what let them expose the old over-counted t_eval in the first place.
+    // spec-TPS is now asserted per cell against that measured decode span (see
+    // TPS_OVERCOUNT_CEILING) rather than simply distrusted.
     const valid = rows.filter((r) => !r.spilled)
     if (valid.length < rows.length) {
       console.log(

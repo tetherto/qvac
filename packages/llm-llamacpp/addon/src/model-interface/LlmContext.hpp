@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -556,9 +557,10 @@ protected:
   // that llama's `n_queued_tokens == 1` heuristic gets wrong once decode
   // batches carry drafts.
   llama_perf_context_data specPerfBase_{};
-  // Same baseline for the draft context, so its share of the decode cost can
-  // be added back in (it is invisible to the target's counters).
-  llama_perf_context_data specPerfBaseDraft_{};
+  // Wall-clock start of the decode span, captured with specPerfBase_. The
+  // speculative decode duration is measured here rather than summed from the
+  // two contexts' internal eval timers -- see specPublishPerf.
+  std::chrono::steady_clock::time_point specDecodeStart_{};
   bool specPerfBaseValid_ = false;
   int64_t draftAccepted_ = 0;
   int64_t draftTotal_ = 0;
@@ -699,25 +701,35 @@ protected:
     fixed.n_p_eval = specPerfBase_.n_p_eval;
     fixed.t_p_eval_ms = specPerfBase_.t_p_eval_ms;
     fixed.n_eval = static_cast<int32_t>(generated);
-    fixed.t_eval_ms = (now.t_p_eval_ms - specPerfBase_.t_p_eval_ms) +
-                      (now.t_eval_ms - specPerfBase_.t_eval_ms);
-    // Add the DRAFT context's compute. The MTP drafter runs its forward passes
-    // in ctx_dft, a separate llama_context, so none of that time reaches the
-    // target's counters — yet the caller pays it on every generated token.
-    // Omitting it makes TPS report target-side throughput and can claim
-    // speculation is faster when it is a net loss (measured on a CPU box:
-    // TPS 66.5 vs 56.2 non-spec, while wall-clock was 6385ms vs 4148ms —
-    // i.e. actually ~1.5x SLOWER). Counting both contexts keeps TPS honest.
-    if (ctxDraft_) {
-      const llama_perf_context_data nowDraft =
-          llama_perf_context(ctxDraft_.get());
-      fixed.t_eval_ms +=
-          (nowDraft.t_p_eval_ms - specPerfBaseDraft_.t_p_eval_ms) +
-          (nowDraft.t_eval_ms - specPerfBaseDraft_.t_eval_ms);
-    }
-    if (fixed.t_eval_ms < 0.0) {
-      fixed.t_eval_ms = 0.0;
-    }
+    // Decode duration is WALL-CLOCK over the generation phase, not a sum of the
+    // two contexts' internal eval timers.
+    //
+    // The drafter's forward passes run in ctx_dft, a separate llama_context, so
+    // none of their cost reaches the target's counters even though the caller
+    // pays it on every generated token — omitting it lets TPS report only
+    // target-side throughput and claim a win where there is a net loss. But
+    // ADDING the two contexts' timers over-counts instead: measured
+    // implied-t_eval/wall-decode was 1.09-1.10 from the second generation
+    // onward, ~1.8x on ~6-token generations, and ~2.5x with a second addon
+    // co-resident. Two independent per-context timers cannot be summed into an
+    // elapsed duration -- they are not guaranteed to measure disjoint
+    // wall-clock intervals.
+    //
+    // The drafter runs inline on this thread, so a single monotonic span from
+    // end-of-prefill to end-of-generation covers BOTH contexts exactly once and
+    // cannot be inflated by a co-resident addon. It also matches what the
+    // benchmark measures externally, which is what made the old figures
+    // detectable in the first place.
+    //
+    // Trade-off, deliberate: this span also contains sampling, detokenization
+    // and the output callback, which llama's t_eval excludes. Measured at ~4%
+    // of decode, so spec-arm TPS reads slightly CONSERVATIVE against the
+    // non-speculative arm (which still uses llama's own t_eval). Erring toward
+    // under-stating speculation is the right direction for a feature that would
+    // otherwise oversell itself.
+    fixed.t_eval_ms = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - specDecodeStart_)
+                          .count();
     setUserVisiblePerf(fixed);
     specPerfBaseValid_ = false;
   }
@@ -773,9 +785,7 @@ protected:
     // verify batch, so it holds the true prompt-eval figures. Everything
     // llama books as "prompt" from here on is really decode.
     specPerfBase_ = llama_perf_context(getCtx());
-    if (ctxDraft_) {
-      specPerfBaseDraft_ = llama_perf_context(ctxDraft_.get());
-    }
+    specDecodeStart_ = std::chrono::steady_clock::now();
     specPerfBaseValid_ = true;
 
     if (stopGeneration_.load()) {
