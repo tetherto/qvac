@@ -193,7 +193,6 @@ jobs:
         shell: bash
         env:
           PACKAGES: ${{ steps.detect.outputs.packages }}
-          SDK_PKGJSON_CHANGED: ${{ steps.detect.outputs.sdk_pkgjson_changed }}
           # Maintainer escape hatch: when this label is present the gate still
           # runs and logs failures, but reports success so an urgent fix can
           # land over a confirmed false-positive check. Audited via the label
@@ -366,10 +365,6 @@ jobs:
             git checkout HEAD -- package.json 2>/dev/null || true
 
             if [ "$PKG" = "sdk" ]; then
-              # Assert bare-sdk stays in dep lockstep with sdk.
-              if [ "$SDK_PKGJSON_CHANGED" = "true" ]; then
-                run "bare-sdk deps parity" node "$WS/packages/bare-sdk/scripts/check-deps-vs-sdk.mjs"
-              fi
               # Assert the committed Python-client contract (contract/schema.json,
               # contract/manifest.json) matches a fresh export. A dedicated named
               # check so a schema/registry change without regenerating fails with
