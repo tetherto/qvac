@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -51,6 +52,15 @@ CosyvoiceConfig configWithExistingDir() {
   CosyvoiceConfig cfg;
   cfg.modelDir = emptyModelDir().string();
   return cfg;
+}
+
+// A file that exists but holds no LavaSR weights. validateConfig only checks
+// for presence, so this is enough to exercise the accept path; an actual
+// Enhancer::load would happen later in load().
+std::string existingFile(const char* name) {
+  auto path = emptyModelDir() / name;
+  std::ofstream(path) << "not-a-real-gguf";
+  return path.string();
 }
 
 } // namespace
@@ -106,6 +116,51 @@ TEST(CosyvoiceValidate, StreamingNonNativeOutputRateRejected) {
   cfg.streamChunkTokens = 25;
   cfg.outputSampleRate = 16000; // non-native while streaming
   EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+// The LavaSR enhancer resamples inside its overlap-reprocess window, so it
+// lifts the streaming native-rate restriction above.
+TEST(CosyvoiceValidate, StreamingNonNativeOutputRateAcceptedWithEnhancer) {
+  auto cfg = configWithExistingDir();
+  cfg.streamChunkTokens = 25;
+  cfg.outputSampleRate = 16000;
+  cfg.enhancerGgufPath = existingFile("lavasr-enhancer.gguf");
+  EXPECT_NO_THROW(CosyvoiceModel{cfg});
+}
+
+TEST(CosyvoiceValidate, NonexistentEnhancerGgufRejected) {
+  auto cfg = configWithExistingDir();
+  cfg.enhancerGgufPath = "/definitely/does/not/exist/lavasr-enhancer.gguf";
+  EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+TEST(CosyvoiceValidate, NonexistentDenoiserGgufRejected) {
+  auto cfg = configWithExistingDir();
+  cfg.denoiserGgufPath = "/definitely/does/not/exist/lavasr-denoiser.gguf";
+  EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+TEST(CosyvoiceValidate, EnhancerAcceptedForBatchAndStreaming) {
+  auto base = configWithExistingDir();
+  base.enhancerGgufPath = existingFile("lavasr-enhancer.gguf");
+
+  EXPECT_NO_THROW(CosyvoiceModel{base});
+
+  auto streaming = base;
+  streaming.streamChunkTokens = 25;
+  EXPECT_NO_THROW(CosyvoiceModel{streaming});
+}
+
+// The UL-UNAS denoiser is one-shot in tts-cpp, so it stays batch-only until a
+// stateful streaming denoiser lands.
+TEST(CosyvoiceValidate, DenoiserAcceptedForBatchButRejectedWhileStreaming) {
+  auto batch = configWithExistingDir();
+  batch.denoiserGgufPath = existingFile("lavasr-denoiser.gguf");
+  EXPECT_NO_THROW(CosyvoiceModel{batch});
+
+  auto streaming = batch;
+  streaming.streamChunkTokens = 25;
+  EXPECT_THROW(CosyvoiceModel{streaming}, StatusError);
 }
 
 // Ungated coverage of the wasStreaming decision (the double-emit fix):

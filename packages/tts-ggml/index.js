@@ -687,7 +687,7 @@ class TTSGgml {
             (this._streamChunkTokens != null ||
                 this._streamFirstChunkTokens != null)) {
             throw new Error("tts-ggml: the LavaSR denoiser is not yet supported with " +
-                "Chatterbox native chunk streaming (streamChunkTokens / " +
+                "native chunk streaming (streamChunkTokens / " +
                 "streamFirstChunkTokens). Use batch synthesis, or drop the " +
                 "denoiser for streaming. Streaming denoise is a planned " +
                 "follow-up (needs a stateful streaming denoiser).");
@@ -742,15 +742,8 @@ class TTSGgml {
         }
     }
     _assertCosyvoiceOptionConsistency() {
-        if (this._engineType === ENGINE_COSYVOICE3) {
-            // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
-            // denoiser at construction (mirrors the parler rejection).
-            if (this._enhancerGgufPath || this._denoiserGgufPath) {
-                throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
-                    "Drop lavasrEnhancer / lavasrDenoiser.");
-            }
+        if (this._engineType === ENGINE_COSYVOICE3)
             return;
-        }
         const cosyvoiceOnly = [];
         const cosyvoiceOnlyFields = {
             instruct: this._instruct,

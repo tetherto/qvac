@@ -279,6 +279,15 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.streamLeftContextTokens =
       readOptionalInt(configurationParams, env, "streamLeftContextTokens");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  // LavaSR neural enhancement: a non-empty GGUF path turns it on. CosyVoice3's
+  // native 24 kHz output is bandwidth-extended to 48 kHz.
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  // LavaSR neural denoiser (runs before the enhancer): a non-empty GGUF path
+  // turns it on. Batch-only; the streaming combo is rejected in
+  // CosyvoiceModel::validateConfig.
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
 }

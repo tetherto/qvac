@@ -24,6 +24,8 @@
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
+    "example:cosyvoice": "bare examples/cosyvoice-tts.js \"Hello from CosyVoice three.\"",
+    "example:cosyvoice-enhanced": "bare examples/cosyvoice-enhanced.js \"Hello from CosyVoice three.\"",
     "example:parler": "bare examples/parler-tts.js \"Hey, how are you doing today?\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"test/**/*.js\" \"binding.js\" && lunte \"test/**/*.js\" \"binding.js\"",
