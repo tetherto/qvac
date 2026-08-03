@@ -1,6 +1,6 @@
 'use strict'
 
-// GPU smoke tests for both tts-ggml engines (chatterbox + supertonic).
+// GPU smoke tests for the tts-ggml engines.
 //
 // Mirrors transcription-parakeet/test/integration/gpu-smoke.test.js's
 // strict-on-CPU policy: a useGPU=true request that resolves to the CPU
@@ -18,9 +18,8 @@
 //
 // The strict gate uses `response.stats.backendDevice` (0=CPU, 1=GPU)
 // and `response.stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan,
-// 4=OpenCL, 99=other), both surfaced by ChatterboxModel +
-// SupertonicModel after Engine::backend_device() / backend_name() were
-// added in tts-cpp.
+// 4=OpenCL, 99=other), surfaced by the native engine wrappers after
+// Engine::backend_device() / backend_name() were added in tts-cpp.
 
 const fs = require('bare-fs')
 const os = require('bare-os')
@@ -47,10 +46,6 @@ const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-// Parler's only validated GPU backend is Metal (Apple); it has no vulkan/opencl/
-// cuda kernels yet, so its GPU smoke is gated to Apple — every other platform
-// runs Parler on CPU (covered by the unconditional CPU smoke below).
-const isApple = platform === 'darwin' || platform === 'ios'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
@@ -540,17 +535,17 @@ test(
 )
 
 // Parler smoke over the two mobile-target variants (mini + indic, q8). The GPU
-// leg is gated to Apple: Metal is Parler's only validated GPU backend, so it
-// runs on darwin/ios GPU runners and the iOS Device Farm where useGPU=true must
-// engage Metal (backendId=1). The CPU leg runs everywhere and locks the
-// explicit-CPU contract in. Both are strict assertions.
+// leg is strict on every GPU-capable runner: Metal on Apple, Vulkan on
+// Mali/Xclipse/desktop, and OpenCL on validated Adreno devices. useGPU=true
+// maps to nGpuLayers=99 in ParlerModel. The CPU leg runs everywhere and locks
+// the explicit-CPU contract in.
 for (const v of [
   { variant: 'mini', label: 'mini q8' },
   { variant: 'indic', label: 'indic q8', optional: true }
 ]) {
   test(
-    `Parler GPU smoke (${v.label}) - useGPU=true must engage the Metal backend on Apple`,
-    { timeout: 600000, skip: NO_GPU || !isApple },
+    `Parler GPU smoke (${v.label}) - useGPU=true must engage a validated GPU backend`,
+    { timeout: 600000, skip: NO_GPU },
     async (t) => {
       const modelsDir = path.join(getBaseDir(), 'models')
       const download = await ensureParlerModel({ targetDir: modelsDir, variant: v.variant })

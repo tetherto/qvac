@@ -16,6 +16,13 @@
         "vulkan-loader",
         "spirv-headers"
       ]
+    },
+    {
+      "kind": "git",
+      "reference": "QVAC-21598/parler-tts-vulkan-pixel9",
+      "baseline": "341484547d2a305f3e42368fce440e8c8852990f",
+      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
+      "packages": ["tts-cpp"]
     }
   ]
 }
