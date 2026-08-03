@@ -195,6 +195,30 @@ FitResult runFit(const FitRequest& req) {
     throw std::invalid_argument("model-fit: modelPath is required");
   }
 
+  // Absolute only, for the reason `backendsDir` is: a relative path resolves
+  // against the process working directory, which nothing in a worklet controls,
+  // so the same request would mean different files depending on where the host
+  // happened to be launched. index.d.ts documents the field as absolute — this
+  // is where that becomes true, since ./binding.js is a public export and the
+  // wrapper's check can be bypassed entirely.
+  //
+  // Deliberately not canonicalised, unlike backendsDir. That path is a
+  // native-code-loading sink and has to be pinned to a real directory before
+  // anything is dlopen'd from it; this one is only ever opened for reading, and
+  // requiring it to exist here would turn the documented ERROR/model-unreadable
+  // outcome into a thrown exception.
+  //
+  // NOTE: on Windows this is stricter than the wrapper. bare-path follows
+  // Node and calls a rootless "/foo" absolute; std::filesystem does not,
+  // because without a drive letter it still resolves against the current one.
+  // The native answer is the correct one, and a path the wrapper lets through
+  // is rejected here with the same message.
+  if (!std::filesystem::path(req.modelPath).is_absolute()) {
+    throw std::invalid_argument(
+        "model-fit: modelPath must be an absolute path, got '" + req.modelPath +
+        "'");
+  }
+
   FitResult out;
   const size_t maxDevices = llama_max_devices();
   out.maxDevices = maxDevices;

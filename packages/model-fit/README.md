@@ -123,6 +123,12 @@ reference counting.
 
 ### Argument validation
 
+`modelPath` must be **absolute**, as `backendsDir` must. A relative path
+resolves against the process working directory, which nothing in a worklet
+controls — the same call would then name a different file, or no file, from one
+launch to the next. It is not required to exist: a missing model is the
+documented `ERROR` / `model-unreadable` outcome rather than a thrown error.
+
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
 nothing can satisfy. All must be safe integers within the range of their target

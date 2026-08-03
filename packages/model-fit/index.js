@@ -104,7 +104,8 @@ function validateRelationships (config) {
  * it must be an application-controlled location — never remote or user input.
  *
  * @param {object} config
- * @param {string} config.modelPath  Absolute path to the GGUF file.
+ * @param {string} config.modelPath  Absolute path to the GGUF file. A relative
+ *   path throws — it would resolve against the process working directory.
  * @param {string} [config.backendsDir] Absolute directory holding the backends.
  * @param {number} [config.nCtx]      Desired context. 0 lets the fitter pick.
  * @param {number} [config.nCtxMin]   Lower bound when reducing context. Bounded
@@ -127,6 +128,15 @@ function fitParams (config) {
   }
   if (typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
     throw new TypeError('model-fit: config.modelPath must be a non-empty string')
+  }
+  // A relative path resolves against the process working directory, which
+  // nothing in a worklet controls and which the caller cannot rely on — the
+  // same call would then succeed or fail depending on where the host was
+  // launched from. The API already documents this field as absolute; enforce it
+  // rather than leaving it to be discovered at the native fopen. Mirrors
+  // `backendsDir`, and `files.model` in @qvac/embed-llamacpp.
+  if (!path.isAbsolute(config.modelPath)) {
+    throw new TypeError(`model-fit: config.modelPath must be an absolute path, got '${config.modelPath}'`)
   }
   if (config.backendsDir !== undefined && (typeof config.backendsDir !== 'string' || config.backendsDir.length === 0)) {
     throw new TypeError('model-fit: config.backendsDir must be a non-empty string when provided')

@@ -1,5 +1,12 @@
 export interface FitConfig {
-  /** Absolute path to the GGUF weights file. */
+  /**
+   * Path to the GGUF weights file.
+   *
+   * Must be absolute; a relative path throws. It would otherwise resolve
+   * against the process working directory, which nothing in a worklet
+   * controls, so the same call could name a different file — or no file — from
+   * one launch to the next.
+   */
   modelPath: string
   /**
    * Directory holding the packaged ggml backends. Required wherever backends

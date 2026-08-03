@@ -9,7 +9,11 @@ const { ensureModelPath } = require('./utils')
 
 // Deliberately never created. Argument validation must reject configs using it
 // before any file is opened, so these cases never reach the fitter.
-const UNREACHABLE_MODEL = '/model-fit-validation-only/never-created.gguf'
+//
+// Built from cwd for the same reason as UNREACHABLE_BACKENDS_DIR below: it has
+// to clear the absoluteness check on every platform so these cases fail on the
+// argument they are actually probing.
+const UNREACHABLE_MODEL = path.join(process.cwd(), 'model-fit-validation-only', 'never-created.gguf')
 
 // Absolute on every platform, and never created. Built from cwd rather than
 // written as '/…' because win32 treats a rootless '/foo' as *relative* (no
@@ -418,6 +422,32 @@ test('fitParams reports the device inventory it fitted against', async function 
   }
 })
 
+// The API documents modelPath as absolute, and a relative one resolves against
+// the process working directory — which nothing in a worklet controls, so the
+// same call names a different file depending on where the host was launched.
+test('fitParams rejects a relative modelPath', async function (t) {
+  await t.exception.all(
+    () => fitParams({ modelPath: 'models/foo.gguf' }),
+    /modelPath must be an absolute path/
+  )
+  await t.exception.all(
+    () => fitParams({ modelPath: './foo.gguf' }),
+    /modelPath must be an absolute path/
+  )
+  await t.exception.all(
+    () => fitParams({ modelPath: '../foo.gguf' }),
+    /modelPath must be an absolute path/
+  )
+
+  // ./binding.js is a public export, so the wrapper's check can be bypassed
+  // entirely — the bound has to hold natively too.
+  const binding = require('../../binding.js')
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: 'models/foo.gguf' }),
+    /modelPath must be an absolute path/
+  )
+})
+
 test('fitParams rejects a non-string backendsDir', async function (t) {
   await t.exception.all(
     () => fitParams({ modelPath: UNREACHABLE_MODEL, backendsDir: 42 }),
@@ -470,7 +500,10 @@ test('an unsatisfiable SPLIT_MODE_NONE placement is rejected', async function (t
 })
 
 test('fitParams on a missing file reports ERROR (does not throw)', function (t) {
-  const res = fitParams({ modelPath: '/nonexistent/does-not-exist.gguf' })
+  // Absolute and non-existent. A rootless '/nonexistent/…' would be rejected as
+  // relative on win32 before the file is ever opened, turning the outcome this
+  // test asserts — ERROR, not a throw — into a throw on one platform only.
+  const res = fitParams({ modelPath: path.join(process.cwd(), 'nonexistent', 'does-not-exist.gguf') })
   t.is(res.status, FIT_STATUS.ERROR, 'missing model yields ERROR status')
   t.is(res.fits, false)
 

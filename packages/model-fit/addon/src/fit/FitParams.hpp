@@ -177,7 +177,7 @@ struct FitResult {
 /// registry (both ERROR).
 ///
 /// Throws `std::invalid_argument` for arguments that cannot be acted on:
-///  - an empty `modelPath`;
+///  - a `modelPath` that is empty or relative;
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
 ///  - a pinned `splitMode` of NONE on a host with no GPU device, or with a
 ///    `mainGpu` past the registered ones;
