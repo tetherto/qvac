@@ -119,8 +119,27 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
         return { passed: false, output: 'Expected terminal finetune stats.global_steps' }
       }
 
+      const finiteLosses = progress.filter(
+        (update) => update.loss !== null && Number.isFinite(update.loss) && update.loss > 0
+      )
+      if (finiteLosses.length === 0) {
+        return {
+          passed: false,
+          output: `Expected at least one finite positive loss across ${progress.length} progress updates`
+        }
+      }
+
+      const adapterPath = path.join(paths.outputDir, 'trained-lora-adapter.gguf')
+      try {
+        await access(adapterPath)
+      } catch {
+        return { passed: false, output: `Expected trained LoRA adapter at ${adapterPath}` }
+      }
+
       return ValidationHelpers.validate(
-        `Completed finetune with ${progress.length} progress updates and ${result.stats.global_steps} steps`,
+        `Completed finetune with ${progress.length} progress updates, ` +
+          `${result.stats.global_steps} steps, ${finiteLosses.length} finite loss values ` +
+          `and a LoRA adapter`,
         expectation as Expectation
       )
     } catch (error) {
