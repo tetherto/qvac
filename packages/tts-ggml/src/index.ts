@@ -1426,13 +1426,33 @@ class TTSGgml {
   }
 
   private _assertCosyvoiceOptionConsistency(): void {
-    if (this._engineType !== ENGINE_COSYVOICE3) return;
-    // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
-    // denoiser at construction (mirrors the parler rejection).
-    if (this._enhancerGgufPath || this._denoiserGgufPath) {
+    if (this._engineType === ENGINE_COSYVOICE3) {
+      // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
+      // denoiser at construction (mirrors the parler rejection).
+      if (this._enhancerGgufPath || this._denoiserGgufPath) {
+        throw new Error(
+          "tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
+            "Drop lavasrEnhancer / lavasrDenoiser.",
+        );
+      }
+      return;
+    }
+    const cosyvoiceOnly: string[] = [];
+    const cosyvoiceOnlyFields: Record<
+      string,
+      string | number | undefined
+    > = {
+      instruct: this._instruct,
+      promptText: this._promptText,
+      streamLeftContextTokens: this._streamLeftContextTokens,
+    };
+    for (const [key, value] of Object.entries(cosyvoiceOnlyFields)) {
+      if (value != null) cosyvoiceOnly.push(key);
+    }
+    if (cosyvoiceOnly.length > 0) {
       throw new Error(
-        "tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
-          "Drop lavasrEnhancer / lavasrDenoiser.",
+        `tts-ggml: ${cosyvoiceOnly.join(", ")} are cosyvoice3-only options ` +
+          `(engine is ${this._engineType})`,
       );
     }
   }
@@ -2408,6 +2428,7 @@ type NamespaceRunStreamingOptions = RunStreamingOptions;
 type NamespaceTextStreamInput = TextStreamInput;
 type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
+type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the established class namespace API.
 namespace TTSGgml {
@@ -2425,6 +2446,7 @@ namespace TTSGgml {
   export type TextStreamInput = NamespaceTextStreamInput;
   export type TTSRunInput = NamespaceRunInput;
   export type InferenceState = NamespaceInferenceState;
+  export type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
 }
 
 export = TTSGgml;

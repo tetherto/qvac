@@ -742,13 +742,28 @@ class TTSGgml {
         }
     }
     _assertCosyvoiceOptionConsistency() {
-        if (this._engineType !== ENGINE_COSYVOICE3)
+        if (this._engineType === ENGINE_COSYVOICE3) {
+            // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
+            // denoiser at construction (mirrors the parler rejection).
+            if (this._enhancerGgufPath || this._denoiserGgufPath) {
+                throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
+                    "Drop lavasrEnhancer / lavasrDenoiser.");
+            }
             return;
-        // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
-        // denoiser at construction (mirrors the parler rejection).
-        if (this._enhancerGgufPath || this._denoiserGgufPath) {
-            throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
-                "Drop lavasrEnhancer / lavasrDenoiser.");
+        }
+        const cosyvoiceOnly = [];
+        const cosyvoiceOnlyFields = {
+            instruct: this._instruct,
+            promptText: this._promptText,
+            streamLeftContextTokens: this._streamLeftContextTokens,
+        };
+        for (const [key, value] of Object.entries(cosyvoiceOnlyFields)) {
+            if (value != null)
+                cosyvoiceOnly.push(key);
+        }
+        if (cosyvoiceOnly.length > 0) {
+            throw new Error(`tts-ggml: ${cosyvoiceOnly.join(", ")} are cosyvoice3-only options ` +
+                `(engine is ${this._engineType})`);
         }
     }
     /**

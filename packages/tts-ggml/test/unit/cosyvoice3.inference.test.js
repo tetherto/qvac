@@ -190,6 +190,39 @@ test('CosyVoice3: LavaSR enhancer/denoiser rejected at construction', (t) => {
   )
 })
 
+test('CosyVoice3: cosyvoice3-only options on other engines throw', (t) => {
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_CHATTERBOX,
+        files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
+        instruct: { dialect: 'cantonese' }
+      }),
+    /cosyvoice3-only/,
+    'instruct on chatterbox throws'
+  )
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_CHATTERBOX,
+        files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
+        promptText: 'hello'
+      }),
+    /cosyvoice3-only/,
+    'promptText on chatterbox throws'
+  )
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_CHATTERBOX,
+        files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
+        streamLeftContextTokens: 8
+      }),
+    /cosyvoice3-only/,
+    'streamLeftContextTokens on chatterbox throws'
+  )
+})
+
 test('CosyVoice3: streamChunkTokens is NOT rejected (native streaming model)', (t) => {
   // Unlike Supertonic, CosyVoice3 supports native sub-utterance chunk streaming.
   t.execution(

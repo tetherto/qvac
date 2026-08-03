@@ -113,4 +113,11 @@ private:
 // weights (see test_cosyvoice_config.cpp).
 bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback);
 
+// Batch-only output-rate conversion. The tts-cpp CosyVoice engine ignores
+// output_sample_rate, so the addon resamples the batch output itself. No-op
+// unless a non-native outputSampleRate was requested. Free function so it is
+// unit-testable without weights (see test_cosyvoice_config.cpp).
+void resampleBatchOutput(
+    const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result);
+
 } // namespace qvac::ttsggml::cosyvoice

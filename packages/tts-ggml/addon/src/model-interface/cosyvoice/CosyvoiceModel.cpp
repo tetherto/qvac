@@ -78,6 +78,8 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   return opts;
 }
 
+} // namespace
+
 // Batch-only output-rate conversion (the tts-cpp engine ignores
 // output_sample_rate; streaming is validated to the native rate). No-op unless
 // a non-native outputSampleRate was requested. Runs before stats so
@@ -91,8 +93,6 @@ void resampleBatchOutput(
     result.sample_rate = *cfg.outputSampleRate;
   }
 }
-
-} // namespace
 
 CosyvoiceModel::CosyvoiceModel(CosyvoiceConfig config)
     : cfg_(std::move(config)) {
@@ -109,10 +109,39 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         general_error::InvalidArgument,
         "cosyvoiceModelDir (or cosyvoiceLlmModelPath) is required");
   }
-  if (!cfg.modelDir.empty() && !std::filesystem::exists(cfg.modelDir)) {
+  if (!cfg.modelDir.empty() && !std::filesystem::is_directory(cfg.modelDir)) {
     throw createTTSError(
         TTSErrorCode::ModelFileNotFound,
         "cosyvoice model dir not found: " + cfg.modelDir);
+  }
+  if (!cfg.llmModelPath.empty() && !std::filesystem::exists(cfg.llmModelPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice llm model not found: " + cfg.llmModelPath);
+  }
+  if (!cfg.flowModelPath.empty() &&
+      !std::filesystem::exists(cfg.flowModelPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice flow model not found: " + cfg.flowModelPath);
+  }
+  if (!cfg.hiftModelPath.empty() &&
+      !std::filesystem::exists(cfg.hiftModelPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice hift model not found: " + cfg.hiftModelPath);
+  }
+  if (!cfg.s3tokModelPath.empty() &&
+      !std::filesystem::exists(cfg.s3tokModelPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice s3tok model not found: " + cfg.s3tokModelPath);
+  }
+  if (!cfg.campplusModelPath.empty() &&
+      !std::filesystem::exists(cfg.campplusModelPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice campplus model not found: " + cfg.campplusModelPath);
   }
   if (!cfg.referenceAudio.empty() &&
       !std::filesystem::exists(cfg.referenceAudio)) {

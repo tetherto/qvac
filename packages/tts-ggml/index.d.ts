@@ -570,6 +570,7 @@ type NamespaceRunStreamingOptions = RunStreamingOptions;
 type NamespaceTextStreamInput = TextStreamInput;
 type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
+type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 declare namespace TTSGgml {
     type TTSGgmlFiles = NamespaceFiles;
     type TTSGgmlRuntimeConfig = NamespaceRuntimeConfig;
@@ -584,5 +585,6 @@ declare namespace TTSGgml {
     type TextStreamInput = NamespaceTextStreamInput;
     type TTSRunInput = NamespaceRunInput;
     type InferenceState = NamespaceInferenceState;
+    type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
 }
 export = TTSGgml;
