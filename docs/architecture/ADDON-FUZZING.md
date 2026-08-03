@@ -6,9 +6,10 @@ maintainers and agents implementing, reviewing, or extending fuzz coverage
 across the addon fleet.
 
 Status: **Phase 0 implemented for `classification-ggml`** (template fuzz
-helper + first `FUZZ_TEST`), including bounded Linux CI coverage. Fleet rollout,
-seed corpora, scheduled continuous fuzzing, and optional OSS-Fuzz onboarding
-remain future phases. Chosen framework: **Google FuzzTest** (backed by
+helper + a `FUZZ_TEST` per `preprocessToTensor` branch, each seeded so both
+branches are reachable in bounded mode), including bounded Linux CI coverage.
+Fleet rollout, corpus/dictionary scale-up, scheduled continuous fuzzing, and
+optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
 
 > **The entire fuzz dependency stack comes from vcpkg — FuzzTest included.**
@@ -259,8 +260,7 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
   one side is an ODR violation.
 - Continuous-fuzzing mode is Linux/clang-first. Fuzzing is treated as a
   **Linux-only** CI concern, consistent with the existing `if(NOT WIN32)` ASan
-  gating. Instrumented Windows fuzz builds are not supported: prior attempts
-  exposed toolchain issues, and resolving them is outside the current scope.
+  gating. Instrumented Windows fuzz builds are not supported.
 - Fuzz binaries that link `@qvac/fabric` inherit the limited-ASan boundary
   (`detect_leaks=0`), so leak findings require either not linking fabric
   (preferred, see Finding 3) or a dedicated ASan-instrumented-fabric fuzz job.
@@ -489,7 +489,9 @@ fuzzing needs the code *under test* instrumented, which
 FuzzTest's own libraries on top of that just feeds the fuzzer edges from its own
 machinery. The check that this is right: the packaged build reports the same
 `Total edges` (8505) as the FetchContent build did on `preprocess-fuzz`, so the
-instrumentation scope is unchanged. The one visible difference is that FuzzTest's
+instrumentation scope is unchanged. (That figure predates the seed work, which
+compiles `stb_image_write` into the driver; compare like-for-like builds when
+re-running the check, not against the number quoted here.) The one visible difference is that FuzzTest's
 internal assertions stay compiled out, which is the posture its unit-test mode
 uses anyway.
 
@@ -515,11 +517,32 @@ addons at once.
 - **Phase 0 — template fuzz helper + spike (`classification-ggml`). ✅ Done.**
   Added the `BUILD_FUZZING` option in `qvac_addon_preproject`, the
   `qvac_addon_enable_fuzztest()` + `qvac_addon_add_fuzz_target()` helpers to
-  `cmake/qvac-addon/qvac-addon.cmake`, a `test/fuzz` `FUZZ_TEST` over
+  `cmake/qvac-addon/qvac-addon.cmake`, `test/fuzz` `FUZZ_TEST`s over
   `preprocessToTensor` built **without** `LINK_FABRIC` (full ASan + LSan), and
   `fuzz*` npm scripts + `scripts/run-cpp-fuzz.js`. FuzzTest and its dependency
   stack resolve from vcpkg; the registry ports own the pins and C++20 build
   requirements.
+- **Phase 0 follow-up — both `preprocessToTensor` branches, reachable per PR.
+  ✅ Done.** `preprocessToTensor()` picks its branch off the *declared*
+  dimensions, so one property function cannot cover both: with them fixed at `0`
+  it decodes encoded bytes and `validateRawRgb` / `resizeToInput` /
+  `normalizeToWhcn` are dead code; with them fuzzed the all-zero triple that
+  selects the decode path is ~1-in-10⁹. `preprocess_fuzz.cpp` therefore carries
+  two targets — `PreprocessDecodedNeverCrashes` (encoded, dimensions `0`) and
+  `PreprocessRawNeverCrashes` (dimensions fuzzed with `InRange`, bounded one past
+  `MAX_IMAGE_DIMENSION` / `CHANNELS` so the guards' reject side stays reachable).
+  Both carry **seeds**, because bounded unit-test mode has no coverage feedback
+  and neither branch is reachable by chance: random bytes clear
+  `isEncodedImage()` with probability 2⁻²⁴ (JPEG) / 2⁻⁶⁴ (PNG), and
+  `validateRawRgb` wants `size == width * height * channels` exactly. The seeds
+  are **generated in-process by `stb_image_write`** rather than checked in as
+  byte blobs, so they cannot drift from the `stb_image` that decodes them and no
+  hand-computed PNG CRC lives in the tree. Two ordinary `TEST`s in the same file
+  assert each seed still round-trips, so a rotten seed fails loudly instead of
+  quietly demoting both fuzzers to their reject paths — the failure mode that is
+  invisible in a green fuzz log. Verified by temporarily aborting on a
+  *successful* `preprocessToTensor`: bounded mode reports counterexamples that
+  are the 16×16 PNG seed, the JPEG seed, and `16x16x3` respectively.
 - **Phase 0 follow-up — dependencies from vcpkg. ✅ Done.** GoogleTest, ANTLR4 and
   (via the registry's dated port) Abseil moved off FetchContent — see "Dependency
   sourcing". Two bugs surfaced while validating this, both worth knowing about
@@ -563,10 +586,16 @@ addons at once.
 - **Phase 3 — harness gaps.** Stand up the missing GTest/`addon-test` harness
   for `audiogen-ggml` (and decide whether `fabric` is in scope), then add its
   fuzz targets.
-- **Phase 4 — seed corpora + dictionaries.** Seed from existing assets
-  (`test/images/*.jpg`, real GGUF headers, sample audio) and add format
-  dictionaries (PNG/JPEG magic, GGUF magic/version/type tags). Store minimized
-  corpora in-repo or in the CI model S3 bucket.
+- **Phase 4 — seed corpora + dictionaries.** Every target ships the minimum
+  in-harness `.WithSeeds(...)` needed to make its branches reachable per PR (see
+  the Phase 0 follow-up); this phase is the scale-up. Seed from existing assets
+  (`test/images/*.jpg`, real GGUF headers, sample audio) via
+  `ReadFilesFromDirectory`, add format dictionaries (PNG/JPEG magic, GGUF
+  magic/version/type tags), and store minimized corpora in-repo or in the CI
+  model S3 bucket. Also where an input domain whose parts must agree — a raw-RGB
+  buffer whose length is *derived* from the fuzzed dimensions, via `FlatMap` —
+  belongs, if a continuous run shows `PreprocessRawNeverCrashes` starving past
+  `validateRawRgb`.
 - **Phase 5 — CI wiring.** Run fuzz targets *bounded* inside the existing
   `cpp-tests-*` workflows (free per-PR regression coverage). **Landed for
   `classification-ggml`:** on **Linux** (matching the `if(NOT WIN32)` ASan gate)
@@ -575,12 +604,15 @@ addons at once.
   `addon-test` and the bounded fuzz target (sharing the vcpkg GoogleTest)
   instead of configuring two trees. Build and run are then **split per target
   and ordered unit-tests-first** — `test:cpp:fuzz:build:tests`, `test:cpp:run`,
-  `test:cpp:fuzz:build:fuzz`, `fuzz:run` — so the pre-existing unit-test signal
-  never depends on the newer fuzz stack: a fuzz compile break fails *after*
-  `addon-test` has been built and run, rather than aborting the job before the
-  unit tests start. (The configure remains shared, so a vcpkg failure in the
-  `fuzz` feature still blocks both; that is the price of the single tree.)
-  Neither run step sets `ASAN_OPTIONS`: the unit-test
+  `test:cpp:fuzz:build:fuzz`, `fuzz:run` — so a fuzz compile break or a fuzz
+  finding fails *after* `addon-test` has been built and run, rather than
+  aborting the job before the unit tests start. That ordering does **not**
+  decouple the unit tests from the fuzz *dependencies*: the shared configure
+  runs with `BUILD_FUZZING=ON` and therefore resolves the `fuzz` manifest
+  feature (`fuzztest[asan]`, `abseil[asan]`, `re2[asan]`, `antlr4`) before
+  `addon-test` is configured at all, so a vcpkg registry or binary-cache
+  failure there takes the Linux unit tests down with it — the accepted price of
+  one configure over two. Neither run step sets `ASAN_OPTIONS`: the unit-test
   runner self-applies the relaxed fabric-boundary options while the fuzz runner
   keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
   `test:cpp` path (no fuzzing). It reuses the caller's existing
@@ -620,8 +652,15 @@ addons at once.
   truncated `IDAT` passes `stbi_info_from_memory()` and the dimension guard, and
   makes `stbi_load_from_memory()` allocate the full output buffer before it
   discovers the data is truncated. Expect this once Phase 5's continuous job runs
-  against a real image corpus; bounded per-PR mode is unlikely to synthesize a
-  valid header by chance. Fixes are deferred, and the tempting one — a
+  against a real image corpus. Bounded per-PR mode now *does* decode real images
+  — its seeds are valid PNG/JPEG — but they are **16×16**, and the allocation is
+  the product of both axes: a mutation that inflates one dimension field of a
+  seed header allocates kilobytes, so the pathological shape still needs both
+  axes mutated large at once, which is why per-PR mode is not expected to hit
+  this. Keep the seeds small for that reason. The raw-RGB target cannot hit it at
+  all: `validateRawRgb` rejects unless the buffer length already equals
+  `width * height * channels`, so its allocation is bounded by the fuzzer's own
+  input size. Fixes are deferred, and the tempting one — a
   `catch (const std::bad_alloc&)` in the property — is the wrong one: that same
   path holds a **real defect** (the `std::vector` copy throws with stb's buffer
   still owned by nobody, leaking it), and a blanket catch would mask that plus any
@@ -675,8 +714,10 @@ addons at once.
   `qvac_addon_add_fuzz_target()`, and the existing
   `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
 - `packages/classification-ggml/test/fuzz/` — Phase 0 reference: the
-  `CMakeLists.txt` fuzz wiring and `preprocess_fuzz.cpp` (`FUZZ_TEST` over
-  `preprocessToTensor`, no fabric link).
+  `CMakeLists.txt` fuzz wiring and `preprocess_fuzz.cpp` — one `FUZZ_TEST` per
+  `preprocessToTensor` branch (encoded / raw-RGB), each seeded with
+  `stb_image_write`-generated inputs, plus the `TEST`s that keep those seeds
+  honest. No fabric link.
 - `packages/classification-ggml/vcpkg.json` /
   `packages/classification-ggml/vcpkg-configuration.json` — the `fuzz` manifest
   feature (`abseil[asan]`, `re2[asan]`, and `fuzztest[asan]` with version

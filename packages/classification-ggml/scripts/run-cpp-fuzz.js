@@ -17,6 +17,10 @@ const { spawnSync } = require('child_process')
 //   node scripts/run-cpp-fuzz.js --continuous <Suite.Test>
 //   node scripts/run-cpp-fuzz.js --continuous --fuzz_for=30m   time-boxed
 //
+// Bounded mode runs every FUZZ_TEST in the binary. Coverage-guided mode fuzzes
+// one at a time, so the second target needs an explicit selector:
+//   npm run fuzz:continuous -- PreprocessorFuzz.PreprocessRawNeverCrashes
+//
 // Only --continuous and --build-dir are the runner's own. Every other flag is
 // forwarded verbatim to the fuzz binary, which is how FuzzTest/libFuzzer knobs
 // (--fuzz_for, --rss_limit_mb, --gtest_filter, ...) are reached. Through npm:

@@ -149,10 +149,19 @@ jobs:
       # configured by setup-vcpkg above, so this needs no egress of its own.
       # See docs/architecture/ADDON-FUZZING.md.
       #
-      # The build and run are split per target, in that order, so the
-      # pre-existing unit-test signal never depends on the newer fuzz stack: a
-      # fuzz compile break fails after addon-test has already been built AND
-      # run, instead of aborting the job before the unit tests ever start.
+      # The build and run are split per target, in that order, so a fuzz
+      # compile break or a fuzz finding fails after addon-test has already been
+      # built AND run, instead of aborting the job before the unit tests ever
+      # start.
+      #
+      # That ordering does NOT isolate the unit tests from the fuzz
+      # *dependencies*: BUILD_FUZZING=ON activates the `fuzz` vcpkg manifest
+      # feature, so this configure resolves fuzztest[asan], abseil[asan],
+      # re2[asan] and antlr4 before addon-test is configured at all — a
+      # registry or binary-cache failure there takes the Linux unit tests down
+      # with it. That is the accepted price of one configure over two;
+      # splitting the trees would pay a second CMake configure on every run to
+      # guard against it.
       - name: Configure C++ tests + fuzz targets
         if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}

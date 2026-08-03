@@ -65,3 +65,17 @@ test('resolveBuildDir --build-dir flag wins over env', () => {
   )
   assert.equal(resolveBuildDir(['--build-dir=build-fuzz'], {}), 'build-fuzz')
 })
+
+test('resolveBuildDir rejects --build-dir without a value instead of using the default', () => {
+  assert.throws(
+    () => resolveBuildDir(['--build-dir'], { CPP_BUILD_DIR: 'other' }),
+    /--build-dir requires/
+  )
+})
+
+test('resolveBuildDir rejects a --build-dir that would swallow a following flag', () => {
+  assert.throws(
+    () => resolveBuildDir(['--build-dir', '--gtest_filter=Foo'], {}),
+    /--build-dir requires/
+  )
+})

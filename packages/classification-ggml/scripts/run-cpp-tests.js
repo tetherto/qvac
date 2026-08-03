@@ -51,8 +51,15 @@ function resolveBuildDir(argv, processEnv) {
     return eq.slice('--build-dir='.length)
   }
   const idx = argv.indexOf('--build-dir')
-  if (idx !== -1 && argv[idx + 1]) {
-    return argv[idx + 1]
+  if (idx !== -1) {
+    // Matching run-cpp-fuzz.js: refuse a missing value and refuse to consume a
+    // following flag as the value. Falling back to the default tree here would
+    // run a different build than the caller asked for and still report success.
+    const next = argv[idx + 1]
+    if (next === undefined || next.startsWith('--')) {
+      throw new Error('--build-dir requires a directory (e.g. --build-dir build-fuzz)')
+    }
+    return next
   }
   return processEnv.CPP_BUILD_DIR || 'build'
 }
