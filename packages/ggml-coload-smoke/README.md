@@ -84,7 +84,7 @@ right after that addon's `prebuild`, via two reusable workflows:
 
 Gating (via `.github/actions/ci-router`):
 
-- desktop co-load runs when the PR carries `verified` + `run-coload-tests`;
+- desktop co-load runs when the PR carries `run-coload-tests` (external forks also need `fork-ci` approval on the workflow run);
 - the Device Farm co-load additionally requires `run-mobile-addon-tests`, so the
   expensive on-device run is opt-in (new model / new GPU work) rather than
   automatic.

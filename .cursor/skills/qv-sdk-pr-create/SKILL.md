@@ -18,9 +18,9 @@ Generate PR titles and descriptions for SDK pod packages, following the team's t
 
 ## Branch / remote preference
 
-**Preferred path for internal SDK work:** push the head branch to the org repo (`tetherto/qvac`) and open a same-repo PR. Org-branch ready PRs get baseline CI without the `verified` label. Heavy tiers still opt in via labels (`test-e2e-smoke` / `test-e2e-full`, addon stage labels, etc.). Prefer **Ready for review** over Draft when you want baseline checks to run (drafts run nothing until ready).
+**Preferred path for internal SDK work:** push the head branch to the org repo (`tetherto/qvac`) and open a same-repo PR. Org-branch ready PRs get baseline CI without any fork trust gate. Heavy tiers still opt in via labels (`test-e2e-smoke` / `test-e2e-full`, addon stage labels, etc.). Prefer **Ready for review** over Draft when you want baseline checks to run (drafts run nothing until ready).
 
-**Fallback:** personal-fork → org PRs still work, but a personal fork counts as external. Privileged CI needs merge/release to apply `verified` for that exact commit; any new push strips approval and requires re-apply. Do not ask the PR author to self-apply `verified`.
+**Fallback:** personal-fork → org PRs still work, but a personal fork counts as external. Privileged CI needs a merge/release-team member to approve the `fork-ci` environment on each workflow run for the current head SHA; each new push re-prompts. Do not ask the PR author to self-approve `fork-ci`.
 
 Resolve remotes from `git remote -v`:
 - **Org remote** — URL contains `tetherto/qvac` (often named `upstream`, sometimes `origin`)
@@ -115,7 +115,7 @@ gh pr create \
   --title "TICKET prefix: subject" \
   --body "..."
 
-# Fallback — personal fork -> org PR (external CI path; needs merge/release `verified` per commit):
+# Fallback — personal fork -> org PR (external CI path; needs merge/release fork-ci approval per run):
 git push -u FORK_REMOTE BRANCH
 gh pr create \
   --repo tetherto/qvac \
@@ -132,7 +132,7 @@ gh pr view --repo tetherto/qvac BRANCH --web
 - `--web` alone only opens browser for manual creation, does NOT create the PR
 - For fork PRs, must specify `--repo`, `--base`, and `--head FORK_OWNER:BRANCH` explicitly
 - For org-branch PRs, `--head BRANCH` (no `owner:`) is enough when `--repo tetherto/qvac`
-- Do not add `verified` on org-branch PRs; baseline CI runs without it. For fork PRs, tell the user a merge/release reviewer must apply `verified` after reviewing the current head
+- Do not add fork trust gates on org-branch PRs; baseline CI runs without them. For fork PRs, tell the user a merge/release reviewer must approve the pending `fork-ci` deployment after reviewing the current head
 - Commit and push before creating PR
 
 6. If gh not available, output the copy-ready markdown format above
@@ -221,7 +221,7 @@ Before outputting the PR description, verify:
 - [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
-- [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `verified` re-approval called out)
+- [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
 - [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 
 ## References
@@ -231,5 +231,5 @@ Before outputting the PR description, verify:
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - Backmerge skill: `.cursor/skills/qv-sdk-backmerge/SKILL.md`
 - sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
-- GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill (and `label-gate`) until DevOps updates gitflow
-- Fork CI trust model: `.github/actions/label-gate/README.md` (on default branch / after #3382)
+- GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill until DevOps updates gitflow
+- Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)
