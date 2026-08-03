@@ -36,6 +36,16 @@ function parseArgs(argv) {
   return { continuous, fuzzTest, buildDir }
 }
 
+function resolveExitCode(result) {
+  if (result.error) {
+    throw result.error
+  }
+  if (result.signal) {
+    return 1
+  }
+  return result.status ?? 1
+}
+
 function main() {
   const { continuous, fuzzTest, buildDir } = parseArgs(process.argv.slice(2))
   const binary = os.platform() === 'win32' ? `${BINARY_NAME}.exe` : `./${BINARY_NAME}`
@@ -59,18 +69,15 @@ function main() {
     env: process.env
   })
 
-  if (result.error) {
-    throw result.error
-  }
+  const exitCode = resolveExitCode(result)
   if (result.signal) {
     console.error(`${BINARY_NAME} terminated by signal ${result.signal}`)
-    process.exit(1)
   }
-  process.exit(result.status ?? 1)
+  process.exit(exitCode)
 }
 
 if (require.main === module) {
   main()
 }
 
-module.exports = { parseArgs, DEFAULT_FUZZ_TEST }
+module.exports = { parseArgs, resolveExitCode, DEFAULT_FUZZ_TEST }

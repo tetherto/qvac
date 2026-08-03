@@ -10,10 +10,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const {
-  DEFAULT_FUZZ_TEST,
-  parseArgs
-} = require('../run-cpp-fuzz')
+const { DEFAULT_FUZZ_TEST, parseArgs, resolveExitCode } = require('../run-cpp-fuzz')
 
 test('parseArgs defaults to bounded mode and the default fuzz test', () => {
   assert.deepEqual(parseArgs([]), {
@@ -24,47 +21,54 @@ test('parseArgs defaults to bounded mode and the default fuzz test', () => {
 })
 
 test('parseArgs enables continuous mode and accepts a fuzz test selector', () => {
-  assert.deepEqual(
-    parseArgs(['--continuous', 'OtherSuite.OtherProperty']),
-    {
-      continuous: true,
-      fuzzTest: 'OtherSuite.OtherProperty',
-      buildDir: undefined
-    }
-  )
+  assert.deepEqual(parseArgs(['--continuous', 'OtherSuite.OtherProperty']), {
+    continuous: true,
+    fuzzTest: 'OtherSuite.OtherProperty',
+    buildDir: undefined
+  })
 })
 
 test('parseArgs supports both build-dir flag forms', () => {
-  assert.deepEqual(
-    parseArgs(['--build-dir', 'build-fuzz']),
-    {
-      continuous: false,
-      fuzzTest: DEFAULT_FUZZ_TEST,
-      buildDir: 'build-fuzz'
-    }
-  )
-  assert.deepEqual(
-    parseArgs(['--build-dir=build-fuzz']),
-    {
-      continuous: false,
-      fuzzTest: DEFAULT_FUZZ_TEST,
-      buildDir: 'build-fuzz'
-    }
-  )
+  assert.deepEqual(parseArgs(['--build-dir', 'build-fuzz']), {
+    continuous: false,
+    fuzzTest: DEFAULT_FUZZ_TEST,
+    buildDir: 'build-fuzz'
+  })
+  assert.deepEqual(parseArgs(['--build-dir=build-fuzz']), {
+    continuous: false,
+    fuzzTest: DEFAULT_FUZZ_TEST,
+    buildDir: 'build-fuzz'
+  })
 })
 
 test('parseArgs keeps the build directory separate from the fuzz selector', () => {
   assert.deepEqual(
-    parseArgs([
-      '--continuous',
-      '--build-dir',
-      'build-fuzz',
-      'OtherSuite.OtherProperty'
-    ]),
+    parseArgs(['--continuous', '--build-dir', 'build-fuzz', 'OtherSuite.OtherProperty']),
     {
       continuous: true,
       fuzzTest: 'OtherSuite.OtherProperty',
       buildDir: 'build-fuzz'
     }
   )
+})
+
+test('resolveExitCode preserves a non-zero fuzz failure', () => {
+  assert.equal(resolveExitCode({ status: 1 }), 1)
+})
+
+test('resolveExitCode preserves a successful fuzz run', () => {
+  assert.equal(resolveExitCode({ status: 0 }), 0)
+})
+
+test('resolveExitCode maps signal termination to failure', () => {
+  assert.equal(resolveExitCode({ signal: 'SIGABRT', status: null }), 1)
+})
+
+test('resolveExitCode maps a null status without a signal to failure', () => {
+  assert.equal(resolveExitCode({ status: null }), 1)
+})
+
+test('resolveExitCode rethrows a spawn error', () => {
+  const error = new Error('spawn failed')
+  assert.throws(() => resolveExitCode({ error }), error)
 })
