@@ -191,20 +191,40 @@ The SDK runs this preflight before handing a model to `@qvac/llm-llamacpp`:
 
 ```bash
 npm install
-bare-make generate
-bare-make build
-bare-make install
+npm run build          # build:ts + build:native
+```
+
+Or the two halves separately:
+
+```bash
+npm run build:ts       # tsc: src/index.ts -> index.js + index.d.ts
+npm run build:native   # bare-make generate && bare-make build && bare-make install
 ```
 
 Consumes llama.cpp via the `qvac-fabric` vcpkg port (fork
 `tetherto/qvac-fabric-llm.cpp`); JS↔C++ marshalling helpers come from the
 header-only `qvac-lib-inference-addon-cpp` port.
 
+### JS API source of truth
+
+`src/index.ts` is the only hand-written copy of the JS API. Root `index.js` and
+`index.d.ts` are **generated** by `npm run build:ts` and committed, so consumers
+get types and runtime from one implementation rather than three files kept in
+sync by hand — the arrangement `@qvac/embed-llamacpp` uses.
+
+`npm run check:generated` rebuilds and fails if either artifact differs from
+what is committed, so a change to `src/` that is not regenerated cannot merge.
+It runs as part of `npm run test:types`.
+
+Edit `src/index.ts`, never the generated files.
+
 ## Test
 
 ```bash
 npm test                       # validation + enum tests (no model needed)
 FIT_MODEL_PATH=/abs/model.gguf npm test   # also runs the real fit projection
+npm run test:types             # typecheck + consumer narrowing test + drift check
+npm run lint                   # standard (JS) + eslint (TS)
 ```
 
 ### Reading the outcome

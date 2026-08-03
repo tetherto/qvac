@@ -4,6 +4,38 @@
 
 ### Changed
 
+- The JS API is now generated from TypeScript. `src/index.ts` is the single
+  hand-written copy; root `index.js` and `index.d.ts` are emitted by
+  `npm run build:ts` and committed, matching `@qvac/embed-llamacpp`. Previously
+  the runtime, the JSDoc and the declarations were three files kept in sync by
+  hand, and they had already drifted: `index.d.ts` and the README carried
+  `reason`, `nDevices`, `nGpuDevices`, `buftOverrides` and the placement fields
+  while the JSDoc `@returns` still described the older, smaller result object.
+  `npm run check:generated` rebuilds and fails on any difference from what is
+  committed, so the same drift cannot recur silently. No runtime behaviour
+  changes.
+
+- Reject a relative `modelPath`. The API documented the field as absolute but
+  only checked that it was a non-empty string, so a relative path resolved
+  against the process working directory — which nothing in a worklet controls,
+  making the same call name a different file, or no file, depending on where the
+  host was launched. Enforced in the wrapper and again in `runFit`, so
+  `./binding.js` cannot bypass it. Matches `files.model` in
+  `@qvac/embed-llamacpp`. The path is still not required to exist: a missing
+  model remains the documented `ERROR` / `model-unreadable` outcome.
+
+- Bound `nCtxMin` by the model's declared `context_length`. The `nCtx` guard was
+  bypassable through the floor: `nCtxMin <= nCtx` is only checked when `nCtx` is
+  concrete, and `nCtx: 0` is the documented way to let the fitter choose, so
+  `{ nCtx: 0, nCtxMin: 75000000 }` reached `common_fit_params` unchecked. An
+  explicit floor above the declared length now throws. The 4096 default is
+  clamped to the declared length instead of throwing, since it is this package's
+  value rather than the caller's — and a floor above the top of the reduction
+  range constrained nothing anyway.
+
+- Correct the package description: this addon wraps `common_fit_params`, not
+  `llama_params_fit`, since the fabric 9840.1.1 port below.
+
 - Bump `qvac-fabric` to 9840.1.1, in lockstep with the rest of the monorepo, and
   port to the API the fitter now lives behind. Upstream moved it out of the core
   llama ABI into libcommon (ggml-org/llama.cpp#22171, "move fit params

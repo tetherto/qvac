@@ -112,7 +112,7 @@ test('binding.paramsFit enforces the same constraints as the wrapper', async fun
   await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nBatch: 256, nUbatch: 512 }), /must not exceed/)
 })
 
-test('FIT_STATUS enum matches llama_params_fit_status', function (t) {
+test('FIT_STATUS enum matches common_params_fit_status', function (t) {
   t.is(FIT_STATUS.SUCCESS, 0)
   t.is(FIT_STATUS.FAILURE, 1)
   t.is(FIT_STATUS.ERROR, 2)
@@ -313,8 +313,8 @@ test('a non-default nGpuLayers is what actually pins the offload', async functio
 test('memory pressure moves the plan off the GPU rather than reporting FAILURE', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
 
-  // `llama_params_fit` fits to free *device* memory and, per llama.h, "assumes
-  // system memory is unlimited". So an unmeetable device margin is satisfied by
+  // `common_fit_params` fits to free *device* memory and, per common/fit.h,
+  // "assumes system memory is unlimited". So an unmeetable device margin is satisfied by
   // moving every layer to the host and shrinking the context — not by returning
   // FAILURE. Driving this with the margin rather than with a large model keeps
   // it deterministic: a model sized to overflow one CI runner's VRAM fits the
