@@ -748,6 +748,9 @@
                           "generatedTokens": {
                             "type": "number"
                           },
+                          "emittedTokens": {
+                            "type": "number"
+                          },
                           "avgConcurrentSeq": {
                             "type": "number"
                           },
@@ -865,6 +868,9 @@
               "type": "number"
             },
             "generatedTokens": {
+              "type": "number"
+            },
+            "emittedTokens": {
               "type": "number"
             },
             "avgConcurrentSeq": {
@@ -1819,6 +1825,9 @@
                       "generatedTokens": {
                         "type": "number"
                       },
+                      "emittedTokens": {
+                        "type": "number"
+                      },
                       "avgConcurrentSeq": {
                         "type": "number"
                       },
@@ -2414,6 +2423,9 @@
                         "type": "number"
                       },
                       "generatedTokens": {
+                        "type": "number"
+                      },
+                      "emittedTokens": {
                         "type": "number"
                       },
                       "avgConcurrentSeq": {

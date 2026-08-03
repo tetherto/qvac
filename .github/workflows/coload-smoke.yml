@@ -140,6 +140,14 @@ jobs:
             ls -R "$SRC" || true
             exit 1
           fi
+          # The combo installs the published baseline for every addon it loads.
+          # A missing package means no combo loads $ADDON, so overlaying would
+          # create an orphan directory and the smoke would pass without ever
+          # exercising this PR's build.
+          if [ ! -d "node_modules/@qvac/$ADDON" ]; then
+            echo "::error::@qvac/$ADDON is not installed for combo '${{ matrix.combo.name }}'; the overlay would not be loaded"
+            exit 1
+          fi
           mkdir -p "$DEST"
           cp -r "$SRC/linux-x64/." "$DEST/"
           # Published @qvac packages use the qvac_ prefix; a freshly-built
