@@ -478,4 +478,21 @@ function(qvac_addon_add_fuzz_target target)
   include(GoogleTest)
   add_test(NAME ${target} COMMAND ${target})
   set_tests_properties(${target} PROPERTIES TIMEOUT 600)
+
+  # Pin the sanitizer posture on the test itself instead of inheriting whatever
+  # the invoking shell carries: ASan replaces its defaults with ASAN_OPTIONS
+  # wholesale, so a value left over from an addon-test session would silently
+  # turn LeakSanitizer off here. A fabric-linked target has to run relaxed (the
+  # static-libstdc++ boundary trips alloc/dealloc-mismatch and fabric's
+  # long-lived globals look like leaks); everything else runs at full strength.
+  # Mirrors scripts/run-cpp-fuzz.js and scripts/run-cpp-tests.js.
+  if(NOT WIN32)
+    if(_QAFZ_LINK_FABRIC)
+      set(_qafz_asan_options "alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1")
+    else()
+      set(_qafz_asan_options "detect_leaks=1:abort_on_error=1")
+    endif()
+    set_tests_properties(${target} PROPERTIES
+      ENVIRONMENT "ASAN_OPTIONS=${_qafz_asan_options}")
+  endif()
 endfunction()

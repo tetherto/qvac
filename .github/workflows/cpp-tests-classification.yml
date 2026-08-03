@@ -154,10 +154,12 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:fuzz:build
 
-      # One run step for both. Intentionally NO step-level ASAN_OPTIONS: the
-      # unit-test runner self-applies the relaxed fabric-boundary options for the
-      # fabric-linked addon-test, while the fuzz runner leaves ASan at full
-      # strength (+ LeakSanitizer) for the non-fabric fuzz target. Fuzzing runs
+      # One run step for both. Intentionally NO step-level ASAN_OPTIONS: each
+      # runner applies its own posture — relaxed fabric-boundary options for the
+      # fabric-linked addon-test, full strength (+ LeakSanitizer) for the
+      # non-fabric fuzz target. Setting ASAN_OPTIONS here (or at job level) would
+      # override both; the fuzz runner warns when that happens rather than
+      # silently dropping leak detection. Fuzzing runs
       # in bounded unit-test mode (each FUZZ_TEST ~1s) for free per-PR coverage;
       # coverage-guided time-boxed fuzzing (`--fuzz_for`) is a separate scheduled job.
       - name: Run C++ tests + fuzz targets (bounded)

@@ -10,7 +10,15 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { DEFAULT_FUZZ_TEST, parseArgs, buildFuzzArgs, resolveExitCode } = require('../run-cpp-fuzz')
+const {
+  DEFAULT_FUZZ_TEST,
+  DEFAULT_ASAN_OPTIONS,
+  parseArgs,
+  buildFuzzArgs,
+  buildRunnerEnv,
+  asanOptionsNotice,
+  resolveExitCode
+} = require('../run-cpp-fuzz')
 
 test('parseArgs defaults to bounded mode and the default fuzz test', () => {
   assert.deepEqual(parseArgs([]), {
@@ -104,6 +112,43 @@ test('buildFuzzArgs places forwarded flags after the fuzz selector', () => {
     }),
     [`--fuzz=${DEFAULT_FUZZ_TEST}`, '--fuzz=Other.T']
   )
+})
+
+test('buildRunnerEnv keeps ASan strict when the environment says nothing', () => {
+  const env = buildRunnerEnv({ PATH: '/usr/bin' })
+  assert.equal(env.ASAN_OPTIONS, DEFAULT_ASAN_OPTIONS)
+  assert.match(env.ASAN_OPTIONS, /detect_leaks=1/)
+  assert.equal(env.PATH, '/usr/bin')
+})
+
+test('buildRunnerEnv honours an inherited ASAN_OPTIONS as-is', () => {
+  const inherited = 'alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1'
+  assert.equal(buildRunnerEnv({ ASAN_OPTIONS: inherited }).ASAN_OPTIONS, inherited)
+  assert.equal(buildRunnerEnv({ ASAN_OPTIONS: '' }).ASAN_OPTIONS, '')
+})
+
+test('asanOptionsNotice stays quiet when the runner owns the value', () => {
+  assert.equal(asanOptionsNotice({ PATH: '/usr/bin' }), null)
+})
+
+test('asanOptionsNotice calls out an inherited value that disables LeakSanitizer', () => {
+  const notice = asanOptionsNotice({
+    ASAN_OPTIONS: 'alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1'
+  })
+  assert.match(notice, /^WARNING:/)
+  assert.match(notice, /LeakSanitizer is OFF/)
+  assert.match(notice, /detect_leaks=0/)
+})
+
+test('asanOptionsNotice warns about any inherited value, not just detect_leaks=0', () => {
+  const notice = asanOptionsNotice({ ASAN_OPTIONS: 'abort_on_error=0' })
+  assert.match(notice, /^WARNING:/)
+  assert.doesNotMatch(notice, /LeakSanitizer is OFF/)
+})
+
+test('asanOptionsNotice does not mistake detect_leaks=1 for the disabled form', () => {
+  const notice = asanOptionsNotice({ ASAN_OPTIONS: 'detect_leaks=1:abort_on_error=0' })
+  assert.doesNotMatch(notice, /LeakSanitizer is OFF/)
 })
 
 test('resolveExitCode preserves a non-zero fuzz failure', () => {

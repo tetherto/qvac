@@ -308,8 +308,14 @@ lines in the PR that already migrates it to the template + fabric.
 - **Runner parity.** A fuzz binary that links fabric must run under the same
   `ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0` that
   `scripts/run-cpp-tests.js` applies to `addon-test`; a non-fabric fuzz binary
-  (the `classification-ggml` Phase 0 target) runs with default (full) options —
-  `scripts/run-cpp-fuzz.js` deliberately sets **no** `ASAN_OPTIONS` relaxations.
+  (the `classification-ggml` Phase 0 target) runs at full strength. Both
+  postures are **set explicitly, never inherited** — ASan replaces its defaults
+  with `ASAN_OPTIONS` wholesale, so a value left over from an `addon-test`
+  session would otherwise switch LeakSanitizer off with no trace in the log.
+  `scripts/run-cpp-fuzz.js` defaults to `detect_leaks=1:abort_on_error=1`, warns
+  loudly when it inherits something else, and always echoes the effective
+  string; `qvac_addon_add_fuzz_target()` sets the matching `ENVIRONMENT`
+  property on the `ctest` case (relaxed only under `LINK_FABRIC`).
 - **Drift guard.** Because the wiring is in the template, the planned
   `scripts/check-addon-cmake.mjs` guard covers it — a re-inlined fuzz block or a
   missing `qvac_addon_add_fuzz_target` call is a CI failure like any other
@@ -645,7 +651,8 @@ addons at once.
   floors, plus `antlr4` and `gtest`) and the `microsoft/vcpkg` allowlist entries
   for `antlr4`, `gtest`, and transitive `libuuid`.
 - `packages/classification-ggml/scripts/run-cpp-fuzz.js` — bounded /
-  `--continuous` fuzz runner (full ASan + LSan, no `ASAN_OPTIONS` relaxation);
+  `--continuous` fuzz runner (pins `ASAN_OPTIONS=detect_leaks=1:abort_on_error=1`
+  and warns when it inherits a different value);
   wired via the `fuzz`, `fuzz:build`, `fuzz:run`, `fuzz:continuous` npm scripts
   (fuzz-only configure) and the `test:cpp:fuzz*` scripts (combined tests+fuzz
   configure). Both runners default to `build/` and take `--build-dir <dir>` (or

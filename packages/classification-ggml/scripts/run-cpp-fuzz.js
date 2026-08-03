@@ -5,8 +5,10 @@ const os = require('os')
 const { spawnSync } = require('child_process')
 
 // The fuzz target does NOT link @qvac/fabric, so — unlike addon-test — it keeps
-// full ASan + LeakSanitizer. We deliberately do not relax any ASAN_OPTIONS
-// here: any leak or alloc/dealloc mismatch is a real finding.
+// full ASan + LeakSanitizer: any leak or alloc/dealloc mismatch is a real
+// finding. Keeping ASan strict is the whole reason the target skips fabric, so
+// the posture is set explicitly and echoed rather than left to whatever the
+// environment happens to carry. See buildRunnerEnv below.
 //
 // Usage:
 //   node scripts/run-cpp-fuzz.js                     bounded unit-test mode (CI-friendly)
@@ -21,6 +23,48 @@ const { spawnSync } = require('child_process')
 //   npm run fuzz:continuous -- --fuzz_for=30m
 const DEFAULT_FUZZ_TEST = 'PreprocessorFuzz.PreprocessDecodedNeverCrashes'
 const BINARY_NAME = 'preprocess-fuzz'
+
+// Strict counterpart to run-cpp-tests.js's relaxed fabric-boundary string.
+// detect_leaks=1 is already ASan's Linux default; it is spelled out so the
+// posture is greppable in a log and so a future edit has to be deliberate.
+const DEFAULT_ASAN_OPTIONS = 'detect_leaks=1:abort_on_error=1'
+
+/**
+ * Build the child-process env. Mirrors run-cpp-tests.js: an ASAN_OPTIONS
+ * already in the environment — including an explicit empty string — is used
+ * as-is, because overriding a caller's sanitizer choice is worse than honoring
+ * it. Unlike that runner, ours is the strict default, so an inherited value is
+ * usually accidental rather than intended; asanOptionsNotice() exists to make
+ * that case loud.
+ */
+function buildRunnerEnv(processEnv) {
+  return {
+    ...processEnv,
+    ASAN_OPTIONS: 'ASAN_OPTIONS' in processEnv ? processEnv.ASAN_OPTIONS : DEFAULT_ASAN_OPTIONS
+  }
+}
+
+/**
+ * Warning text for an inherited ASAN_OPTIONS, or null when we own the value.
+ * ASan replaces its defaults with the string wholesale, so inheriting one from
+ * a neighbouring addon-test session (or a job-level env block) silently drops
+ * whatever it omits — LeakSanitizer above all.
+ */
+function asanOptionsNotice(processEnv) {
+  if (!('ASAN_OPTIONS' in processEnv)) {
+    return null
+  }
+  const inherited = processEnv.ASAN_OPTIONS
+  const leaksOff = /(^|[:\s,])detect_leaks=0([:\s,]|$)/.test(inherited)
+  return [
+    `WARNING: ${BINARY_NAME} inherited ASAN_OPTIONS='${inherited}' instead of using`,
+    `its default '${DEFAULT_ASAN_OPTIONS}'. ASan takes that string wholesale, so`,
+    leaksOff
+      ? 'LeakSanitizer is OFF for this run and leak findings will be missed.'
+      : 'anything the default enables and this string omits is off for this run.',
+    'Unset ASAN_OPTIONS to fuzz at full strength.'
+  ].join('\n')
+}
 
 function parseArgs(argv) {
   // --build-dir <dir> / --build-dir=<dir> selects the build tree; a non-flag is
@@ -91,12 +135,21 @@ function main() {
   )
 
   const args = buildFuzzArgs({ continuous, fuzzTest, fuzzerArgs })
+  const env = buildRunnerEnv(process.env)
+
+  const notice = asanOptionsNotice(process.env)
+  if (notice) {
+    console.warn(notice)
+  }
+  // Always on the record: a run with LSan off is otherwise indistinguishable
+  // from a run that found no leaks.
+  console.log(`${BINARY_NAME}: ASAN_OPTIONS=${env.ASAN_OPTIONS}`)
 
   const result = spawnSync(binary, args, {
     cwd,
     stdio: 'inherit',
     shell: false,
-    env: process.env
+    env
   })
 
   const exitCode = resolveExitCode(result)
@@ -110,4 +163,12 @@ if (require.main === module) {
   main()
 }
 
-module.exports = { parseArgs, buildFuzzArgs, resolveExitCode, DEFAULT_FUZZ_TEST }
+module.exports = {
+  parseArgs,
+  buildFuzzArgs,
+  buildRunnerEnv,
+  asanOptionsNotice,
+  resolveExitCode,
+  DEFAULT_FUZZ_TEST,
+  DEFAULT_ASAN_OPTIONS
+}
