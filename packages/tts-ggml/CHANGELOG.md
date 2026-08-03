@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is active, because the enhancer resamples inside its overlap-reprocess window
   without introducing chunk seams.
 
+### Fixed
+
+- **`denoiser` with an explicit `streamChunkTokens: 0`.** A zero token count
+  means batch synthesis, but it was still rejected as a streaming request, so
+  passing `0` explicitly disabled the denoiser path. Only a positive count now
+  counts as native chunk streaming, matching the addon.
+
 ## [0.6.1] - 2026-07-30
 
 ### Fixed

@@ -1358,11 +1358,7 @@ class TTSGgml {
     // streaming guards, matching the pre-migration single-method throw order.
     this._assertParlerOptionConsistency();
     this._assertCosyvoiceOptionConsistency();
-    if (
-      this._denoiserGgufPath &&
-      (this._streamChunkTokens != null ||
-        this._streamFirstChunkTokens != null)
-    ) {
+    if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
       throw new Error(
         "tts-ggml: the LavaSR denoiser is not yet supported with " +
           "native chunk streaming (streamChunkTokens / " +
@@ -1371,6 +1367,15 @@ class TTSGgml {
           "follow-up (needs a stateful streaming denoiser).",
       );
     }
+  }
+
+  // A token count of 0 means "no streaming" (same contract the addon's
+  // validateConfig enforces), so only a positive count requests it.
+  private _requestsChunkStreaming(): boolean {
+    return (
+      (this._streamChunkTokens ?? 0) > 0 ||
+      (this._streamFirstChunkTokens ?? 0) > 0
+    );
   }
 
   private _assertParlerOptionConsistency(): void {
