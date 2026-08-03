@@ -23,7 +23,7 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
     REF 52b231efbfd2e4ca1b25c4e4bff76e2fd2c16902
-    SHA512 f3781cbb4e9e190df38c3fe7fa80ba69bf6f9dbafb158e0426dd4604f2f1ba794450679005a38d0f9f1dad0696e2f22b8b086b2d7d08a0f99bb4fd3b0f7ed5d8
+    SHA512 b92324529e05d4aa142f0c5f87d7c08d0c165f0c3f0010a3df3a2cf02b74c564f7d12df31dcd7597d0c9161bc90064e244f1af70e79e31b0ab1485e4232b5056
 )
 
 set(SD_FLASH_ATTN OFF)
