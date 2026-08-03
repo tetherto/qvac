@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 # Never run two promotions at once; do not cancel an in-flight promotion.
 concurrency:
@@ -29,6 +29,17 @@ jobs:
     # (configured on the docs-production environment) before it can push.
     environment: docs-production
     steps:
+      # docs-production is a restricted ref (Restrict updates). The default
+      # GITHUB_TOKEN cannot be a ruleset bypass actor, so the push runs as a
+      # GitHub App: the App is the sole bypass identity on the docs-production
+      # ruleset (github-ops) and must hold `contents: write` on this repo.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.QVAC_DOCS_PROMOTE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.QVAC_DOCS_PROMOTE_APP_PRIVATE_KEY }}
+
       - name: Checkout docs-production
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -36,10 +47,10 @@ jobs:
           # Full history so the fast-forward check can see the relationship
           # between docs-production and main.
           fetch-depth: 0
+          # Persist the App token so the fast-forward push authenticates as the
+          # App (the docs-production ruleset bypass identity).
           persist-credentials: true
-          # docs-production only accepts updates through this workflow. The push
-          # runs as the GitHub Actions app (GITHUB_TOKEN), the sole bypass
-          # identity on the docs-production ruleset (github-ops).
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Fast-forward docs-production to origin/main
         shell: bash
