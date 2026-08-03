@@ -36,6 +36,12 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare-os:
+        specifier: ^3.9.1
+        version: 3.9.3
+      bare-process:
+        specifier: ^4.4.1
+        version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6

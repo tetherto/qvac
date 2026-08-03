@@ -60,6 +60,8 @@
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "bare-os": "^3.9.1",
+    "bare-process": "^4.4.1",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
