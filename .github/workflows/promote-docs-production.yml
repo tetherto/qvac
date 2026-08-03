@@ -37,8 +37,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.QVAC_DOCS_PROMOTE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.QVAC_DOCS_PROMOTE_APP_PRIVATE_KEY }}
 
       - name: Checkout docs-production
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
