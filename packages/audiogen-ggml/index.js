@@ -210,7 +210,9 @@ class AudioGen {
             const stats = {
                 ...(typeof d.audioDurationMs === 'number' ? { audioDurationMs: d.audioDurationMs } : {}),
                 ...(typeof d.totalTimeMs === 'number' ? { totalTimeMs: d.totalTimeMs } : {}),
-                ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {})
+                ...(typeof d.realTimeFactor === 'number' ? { realTimeFactor: d.realTimeFactor } : {}),
+                ...(typeof d.backendDevice === 'number' ? { backendDevice: d.backendDevice } : {}),
+                ...(typeof d.backendId === 'number' ? { backendId: d.backendId } : {})
             };
             this._job.end(stats, stats);
         }

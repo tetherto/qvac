@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   progress ticks + the interleaved-Int16 PCM chunk and resolves with the run
   stats (`audioDurationMs`, `totalTimeMs`, `realTimeFactor`), plus `cancel()` /
   `unload()` / `destroy()`.
+- Run stats report the *resolved* backend via `backendDevice` (0 = CPU, 1 = GPU)
+  and `backendId` (0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL,
+  99 = other), matching `@qvac/tts-ggml`. The GPU integration smoke asserts on
+  them, so a `useGPU: true` run that silently falls back to the CPU now fails
+  instead of passing; `QVAC_AUDIOGEN_GPU_SMOKE_RELAX=1` downgrades that to a
+  warning. The smoke also checks the rendered audio is non-silent (peak/RMS) and
+  close to the requested duration.
 - Full ACE-Step pipeline (text-encoder → LM → DiT → Oobleck VAE) with optional
   `lyrics`, `vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `duration` and
   `seed`.
