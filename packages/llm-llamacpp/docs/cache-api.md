@@ -25,15 +25,15 @@ await model.run([
 
 Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Cache resolution happens first. The existing committed canonical artifact is pinned through a stable hard-link identity without serializing model state again. A missing, corrupt, or dirty baseline is an invariant violation and fails before request tokenization, automatic context sliding, media/text prefill decode, or generation mutates llama model memory. Unsaved live state is never silently committed at admission.
+Cache resolution happens first. When a last-known-valid canonical artifact exists, it is pinned through a stable hard-link identity without serializing model state again. Newer unsaved live state does not block admission and is never silently committed at admission. If no valid rollback artifact is available, the request proceeds without a checkpoint.
 
 An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
 
-Explicit prefill or generation cancellation restores the committed cache artifact. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
+Explicit prefill or generation cancellation restores the committed cache artifact even when it is older than live state; losing unsaved deltas is expected. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
 
 With `saveCacheToDisk: false`, no pre-request transaction snapshot or file is created. Cancellation clears the affected sequence, resets its cursor/cache metadata, and invalidates unsaved in-memory cache state. Any existing on-disk cache is left untouched and may be loaded by a later request using that key.
 
-If persistent checkpoint restoration fails after mutation, the affected sequence is cleared, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
+If no checkpoint exists or restoration fails after mutation, the affected sequence is cleared, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
 
 Arbitrary thrown prefill, decode, or replay errors use a different recovery path: live model state is reset and the active cache session is invalidated instead of restoring the transaction checkpoint.
 
@@ -46,7 +46,8 @@ No transaction checkpoint uses the OS temp directory or working-directory fallba
 ### Interaction with cache files
 
 - **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the validated canonical artifact is pinned without a pre-request save or state serialization.
-- **Dirty same-key continuation with `saveCacheToDisk: true`:** admission fails before mutation. The dirty live state is cleared/invalidated and is not promoted over the last committed file.
+- **Dirty same-key continuation with `saveCacheToDisk: true`:** admission succeeds and pins the older committed artifact. Cancellation restores that artifact and intentionally loses the unsaved delta; successful completion atomically persists the resulting live state normally.
+- **Missing optional rollback artifact:** admission continues without a checkpoint. Cancellation clears the affected sequence while leaving any last-known-good disk file untouched.
 - **Missing cache file with an empty baseline:** an in-memory empty marker is used; no file is created until successful persistence.
 - **No `cacheKey`, or `saveCacheToDisk: false`:** there is no transaction checkpoint. Cancellation clears unsaved live state.
 - **Existing disk cache with `saveCacheToDisk: false`:** the request may load it, but cancellation does not promise restoration. The disk artifact remains unchanged and can be reloaded later.

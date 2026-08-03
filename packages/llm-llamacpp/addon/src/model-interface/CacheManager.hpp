@@ -65,4 +65,5 @@ private:
   bool cacheDisabled_ = true;
   bool cacheUsedInLastPrompt_ = false;
   bool activeCacheSavedToDisk_ = false;
+  bool committedArtifactKnownValid_ = false;
 };

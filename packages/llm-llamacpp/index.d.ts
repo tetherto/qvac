@@ -248,10 +248,10 @@ export interface RunOptions {
    *
    * With `cacheKey` and `saveCacheToDisk: true`, the last committed cache
    * artifact is pinned as the pre-request transaction checkpoint without a
-   * pre-request save. A missing, corrupt, or dirty baseline fails before
-   * request mutation. Successful cancellation restores the pinned artifact;
-   * if restore fails, the affected sequence is cleared and the active cache
-   * session is invalidated.
+   * pre-request save. Newer unsaved live state may exist; cancellation restores
+   * the older committed artifact and may lose that unsaved delta. If no valid
+   * checkpoint exists or restore fails, the affected sequence is cleared and
+   * the active cache session is invalidated. Admission itself still proceeds.
    *
    * With `saveCacheToDisk: false`, no transaction snapshot is created.
    * Cancellation clears unsaved live state while leaving any existing

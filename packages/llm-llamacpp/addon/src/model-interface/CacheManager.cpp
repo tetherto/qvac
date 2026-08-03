@@ -167,6 +167,7 @@ bool CacheManager::handleCache(
   try {
     bool loaded = loadCache();
     activeCacheSavedToDisk_ = loaded;
+    committedArtifactKnownValid_ = loaded;
     if (!loaded) {
       resetStateCallback_(true);
     }
@@ -322,6 +323,7 @@ void CacheManager::saveCache() {
   }
   writeCacheFile(sessionPath_);
   activeCacheSavedToDisk_ = true;
+  committedArtifactKnownValid_ = true;
 }
 
 void CacheManager::prepareTransactionCheckpoint(bool persistent) {
@@ -333,26 +335,17 @@ void CacheManager::prepareTransactionCheckpoint(bool persistent) {
     llmContext_->setEmptyTransactionCheckpoint();
     return;
   }
-  if (!activeCacheSavedToDisk_ || !isFileInitialized(sessionPath_)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: persistent request has no committed baseline for '%s'\n",
-            __func__,
-            sessionPath_.c_str()));
+  if (!committedArtifactKnownValid_ || !isFileInitialized(sessionPath_)) {
+    return;
   }
-  if (!loadCache()) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: committed baseline validation failed for '%s'\n",
-            __func__,
-            sessionPath_.c_str()));
+  try {
+    llmContext_->setPersistentTransactionCheckpoint(
+        pinCommittedCacheArtifact(sessionPath_), llmContext_->getNPast());
+  } catch (const qvac_errors::StatusError&) {
+    // Rollback durability is optional. Admission continues without a
+    // checkpoint; cancellation will clear this sequence coherently.
+    llmContext_->clearTransactionCheckpoint();
   }
-  llmContext_->setPersistentTransactionCheckpoint(
-      pinCommittedCacheArtifact(sessionPath_), llmContext_->getNPast());
 }
 
 void CacheManager::markActiveCacheDirty() {
@@ -515,6 +508,7 @@ void CacheManager::invalidate() {
   cacheDisabled_ = true;
   cacheUsedInLastPrompt_ = false;
   activeCacheSavedToDisk_ = false;
+  committedArtifactKnownValid_ = false;
 }
 
 bool CacheManager::isCacheDisabled() const { return cacheDisabled_; }
