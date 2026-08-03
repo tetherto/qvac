@@ -77,12 +77,15 @@ async function provisionFromS3(dir) {
     if (name !== SUMS_NAME && fs.existsSync(dest)) continue
     await run('aws', ['s3', 'cp', `${S3_PREFIX}/${name}`, dest])
   }
-  // The scene pack ships alongside the GGUFs; tolerate its absence (the walk
-  // lane no-ops without it) so the guard lane keeps working against older
-  // uploads of the model set.
-  const sceneDest = path.join(dir, SCENE_NAME)
-  if (!fs.existsSync(sceneDest)) {
-    await run('aws', ['s3', 'cp', `${S3_PREFIX}/${SCENE_NAME}`, sceneDest]).catch(() => {})
+  // The scene pack and the umT5 encoder GGUFs ship alongside the other
+  // GGUFs in newer uploads of the model set; tolerate their absence (the
+  // walk lane no-ops without the scene, and the world-generation lane falls
+  // back to the manifest safetensors without the encoder).
+  for (const name of [SCENE_NAME, 'umt5-xxl-enc-q8_0.gguf']) {
+    const dest = path.join(dir, name)
+    if (!fs.existsSync(dest)) {
+      await run('aws', ['s3', 'cp', `${S3_PREFIX}/${name}`, dest]).catch(() => {})
+    }
   }
   // Verify transfer integrity against the checksums published with the set.
   await run('sha256sum', ['--check', '--ignore-missing', SUMS_NAME], { cwd: dir })
@@ -236,11 +239,22 @@ test(
       return
     }
 
-    // umT5 comes from the pinned models manifest (the same file the Wan tests
-    // use, so it is usually cached on the runner). Scene creation loads the
-    // safetensors directly; the path is gated against the golden PyTorch
-    // extraction (prompt_embeds cosine 0.9973, first_frame_latents 0.9987).
-    const t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
+    // Prompt encoder resolution: prefer the model set's own umT5 GGUFs when
+    // provisioned (S3 / ABOT_MODELS_DIR; Q8_0 is the validated deployment
+    // quant), else fall back to the pinned-manifest safetensors the Wan tests
+    // use. All three forms are gated against the golden PyTorch extraction
+    // (prompt_embeds cosine 0.9973 F16 / 0.9969 Q8 CUDA, latents 0.9987).
+    let t5Xxl = ''
+    for (const name of ['umt5-xxl-enc-q8_0.gguf', 'umt5-xxl-enc-f16.gguf']) {
+      const candidate = path.join(dir, name)
+      if (fs.existsSync(candidate)) {
+        t5Xxl = candidate
+        break
+      }
+    }
+    if (!t5Xxl) {
+      t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
+    }
 
     const image = fs.readFileSync(
       path.resolve(__dirname, '../../assets/claude-shannon-resized.jpg')
