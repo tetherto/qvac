@@ -27,6 +27,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const proc = require('bare-process')
 const TTSGgml = require('../')
 const { createWav } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
@@ -34,7 +35,7 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 const ENHANCED_SAMPLE_RATE = 48000
 
 const argv = global.Bare ? global.Bare.argv : process.argv
-const env = (global.Bare && global.Bare.env) || (typeof process !== 'undefined' && process.env) || {}
+const env = proc.env || {}
 const textArg = argv[2]
 const modelDirArg = argv[3] && argv[3] !== '--denoise' ? argv[3] : undefined
 const denoise = argv.includes('--denoise')
