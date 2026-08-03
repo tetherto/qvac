@@ -34,6 +34,7 @@ coverage denominator.
 | PR touching this folder / workflow / CLI lockfile | `harness-unit`    | `tsx` unit tests (no models, no live servers) on the PR merge SHA                |
 | CLI `test:unit` (SDK Pod Checks)                  | same harness      | via `npm run test:bench-serve-openai-providers`                                  |
 | `workflow_dispatch` (any mode)                    | `validate-target` | validates the full SHA, checks it out, and typechecks + tests it (GitHub-hosted) |
+| `workflow_dispatch` `mode=coverage-report`        | `coverage-report` | provider-free coverage JSON + Markdown preview artifact on GitHub-hosted infra   |
 | `workflow_dispatch` `mode=smoke` / `full`         | `live`            | live providers on the self-hosted GPU runner, gated by `benchmark-live`          |
 
 Dispatch is **immutable**: the required `target_sha` input must be a full
@@ -45,6 +46,11 @@ approval of the protected `benchmark-live` environment (see
 the self-hosted runner. Approval attests to the selected commit's benchmark
 harness code and dependency install scripts as well as the protected external
 configuration.
+
+The `coverage-report` mode does not use models, provider servers, protected
+configuration, environments, or self-hosted runners. It fetches the OpenAI
+specification, compares it with the checked-out QVAC router, and uploads
+`coverage.json` plus `report.md` as `openai-coverage-report-<run-id>`.
 
 The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
 LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`
@@ -63,6 +69,7 @@ external file with `--config`; do not run benchmarks against the committed copy.
 cd packages/cli
 npm install
 npm run test:bench-serve-openai-providers
+npx tsx benchmarks/serve-openai-providers/coverage-preview.ts
 
 # Keep the filled config outside the repository and fill a local copy of
 # benchmarks/serve-openai-providers/environment.md.

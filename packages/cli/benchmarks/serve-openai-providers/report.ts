@@ -96,6 +96,20 @@ function appendOpenAiCoverage(
   }
 }
 
+export function writeOpenAiCoveragePreview(
+  coverage: OpenAiApiCoverageSnapshot,
+  path: string
+): void {
+  const lines = [
+    '# OpenAI API capability coverage preview',
+    '',
+    'Preview only: no model, provider, performance benchmark, deployment, or publishing step ran.',
+    ''
+  ]
+  appendOpenAiCoverage(lines, coverage)
+  writeFileSync(path, `${lines.join('\n')}\n`, 'utf8')
+}
+
 export function writeReport(raw: RawDocument, path: string): void {
   const snapshot = raw.config_snapshot
   const providers = snapshot.providers.map((provider) => provider.id)

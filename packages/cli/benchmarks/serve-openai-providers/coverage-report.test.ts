@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { captureOpenAiApiCoverage } from './coverage'
-import { writeReport } from './report'
+import { generateOpenAiCoveragePreview } from './coverage-preview'
+import { writeOpenAiCoveragePreview, writeReport } from './report'
 import type { RawDocument } from './types'
 import type { CoverageReport } from '../../src/openai/coverage/types'
 
@@ -191,6 +192,50 @@ describe('OpenAI API capability coverage report', () => {
         )
       )
       assert.equal(report.endsWith('\n'), true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('writes a provider-free preview using the production coverage section', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-coverage-preview-'))
+    try {
+      const path = join(dir, 'report.md')
+      const snapshot = await captureOpenAiApiCoverage(() => Promise.resolve(makeCoverageReport()))
+
+      writeOpenAiCoveragePreview(snapshot, path)
+
+      const report = readFileSync(path, 'utf8')
+      assert.ok(report.startsWith('# OpenAI API capability coverage preview\n'))
+      assert.ok(
+        report.includes(
+          'Preview only: no model, provider, performance benchmark, deployment, or publishing step ran.'
+        )
+      )
+      assert.ok(report.includes('## OpenAI API capability coverage'))
+      assert.ok(report.includes('Consumer-primary: 1 / 2 (50.0%)'))
+      assert.ok(report.includes(`Spec SHA-256: \`${'b'.repeat(64)}\``))
+      assert.equal(report.includes('## Median and IQR tables by prompt size'), false)
+      assert.equal(report.endsWith('\n'), true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('generates CI preview JSON and Markdown artifacts without providers', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-coverage-preview-artifact-'))
+    try {
+      const expected = await captureOpenAiApiCoverage(() => Promise.resolve(makeCoverageReport()))
+
+      const snapshot = await generateOpenAiCoveragePreview(dir, () => Promise.resolve(expected))
+
+      assert.deepEqual(snapshot, expected)
+      assert.deepEqual(JSON.parse(readFileSync(join(dir, 'coverage.json'), 'utf8')), expected)
+      assert.ok(
+        readFileSync(join(dir, 'report.md'), 'utf8').includes(
+          'Preview only: no model, provider, performance benchmark, deployment, or publishing step ran.'
+        )
+      )
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
