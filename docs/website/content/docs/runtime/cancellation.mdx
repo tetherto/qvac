@@ -73,6 +73,10 @@ Other operations that go through `cancel({ requestId })` (`loadModel`, `download
 
 Only the targeted call is affected — other in-flight calls on the same `modelId` keep running. To cancel `translate`, `textToSpeech`, `ocr`, `diffusion`, or `upscale` — or to sweep every in-flight call on a model in one shot — use the broad-cancel form below.
 
+<Callout type="info">
+`@qvac/llm-llamacpp` uses addon-specific transaction checkpoints. Explicit prefill or generation cancellation restores the affected sequence to its pre-request model-memory state. Partial output may already have streamed to the caller, but it is not retained in the addon's KV/recurrent memory. This checkpoint behavior is specific to `llm-llamacpp`; other addons may use different cancellation mechanics.
+</Callout>
+
 ## Broad cancel by `modelId` (escape hatch)
 
 When you don't have a `requestId` — typically because you're unloading the model, shutting down the app, or sweeping stale requests from admin code — use the broad-cancel form. The canonical 0.11.0 shape is `{ modelId, kind? }`:
@@ -115,7 +119,7 @@ Functionally cancel still lands; observably, `await finetune({ operation: "cance
 
 ## History-trim
 
-A cancelled assistant turn is **partial** — the model stopped mid-decode, so its content cuts off in the middle of a thought. Drop it (or mark it as partial) before appending the next user turn to `history` on the follow-up `completion()`. Otherwise the model sees a truncated assistant message as if it were complete, which biases subsequent generations:
+A cancelled assistant turn delivered to the application is **partial** — the model stopped mid-decode, so its content cuts off in the middle of a thought. Drop it (or mark it as partial) before appending the next user turn to application-managed `history`. Otherwise that explicit history makes a later request see the truncated assistant message as if it were complete:
 
 ```ts
 const run = completion({ modelId, history, stream: true });
@@ -133,7 +137,7 @@ const nextHistory = cancelled
 ```
 
 <Callout type="info">
-The same partial-turn rule applies if you abort the `events` iterator early (e.g., `break` out of the `for await` loop) without calling `cancel()`. The model still committed a truncated turn — treat it as partial.
+The same partial-turn rule applies if you abort the `events` iterator early (e.g., `break` out of the `for await` loop) without calling `cancel()`. Output already delivered to the application remains partial; whether an addon retains model-memory state depends on that addon's cancellation implementation.
 </Callout>
 
 ## Example

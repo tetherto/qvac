@@ -197,36 +197,23 @@ export interface GenerationParams {
    * multimodal contexts. No-op for models without a recognised
    * reasoning channel.
    *
-   * Recurrent / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba,
-   * Granite-Hybrid, ...) are supported when the reasoning close
-   * marker tokenises to a single vocab token. The recurrent half of
-   * the memory module is snapshotted at the end-of-prefill boundary
-   * and restored at end-of-generation. The replay buffer then feeds
-   * any generated-opener seed tokens, the canonical close marker, and
-   * the post-reasoning tail back through the decoder so both KV halves
-   * stay consistent. Chat templates that force-open the reasoning
-   * channel during prefill and templates that let the model generate
-   * the opener are both supported: on the generated-opener path, every
-   * sampled token from end-of-prefill up to and including the opener
-   * flip is seeded into the replay buffer so the restored snapshot
-   * still lands in a balanced `<think>...</think>` state on the next
-   * turn. If a hybrid / recurrent model uses a multi-token close
-   * marker while this feature is enabled, the request fails with
-   * `StatusError` instead of silently preserving reasoning in cache.
-   * Prefill-only
-   * (cache-warm) requests are exempt from this check: they never
-   * enter generation and cannot emit reasoning tokens, so a cache
-   * warm on a non-conforming hybrid model still succeeds.
+   * Every supported model and memory type uses the same replay-only
+   * compaction policy. The full per-sequence state is snapshotted at the
+   * end-of-prefill boundary and restored at end-of-generation. The replay
+   * buffer then feeds generated-opener seed tokens, the canonical close
+   * marker, and retained answer tokens back through the decoder at corrected
+   * positions. No reasoning-removal path uses partial `seq_rm`, `seq_add`, or
+   * context-window sliding.
+   *
+   * The reasoning close marker must tokenise to one vocab token. Otherwise
+   * the request fails with `StatusError` instead of silently preserving an
+   * unbalanced reasoning block. Prefill-only cache-warm requests are exempt
+   * because they cannot emit reasoning tokens.
    *
    * Uniform hard-fail contract: any inability to remove the reasoning
-   * span from cache — whether the end-of-prefill boundary snapshot
-   * capture, the pure-attention `seq_rm + seq_add` primitive, the
-   * hybrid restore / replay step, or an unsupported multi-token
-   * recurrent close marker — is surfaced to the caller as a
-   * `StatusError`. There is no soft-failure counter: if the feature is
-   * enabled and cache cleanup cannot complete, the final request result is
-   * failed rather than reported as a successful answer with the reasoning span
-   * still resident in cache.
+   * span from cache — including boundary capture, restore/replay, or an
+   * unsupported multi-token close marker — is surfaced as `StatusError`.
+   * Failed state is never reported as a successful compacted answer.
    *
    * Streaming caveat: token callbacks (`outputCallback` / batch `onToken`) are
    * invoked during generation, while reasoning-block compaction runs at
@@ -235,31 +222,17 @@ export interface GenerationParams {
    * the request completes successfully; non-streaming callers receive no
    * successful returned answer on this failure path.
    *
-   * Before throwing, the affected sequence is cleaned up so that the
-   * next request on the same context starts from a coherent state:
-   *   * Pure-attention `seq_rm + seq_add` rejection — the primitive
-   *     is documented all-or-nothing, so live KV is unchanged when
-   *     compaction is rejected. The driver drops the current
-   *     request's contribution (`[preRequestCursor, currentCursor)`)
-   *     from live memory and restores its positional accounting to
-   *     the pre-request cursor before throwing, so both driver
-   *     metadata and live KV agree on the pre-request state.
-   *   * Boundary-capture or hybrid restore / replay failure — the
-   *     driver rolls back to its pre-request checkpoint (or clears
-   *     the sequence entirely on restore underflow) and resets
-   *     positional accounting so subsequent turns cannot decode into
-   *     contaminated positions.
+   * Before throwing, the affected sequence is cleared or restored to a
+   * coherent state. The active cache session is invalidated and failed state
+   * is not persisted over the last-known-good on-disk cache.
    *
    * On the continuous-batch path, the scheduler's error-recovery leg
    * deliberately does NOT persist the failed slot's cache: when the
    * request was configured with `cacheKey` + `saveCacheToDisk`, the
    * last known-good on-disk cache is preserved rather than being
    * overwritten with the post-failure state. The same skip-save rule
-   * applies to graceful cancels of hybrid / recurrent requests when
-   * rollback to the pre-request cursor cannot be completed (recurrent
-   * full-state restore refused, or no pre-request snapshot was captured
-   * yet the driver has advanced past the pre-request cursor). Cancels
-   * that can be rolled back cleanly still persist as usual.
+   * applies when a mandatory cancellation checkpoint cannot be restored.
+   * Cancels that restore cleanly may persist the restored state as usual.
    */
   remove_thinking_from_context?: boolean
 }
@@ -273,6 +246,12 @@ export interface RunOptions {
    * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
    * later run keyed by the same string can resume without re-prefilling.
    *
+   * Each admitted request captures a pre-request transaction checkpoint after
+   * cache loading and before request memory mutation. Successful cancellation
+   * restores it. If capture fails, the request aborts before mutation; if
+   * restore fails, the affected sequence is cleared and the active cache
+   * session is invalidated.
+   *
    * The continuous-batch scheduler intentionally SKIPS the save on
    * teardown legs where persistence could corrupt the last known-good
    * on-disk cache:
@@ -285,6 +264,10 @@ export interface RunOptions {
    * On both skip paths the sequence's in-memory KV is still cleared, so
    * subsequent requests decode from a coherent baseline; only the
    * on-disk cache is untouched.
+   *
+   * Other thrown prefill, decode, or replay errors reset live state and
+   * invalidate the active cache session rather than restoring the transaction
+   * checkpoint. The last-known-good on-disk cache remains unchanged.
    */
   saveCacheToDisk?: boolean
 }

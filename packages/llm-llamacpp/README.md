@@ -334,7 +334,17 @@ The following table describes the expected behavior of `run` and `cancel` depend
 | run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
 | run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
 
-Explicit cancellation restores the pre-request model-memory checkpoint. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. Other thrown prefill, decode, or replay errors reset live model state, invalidate the active cache session, and preserve the last known-good on-disk cache.
+#### Cancellation and cache recovery
+
+Text, multimodal, and continuous-batch requests capture a per-sequence transaction checkpoint after cache loading and before request tokenization, context sliding, or decode mutates model memory. If checkpoint capture fails, the request fails before that mutation begins. Successful requests release the checkpoint.
+
+Explicit prefill or generation cancellation restores the pre-request checkpoint. Partial output may already have streamed to the caller, but it is not retracted and is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block uses the same pre-request rollback because there is no retained answer to replay. If checkpoint restoration fails, the affected sequence is cleared, its active cache session is invalidated, that request is not saved, and the last-known-good on-disk cache is preserved.
+
+Other thrown prefill, decode, or replay errors intentionally do not restore the transaction checkpoint. They reset live model state, invalidate the active cache session, skip persistence of failed state, and preserve the last-known-good on-disk cache.
+
+Closed reasoning blocks follow a separate replay path: the driver restores the end-of-prefill reasoning boundary and replays only retained answer tokens. Cancellation and reasoning removal do not use partial `seq_rm`, `seq_add`, or context-window sliding. General context-window sliding remains a separate pressure-management operation. `tools_compact` detection remains present, but tools-tail cache removal is disabled.
+
+See [KV Cache API](./docs/cache-api.md) for checkpoint storage, cache-key interactions, and lifecycle details.
 
 When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
 - `"Cannot set new job: a job is already set or being processed"`
@@ -343,7 +353,7 @@ When `run()` is called while another job is active, the implementation first wai
 
 When more prompts are submitted in one batch than the configured `parallel` slots, the overflow prompts wait in an internal queue until a slot frees up. `cancel` treats the two groups differently, mirroring how cancelling a single request behaves:
 
-- **In-flight prompts** (already decoding in a slot) are cancelled gracefully: they keep whatever they generated so far and the call resolves normally — no error.
+- **In-flight prompts** (already decoding in a slot) are cancelled gracefully: output already delivered to the caller remains available, the model-memory checkpoint is restored, and the call resolves normally — no error.
 - **Queued prompts** (still waiting, never admitted to a slot) had no chance to run and produced nothing. These are surfaced as an error rather than silent empty results: the batch call rejects with a `Cancelled` `StatusError`.
 
 So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts.

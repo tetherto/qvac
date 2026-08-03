@@ -21,6 +21,43 @@ await model.run([
 | `prefill` | `boolean` | Evaluate prompt without generating a response. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
+## Transaction checkpoints and cancellation
+
+Every admitted text, multimodal, and continuous-batch request captures a full per-sequence transaction checkpoint. Cache loading or same-key in-memory continuation is resolved first; checkpoint capture then occurs before request tokenization, automatic context sliding, media/text prefill decode, or generation mutates llama model memory.
+
+Explicit prefill or generation cancellation restores this pre-request checkpoint. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block also restores the pre-request checkpoint because there is no retained answer to replay. Successful requests and successful cancellation rollback release the checkpoint.
+
+Checkpoint capture failure aborts before request-memory mutation. If restoration fails after mutation, the affected sequence is cleared, its cursor/cache metadata is reset coherently, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
+
+Arbitrary thrown prefill, decode, or replay errors use a different recovery path: live model state is reset and the active cache session is invalidated instead of restoring the transaction checkpoint.
+
+### Storage and lifecycle
+
+For a non-empty sequence, the checkpoint is a full state file written with llama.cpp's per-sequence state API. It contains attention KV state and, where present, recurrent/SSM state. The file is stored under the operating system temporary directory with a process/sequence/counter-based name. If resolving the OS temp directory fails, the implementation currently falls back to the process working directory.
+
+An empty sequence does not create a file. It records an in-memory captured-empty marker; restoration clears that sequence to its empty state.
+
+Checkpoint files are owned by the request rollback state and removed on successful completion, rollback cleanup, replacement, or destruction. Removal is best-effort, so process crashes may leave residue. The files contain sensitive model state. This layer does not promise encryption or explicitly enforce permissions beyond those provided by the platform and llama.cpp file creation.
+
+Checkpointing adds one full sequence-state write per non-empty request. Reasoning removal may add a second full state file at the end-of-prefill boundary because that state differs from the pre-request transaction checkpoint.
+
+### Interaction with cache files
+
+- **Freshly loaded `cacheKey`:** the validated cache is loaded first, then the same live sequence is serialized again as the transaction checkpoint. The implementation does not currently reuse the canonical cache file.
+- **Dirty same-key continuation:** the live in-memory state may be newer than the on-disk file, so an explicit checkpoint is required.
+- **No existing cache file:** the newly activated in-memory sequence is checkpointed normally.
+- **No `cacheKey`:** caching remains disabled. Empty contexts use the captured-empty marker; non-empty live state still requires a checkpoint.
+- **`saveCacheToDisk`:** controls end-of-request persistence only and does not disable transaction checkpoint capture.
+- **Batch requests:** each admitted sequence owns an independent checkpoint and rollback affects only that sequence.
+
+The canonical disk cache could only serve as a rollback checkpoint if it were validated, immutable, guaranteed to match the live sequence exactly, and pinned for the full request lifetime. Those invariants do not hold for dirty continuation or unsaved state, so current code uses an independent checkpoint.
+
+### Reasoning replay, sliding, and tools
+
+The transaction checkpoint is separate from the end-of-prefill reasoning boundary. Closed reasoning blocks restore that later boundary and replay only retained answer tokens. Cancellation and reasoning removal do not use partial `seq_rm`, `seq_add`, or context-window sliding.
+
+General context-window sliding remains a separate pressure-management operation and may shift supported attention memory. `tools_compact` detection remains available, but tools-tail cache removal is currently disabled.
+
 ## Enable caching
 
 Pass `cacheKey` with a file path. The KV cache is loaded from that file if it exists, or created fresh if it doesn't.
