@@ -38,8 +38,8 @@ BARE_RPC_AVAILABLE = bare_rpc is not None
 class BareRpcNotInstalledError(ImportError):
     def __init__(self) -> None:
         super().__init__(
-            "bare_rpc is not installed -- install the 'bare-rpc' extra "
-            "(`pip install tetherto-qvac-sdk[bare-rpc]`) to use BareRpcTransport"
+            "bare_rpc is not installed -- reinstall tetherto-qvac-sdk "
+            "(depends on bare-rpc from PyPI) to use BareRpcTransport"
         )
 
 

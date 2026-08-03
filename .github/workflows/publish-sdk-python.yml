@@ -1,0 +1,85 @@
+# Publish tetherto-qvac-sdk via PyPI Trusted Publisher (OIDC).
+# Configure publisher on PyPI: workflow publish-sdk-python.yml, env pypi.
+# Tags: sdk-python-vX.Y.Z
+
+name: Publish SDK Python
+
+on:
+  push:
+    tags:
+      - "sdk-python-v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload to PyPI (requires Trusted Publisher)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-sdk-python-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+
+      - name: Install build tooling
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -U pip
+          .venv/bin/pip install --quiet build twine
+          .venv/bin/pip install --quiet -e ".[gen]"
+
+      - name: Contract check
+        run: .venv/bin/python3 scripts/generate.py --check
+
+      - name: Build
+        run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
+
+      - name: Check metadata
+        run: .venv/bin/python3 -m twine check dist/*
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: tetherto-qvac-sdk-dist
+          path: packages/sdk-python/dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: >-
+      github.repository == 'tetherto/qvac' &&
+      (startsWith(github.ref, 'refs/tags/sdk-python-v') ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish == true))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tetherto-qvac-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tetherto-qvac-sdk-dist
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
