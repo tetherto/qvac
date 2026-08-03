@@ -313,9 +313,13 @@ interface TTSGgmlRuntimeConfig {
   useGPU?: boolean;
   /**
    * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
-   * native rate. Resamples the native output (24 kHz Chatterbox, 44.1 kHz
-   * Supertonic), or the 48 kHz LavaSR-enhanced signal, before emitting.
-   * `TTSOutputChunk.sampleRate` reports the resulting rate.
+   * native rate. Resamples the native output (24 kHz Chatterbox and
+   * CosyVoice3, 44.1 kHz Supertonic), or the 48 kHz LavaSR-enhanced signal,
+   * before emitting. `TTSOutputChunk.sampleRate` reports the resulting rate.
+   *
+   * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
+   * only accepted there when the LavaSR enhancer is active, because the
+   * enhancer's overlap-reprocess window resamples without chunk seams.
    */
   outputSampleRate?: number;
   backendsDir?: string;
@@ -460,15 +464,15 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
   /**
    * LavaSR neural speech enhancement. Opt-in CPU/GGML bandwidth extension to
    * 48 kHz, enabled by a GGUF path here or through `files.lavasrEnhancer`.
-   * Works for every engine, including Chatterbox and Parler native chunk
-   * streaming.
+   * Works for every engine, including the native chunk streaming of
+   * Chatterbox, Parler and CosyVoice3.
    */
   enhancer?: LavaSREnhancerOptions;
   /**
    * LavaSR neural speech denoiser (UL-UNAS). Opt-in preprocessing that runs
    * before the enhancer and preserves the sample rate. Enabled by a GGUF path
    * here or through `files.lavasrDenoiser`; rejected with native chunk
-   * streaming.
+   * streaming (batch synthesis only).
    */
   denoiser?: LavaSRDenoiserOptions;
   /** Directory the addon scans for dynamically loaded ggml backends. */
@@ -1421,17 +1425,7 @@ class TTSGgml {
   }
 
   private _assertCosyvoiceOptionConsistency(): void {
-    if (this._engineType === ENGINE_COSYVOICE3) {
-      // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
-      // denoiser at construction (mirrors the parler rejection).
-      if (this._enhancerGgufPath || this._denoiserGgufPath) {
-        throw new Error(
-          "tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
-            "Drop lavasrEnhancer / lavasrDenoiser.",
-        );
-      }
-      return;
-    }
+    if (this._engineType === ENGINE_COSYVOICE3) return;
     const cosyvoiceOnly: string[] = [];
     const cosyvoiceOnlyFields: Record<
       string,

@@ -82,7 +82,9 @@ struct CosyvoiceConfig {
   std::optional<bool> useGpu;
   /**
    * Desired output sample rate in Hz (8000–192000), or unset/0 to keep the
-   * engine's native 24 kHz.
+   * engine's native 24 kHz. When the LavaSR enhancer is active the enhancer
+   * emits 48 kHz and the addon resamples to this value afterwards (batch), or
+   * folds it into the seam-free streaming window (native chunk streaming).
    */
   std::optional<int> outputSampleRate;
   /**
@@ -109,6 +111,20 @@ struct CosyvoiceConfig {
 
   /** Forwarded to `tts_cpp::cosyvoice::EngineOptions::backends_dir`. */
   std::string backendsDir;
+
+  // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the
+  // single switch: when set, the model bandwidth-extends CosyVoice3's native
+  // 24 kHz output to 48 kHz; empty disables enhancement (full backward compat).
+  // Works on both the batch path and native chunk streaming (the latter via
+  // StreamingEnhancer, which keeps chunk seams inaudible).
+  std::string enhancerGgufPath;
+
+  // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
+  // the single switch: when set, the model denoises the synthesized PCM BEFORE
+  // the enhancer (rate-preserving); empty disables it (full backward compat).
+  // Batch-only: tts-cpp exposes a one-shot denoise(), so combining it with
+  // native chunk streaming is rejected by CosyvoiceModel::validateConfig.
+  std::string denoiserGgufPath;
 };
 
 } // namespace qvac::ttsggml::cosyvoice

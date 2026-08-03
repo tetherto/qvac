@@ -171,22 +171,38 @@ test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
   )
 })
 
-test('CosyVoice3: LavaSR enhancer/denoiser rejected at construction', (t) => {
+test('CosyVoice3: LavaSR enhancer/denoiser accepted and forwarded to the addon', (t) => {
+  const model = createMockedCosyvoiceModel({
+    files: {
+      cosyvoiceModelDir: './models/cv3',
+      lavasrEnhancer: './e.gguf',
+      lavasrDenoiser: './d.gguf'
+    }
+  })
+  const parameters = model._buildTtsParams()
+  t.is(parameters.lavasrEnhancerPath, './e.gguf', 'enhancer path forwarded')
+  t.is(parameters.lavasrDenoiserPath, './d.gguf', 'denoiser path forwarded')
+})
+
+test('CosyVoice3: LavaSR enhancer works with native chunk streaming', (t) => {
+  const model = createMockedCosyvoiceModel({
+    files: { cosyvoiceModelDir: './models/cv3', lavasrEnhancer: './e.gguf' },
+    extra: { streamChunkTokens: 25 }
+  })
+  const parameters = model._buildTtsParams()
+  t.is(parameters.lavasrEnhancerPath, './e.gguf', 'enhancer survives streaming')
+  t.is(parameters.streamChunkTokens, 25, 'streaming still requested')
+})
+
+test('CosyVoice3: LavaSR denoiser rejected with native chunk streaming', (t) => {
   t.exception(
     () =>
       createMockedCosyvoiceModel({
-        files: { cosyvoiceModelDir: './models/cv3', lavasrEnhancer: './e.gguf' }
+        files: { cosyvoiceModelDir: './models/cv3', lavasrDenoiser: './d.gguf' },
+        extra: { streamChunkTokens: 25 }
       }),
-    /LavaSR/,
-    'enhancer rejected at construction'
-  )
-  t.exception(
-    () =>
-      createMockedCosyvoiceModel({
-        files: { cosyvoiceModelDir: './models/cv3', lavasrDenoiser: './d.gguf' }
-      }),
-    /LavaSR/,
-    'denoiser rejected at construction'
+    /denoiser is not yet supported with native chunk streaming/,
+    'denoiser + streaming rejected at construction'
   )
 })
 

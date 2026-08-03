@@ -28,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
   vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
   volume / style) via the `instruct` option.
+- **LavaSR enhancer + denoiser for CosyVoice3.** `files.lavasrEnhancer` /
+  `enhancer` now bandwidth-extend CosyVoice3's native 24 kHz output to 48 kHz,
+  on both batch synthesis and native chunk streaming (seam-free). The
+  `files.lavasrDenoiser` / `denoiser` stage runs before it on the batch path.
+  `enhancerBackendDevice` / `enhancerBackendId` are reported in runtime stats,
+  matching Chatterbox and Supertonic.
+
+### Changed
+
+- **`outputSampleRate` with CosyVoice3 streaming.** Previously rejected for any
+  non-native rate; it is now accepted while streaming when the LavaSR enhancer
+  is active, because the enhancer resamples inside its overlap-reprocess window
+  without introducing chunk seams.
 
 ### Fixed
 

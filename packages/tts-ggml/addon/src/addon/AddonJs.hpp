@@ -114,9 +114,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(stm);
   } else if (engineType == EngineType::Cosyvoice) {
     auto cfg = adapter.buildCosyvoiceConfig(configurationParams, env);
+    const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto cvm = make_unique<CosyvoiceModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : cvm->sampleRate(); // native 24 kHz
+    sampleRate = outSr > 0 ? outSr
+                           : (enhanced ? kLavasrEnhancedSampleRate
+                                       : cvm->sampleRate()); // native 24 kHz
     model = std::move(cvm);
   } else if (engineType == EngineType::Parler) {
     auto cfg = adapter.buildParlerConfig(configurationParams, env);
