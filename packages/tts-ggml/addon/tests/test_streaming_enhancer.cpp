@@ -1,6 +1,6 @@
 // Unit tests for StreamingEnhancer — the stateful wrapper that lets the
-// Chatterbox native chunk-streaming path emit LavaSR-enhanced audio chunk by
-// chunk (overlap-reprocess with look-ahead margin + crossfade).
+// Chatterbox and CosyVoice3 native chunk-streaming paths emit LavaSR-enhanced
+// audio chunk by chunk (overlap-reprocess with look-ahead margin + crossfade).
 //
 // The real enhancer is injected as a transform, so these exercise the
 // streaming bookkeeping (windowing, hold-back, crossfade, compaction) in
@@ -21,6 +21,23 @@
 using qvac::ttsggml::StreamingEnhancer;
 
 namespace {
+
+constexpr int kNativeRate = 24000;
+constexpr int kEnhancedRate = 48000;
+constexpr float kToneHz = 180.0f;
+
+// Hops matching streamChunkTokens 25 and 5 at the CosyVoice3 token rate.
+constexpr std::size_t kOneSecondHop = 24000;
+constexpr std::size_t kFifthSecondHop = 4800;
+
+constexpr float kShortUtteranceSeconds = 5.0f;
+constexpr float kLongUtteranceSeconds = 30.0f;
+
+// Each window re-feeds context + margin + crossfade (8192 + 8192 + 256) around
+// the committed hop, so amplification settles near 1 + 16640/hop.
+constexpr double kMaxAmplificationAtOneSecondHops = 1.8;
+constexpr double kMinAmplificationAtFifthSecondHops = 4.0;
+constexpr double kAmplificationTolerance = 0.05;
 
 // Shift-invariant linear upsample-by-2 (24k -> 48k stand-in). Temporal support
 // is 1 input sample (out[2k+1] reads in[k+1]); the last sample clamps. This is
@@ -82,6 +99,22 @@ std::vector<float> streamChunks(
   const auto tail = se.flush();
   out.insert(out.end(), tail.begin(), tail.end());
   return out;
+}
+
+// Total input the enhancer is handed, divided by the utterance length: the
+// factor by which overlap-reprocess multiplies a single batch pass.
+double reprocessAmplification(float seconds, std::size_t hop) {
+  std::size_t processed = 0;
+  StreamingEnhancer se(
+      [&processed](const std::vector<float>& block) {
+        processed += block.size();
+        return upsample2(block);
+      },
+      kNativeRate,
+      kEnhancedRate);
+  const auto in = sine(kToneHz, seconds, kNativeRate);
+  streamChunks(se, in, hop);
+  return static_cast<double>(processed) / static_cast<double>(in.size());
 }
 
 } // namespace
@@ -211,4 +244,27 @@ TEST(StreamingEnhancer, MemoryStaysBounded) {
   ASSERT_EQ(streamed.size(), batch.size());
   for (std::size_t i = 0; i < batch.size(); ++i)
     ASSERT_FLOAT_EQ(streamed[i], batch[i]) << "mismatch at sample " << i;
+}
+
+TEST(StreamingEnhancer, ReprocessCostDoesNotGrowWithUtteranceLength) {
+  const double shortUtterance =
+      reprocessAmplification(kShortUtteranceSeconds, kOneSecondHop);
+  const double longUtterance =
+      reprocessAmplification(kLongUtteranceSeconds, kOneSecondHop);
+
+  EXPECT_LT(longUtterance, kMaxAmplificationAtOneSecondHops);
+  EXPECT_NEAR(shortUtterance, longUtterance, kAmplificationTolerance)
+      << "overlap-reprocess must cost a constant factor of a batch pass, not "
+         "one that grows with utterance length";
+}
+
+TEST(StreamingEnhancer, ReprocessCostRisesAsHopsShrink) {
+  const double oneSecondHops =
+      reprocessAmplification(kLongUtteranceSeconds, kOneSecondHop);
+  const double fifthSecondHops =
+      reprocessAmplification(kLongUtteranceSeconds, kFifthSecondHop);
+
+  EXPECT_LT(oneSecondHops, kMaxAmplificationAtOneSecondHops);
+  EXPECT_GT(fifthSecondHops, kMinAmplificationAtFifthSecondHops)
+      << "the fixed per-window context + margin dominates once hops are small";
 }

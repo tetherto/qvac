@@ -259,6 +259,13 @@ Notes:
   This adds **~0.34 s of look-ahead latency** (inherent to the enhancer's
   receptive field), so first-audio-out arrives a little later than un-enhanced
   streaming.
+- That window re-runs the enhancer over a fixed left context + look-ahead around
+  every chunk, so streamed enhancement costs a constant factor above a single
+  batch pass: **~1.7×** at the default `streamChunkTokens: 25` (~1 s chunks),
+  ~2.7× at 10 tokens, ~4.4× at 5 tokens. The factor is flat in utterance length,
+  and the enhancer is only a small share of synthesis, so ~1 s chunks cost
+  roughly 2% of total synthesis time. Prefer larger chunks if enhancer CPU
+  matters more to you than first-audio latency.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
   different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
