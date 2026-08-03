@@ -1,14 +1,28 @@
 name: On PR Trigger (inference-addon-cpp)
 
 # Gated entrypoint for the inference-addon-cpp mobile integration tests.
-# Mirrors on-pr-llm-llamacpp.yml's gating (label-gate + ci-router), trimmed to
-# just the mobile stage. The desktop C++/JS suites keep their own dedicated
-# `pull_request` workflows (pr-test-inference-addon-cpp*.yml) — this file only
-# adds the privileged, secret-bearing mobile-on-Device-Farm path.
+# Mirrors on-pr-embed-llamacpp.yml's gating (fork-approval + authorize + ci-router),
+# trimmed to just the mobile stage. The desktop C++/JS suites keep their own
+# dedicated `pull_request` workflows (pr-test-inference-addon-cpp*.yml) — this file
+# only adds the privileged, secret-bearing mobile-on-Device-Farm path.
 #
-# Mobile runs only when BOTH labels are present on the PR:
-#   - `verified`                 (applied by a trusted actor; authorises secrets)
-#   - `run-mobile-addon-tests`   (selects the mobile stage)
+# Mobile runs only when BOTH hold:
+#   - the PR is authorised by the shared trust gate (see below)
+#   - the `run-mobile-addon-tests` label selects the mobile stage (ci-router)
+#
+# TRUST MODEL (QVAC-22799): label-gate was retired; `fork-ci` is the sole fork
+# trust gate. Two jobs cooperate, and both come from the DEFAULT branch so a fork
+# cannot modify its own gate:
+#   fork-approval — calls reusable-fork-approval.yml, which requires the `fork-ci`
+#                   environment's reviewers to approve an external-fork run and
+#                   then records `qvac/fork-verified` on the PR head SHA.
+#   authorize     — runs the shared authorize-pr composite, which resolves that
+#                   SHA-bound status into a single `allowed` output. Approval is
+#                   bound to the exact commit, so a stale approval for an earlier
+#                   commit cannot authorise a new one (this is what closes the
+#                   draft->ready and close->reopen replay bypasses, which is why
+#                   `reopened` and `ready_for_review` are safe to keep here).
+# Enforced by .github/scripts/test/ci-trust-policy.test.mjs.
 
 on:
   pull_request_target:
@@ -17,6 +31,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -38,45 +53,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
-  # Mandatory second trust factor for fork PRs (QVAC-22799), enforced by
-  # .github/scripts/test/ci-trust-policy.test.mjs. The SHA-bound label-gate proves
-  # a trusted actor approved THIS commit; this job additionally requires the
-  # `fork-ci` GitHub Environment's reviewers to approve before any privileged job
-  # runs, so a fork carrying only the `verified` label cannot reach the
-  # secret-bearing mobile pipeline on its own. The environment expression is
-  # fork-only: same-repo PRs and non-PR events resolve to '' (no gate).
-  # Every job that gates on label-gate.outputs.authorised MUST `needs:` this.
+  # `statuses: write` must be granted HERE, by the caller: a reusable workflow
+  # cannot elevate its own token, and the gate needs it to record
+  # `qvac/fork-verified` on the head SHA. Asserted by ci-trust-policy.test.mjs.
   fork-approval:
-    name: Fork approval gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
-    steps:
-      - name: Approved
-        run: echo "fork PR authorised to run privileged jobs"
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
 
   ci-router:
     name: CI Router (label detection)
@@ -98,16 +81,46 @@ jobs:
         id: route
         uses: ./.github/actions/ci-router
 
+  # Must `needs: fork-approval` so the fork-ci environment approval happens BEFORE
+  # trust is resolved; authorize-pr then reads the SHA-bound status the gate wrote.
+  authorize:
+    name: Authorize PR
+    needs: [fork-approval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
   run-mobile-integration-tests:
     needs:
       - fork-approval
-      - label-gate
+      - authorize
       - ci-router
-    # fork-approval.result is checked EXPLICITLY: always() overrides GitHub's
-    # needs-success rule, so listing fork-approval in `needs:` alone would let a
-    # rejected/failed fork-ci environment approval fall through into this
-    # secret-bearing workflow (fail-open).
-    if: always() && !cancelled() && needs.fork-approval.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
+    # Gates on authorize's OUTPUT, not merely on the job being listed in `needs:`.
+    # always() overrides GitHub's needs-success rule, so a failed, rejected,
+    # timed-out or skipped gate would otherwise fall through into this
+    # secret-bearing workflow (fail-open). An unset/false `allowed` fails closed,
+    # and because authorize itself needs fork-approval, a rejected fork-ci
+    # approval can never produce allowed == 'true'.
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_mobile == 'true'
     permissions:
       contents: read
       packages: read
