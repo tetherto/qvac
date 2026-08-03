@@ -37,6 +37,24 @@ const PROMPT =
 const NEGATIVE_PROMPT =
   'identity drift, different person, missing lab coat, missing table, missing chair, missing coffee cup, duplicate cup, extra person, extra furniture, malformed hands, cup fused to hand, drinking through lid, garbled text, duplicate mountain, indoor room, cartoon, CGI, blur, soft focus, camera shake, jitter, flicker, overexposure, text overlay, subtitles, watermark'
 
+function envFlag(name, defaultValue) {
+  const value = process.env[name]
+  if (value === undefined) return defaultValue
+  return !['0', 'false', 'no', 'off'].includes(value.toLowerCase())
+}
+
+function mainGpuFromEnv() {
+  const value = process.env.LTX_MAIN_GPU
+  if (value === undefined || value === '') return undefined
+  if (value === 'integrated' || value === 'dedicated') return value
+
+  const index = Number(value)
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error('LTX_MAIN_GPU must be a non-negative index, integrated, or dedicated')
+  }
+  return index
+}
+
 function formatDuration(milliseconds) {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return null
   if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`
@@ -128,8 +146,12 @@ async function main() {
     files,
     config: {
       threads: 4,
-      device: 'gpu',
+      device: process.env.LTX_DEVICE || 'gpu',
+      'main-gpu': mainGpuFromEnv(),
       diffusion_fa: true,
+      // LTX-2.3 plus Gemma and the VAE exceed a 32 GB card. Keep parameters in
+      // system RAM by default so Vulkan has headroom for generation buffers.
+      offload_to_cpu: envFlag('LTX_OFFLOAD_TO_CPU', true),
       vae_tiling: true,
       vae_conv_direct: true,
       lora_apply_mode: 'at_runtime',
@@ -156,7 +178,7 @@ async function main() {
       cfg_scale: Number(process.env.CFG_SCALE || 1),
       seed: Number(process.env.SEED || 84),
       lora: loraPath,
-      lora_strength: Number(process.env.LORA_STRENGTH || 1.4),
+      lora_strength: Number(process.env.LORA_STRENGTH || 1.37),
       stg_scale: Number(process.env.STG_SCALE || 1),
       stg_block: Number(process.env.STG_BLOCK || 29),
       reference_images: [reference],
