@@ -377,17 +377,16 @@ jobs:
   # packages/ggml-coload-smoke/addons.js, which is keyed to PUBLISHED npm
   # packages. The QIP deliberately defers adding the `asr-ggml` entry to the
   # release step (docs/QIP-asr-ggml.md, "co-load"), because the smoke harness
-  # installs published packages. With no entry, `addon: asr-ggml` does NOT fail
-  # cleanly — it misreports:
-  #   * desktop: coload-combinations.mjs `--changed asr-ggml` filters the
-  #     unknown name out, falls back to fullMatrix() over the OLD published
-  #     addon set, and the overlay's `mkdir -p node_modules/@qvac/asr-ggml/...`
-  #     creates an orphan directory no combo loads => GREEN without ever
-  #     loading this PR's addon.
+  # installs published packages. With no entry, `addon: asr-ggml` cannot report
+  # anything useful — both legs fail fast rather than misreport:
+  #   * desktop: coload-combinations.mjs rejects the unknown name and exits 1
+  #     before emitting a matrix, and the overlay step refuses to write into a
+  #     package the combo never installed.
   #   * mobile: test-android-sdk.yml's overlay step `find`s no installed
   #     @qvac/asr-ggml and exits 1 => hard failure after a full app build.
-  # A green-but-vacuous gate is worse than no gate, so the `false &&` below
-  # keeps both jobs skipped. The job blocks themselves must stay (the
+  # Failing every PR on an addon that is not published yet helps nobody, so the
+  # `false &&` below keeps both jobs skipped. The job blocks themselves must
+  # stay (the
   # ci-trust-policy test asserts the coload-smoke-mobile shape and its label
   # gating in this file), and `skipped` is a pass for merge-guard.
   #
