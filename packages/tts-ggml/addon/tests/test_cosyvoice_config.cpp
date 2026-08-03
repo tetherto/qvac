@@ -15,6 +15,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -54,14 +55,35 @@ CosyvoiceConfig configWithExistingDir() {
   return cfg;
 }
 
-// A file that exists but holds no LavaSR weights. validateConfig only checks
-// for presence, so this is enough to exercise the accept path; an actual
-// Enhancer::load would happen later in load().
-std::string existingFile(const char* name) {
-  auto path = emptyModelDir() / name;
-  std::ofstream(path) << "not-a-real-gguf";
-  return path.string();
+// Placeholder LavaSR GGUFs are staged outside the model dir so the latter keeps
+// matching the "holds no weights" contract above.
+std::filesystem::path lavasrStageDir() {
+  auto dir = std::filesystem::temp_directory_path() /
+             "qvac-tts-ggml-cosyvoice-tests-lavasr";
+  std::filesystem::create_directories(dir);
+  return dir;
 }
+
+// A file that exists but holds no LavaSR weights, removed again when the test
+// ends. validateConfig only checks for presence, so this is enough to exercise
+// the accept path; an actual Enhancer::load would happen later in load().
+class TempGguf {
+public:
+  explicit TempGguf(const char* name) : path_(lavasrStageDir() / name) {
+    std::ofstream(path_) << "not-a-real-gguf";
+  }
+  ~TempGguf() {
+    std::error_code ec;
+    std::filesystem::remove(path_, ec);
+  }
+  TempGguf(const TempGguf&) = delete;
+  TempGguf& operator=(const TempGguf&) = delete;
+
+  std::string path() const { return path_.string(); }
+
+private:
+  std::filesystem::path path_;
+};
 
 } // namespace
 
@@ -121,10 +143,11 @@ TEST(CosyvoiceValidate, StreamingNonNativeOutputRateRejected) {
 // The LavaSR enhancer resamples inside its overlap-reprocess window, so it
 // lifts the streaming native-rate restriction above.
 TEST(CosyvoiceValidate, StreamingNonNativeOutputRateAcceptedWithEnhancer) {
+  const TempGguf enhancer("lavasr-enhancer.gguf");
   auto cfg = configWithExistingDir();
   cfg.streamChunkTokens = 25;
   cfg.outputSampleRate = 16000;
-  cfg.enhancerGgufPath = existingFile("lavasr-enhancer.gguf");
+  cfg.enhancerGgufPath = enhancer.path();
   EXPECT_NO_THROW(CosyvoiceModel{cfg});
 }
 
@@ -141,8 +164,9 @@ TEST(CosyvoiceValidate, NonexistentDenoiserGgufRejected) {
 }
 
 TEST(CosyvoiceValidate, EnhancerAcceptedForBatchAndStreaming) {
+  const TempGguf enhancer("lavasr-enhancer.gguf");
   auto base = configWithExistingDir();
-  base.enhancerGgufPath = existingFile("lavasr-enhancer.gguf");
+  base.enhancerGgufPath = enhancer.path();
 
   EXPECT_NO_THROW(CosyvoiceModel{base});
 
@@ -154,8 +178,9 @@ TEST(CosyvoiceValidate, EnhancerAcceptedForBatchAndStreaming) {
 // The UL-UNAS denoiser is one-shot in tts-cpp, so it stays batch-only until a
 // stateful streaming denoiser lands.
 TEST(CosyvoiceValidate, DenoiserAcceptedForBatchButRejectedWhileStreaming) {
+  const TempGguf denoiser("lavasr-denoiser.gguf");
   auto batch = configWithExistingDir();
-  batch.denoiserGgufPath = existingFile("lavasr-denoiser.gguf");
+  batch.denoiserGgufPath = denoiser.path();
   EXPECT_NO_THROW(CosyvoiceModel{batch});
 
   auto streaming = batch;
