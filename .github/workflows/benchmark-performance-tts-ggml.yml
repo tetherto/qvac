@@ -38,27 +38,6 @@ env:
   ADDON_DIR: packages/tts-ggml
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -84,7 +63,6 @@ jobs:
   prebuild:
     needs:
       - context
-      - label-gate
     permissions:
       contents: write
       pull-requests: write
@@ -94,13 +72,12 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
+    if: ${{ !inputs.prebuild_package }}
 
   desktop-benchmarks:
     needs:
       - context
       - prebuild
-      - label-gate
     permissions:
       contents: read
       packages: read
@@ -113,13 +90,12 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
       benchmark_matrix_json: ${{ needs.context.outputs.benchmark_matrix_json }}
-    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
 
   mobile-benchmarks:
     needs:
       - context
       - prebuild
-      - label-gate
     permissions:
       contents: read
       packages: read
@@ -132,15 +108,14 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
       run_rtf_benchmarks: true
-    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
 
   summarize:
     needs:
       - context
       - desktop-benchmarks
       - mobile-benchmarks
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (always())
+    if: (always())
     runs-on: ubuntu-latest
     permissions:
       contents: read
