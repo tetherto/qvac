@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.3.1] - 2026-08-03
+
+### Fixed
+
+- Linux arm64 prebuilds are now pinned to an ARMv8.0-A baseline. Marian defaults
+  to `BUILD_ARCH=native`, and the `marian-dev` vcpkg port overrode that for
+  Android arm64 and x64 but not Linux arm64, so the published module inherited
+  the CI builder's instruction set: 7,227 SVE, 3,844 unguarded LSE and 63 LRCPC
+  instructions with no runtime dispatch. Some sat in static constructors, so the
+  module raised `SIGILL` during `dlopen` on any CPU below that floor — taking
+  down the whole default worker, since it registers every engine plugin eagerly.
+  Affected Cortex-A53/A55/A72/A76, Neoverse N1 and Ampere Altra. The rebuilt
+  artifact audits clean.
+
+  Pulled in as a `marian-dev` `1.0.0#1` override rather than a registry baseline
+  bump, so nothing else moves
+  ([qvac-registry-vcpkg#278](https://github.com/tetherto/qvac-registry-vcpkg/pull/278)).
+
+  Trade-off: SVE autovectorization is no longer available in Marian's CPU
+  kernels on SVE-capable hardware, and atomics fall back from LSE to `ldxr`/
+  `stxr` exclusive loops. Marian's atomic traffic is in model construction and
+  config paths rather than inference inner loops.
+
+### Pull Requests
+
+- [#3592](https://github.com/tetherto/qvac/pull/3592) - fix[notask]: pin
+  ARMv8.0-A baseline for translation-nmtcpp linux-arm64 prebuilds
+  (fixes [#3364](https://github.com/tetherto/qvac/issues/3364))
+
 ## [8.3.0] - 2026-08-03
 
 ### Changed
