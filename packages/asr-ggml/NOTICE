@@ -1,0 +1,231 @@
+@qvac/asr-ggml
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/asr-ggml itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+@qvac/asr-ggml is the merge of @qvac/transcription-whispercpp and
+@qvac/transcription-parakeet; the entries below are the union of both
+packages' notices.
+
+=========================================================================
+Third-Party Model Licenses
+=========================================================================
+
+--- nvidia-open-model-license ---
+
+  Parakeet and Sortformer checkpoints, converted from the upstream
+  NVIDIA NeMo `.nemo` releases. See each model card for the terms.
+
+  parakeet-ctc-0.6b
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  parakeet-tdt-0.6b-v3
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  parakeet_realtime_eou_120m-v1
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  diar_sortformer_4spk-v1
+    https://huggingface.co/nvidia/diar_sortformer_4spk-v1
+  diar_streaming_sortformer_4spk-v2.1
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  de-tiny-ggml-model-f16
+    https://huggingface.co/primeline/whisper-tiny-german-1224
+  en-base-ggml-model-f16
+    https://huggingface.co/openai/whisper-base
+  fr-base-ggml-model-f16
+    https://huggingface.co/personalizedrefrigerator/whisper-base-fr
+  fr-tiny-ggml-model-f16
+    https://huggingface.co/JaepaX/whisper-tiny-fr
+  it-base-ggml-model-f16
+    https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it
+  it-tiny-ggml-model-f16
+    https://huggingface.co/luigisaetta/whisper-tiny-it
+  ja-base-ggml-model-f16
+    https://huggingface.co/bygreencn/whisper-base-ja
+  ja-tiny-ggml-model-f16
+    https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
+  nb-tiny-ggml-model
+    https://huggingface.co/NbAiLab/nb-whisper-tiny
+  pt-base-ggml-model-f16
+    https://huggingface.co/mariana-coelho-9/whisper-base-pt
+  ru-base-ggml-model-f16
+    https://huggingface.co/CheeLi03/whisper-base-rus-8
+  ru-tiny-ggml-model-f16
+    https://huggingface.co/yaroslav0530/whisper-tiny-ru
+
+--- mit (MIT License) ---
+
+  de-base-ggml-model-f16
+    https://huggingface.co/aware-ai/whisper-base-german
+  es-tiny-ggml-model-f16
+    https://huggingface.co/JaepaX/whisper-tiny-es
+  pt-tiny-ggml-model-f16
+    https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
+  tiny_acft_q8_0
+    https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
+  tiny_en_acft_q8_0
+    https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
+  whisper-vad
+    https://huggingface.co/ggml-org/whisper-vad
+  whisper.cpp
+    https://huggingface.co/ggerganov/whisper.cpp
+
+=========================================================================
+Modification Notice
+=========================================================================
+
+Models listed above may have been converted from original model
+weights into optimized inference formats (GGUF, GGML, ONNX, or
+Bergamot intgemm). These conversions involve format transformation
+and/or weight quantization. No architectural changes were made to
+the underlying models.
+
+Source URLs for original weights are recorded in each model's
+metadata entry within the registry.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  @qvac/error@0.1.1
+  @qvac/infer-base@0.6.1
+    https://github.com/tetherto/qvac
+  @qvac/logging@0.1.1
+    https://github.com/tetherto/qvac
+  b4a@1.8.1
+    https://github.com/holepunchto/b4a
+  bare-buffer@3.6.1
+    https://github.com/holepunchto/bare-buffer
+  bare-env@3.0.0
+    https://github.com/holepunchto/bare-env
+  bare-events@2.9.1
+    https://github.com/holepunchto/bare-events
+  bare-fs@4.7.2
+    https://github.com/holepunchto/bare-fs
+  bare-os@3.9.1
+    https://github.com/holepunchto/bare-os
+  bare-path@3.0.1
+    https://github.com/holepunchto/bare-path
+  bare-stream@2.13.3
+    https://github.com/holepunchto/bare-stream
+  bare-url@2.4.5
+    https://github.com/holepunchto/bare-url
+  events-universal@1.0.1
+    https://github.com/holepunchto/events-universal
+  text-decoder@1.2.7
+    https://github.com/holepunchto/text-decoder
+
+--- mit (MIT License) ---
+
+  fast-fifo@1.3.2
+    https://github.com/mafintosh/fast-fifo
+  streamx@2.28.0
+    https://github.com/mafintosh/streamx
+  teex@1.0.1
+    https://github.com/mafintosh/teex
+
+
+=========================================================================
+Python Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  boto3
+    https://github.com/boto/boto3
+  datasets
+    https://github.com/huggingface/datasets
+  evaluate
+    https://github.com/huggingface/evaluate
+  huggingface-hub
+    https://github.com/huggingface/huggingface_hub
+  jiwer
+    UNKNOWN
+  safetensors
+    https://github.com/huggingface/safetensors
+  sentencepiece
+    https://github.com/google/sentencepiece
+  transformers
+    https://github.com/huggingface/transformers
+
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  httpx
+    https://github.com/encode/httpx
+  soundfile
+    https://github.com/bastibe/python-soundfile
+  torch
+    https://pytorch.org
+
+--- bsd-3-clause AND 0bsd AND mit AND zlib AND cc0-1.0 ---
+
+  numpy
+    https://numpy.org
+
+--- isc license (iscl) ---
+
+  librosa
+    https://librosa.org
+
+--- mit (MIT License) ---
+
+  gguf
+    https://github.com/ggml-org/llama.cpp/tree/master/gguf-py
+  jieba
+    https://github.com/fxsjy/jieba
+  openai-whisper
+    https://github.com/openai/whisper
+  pydantic
+    https://github.com/pydantic/pydantic
+  pyyaml
+    https://pyyaml.org/
+  unidic-lite
+    https://github.com/polm/unidic-lite
+
+--- mit AND bsd-3-clause ---
+
+  fugashi
+    https://github.com/polm/fugashi
+
+--- mpl-2.0 (Mozilla Public License 2.0) ---
+
+  datacollective
+    https://github.com/Mozilla-Data-Collective/datacollective-python
+
+
+=========================================================================
+C++ Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  parakeet-cpp
+    https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/main/engines/parakeet
+  qvac-lib-inference-addon-cpp
+    https://github.com/tetherto/qvac
+
+--- apache-2.0-with-llvm-exception ---
+
+  libc++ (LLVM C++ Standard Library)
+    https://github.com/llvm/llvm-project
+
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  gtest
+    https://github.com/google/googletest
+
+--- mit (MIT License) ---
+
+  whisper-cpp
+    https://github.com/tetherto/qvac-ext-lib-whisper.cpp
+
+--- Unknown ---
+
+  qvac-lint-cpp
+

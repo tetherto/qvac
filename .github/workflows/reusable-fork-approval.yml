@@ -1,0 +1,40 @@
+name: Fork approval gate (reusable)
+
+# Gates external-fork pull_request_target runs on the fork-ci environment.
+# After approval, records qvac/fork-verified on the PR head SHA for unprivileged
+# pull_request consumers (e.g. pr-test-inference-addon-cpp*).
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  gate:
+    name: Fork approval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Record fork-ci approval on head SHA
+        if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${REPO}/statuses/${HEAD_SHA}" \
+            -f state=success \
+            -f context=qvac/fork-verified \
+            -f description="fork-ci environment approved for this commit"
+
+      - name: Approved
+        run: echo "fork PR authorised to run privileged jobs"

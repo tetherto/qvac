@@ -12,8 +12,9 @@ PyTorch, and no ONNX Runtime at runtime:
 Select the pipeline at construction time via `params.pipelineType`
 (default `'easyocr'`). Both pipelines emit the same output shape.
 
-Sibling of [`@qvac/ocr-onnx`](../ocr-onnx). Same input/output shape, same
-public surface — only the inference engine differs.
+Successor of `@qvac/ocr-onnx` (retired and removed from the monorepo,
+QVAC-22515 — browse it in git history at tag `ocr-onnx-v0.7.2`). Same
+input/output shape, same public surface — only the inference engine differs.
 
 | | `@qvac/ocr-onnx` | `@qvac/ocr-ggml` |
 |---|---|---|
@@ -673,8 +674,8 @@ packages/ocr-ggml/
   [`@qvac/translation-nmtcpp`](../translation-nmtcpp) (ggml from
   `qvac-fabric`, `cmake-bare` + `cmake-vcpkg`, `inference-addon-cpp` base
   classes).
-- **Public JS surface** modelled on
-  [`@qvac/ocr-onnx`](../ocr-onnx) so callers can swap engines transparently.
+- **Public JS surface** modelled on `@qvac/ocr-onnx` (retired; git tag
+  `ocr-onnx-v0.7.2`) so callers can swap engines transparently.
 
 ## License
 

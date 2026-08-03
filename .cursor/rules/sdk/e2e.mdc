@@ -24,7 +24,7 @@ alwaysApply: false
 
 ### Executor placement decision tree
 
-1. Pure SDK API usage (no Node stdlib, no RN APIs) → `tests/shared/executors/`. Runs on desktop and mobile.
+1. Pure SDK API usage (no Node stdlib, no RN APIs) → `tests/shared/executors/`. Can run on desktop, mobile, and Electron.
 2. Needs `node:fs`, `node:path`, `process.cwd()`, or other Node stdlib → `tests/desktop/executors/`.
 3. Needs React Native platform APIs or bundled mobile assets → `tests/mobile/executors/`.
 
@@ -32,7 +32,15 @@ alwaysApply: false
 
 **No Node-only globals (`Buffer`, `process`, `global`) in `tests/shared/` or `tests/mobile/`** — RN/Hermes lacks them. Use `Uint8Array` for binary.
 
-Register new executors in the relevant consumer entry: `tests/desktop/consumer.ts` and/or `tests/mobile/consumer.ts`.
+Executor placement does not register it automatically. For every new executor, explicitly check all
+compatible consumer entries:
+
+- `tests/desktop/consumer.ts`
+- `tests/mobile/consumer.ts`
+- `tests/electron/consumer.ts` — also used by the Snap consumer
+
+Register the executor in each compatible consumer. If a consumer intentionally cannot run the tests,
+add a clear `SkipExecutor` instead; otherwise the suite fails at runtime with `No handler found`.
 
 ### Mobile platform skips
 
@@ -55,6 +63,7 @@ New assets go under `e2e/assets/`. Update `e2e/qvac-test.config.js` `consumers.m
 cd packages/sdk/e2e
 npm run install:build
 npx qvac-test run:local:desktop --filter <prefix>
+npx qvac-test run:local:electron --filter <prefix> # verifies the handler or intentional skip
 ```
 
 See [e2e/README.md](../../../packages/sdk/e2e/README.md) for full local-run instructions and CI trigger labels.

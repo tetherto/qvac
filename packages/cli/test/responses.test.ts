@@ -245,7 +245,7 @@ function fakeCompletion(opts: {
 }
 
 describe('writeBlockingResponse', () => {
-  it('returns JSON with usage from stats.generatedTokens', async () => {
+  it('returns JSON with usage from emittedTokens over inflated generatedTokens', async () => {
     let status = 0
     let bodyStr = ''
     let sent = false
@@ -267,14 +267,14 @@ describe('writeBlockingResponse', () => {
     const result = fakeCompletion({
       text: 'hello',
       toolCalls: [],
-      stats: { generatedTokens: 42 }
+      stats: { generatedTokens: 42, emittedTokens: 1 }
     })
 
     const obj = await writeBlockingResponse(res, p, result)
     assert.equal(status, 200)
-    assert.equal((obj['usage'] as { output_tokens: number }).output_tokens, 42)
+    assert.equal((obj['usage'] as { output_tokens: number }).output_tokens, 1)
     const parsed = JSON.parse(bodyStr) as { usage: { output_tokens: number } }
-    assert.equal(parsed.usage.output_tokens, 42)
+    assert.equal(parsed.usage.output_tokens, 1)
   })
 
   it('includes required_action when tool calls present', async () => {
