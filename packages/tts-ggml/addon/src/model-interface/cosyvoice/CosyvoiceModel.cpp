@@ -221,18 +221,7 @@ struct StreamChunkPostProcessor {
   }
 };
 
-} // namespace
-
-CosyvoiceModel::CosyvoiceModel(CosyvoiceConfig config)
-    : cfg_(std::move(config)) {
-  validateConfig(cfg_);
-  // load() is deferred to waitForLoadInitialization() so any heavy model
-  // parse runs off the JS event loop via JsAsyncTask::run-driven activate().
-}
-
-CosyvoiceModel::~CosyvoiceModel() noexcept = default;
-
-void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
+void validateModelPaths(const CosyvoiceConfig& cfg) {
   if (cfg.modelDir.empty() && cfg.llmModelPath.empty()) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -290,6 +279,9 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         TTSErrorCode::ModelFileNotFound,
         "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
   }
+}
+
+void validateSynthesisRanges(const CosyvoiceConfig& cfg) {
   if (cfg.cfmSteps.has_value() && *cfg.cfmSteps < 0) {
     throw StatusError(general_error::InvalidArgument, "cfmSteps must be >= 0");
   }
@@ -299,6 +291,9 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         general_error::InvalidArgument,
         "outputSampleRate must be 0 or in [8000, 192000]");
   }
+}
+
+void validateStreamTokens(const CosyvoiceConfig& cfg) {
   if (cfg.streamChunkTokens.has_value() && *cfg.streamChunkTokens < 0) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -315,15 +310,22 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
     throw StatusError(
         general_error::InvalidArgument, "streamLeftContextTokens must be >= 0");
   }
+}
+
+// AddonJs always installs a chunkCallback for CosyVoice, so streaming ==
+// streamChunkTokens>0 at construction.
+bool streamsNativeChunks(const CosyvoiceConfig& cfg) {
+  return cfg.streamChunkTokens.value_or(0) > 0;
+}
+
+void validateStreamingCompatibility(const CosyvoiceConfig& cfg) {
   // CosyVoice emits its native 24 kHz per chunk while streaming; naive
   // addon-side per-chunk resampling would break the seams, so reject a
   // non-native output rate while streaming (batch output is resampled
   // instead). The LavaSR enhancer is the exception: StreamingEnhancer already
   // reprocesses an overlapping window and crossfades the seams, so it folds the
-  // requested rate into that seam-free stage. AddonJs always installs a
-  // chunkCallback for CosyVoice, so streaming == streamChunkTokens>0 at
-  // construction.
-  if (cfg.streamChunkTokens.value_or(0) > 0 && cfg.enhancerGgufPath.empty() &&
+  // requested rate into that seam-free stage.
+  if (streamsNativeChunks(cfg) && cfg.enhancerGgufPath.empty() &&
       cfg.outputSampleRate.has_value() && *cfg.outputSampleRate != 0 &&
       *cfg.outputSampleRate != kCosyvoiceNativeSampleRate) {
     throw StatusError(
@@ -334,10 +336,10 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
   }
   // LavaSR denoiser + native chunk streaming is not supported yet: the UL-UNAS
   // denoiser is causal but tts-cpp only exposes a one-shot denoise(), so a
-  // stateful streaming denoiser (à la StreamingEnhancer) is the follow-up.
+  // stateful streaming denoiser (like StreamingEnhancer) is the follow-up.
   // Reject the combo up front rather than silently dropping denoising on the
   // streaming path. Defense-in-depth: index.js rejects it before we get here.
-  if (!cfg.denoiserGgufPath.empty() && cfg.streamChunkTokens.value_or(0) > 0) {
+  if (!cfg.denoiserGgufPath.empty() && streamsNativeChunks(cfg)) {
     throw StatusError(
         general_error::InvalidArgument,
         "CosyvoiceModel: the LavaSR denoiser is not yet supported with native "
@@ -345,22 +347,43 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         "the denoiser for streaming (streaming denoise is a planned "
         "follow-up).");
   }
-  // useGPU / nGpuLayers conflict check — mirrors the sibling engines so the
-  // option surface behaves identically even though iteration 1 runs CPU-only.
-  if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
-    const bool wantsGpuFlag = *cfg.useGpu;
-    const int layers = *cfg.nGpuLayers;
-    const bool layersWantGpu = layers != 0;
-    if (wantsGpuFlag != layersWantGpu) {
-      throw StatusError(
-          general_error::InvalidArgument,
-          std::string("CosyvoiceModel: useGPU=") +
-              (wantsGpuFlag ? "true" : "false") +
-              " conflicts with nGpuLayers=" + std::to_string(layers) +
-              ". Either drop one of the two, or make them agree "
-              "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
-    }
-  }
+}
+
+// useGPU / nGpuLayers conflict check — mirrors the sibling engines so the
+// option surface behaves identically even though iteration 1 runs CPU-only.
+void validateGpuIntent(const CosyvoiceConfig& cfg) {
+  if (!cfg.useGpu.has_value() || !cfg.nGpuLayers.has_value())
+    return;
+  const bool wantsGpuFlag = *cfg.useGpu;
+  const int layers = *cfg.nGpuLayers;
+  if (wantsGpuFlag == (layers != 0))
+    return;
+  throw StatusError(
+      general_error::InvalidArgument,
+      std::string("CosyvoiceModel: useGPU=") +
+          (wantsGpuFlag ? "true" : "false") +
+          " conflicts with nGpuLayers=" + std::to_string(layers) +
+          ". Either drop one of the two, or make them agree "
+          "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
+}
+
+} // namespace
+
+CosyvoiceModel::CosyvoiceModel(CosyvoiceConfig config)
+    : cfg_(std::move(config)) {
+  validateConfig(cfg_);
+  // load() is deferred to waitForLoadInitialization() so any heavy model
+  // parse runs off the JS event loop via JsAsyncTask::run-driven activate().
+}
+
+CosyvoiceModel::~CosyvoiceModel() noexcept = default;
+
+void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
+  validateModelPaths(cfg);
+  validateSynthesisRanges(cfg);
+  validateStreamTokens(cfg);
+  validateStreamingCompatibility(cfg);
+  validateGpuIntent(cfg);
 }
 
 void CosyvoiceModel::setConfig(CosyvoiceConfig config) {
