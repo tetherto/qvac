@@ -303,7 +303,8 @@ lines in the PR that already migrates it to the template + fabric.
 - **Two run modes off one source.** Default configure builds FuzzTest's
   unit-test mode: every `FUZZ_TEST` runs bounded via `ctest` (free per-PR
   regression coverage). Configure with `-D FUZZTEST_FUZZING_MODE=ON` for
-  coverage-guided fuzzing, then run `<binary> --fuzz=Suite.Test [--fuzz_for=…]`.
+  coverage-guided fuzzing, then run `<binary> --fuzz=Suite.Test [--fuzz_for=…]`
+  — or, through the runner, `npm run fuzz:continuous -- --fuzz_for=30m`.
 - **Runner parity.** A fuzz binary that links fabric must run under the same
   `ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0` that
   `scripts/run-cpp-tests.js` applies to `addon-test`; a non-fabric fuzz binary
@@ -574,7 +575,8 @@ addons at once.
   (see "Dependency sourcing"), so a job that wipes `build/` still pays only the
   vcpkg restore. Then add a separate scheduled
   / `workflow_dispatch` fuzzing job that builds with `-DFUZZTEST_FUZZING_MODE=ON`
-  and runs `--fuzz_for=<duration>` (coverage-guided, time-boxed) with a
+  and runs `npm run fuzz:continuous -- --fuzz_for=<duration>` (coverage-guided,
+  time-boxed — the runner forwards the flag to the binary) with a
   wall-clock budget per target on a self-hosted `qvac-*` Linux runner, applying
   the correct `ASAN_OPTIONS` per target (full for non-fabric targets, relaxed
   for fabric-linked ones) and uploading crash reproducers + updated corpus as
@@ -647,7 +649,12 @@ addons at once.
   wired via the `fuzz`, `fuzz:build`, `fuzz:run`, `fuzz:continuous` npm scripts
   (fuzz-only configure) and the `test:cpp:fuzz*` scripts (combined tests+fuzz
   configure). Both runners default to `build/` and take `--build-dir <dir>` (or
-  `CPP_BUILD_DIR`) for a side-by-side tree.
+  `CPP_BUILD_DIR`) for a side-by-side tree. `--continuous` and `--build-dir` are
+  the fuzz runner's only own flags; every other flag is forwarded verbatim to the
+  binary, which is how the time box reaches it
+  (`npm run fuzz:continuous -- --fuzz_for=30m`). Without a `--fuzz_for`,
+  `fuzz:continuous` fuzzes until interrupted — that is the intended local
+  default, but a CI job must always pass a duration.
 - `docs/architecture/ADDON-CMAKE-TEMPLATE.md` — template design, the fabric
   migration shape, migration order, and the planned `check-addon-cmake.mjs`
   drift guard.
