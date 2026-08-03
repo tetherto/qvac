@@ -116,7 +116,11 @@ export async function planAutoCacheEvictions(options: AutoCacheRetentionOptions)
     const cacheKey = markerMatch[1]
     if (cacheKey === undefined) continue
     const entry = await inspectAutoCacheEntry(cacheKey, options.activeCachePaths)
-    if (entry !== null) entries.push(entry)
+    if (entry === null) {
+      await removeAutoCacheMarker(cacheKey)
+      continue
+    }
+    entries.push(entry)
   }
 
   let retainedBytes = entries.reduce((total, entry) => total + entry.size, 0)

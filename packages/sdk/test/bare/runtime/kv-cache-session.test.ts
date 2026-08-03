@@ -266,6 +266,67 @@ test('kv-cache-session: marker write failure does not abort auto-cache path reso
   }
 })
 
+test('kv-cache-session: retention removes markers whose cache directory is missing', async (t) => {
+  const { fs, path, utils, retention, cleanup } = await loadSession()
+  try {
+    const cacheKey = '7777777777777777'
+    const cachePath = await utils.getCacheFilePath('model', 'config', cacheKey)
+    const cacheRoot = path.dirname(path.dirname(path.dirname(cachePath)))
+    const markerPath = path.join(cacheRoot, `.auto-cache-${cacheKey}`)
+    await retention.markAutoCacheKey(cacheKey)
+    fs.rmSync(path.dirname(path.dirname(cachePath)), { recursive: true, force: true })
+
+    await retention.planAutoCacheEvictions({
+      activeCachePaths: [],
+      maxBytes: 0,
+      maxIdleMs: 1,
+      nowMs: Date.now()
+    })
+
+    t.is(fs.existsSync(markerPath), false, 'orphaned auto-cache marker removed')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: beginTurn does not run retention before inference', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const staleKey = '8888888888888888'
+    const stalePath = await utils.getCacheFilePath('stale-model', 'config', staleKey)
+    writeFakeCache(stalePath)
+    await retention.markAutoCacheKey(staleKey)
+    await fs.promises.utimes(stalePath, new Date(1000), new Date(1000))
+    mod.__kvCacheSessionTestHooks.setLastAutoCacheSweepMsForTest(0)
+
+    const session = mod.createKvCacheSession('test-model')
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash: mod.generateConfigHash('sys', []),
+      history: [{ role: 'user', content: 'active' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+
+    t.is(
+      mod.__kvCacheSessionTestHooks.getLastAutoCacheSweepMsForTest(),
+      0,
+      'beginTurn did not start a retention sweep'
+    )
+    t.ok(fs.existsSync(stalePath), 'stale cache remains available before inference starts')
+
+    await session.rollback(turn)
+    await mod.__kvCacheSessionTestHooks.sweepAutoCachesForTest({
+      maxBytes: Number.MAX_SAFE_INTEGER,
+      maxIdleMs: 1,
+      nowMs: Date.now()
+    })
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: retention evicts oldest auto caches and preserves named caches', async (t) => {
   const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
   try {

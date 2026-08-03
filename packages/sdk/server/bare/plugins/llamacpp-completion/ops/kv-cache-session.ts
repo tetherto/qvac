@@ -100,7 +100,7 @@ const AUTO_CACHE_MAX_BYTES = 4 * 1024 * 1024 * 1024
 const AUTO_CACHE_MAX_IDLE_MS = 24 * 60 * 60 * 1000
 const AUTO_CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000
 
-let lastAutoCacheSweepMs = 0
+let lastAutoCacheSweepMs = Date.now()
 let autoCacheSweepInFlight: Promise<void> | null = null
 let cacheStateLockTail = Promise.resolve()
 
@@ -155,13 +155,12 @@ async function maybeSweepAutoCaches(
   }
 ): Promise<void> {
   const nowMs = overrides?.nowMs ?? Date.now()
-  if (
-    !overrides?.force &&
-    (autoCacheSweepInFlight !== null || nowMs - lastAutoCacheSweepMs < AUTO_CACHE_SWEEP_INTERVAL_MS)
-  ) {
-    if (autoCacheSweepInFlight !== null) await autoCacheSweepInFlight
-    return
+  if (autoCacheSweepInFlight !== null) {
+    await autoCacheSweepInFlight
+    if (!overrides?.force) return
+    return maybeSweepAutoCaches(logger, overrides)
   }
+  if (!overrides?.force && nowMs - lastAutoCacheSweepMs < AUTO_CACHE_SWEEP_INTERVAL_MS) return
 
   lastAutoCacheSweepMs = nowMs
   const sweep = async () => {
@@ -190,12 +189,21 @@ async function maybeSweepAutoCaches(
     }
   }
 
-  autoCacheSweepInFlight = sweep()
+  const sweepPromise = sweep()
+  autoCacheSweepInFlight = sweepPromise
   try {
-    await autoCacheSweepInFlight
+    await sweepPromise
   } finally {
-    autoCacheSweepInFlight = null
+    if (autoCacheSweepInFlight === sweepPromise) autoCacheSweepInFlight = null
   }
+}
+
+function scheduleAutoCacheSweep(logger: Logger): void {
+  void maybeSweepAutoCaches(logger).catch((error) => {
+    logger.warn(
+      `[kv-cache] Failed to schedule auto-cache retention sweep: ${error instanceof Error ? error.message : String(error)}`
+    )
+  })
 }
 
 // ----- public types -----
@@ -407,7 +415,6 @@ export function createKvCacheSession(
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(registryKey)
       }
-      await maybeSweepAutoCaches(logger)
 
       return handle
     } catch (error) {
@@ -500,6 +507,7 @@ export function createKvCacheSession(
     // paths.
     state.committed = true
     releaseCachePath(state.cachePath)
+    scheduleAutoCacheSweep(logger)
   }
 
   async function rollback(turn: TurnHandle): Promise<void> {
@@ -529,6 +537,7 @@ export function createKvCacheSession(
     cachedMessageCounts.delete(state.cachePath)
     releaseCachePath(state.cachePath)
     state.rolledBack = true
+    if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
   function dropStaleSavedCount(turn: TurnHandle): void {
@@ -760,11 +769,17 @@ export const __kvCacheSessionTestHooks = {
   markInitializedForTest(modelId: string, configHash: string, cacheKey: string): void {
     initializedCaches.add(initRegistryKey(modelId, configHash, cacheKey))
   },
+  getLastAutoCacheSweepMsForTest(): number {
+    return lastAutoCacheSweepMs
+  },
+  setLastAutoCacheSweepMsForTest(value: number): void {
+    lastAutoCacheSweepMs = value
+  },
   resetForTest(): void {
     cachedMessageCounts.clear()
     initializedCaches.clear()
     activeCachePaths.clear()
-    lastAutoCacheSweepMs = 0
+    lastAutoCacheSweepMs = Date.now()
     autoCacheSweepInFlight = null
     cacheStateLockTail = Promise.resolve()
   },
