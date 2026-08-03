@@ -3,6 +3,7 @@
 #include <any>
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -142,5 +143,19 @@ bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback);
 // unit-testable without weights (see test_cosyvoice_config.cpp).
 void resampleBatchOutput(
     const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result);
+
+// What actually reached the caller, which is not always what the engine's
+// SynthesisResult describes: while streaming with the enhancer, chunks are
+// emitted at the enhancer's final rate but the result stays at the native rate.
+struct EmittedAudio {
+  std::size_t samples = 0;
+  int sampleRate = 0;
+};
+
+// Free function for the same reason as streamingRequested: the stats depend on
+// this choice, and getting it wrong is silent.
+EmittedAudio resolveEmittedAudio(
+    bool streaming, bool enhanced, int streamFinalRate,
+    std::size_t streamedSamples, std::size_t batchSamples, int batchRate);
 
 } // namespace qvac::ttsggml::cosyvoice

@@ -3,13 +3,13 @@
 // LavaSR enhancer integration + regression tests.
 //
 // The construct-time tests need no models and always run in CI. They pin:
-// enhancer + Chatterbox native chunk streaming is now supported (constructs and
-// forwards both knobs — the addon enhances each chunk seam-free), and a
-// misconfigured enhancer can't silently become a no-op (an unknown
-// enhancer.type throws). The model-backed tests assert the enhanced output is
-// reported as 48 kHz for both engines (incl. Chatterbox native streaming);
-// they are gated on the converted enhancer GGUF being staged, and skip cleanly
-// otherwise.
+// enhancer + native chunk streaming is now supported on Chatterbox and
+// CosyVoice3 (constructs and forwards both knobs — the addon enhances each
+// chunk seam-free), the denoiser stays batch-only, and a misconfigured enhancer
+// can't silently become a no-op (an unknown enhancer.type throws). The
+// model-backed tests assert the enhanced output is reported as 48 kHz for both
+// engines (incl. Chatterbox native streaming); they are gated on the converted
+// enhancer GGUF being staged, and skip cleanly otherwise.
 //
 // Stage the enhancer GGUF via scripts/convert-lavasr-enhancer-to-gguf.py (from
 // the public LavaSRcpp ONNX release) into models/lavasr/lavasr-enhancer.gguf,
@@ -156,6 +156,59 @@ test('Chatterbox: enhancer + streamChunkTokens constructs and forwards both', (t
   )
 })
 
+test('CosyVoice3: enhancer + streamChunkTokens constructs and forwards both', (t) => {
+  // CosyVoice3 used to reject the enhancer outright; it is now supported on the
+  // batch path and on native chunk streaming, so both knobs must reach the
+  // addon together.
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_COSYVOICE3,
+    files: {
+      cosyvoiceModelDir: './models/cosyvoice3',
+      lavasrEnhancer: './models/lavasr/lavasr-enhancer.gguf'
+    },
+    streamChunkTokens: 25,
+    config: { language: 'en' }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.streamChunkTokens, 25, 'streamChunkTokens forwarded')
+  t.is(
+    params.lavasrEnhancerPath,
+    './models/lavasr/lavasr-enhancer.gguf',
+    'enhancer path forwarded alongside streamChunkTokens'
+  )
+})
+
+test('CosyVoice3: denoiser is forwarded for batch but rejected with streaming', (t) => {
+  const batch = new TTSGgml({
+    engine: TTSGgml.ENGINE_COSYVOICE3,
+    files: {
+      cosyvoiceModelDir: './models/cosyvoice3',
+      lavasrDenoiser: './models/lavasr/lavasr-denoiser.gguf'
+    },
+    config: { language: 'en' }
+  })
+  t.is(
+    batch._buildTtsParams().lavasrDenoiserPath,
+    './models/lavasr/lavasr-denoiser.gguf',
+    'denoiser path forwarded on the batch path'
+  )
+
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_COSYVOICE3,
+        files: {
+          cosyvoiceModelDir: './models/cosyvoice3',
+          lavasrDenoiser: './models/lavasr/lavasr-denoiser.gguf'
+        },
+        streamChunkTokens: 25,
+        config: { language: 'en' }
+      }),
+    /denoiser is not yet supported with native chunk streaming/,
+    'denoiser + native chunk streaming throws (unlike the enhancer)'
+  )
+})
+
 test('enhancer with an unknown type is rejected at construction', (t) => {
   t.exception(
     () =>
@@ -208,6 +261,14 @@ for (const [engineName, engine, files] of [
     {
       t3Model: './models/chatterbox-t3-turbo.gguf',
       s3genModel: './models/chatterbox-s3gen.gguf',
+      lavasrEnhancer: './models/lavasr/lavasr-enhancer.gguf'
+    }
+  ],
+  [
+    'CosyVoice3',
+    TTSGgml.ENGINE_COSYVOICE3,
+    {
+      cosyvoiceModelDir: './models/cosyvoice3',
       lavasrEnhancer: './models/lavasr/lavasr-enhancer.gguf'
     }
   ]
