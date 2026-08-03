@@ -249,7 +249,7 @@
   "devDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
     "@expo/config-plugins": "^54.0.4",
-    "@qvac/infer-base": "workspace:^0.4.0",
+    "@qvac/infer-base": "^0.4.0",
     "bare-module": "^6.2.0",
     "@lancedb/lancedb": "^0.21.3",
     "@modelcontextprotocol/sdk": "^1.12.1",

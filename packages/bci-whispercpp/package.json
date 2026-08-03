@@ -69,7 +69,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/registry-client": "workspace:^0.6.0",
+    "@qvac/registry-client": "^0.6.0",
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "brittle": "^3.17.0",
@@ -88,9 +88,9 @@
     "bare-process": "^4.2.2"
   },
   "dependencies": {
-    "@qvac/error": "workspace:^0.1.0",
-    "@qvac/infer-base": "workspace:^0.4.0",
-    "@qvac/logging": "workspace:^0.1.0",
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },

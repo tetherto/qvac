@@ -77,8 +77,8 @@
     "bare-os": "^3.6.2"
   },
   "dependencies": {
-    "@qvac/infer-base": "workspace:^0.4.0",
-    "@qvac/logging": "workspace:^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
   },

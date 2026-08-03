@@ -1,12 +1,12 @@
 {
-  "name": "@qvac/transcription-parakeet",
-  "root": "packages/transcription-parakeet",
+  "name": "@qvac/asr-ggml",
+  "root": "packages/asr-ggml",
   "targets": {
     "build": {
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/transcription-parakeet"
+        "cwd": "packages/asr-ggml"
       },
       "inputs": [
         "default",
@@ -20,28 +20,28 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:unit",
-        "cwd": "packages/transcription-parakeet"
+        "cwd": "packages/asr-ggml"
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/transcription-parakeet"
+        "cwd": "packages/asr-ggml"
       }
     },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run lint",
-        "cwd": "packages/transcription-parakeet"
+        "cwd": "packages/asr-ggml"
       }
     },
     "test:cpp": {
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/transcription-parakeet"
+        "cwd": "packages/asr-ggml"
       }
     }
   },

@@ -115,6 +115,7 @@
     "bare-subprocess": "^6.0.0",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
+    "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -128,9 +129,9 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/error": "workspace:^0.1.0",
-    "@qvac/infer-base": "workspace:^0.6.0",
-    "@qvac/logging": "workspace:^0.1.0",
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.6.0",
+    "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.7.1",
     "bare-path": "^3.0.0"
   },

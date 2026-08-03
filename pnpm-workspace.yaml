@@ -3,29 +3,20 @@ packages:
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
 
-# Some deps ship large binary tarballs (e.g. react-native-bare-kit@0.14.5 ~106MB).
-# pnpm's default fetchTimeout (60s) is too short for these on a normal connection;
-# raise it + retry/backoff so a slow-but-succeeding download doesn't abort.
+# Plain semver everywhere, no workspace:. Falls back to registry when local
+# version doesn't satisfy the range.
+linkWorkspacePackages: true
+
+# Large binary tarballs (e.g. react-native-bare-kit) need more than pnpm's
+# default 60s fetch timeout.
 fetchTimeout: 300000
 fetchRetries: 5
 fetchRetryMaxtimeout: 120000
 
+# hyper-instrument's own lockfile points bare-v8 at a local link: path that
+# doesn't exist in this workspace; pin it to a real registry version instead.
 overrides:
   hyper-instrument>bare-v8: "^1.0.1"
-  # TEMP: PR #1898 (QVAC-18409, merged) deliberately slimmed local
-  # @qvac/infer-base (now 0.6.1) to drop BaseInference, WeightsProvider,
-  # progressReport, and QvacResponse.pause/continue/getStatus. The consumers
-  # below never migrated off that surface and still declare old plain-semver
-  # ranges that used to resolve to a pre-refactor registry version; the
-  # workspace: conversion instead links them to the current (slimmed) local
-  # source, breaking them. No open PR fixes this (checked). Pin each edge to
-  # its own pre-migration range so the registry version (not local HEAD)
-  # is used, matching pre-workspace behavior. Revisit once each package
-  # migrates off the removed API.
-  "@qvac/sdk>@qvac/infer-base": "^0.4.0"
-  "@qvac/dl-hyperdrive>@qvac/infer-base": "^0.1.0"
-  "@qvac/translation-nmtcpp>@qvac/infer-base": "^0.4.0"
-  "@qvac/llm-llamacpp>@qvac/infer-base": "^0.4.0"
 
 blockExoticSubdeps: false
 
