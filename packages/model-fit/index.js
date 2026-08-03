@@ -107,7 +107,8 @@ function validateRelationships (config) {
  * @param {string} config.modelPath  Absolute path to the GGUF file.
  * @param {string} [config.backendsDir] Absolute directory holding the backends.
  * @param {number} [config.nCtx]      Desired context. 0 lets the fitter pick.
- * @param {number} [config.nCtxMin]   Lower bound when reducing context.
+ * @param {number} [config.nCtxMin]   Lower bound when reducing context. Bounded
+ *   by the model's declared context length; the 4096 default is clamped to it.
  * @param {number} [config.nBatch]    Logical batch size (0 = llama default).
  * @param {number} [config.nUbatch]   Physical batch size (0 = llama default).
  * @param {number} [config.nGpuLayers] Pin offload layer count; omit to auto-fit.

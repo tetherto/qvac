@@ -23,7 +23,14 @@ export interface FitConfig {
    * most any caller can legitimately ask for.
    */
   nCtx?: number
-  /** Lower bound when shrinking the context. 0 (default) means 4096. */
+  /**
+   * Lower bound when shrinking the context. 0 (default) means 4096, clamped
+   * down to the model's declared context length when that is smaller.
+   *
+   * An explicit value throws if it exceeds the declared context length, for
+   * the same reason `nCtx` does — the `nCtxMin <= nCtx` relationship check
+   * does not apply when `nCtx` is 0.
+   */
   nCtxMin?: number
   /** Logical batch size. 0 = llama default. */
   nBatch?: number

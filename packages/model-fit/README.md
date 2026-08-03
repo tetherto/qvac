@@ -109,7 +109,13 @@ reference counting.
   revisiting if RoPE scaling parameters were ever exposed.
 - `nCtxMin` defaults to **4096** when left at 0, matching upstream's
   `common_params::fit_params_min_ctx`. Reducing towards a floor of zero
-  could otherwise return a context nothing can run with.
+  could otherwise return a context nothing can run with. On a model trained
+  shorter than that the default is **clamped to `context_length`** — a floor
+  above the top of the reduction range constrains nothing.
+- An **explicit** `nCtxMin` is bounded by `context_length` exactly as `nCtx`
+  is, and throws above it. The `nCtxMin <= nCtx` check below cannot cover this:
+  it only applies when `nCtx` is concrete, and `nCtx: 0` is the documented way
+  to let the fitter choose.
 - A `SUCCESS` always reports a concrete `nCtx`. When the fitter needs no
   reduction it leaves the context at the 0 it was handed — llama's encoding for
   "use the trained context" — so the trained value is read from GGUF metadata

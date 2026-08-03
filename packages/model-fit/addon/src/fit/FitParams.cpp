@@ -298,6 +298,35 @@ FitResult runFit(const FitRequest& req) {
         std::to_string(trainedCtx) + ")");
   }
 
+  // Apply the same bound to the floor the fitter reduces *towards*.
+  //
+  // The relationship check in the wrapper and the binding (`nCtxMin <= nCtx`)
+  // only holds when `nCtx` is concrete. Left at 0 — the documented way to say
+  // "you choose" — it does not apply at all, so an arbitrary floor reached
+  // `common_fit_params` unchecked while the ceiling beside it was rejected.
+  // Asking the fitter to stop reducing at a context the model never claims to
+  // serve is the same nonsense `nCtx` is bounded for, and it feeds llama the
+  // class of oversized context the bound above exists to keep away from it.
+  //
+  // Only an *explicit* floor is rejected. `DEFAULT_N_CTX_MIN` is this package's
+  // value rather than the caller's, and it sits above the declared context of
+  // any model trained shorter than 4096 (the bundled stories260K declares
+  // 2048), so throwing on it would reject an ordinary call over a default
+  // nobody passed. Clamp it instead — which is also what makes it a floor at
+  // all: above the top of the reduction range it can never be reached, so it
+  // silently constrains nothing.
+  uint32_t nCtxMin = req.nCtxMin;
+  if (nCtxMin == 0) {
+    nCtxMin = (trainedCtx > 0 && trainedCtx < DEFAULT_N_CTX_MIN)
+                  ? trainedCtx
+                  : DEFAULT_N_CTX_MIN;
+  } else if (trainedCtx > 0 && nCtxMin > trainedCtx) {
+    throw std::invalid_argument(
+        "model-fit: nCtxMin " + std::to_string(nCtxMin) +
+        " exceeds the context length the model declares (" +
+        std::to_string(trainedCtx) + ")");
+  }
+
   llama_model_params mparams = llama_model_default_params();
   llama_context_params cparams = llama_context_default_params();
 
@@ -336,10 +365,6 @@ FitResult runFit(const FitRequest& req) {
     cparams.flash_attn_type =
         static_cast<llama_flash_attn_type>(req.flashAttnType);
   }
-
-  // Reducing towards a floor of zero could hand back a context nothing can run
-  // with, so substitute a positive default when the caller left it unset.
-  const uint32_t nCtxMin = req.nCtxMin != 0 ? req.nCtxMin : DEFAULT_N_CTX_MIN;
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
   // library, not the caller.

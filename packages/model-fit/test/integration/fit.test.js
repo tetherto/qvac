@@ -230,6 +230,41 @@ test('a context beyond what the model declares is rejected', async function (t) 
   )
 })
 
+test('a context floor beyond what the model declares is rejected', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+
+  // The `nCtxMin <= nCtx` relationship check only applies when nCtx is
+  // concrete. Left at 0 — the documented way to let the fitter choose — an
+  // arbitrary floor used to pass every check and reach common_fit_params
+  // unbounded, so the ceiling was policed and the floor beside it was not.
+  await t.exception.all(
+    () => fitParams({ modelPath, nCtx: 0, nCtxMin: 75000000 }),
+    /nCtxMin 75000000 exceeds the context length the model declares/
+  )
+  await t.exception.all(
+    () => fitParams({ modelPath, nCtx: 0, nCtxMin: 2049 }),
+    /nCtxMin 2049 exceeds the context length the model declares/
+  )
+
+  // The declared length itself is a floor the model can serve.
+  const atDeclared = fitParams({ modelPath, nCtx: 0, nCtxMin: 2048 })
+  t.not(atDeclared.status, FIT_STATUS.ERROR, 'a floor at the declared length is allowed')
+
+  // Omitting it must stay valid on a model trained shorter than the 4096
+  // default: that value is this package's, not the caller's, so it is clamped
+  // rather than thrown over.
+  const defaulted = fitParams({ modelPath, nCtx: 0 })
+  t.not(defaulted.status, FIT_STATUS.ERROR, 'the default floor is clamped, not rejected')
+
+  // ./binding.js is a public export, so the bound cannot live only in runFit's
+  // caller — it has to hold on the native entry point too.
+  const binding = require('../../binding.js')
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath, nCtx: 0, nCtxMin: 75000000 }),
+    /nCtxMin 75000000 exceeds the context length the model declares/
+  )
+})
+
 test('a successful plan always carries a concrete context', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
 

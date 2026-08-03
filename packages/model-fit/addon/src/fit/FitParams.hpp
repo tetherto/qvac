@@ -13,6 +13,11 @@ namespace model_fit {
 /// Matches upstream's `common_params::fit_params_min_ctx` default, so a caller
 /// coming from `llama-fit-params` gets the same behaviour without passing
 /// anything.
+///
+/// Clamped down to the model's declared context length when that is smaller,
+/// since a floor above the top of the reduction range constrains nothing. An
+/// explicit `nCtxMin` past the declared length is rejected instead — see
+/// `runFit`.
 inline constexpr uint32_t DEFAULT_N_CTX_MIN = 4096;
 
 /// Inputs to a single memory-fit preflight. Mirrors the knobs the upstream
@@ -30,7 +35,8 @@ struct FitRequest {
   uint32_t nCtx = 0;
 
   /// Lower bound the fitter may shrink the context to while freeing memory.
-  /// 0 means "unset" and is replaced by `DEFAULT_N_CTX_MIN`.
+  /// 0 means "unset" and is replaced by `DEFAULT_N_CTX_MIN`. A concrete value
+  /// is bounded by the model's declared context length, exactly as `nCtx` is.
   uint32_t nCtxMin = 0;
 
   /// Logical / physical batch sizes. 0 => llama default. Both feed the
@@ -175,7 +181,8 @@ struct FitResult {
 ///  - a `backendsDir` that is relative or does not resolve to a directory;
 ///  - a pinned `splitMode` of NONE on a host with no GPU device, or with a
 ///    `mainGpu` past the registered ones;
-///  - an `nCtx` above the context length the model declares.
+///  - an `nCtx`, or an explicitly requested `nCtxMin`, above the context
+///    length the model declares.
 FitResult runFit(const FitRequest& req);
 
 } // namespace model_fit
