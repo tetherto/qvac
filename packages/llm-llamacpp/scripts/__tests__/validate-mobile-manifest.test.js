@@ -344,6 +344,44 @@ test('prestageSetDefs scopes a label to the literal beneath it', () => {
   assert.deepEqual([...modelNamesInSource(sets.get('big').block)], ['other.gguf'])
 })
 
+test('a set block is not truncated by braces in strings or comments', () => {
+  // Brace matching on the raw source ended the block at the first `}` inside a
+  // string or comment, silently dropping every model declared after it — an
+  // under-report, which is the failure mode this validator exists to prevent.
+  const cases = {
+    'string with an unmatched brace': "  tmpl: 'closing brace: }',",
+    'line comment with a brace': '  // note: } would end the block',
+    'block comment with a brace': '  /* } */',
+    'balanced template literal': '  url: `${BASE}/x`,'
+  }
+  for (const [label, noise] of Object.entries(cases)) {
+    const src = [
+      '// prestage-set: s',
+      'const T = {',
+      "  a: { modelName: 'm.gguf' },",
+      noise,
+      "  b: { modelName: 'other.gguf' }",
+      '}'
+    ].join('\n')
+    const sets = prestageSetDefs({ '_h.js': src }, [])
+    assert.deepEqual(
+      [...modelNamesInSource(sets.get('s').block)].sort(),
+      ['m.gguf', 'other.gguf'],
+      `${label}: both models stay in the set`
+    )
+  }
+})
+
+test('a brace before the label does not become the block', () => {
+  const src = [
+    'const EARLIER = { modelName: "other.gguf" }',
+    '// prestage-set: s',
+    "const T = { a: { modelName: 'm.gguf' } }"
+  ].join('\n')
+  const sets = prestageSetDefs({ '_h.js': src }, [])
+  assert.deepEqual([...modelNamesInSource(sets.get('s').block)], ['m.gguf'])
+})
+
 test('repinUrls rewrites to the integration manifest url', () => {
   const manifest = { runGrammarTest: [{ name: 'm.gguf', url: 'https://stale/m.gguf' }] }
   assert.equal(repinUrls(manifest, stubManifest), 1)

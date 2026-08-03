@@ -101,16 +101,60 @@ function prestageIgnores(src, testName, errors) {
   return ignored
 }
 
+// `src` with every comment body and string literal blanked out, positions
+// preserved. Brace matching MUST run on this rather than on the raw source: a
+// `}` inside a string or a comment would end the block early and silently drop
+// the models declared after it — under-reporting, which is the exact failure
+// this validator exists to prevent. Template literals are blanked whole; their
+// `${...}` braces are balanced, so ignoring them cannot skew the count.
+function blankStringsAndComments(src) {
+  const out = src.split('')
+  let i = 0
+  const blank = (start, end) => {
+    for (let k = start; k < end && k < out.length; k++) if (out[k] !== '\n') out[k] = ' '
+  }
+  while (i < src.length) {
+    const c = src[i]
+    const next = src[i + 1]
+    if (c === '/' && next === '/') {
+      const end = src.indexOf('\n', i)
+      const stop = end === -1 ? src.length : end
+      blank(i, stop)
+      i = stop
+    } else if (c === '/' && next === '*') {
+      const end = src.indexOf('*/', i + 2)
+      const stop = end === -1 ? src.length : end + 2
+      blank(i, stop)
+      i = stop
+    } else if (c === "'" || c === '"' || c === '`') {
+      let k = i + 1
+      while (k < src.length) {
+        if (src[k] === '\\') k += 2
+        else if (src[k] === c) break
+        else k++
+      }
+      blank(i, Math.min(k + 1, src.length))
+      i = Math.min(k + 1, src.length)
+    } else {
+      i++
+    }
+  }
+  return out.join('')
+}
+
 // The `{ ... }` literal that follows `from`, brace-matched. Used to scope a
 // `// prestage-set:` label to the model table it labels rather than the whole
 // helper — a helper defines several tables and each test uses one of them.
+// The range is found on the blanked source but sliced out of the original, so
+// the caller still sees the quoted model names.
 function braceBlockAfter(src, from) {
-  const open = src.indexOf('{', from)
+  const code = blankStringsAndComments(src)
+  const open = code.indexOf('{', from)
   if (open === -1 || open - from > 400) return ''
   let depth = 0
-  for (let i = open; i < src.length; i++) {
-    if (src[i] === '{') depth++
-    else if (src[i] === '}' && --depth === 0) return src.slice(open, i + 1)
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === '{') depth++
+    else if (code[i] === '}' && --depth === 0) return src.slice(open, i + 1)
   }
   return ''
 }
