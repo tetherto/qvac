@@ -48,6 +48,7 @@ public:
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
   static void atomicPromoteFile(const std::string& from, const std::string& to);
+  static std::string pinCommittedCacheArtifact(const std::string& path);
 
 private:
   void saveActiveCacheForTransition();

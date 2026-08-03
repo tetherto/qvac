@@ -1,4 +1,5 @@
 #include <any>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -9,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include "model-interface/CacheManager.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 #include "test_prompt_helpers.hpp"
@@ -18,6 +20,46 @@ namespace fs = std::filesystem;
 using test_common::getStatValue;
 using test_common::processPromptString;
 using test_common::processPromptWithCacheOptions;
+
+TEST(CacheCheckpointPinTest, AtomicReplacementPreservesPinnedIdentity) {
+  const fs::path base =
+      fs::temp_directory_path() /
+      ("qvac-cache-checkpoint-pin-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".bin");
+  const fs::path replacement = base.string() + ".tmp";
+  fs::remove(base);
+  fs::remove(replacement);
+
+  {
+    std::ofstream out(base, std::ios::binary);
+    out << "old";
+  }
+  const std::string pinned =
+      CacheManager::pinCommittedCacheArtifact(base.string());
+  {
+    std::ofstream out(replacement, std::ios::binary);
+    out << "new";
+  }
+  CacheManager::atomicPromoteFile(replacement.string(), base.string());
+
+  std::string canonicalValue;
+  std::string pinnedValue;
+  {
+    std::ifstream in(base, std::ios::binary);
+    in >> canonicalValue;
+  }
+  {
+    std::ifstream in(pinned, std::ios::binary);
+    in >> pinnedValue;
+  }
+  EXPECT_EQ(canonicalValue, "new");
+  EXPECT_EQ(pinnedValue, "old");
+
+  fs::remove(base);
+  fs::remove(pinned);
+}
 
 class CacheManagementTest : public ::testing::Test {
 protected:

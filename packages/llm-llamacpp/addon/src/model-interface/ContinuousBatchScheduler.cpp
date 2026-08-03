@@ -18,6 +18,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -411,10 +412,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       driver->setEmptyTransactionCheckpoint();
     } else {
       if (!isCacheLoaded) {
-        driver->saveCache(request.cacheKey);
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(UnableToLoadSessionFile),
+            "persistent batch request has no committed baseline");
       }
       driver->setPersistentTransactionCheckpoint(
-          request.cacheKey, driver->getNPast());
+          CacheManager::pinCommittedCacheArtifact(request.cacheKey),
+          driver->getNPast());
     }
   } else {
     driver->clearTransactionCheckpoint();

@@ -1,6 +1,8 @@
 #include "ReasoningRollbackState.hpp"
 
 #include <cstddef>
+#include <filesystem>
+#include <system_error>
 #include <utility>
 
 #include "RecurrentStateSnapshot.hpp"
@@ -10,20 +12,29 @@ namespace utils {
 
 void ReasoningRollbackState::setPersistentTransactionCheckpoint(
     std::string path, llama_pos nPast) noexcept {
+  clearTransactionCheckpoint();
   transactionCheckpointKind_ = TransactionCheckpointKind::Persistent;
   transactionCheckpointPath_ = std::move(path);
+  ownsTransactionCheckpointPath_ = true;
   transactionCheckpointNPast_ = nPast;
 }
 
 void ReasoningRollbackState::setEmptyTransactionCheckpoint() noexcept {
+  clearTransactionCheckpoint();
   transactionCheckpointKind_ = TransactionCheckpointKind::Empty;
   transactionCheckpointPath_.clear();
+  ownsTransactionCheckpointPath_ = false;
   transactionCheckpointNPast_ = 0;
 }
 
 void ReasoningRollbackState::clearTransactionCheckpoint() noexcept {
+  if (ownsTransactionCheckpointPath_ && !transactionCheckpointPath_.empty()) {
+    std::error_code ec;
+    std::filesystem::remove(transactionCheckpointPath_, ec);
+  }
   transactionCheckpointKind_ = TransactionCheckpointKind::None;
   transactionCheckpointPath_.clear();
+  ownsTransactionCheckpointPath_ = false;
   transactionCheckpointNPast_ = 0;
 }
 

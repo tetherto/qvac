@@ -25,7 +25,7 @@ await model.run([
 
 Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Cache resolution happens first. The live baseline is synchronously recommitted through the existing atomic cache-save path and the resulting canonical artifact is pinned without copying it to another temporary file. This guarantees that both freshly loaded and dirty same-key state match the checkpoint before request tokenization, automatic context sliding, media/text prefill decode, or generation mutates llama model memory. Failure to commit aborts before request mutation.
+Cache resolution happens first. The existing committed canonical artifact is pinned through a stable hard-link identity without serializing model state again. A missing, corrupt, or dirty baseline is an invariant violation and fails before request tokenization, automatic context sliding, media/text prefill decode, or generation mutates llama model memory. Unsaved live state is never silently committed at admission.
 
 An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
 
@@ -39,14 +39,14 @@ Arbitrary thrown prefill, decode, or replay errors use a different recovery path
 
 ### Storage and lifecycle
 
-The persistent checkpoint is a non-owning reference to the canonical per-sequence cache artifact. The request does not delete it. Atomic cache promotion prevents restoration from reading a partially written successful save, and successful replacement happens only after the transaction checkpoint is released.
+The persistent checkpoint is a hard-link pin to the canonical per-sequence cache artifact. It creates a stable file identity without copying state bytes, so an atomic replacement of the canonical path cannot change the in-flight rollback baseline. The request owns and removes only the pin; it never deletes the canonical artifact. Successful replacement normally happens after the pin is released.
 
 No transaction checkpoint uses the OS temp directory or working-directory fallback. Sensitive temporary state remains relevant to reasoning removal: when reasoning compaction is active, the distinct end-of-prefill reasoning boundary is stored in a temporary full-state file and removed best-effort on completion, rollback cleanup, replacement, or destruction. Process crashes may leave that reasoning snapshot behind. This layer does not promise encryption or explicitly enforce permissions beyond the platform and llama.cpp file creation.
 
 ### Interaction with cache files
 
-- **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the live baseline is atomically recommitted to the canonical path and pinned; no duplicate transaction file is created.
-- **Dirty same-key continuation with `saveCacheToDisk: true`:** the live baseline is committed atomically before mutation, then that committed artifact is pinned.
+- **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the validated canonical artifact is pinned without a pre-request save or state serialization.
+- **Dirty same-key continuation with `saveCacheToDisk: true`:** admission fails before mutation. The dirty live state is cleared/invalidated and is not promoted over the last committed file.
 - **Missing cache file with an empty baseline:** an in-memory empty marker is used; no file is created until successful persistence.
 - **No `cacheKey`, or `saveCacheToDisk: false`:** there is no transaction checkpoint. Cancellation clears unsaved live state.
 - **Existing disk cache with `saveCacheToDisk: false`:** the request may load it, but cancellation does not promise restoration. The disk artifact remains unchanged and can be reloaded later.

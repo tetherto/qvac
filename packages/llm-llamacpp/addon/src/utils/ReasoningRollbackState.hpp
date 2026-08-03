@@ -13,8 +13,8 @@ namespace utils {
 
 // Shared per-inference transaction and reasoning-replay state.
 //
-//   * an optional persistent transaction checkpoint referencing the last
-//     committed cache artifact;
+//   * an optional persistent transaction checkpoint pinning the last committed
+//     cache artifact through a stable hard-link identity;
 //   * an end-of-prefill temporary full-state snapshot restored by
 //     thinking-block compaction;
 //   * the post-reasoning token capture buffer used to replay the
@@ -139,6 +139,7 @@ private:
   TransactionCheckpointKind transactionCheckpointKind_ =
       TransactionCheckpointKind::None;
   std::string transactionCheckpointPath_;
+  bool ownsTransactionCheckpointPath_ = false;
   llama_pos transactionCheckpointNPast_ = 0;
   RecurrentStateSnapshot reasoningBoundary_;
   std::vector<llama_token> postReasoningTokens_;

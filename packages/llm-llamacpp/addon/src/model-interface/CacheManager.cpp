@@ -1,6 +1,8 @@
 #include "CacheManager.hpp"
 
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <system_error>
 
@@ -331,11 +333,26 @@ void CacheManager::prepareTransactionCheckpoint(bool persistent) {
     llmContext_->setEmptyTransactionCheckpoint();
     return;
   }
-  // Recommit through atomic promotion so the pinned artifact is guaranteed to
-  // match the current live baseline, including dirty same-key continuation.
-  saveCache();
+  if (!activeCacheSavedToDisk_ || !isFileInitialized(sessionPath_)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: persistent request has no committed baseline for '%s'\n",
+            __func__,
+            sessionPath_.c_str()));
+  }
+  if (!loadCache()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: committed baseline validation failed for '%s'\n",
+            __func__,
+            sessionPath_.c_str()));
+  }
   llmContext_->setPersistentTransactionCheckpoint(
-      sessionPath_, llmContext_->getNPast());
+      pinCommittedCacheArtifact(sessionPath_), llmContext_->getNPast());
 }
 
 void CacheManager::markActiveCacheDirty() {
@@ -469,6 +486,28 @@ void CacheManager::atomicPromoteFile(
             renameEc.message().c_str()));
   }
 #endif
+}
+
+std::string CacheManager::pinCommittedCacheArtifact(const std::string& path) {
+  static std::atomic<uint64_t> counter{0};
+  const auto timestamp =
+      std::chrono::steady_clock::now().time_since_epoch().count();
+  const std::string pinnedPath =
+      path + ".rollback." + std::to_string(timestamp) + "." +
+      std::to_string(counter.fetch_add(1, std::memory_order_relaxed));
+  std::error_code ec;
+  std::filesystem::create_hard_link(path, pinnedPath, ec);
+  if (ec) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: failed to pin committed cache '%s': %s\n",
+            __func__,
+            path.c_str(),
+            ec.message().c_str()));
+  }
+  return pinnedPath;
 }
 
 void CacheManager::invalidate() {

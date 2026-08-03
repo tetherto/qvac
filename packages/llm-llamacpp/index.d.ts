@@ -247,11 +247,11 @@ export interface RunOptions {
    * later run keyed by the same string can resume without re-prefilling.
    *
    * With `cacheKey` and `saveCacheToDisk: true`, the last committed cache
-   * artifact is pinned as the pre-request transaction checkpoint. A dirty
-   * in-memory baseline is committed atomically before request mutation.
-   * Successful cancellation restores that artifact. If baseline commit fails,
-   * the request aborts before mutation; if restore fails, the affected
-   * sequence is cleared and the active cache session is invalidated.
+   * artifact is pinned as the pre-request transaction checkpoint without a
+   * pre-request save. A missing, corrupt, or dirty baseline fails before
+   * request mutation. Successful cancellation restores the pinned artifact;
+   * if restore fails, the affected sequence is cleared and the active cache
+   * session is invalidated.
    *
    * With `saveCacheToDisk: false`, no transaction snapshot is created.
    * Cancellation clears unsaved live state while leaving any existing
