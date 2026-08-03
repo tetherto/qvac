@@ -37,8 +37,7 @@ namespace qvac_lib_inference_addon_llama::reasoning_recovery {
 inline void clearMemoryForRecovery(::llama_context* ctx, llama_seq_id seqId) {
   auto* mem = llama_get_memory(ctx);
   if (mem != nullptr) {
-    (void)seqId;
-    llama_memory_clear(mem, true);
+    (void)llama_memory_seq_rm(mem, seqId, -1, -1);
   }
 }
 

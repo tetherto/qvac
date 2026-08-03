@@ -34,8 +34,16 @@ void clearMemoryOnFailure(::llama_context* ctx, llama_seq_id seqId) noexcept {
   if (mem == nullptr) {
     return;
   }
-  (void)seqId;
-  llama_memory_clear(mem, true);
+  const bool cleared = llama_memory_seq_rm(mem, seqId, -1, -1);
+  if (!cleared) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[ReasoningBlockCompactor] llama_memory_seq_rm(-1,-1) refused "
+            "full-range wipe on seqId=%d before hard-fail throw; caller's "
+            "post-catch reset may not match live memory\n",
+            static_cast<int>(seqId)));
+  }
 }
 
 } // namespace
