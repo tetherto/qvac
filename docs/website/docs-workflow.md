@@ -338,7 +338,7 @@ Job pauses for docs-production environment approval
 Workflow fast-forwards docs-production to origin/main (--ff-only)
     │  (fails if docs-production has diverged from main)
     ▼
-Push to docs-production (GitHub Actions app / GITHUB_TOKEN)
+Push to docs-production (as the GitHub App — ruleset bypass identity)
     │
     ▼
 Hosting provider detects new commit on docs-production
@@ -400,7 +400,7 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
 
 **What it does:**
 - Pauses for approval on the `docs-production` environment (`qvac-internal-release` required reviewers)
-- Checks out `docs-production` (full history) using `GITHUB_TOKEN` — the GitHub Actions app is the sole bypass identity on the `docs-production` ruleset
+- Mints a short-lived **GitHub App token** (`actions/create-github-app-token`) and checks out `docs-production` (full history) with it — the App is the only bypass identity on the `docs-production` ruleset (the default `GITHUB_TOKEN` / GitHub Actions integration cannot be a ruleset bypass actor)
 - Fetches `origin/main` and runs `git merge --ff-only origin/main`
 - Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
 
@@ -408,7 +408,7 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
 
 **Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
 
-> `docs-production` is branch-protected (restrict updates, no PR merges, no deletions, no force pushes). Only the promote workflow — running as the GitHub Actions app after environment approval — can advance the branch.
+> `docs-production` is branch-protected (Restrict updates, Restrict deletions, Block force pushes, no PR merges). The promotion workflow — running as the GitHub App after environment approval — is the only identity allowed to advance it.
 
 ### 3. SDK release docs (local, skill-driven)
 

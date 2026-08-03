@@ -1,6 +1,6 @@
 ---
 name: qv-devops-why-my-pr-not
-description: Diagnose why CI checks are not running on a PR and/or why a PR cannot be merged, by cross-referencing the live PR state (via gh CLI) against the repo's labels, teams, CODEOWNERS, label-gate trust model, and tier-based approval rules. Read-only by default — proposes labels / re-review comments / unblock actions in plan-then-apply mode. Use when a developer asks "why aren't my checks running", "why can't I merge", "what's blocking my PR", or invokes /qv-devops-why-my-pr-not with a PR URL.
+description: Diagnose why CI checks are not running on a PR and/or why a PR cannot be merged, by cross-referencing the live PR state (via gh CLI) against the repo's labels, teams, CODEOWNERS, fork-ci trust model, and tier-based approval rules. Read-only by default — proposes labels / re-review comments / unblock actions in plan-then-apply mode. Use when a developer asks "why aren't my checks running", "why can't I merge", "what's blocking my PR", or invokes /qv-devops-why-my-pr-not with a PR URL.
 disable-model-invocation: true
 ---
 
@@ -13,10 +13,9 @@ Self-service triage for the two most common DevOps support questions:
 
 The skill cross-references the live PR state (via `gh`) against the canonical repo docs that describe the rules:
 
-- [`docs/ci/LABELS.md`](../../../docs/ci/LABELS.md) — every CI-relevant label, what it gates, and who can apply it.
+- [`docs/ci/LABELS.md`](../../../docs/ci/LABELS.md) — every CI-relevant label, fork-ci environment, `fork-approval`, and what each gates.
 - [`docs/ci/TEAMS.md`](../../../docs/ci/TEAMS.md) — the four teams + the two pods (DevOps, SDK).
 - [`.github/CODEOWNERS`](../../../.github/CODEOWNERS) — merge-approval routing.
-- [`.github/actions/label-gate/README.md`](../../../.github/actions/label-gate/README.md) — `verified` trust model + strip policy.
 - [`.github/workflows/approval-check-worker.yml`](../../../.github/workflows/approval-check-worker.yml) — tier1 / tier2 math + bypass rules.
 - [`.github/teams/devops.json`](../../../.github/teams/devops.json), [`.github/teams/sdk.json`](../../../.github/teams/sdk.json) — pod leads + members.
 
@@ -47,7 +46,7 @@ If the PR identifier is missing, ask once. Nothing else to ask up-front.
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth status`). The token needs `repo` scope to read PR metadata, checks, and reviews on `tetherto/qvac`.
-- `read:org` is **not** required by the skill itself, but the `label-gate` action in CI needs it via `PAT_TOKEN`. If your diagnosis traces back to a `label-gate` 5xx / auth error, that's the cause — see the rule mapping below.
+- `read:org` is **not** required by the skill itself. If privileged fork jobs fail while recording `qvac/fork-verified`, check `fork-approval` logs — the gate job uses `github.token` with `statuses: write` (not `PAT_TOKEN`).
 
 The skill does not require a checked-out worktree. All inspection is via `gh`.
 
@@ -58,7 +57,7 @@ This skill follows the [DevOps agentic-automation rule](../../rules/devops/agent
 - **Read-only with respect to the user's local working tree.** No `git switch`, `git checkout`, `git reset`, `git restore`, `git stash`, `git pull`, `git merge`, `git rebase`, `git cherry-pick`, `git clean`, `gh pr checkout`, or any write inside the user's working tree.
 - **Read-only with respect to the PR's GitHub state by default.** No `gh pr edit`, no `gh api ... -X POST/PATCH/PUT/DELETE`, no `gh pr comment`, no `gh pr review` without explicit user confirmation per call.
 - **Mutations are plan-then-apply.** When the diagnosis suggests a fix that the user could perform (apply a label, post `/review`, request re-review from a teammate, rebase to drop a merge conflict), print the exact `gh` command, wait for the user to type "yes" / "go" / "apply", then execute. A blanket "do everything" is not accepted — confirm per command.
-- **Never apply `verified` on the user's behalf.** The `verified` gate is intentionally not self-service (per `LABELS.md`). The skill may *suggest* who to ask, never apply it.
+- **Never approve the `fork-ci` environment on the user's behalf.** That gate is intentionally not self-service. The skill may *suggest* who to ask (merge/release team), never click approve for them.
 
 ## Efficiency rules
 
@@ -94,13 +93,12 @@ Before fetching the PR, ensure you've read these in this turn (or already have t
 
 - [`docs/ci/LABELS.md`](../../../docs/ci/LABELS.md)
 - [`docs/ci/TEAMS.md`](../../../docs/ci/TEAMS.md)
-- [`.github/actions/label-gate/README.md`](../../../.github/actions/label-gate/README.md) — for the `verified` trust + strip rules
 
 These are short. Read them in full. **Quote them in findings**, do not paraphrase from memory — the rules drift over time and the doc is authoritative.
 
 For tier math, read [`approval-check-worker.yml`](../../../.github/workflows/approval-check-worker.yml) only when a tier finding is actually triggered (saves tokens for the common case).
 
-For pod ownership, read [`.github/teams/devops.json`](../../../.github/teams/devops.json) / [`.github/teams/sdk.json`](../../../.github/teams/sdk.json) on demand when computing "who can apply `verified`" or "who is in your CODEOWNERS path."
+For pod ownership, read [`.github/teams/devops.json`](../../../.github/teams/devops.json) / [`.github/teams/sdk.json`](../../../.github/teams/sdk.json) on demand when computing "who can approve fork-ci" or "who is in your CODEOWNERS path."
 
 ### 3. Fetch live PR state
 
@@ -131,14 +129,14 @@ Walk down this checklist in order. Stop at the first match per dimension; print 
 | # | Symptom (from PR JSON / checks JSON) | Diagnosis | Cite |
 |---|---|---|---|
 | C1 | PR `isDraft == true` AND a workflow has `pull_request: types: [opened, synchronize, reopened]` (default) | Draft PRs do not fire `pull_request` events for `ready_for_review` excluded triggers. Mark the PR as ready or push a new commit. | GitHub default `pull_request` event semantics |
-| C2 | Workflow runs are present but jobs gated on `needs.label-gate.outputs.authorised == 'true'` are SKIPPED, AND `verified` label is missing | The `label-gate` denied because `verified` is not applied. Ask any active member of `@tetherto/qvac-internal-dev` / `-merge` / `-release` or `@tetherto/qvac-collabora` to apply it. | `docs/ci/LABELS.md § verified`, `label-gate/README.md § Trust model` |
-| C3 | Same SKIPPED jobs, `verified` is present, but the latest `synchronize` event was a push by a non-trusted actor | `label-gate` strips `verified` on every `synchronize` from a non-trusted actor. A trusted actor must re-apply after reviewing the new commits. | `LABELS.md § verified — Behaviour on synchronize`, `label-gate/README.md § Strip policy` |
-| C4 | `verified` label was *applied* by a non-trusted actor (look at the labeled-event applier in the timeline) and was immediately stripped | `label-gate` strips on apply by non-trusted actor (avoids a misleading "verified" social signal). | `LABELS.md § verified — Behaviour on apply by non-trusted actor`, `label-gate/README.md § Strip policy` |
-| C5 | PR is from a fork (`headRepositoryOwner.login != tetherto`) AND only secret-bearing jobs are missing | `pull_request` from a fork gets a read-only `GITHUB_TOKEN` and no secrets. The `verified`-gated jobs intentionally won't run until a trusted actor verifies. | `LABELS.md § verified` |
-| C6 | An expensive test/validation workflow is missing (e.g. `pr-test-inference-addon-cpp*.yml`, `public-reusable-npm.yml`, `pr-models-validation-registry-server.yml`, `public-pr.yml`) AND `verified` is absent | Ask a trusted actor to apply `verified` — it is the single authorisation label across the repo, covering both secret-bearing jobs (via `label-gate`) and the heavy non-secret gates. The legacy `verify` label has been retired; do not recommend applying it. | `LABELS.md § verified` |
+| C2 | Workflow runs are present but jobs gated on `needs: fork-approval` are WAITING / pending environment approval | External fork PR: a merge/release-team member must approve the `fork-ci` environment for this run (GitHub UI → pending deployment). Each new push re-prompts. | `docs/ci/LABELS.md` (fork-ci) |
+| C3 | Same jobs SKIPPED after approval, AND `qvac/fork-verified` commit status is missing or not `success` for `headRefOid` | `fork-approval` should record `qvac/fork-verified` on the head SHA after env approval via `github.token` (`statuses: write`). If missing, check `fork-approval` job logs. Self-hosted `pull_request` jobs (e.g. `pr-test-inference-addon-cpp*`) read this status, not labels. | `.cursor/rules/devops/github-actions.mdc` |
+| C4 | PR is from a fork AND privileged jobs ran without env approval (should not happen post label-gate retirement) | Report to DevOps — privileged fork jobs must `needs: fork-approval`. | `ci-trust-policy.test.mjs` |
+| C5 | PR is from a fork (`headRepositoryOwner.login != tetherto`) AND only secret-bearing jobs are missing | Expected until `fork-ci` is approved for the current SHA. Unprivileged `pull_request` fork jobs stay read-only (no secrets). | `docs/ci/LABELS.md` |
+| C6 | An expensive validation workflow is missing AND PR is an external fork AND `fork-ci` not yet approved for current SHA | Ask merge/release team to approve the pending `fork-ci` deployment on the latest workflow run. Do not recommend the retired `verified` label. | `docs/ci/LABELS.md` |
 | C7 | `pr-checks-sdk-pod.yml` jobs are skipped AND PR touches `packages/sdk/` from a fork AND `safe-to-test` is missing | SDK pod's check-running gate. Reviewer must apply `safe-to-test` after auditing the diff. | `LABELS.md § safe-to-test` |
 | C8 | E2E suite did not run AND PR touches SDK AND neither `test-e2e-smoke` nor `test-e2e-full` is present | SDK E2E is opt-in via these labels. Apply the smoke variant for normal PR feedback. | `LABELS.md § test-e2e-smoke / test-e2e-full` |
-| C9 | A workflow run is FAILED with `label-gate` exiting non-zero (red, not skipped) | Hard misconfiguration in `label-gate` — usually missing `PAT_TOKEN` or `read:org` API failure. This is a DevOps issue, not a label issue. | `label-gate/README.md § Exit policy` |
+| C9 | A workflow run is FAILED in `fork-approval` (red, not waiting) | Hard misconfiguration — usually missing `statuses: write` on the gate job or failure recording `qvac/fork-verified`. DevOps issue. | `fork-approval` job logs |
 | C10 | Required check is in `IN_PROGRESS` state with no failure; user is just impatient | Wait. Or surface the slowest job's link. | `gh pr checks` output |
 
 For each match, print **what the rule says** (one short quote pulled from the cite) plus **what the user should do** (a single concrete action).
@@ -156,7 +154,7 @@ Walk this checklist in order, same rule: stop at first match per dimension, prin
 | M5 | `reviewDecision: "CHANGES_REQUESTED"` | A review requested changes. Resolve the requested changes and either re-request review or have the reviewer dismiss. | n/a |
 | M6 | `Tier-based Approval Check` commit status is `failure` | Tier requirements unmet. Read the bot's last comment for the exact `1/2 TL` / `0/1 Mgmt` deficit. Map deficit to which team must approve. (The bot's check defaults the PR to `tier1` unless the PR carries the `tier2` label.) | `LABELS.md § tier1, tier2`, `approval-check-worker.yml` |
 | M7 | A required check (per `statusCheckRollup`) is FAILED | The required check must pass. Link to the failed run; if it's flake, re-run; if it's a real failure, fix. | `gh pr checks` |
-| M8 | A required check is missing entirely from `statusCheckRollup` | Either the gating workflow is skipping (loop back to the CI section, usually a label-gate problem) OR a required check name in branch protection no longer matches a real job (DevOps issue). | branch-protection ruleset |
+| M8 | A required check is missing entirely from `statusCheckRollup` | Either the gating workflow is skipping/waiting (loop back to the CI section — usually fork-ci pending) OR a required check name in branch protection no longer matches a real job (DevOps issue). | branch-protection ruleset |
 | M9 | Base branch protection updated mid-PR (new required check added) | Push an empty commit (`git commit --allow-empty`) to re-trigger checks against the new ruleset. | n/a |
 | M10 | All checks green, all approvals satisfied, `mergeable: "MERGEABLE"`, `mergeStateStatus: "CLEAN"` | Nothing is blocking. Print "ready to merge" and the merge command the user can run themselves (do not run it). | n/a |
 
@@ -231,7 +229,7 @@ The skill MAY propose at most one mutation per finding. Each proposal prints the
   gh pr ready <num> -R <owner>/<repo>
   ```
 
-**Never propose** applying `verified` on the user's own PR. The whole point of `verified` is third-party sign-off (per `LABELS.md`). If the user's PR is missing `verified`, the suggestion is "ask <named team member from devops.json or sdk.json> to apply it" — not "I'll apply it for you."
+**Never propose** approving the `fork-ci` environment on the user's own PR. If privileged fork jobs are waiting, the suggestion is "ask a merge/release-team member to approve the pending `fork-ci` deployment" — not "I'll approve it for you."
 
 After any mutation, re-run step 3 (single `gh pr view`) and re-render only the section(s) that changed. Print one verification line: `Verified: <label X> now present | reviewers <Y, Z> requested | etc.`
 
@@ -248,18 +246,18 @@ Stop and report (do not guess) when:
 
 Before printing the final report, verify:
 
-- [ ] Each finding cites a real rule from `docs/ci/LABELS.md`, `docs/ci/TEAMS.md`, `label-gate/README.md`, `approval-check-worker.yml`, or `CODEOWNERS` — not from memory.
+- [ ] Each finding cites a real rule from `docs/ci/LABELS.md`, `docs/ci/TEAMS.md`, `approval-check-worker.yml`, or `CODEOWNERS` — not from memory.
 - [ ] Each finding has both a "Rule" (one-line quote) and an "Action" (one concrete step).
 - [ ] Suggested approvers (for tier deficits / CODEOWNERS) are named from `.github/teams/<pod>.json`, not invented.
 - [ ] No mutation has been executed without an explicit per-command confirmation.
-- [ ] `verified` was never proposed for self-application.
+- [ ] `fork-ci` approval was never proposed for self-application.
 - [ ] Total `gh` shell calls ≤ 6 for a read-only diagnosis (≤ 8 if a mutation + verification was performed).
 
 ## References
 
 - Label catalogue: [`docs/ci/LABELS.md`](../../../docs/ci/LABELS.md)
 - Team catalogue: [`docs/ci/TEAMS.md`](../../../docs/ci/TEAMS.md)
-- `label-gate` trust model: [`.github/actions/label-gate/README.md`](../../../.github/actions/label-gate/README.md)
+- Fork CI trust model: [`docs/ci/LABELS.md`](../../../docs/ci/LABELS.md) (`fork-ci`, `fork-approval`, `qvac/fork-verified`)
 - Tier approval math: [`.github/workflows/approval-check-worker.yml`](../../../.github/workflows/approval-check-worker.yml)
 - Merge-routing: [`.github/CODEOWNERS`](../../../.github/CODEOWNERS)
 - DevOps pod metadata: [`.github/teams/devops.json`](../../../.github/teams/devops.json)
