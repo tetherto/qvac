@@ -140,7 +140,6 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `tts-onnx` | `@qvac/tts-onnx` |
 | `asr-ggml` | `@qvac/transcription-whispercpp`, `@qvac/asr-ggml` |
-| `ocr-onnx` | `@qvac/ocr-onnx` |
 | `diffusion-cpp` | `@qvac/diffusion-cpp` |
 
 `asr-ggml` carries two engine keys because the whisper + parakeet packages were
