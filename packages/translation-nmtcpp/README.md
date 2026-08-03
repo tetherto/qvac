@@ -278,7 +278,7 @@ const backendSettings = {
 }
 ```
 
-The three GPU control keys each accept a camelCase alias alongside the snake_case primary. Snake_case mirrors the C-struct field names; camelCase matches the `ocr-onnx` sibling addon convention. When both forms are present in the same config object, **snake_case takes precedence**.
+The three GPU control keys each accept a camelCase alias alongside the snake_case primary. Snake_case mirrors the C-struct field names; camelCase matches the sibling addon convention. When both forms are present in the same config object, **snake_case takes precedence**.
 
 | Key | Alias | Type | Description |
 |-----|-------|------|-------------|

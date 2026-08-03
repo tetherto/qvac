@@ -367,6 +367,90 @@ test('downloadModel clears cached blocks when the download fails', async (t) => 
   )
 })
 
+test('downloadModel waits for in-flight blocks before clearing after failure', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  const peer = { inflight: 1, dataProcessing: 0 }
+  client._core.peers = [peer]
+  client._core.download = () => ({
+    destroy() {
+      client._events.push('destroy')
+      setTimeout(() => {
+        peer.inflight = 0
+        client._events.push('drained')
+      }, 20)
+    }
+  })
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    throw new Error('Download cancelled')
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile }),
+    /Download cancelled/,
+    'the failed download rejects'
+  )
+
+  const drainedAt = client._events.indexOf('drained')
+  t.ok(
+    drainedAt !== -1 && drainedAt < client._events.indexOf('clear'),
+    'in-flight blocks drain before the cached range is cleared'
+  )
+})
+
+test('downloadModel logs remaining peer counters when drain times out', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  const warnings = []
+  const baseWarn = client.logger.warn.bind(client.logger)
+  client.logger.warn = (msg, data) => {
+    warnings.push({ msg, data })
+    baseWarn(msg, data)
+  }
+  client._inflightDrainTimeoutMs = 30
+  client._inflightDrainPollMs = 5
+  client._core.peers = [{ inflight: 2, dataProcessing: 1 }]
+  client._core.download = () => ({
+    destroy() {
+      client._events.push('destroy')
+    }
+  })
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    throw new Error('Download cancelled')
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile }),
+    /Download cancelled/,
+    'the failed download rejects'
+  )
+
+  const timeoutWarning = warnings.find((entry) =>
+    entry.msg.includes('Timed out waiting for in-flight blob blocks')
+  )
+  t.ok(timeoutWarning, 'drain timeout is logged')
+  t.alike(
+    timeoutWarning.data.peers,
+    [{ peer: 0, inflight: 2, dataProcessing: 1 }],
+    'timeout warning includes remaining inflight and dataProcessing counters'
+  )
+  t.ok(client._events.includes('clear'), 'best-effort clear still runs after the timeout')
+})
+
 test('downloadModel clears cached blocks when the returned stream is destroyed', async (t) => {
   const client = makeClient(t)
   const clears = []

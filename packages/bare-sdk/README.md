@@ -48,7 +48,7 @@ const result = await sdk.translate({
 | `@qvac/bare-sdk/parakeet-transcription/plugin`   | `@qvac/transcription-parakeet`   |
 | `@qvac/bare-sdk/nmtcpp-translation/plugin`       | `@qvac/translation-nmtcpp`       |
 | `@qvac/bare-sdk/tts-ggml/plugin`                 | `@qvac/tts-ggml`                 |
-| `@qvac/bare-sdk/onnx-ocr/plugin`                 | `@qvac/ocr-onnx`                 |
+| `@qvac/bare-sdk/ggml-ocr/plugin`                 | `@qvac/ocr-ggml`                 |
 | `@qvac/bare-sdk/sdcpp-generation/plugin`         | `@qvac/diffusion-cpp`            |
 | `@qvac/bare-sdk/ggml-vla/plugin`                 | `@qvac/vla-ggml`                 |
 
