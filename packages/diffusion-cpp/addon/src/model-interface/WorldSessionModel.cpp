@@ -120,9 +120,10 @@ std::any WorldSessionModel::processSceneCreate(const SceneCreateJob& job) {
         "ABot-World scene creation failed (see native logs)");
   }
 
-  const int64_t sceneMs = static_cast<int64_t>(
-      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-          .count());
+  const int64_t sceneMs =
+      static_cast<int64_t>(std::chrono::duration<double, std::milli>(
+                               std::chrono::steady_clock::now() - t0)
+                               .count());
   if (job.progressCallback) {
     picojson::object progress;
     progress["scene"] = picojson::value(job.outputPath);
@@ -132,10 +133,8 @@ std::any WorldSessionModel::processSceneCreate(const SceneCreateJob& job) {
 
   lastStats_.clear();
   lastStats_.emplace_back("sceneCreateMs", sceneMs);
-  lastStats_.emplace_back(
-      "width", static_cast<int64_t>(job.width));
-  lastStats_.emplace_back(
-      "height", static_cast<int64_t>(job.height));
+  lastStats_.emplace_back("width", static_cast<int64_t>(job.width));
+  lastStats_.emplace_back("height", static_cast<int64_t>(job.height));
   return std::any{};
 }
 

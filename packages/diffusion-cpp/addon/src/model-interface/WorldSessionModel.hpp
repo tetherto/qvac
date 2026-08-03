@@ -82,8 +82,8 @@ public:
     std::vector<uint8_t> imageBytes; // first frame, PNG or JPEG
     int width{832};                  // multiples of 32
     int height{480};
-    std::string t5Path;   // umT5-XXL GGUF/safetensors
-    std::string vaePath;  // Wan2.2 VAE GGUF/safetensors
+    std::string t5Path;  // umT5-XXL GGUF/safetensors
+    std::string vaePath; // Wan2.2 VAE GGUF/safetensors
     std::string outputPath;
     std::function<void(const std::string&)> progressCallback;
   };
