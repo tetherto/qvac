@@ -71,15 +71,15 @@ Or opt into auto-close on the final unload:
 await unloadModel({ modelId, autoClose: true });
 ```
 
-## Relationship to `@qvac/sdk`
+## Relationship to `@qvac/inference` and `@qvac/sdk`
 
-`@qvac/bare-sdk` is built by copying compiled output from `@qvac/sdk`. The two packages share the same source, version, and release branch; the only differences are package metadata (slim dependency profile, no default worker entry, explicit assembly API).
+`@qvac/bare-sdk` is a thin re-export of [`@qvac/inference`](../inference), the Bare-only in-process engine. It forwards the same surface (`.`) and per-plugin subpaths, adding only the `@qvac/bare-sdk` package identity and its slim dependency profile — `@qvac/inference` is the sole dependency and does all the work. There is no code of its own beyond the re-exports.
 
-Use `@qvac/sdk` for Node and Expo apps that want the full default worker. Use `@qvac/bare-sdk` when you assemble your own worker on Bare.
+Use `@qvac/sdk` for Node and Expo apps that want the full default worker over RPC. Use `@qvac/bare-sdk` (or `@qvac/inference` directly) when you assemble your own plugins in-process on Bare.
 
 ## Release history
 
-`@qvac/bare-sdk` releases in lockstep with `@qvac/sdk` from the same source tree. For release notes and version history, see the [`@qvac/sdk` changelog](../sdk/CHANGELOG.md).
+`@qvac/bare-sdk` releases in lockstep with `@qvac/inference`. For release notes and version history, see the [`@qvac/inference` changelog](../inference/CHANGELOG.md).
 
 ## Migrating from `@qvac/sdk`
 
