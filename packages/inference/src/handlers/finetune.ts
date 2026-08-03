@@ -1,6 +1,6 @@
-import type { FinetuneProgressResponse, FinetuneRequest, FinetuneResult } from '../schemas/index.ts'
-import { dispatchPluginReply } from './plugin-dispatch.ts'
-import { startFinetune } from '../plugins/builtin/llamacpp-completion/ops/finetune.ts'
+import type { FinetuneProgressResponse, FinetuneRequest, FinetuneResult } from '@/schemas/index'
+import { dispatchPluginReply } from '@/handlers/plugin-dispatch'
+import { startFinetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
 
 export async function handleFinetune(
   request: FinetuneRequest,

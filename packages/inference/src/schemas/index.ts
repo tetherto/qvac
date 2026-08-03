@@ -1,9 +1,9 @@
 // Re-export all schemas and types
-export * from './model-file.ts'
-export * from './cancel.ts'
-export * from './batch-completion-stream.ts'
-export * from './completion-stream.ts'
-export * from './completion-event.ts'
+export * from '@/schemas/model-file'
+export * from '@/schemas/cancel'
+export * from '@/schemas/batch-completion-stream'
+export * from '@/schemas/completion-stream'
+export * from '@/schemas/completion-event'
 export {
   toolSchema,
   toolCallSchema,
@@ -14,33 +14,33 @@ export {
   type ToolCallError,
   type ToolCallWithCall,
   type ToolsMode
-} from './tools.ts'
-export * from './delegate.ts'
-export * from './model-ops.ts'
-export * from './download-asset.ts'
-export * from './embed.ts'
-export * from './finetune.ts'
-export * from './load-model.ts'
-export * from './reload-config.ts'
-export * from './logging-stream.ts'
-export * from './provide.ts'
-export * from './common.ts'
-export * from './transcription.ts'
-export * from './bci.ts'
-export * from './bci-config.ts'
-export * from './translate.ts'
-export * from './translation-config.ts'
-export * from './llamacpp-config.ts'
-export * from './transcription-config.ts'
-export * from './text-to-speech.ts'
-export * from './error.ts'
-export * from './rag.ts'
-export * from './ocr.ts'
-export * from './sdcpp-config.ts'
-export * from './vla.ts'
-export * from './classification.ts'
-export * from './lifecycle.ts'
-export { ERROR_CODES, REGISTRY_ERROR_CODES } from './errors.ts'
+} from '@/schemas/tools'
+export * from '@/schemas/delegate'
+export * from '@/schemas/model-ops'
+export * from '@/schemas/download-asset'
+export * from '@/schemas/embed'
+export * from '@/schemas/finetune'
+export * from '@/schemas/load-model'
+export * from '@/schemas/reload-config'
+export * from '@/schemas/logging-stream'
+export * from '@/schemas/provide'
+export * from '@/schemas/common'
+export * from '@/schemas/transcription'
+export * from '@/schemas/bci'
+export * from '@/schemas/bci-config'
+export * from '@/schemas/translate'
+export * from '@/schemas/translation-config'
+export * from '@/schemas/llamacpp-config'
+export * from '@/schemas/transcription-config'
+export * from '@/schemas/text-to-speech'
+export * from '@/schemas/error'
+export * from '@/schemas/rag'
+export * from '@/schemas/ocr'
+export * from '@/schemas/sdcpp-config'
+export * from '@/schemas/vla'
+export * from '@/schemas/classification'
+export * from '@/schemas/lifecycle'
+export { ERROR_CODES, REGISTRY_ERROR_CODES } from '@/schemas/errors'
 export { ERR_CODES as RAG_ERROR_CODES } from '@qvac/rag/errors'
 export {
   qvacConfigSchema,
@@ -51,7 +51,7 @@ export {
   type DeviceMatch,
   type DeviceConfigDefaults,
   type DevicePattern
-} from './config.ts'
+} from '@/schemas/config'
 export {
   PROFILING_KEY,
   PROFILING_TRAILER_KEY,
@@ -72,12 +72,13 @@ export {
   type ProfilingRequestMeta,
   type ProfilingResponseMeta,
   type PerCallProfiling
-} from './profiling.ts'
-export { runtimeContextSchema, type RuntimeContext } from './runtime-context.ts'
-export * from './model-info.ts'
-export * from './model-src-utils.ts'
-export * from './json-schema.ts'
-export { type McpClient, type McpClientInput } from './mcp-adapter.ts'
+} from '@/schemas/profiling'
+export { runtimeContextSchema, type RuntimeContext } from '@/schemas/runtime-context'
+export * from '@/schemas/model-info'
+export * from '@/schemas/system-resources'
+export * from '@/schemas/model-src-utils'
+export * from '@/schemas/json-schema'
+export { type McpClient, type McpClientInput } from '@/schemas/mcp-adapter'
 export {
   PUBLIC_MODEL_TYPES as MODEL_TYPES,
   ModelType,
@@ -86,6 +87,6 @@ export {
   normalizeModelType,
   isCanonicalModelType,
   isModelTypeAlias
-} from './model-types.ts'
-export * from './plugin.ts'
-export * from './registry.ts'
+} from '@/schemas/model-types'
+export * from '@/schemas/plugin'
+export * from '@/schemas/registry'

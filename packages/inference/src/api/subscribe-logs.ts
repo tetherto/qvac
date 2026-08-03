@@ -1,6 +1,6 @@
-import { getAppLogger, ALL_LOG_ID } from '../logging/index.ts'
-import { loggingStream } from './logging-stream.ts'
-import type { LoggingStreamResponse } from '../schemas/logging-stream.ts'
+import { getAppLogger, ALL_LOG_ID } from '@/logging/index'
+import { loggingStream } from '@/api/logging-stream'
+import type { LoggingStreamResponse } from '@/schemas/logging-stream'
 
 const logger = getAppLogger()
 

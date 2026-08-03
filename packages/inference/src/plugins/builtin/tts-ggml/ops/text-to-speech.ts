@@ -1,19 +1,20 @@
-import { getModel } from '../../../../runtime/model-registry.ts'
-import { ttsRequestSchema, type TtsRequest, type TtsStats } from '../../../../schemas/index.ts'
-import { nowMs } from '../../../../profiling/index.ts'
-import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
-import type { TtsResponse } from '../../../../utils/addon-responses.ts'
-import { TextToSpeechFailedError } from '../../../../errors/index.ts'
+import { getModel } from '@/runtime/model-registry'
+import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/index'
+import { nowMs } from '@/profiling/index'
+import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
+import type { TtsResponse } from '@/utils/addon-responses'
+import { TextToSpeechFailedError } from '@/errors/index'
+import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '@/utils/tts-stats'
 import {
-  type TtsStreamChunk,
-  type TtsOpYield,
-  collectTtsStats
-} from '../../../../utils/tts-stats.ts'
+  assertParlerJobOptionsSupported,
+  getParlerJobOptions,
+  type ParlerJobOptions
+} from '@/plugins/builtin/tts-ggml/ops/parler-options'
 
 type RunStreamModel = {
   runStream: (
     text: string,
-    options?: { locale?: string; maxChunkScalars?: number }
+    options?: ParlerJobOptions & { locale?: string; maxChunkScalars?: number }
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
     stats?: {
@@ -37,6 +38,7 @@ function hasRunStream(model: unknown): model is RunStreamModel {
 export async function* textToSpeech(
   params: TtsRequest
 ): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
+  const request = ttsRequestSchema.parse(params)
   const {
     modelId,
     inputType,
@@ -45,9 +47,11 @@ export async function* textToSpeech(
     sentenceStream,
     sentenceStreamLocale,
     sentenceStreamMaxChunkScalars
-  } = ttsRequestSchema.parse(params)
+  } = request
+  const parlerJobOptions = getParlerJobOptions(request)
 
   const model = getModel(modelId)
+  assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
   const modelStart = nowMs()
 
   if (sentenceStream) {
@@ -56,12 +60,15 @@ export async function* textToSpeech(
     }
 
     const streamOpts =
-      sentenceStreamLocale !== undefined || sentenceStreamMaxChunkScalars !== undefined
+      sentenceStreamLocale !== undefined ||
+      sentenceStreamMaxChunkScalars !== undefined ||
+      Object.keys(parlerJobOptions).length > 0
         ? {
             ...(sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
             ...(sentenceStreamMaxChunkScalars !== undefined
               ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
-              : {})
+              : {}),
+            ...parlerJobOptions
           }
         : undefined
 
@@ -103,7 +110,8 @@ export async function* textToSpeech(
   const response = (await model.run({
     input: text,
     inputType,
-    ...(stream ? { streamOutput: true } : {})
+    ...(stream ? { streamOutput: true } : {}),
+    ...parlerJobOptions
   })) as unknown as TtsResponse
 
   if (!stream) {

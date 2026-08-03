@@ -1,4 +1,4 @@
-import { ModelType } from './model-types.ts'
+import { ModelType } from '@/schemas/model-types'
 import {
   ADDON_BCI,
   ADDON_CLASSIFICATION,
@@ -11,12 +11,12 @@ import {
   ADDON_TTS,
   ADDON_VLA,
   ADDON_WHISPER
-} from './plugin.ts'
+} from '@/schemas/plugin'
 import {
   modelRegistryEngineSchema,
   type ModelRegistryEngine,
   type ModelRegistryEntryAddon
-} from './registry.ts'
+} from '@/schemas/registry'
 
 // Canonical engine → addon mapping (exhaustive). `as const` preserves
 // per-key literals so the addon can be derived from the engine at the type level.

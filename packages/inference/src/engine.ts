@@ -6,9 +6,9 @@
 //
 // Bare consumers use the public API in `index.ts` instead.
 
-import type { Request } from './schemas/index.ts'
-import { registry } from './registry.ts'
-import { handlerSupportsProgress } from './selection.ts'
+import type { Request } from '@/schemas/index'
+import { registry } from '@/registry'
+import { handlerSupportsProgress } from '@/selection'
 
 export {
   send,
@@ -18,9 +18,9 @@ export {
   type DuplexSession,
   type DuplexWritable,
   type DuplexReadable
-} from './dispatch.ts'
-export { setConfig, setRuntimeContext } from './runtime/state.ts'
-export { initialize, cleanupForTerminate } from './runtime/lifecycle.ts'
+} from '@/dispatch'
+export { setConfig, setRuntimeContext } from '@/runtime/state'
+export { initialize, cleanupForTerminate } from '@/runtime/lifecycle'
 
 // The wire transport a request needs: reply, stream, progress, or duplex.
 // Returns undefined for an unknown type. A host reads it to pick the matching

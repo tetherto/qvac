@@ -1,8 +1,8 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
-import { getEngineLogger } from '../logging/index.ts'
-import { getQvacPath } from '../utils/qvac-paths.ts'
+import { getEngineLogger } from '@/logging/index'
+import { getQvacPath } from '@/utils/qvac-paths'
 
 const logger = getEngineLogger()
 

@@ -1,17 +1,19 @@
-import { destroySwarm } from '../p2p/swarm.ts'
-import { initEnv } from './env.ts'
-import { closeAllRagInstances } from '../rag/index.ts'
-import { cleanupDownloads } from '../handlers/load-model/download-manager.ts'
-import { unloadAllModels } from './model-registry.ts'
-import { closeRegistryClient } from './registry-client.ts'
+import { destroySwarm } from '@/p2p/swarm'
+import { initEnv } from '@/runtime/env'
+import { closeAllRagInstances } from '@/rag/index'
+import { cleanupDownloads } from '@/handlers/load-model/download-manager'
+import { unloadAllModels } from '@/runtime/model-registry'
+import { closeRegistryClient } from '@/runtime/registry-client'
 import {
   clearAllLoggingStreams,
   startLogBuffering,
   stopLogBufferingWithTimeout
-} from './logging-stream-registry.ts'
-import { clearAllAddonLoggers, getEngineLogger, LOG_ID, ALL_LOG_ID } from '../logging/index.ts'
-import { clearPlugins } from '../plugins/index.ts'
-import { acquireCacheLock, releaseCacheLock } from './cache-lock.ts'
+} from '@/runtime/logging-stream-registry'
+import { clearAllAddonLoggers, getEngineLogger, LOG_ID, ALL_LOG_ID } from '@/logging/index'
+import { clearPlugins } from '@/plugins/index'
+import { acquireCacheLock, releaseCacheLock } from '@/runtime/cache-lock'
+import { nativeResourceCollectorDependencies } from '@/resources/native'
+import { destroyResourceCollector, initializeResourceCollector } from '@/resources/instance'
 
 // The host application owns the Bare runtime lifecycle: this module sets up the
 // shared engine state and tears it back down on `close()`, but never claims
@@ -35,6 +37,7 @@ export function initialize(): void {
 
   initEnv()
   acquireCacheLock()
+  initializeResourceCollector(nativeResourceCollectorDependencies)
 
   // A `subscribeServerLogs` consumer can attach right away. Bound the global
   // startup buffer the same way model-load buffering is bounded: if nothing
@@ -66,6 +69,7 @@ function clearRegistries(): void {
 async function runCleanup(): Promise<void> {
   if (cleanupRan) return
   cleanupRan = true
+  destroyResourceCollector()
   clearRegistries()
   await Promise.allSettled([
     destroySwarm(),

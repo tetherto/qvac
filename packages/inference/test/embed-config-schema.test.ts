@@ -1,10 +1,7 @@
 import test from 'brittle'
-import { embedConfigBaseSchema } from '../src/schemas/llamacpp-config'
-import {
-  loadModelOptionsToRequestSchema,
-  loadModelSrcRequestSchema
-} from '../src/schemas/load-model'
-import { ModelType } from '../src/schemas'
+import { embedConfigBaseSchema } from '@/schemas/llamacpp-config'
+import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
+import { ModelType } from '@/schemas'
 
 const EMBED_BASE = {
   modelType: ModelType.llamacppEmbedding,

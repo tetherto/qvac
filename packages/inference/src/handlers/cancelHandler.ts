@@ -1,8 +1,8 @@
-import type { CancelRequest, CancelResponse } from '../schemas/cancel.ts'
-import { cancel as cancelByModelId } from '../plugins/ops/cancel.ts'
-import { getRequestRegistry } from '../runtime/index.ts'
-import { markClearCacheForRequest } from './load-model/download-manager.ts'
-import { getEngineLogger } from '../logging/index.ts'
+import type { CancelRequest, CancelResponse } from '@/schemas/cancel'
+import { cancel as cancelByModelId } from '@/plugins/ops/cancel'
+import { getRequestRegistry } from '@/runtime/index'
+import { markClearCacheForRequest } from '@/handlers/load-model/download-manager'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

@@ -1,12 +1,12 @@
-import { getModel } from '../../../../runtime/model-registry.ts'
+import { getModel } from '@/runtime/model-registry'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import Buffer from 'bare-buffer'
-import { type OCRParams, type OCRTextBlock, type OCRStats } from '../../../../schemas/index.ts'
-import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
-import { getCacheDir } from '../../../../utils/index.ts'
-import { ImageFileNotFoundError, InvalidImageInputError } from '../../../../errors/index.ts'
-import { nowMs } from '../../../../profiling/index.ts'
+import { type OCRParams, type OCRTextBlock, type OCRStats } from '@/schemas/index'
+import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
+import { getCacheDir } from '@/utils/index'
+import { ImageFileNotFoundError, InvalidImageInputError } from '@/errors/index'
+import { nowMs } from '@/profiling/index'
 
 interface OCRResponse {
   onUpdate: (callback: (data: unknown) => unknown[]) => {

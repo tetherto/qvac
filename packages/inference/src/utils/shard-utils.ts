@@ -1,8 +1,8 @@
-import { ModelLoadFailedError, InvalidShardUrlPatternError } from '../errors/index.ts'
-import { generateShortHash } from './formatting.ts'
-import { validateAndJoinPath } from './path-security.ts'
-import type { ShardPatternInfo, ShardUrl } from '../schemas/index.ts'
-import { extractAndWriteTensorsFile } from './gguf-tensor-extractor.ts'
+import { ModelLoadFailedError, InvalidShardUrlPatternError } from '@/errors/index'
+import { generateShortHash } from '@/utils/formatting'
+import { validateAndJoinPath } from '@/utils/path-security'
+import type { ShardPatternInfo, ShardUrl } from '@/schemas/index'
+import { extractAndWriteTensorsFile } from '@/utils/gguf-tensor-extractor'
 import { promises as fsPromises } from 'bare-fs'
 
 /**

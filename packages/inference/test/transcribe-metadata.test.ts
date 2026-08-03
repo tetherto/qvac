@@ -8,11 +8,11 @@ import {
   transcribeSegmentSchema,
   type TranscribeSegment,
   type TranscribeStreamResponse
-} from '../src/schemas/transcription'
-import { ModelType } from '../src/schemas/model-types'
-import { createErrorResponse } from '../src/schemas/error'
-import { toTranscribeSegment, assertMetadataSupported } from '../src/utils/transcribe-metadata'
-import { TranscriptionFailedError } from '../src/errors'
+} from '@/schemas/transcription'
+import { ModelType } from '@/schemas/model-types'
+import { createErrorResponse } from '@/schemas/error'
+import { toTranscribeSegment, assertMetadataSupported } from '@/utils/transcribe-metadata'
+import { TranscriptionFailedError } from '@/errors'
 
 // =============================================================================
 // Schema round-trip — transcribeSegmentSchema / transcribeResponseSchema

@@ -1,13 +1,13 @@
 import test from 'brittle'
-import { llmPlugin } from '../src/plugins/builtin/llamacpp-completion/plugin'
+import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import {
   clearRegistry,
   registerModel,
   unregisterModel,
   type AnyModel
-} from '../src/runtime/model-registry'
-import { getRequestRegistry } from '../src/runtime'
-import { ModelType } from '../src/schemas'
+} from '@/runtime/model-registry'
+import { getRequestRegistry } from '@/runtime'
+import { ModelType } from '@/schemas'
 
 // -----------------------------------------------------------------------------
 // QVAC-19346 regression — cancelling a *queued* same-model completion must not

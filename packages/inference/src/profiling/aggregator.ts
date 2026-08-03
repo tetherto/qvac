@@ -3,8 +3,8 @@
  * Uses a ring buffer for O(1) event insertion.
  */
 
-import type { ProfilingEvent, AggregatedStats } from './types.ts'
-import { getGlobalSingleton } from '../utils/global-singleton.ts'
+import type { ProfilingEvent, AggregatedStats } from '@/profiling/types'
+import { getGlobalSingleton } from '@/utils/global-singleton'
 import {
   createRingBuffer,
   ringBufferPush,
@@ -13,7 +13,7 @@ import {
   ringBufferResize,
   ringBufferDroppedCount,
   type RingBufferState
-} from './ring-buffer.ts'
+} from '@/profiling/ring-buffer'
 
 const DEFAULT_MAX_RECENT_EVENTS = 1000
 

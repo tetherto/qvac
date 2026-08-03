@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { collectTtsStats } from '../src/utils/tts-stats'
+import { collectTtsStats } from '@/utils/tts-stats'
 
 test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
   const stats = collectTtsStats({

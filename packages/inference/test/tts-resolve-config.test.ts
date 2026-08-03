@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { ttsConfigSchema } from '../src/schemas/text-to-speech'
-import { LegacyTtsModelDeprecatedError } from '../src/errors'
+import { ttsConfigSchema } from '@/schemas/text-to-speech'
+import { LegacyTtsModelDeprecatedError } from '@/errors'
 
 type TtsGgmlDebugModel = {
   _streamChunkTokens?: number
@@ -22,7 +22,7 @@ type TtsGgmlDebugModel = {
 }
 
 test('ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsModelDeprecatedError', async (t) => {
-  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
   const legacyConfig = {
     ttsEngine: 'chatterbox',
     language: 'en',
@@ -51,7 +51,7 @@ test('ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsMode
 })
 
 test('ttsPlugin createModel: forwards Chatterbox native constructor options', async (t) => {
-  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
 
   const result = ttsPlugin.createModel({
     modelId: 'tts-chatterbox-test',
@@ -83,7 +83,7 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
 })
 
 test('ttsPlugin resolveConfig: resolves LavaSR enhancer/denoiser to artifacts and strips *Src', async (t) => {
-  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
 
   const resolved = await ttsPlugin.resolveConfig!(
     {
@@ -111,7 +111,7 @@ test('ttsPlugin resolveConfig: resolves LavaSR enhancer/denoiser to artifacts an
 })
 
 test('ttsPlugin resolveConfig: resolves Chatterbox LavaSR artifacts and strips *Src', async (t) => {
-  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
 
   const resolved = await ttsPlugin.resolveConfig!(
     {
@@ -140,7 +140,7 @@ test('ttsPlugin resolveConfig: resolves Chatterbox LavaSR artifacts and strips *
 })
 
 test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertonic)', async (t) => {
-  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
 
   const result = ttsPlugin.createModel({
     modelId: 'tts-supertonic-lavasr',
@@ -170,7 +170,7 @@ test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertoni
 })
 
 test('ttsPlugin createModel: forwards LavaSR enhancer (chatterbox)', async (t) => {
-  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
 
   const result = ttsPlugin.createModel({
     modelId: 'tts-chatterbox-lavasr',

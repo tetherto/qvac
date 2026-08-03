@@ -1,6 +1,6 @@
-import { send } from '../dispatch.ts'
-import { type CancelClientInput, type CancelParams, type CancelRequest } from '../schemas/index.ts'
-import { InvalidResponseError, CancelFailedError } from '../errors/index.ts'
+import { send } from '@/dispatch'
+import { type CancelClientInput, type CancelParams, type CancelRequest } from '@/schemas/index'
+import { InvalidResponseError, CancelFailedError } from '@/errors/index'
 
 /**
  * Cancels an ongoing operation.

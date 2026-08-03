@@ -1,6 +1,6 @@
-import type { SuspendResponse } from '../schemas/index.ts'
-import { suspendRuntime } from '../runtime/runtime-lifecycle.ts'
-import { LifecycleSuspendFailedError } from '../errors/index.ts'
+import type { SuspendResponse } from '@/schemas/index'
+import { suspendRuntime } from '@/runtime/runtime-lifecycle'
+import { LifecycleSuspendFailedError } from '@/errors/index'
 
 export async function handleSuspend(): Promise<SuspendResponse> {
   try {

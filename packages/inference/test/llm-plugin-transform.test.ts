@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { transformLlmConfig } from '../src/plugins/builtin/llamacpp-completion/transform'
-import { llmConfigSchema } from '../src/schemas/llamacpp-config'
+import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
+import { llmConfigSchema } from '@/schemas/llamacpp-config'
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return llmConfigSchema.parse(overrides)

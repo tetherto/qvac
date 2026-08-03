@@ -2,10 +2,10 @@
  * JSON, table, and summary export utilities for profiling data.
  */
 
-import type { ProfilerExport, AggregatedStats } from './types.ts'
-import { getEffectiveConfig, getAggregates, getRecentEvents } from './controller.ts'
-import { getDroppedCount, getEventCount } from './aggregator.ts'
-import { nowMs } from './clock.ts'
+import type { ProfilerExport, AggregatedStats } from '@/profiling/types'
+import { getEffectiveConfig, getAggregates, getRecentEvents } from '@/profiling/controller'
+import { getDroppedCount, getEventCount } from '@/profiling/aggregator'
+import { nowMs } from '@/profiling/clock'
 
 export function exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport {
   const config = getEffectiveConfig()

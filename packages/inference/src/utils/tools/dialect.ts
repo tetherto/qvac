@@ -1,4 +1,4 @@
-import type { ToolDialect } from '../../schemas/index.ts'
+import type { ToolDialect } from '@/schemas/index'
 
 /**
  * Detects the tool-call dialect from a model's registry name and file path.

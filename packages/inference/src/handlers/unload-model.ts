@@ -1,8 +1,8 @@
-import { unloadModel } from '../plugins/ops/unload-model.ts'
-import { getRegistryStats } from '../runtime/model-registry.ts'
-import { hasActiveProviders } from '../p2p/swarm.ts'
-import type { UnloadModelRequest, UnloadModelResponse } from '../schemas/index.ts'
-import { getEngineLogger } from '../logging/index.ts'
+import { unloadModel } from '@/plugins/ops/unload-model'
+import { getRegistryStats } from '@/runtime/model-registry'
+import { hasActiveProviders } from '@/p2p/swarm'
+import type { UnloadModelRequest, UnloadModelResponse } from '@/schemas/index'
+import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 

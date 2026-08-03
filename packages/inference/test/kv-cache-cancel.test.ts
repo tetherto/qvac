@@ -3,7 +3,7 @@ import {
   decideCachedHistorySlice,
   type HistoryMessage,
   shouldCommitCachedTurn
-} from '../src/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
+} from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
 
 // -----------------------------------------------------------------------------
 // Unit-level regression coverage for `decideCachedHistorySlice` — the pure

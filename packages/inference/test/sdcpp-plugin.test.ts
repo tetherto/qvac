@@ -12,16 +12,13 @@ import {
   ERROR_CODES,
   type DiffusionStreamResponse,
   type PluginInvokeStreamResponse
-} from '../src/schemas'
-import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '../src/schemas/load-model'
-import { clearPlugins, registerPlugin, hasPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
-import { handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
-import {
-  PluginResponseValidationFailedError,
-  PluginRequestValidationFailedError
-} from '../src/errors'
-import { diffusion as diffusionOp } from '../src/plugins/builtin/sdcpp-generation/ops/diffusion'
+} from '@/schemas'
+import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '@/schemas/load-model'
+import { clearPlugins, registerPlugin, hasPlugin } from '@/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import { handlePluginInvokeStream } from '@/handlers/plugin-invoke'
+import { PluginResponseValidationFailedError, PluginRequestValidationFailedError } from '@/errors'
+import { diffusion as diffusionOp } from '@/plugins/builtin/sdcpp-generation/ops/diffusion'
 
 // ============================================
 // sdcppConfigSchema

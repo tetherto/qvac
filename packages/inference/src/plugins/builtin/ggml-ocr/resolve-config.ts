@@ -3,10 +3,10 @@ import {
   type ModelSrcInput,
   type ResolveContext,
   type ResolveResult
-} from '../../../schemas/index.ts'
-import { ModelLoadFailedError } from '../../../errors/index.ts'
-import { hyperdriveUrlSchema } from '../../../schemas/load-model.ts'
-import { OCR_CRAFT, OCR_DOCTR_1 } from '../../../models/registry/index.ts'
+} from '@/schemas/index'
+import { ModelLoadFailedError } from '@/errors/index'
+import { hyperdriveUrlSchema } from '@/schemas/load-model'
+import { OCR_CRAFT, OCR_DOCTR_1 } from '@/models/registry/index'
 
 type OcrPipelineType = NonNullable<OCRConfig['pipelineType']>
 

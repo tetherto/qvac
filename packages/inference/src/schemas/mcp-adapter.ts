@@ -1,4 +1,4 @@
-import type { JsonSchema } from './json-schema.ts'
+import type { JsonSchema } from '@/schemas/json-schema'
 
 // ============== MCP Client Types (Duck-typed interface) ==============
 

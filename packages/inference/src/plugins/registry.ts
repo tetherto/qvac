@@ -2,16 +2,17 @@ import {
   pluginDefinitionRuntimeSchema,
   type QvacPlugin,
   type PluginHandlerDefinition
-} from '../schemas/plugin.ts'
-import { isModelTypeAlias } from '../schemas/index.ts'
+} from '@/schemas/plugin'
+import { isModelTypeAlias } from '@/schemas/index'
 import {
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginLoggingInvalidError,
   PluginModelTypeReservedError
-} from '../errors/index.ts'
-import { createAddonLoggerCallback } from '../logging/addon.ts'
-import { formatZodError } from '../utils/zod-error.ts'
+} from '@/errors/index'
+import { createAddonLoggerCallback } from '@/logging/addon'
+import { getEngineLogger } from '@/logging'
+import { formatZodError } from '@/utils/zod-error'
 
 const plugins = new Map<string, QvacPlugin>()
 
@@ -108,7 +109,18 @@ export function clearPlugins(): void {
       const loggingModule = plugin.logging.module as {
         releaseLogger?: () => void
       }
-      loggingModule.releaseLogger?.()
+      try {
+        loggingModule.releaseLogger?.()
+      } catch (error) {
+        // A plugin's logger teardown must not abort the sweep or leave the
+        // registry half-cleared for the next caller — but surface it, so a leaked
+        // reference or async handle is not masked as a clean teardown.
+        getEngineLogger().warn(
+          `[${plugin.modelType}] releaseLogger failed during clearPlugins: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
     }
   }
   plugins.clear()

@@ -1,40 +1,41 @@
-import { type Request } from './schemas/index.ts'
-import { dispatchPluginReply, dispatchPluginStream } from './handlers/plugin-dispatch.ts'
-import { getModelEntry } from './runtime/model-registry.ts'
-import { handleLoadModel } from './handlers/load-model/index.ts'
-import { handleLoadModelDelegated } from './p2p/load-model-delegated.ts'
-import { handleCompletionStreamDelegated } from './p2p/completion-stream-delegated.ts'
-import { handleUnloadModel } from './handlers/unload-model.ts'
-import { handleUnloadModelDelegated } from './p2p/unload-model-delegated.ts'
-import { handleLoggingStream } from './handlers/logging-stream.ts'
-import { cancelHandler } from './handlers/cancelHandler.ts'
-import { provideHandler } from './p2p/provideHandler.ts'
-import { stopProvideHandler } from './p2p/stopProvideHandler.ts'
-import { handleRag } from './rag/handler.ts'
-import { handleDeleteCache } from './handlers/delete-cache.ts'
-import { handleDownloadAsset } from './handlers/download-asset.ts'
-import { handleGetModelInfo } from './handlers/get-model-info.ts'
-import { handleGetLoadedModelInfo } from './handlers/get-loaded-model-info.ts'
-import { handleHeartbeat } from './handlers/heartbeat.ts'
-import { handleHeartbeatDelegated } from './p2p/heartbeat-delegated.ts'
-import { handleFinetune } from './handlers/finetune.ts'
-import { handleCompletionOrchestrate } from './handlers/completion-orchestrate.ts'
-import { handleCancelDelegated } from './p2p/cancel-delegated.ts'
-import { handlePluginInvoke, handlePluginInvokeStream } from './handlers/plugin-invoke.ts'
+import { type Request } from '@/schemas/index'
+import { dispatchPluginReply, dispatchPluginStream } from '@/handlers/plugin-dispatch'
+import { getModelEntry } from '@/runtime/model-registry'
+import { handleLoadModel } from '@/handlers/load-model/index'
+import { handleLoadModelDelegated } from '@/p2p/load-model-delegated'
+import { handleCompletionStreamDelegated } from '@/p2p/completion-stream-delegated'
+import { handleUnloadModel } from '@/handlers/unload-model'
+import { handleUnloadModelDelegated } from '@/p2p/unload-model-delegated'
+import { handleLoggingStream } from '@/handlers/logging-stream'
+import { cancelHandler } from '@/handlers/cancelHandler'
+import { provideHandler } from '@/p2p/provideHandler'
+import { stopProvideHandler } from '@/p2p/stopProvideHandler'
+import { handleRag } from '@/rag/handler'
+import { handleDeleteCache } from '@/handlers/delete-cache'
+import { handleDownloadAsset } from '@/handlers/download-asset'
+import { handleGetModelInfo } from '@/handlers/get-model-info'
+import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
+import { handleGetSystemResources } from '@/handlers/get-system-resources'
+import { handleHeartbeat } from '@/handlers/heartbeat'
+import { handleHeartbeatDelegated } from '@/p2p/heartbeat-delegated'
+import { handleFinetune } from '@/handlers/finetune'
+import { handleCompletionOrchestrate } from '@/handlers/completion-orchestrate'
+import { handleCancelDelegated } from '@/p2p/cancel-delegated'
+import { handlePluginInvoke, handlePluginInvokeStream } from '@/handlers/plugin-invoke'
 import {
   handleModelRegistryList,
   handleModelRegistrySearch,
   handleModelRegistryGetModel
-} from './handlers/registry.ts'
-import { handleSuspend } from './handlers/suspend.ts'
-import { handleResume } from './handlers/resume.ts'
-import { handleState } from './handlers/state.ts'
+} from '@/handlers/registry'
+import { handleSuspend } from '@/handlers/suspend'
+import { handleResume } from '@/handlers/resume'
+import { handleState } from '@/handlers/state'
 import type {
   HandlerEntry,
   ReplyHandler,
   StreamHandler,
   DuplexStreamHandler
-} from './handlers/types.ts'
+} from '@/handlers/types'
 
 // Capability handlers route a request to whichever plugin serves the loaded
 // model's type. Every model capability shares this shape, so one factory each
@@ -118,6 +119,7 @@ export const registry: Record<string, HandlerEntry> = {
   deleteCache: { type: 'reply', handler: handleDeleteCache },
   getModelInfo: { type: 'reply', handler: handleGetModelInfo },
   getLoadedModelInfo: { type: 'reply', handler: handleGetLoadedModelInfo },
+  getSystemResources: { type: 'reply', handler: handleGetSystemResources },
   pluginInvoke: { type: 'reply', handler: handlePluginInvoke },
   modelRegistryList: { type: 'reply', handler: handleModelRegistryList },
   modelRegistrySearch: { type: 'reply', handler: handleModelRegistrySearch },

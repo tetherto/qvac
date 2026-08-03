@@ -4,7 +4,7 @@ import test from 'brittle'
 // loading the N-API addon at module init when running under Bun.
 
 test('nmtPlugin.resolveConfig: IndicTrans config passes through without vocab resolution', async (t) => {
-  const { nmtPlugin } = await import('../src/plugins/builtin/nmtcpp-translation/plugin')
+  const { nmtPlugin } = await import('@/plugins/builtin/nmtcpp-translation/plugin')
 
   const config = {
     engine: 'IndicTrans' as const,
@@ -31,7 +31,7 @@ test('nmtPlugin.resolveConfig: IndicTrans config passes through without vocab re
 })
 
 test('nmtPlugin.resolveConfig: Bergamot config strips vocab sources and delegates to resolveBergamotVocab', async (t) => {
-  const { nmtPlugin } = await import('../src/plugins/builtin/nmtcpp-translation/plugin')
+  const { nmtPlugin } = await import('@/plugins/builtin/nmtcpp-translation/plugin')
 
   const config = {
     engine: 'Bergamot' as const,
