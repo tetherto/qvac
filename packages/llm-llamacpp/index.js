@@ -155,7 +155,7 @@ function normalizeGenerationParams(generationParams) {
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
-/// Upper bound for `parallel`, mirroring kMaxParallelWorkers in
+/// Upper bound for `parallel`, mirroring K_MAX_PARALLEL_WORKERS in
 /// addon/src/addon/AddonJs.hpp — the engine's own n_seq_max ceiling
 /// (LLAMA_MAX_SEQ in qvac-fabric). Keep the two in sync.
 const MAX_PARALLEL = 256
@@ -277,7 +277,7 @@ class LlmLlamacpp {
     // Concurrency is the caller's configured `parallel` (n_seq_max); values
     // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
     // derived once here rather than queried from the loaded model. The 1..256
-    // range mirrors the native kMaxParallelWorkers contract in createInstance
+    // range mirrors the native K_MAX_PARALLEL_WORKERS contract in createInstance
     // (addon/src/addon/AddonJs.hpp) — keep the two in sync. 256 is the
     // engine's own n_seq_max ceiling (LLAMA_MAX_SEQ in qvac-fabric).
     if (config?.parallel !== undefined) {

@@ -16,6 +16,6 @@ namespace qvac_lib_inference_addon_llama {
 /// `test/unit/test_parallel_ceiling.cpp` pins this value and `MAX_PARALLEL` in
 /// `index.js` mirrors it for the JS-side validation — a fabric bump that
 /// changes LLAMA_MAX_SEQ must update all three plus the docs.
-inline constexpr unsigned kMaxParallelWorkers = 256;
+inline constexpr unsigned K_MAX_PARALLEL_WORKERS = 256;
 
 } // namespace qvac_lib_inference_addon_llama

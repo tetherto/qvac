@@ -520,7 +520,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // moved into the model; absent means single-slot (1), a malformed or
   // out-of-range value throws before the model or scheduler is constructed.
   auto config = args.getSubmap(1, "config");
-  // Bounded by kMaxParallelWorkers (the engine's n_seq_max ceiling; see its
+  // Bounded by K_MAX_PARALLEL_WORKERS (the engine's n_seq_max ceiling; see its
   // definition above). The pool is thread-per-slot and eager: `parallel` OS
   // threads are spawned at load and live for the model's lifetime, so a server
   // pays the whole cost upfront and is ready to serve at full concurrency with
@@ -529,8 +529,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   unsigned maxConcurrency = 1;
   if (auto it = config.find("parallel"); it != config.end()) {
     try {
-      maxConcurrency =
-          parseUnsignedInRange(it->second, 1, kMaxParallelWorkers, "parallel");
+      maxConcurrency = parseUnsignedInRange(
+          it->second, 1, K_MAX_PARALLEL_WORKERS, "parallel");
     } catch (const std::invalid_argument& e) {
       throw StatusError(general_error::InvalidArgument, e.what());
     }

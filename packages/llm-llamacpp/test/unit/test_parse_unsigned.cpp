@@ -8,7 +8,7 @@
 using qvac_lib_inference_addon_llama::parseUnsignedInRange;
 
 namespace {
-/// Mirrors createInstance's range (kMaxParallelWorkers == the engine's
+/// Mirrors createInstance's range (K_MAX_PARALLEL_WORKERS == the engine's
 /// LLAMA_MAX_SEQ); test_parallel_ceiling.cpp pins the constant itself.
 unsigned parseParallel(const std::string& raw) {
   return parseUnsignedInRange(raw, 1, 256, "parallel");
