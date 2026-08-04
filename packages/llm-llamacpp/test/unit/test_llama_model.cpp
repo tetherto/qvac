@@ -814,7 +814,7 @@ TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringTrue) {
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_FALSE(model.getCommonParams().model.use_mmap);
+  EXPECT_FALSE(model.getCommonParams().use_mmap);
 }
 
 TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
@@ -829,7 +829,7 @@ TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_TRUE(model.getCommonParams().model.use_mmap);
+  EXPECT_TRUE(model.getCommonParams().use_mmap);
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
