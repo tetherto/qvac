@@ -189,9 +189,9 @@
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
-    "bare:ensureprebuilds:whispercpp": "cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-x64",
+    "bare:ensureprebuilds:asr": "cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-ia32 && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-arm && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-x64",
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
-    "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
+    "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:asr && bun run bare:ensureprebuilds:embeddings",
     "prepare:husky": "bun run husky",
     "bare:example": "bare ./scripts/bare-bootstrap.js",
     "contract:export": "tsx ./scripts/export-contract.ts",
@@ -202,6 +202,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/asr-ggml": "^0.1.0",
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.15.1",
     "@qvac/decoder-audio": "^0.5.0",
@@ -214,8 +215,6 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
-    "@qvac/transcription-parakeet": "^0.10.0",
-    "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.2.1",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.16.2",
