@@ -112,8 +112,7 @@ void TextLlmContext::initializeCommonState() {
   needsRecurrentSnapshot_ =
       (model != nullptr) &&
       qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot(
-          llama_model_is_recurrent(model),
-          llama_model_is_hybrid(model),
+          llama_model_is_recurrent(model), llama_model_is_hybrid(model),
           isDeepSeekV4);
   compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
   // EOS-inside-reasoning recovery (close-marker substitution +
@@ -125,14 +124,15 @@ void TextLlmContext::initializeCommonState() {
   // tracking / compaction via `reasoningEnabled_`, just not this
   // recovery.
   {
-    isQwen3ReasoningFamily_ = architecture.has_value() &&
+    isQwen3ReasoningFamily_ =
+        architecture.has_value() &&
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(architecture.value());
   }
   setRemoveThinkingFromContext(
       architecture.has_value() &&
-      qvac_lib_inference_addon_llama::utils::
-          usesThinkingCompactionByDefault(architecture.value()));
+      qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
+          architecture.value()));
 
   // Precompute the EOG token id set used by the EOS-inside-reasoning recovery
   // (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family arms that
@@ -1147,12 +1147,9 @@ bool TextLlmContext::onCancel(
 bool TextLlmContext::shouldRollbackInterruptedReasoning() const {
   return qvac_lib_inference_addon_llama::utils::
       shouldRollbackInterruptedReasoning(
-          generationStopReason_,
-          needsRecurrentSnapshot_,
-          removeThinkingFromContext_,
-          reasoningEnabled_,
-          reasoningState_.inside_reasoning,
-          compactor_.hasOpenSpan(),
+          generationStopReason_, needsRecurrentSnapshot_,
+          removeThinkingFromContext_, reasoningEnabled_,
+          reasoningState_.inside_reasoning, compactor_.hasOpenSpan(),
           compactor_.hasCapturedCloseSpan());
 }
 

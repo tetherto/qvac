@@ -56,11 +56,11 @@ public:
 
 class MtmdLlmContextTestPeer {
 public:
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
+  static bool removeThinkingFromContext(const MtmdLlmContext &context) {
     return context.removeThinkingFromContext_;
   }
 
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
+  static bool compactorRemovesThinking(const MtmdLlmContext &context) {
     return context.compactor_.removeThinkingFromContext();
   }
 };

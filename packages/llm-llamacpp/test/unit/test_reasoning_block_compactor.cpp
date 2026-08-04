@@ -13,11 +13,10 @@
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot;
 using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
-using qvac_lib_inference_addon_llama::utils::
-    needsFullStateSnapshot;
 using qvac_lib_inference_addon_llama::utils::
     shouldCaptureRecurrentReasoningBoundary;
 using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;
@@ -146,49 +145,49 @@ TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {
   // Every terminal stop reason (EOG, antiprompt, n_predict, and sequence
   // limit) must restore a checkpoint-backed context rather than attempting
   // to compact an unclosed span.
-  EXPECT_TRUE(shouldRollbackInterruptedReasoning(
-      GenerationStopReason::Eos,
-      /*needsRecurrentSnapshot=*/true,
-      /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*insideReasoning=*/true,
-      /*hasOpenSpan=*/true,
-      /*hasCapturedCloseSpan=*/false));
-  EXPECT_TRUE(shouldRollbackInterruptedReasoning(
-      GenerationStopReason::Antiprompt,
-      /*needsRecurrentSnapshot=*/true,
-      /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*insideReasoning=*/true,
-      /*hasOpenSpan=*/true,
-      /*hasCapturedCloseSpan=*/false));
+  EXPECT_TRUE(
+      shouldRollbackInterruptedReasoning(GenerationStopReason::Eos,
+                                         /*needsRecurrentSnapshot=*/true,
+                                         /*removeThinkingFromContext=*/true,
+                                         /*reasoningEnabled=*/true,
+                                         /*insideReasoning=*/true,
+                                         /*hasOpenSpan=*/true,
+                                         /*hasCapturedCloseSpan=*/false));
+  EXPECT_TRUE(
+      shouldRollbackInterruptedReasoning(GenerationStopReason::Antiprompt,
+                                         /*needsRecurrentSnapshot=*/true,
+                                         /*removeThinkingFromContext=*/true,
+                                         /*reasoningEnabled=*/true,
+                                         /*insideReasoning=*/true,
+                                         /*hasOpenSpan=*/true,
+                                         /*hasCapturedCloseSpan=*/false));
 }
 
 TEST(ReasoningSnapshotPolicy, KeepsCompletedOrNonTerminalReasoning) {
-  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
-      GenerationStopReason::None,
-      /*needsRecurrentSnapshot=*/true,
-      /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*insideReasoning=*/true,
-      /*hasOpenSpan=*/true,
-      /*hasCapturedCloseSpan=*/false));
-  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
-      GenerationStopReason::Eos,
-      /*needsRecurrentSnapshot=*/true,
-      /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*insideReasoning=*/false,
-      /*hasOpenSpan=*/true,
-      /*hasCapturedCloseSpan=*/false));
-  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
-      GenerationStopReason::Eos,
-      /*needsRecurrentSnapshot=*/true,
-      /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*insideReasoning=*/true,
-      /*hasOpenSpan=*/true,
-      /*hasCapturedCloseSpan=*/true));
+  EXPECT_FALSE(
+      shouldRollbackInterruptedReasoning(GenerationStopReason::None,
+                                         /*needsRecurrentSnapshot=*/true,
+                                         /*removeThinkingFromContext=*/true,
+                                         /*reasoningEnabled=*/true,
+                                         /*insideReasoning=*/true,
+                                         /*hasOpenSpan=*/true,
+                                         /*hasCapturedCloseSpan=*/false));
+  EXPECT_FALSE(
+      shouldRollbackInterruptedReasoning(GenerationStopReason::Eos,
+                                         /*needsRecurrentSnapshot=*/true,
+                                         /*removeThinkingFromContext=*/true,
+                                         /*reasoningEnabled=*/true,
+                                         /*insideReasoning=*/false,
+                                         /*hasOpenSpan=*/true,
+                                         /*hasCapturedCloseSpan=*/false));
+  EXPECT_FALSE(
+      shouldRollbackInterruptedReasoning(GenerationStopReason::Eos,
+                                         /*needsRecurrentSnapshot=*/true,
+                                         /*removeThinkingFromContext=*/true,
+                                         /*reasoningEnabled=*/true,
+                                         /*insideReasoning=*/true,
+                                         /*hasOpenSpan=*/true,
+                                         /*hasCapturedCloseSpan=*/true));
 }
 
 TEST(ReasoningRollbackStateAppend, AppendsRegardlessOfCaptureFlag) {
