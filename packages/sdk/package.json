@@ -318,5 +318,11 @@
       "optional": true
     }
   },
+  "overrides": {
+    "tar": "^7.5.22",
+    "shell-quote": "^1.10.0",
+    "@electron/rebuild": "^4.2.0"
+  },
   "patchedDependencies": {}
 }
+
