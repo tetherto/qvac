@@ -14,6 +14,7 @@
 #include <gguf.h>
 #include <gtest/gtest.h>
 
+#include "groot_embodiment_test_util.hpp"
 #include "model-interface/groot.hpp"
 #include "pi05_compute.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -49,9 +50,18 @@ struct ggml_tensor* g(struct ggml_context* c, const char* n) {
   return ggml_get_tensor(c, n);
 }
 
-qvac_lib_infer_vla_ggml::GrootLinearWeights
-linW(struct ggml_context* c, const std::string& prefix) {
-  return {g(c, (prefix + ".weight").c_str()), g(c, (prefix + ".bias").c_str())};
+// Reads embodiment.* weights from the GGUF, slicing the default row when the
+// fixture is multi-embodiment (rank-3 weight / rank-2 bias); `view` owns the
+// view tensors, `src` holds the GGUF data.
+qvac_lib_infer_vla_ggml::GrootLinearWeights linW(
+    struct ggml_context* src, struct ggml_context* view,
+    struct gguf_context* gguf, const std::string& prefix) {
+  const int row = groot_embodiment_test_util::defaultEmbodimentRow(gguf);
+  return {
+      groot_embodiment_test_util::embodimentRow(
+          view, g(src, (prefix + ".weight").c_str()), row, 2),
+      groot_embodiment_test_util::embodimentRow(
+          view, g(src, (prefix + ".bias").c_str()), row, 1)};
 }
 
 // Feed a numpy (…, D) row-major buffer as ggml ne=[D, rows].
@@ -62,9 +72,17 @@ struct ggml_tensor* feed2d(
   return t;
 }
 
-void check(const char* tag, const float* got, const std::vector<float>& exp) {
-  const float cos = cosineSim(got, exp.data(), exp.size());
-  const float rel = relMaxDiff(got, exp.data(), exp.size());
+// Takes the graph output tensor rather than a raw pointer so the element count
+// is checked: cosineSim/relMaxDiff iterate exp.size(), which would run off the
+// end of the ggml buffer (UB, not a clean failure) on a shape regression.
+void check(
+    const char* tag, const struct ggml_tensor* got,
+    const std::vector<float>& exp) {
+  ASSERT_EQ(got->type, GGML_TYPE_F32) << tag;
+  ASSERT_EQ(static_cast<size_t>(ggml_nelements(got)), exp.size()) << tag;
+  const auto* p = static_cast<const float*>(got->data);
+  const float cos = cosineSim(p, exp.data(), exp.size());
+  const float rel = relMaxDiff(p, exp.data(), exp.size());
   std::cerr << "[M4.2] " << tag << ": cos=" << cos << " rel=" << rel << "\n";
   EXPECT_GT(cos, 0.9995f) << tag;
   EXPECT_LT(rel, 0.01f) << tag;
@@ -117,10 +135,7 @@ TEST(GrootM4_2, EncodersMatchPytorch) {
     struct ggml_cgraph* gf = ggml_new_graph(c);
     ggml_build_forward_expand(gf, out);
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
-    check(
-        "timestep",
-        static_cast<const float*>(out->data),
-        act.readF32("timestep_encoder_output.call0"));
+    check("timestep", out, act.readF32("timestep_encoder_output.call0"));
   }
 
   // ── 2. State encoder (CategorySpecificMLP, ReLU) ──────────────────────
@@ -131,16 +146,13 @@ TEST(GrootM4_2, EncodersMatchPytorch) {
     struct ggml_tensor* out = grootBuildCategoryMlpGraph(
         c,
         x,
-        linW(ctxW, "embodiment.state_encoder.layer1"),
-        linW(ctxW, "embodiment.state_encoder.layer2"));
+        linW(ctxW, c, gguf, "embodiment.state_encoder.layer1"),
+        linW(ctxW, c, gguf, "embodiment.state_encoder.layer2"));
     ASSERT_NE(out, nullptr);
     struct ggml_cgraph* gf = ggml_new_graph(c);
     ggml_build_forward_expand(gf, out);
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
-    check(
-        "state_encoder",
-        static_cast<const float*>(out->data),
-        act.readF32("state_encoder_output.call0"));
+    check("state_encoder", out, act.readF32("state_encoder_output.call0"));
   }
 
   // ── 3. Action decoder (CategorySpecificMLP, ReLU) ─────────────────────
@@ -151,16 +163,13 @@ TEST(GrootM4_2, EncodersMatchPytorch) {
     struct ggml_tensor* out = grootBuildCategoryMlpGraph(
         c,
         x,
-        linW(ctxW, "embodiment.action_decoder.layer1"),
-        linW(ctxW, "embodiment.action_decoder.layer2"));
+        linW(ctxW, c, gguf, "embodiment.action_decoder.layer1"),
+        linW(ctxW, c, gguf, "embodiment.action_decoder.layer2"));
     ASSERT_NE(out, nullptr);
     struct ggml_cgraph* gf = ggml_new_graph(c);
     ggml_build_forward_expand(gf, out);
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
-    check(
-        "action_decoder",
-        static_cast<const float*>(out->data),
-        act.readF32("action_decoder_output.call0"));
+    check("action_decoder", out, act.readF32("action_decoder_output.call0"));
   }
 
   // ── 4. Action encoder (MultiEmbodimentActionEncoder, swish) ───────────
@@ -177,19 +186,16 @@ TEST(GrootM4_2, EncodersMatchPytorch) {
         c,
         actions,
         tau,
-        linW(ctxW, "embodiment.action_encoder.w1"),
-        linW(ctxW, "embodiment.action_encoder.w2"),
-        linW(ctxW, "embodiment.action_encoder.w3"),
+        linW(ctxW, c, gguf, "embodiment.action_encoder.w1"),
+        linW(ctxW, c, gguf, "embodiment.action_encoder.w2"),
+        linW(ctxW, c, gguf, "embodiment.action_encoder.w3"),
         1536,
         40);
     ASSERT_NE(out, nullptr);
     struct ggml_cgraph* gf = ggml_new_graph(c);
     ggml_build_forward_expand(gf, out);
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
-    check(
-        "action_encoder",
-        static_cast<const float*>(out->data),
-        act.readF32("action_encoder_output.call0"));
+    check("action_encoder", out, act.readF32("action_encoder_output.call0"));
   }
 
   ggml_free(c);

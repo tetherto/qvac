@@ -136,12 +136,14 @@ reasoning routed to \`reasoning_content\` (a \`message.reasoning_content\` field
 on blocking responses, \`delta.reasoning_content\` chunks when streaming) so it
 never appears in \`content\`.
 
-**Token accounting**: \`usage.prompt_tokens\`, \`completion_tokens\` and
+**Token accounting**: \`usage.prompt_tokens\` and
 \`prompt_tokens_details.cached_tokens\` come from \`CompletionStats\` when the SDK
-provides them; \`completion_tokens\` falls back to a whitespace split of the
-output otherwise. When streaming, \`usage\` is emitted only if
-\`stream_options: { include_usage: true }\` is set, as a final chunk with an
-empty \`choices\` array (OpenAI compatibility).
+provides them. \`completion_tokens\` prefers \`stats.emittedTokens\` (non-empty
+addon stream pieces) over \`stats.generatedTokens\` (decode / \`n_eval\` count,
+which inline recovery can inflate toward the \`max_tokens\` / predict budget),
+and falls back to a whitespace split of the output. When streaming, \`usage\`
+is emitted only if \`stream_options: { include_usage: true }\` is set, as a
+final chunk with an empty \`choices\` array (OpenAI compatibility).
 `.trim()
 }
 

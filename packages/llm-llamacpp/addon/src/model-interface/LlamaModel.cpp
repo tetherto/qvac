@@ -1284,6 +1284,38 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
+  // The current llama.cpp common-argument parser does not expose --no-mmap,
+  // so map this addon's string configuration directly to the native model
+  // parameter instead of forwarding it through the generic argument parser.
+  std::optional<bool> noMmap;
+  for (const std::string& key : {"no-mmap", "no_mmap"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      std::string value = it->second;
+      std::ranges::transform(value, value.begin(), ::tolower);
+      const bool enabled = value.empty() || value == "true";
+      if (!enabled && value != "false") {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "no-mmap must be true or false, got: %s", it->second.c_str()));
+      }
+      if (noMmap.has_value() && noMmap.value() != enabled) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            "no-mmap and no_mmap must have the same value");
+      }
+      noMmap = enabled;
+      configFilemap.erase(it);
+    }
+  }
+  if (noMmap.value_or(false)) {
+    params.use_mmap = false;
+  }
+
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
   // fallback path used by llama.cpp does not execute the {%- set persona -%}
   // block that injects the model's persona system prompt, so the model loses

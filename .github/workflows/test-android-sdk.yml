@@ -84,8 +84,10 @@ on:
       # (see jobs with `environment: release`). They are declared required: false
       # here so `secrets: inherit` from a caller with no repo-level values does
       # not fail at the workflow_call boundary; the jobs that consume them have
-      # environment access. AWS auth uses OIDC via AWS_OIDC_ROLE_ARN, so
-      # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are not declared.
+      # environment access. AWS auth uses OIDC, so AWS_ACCESS_KEY_ID /
+      # AWS_SECRET_ACCESS_KEY are not declared.
+      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
+      # repo-level.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
@@ -102,6 +104,8 @@ on:
         required: false
       MQTT_CA_CERT:
         required: false
+      AWS_OIDC_ROLE_ARN:
+        required: true
 
 permissions:
   actions: read

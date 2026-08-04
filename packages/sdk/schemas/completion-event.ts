@@ -7,7 +7,10 @@ export const completionStatsSchema = z.object({
   tokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
   promptTokens: z.number().optional(),
+  // Decode count (`llama_perf` `n_eval`) — length / KV-cache budget decisions.
   generatedTokens: z.number().optional(),
+  // Non-empty addon stream pieces — prefer for OpenAI usage when present.
+  emittedTokens: z.number().optional(),
   avgConcurrentSeq: z.number().optional(),
   backendDevice: z.enum(['cpu', 'gpu']).optional()
 })

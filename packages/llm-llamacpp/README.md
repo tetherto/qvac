@@ -152,7 +152,8 @@ The `config` obj consists of a set of hyper-parameters which can be used to twea
 const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
-  device: 'cpu' // must be specified: 'gpu' or 'cpu' else it will throw an error
+  device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
+  no_mmap: 'true' // disable memory-mapped model loading
 }
 ```
 
@@ -167,7 +168,7 @@ const config = {
 | top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
 | predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
 | seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
-| no_mmap           | "" (passing empty string sets the flag)     | —                            | Disable memory mapping for model loading              |
+| no_mmap           | `""`, `"true"`, or `"false"`                | `"false"`                    | Disable memory mapping for model loading              |
 | reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
@@ -406,7 +407,7 @@ npm run quickstart
 
 ## OCR with Vision-Language Models
 
-In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
+In addition to pipeline-based OCR (`@qvac/ocr-ggml`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
 
 ### Supported OCR Models
 

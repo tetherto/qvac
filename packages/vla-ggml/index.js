@@ -27,6 +27,106 @@ function pickPrimaryGgufPath(files) {
     const FIRST_SHARD_REGEX = /-0*1-of-\d+\.gguf$/;
     return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0];
 }
+// Largest camera count the native resolver accepts (GROOT_MAX_SANE_NUM_CAMERAS)
+// — validated here too so a typo is a JS config error instead of a native throw.
+const MAX_NUM_CAMERAS = 64;
+// Largest embodiment id (GROOT_MAX_EMBODIMENT_CAT_ID). A cat_id indexes GR00T's
+// CategorySpecificLinear bank, whose category dim the architecture fixes at 32,
+// so 0..31 is the whole id space. Bounded here as well as natively because the
+// binding would otherwise have to narrow a JS number to int32, and 2**32 narrows
+// to 0 — silently selecting a different embodiment instead of failing.
+const MAX_EMBODIMENT_CAT_ID = 31;
+// Native error-message prefixes the wrapper classifies on. The C++ throw sites
+// carry these verbatim and are marked with a comment naming this contract, so
+// rewording one there is a visible break rather than a silent change of a
+// public error code.
+const NATIVE_ERR_MARKERS = Object.freeze({
+    // Embodiment resolution — runs before any weight I/O, so every rejection is
+    // about the request, not the file.
+    resolve: "grootResolveEmbodiment:",
+    // An embodiment named on an architecture that has none — also a request
+    // error, but raised by the factory before any model exists to resolve on.
+    archMismatch: "config.embodiment is GR00T-only",
+    // setEmbodiment refused because an inference job is dispatched but unawaited.
+    inFlight: "an inference job is in flight",
+});
+// Map a native throw out of the embodiment paths onto a public error code.
+// Only the resolver's rejections are configuration errors; a switch can also
+// fail because the GGUF moved, a read came up short, or an allocation failed,
+// and reporting those as INVALID_CONFIG points the caller at the wrong problem
+// (and invites an SDK to retry a "bad config" forever). Those are the same
+// weight-read failures the load path reports, so they get the same code.
+function classifyEmbodimentError(err) {
+    const message = typeof err.message === "string" ? err.message : "";
+    if (message.includes(NATIVE_ERR_MARKERS.inFlight)) {
+        return ERR_CODES.JOB_ALREADY_RUNNING;
+    }
+    if (message.includes(NATIVE_ERR_MARKERS.resolve) ||
+        message.includes(NATIVE_ERR_MARKERS.archMismatch)) {
+        return ERR_CODES.INVALID_CONFIG;
+    }
+    return ERR_CODES.FAILED_TO_LOAD_WEIGHTS;
+}
+// Normalize the three accepted spellings of an embodiment selection into
+// { tag, catId, numCameras }: a tag string, a numeric cat_id, or an object
+// carrying either plus an optional camera-count override. `requireSelection`
+// is set for setEmbodiment (a switch must name an embodiment) and clear for the
+// load path (nothing named = the GGUF's default embodiment).
+//
+// A tag and a catId are two spellings of one selection, so passing both is an
+// error rather than a precedence rule — the native resolver rejects it too.
+function normalizeEmbodiment(value, requireSelection) {
+    const bad = (adds) => new QvacErrorAddonVla({ code: ERR_CODES.INVALID_CONFIG, adds });
+    const out = { tag: "", catId: -1, numCameras: 0 };
+    // Unpack the accepted spellings into one { selector, numCameras } shape.
+    let selector;
+    let numCameras;
+    if (value === undefined || value === null) {
+        if (requireSelection) {
+            throw bad("embodiment must be a tag string, a cat_id number, or an object");
+        }
+        return out;
+    }
+    else if (typeof value === "string" || typeof value === "number") {
+        selector = value;
+    }
+    else if (typeof value === "object") {
+        if (value.tag !== undefined && value.catId !== undefined) {
+            throw bad("embodiment accepts either tag or catId, not both");
+        }
+        selector = value.tag !== undefined ? value.tag : value.catId;
+        numCameras = value.numCameras;
+    }
+    else {
+        throw bad("embodiment must be a string, number, or object");
+    }
+    if (typeof selector === "string") {
+        if (selector.length === 0) {
+            throw bad("embodiment tag must be a non-empty string");
+        }
+        out.tag = selector;
+    }
+    else if (typeof selector === "number") {
+        if (!Number.isInteger(selector) ||
+            selector < 0 ||
+            selector > MAX_EMBODIMENT_CAT_ID) {
+            throw bad(`embodiment catId must be an integer in 0..${MAX_EMBODIMENT_CAT_ID}`);
+        }
+        out.catId = selector;
+    }
+    else if (requireSelection) {
+        throw bad("embodiment must name a tag or a catId");
+    }
+    if (numCameras !== undefined && numCameras !== null) {
+        if (!Number.isInteger(numCameras) ||
+            numCameras < 1 ||
+            numCameras > MAX_NUM_CAMERAS) {
+            throw bad(`embodiment numCameras must be an integer in 1..${MAX_NUM_CAMERAS}`);
+        }
+        out.numCameras = numCameras;
+    }
+    return out;
+}
 function validateRunInput(input, hparams) {
     if (!input || typeof input !== "object") {
         throw new QvacErrorAddonVla({
@@ -399,6 +499,10 @@ class VlaModel {
                 adds: ggufPath,
             });
         }
+        // Validated before createInstance so a malformed selector is a JS config
+        // error rather than a native throw. Nothing named = the GGUF's own default
+        // embodiment, which is also a no-op on single-embodiment / non-GR00T GGUFs.
+        const embodimentSel = normalizeEmbodiment(this._config.embodiment, false);
         try {
             // Canonical instance lifecycle (mirrors LLM/embed/NMT):
             // createInstance(jsHandle, params, outputCb) — the framework's
@@ -406,7 +510,16 @@ class VlaModel {
             const backendsDir = this._config.backendsDir
                 ? this._config.backendsDir
                 : path.join(__dirname, "prebuilds");
-            this._handle = binding.createInstance(this, { ggufPath, backend, backendsDir }, (jsHandle, eventTypeName, outputData, errorData) => {
+            this._handle = binding.createInstance(this, {
+                ggufPath,
+                backend,
+                backendsDir,
+                embodiment: embodimentSel.tag,
+                embodimentCatId: embodimentSel.catId >= 0 ? String(embodimentSel.catId) : "",
+                embodimentNumCameras: embodimentSel.numCameras > 0
+                    ? String(embodimentSel.numCameras)
+                    : "",
+            }, (jsHandle, eventTypeName, outputData, errorData) => {
                 this._onAddonEvent(jsHandle, eventTypeName, outputData, errorData);
             });
             // No-op for VLA (no IModelAsyncLoad weights stream) but kept for
@@ -426,8 +539,14 @@ class VlaModel {
             }
             // Same logger-leak guard as the missing-file path above.
             this._releaseNativeLogger();
+            // An unresolvable embodiment is a bad config, not a bad weights file — it
+            // is rejected before any weight I/O happens. Without this, the SAME root
+            // cause reported INVALID_CONFIG through setEmbodiment() and
+            // FAILED_TO_LOAD_WEIGHTS through the constructor. Everything else on this
+            // path is already FAILED_TO_LOAD_WEIGHTS, which is what the shared
+            // classifier falls back to.
             throw new QvacErrorAddonVla({
-                code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+                code: classifyEmbodimentError(loadError),
                 adds: loadError.message,
                 cause: loadError,
             });
@@ -439,6 +558,73 @@ class VlaModel {
     }
     get backendName() {
         return this._backendName;
+    }
+    // Switch a loaded multi-embodiment GR00T model to another embodiment shipped
+    // in the same GGUF — no reload, only that embodiment's weight rows are re-read
+    // (~20MB vs a multi-GB model load). Refreshes the cached hparams:
+    // `numCameras` follows the new embodiment, so subsequent run() calls must pass
+    // that many images.
+    //
+    // Takes a tag string, a numeric cat_id, or `{ tag | catId, numCameras }` —
+    // `numCameras` overrides the GGUF's camera count for that embodiment, which is
+    // how a row whose count was unknown at conversion time is run.
+    //
+    // Rejects (leaving the current embodiment active) for an unknown tag or
+    // cat_id, one not stored in this GGUF, an embodiment with no known camera
+    // count and no override, a single-embodiment model (including selecting the one
+    // row a v1 GGUF bakes in), or an inference that has been dispatched and not
+    // yet awaited.
+    //
+    // Unlike run(), this does NOT hand off to the worker thread: the row re-read
+    // (~20MB) and the pre-transpose rebuild run synchronously, so on Bare's single
+    // JS thread the call blocks other JS work for tens of ms — longer on mobile
+    // flash under load. Accepted trade-off: switching is a control-plane operation
+    // that must be ordered against in-flight inference anyway (hence the rejection
+    // above), and routing it through the job queue would buy concurrency the
+    // embodiment mutex would immediately serialize again. Switch between
+    // inferences, not underneath one.
+    async setEmbodiment(embodiment) {
+        const sel = normalizeEmbodiment(embodiment, true);
+        return this._run(() => this._setEmbodimentInternal(sel));
+    }
+    // eslint-disable-next-line @typescript-eslint/require-await -- kept async so setEmbodiment can serialize it through the exclusive run queue; the switch itself is a synchronous native call.
+    async _setEmbodimentInternal(sel) {
+        if (!this._handle) {
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.INSTANCE_NOT_INITIALIZED,
+            });
+        }
+        // The _run queue is NOT sufficient on its own: run() releases it as soon as
+        // it has dispatched the job and returned the QvacResponse, while the worker
+        // thread reaches infer() later. Switching in that window would run inference
+        // on the NEW weights against input already validated against the OLD
+        // hparams — the native mutex serializes the two but cannot restore the
+        // caller's intended order, so the result would be silently wrong for an
+        // embodiment the caller never selected. Refuse until the response settles.
+        if (this._hasActiveResponse) {
+            throw new QvacErrorAddonVla({
+                code: ERR_CODES.JOB_ALREADY_RUNNING,
+                adds: "await the in-flight run() response before switching embodiment",
+            });
+        }
+        try {
+            this._hparams = binding.setVlaEmbodiment(this._handle, sel.catId >= 0 ? sel.catId : sel.tag, sel.numCameras);
+        }
+        catch (err) {
+            // The binding enforces the same in-flight refusal natively. Pure wrapper
+            // use cannot reach it — _hasActiveResponse is set synchronously after a
+            // job is accepted and cleared only once the response settles, which is
+            // strictly later than the native count clears in process(). It IS
+            // reachable when a caller mixes the wrapper with binding.runJob directly,
+            // which bumps the native count and no JS flag. Same cause as the check
+            // above, so report the same code rather than blaming the config.
+            throw new QvacErrorAddonVla({
+                code: classifyEmbodimentError(err),
+                adds: err.message,
+                cause: err,
+            });
+        }
+        return this._hparams;
     }
     async run(input) {
         return this._run(() => this._runInternal(input));

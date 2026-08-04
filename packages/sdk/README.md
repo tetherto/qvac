@@ -95,9 +95,13 @@ if (resources.sample?.cpu.status === 'supported') {
 }
 ```
 
+See the [system resources support matrix](./docs/system-resources-support-matrix.md)
+for metric-level evidence and platform limitations.
+
 Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
-Supported values include their source and scope. These values are diagnostics;
-they do not reserve memory or guarantee that a model can be loaded.
+Supported values include provenance with a source and optional scope. These
+values are diagnostics; they do not reserve memory or guarantee that a model
+can be loaded.
 
 ## Examples
 
