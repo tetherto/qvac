@@ -7734,6 +7734,28 @@
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
   },
   {
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-07-23/groot-q8_vf16.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "NVIDIA GR00T N1.7-3B vision-language-action model, multi-embodiment. Single GGUF carrying every trained embodiment head of the base checkpoint (17 stored rows, default libero_sim); select at load or switch at runtime by tag or cat_id, no reload. Same architecture as the LIBERO model: Qwen3-VL backbone, VL fusion, 32-layer AlternateVLDiT action head, 4-step Euler flow-matching. Camera count and action dims follow the selected embodiment. Desktop multi-embodiment model of record.",
+    "quantization": "q8_vf16",
+    "params": "groot-n1.7-3b-multi",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["vla", "groot", "multi-embodiment", "robotics"],
+    "notes": "q8_vf16 profile: Q8_0 text / DiT / VL-fusion / action-head linears, F16 vision tower + embodiment bank, F32 norms. Requires @qvac/vla-ggml >= 0.17.0 (older loaders reject the rank-3 embodiment.* tensors). Per-embodiment parity vs the PyTorch oracle on selected rows: libero_sim cos 0.999995, oxe_droid cos 0.999993, real_r1_pro cos 0.999941 (see qvac PR #3427). Converted from nvidia/GR00T-N1.7-3B via convert_groot_dit_to_gguf.py multi-embodiment mode.",
+    "link": "https://huggingface.co/nvidia/GR00T-N1.7-3B"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-07-23/groot-q5_vf16.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "NVIDIA GR00T N1.7-3B vision-language-action model, multi-embodiment. Mobile profile of the desktop multi-embodiment groot-q8_vf16 model: same architecture and embodiment bank (17 stored rows, default libero_sim), smaller action-head quant so the model file fits the on-device memory budget. Active embodiment selected at load or switched at runtime by tag or cat_id.",
+    "quantization": "q5_vf16",
+    "params": "groot-n1.7-3b-multi",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["vla", "groot", "multi-embodiment", "robotics", "mobile"],
+    "notes": "q5_vf16 profile: Q5_0 non-vision linears, F16 vision tower + embodiment bank, F32 norms. Q5_0 is required — legacy Q4_0 is too coarse for the DiT action head, and K-quants are not supported by the qvac-fabric gguf packer. Requires @qvac/vla-ggml >= 0.17.0. Converted from nvidia/GR00T-N1.7-3B via convert_groot_dit_to_gguf.py multi-embodiment mode.",
+    "link": "https://huggingface.co/nvidia/GR00T-N1.7-3B"
+  },
+  {
     "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/593b5a2e04c8f3e4ee880263f93e0bd2901ad47f/smollm2-360m-instruct-q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "SmolLM2 360M instruction-tuned GGUF model from Hugging Face, useful as a small text-generation canary.",
