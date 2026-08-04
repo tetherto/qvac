@@ -1,0 +1,234 @@
+# Consolidates 5 of the 6 benchmark-performance-<pkg>.yml files.
+#
+# Real dependency ordering (this is why this branch is stacked on top of
+# prebuilds-nx / integration-mobile-test-nx / cpp-test-coverage-nx /
+# cpp-tests-nx / integration-test-nx, not branched directly off the
+# foundation): prebuild/desktop/mobile each call the shared nx-consolidated
+# workflow ONCE (not once per legacy per-package file) and let ITS OWN
+# nx-affected filtering decide what actually runs, using the same
+# base-ref/head-ref this file's own matrix job used. This only works because
+# those 3 files already exist earlier in this branch's history.
+#
+# Known simplification: the legacy per-package files toggle a
+# `run_rtf_benchmarks`/`run_integration_tests` input to switch a package's
+# integration-test file into "benchmark mode" (asr-ggml's real file has
+# test:integration / test:integration:gpu / test:stand-alone:gpu variants
+# gated on this). integration-test-nx.yml / integration-mobile-test-nx.yml
+# don't carry that toggle (asr-ggml itself is carved out of that
+# consolidation for unrelated reasons - see integration-test-nx.yml). This
+# file runs the regular integration-test path for whatever's affected, not a
+# specialized RTF-only benchmark path. Revisit if/when RTF-specific toggling
+# needs to be threaded through the consolidated files too.
+#
+# Per-package summarize metadata (aggregate script, manual-results dir)
+# lives in the SAME config table the nx-affected action already reads for
+# matrix filtering, and the summarize job reads it back out via jq - no
+# separate bash associative arrays to keep in sync.
+#
+# Carve-out: tts-ggml.yml stays untouched and separate - its `summarize` job
+# has a bespoke "GPU coverage map" markdown table specific to TTS backends,
+# not something a generic loop can normalize.
+name: "Benchmark Performance (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      run_desktop:
+        description: "Run desktop (CPU/GPU) RTF benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  matrix:
+    name: Determine affected packages (nx affected, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - id: compute
+        uses: ./.github/actions/nx-affected
+        with:
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          config: |
+            - package: asr-ggml
+              aggregateScript: scripts/perf-report/aggregate-asr-ggml-rtf.js
+              manualDir: packages/asr-ggml/benchmarks/manual-results
+            - package: bci-whispercpp
+              aggregateScript: scripts/perf-report/aggregate-bci-rtf.js
+              manualDir: packages/bci-whispercpp/benchmarks/manual-results
+            - package: diffusion-cpp
+              aggregateScript: scripts/perf-report/aggregate-diffusion-cpp-rtf.js
+              manualDir: packages/diffusion-cpp/benchmarks/manual-results
+            - package: llm-llamacpp
+              aggregateScript: scripts/perf-report/aggregate-llamacpp-llm-rtf.js
+              manualDir: packages/llm-llamacpp/benchmarks/manual-results
+            - package: ocr-ggml
+              aggregateScript: scripts/perf-report/aggregate-ocr-ggml-rtf.js
+              manualDir: packages/ocr-ggml/benchmarks/manual-results
+
+  context:
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs: [matrix, context]
+    if: needs.matrix.outputs.any == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      base-ref: ${{ inputs.base-ref }}
+      head-ref: ${{ inputs.head-ref }}
+
+  desktop-benchmarks:
+    needs: [matrix, context, prebuild]
+    if: needs.matrix.outputs.any == 'true' && !cancelled() && inputs.run_desktop && needs.prebuild.result == 'success'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      base-ref: ${{ inputs.base-ref }}
+      head-ref: ${{ inputs.head-ref }}
+
+  mobile-benchmarks:
+    needs: [matrix, context, prebuild]
+    if: needs.matrix.outputs.any == 'true' && !cancelled() && inputs.run_mobile && needs.prebuild.result == 'success'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      base-ref: ${{ inputs.base-ref }}
+      head-ref: ${{ inputs.head-ref }}
+
+  summarize:
+    needs:
+      - matrix
+      - context
+      - desktop-benchmarks
+      - mobile-benchmarks
+    if: always() && needs.matrix.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download all benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          path: artifacts/all
+
+      - name: Generate consolidated benchmark reports (one per affected package)
+        shell: bash
+        env:
+          AFFECTED_JSON: ${{ needs.matrix.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+
+          echo "$AFFECTED_JSON" | jq -c '.[]' | while read -r pkg_json; do
+            pkg=$(echo "$pkg_json" | jq -r '.package')
+            script=$(echo "$pkg_json" | jq -r '.aggregateScript')
+            manual=$(echo "$pkg_json" | jq -r '.manualDir')
+            echo "=== Summarizing $pkg ==="
+            if [ ! -f "$script" ]; then
+              echo "::warning::$script not found for $pkg, skipping"
+              continue
+            fi
+            node "$script" \
+              --dir artifacts/all \
+              --manual-dir "$manual" \
+              --output "benchmark-artifacts/$pkg-performance-findings.md" \
+              --output-json "benchmark-artifacts/$pkg-performance-findings.json" \
+              || echo "::warning::aggregate script failed for $pkg (likely no matching artifacts this run)"
+          done
+
+      - name: Add combined summary
+        shell: bash
+        run: |
+          echo "## Benchmark Performance Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for f in benchmark-artifacts/*-performance-findings.md; do
+            if [ -f "$f" ]; then
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload consolidated benchmark reports
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: benchmark-performance-findings
+          path: benchmark-artifacts/
+          if-no-files-found: ignore
+          retention-days: 30
