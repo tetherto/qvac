@@ -85,7 +85,10 @@ try {
       }
     ],
     stream: true,
-    tools
+    tools,
+    generationParams: {
+      remove_thinking_from_context: false
+    }
   })
 
   for await (const event of run.events) {

@@ -75,7 +75,11 @@ async function main() {
     ]
 
     console.log('▸ Running direct addon tool-call inference')
-    const response = await model.run(prompt)
+    const response = await model.run(prompt, {
+      generationParams: {
+        remove_thinking_from_context: false
+      }
+    })
     let fullResponse = ''
 
     await response
