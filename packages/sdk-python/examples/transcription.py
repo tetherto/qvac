@@ -1,4 +1,4 @@
-"""Python port of packages/sdk/examples/transcription/whispercpp-filesystem.ts.
+"""Python port of packages/sdk/examples/asr/whispercpp-filesystem.ts.
 
 Transcribe an audio file with per-segment metadata. `transcribe` is a
 server-stream: it yields `TranscribeResponse` frames; with `metadata=True`

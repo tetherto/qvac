@@ -91,5 +91,6 @@ declare module 'bare-fs' {
       options?: { encoding?: BufferEncoding; withFileTypes?: boolean }
     ): Promise<string[] | Buffer[]>
     rename(oldPath: string, newPath: string): Promise<void>
+    utimes(path: string, atime: number | Date, mtime: number | Date): Promise<void>
   }
 }
