@@ -14,7 +14,7 @@
     "update:quickstart-section": "node ./scripts/quickstart-testing/update_readme.js",
     "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:mobile:generate": "npm run generate:benchmark-shards && bare ./scripts/generate-mobile-integration-tests.js",
-    "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js",
+    "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js && node scripts/validate-mobile-manifest.js",
     "test:dts": "tsc -p tsconfig.dts.json",
     "generate:benchmark-shards": "node scripts/generate-benchmark-shards.js",
     "verify:benchmark-shards": "node scripts/generate-benchmark-shards.js --check",

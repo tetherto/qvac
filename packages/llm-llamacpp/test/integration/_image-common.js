@@ -46,6 +46,8 @@ const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 // CPU-only platforms (no GPU inference path today)
 const useCpu = isDarwinX64 || isLinuxArm64
 
+// The default VLM pair for every image test that does not pass its own config.
+// prestage-set: multimodal-default
 const MULTIMODAL_MODEL_CONFIG = {
   llmModel: {
     modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
@@ -60,6 +62,9 @@ const MULTIMODAL_MODEL_CONFIG = {
   ctx_size: '2048'
 }
 
+// Opt-in larger VLM pair — only tests that import LARGE_MULTIMODAL_CONFIG and
+// pass it to setupMultimodalInference() load these.
+// prestage-set: multimodal-large
 const LARGE_MULTIMODAL_CONFIG = {
   llmModel: {
     modelName: 'Qwen3VL-2B-Instruct-Q4_K_M.gguf',
