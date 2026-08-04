@@ -67,6 +67,15 @@ std::optional<ReasoningTags> selectReasoningTagSource(
 bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture);
 
 /**
+ * @brief Returns whether thinking-block compaction defaults on for an
+ * architecture.
+ *
+ * Only the Qwen3 reasoning family defaults on. Other architectures,
+ * including DeepSeek V4, require an explicit per-request override.
+ */
+bool usesThinkingCompactionByDefault(std::string_view architecture);
+
+/**
  * @brief Returns true when `architecture` is DeepSeek V4 (`deepseek4`).
  *
  * DeepSeek V4 uses the same full-state checkpoint/replay lifecycle as hybrid

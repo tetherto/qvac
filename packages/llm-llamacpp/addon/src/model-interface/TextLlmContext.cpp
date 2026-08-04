@@ -129,7 +129,10 @@ void TextLlmContext::initializeCommonState() {
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(architecture.value());
   }
-  setRemoveThinkingFromContext(isQwen3ReasoningFamily_);
+  setRemoveThinkingFromContext(
+      architecture.has_value() &&
+      qvac_lib_inference_addon_llama::utils::
+          usesThinkingCompactionByDefault(architecture.value()));
 
   // Precompute the EOG token id set used by the EOS-inside-reasoning recovery
   // (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family arms that
