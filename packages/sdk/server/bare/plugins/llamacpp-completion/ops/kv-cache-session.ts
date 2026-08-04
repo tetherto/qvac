@@ -31,47 +31,17 @@ import type { Logger } from '@/logging/types'
 const moduleLogger = getServerLogger()
 
 /**
- * Single owner of the three KV-cache bookkeeping layers.
+ * Coordinates five KV-cache state layers:
  *
- * The llama.cpp completion handler has three independent layers it must
- * keep consistent across every cancel/error branch:
+ * 1. `cachedMessageCounts` — saved message boundaries.
+ * 2. `initializedCaches` — caches primed in this worker.
+ * 3. On-disk `.bin` files written by the addon.
+ * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
+ * 5. `.auto-cache-<key>` markers — SDK-generated cache ownership.
  *
- *   1. `cachedMessageCounts: Map<path, count>` — the "n messages
- *      currently on disk" tracker.
- *   2. `initializedCaches: Set<key>` — the "addon defers disk writes;
- *      we know this cache is primed" tracker.
- *   3. On-disk `.bin` files written by the addon.
- *
- * Without a single owner, every cancel / zero-token / rename-failed /
- * tool-call exit would need to touch all three; any branch that forgets
- * a layer produces three-layer drift bugs.
- *
- * `KvCacheSession` collapses the three layers behind one object with
- * three operations:
- *
- *   - `beginTurn` — resolves the cache file path, primes the system
- *     prompt cache if missing (delegated to a caller-supplied closure
- *     so the session doesn't depend on the model addon), marks the
- *     cache initialized, and returns a `TurnHandle` carrying the
- *     resolved path + the snapshot of the on-disk saved count.
- *   - `commitTurn` — records the new saved count (for custom-key
- *     turns) or renames the addon's pre-response file to the
- *     post-response path and records the count there (for auto-cache
- *     turns). Flips the turn's internal `committed` flag so the
- *     deferred `rollback` becomes a no-op on the happy path.
- *   - `rollback` — atomically deletes the on-disk file, clears the
- *     in-memory init entry, and forgets the saved count. **All three
- *     layers, always, in one place.** Handlers call it once via
- *     `ctx.scope.defer(() => session.rollback(turn))`; `commitTurn`
- *     short-circuits it on success.
- *
- * The module-level `deleteKvCacheState(...)` function (below) provides
- * an administrative cross-model delete API for the
- * `handleDeleteCache` RPC handler.
- *
- * The module-scoped `cachedMessageCounts` and `initializedCaches` maps
- * are *private* to this file — no other module reaches into them.
- * Callers that need cache-status info do so through the session API.
+ * Every turn must finish through `commitTurn` or `rollback` so all
+ * inference state stays aligned, the active-path ref is released, and
+ * marker metadata follows the cache directory lifecycle.
  */
 
 // ----- module-scoped state. The session is the single mutation point
@@ -279,7 +249,8 @@ export interface KvCacheSession {
    * primes the system-prompt cache if needed (delegated to
    * `input.primeIfMissing`), marks the cache initialized, and returns a
    * `TurnHandle` the handler attaches to `ctx.scope.defer(...)` for the
-   * rollback hook.
+   * rollback hook. Auto-cache path resolution is serialized with
+   * retention deletion before the handle is returned.
    */
   beginTurn(input: BeginTurnInput): Promise<TurnHandle>
 
@@ -294,12 +265,13 @@ export interface KvCacheSession {
 
   /**
    * Roll back an in-flight turn — atomically deletes the on-disk cache
-   * file, clears the in-memory `initializedCaches` entry, and forgets
-   * the `cachedMessageCounts` entry. **All three layers, always, in
-   * one place.** Idempotent: a turn that has already been committed
-   * or rolled back is a no-op on subsequent calls. Handlers register
-   * this via `ctx.scope.defer(...)` so it runs regardless of how the
-   * handler exits (success branch removes itself via `commitTurn`).
+   * file, clears the in-memory `initializedCaches` entry, forgets the
+   * `cachedMessageCounts` entry, releases the active-path ref, and
+   * removes orphaned marker metadata. Idempotent: a turn that has
+   * already been committed or rolled back is a no-op on subsequent
+   * calls. Handlers register this via `ctx.scope.defer(...)` so it
+   * runs regardless of how the handler exits (success branch removes
+   * itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
 
