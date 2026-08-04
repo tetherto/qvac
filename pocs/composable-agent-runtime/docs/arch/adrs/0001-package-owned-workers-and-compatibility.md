@@ -50,6 +50,10 @@ distribution installs its matching worker artifacts. A client that requires a
 separately installed worker is outside this proposed decision and requires an
 explicit exception or a superseding ADR.
 
+Each worker-owning package authors that boundary from one package-owned
+declarative contract. The source-of-truth and generation policy are defined in
+[ADR 0003](0003-package-owned-rpc-contract-authoring-and-generation.md).
+
 ### Verify package-owned workers during initialization
 
 Packaging a client with its matching worker removes the need for local version
@@ -107,10 +111,13 @@ type checking and runtime shape validation rather than version handshakes.
 ### Validate packaged artifacts, not only installations
 
 Duplicate versions may exist in an installed dependency graph without entering
-the application artifact. Packaging should enforce:
+the application artifact. Each application and worker is built from an explicit
+entry point, and validation applies to the reachable final bundle graph for
+that execution realm. Packaging should enforce:
 
 - at most one selected package version within one execution realm;
-- one version of each native addon within a mobile or desktop artifact;
+- a hard failure when multiple versions of a native addon enter one mobile or
+  desktop artifact;
 - duplicate private dependencies are allowed across isolated worker bundles;
 - incompatible versions must not be silently collapsed through aliases or
   dependency overrides.
@@ -227,6 +234,7 @@ Change this ADR to Accepted only after:
 
 ## Related material
 
+- [Package-owned RPC contract authoring and generation](0003-package-owned-rpc-contract-authoring-and-generation.md)
 - [Package-owned Bare-Stow runtimes](../tech-debt/TD-PACKAGE-OWNED-BARE-STOW-RUNTIMES.md)
 - [Multilanguage RPC client generation](../tech-debt/TD-MULTILANGUAGE-RPC-CLIENT-GENERATION.md)
 - [Mobile RPC contract parity](../tech-debt/TD-MOBILE-RPC-CONTRACT-PARITY.md)
