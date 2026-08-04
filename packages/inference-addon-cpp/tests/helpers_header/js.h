@@ -3,22 +3,57 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 
 // Forward declarations for opaque types
 struct js_env_t {};
-struct js_value_t {};
+struct js_value_t {
+  double numberValue{};
+  bool isNumber{false};
+};
 struct js_ref_t {};
 struct js_callback_info_t {};
 struct js_handle_scope_t {};
-struct js_deferred_t {};
+struct js_deferred_t {
+  // Set by the mocked js_resolve_deferred/js_reject_deferred so tests can
+  // assert whether a given promise was ever settled. Atomic: settled on a
+  // worker thread, read by the test thread.
+  std::atomic<bool> settled{false};
+};
 struct uv_async_t {
   void* data;
+  // Stored by the mocked uv_async_init so uv_async_send can dispatch the
+  // completion callback synchronously (stands in for the libuv loop).
+  void (*async_cb)(uv_async_t*) = nullptr;
 };
 struct uv_handle_t {};
 struct uv_loop_t {};
+
+struct js_deferred_teardown_t {
+  // Set by the mocked js_finish_deferred_teardown_callback; in the real
+  // implementation this is what lets a pending env teardown complete.
+  std::atomic<bool> finished{false};
+};
+
+typedef void (*js_deferred_teardown_cb)(js_deferred_teardown_t*, void* data);
+
+// Test hooks: the mock records the most recent promise and deferred-teardown
+// registration (both happen synchronously inside the code under test on the
+// calling thread) so tests can fire env teardown by hand and observe the
+// finish handshake.
+namespace mock_js {
+inline js_deferred_t* lastCreatedDeferred = nullptr;
+inline js_deferred_teardown_cb lastDeferredTeardownCb = nullptr;
+inline void* lastDeferredTeardownData = nullptr;
+inline js_deferred_teardown_t* lastDeferredTeardownHandle = nullptr;
+/// One-shot failure injection: the next js_resolve_deferred call returns
+/// non-zero (a JS() failure) instead of settling, so tests can drive the
+/// completion path where settlement fails mid-flight.
+inline std::atomic<bool> failNextResolveDeferred{false};
+} // namespace mock_js
 
 // js_loop_t is an alias for uv_loop_t in the real implementation
 typedef uv_loop_t js_loop_t;
@@ -181,6 +216,9 @@ inline int js_create_string_utf16le(
 }
 
 inline int js_create_double(js_env_t* env, double value, js_value_t** result) {
+  *result = new js_value_t{};
+  (*result)->numberValue = value;
+  (*result)->isNumber = true;
   return 0;
 }
 
@@ -242,6 +280,10 @@ inline int js_get_value_string_utf16le(
 
 inline int
 js_get_value_double(js_env_t* env, js_value_t* value, double* result) {
+  if (value->isNumber) {
+    *result = value->numberValue;
+    return 0;
+  }
   return -1;
 }
 
@@ -421,16 +463,38 @@ inline int js_create_promise(
     js_env_t* env, js_deferred_t** deferred, js_value_t** promise) {
   *deferred = new js_deferred_t{};
   *promise = new js_value_t{};
+  mock_js::lastCreatedDeferred = *deferred;
   return 0;
 }
 
 inline int js_resolve_deferred(
     js_env_t* env, js_deferred_t* deferred, js_value_t* resolution) {
+  if (mock_js::failNextResolveDeferred.exchange(false)) {
+    return -1;
+  }
+  deferred->settled = true;
   return 0;
 }
 
 inline int js_reject_deferred(
     js_env_t* env, js_deferred_t* deferred, js_value_t* rejection) {
+  deferred->settled = true;
+  return 0;
+}
+
+inline int js_add_deferred_teardown_callback(
+    js_env_t* env, js_deferred_teardown_cb callback, void* data,
+    js_deferred_teardown_t** result) {
+  *result = new js_deferred_teardown_t{};
+  mock_js::lastDeferredTeardownCb = callback;
+  mock_js::lastDeferredTeardownData = data;
+  mock_js::lastDeferredTeardownHandle = *result;
+  return 0;
+}
+
+inline int
+js_finish_deferred_teardown_callback(js_deferred_teardown_t* handle) {
+  handle->finished = true;
   return 0;
 }
 
@@ -440,16 +504,29 @@ inline int js_create_error(
   return 0;
 }
 
-// UV/libuv functions (minimal stubs for compilation)
+// UV/libuv functions: minimal stubs, except that async send and close
+// dispatch their callbacks synchronously on the calling thread so the
+// JsAsyncTask completion chain (worker -> uv_async_send -> completion ->
+// uv_close -> close callback) is observable without a running loop.
 inline int
 uv_async_init(uv_loop_t* loop, uv_async_t* handle, void (*cb)(uv_async_t*)) {
+  handle->async_cb = cb;
   return 0;
 }
 
-inline int uv_async_send(uv_async_t* handle) { return 0; }
+inline int uv_async_send(uv_async_t* handle) {
+  if (handle->async_cb != nullptr) {
+    handle->async_cb(handle);
+  }
+  return 0;
+}
 
 inline void* uv_handle_get_data(uv_handle_t* handle) { return nullptr; }
 
 inline void uv_handle_set_data(uv_handle_t* handle, void* data) {}
 
-inline void uv_close(uv_handle_t* handle, void (*cb)(uv_handle_t*)) {}
+inline void uv_close(uv_handle_t* handle, void (*cb)(uv_handle_t*)) {
+  if (cb != nullptr) {
+    cb(handle);
+  }
+}

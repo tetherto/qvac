@@ -48,14 +48,11 @@ jobs:
       packages: read
     steps:
       - name: Check tests status
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
         run: |
           failed=0
-          echo "Labels: ${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-          if [[ ! " ${{ join(github.event.pull_request.labels.*.name, ' ') }} " =~ " verified " ]]; then
-            echo "::error title=PR is not verified::This PR needs the 'verified' label to be merged"
-            echo "Warning:Label 'verified' must be present on the PR to run the full suite of checks"
-            failed=1
-          fi
+          echo "Labels: $PR_LABELS"
           if [[ "${{ inputs.sanity-checks-status }}" != "" && "${{ inputs.sanity-checks-status }}" != "true" ]]; then
             echo "::error title=Sanity checks have not returned success::Some sanity checks have not returned success"
             failed=1

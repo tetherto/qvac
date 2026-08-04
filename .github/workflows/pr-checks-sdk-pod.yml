@@ -3,8 +3,10 @@ name: PR Checks (SDK Pod)
 on:
   # Plain `pull_request` (NOT pull_request_target): fork PRs run with a
   # read-only token and no secrets, so it is safe to check out and execute PR
-  # code (install/lint/build/test). These checks need no secrets, so the
-  # privileged context would buy nothing and only add "pwn request" risk.
+  # code (install/lint/build/test). GITHUB_TOKEN (packages: read) resolves
+  # @tetherto/* GPR mono packages on same-repo PRs; fork PRs may still fail
+  # to install private GPR deps (acceptable — coordinated inference work is
+  # internal same-repo PRs).
   #
   # No trigger-level `paths:` filter on purpose: this workflow publishes the
   # required "SDK Pod Checks" status, which must report on EVERY PR or GitHub
@@ -23,6 +25,8 @@ on:
       - feature-*
       - tmp-*
   workflow_dispatch:
+  # Lets pr-gate-merge.yml call this workflow directly.
+  workflow_call:
 
 permissions:
   contents: read
@@ -59,6 +63,9 @@ jobs:
   sdk-pod-checks:
     name: SDK Pod Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     # Hard cap so a hung job can't hog runners or burn minutes. Slightly above
     # the 30-min default because this rollup runs up to 6 packages sequentially
     # (incl. the SDK build + bare/e2e tests and the two consumer installs).
@@ -155,6 +162,31 @@ jobs:
         with:
           node-version: 22
 
+      - name: Configure npm registries
+        if: steps.detect.outputs.has_changes == 'true'
+        shell: node {0}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+
+          if (!process.env.GPR_TOKEN) {
+            console.log('::error::GITHUB_TOKEN is empty — cannot read @tetherto GPR packages');
+            process.exit(1);
+          }
+
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+            `//npm.pkg.github.com/:_authToken=${process.env.GPR_TOKEN}`,
+          ];
+          const npmrc = lines.join('\n') + '\n';
+          const target = path.join(process.env.GITHUB_WORKSPACE, '.npmrc');
+          fs.writeFileSync(target, npmrc, 'utf8');
+          console.log(`::notice::.npmrc configured at ${target} (@tetherto → GPR via GITHUB_TOKEN)`);
+
       - name: Run SDK pod checks
         if: steps.detect.outputs.has_changes == 'true'
         timeout-minutes: 40
@@ -192,6 +224,7 @@ jobs:
           consumer_install_check() (
             set -eo pipefail
             cd "$WS/packages/sdk"
+            npmrc_src="$WS/.npmrc"
 
             # Pack the tarball produced by the preceding build step.
             bun pm pack --destination dist/
@@ -233,6 +266,7 @@ jobs:
             cd "$consumer_default"
             npm init -y > /dev/null
             npm pkg set type=module > /dev/null
+            if [ -f "$npmrc_src" ]; then cp "$npmrc_src" .npmrc; fi
             npm install --no-fund --no-audit --ignore-scripts --loglevel=info "$tarball_abs" 2>&1 | tee install.log
             check_consumer "$consumer_default" "default"
 
@@ -241,6 +275,7 @@ jobs:
             cd "$consumer_lean"
             npm init -y > /dev/null
             npm pkg set type=module > /dev/null
+            if [ -f "$npmrc_src" ]; then cp "$npmrc_src" .npmrc; fi
             npm install --no-fund --no-audit --ignore-scripts --omit=optional --loglevel=info "$tarball_abs" 2>&1 | tee install.log
             check_consumer "$consumer_lean" "lean (--omit=optional)"
           )
@@ -265,13 +300,25 @@ jobs:
             echo "::group::SDK pod checks - $PKG"
             cd "$WS/$P_PATH"
 
-            # Disallowed dependencies: no git URLs or dev/tmp versions. Checked on
-            # the committed manifest, before any per-source prep can rewrite it.
-            deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
-            if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
-              echo "::error::[$PKG] disallowed dependency detected (git URL or dev/tmp version)"
-              fail=$((fail + 1))
-            fi
+            # Disallowed dependencies: no git URLs or dev/tmp versions on public
+            # npm deps. @tetherto/* GPR mono prerelease pins (e.g. inference-mono
+            # 0.16.0-tmp.runid-*) are allowed — coordinated SDK+inference PRs
+            # consume them from GPR before a public npm release.
+            while IFS=$'\t' read -r dep_name dep_value; do
+              [ -n "$dep_name" ] || continue
+              if echo "$dep_value" | grep -Eq '^git\+https://github.com'; then
+                echo "::error::[$PKG] disallowed dependency detected (git URL): ${dep_name}@${dep_value}"
+                fail=$((fail + 1))
+                continue
+              fi
+              if echo "$dep_name" | grep -Eq '^@tetherto/'; then
+                continue
+              fi
+              if echo "$dep_value" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)'; then
+                echo "::error::[$PKG] disallowed dependency detected (dev/tmp version): ${dep_name}@${dep_value}"
+                fail=$((fail + 1))
+              fi
+            done < <(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | "\(.key)\t\(.value)"' package.json)
 
             # Run the checks once per declared SDK source. The optional
             # sdk-source:<source> script does that source's setup (e.g. link the
@@ -329,6 +376,13 @@ jobs:
               # a clear "contract:check failed" instead of being buried inside the
               # test:unit run above.
               run "contract:check" npm run --if-present contract:check
+              run "resource collector packaging" npm run --if-present check:resource-collectors -- \
+                --host darwin-arm64 \
+                --host darwin-x64 \
+                --host linux-arm64 \
+                --host linux-x64 \
+                --host win32-arm64 \
+                --host win32-x64
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else

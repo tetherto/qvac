@@ -1,5 +1,5 @@
 name: Run lint & integration tests
-description: "Run linting and integration tests when the 'verified' label is present"
+description: "Run linting and integration tests when selected by the caller"
 
 inputs:
   npm-token:
@@ -15,7 +15,6 @@ inputs:
     description: "Working directory inside the repo (monorepo package path)"
     required: false
     default: "."
-    type: string
 
 runs:
   using: composite

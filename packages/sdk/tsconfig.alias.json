@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "tsc-alias": {
+    "resolveFullPaths": true
+  },
+  "compilerOptions": {
+    // Only the internal "@/*" alias is rewritten to relative paths. The
+    // "@qvac/sdk" entries in tsconfig.json exist so tsc can typecheck the
+    // package's self-imports; they must stay bare specifiers in the output so
+    // examples keep importing the package by name and resolve through the
+    // exports map.
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}

@@ -105,6 +105,19 @@ Rules governing agent-driven automation in DevOps surfaces — Cursor skills, ho
 - **External writes (Slack, Asana, Linear, GitHub) require explicit user confirmation** for the specific message/issue/PR being created.
 - **Drafts over publishes**: where the platform supports drafts (PRs, releases, Slack scheduled), prefer creating a draft and surfacing the link to the user.
 
+## No remote code execution
+
+Skills, hooks, and agents MUST NOT execute code fetched from an external link. Downloading a script or binary and running it — whether in one step or two — is prohibited regardless of how trustworthy the source looks. This is a **hard stop**, not a plan-then-apply: there is no confirmation prompt that unlocks it. If a flow appears to need it, fail-stop and surface the need to the user.
+
+- **Forbidden patterns** (non-exhaustive) — applies to skill `scripts/`, hooks, workflow `run:` steps, and any command the agent runs on the user's behalf:
+  - Pipe-to-shell: `curl … | bash`, `curl … | sh`, `wget -qO- … | bash`, `bash <(curl …)`, `sh -c "$(curl …)"`
+  - PowerShell equivalents: `iwr … | iex`, `irm … | iex`, `Invoke-WebRequest … | Invoke-Expression`
+  - Download-then-run: fetch a script/binary to disk (`curl -o`, `wget`, `Invoke-WebRequest -OutFile`) and then execute it in the same flow
+  - `eval` / `Invoke-Expression` over the body of an HTTP response
+  - Bootstrap installers delivered as remote one-liners (rustup, nvm, homebrew, `get.docker.com`, `deno.land/install.sh`, and similar)
+- **Fetching is not executing.** Reading remote docs, downloading data files, or `WebFetch`-ing a page for context is fine. Turning fetched bytes into a running process is what's banned.
+- **Install dependencies through the package manager**, pinned via a lockfile or version-pinned manifest (`npm`, `bun`, `pip`, `vcpkg`, `apt` with a pinned repo) — never by piping a remote installer to a shell. Tooling that only ships a `curl | bash` installer must be vendored, pinned to a commit/digest, or baked into a human-reviewed image via a PR (see "When the rails block a useful flow").
+
 ## When the rails block a useful flow
 
 - If a rail is blocking a flow that's clearly safe and clearly useful, the answer is to relax the rail in this rule (with a PR), not to override it case-by-case in a skill. Code that quietly bypasses these rules is a bug.

@@ -561,7 +561,12 @@ const METRIC_COLUMNS = {
     { key: 'ttfb_ms', label: 'TTFB (ms)' },
     { key: 'total_steps', label: 'Steps' },
     { key: 'width', label: 'Width' },
-    { key: 'height', label: 'Height' }
+    { key: 'height', label: 'Height' },
+    { key: 'conditioner_ms', label: 'Cond (ms)' },
+    { key: 'denoise_ms', label: 'Denoise (ms)' },
+    { key: 'vae_ms', label: 'VAE (ms)' },
+    { key: 'post_process_ms', label: 'Post (ms)' },
+    { key: 'steps_per_second', label: 'Steps/s' }
   ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -575,7 +580,7 @@ const METRIC_COLUMNS = {
 
 /**
  * @param {Object} opts
- * @param {string} opts.addon       - Addon identifier (e.g. 'ocr-onnx', 'nmtcpp')
+ * @param {string} opts.addon       - Addon identifier (e.g. 'ocr-ggml', 'nmtcpp')
  * @param {string} [opts.addonType] - One of 'ocr','translation','vision','tts','generic'
  * @param {Object} [opts.device]    - Override auto-detected device info
  */
@@ -651,6 +656,11 @@ function createPerformanceReporter (opts) {
           total_steps: null,
           width: null,
           height: null,
+          conditioner_ms: null,
+          denoise_ms: null,
+          vae_ms: null,
+          post_process_ms: null,
+          steps_per_second: null,
           ...metrics
         },
         input: (extra && extra.input) || null,

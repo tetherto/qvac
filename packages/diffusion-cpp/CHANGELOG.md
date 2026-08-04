@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.17.0] - 2026-07-23
+
+This release adds the validated Wan 2.2 TI2V-5B Turbo Q5_K_S workflow for
+high-quality text-to-video generation.
+
+### Features
+
+#### Wan 2.2 Turbo text-to-video workflow
+
+The package now provides a pinned downloader, manifest entries, runnable
+example, and opt-in smoke coverage for the community-distilled TI2V-5B Turbo
+Q5_K_S GGUF. The example uses the validated espresso product-film prompt with
+1280×704 output, 121 frames at 24 fps, four denoising steps, and CFG 1.
+
+#### Model-derived video validation
+
+Wan 2.2 TI2V models now derive their 32-pixel spatial alignment from GGUF
+tensor descriptors at load time. Renaming a checkpoint can no longer bypass
+the native constraint, while Wan 2.1 retains its 16-pixel grid.
+
+### Fixed
+
+- Wan 2.2 A14B progress reporting now treats a `high_noise_steps: -1` request
+  with `moe_boundary: 0` as a single denoising sequence, preventing VAE
+  progress from being classified as a second sampler phase.
+- The native `high_noise_steps` sentinel is preserved for A14B
+  `moe_boundary`-based routing.
+
+### Pull Requests
+
+- [#3415](https://github.com/tetherto/qvac/pull/3415) - QVAC-22493 feat(diffusion-cpp): focus Wan 2.2 on Turbo Q5
+
+## [0.16.0] - 2026-07-23
+
+This release makes TypeScript the source of truth for the diffusion runtime
+wrappers and their public declarations. It also strengthens performance
+regression coverage for the per-phase generation metrics introduced in 0.15.0.
+
+### Changed
+
+#### TypeScript-generated runtime wrappers and declarations
+
+The image, video, native-addon, and logging wrappers are now authored in
+TypeScript, with published JavaScript and declaration files generated during
+builds and packaging. CommonJS and ESM exports remain compatible, while strict
+type checking, linting, and generated-output validation reduce the risk of
+runtime behavior drifting from the public types.
+
+#### Per-phase timing regression coverage
+
+Integration performance reports now capture `conditionerMs`, `denoiseMs`,
+`vaeMs`, `postProcessMs`, and `stepsPerSecond` across image and img2img flows.
+The tests verify phase totals and throughput consistency, and mobile CI now
+surfaces these metrics from iOS artifacts and multi-device Android runs.
+
+### Pull Requests
+
+- [#3341](https://github.com/tetherto/qvac/pull/3341) - QVAC-22469 test: profile diffusion per-phase runtime stats in integration tests
+- [#3350](https://github.com/tetherto/qvac/pull/3350) - QVAC-22462 mod: migrate diffusion-cpp to TypeScript
+
 ## [0.15.1] - 2026-07-17
 
 ### Fixed

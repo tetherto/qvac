@@ -46,6 +46,22 @@ Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. Thi
   - ❌ `run: echo "${{ github.event.pull_request.title }}"`
 - **Token scope on fork PRs**: `pull_request` from forks gets a read-only `GITHUB_TOKEN` and no secrets. Do not work around this — design fork-safe workflows or split into a `pull_request_target` follow-up that does not check out PR code.
 
+## CI trust policy for fork PRs (SHA-bound authorization)
+
+Getting fork authorization wrong is high-impact and easy to do — the failure modes are subtle (a stale approval riding a state-flip onto a new commit). These rules are mandatory for **any** workflow that runs external-fork PR code with elevated access — `pull_request_target` (secrets), **or** `pull_request` on **self-hosted runners** (`qvac-*`), **or** any job that publishes/deploys.
+
+- **Approval is bound to the exact commit SHA, never to workflow-event ordering or label presence.** A tier/opt-in label present on the PR is *not* proof a given commit was approved. Every privileged run must confirm the **current `github.event.pull_request.head.sha`** is the SHA a merge/release actor approved via the `fork-ci` environment (or is an internal same-repo PR). This closes the whole class of flip bypasses:
+  - `draft → ready_for_review` after pushing a new commit,
+  - `close → reopen` after pushing a new commit,
+  - any later `synchronize` / push while a stale label persists.
+- **Use the repository's shared fork trust mechanism — do not hand-roll label checks.** Bespoke `contains(labels.*.name, 'verified')` gating in a workflow's own `if:`/bash is forbidden.
+  - **Setter (privileged, `pull_request_target`)**: the `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../../.github/workflows/reusable-fork-approval.yml), gating on the `fork-ci` GitHub Environment (merge/release-team approval per run). After approval it records a `qvac/fork-verified` **commit status** on the head SHA via `GITHUB_TOKEN`. **Caller jobs must declare `permissions: statuses: write`** — reusable workflows cannot elevate the caller token scope. [`authorize-pr`](../../../.github/actions/authorize-pr) denies every external fork that has no `qvac/fork-verified` status on the current head SHA — write-or-higher permission on the actor is not an exemption — and privileged jobs additionally `needs: fork-approval` so the environment gate blocks execution, not just authorization.
+  - **Consumer (unprivileged `pull_request` self-hosted jobs)**: gate on the `qvac/fork-verified` commit status for `head.sha` (read-only, `statuses: read`) — e.g. `gh api repos/$REPO/commits/$HEAD_SHA/statuses`. Do not trust label presence. Reference: `pr-test-inference-addon-cpp{,-js}.yml`.
+  - **Approval-label-only pipelines with no status setter** (e.g. `test-e2e-full`): run **only** on the fresh `labeled` event (which pins to the head SHA at approval time) or `workflow_dispatch` — **never** re-run on `synchronize` with a persisted label. Reference: `on-pr-sdk-python-e2e-full.yml`.
+- **Pin every fork checkout to `github.event.pull_request.head.sha`** (never `head.ref`, never the implicit merge ref) so the job runs exactly the approved commit — with `persist-credentials: false`.
+- **Internal same-repo PRs** skip the `fork-ci` environment gate; tier/opt-in labels may still gate expensive stages for them.
+- **New workflows must add coverage** to `.github/scripts/test/ci-trust-policy.test.mjs` proving privileged fork jobs `needs: fork-approval`. No new privileged fork-executing workflow merges without it.
+
 ## OIDC over long-lived credentials
 
 - **Cloud authentication uses OIDC.** No long-lived access keys / service-account JSON in secrets where OIDC is supported.
@@ -131,6 +147,9 @@ Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workfl
 - **Names are descriptive and lowercase-hyphenated** (e.g., `lint`, `unit-tests`, `cpp-tests`). Choose once and treat as part of the public contract.
 - **Required checks are declared in the GitHub ruleset**, not in YAML. The ruleset is the source of truth.
 - **Renaming a required check requires a coordinated change**: update the ruleset and the workflow in the same change window, or add the new name as required while leaving the old one until merges drain.
+- **Check-name collisions are silent.** GitHub matches required checks by literal context string with no per-workflow scoping — two jobs producing the same name (e.g. same job id called via `uses:` from different callers) can satisfy each other's requirement. Grep for the job id across `.github/workflows/*.yml` before requiring a new check.
+- **A new job that should gate merges almost always folds into `qvac-merge-guard / validate-pr`** (`pr-gate-merge.yml`'s aggregated required check) rather than becoming its own standalone required check — a disconnected new check is invisible to the merge gate if the ruleset never requires it. See [`docs/ci/MERGE-GUARD.md`](../../../docs/ci/MERGE-GUARD.md) for the wiring patterns (fold into an existing category, add a caller workflow for a repeated job family, or claim a spare `public-pr.yml` boolean input) and the `qv-merge-guard-wire` skill for the actionable checklist.
+- **Hard rule: only `pr-gate-merge.yml`'s `qvac-merge-guard` job may produce the `qvac-merge-guard / validate-pr` check.** No other workflow may define a job id `qvac-merge-guard` (or call a reusable workflow whose job id is `validate-pr`) — that would collide with the real Merge Guard check name and let another workflow silently satisfy it. Verify with `grep -rl "^  qvac-merge-guard:$" .github/workflows/*.yml` — must return only `pr-gate-merge.yml`.
 
 ## Outputs and step IDs
 
@@ -145,6 +164,35 @@ Persistent self-hosted runners (`qvac-*` labels) reuse disk between jobs. Workfl
 - **`continue-on-error: true` is forbidden on Tier-1 checks** (lint, format, type-check, security scans, tests). Allowed on diagnostic-only steps.
 - **`if: always()`** on cleanup steps so artifacts and logs are uploaded even on failure.
 - **Timeouts**: every job declares `timeout-minutes`. Default budget is 30 minutes; longer requires a comment explaining why.
+
+## Linting workflows (actionlint)
+
+Every PR that edits `.github/workflows/` or `.github/actions/` runs actionlint on
+**only the changed files** from the `policy-tests` job in
+`security-baseline.yml`. Run it locally before pushing:
+
+```bash
+git diff --name-only origin/main -- '.github/workflows/*.yml' '.github/actions/*' \
+  | xargs node .github/scripts/lint-workflows.mjs
+```
+
+- There is no checked-in baseline file. Only **structural** actionlint findings
+  in files your PR edits fail the check (unparseable YAML, dangling `needs`,
+  duplicate keys, empty `if:` from a bare leading `!`). Pre-existing debt such
+  as dead `npm-token` action inputs in untouched semantics is ignored.
+- `shellcheck` and `pyflakes` are disabled in CI: they lint the contents of
+  `run:` blocks rather than workflow structure.
+- New self-hosted runner labels must be added to `.github/actionlint.yaml` or
+  every `runs-on` using them reports "label is unknown" in local full-tree runs.
+
+This gate exists because bulk edits to workflows can silently destroy a job
+graph: a mis-indented key swallows the following job, a dangling `needs:` entry
+points at a job that no longer exists, and an `if:` that starts with `!` is
+parsed by YAML as a **tag**, leaving the condition empty. Write
+`if: ${{ !cancelled() }}`, never `if: !cancelled()`. None of these fail any
+other check — `on-merge-*` / `on-publish-*` workflows never run on a PR, and
+`pull_request_target` workflows load from the base branch, so a PR's own edited
+workflows are otherwise never parsed.
 
 ## File layout and naming
 

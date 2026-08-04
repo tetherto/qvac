@@ -222,7 +222,8 @@ If you fine-tune or swap the underlying MobileNetV3 model, follow `[docs/onnx-to
 - **“MobileNet GGUF weights not found”**: the default path is `<package>/weights/mobilenetv3_3class_v3_fp16.gguf`. Override with `new ImageClassifier({ modelPath: '/abs/path.gguf' })` or set the `QVAC_CLASSIFICATION_MODEL_PATH` env variable.
 - **All predictions look wrong**: verify the BN epsilon is still `0.001` (see the guarded unit test) — the architecture is unusually sensitive to this constant.
 - **Build fails looking for `stb_image.h`**: make sure the `stb` vcpkg port is installed. The `vcpkg-configuration.json` pins it.
-- **Mobile build fails looking for `libggml-cpu`**: the prebuild workflow copies all `ggml::${_backend}` targets into `prebuilds/`. Re-run `bare-make install`.
+- **Build fails resolving `qvac__fabric@0.bare`**: the shared ggml runtime ships in the `@qvac/fabric` npm dependency and is not bundled into this addon. Run `npm install` so `node_modules/@qvac/fabric/prebuilds/` is populated before `bare-make generate`/`build`.
+- **Runtime error “no backends are loaded” on desktop Linux**: the ggml backend `.so` files are loaded directly from `@qvac/fabric` (`node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`), not from this addon. Ensure the `@qvac/fabric` dependency is installed and not pruned.
 
 ## License
 

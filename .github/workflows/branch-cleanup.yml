@@ -13,6 +13,10 @@ on:
         description: "Report only; do not delete branches"
         type: boolean
         default: true
+      max_deletions_per_run:
+        description: "Max branches to delete in a single run"
+        type: number
+        default: 50
 
 permissions:
   contents: read
@@ -31,3 +35,15 @@ jobs:
     with:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
       single_package: false
+      # This monorepo runs a tighter retention window than the portable defaults
+      # (kept as-is in the reusable workflow for other repos): keep the latest 2 minor
+      # release lines per package, and treat branches as stale sooner. Everything below
+      # is still gated by the ~7-day grace ledger, so owners get a warning window.
+      keep_minors: 2
+      adhoc_inactivity_days: 14
+      feature_inactivity_days: 30
+      tmp_inactivity_days: 30
+      # Raised above the reusable default (10) so the weekly run keeps pace with this
+      # monorepo's branch churn instead of accumulating a backlog; a manual dispatch
+      # can override for a one-off larger drain.
+      max_deletions_per_run: ${{ github.event_name == 'workflow_dispatch' && inputs.max_deletions_per_run || 50 }}

@@ -46,30 +46,6 @@ permissions:
   id-token: write
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          # Dispatch-only workflow: label-gate treats workflow_dispatch as a
-          # trusted event and authorises without any API call, so the default
-          # GITHUB_TOKEN suffices — no PAT needed.
-          github-token: ${{ github.token }}
-
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -92,8 +68,7 @@ jobs:
   verify-shards:
     needs:
       - context
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    if: inputs.run_mobile && !inputs.summarize_only
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -122,8 +97,7 @@ jobs:
   stamp-version:
     needs:
       - context
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && !inputs.summarize_only
+    if: ${{ !inputs.summarize_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -153,13 +127,12 @@ jobs:
   prebuild:
     needs:
       - context
-      - label-gate
       - verify-shards
     # verify-shards is a gate so a shard drift fails before this expensive build.
     # It is skipped on a desktop-only run (run_mobile false), so !cancelled() +
     # the explicit result check let that case through rather than a skipped gate
     # skipping the build.
-    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_mobile || inputs.run_desktop) && !inputs.summarize_only && !cancelled() && needs.verify-shards.result != 'failure'
+    if: (inputs.run_mobile || inputs.run_desktop) && !inputs.summarize_only && !cancelled() && needs.verify-shards.result != 'failure'
     permissions:
       contents: write
       packages: write
@@ -167,7 +140,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
     # Bounded: prebuild needs the GPR/signing secrets; no repository input, and the
-    # release environment + label-gate keep this to trusted in-repo refs.
+    # release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -176,12 +149,11 @@ jobs:
   desktop-benchmark:
     needs:
       - context
-      - label-gate
       - prebuild
     # !cancelled() + the explicit prebuild-success check so the skip of the
     # mobile-only verify-shards job (on a desktop-only run) does not propagate
     # through prebuild and skip this job.
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && !inputs.summarize_only && !cancelled() && needs.prebuild.result == 'success'
+    if: inputs.run_desktop && !inputs.summarize_only && !cancelled() && needs.prebuild.result == 'success'
     name: Desktop Parameter Sweep
     runs-on: qvac-ubuntu2204-x64-gpu
     timeout-minutes: 360
@@ -270,26 +242,29 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
-  # Mobile is sharded one group per (model x KV-cache type) = 70 groups so each
-  # Device Farm session finishes inside the fixed 20-minute iOS per-test ceiling.
-  # All of them in one reused-workflow call do NOT fit: Android serializes the
-  # runs against its device pool and the macOS runner fills its disk collecting
-  # logs. So we split the groups into one batch per KV-cache type (10 each — the
-  # proven in-budget load) and run them sequentially (max-parallel: 1) to avoid
-  # Device Farm pool contention. Each batch raises the job timeout to 180 for
-  # headroom (proven 10-shard wall ~119 min) and gets a distinct artifact_suffix
-  # so its perf-report doesn't collide; summarize aggregates all of them. The
-  # TurboQuant/PolarQuant batches (tbq*/pq*) are Vulkan + CPU only, so they show
-  # Crashed on iOS (Metal) and Samsung GPU. These wrappers are deliberately absent from
-  # the addon's test-groups.json, so this override is the only path that runs
-  # them — normal mobile integration runs never trigger the benchmark.
+  # Mobile is sharded one group per (model x KV-cache type) = 70 groups, plus a
+  # small additive batch-sweep group (size x batch = 4), so each Device Farm
+  # session finishes inside the fixed 20-minute iOS per-test ceiling. All of them
+  # in one reused-workflow call do NOT fit: Android serializes the runs against
+  # its device pool and the macOS runner fills its disk collecting logs. So we
+  # split the groups into one batch per KV-cache type (10 each — the proven
+  # in-budget load) plus one 'batchsweep' batch (4), and run them sequentially
+  # (max-parallel: 1) to avoid Device Farm pool contention. Each batch raises the
+  # job timeout to 180 for headroom (proven 10-shard wall ~119 min) and gets a
+  # distinct artifact_suffix so its perf-report doesn't collide; summarize
+  # aggregates all of them. The TurboQuant/PolarQuant batches (tbq*/pq*) are
+  # Vulkan + CPU only, so they show Crashed on iOS (Metal) and Samsung GPU. The
+  # batchsweep group holds batch === ubatch at a fixed Q4_0/f16 baseline against a
+  # long prompt: batch is orthogonal to quant/KV, so it is swept once here rather
+  # than crossed with all 70 cross-product shards. These wrappers are deliberately
+  # absent from the addon's test-groups.json, so this override is the only path
+  # that runs them — normal mobile integration runs never trigger the benchmark.
   mobile-benchmark:
     needs:
       - context
       - prebuild
-      - label-gate
       - verify-shards
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    if: inputs.run_mobile && !inputs.summarize_only
     permissions:
       contents: read
       packages: read
@@ -314,9 +289,11 @@ jobs:
             groups: '[{"name":"BenchmarkPerf08bQ40Pq30","grep":"runBenchmarkPerf08bQ40Pq30Test"},{"name":"BenchmarkPerf08bQ41Pq30","grep":"runBenchmarkPerf08bQ41Pq30Test"},{"name":"BenchmarkPerf08bQ4KMPq30","grep":"runBenchmarkPerf08bQ4KMPq30Test"},{"name":"BenchmarkPerf08bQ6KPq30","grep":"runBenchmarkPerf08bQ6KPq30Test"},{"name":"BenchmarkPerf08bQ80Pq30","grep":"runBenchmarkPerf08bQ80Pq30Test"},{"name":"BenchmarkPerf2bQ40Pq30","grep":"runBenchmarkPerf2bQ40Pq30Test"},{"name":"BenchmarkPerf2bQ41Pq30","grep":"runBenchmarkPerf2bQ41Pq30Test"},{"name":"BenchmarkPerf2bQ4KMPq30","grep":"runBenchmarkPerf2bQ4KMPq30Test"},{"name":"BenchmarkPerf2bQ6KPq30","grep":"runBenchmarkPerf2bQ6KPq30Test"},{"name":"BenchmarkPerf2bQ80Pq30","grep":"runBenchmarkPerf2bQ80Pq30Test"}]'
           - cache: pq4_0
             groups: '[{"name":"BenchmarkPerf08bQ40Pq40","grep":"runBenchmarkPerf08bQ40Pq40Test"},{"name":"BenchmarkPerf08bQ41Pq40","grep":"runBenchmarkPerf08bQ41Pq40Test"},{"name":"BenchmarkPerf08bQ4KMPq40","grep":"runBenchmarkPerf08bQ4KMPq40Test"},{"name":"BenchmarkPerf08bQ6KPq40","grep":"runBenchmarkPerf08bQ6KPq40Test"},{"name":"BenchmarkPerf08bQ80Pq40","grep":"runBenchmarkPerf08bQ80Pq40Test"},{"name":"BenchmarkPerf2bQ40Pq40","grep":"runBenchmarkPerf2bQ40Pq40Test"},{"name":"BenchmarkPerf2bQ41Pq40","grep":"runBenchmarkPerf2bQ41Pq40Test"},{"name":"BenchmarkPerf2bQ4KMPq40","grep":"runBenchmarkPerf2bQ4KMPq40Test"},{"name":"BenchmarkPerf2bQ6KPq40","grep":"runBenchmarkPerf2bQ6KPq40Test"},{"name":"BenchmarkPerf2bQ80Pq40","grep":"runBenchmarkPerf2bQ80Pq40Test"}]'
+          - cache: batchsweep
+            groups: '[{"name":"BenchmarkPerf08bQ40F16Bs512","grep":"runBenchmarkPerf08bQ40F16Bs512Test"},{"name":"BenchmarkPerf08bQ40F16Bs1024","grep":"runBenchmarkPerf08bQ40F16Bs1024Test"},{"name":"BenchmarkPerf2bQ40F16Bs512","grep":"runBenchmarkPerf2bQ40F16Bs512Test"},{"name":"BenchmarkPerf2bQ40F16Bs1024","grep":"runBenchmarkPerf2bQ40F16Bs1024Test"}]'
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
-    # the release environment + label-gate keep this to trusted in-repo refs.
+    # the release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -332,11 +309,10 @@ jobs:
   summarize:
     needs:
       - context
-      - label-gate
       - stamp-version
       - desktop-benchmark
       - mobile-benchmark
-    if: needs.label-gate.outputs.authorised == 'true' && always() && needs.context.result == 'success'
+    if: always() && needs.context.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -431,7 +407,7 @@ jobs:
         env:
           COMPARE_RUN_ID: ${{ inputs.compare_run_id }}
         run: |
-          if ! find baseline-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          if [ "$(find baseline-reports -name '*.json' -type f 2>/dev/null | wc -l)" -eq 0 ]; then
             echo "::error::No baseline artifacts found for run $COMPARE_RUN_ID (wrong run ID, or artifacts expired past the 90-day retention). A comparison was requested but cannot be produced."
             exit 1
           fi
@@ -444,7 +420,12 @@ jobs:
           ADDON_VERSION: ${{ steps.addon_ver.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          if ! find combined-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          # Count with wc, not `find | grep -q`: under `set -o pipefail` grep -q
+          # closes the pipe on the first match, find gets SIGPIPE, and the
+          # pipeline reports a false non-zero — misreading a present (and, with
+          # more shards, larger) report set as "none found". wc consumes all of
+          # find's output, so find never gets SIGPIPE.
+          if [ "$(find combined-reports -name '*.json' -type f 2>/dev/null | wc -l)" -eq 0 ]; then
             echo "::error::No benchmark reports found for run $ARTIFACT_RUN_ID. Nothing to render."
             exit 1
           fi
@@ -459,7 +440,7 @@ jobs:
           if [ -n "$ADDON_VERSION" ]; then
             ARGS+=(--addon-version "$ADDON_VERSION")
           fi
-          if [ -d baseline-reports ] && find baseline-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          if [ -d baseline-reports ] && [ "$(find baseline-reports -name '*.json' -type f 2>/dev/null | wc -l)" -ne 0 ]; then
             ARGS+=(--compare-dir baseline-reports)
             if [ -n "$COMPARE_RUN_ID" ]; then
               ARGS+=(--baseline-run-id "$COMPARE_RUN_ID")

@@ -53,7 +53,7 @@ These are the bar; the deep-dive lives in the topic files above.
 - Bash: `set -euo pipefail` at the top; quote every variable expansion.
 - Node: target Node 20+, prefer ESM (`.mjs`).
 - Idempotent: re-runs must not corrupt state.
-- Never `curl ... | bash`.
+- Never fetch-and-execute remote code (`curl … | bash`, `iwr … | iex`, download-then-run). See `agentic-automation.mdc` → "No remote code execution".
 
 ### Runners
 - Self-hosted runners must not execute jobs from forked PRs by default.
@@ -69,6 +69,7 @@ These are the bar; the deep-dive lives in the topic files above.
 ### Agentic automation
 - Read-only by default. Mutations require explicit user opt-in per call.
 - Plan-then-apply for any state-changing operation.
+- No remote code execution — never fetch a script/binary from a URL and run it. Hard stop, no confirmation unlocks it.
 - Validation before "success." No "done" without evidence.
 - Fail-stop on ambiguity — never guess.
 

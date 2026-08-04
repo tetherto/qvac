@@ -459,6 +459,11 @@ function generateMarkdownReport (aggregated, opts) {
     { key: 'model_load_ms', unit: 'ms', round: true, label: 'Mean Load (ms)' },
     { key: 'generation_ms', unit: 'ms', round: true, label: 'Mean Gen (ms)' },
     { key: 'total_steps', unit: '', round: true, label: 'Steps' },
+    { key: 'conditioner_ms', unit: 'ms', round: true, label: 'Mean Conditioner (ms)' },
+    { key: 'denoise_ms', unit: 'ms', round: true, label: 'Mean Denoise (ms)' },
+    { key: 'vae_ms', unit: 'ms', round: true, label: 'Mean VAE (ms)' },
+    { key: 'post_process_ms', unit: 'ms', round: true, label: 'Mean Post-process (ms)' },
+    { key: 'steps_per_second', unit: '', round: false, label: 'Mean Steps/s' },
   ]
 
   const scenarioMap = aggregated.scenarios || {}
@@ -1119,7 +1124,7 @@ function generateHtmlReport (aggregated, opts) {
   if (image_paths) {
     const fs = require('fs')
     const path = require('path')
-    const fallbackDir = path.resolve(__dirname, '..', '..', 'packages', 'ocr-onnx', 'test', 'images')
+    const fallbackDir = path.resolve(__dirname, '..', '..', 'packages', 'ocr-ggml', 'test', 'images')
     for (const [testKey, imgPath] of Object.entries(image_paths)) {
       try {
         let resolved = path.resolve(imgPath)

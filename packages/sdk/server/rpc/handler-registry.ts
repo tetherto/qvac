@@ -1,5 +1,6 @@
 import { type Request } from '@/schemas'
 import { handleBatchCompletionStream } from '@/server/rpc/handlers/batch-completion-stream'
+import { handleCompletionOrchestrate } from '@/server/rpc/handlers/completion-orchestrate'
 import { handleCompletionStream } from '@/server/rpc/handlers/completion-stream'
 import { handleDownloadAsset } from '@/server/rpc/handlers/download-asset'
 import { handleLoadModel } from '@/server/rpc/handlers/load-model'
@@ -24,6 +25,7 @@ import { handleTextToSpeech } from '@/server/rpc/handlers/text-to-speech'
 import { handleTextToSpeechStream } from '@/server/rpc/handlers/text-to-speech-stream'
 import { handleGetModelInfo } from '@/server/rpc/handlers/get-model-info'
 import { handleGetLoadedModelInfo } from '@/server/rpc/handlers/get-loaded-model-info'
+import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
 import { handleOCRStream } from '@/server/rpc/handlers/ocr-stream'
 import { handleHeartbeat } from '@/server/rpc/handlers/heartbeat'
 import { handleFinetune } from '@/server/rpc/handlers/finetune'
@@ -114,6 +116,7 @@ export const registry: Record<string, HandlerEntry> = {
   deleteCache: { type: 'reply', handler: handleDeleteCache },
   getModelInfo: { type: 'reply', handler: handleGetModelInfo },
   getLoadedModelInfo: { type: 'reply', handler: handleGetLoadedModelInfo },
+  getSystemResources: { type: 'reply', handler: handleGetSystemResources },
   pluginInvoke: { type: 'reply', handler: handlePluginInvoke },
   modelRegistryList: { type: 'reply', handler: handleModelRegistryList },
   modelRegistrySearch: { type: 'reply', handler: handleModelRegistrySearch },
@@ -156,6 +159,11 @@ export const registry: Record<string, HandlerEntry> = {
     delegatedHandler: handleCompletionStreamDelegated,
     isDelegated: isModelDelegated
   },
+
+  // Deliberately no delegated handler: tool callbacks execute code on the
+  // client machine, so only the user's own local worker may orchestrate
+  // (see completionOrchestrateResponseSchema's contract note).
+  completionOrchestrate: { type: 'duplex', handler: handleCompletionOrchestrate },
 
   batchCompletionStream: {
     type: 'stream',

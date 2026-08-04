@@ -16,6 +16,7 @@ export interface CreateServerOptions {
   publicBaseUrl?: string
   docs?: boolean
   model?: string[]
+  transcribeOverride?: StartServerOptions['transcribeOverride']
 }
 
 function serverOptions(projectRoot: string, opts: CreateServerOptions): StartServerOptions {
@@ -28,7 +29,10 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     ...(opts.cors !== undefined ? { cors: opts.cors } : {}),
     ...(opts.publicBaseUrl !== undefined ? { publicBaseUrl: opts.publicBaseUrl } : {}),
     ...(opts.docs !== undefined ? { docs: opts.docs } : {}),
-    ...(opts.model !== undefined ? { model: opts.model } : {})
+    ...(opts.model !== undefined ? { model: opts.model } : {}),
+    ...(opts.transcribeOverride !== undefined
+      ? { transcribeOverride: opts.transcribeOverride }
+      : {})
   }
 }
 

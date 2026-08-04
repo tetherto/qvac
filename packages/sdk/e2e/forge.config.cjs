@@ -76,6 +76,8 @@ module.exports = {
       /^\/reports\//, // test run reports
       /^\/\.env$/, // MQTT creds — read by the CLI orchestrator, not the packaged app
       /^\/\.env\.bak-/, // env backups
+      /^\/\.npmrc$/, // registry credentials — required only while installing host dependencies
+      /^\/snap\//, // Snapcraft outputs — never recursively package previous revisions
       /^\/\.qvac-worker-backup\// // desktop worker snapshot, restored in postPackage
     ]
   },

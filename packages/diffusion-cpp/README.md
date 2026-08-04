@@ -6,11 +6,11 @@ built for the Bare Runtime.
 
 The package exposes three JS entry points:
 
-| API | Entry point | Use case |
-|---|---|---|
-| `ImgStableDiffusion` | `@qvac/diffusion-cpp` | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
-| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video |
-| `EsrganUpscaler` | named export from `@qvac/diffusion-cpp` | Standalone PNG/JPEG upscaling |
+| API                    | Entry point                                 | Use case                                                                        |
+| ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
+| `ImgStableDiffusion`   | `@qvac/diffusion-cpp`                       | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
+| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video                                      |
+| `EsrganUpscaler`       | named export from `@qvac/diffusion-cpp`     | Standalone PNG/JPEG upscaling                                                   |
 
 ## Table of Contents
 
@@ -38,26 +38,26 @@ The package exposes three JS entry points:
 
 ## Supported Models
 
-| Family | Mode | Notes |
-|---|---|---|
-| SD1.x / SD2.x | image | All-in-one checkpoints through `files.model` |
-| SDXL | image | All-in-one checkpoints or split encoders when required |
-| SD3 | image | Supports split CLIP-L / CLIP-G / T5-XXL inputs |
-| FLUX.2 [klein] | image, img2img, multi-reference fusion | Split diffusion + Qwen3 LLM + VAE |
-| Wan 2.1 | text-to-video, image-to-video | Single diffusion expert; I2V requires CLIP vision |
-| Wan 2.2 | video | API/native MoE plumbing for low-noise + high-noise expert layouts; no bundled example/download script yet |
-| LTX-2 / LTXAV | text-to-video + audio | Gemma text encoder, video VAE, audio VAE, embedding connectors |
-| ESRGAN | upscale | Standalone or post-generation image upscale |
+| Family                       | Mode                                   | Notes                                                                             |
+| ---------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| SD1.x / SD2.x                | image                                  | All-in-one checkpoints through `files.model`                                      |
+| SDXL                         | image                                  | All-in-one checkpoints or split encoders when required                            |
+| SD3                          | image                                  | Supports split CLIP-L / CLIP-G / T5-XXL inputs                                    |
+| FLUX.2 [klein]               | image, img2img, multi-reference fusion | Split diffusion + Qwen3 LLM + VAE                                                 |
+| Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
+| Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
+| LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
+| ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
 ## Supported Platforms
 
-| Platform | Architecture | Status | GPU backend |
-|---|---|---|---|
-| macOS | arm64, x64 | Tier 1 | Metal |
-| Linux | arm64, x64 | Tier 1 | Vulkan |
-| Android | arm64 | Tier 1 | Vulkan, OpenCL |
-| iOS | arm64 | Tier 1 | Metal |
-| Windows | x64 | Tier 1 | Vulkan |
+| Platform | Architecture | Status | GPU backend    |
+| -------- | ------------ | ------ | -------------- |
+| macOS    | arm64, x64   | Tier 1 | Metal          |
+| Linux    | arm64, x64   | Tier 1 | Vulkan         |
+| Android  | arm64        | Tier 1 | Vulkan, OpenCL |
+| iOS      | arm64        | Tier 1 | Metal          |
+| Windows  | x64          | Tier 1 | Vulkan         |
 
 Dependencies:
 
@@ -88,55 +88,55 @@ npm run build:cuda
 Download scripts populate `packages/diffusion-cpp/models/` with the files used
 by the examples.
 
-| Script | Model set |
-|---|---|
-| `./scripts/download-model.sh` | FLUX.2 [klein] 4B image model |
-| `./scripts/download-model-sd2.sh` | SD2.x example model |
-| `./scripts/download-model-sd3.sh` | SD3 example files |
-| `./scripts/download-model-sdxl.sh` | SDXL example files |
-| `./scripts/download-model-wan.sh` | Wan 2.1 T2V 1.3B |
-| `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant |
+| Script                                | Model set                     |
+| ------------------------------------- | ----------------------------- |
+| `./scripts/download-model.sh`         | FLUX.2 [klein] 4B image model |
+| `./scripts/download-model-sd2.sh`     | SD2.x example model           |
+| `./scripts/download-model-sd3.sh`     | SD3 example files             |
+| `./scripts/download-model-sdxl.sh`    | SDXL example files            |
+| `./scripts/download-model-wan.sh`     | Wan 2.1 T2V 1.3B              |
+| `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant        |
 | `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
-| `./scripts/download-model-ltx.sh` | LTX-2.3 video + audio files |
+| `./scripts/download-model-ltx.sh`     | LTX-2.3 video + audio files   |
 
 The FLUX.2 [klein] default image example uses:
 
-| Role | File |
-|---|---|
+| Role            | File                        |
+| --------------- | --------------------------- |
 | Diffusion model | `flux-2-klein-4b-Q8_0.gguf` |
-| Text encoder | `Qwen3-4B-Q4_K_M.gguf` |
-| VAE | `flux2-vae.safetensors` |
+| Text encoder    | `Qwen3-4B-Q4_K_M.gguf`      |
+| VAE             | `flux2-vae.safetensors`     |
 
 LTX-2.3 requires more companion files:
 
-| Role | Default file |
-|---|---|
-| Diffusion model | `LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf` |
-| Text encoder | `gemma-3-12b-it-UD-Q4_K_XL.gguf` |
-| Video VAE | `ltx-2.3-22b-distilled_video_vae.safetensors` |
-| Audio VAE | `ltx-2.3-22b-distilled_audio_vae.safetensors` |
+| Role                 | Default file                                              |
+| -------------------- | --------------------------------------------------------- |
+| Diffusion model      | `LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf`                   |
+| Text encoder         | `gemma-3-12b-it-UD-Q4_K_XL.gguf`                          |
+| Video VAE            | `ltx-2.3-22b-distilled_video_vae.safetensors`             |
+| Audio VAE            | `ltx-2.3-22b-distilled_audio_vae.safetensors`             |
 | Embedding connectors | `ltx-2.3-22b-distilled_embeddings_connectors.safetensors` |
 
 Downloads are resumable where supported by the script.
 
 ## Examples
 
-| Command | Description |
-|---|---|
-| `npm run example` | Load/unload the default FLUX.2 model |
-| `npm run generate` | FLUX.2 text-to-image |
-| `npm run generate:sd2` | SD2.x text-to-image |
-| `npm run generate:sd3` | SD3 text-to-image |
-| `npm run generate:sdxl` | SDXL text-to-image |
-| `bare examples/generate-fusion.js` | FLUX.2 multi-reference fusion |
-| `bare examples/img2img-flux2.js` | FLUX.2 single-reference img2img |
-| `bare examples/img2img-sd3.js` | SD3 SDEdit img2img |
-| `bare examples/generate-video-wan.js` | Wan 2.1 text-to-video |
-| `bare examples/img2vid-wan.js` | Wan 2.1 image-to-video |
-| `npm run generate:video` | Wan text-to-video |
-| `npm run generate:ltx` | LTX-2.3 text-to-video with audio |
-| `npm run generate:esrgan` | Image generation followed by ESRGAN upscale |
-| `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale |
+| Command                                      | Description                                 |
+| -------------------------------------------- | ------------------------------------------- |
+| `npm run example`                            | Load/unload the default FLUX.2 model        |
+| `npm run generate`                           | FLUX.2 text-to-image                        |
+| `npm run generate:sd2`                       | SD2.x text-to-image                         |
+| `npm run generate:sd3`                       | SD3 text-to-image                           |
+| `npm run generate:sdxl`                      | SDXL text-to-image                          |
+| `bare examples/generate-fusion.js`           | FLUX.2 multi-reference fusion               |
+| `bare examples/img2img-flux2.js`             | FLUX.2 single-reference img2img             |
+| `bare examples/img2img-sd3.js`               | SD3 SDEdit img2img                          |
+| `bare examples/generate-video-wan.js`        | Wan 2.1 text-to-video                       |
+| `bare examples/img2vid-wan.js`               | Wan 2.1 image-to-video                      |
+| `npm run generate:video`                     | Wan text-to-video                           |
+| `npm run generate:ltx`                       | LTX-2.3 text-to-video with audio            |
+| `npm run generate:esrgan`                    | Image generation followed by ESRGAN upscale |
+| `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale                   |
 
 Outputs are written to `packages/diffusion-cpp/output/`.
 
@@ -189,16 +189,16 @@ await model.unload()
 
 All file paths must be absolute.
 
-| Key | Required | Description |
-|---|---:|---|
-| `files.model` | yes | Main model. All-in-one checkpoint for SD, diffusion model for split layouts |
-| `files.clipL` | no | CLIP-L text encoder for SD3 / split layouts |
-| `files.clipG` | no | CLIP-G text encoder for SDXL / SD3 |
-| `files.t5Xxl` | no | T5-XXL text encoder for SD3 / FLUX.1 |
-| `files.llm` | no | Qwen3 LLM text encoder for FLUX.2 [klein] |
-| `files.vae` | no | Separate VAE |
-| `files.esrgan` | no | ESRGAN model for post-generation upscale |
-| `files.highNoiseDiffusionModel` | no | Wan 2.2 high-noise expert path; normally used by `VideoStableDiffusion` |
+| Key                             | Required | Description                                                                 |
+| ------------------------------- | -------: | --------------------------------------------------------------------------- |
+| `files.model`                   |      yes | Main model. All-in-one checkpoint for SD, diffusion model for split layouts |
+| `files.clipL`                   |       no | CLIP-L text encoder for SD3 / split layouts                                 |
+| `files.clipG`                   |       no | CLIP-G text encoder for SDXL / SD3                                          |
+| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3 / FLUX.1                                        |
+| `files.llm`                     |       no | Qwen3 LLM text encoder for FLUX.2 [klein]                                   |
+| `files.vae`                     |       no | Separate VAE                                                                |
+| `files.esrgan`                  |       no | ESRGAN model for post-generation upscale                                    |
+| `files.highNoiseDiffusionModel` |       no | Wan 2.2 high-noise expert path; normally used by `VideoStableDiffusion`     |
 
 Passing any separate text encoder (`llm`, `t5Xxl`, `clipL`, `clipG`) makes the
 wrapper route `files.model` to stable-diffusion.cpp's `diffusion_model_path`.
@@ -209,29 +209,29 @@ All-in-one checkpoints are routed to `model_path`.
 `config` is part of the constructor object. There is no second constructor
 argument.
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `threads` | number | auto | CPU threads for loading / CPU ops |
-| `device` | `'gpu' | 'cpu'` | `'gpu'` | Prefer GPU backends or force CPU |
-| `main-gpu` | number \| `'integrated'` \| `'dedicated'` | unset | Pin the GPU selected by stable-diffusion.cpp |
-| `type` | weight type | auto | Override weight quantization |
-| `rng` | `'cpu' | 'cuda' | 'std_default'` | `'cuda'` | Context RNG; `cuda` means Philox and is not GPU-specific |
-| `sampler_rng` | RNG type | auto | Sampler RNG override |
-| `clip_on_cpu` | boolean | `false` | Force CLIP/text encoder to CPU |
-| `vae_on_cpu` | boolean | `false` | Force VAE to CPU |
-| `vae_decode_only` | boolean | `false` | Load only VAE decoder weights; leave false for img2img/fusion/hires paths |
-| `vae_tiling` | boolean | `false` | Tile VAE decode to reduce peak VRAM |
-| `flash_attn` | boolean | `false` | Enable flash attention globally |
-| `diffusion_fa` | boolean | `true` | Enable diffusion-model flash attention; important for FLUX/LTX memory use |
-| `mmap` | boolean | backend default | Memory-map weights when supported |
-| `offload_to_cpu` | boolean | backend default | Keep weights on CPU/offload as supported by backend |
-| `prediction` | prediction type | auto | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2 |
-| `flow_shift` | number | model default | Flow-matching noise schedule shift |
-| `diffusion_conv_direct` | boolean | `true` | Use direct convolution in diffusion model |
-| `vae_conv_direct` | boolean | `true` | Use direct convolution in VAE |
-| `backendsDir` | string | package prebuilds | Custom ggml backend directory |
-| `lora_apply_mode` | string | auto | LoRA application mode |
-| `upscaler_tile_size` | number | `128` | ESRGAN tile size |
+| Key                     | Type                                      | Default           | Description                                                               |
+| ----------------------- | ----------------------------------------- | ----------------- | ------------------------------------------------------------------------- |
+| `threads`               | number                                    | auto              | CPU threads for loading / CPU ops                                         |
+| `device`                | `'gpu'                                    | 'cpu'`            | `'gpu'`                                                                   | Prefer GPU backends or force CPU |
+| `main-gpu`              | number \| `'integrated'` \| `'dedicated'` | unset             | Pin the GPU selected by stable-diffusion.cpp                              |
+| `type`                  | weight type                               | auto              | Override weight quantization                                              |
+| `rng`                   | `'cpu'                                    | 'cuda'            | 'std_default'`                                                            | `'cuda'`                         | Context RNG; `cuda` means Philox and is not GPU-specific |
+| `sampler_rng`           | RNG type                                  | auto              | Sampler RNG override                                                      |
+| `clip_on_cpu`           | boolean                                   | `false`           | Force CLIP/text encoder to CPU                                            |
+| `vae_on_cpu`            | boolean                                   | `false`           | Force VAE to CPU                                                          |
+| `vae_decode_only`       | boolean                                   | `false`           | Load only VAE decoder weights; leave false for img2img/fusion/hires paths |
+| `vae_tiling`            | boolean                                   | `false`           | Tile VAE decode to reduce peak VRAM                                       |
+| `flash_attn`            | boolean                                   | `false`           | Enable flash attention globally                                           |
+| `diffusion_fa`          | boolean                                   | `true`            | Enable diffusion-model flash attention; important for FLUX/LTX memory use |
+| `mmap`                  | boolean                                   | backend default   | Memory-map weights when supported                                         |
+| `offload_to_cpu`        | boolean                                   | backend default   | Keep weights on CPU/offload as supported by backend                       |
+| `prediction`            | prediction type                           | auto              | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2   |
+| `flow_shift`            | number                                    | model default     | Flow-matching noise schedule shift                                        |
+| `diffusion_conv_direct` | boolean                                   | `true`            | Use direct convolution in diffusion model                                 |
+| `vae_conv_direct`       | boolean                                   | `true`            | Use direct convolution in VAE                                             |
+| `backendsDir`           | string                                    | package prebuilds | Custom ggml backend directory                                             |
+| `lora_apply_mode`       | string                                    | auto              | LoRA application mode                                                     |
+| `upscaler_tile_size`    | number                                    | `128`             | ESRGAN tile size                                                          |
 
 `main-gpu` is resolved against the addon's own ggml device enumeration and then
 pinned through `sd_ctx_params_t.backend`. If an explicit request cannot be
@@ -242,28 +242,28 @@ single-GPU devices.
 
 ### Image Generation Parameters
 
-| Key | Type | Description |
-|---|---|---|
-| `prompt` | string | Required non-empty prompt |
-| `negative_prompt` | string | Negative prompt |
-| `width`, `height` | number | Positive multiples of 8; FLUX img2img defaults omitted axes to 1024 |
-| `steps` | number | Diffusion step count |
-| `cfg_scale` | number | Classifier-free guidance for SD/SDXL/SD3 and FLUX img2img examples |
-| `guidance` | number | Distilled guidance for FLUX.2 |
-| `sampling_method` / `sampler` | string | Sampler name; omit for auto-selection |
-| `scheduler` | string | Scheduler name; omit for auto-selection |
-| `seed` | number | `-1` for random |
-| `batch_count` | number | Number of images |
-| `lora` | string | Absolute path to a LoRA adapter |
-| `upscale` | boolean \| object | Post-generation ESRGAN upscale; requires `files.esrgan` |
-| `vae_tiling` | boolean | Per-job VAE tiling |
-| `vae_tile_size` | number \| string | VAE tile size, e.g. `512` or `'512x512'` |
-| `vae_tile_overlap` | number | Tile overlap fraction |
-| `cache_mode` | string | Step-caching algorithm |
-| `cache_preset` | string | Cache preset: `slow`, `medium`, `fast`, `ultra` |
-| `cache_threshold` | number | Cache reuse threshold |
-| `eta` | number | DDIM/TCD stochasticity |
-| `clip_skip` | number | Skip last N CLIP layers |
+| Key                           | Type              | Description                                                         |
+| ----------------------------- | ----------------- | ------------------------------------------------------------------- |
+| `prompt`                      | string            | Required non-empty prompt                                           |
+| `negative_prompt`             | string            | Negative prompt                                                     |
+| `width`, `height`             | number            | Positive multiples of 8; FLUX img2img defaults omitted axes to 1024 |
+| `steps`                       | number            | Diffusion step count                                                |
+| `cfg_scale`                   | number            | Classifier-free guidance for SD/SDXL/SD3 and FLUX img2img examples  |
+| `guidance`                    | number            | Distilled guidance for FLUX.2                                       |
+| `sampling_method` / `sampler` | string            | Sampler name; omit for auto-selection                               |
+| `scheduler`                   | string            | Scheduler name; omit for auto-selection                             |
+| `seed`                        | number            | `-1` for random                                                     |
+| `batch_count`                 | number            | Number of images                                                    |
+| `lora`                        | string            | Absolute path to a LoRA adapter                                     |
+| `upscale`                     | boolean \| object | Post-generation ESRGAN upscale; requires `files.esrgan`             |
+| `vae_tiling`                  | boolean           | Per-job VAE tiling                                                  |
+| `vae_tile_size`               | number \| string  | VAE tile size, e.g. `512` or `'512x512'`                            |
+| `vae_tile_overlap`            | number            | Tile overlap fraction                                               |
+| `cache_mode`                  | string            | Step-caching algorithm                                              |
+| `cache_preset`                | string            | Cache preset: `slow`, `medium`, `fast`, `ultra`                     |
+| `cache_threshold`             | number            | Cache reuse threshold                                               |
+| `eta`                         | number            | DDIM/TCD stochasticity                                              |
+| `clip_skip`                   | number            | Skip last N CLIP layers                                             |
 
 Do not force `sampling_method: 'euler_a'` for FLUX.2 models. Leave the sampler
 unset unless you know the model family requires an override.
@@ -374,37 +374,54 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 
 ### Video Files
 
-| Key | Model family | Description |
-|---|---|---|
-| `files.model` | all video | Wan single/low-noise expert or LTX diffusion transformer |
-| `files.highNoiseDiffusionModel` | Wan 2.2 | High-noise expert for MoE generation |
-| `files.t5Xxl` | Wan | UMT5-XXL text encoder |
-| `files.vae` | Wan / LTX | Wan VAE or LTX video VAE |
-| `files.clipVision` | Wan I2V | OpenCLIP ViT-H/14; required for `mode: 'img2vid'` on Wan |
-| `files.llm` | LTX | Gemma text encoder |
-| `files.audioVae` | LTX | Audio VAE decoder for synchronized audio |
-| `files.embeddingsConnectors` | LTX | Text-embedding connector weights; also marks the context as LTX |
+| Key                             | Model family | Description                                                     |
+| ------------------------------- | ------------ | --------------------------------------------------------------- |
+| `files.model`                   | all video    | Wan single/low-noise expert or LTX diffusion transformer        |
+| `files.t5Xxl`                   | Wan          | UMT5-XXL text encoder                                           |
+| `files.vae`                     | Wan / LTX    | Wan VAE or LTX video VAE                                        |
+| `files.clipVision`              | Wan I2V      | OpenCLIP ViT-H/14; required for `mode: 'img2vid'` on Wan        |
+| `files.llm`                     | LTX          | Gemma text encoder                                              |
+| `files.audioVae`                | LTX          | Audio VAE decoder for synchronized audio                        |
+| `files.embeddingsConnectors`    | LTX          | Text-embedding connector weights; also marks the context as LTX |
 
 ### Video Parameters
 
-| Key | Description |
-|---|---|
-| `mode` | Required: `'txt2vid'` or `'img2vid'` |
-| `prompt`, `negative_prompt` | Text conditioning |
-| `width`, `height` | Wan: multiples of 16. LTX: multiples of 32 |
-| `video_frames` | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257 |
-| `fps` | AVI framerate metadata, default 16 for Wan examples and 24 for LTX |
-| `steps`, `cfg_scale`, `sampling_method`, `scheduler`, `seed` | Sampling controls |
-| `flow_shift` | Per-job flow-shift override; Wan 2.1 T2V 1.3B works well at `3.0` |
-| `high_noise_steps`, `high_noise_sampler`, `high_noise_scheduler`, `high_noise_cfg_scale`, `high_noise_flow_shift`, `moe_boundary` | Wan 2.2 high-noise expert controls |
-| `init_image` | First frame for `img2vid`; required by that mode |
-| `control_frames`, `vace_strength` | Optional VACE guidance |
-| `temporal_tiling` | LTX-only temporal VAE tiling to reduce peak VRAM |
-| `cache_mode`, `cache_preset`, `cache_threshold` | Step-cache controls |
+| Key                                                          | Description                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `mode`                                                       | Required: `'txt2vid'` or `'img2vid'`                               |
+| `prompt`, `negative_prompt`                                  | Text conditioning                                                  |
+| `width`, `height`                                            | Wan: multiples of 16. LTX: multiples of 32                         |
+| `video_frames`                                               | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257                        |
+| `fps`                                                        | AVI framerate metadata, default 16 for Wan examples and 24 for LTX |
+| `steps`, `cfg_scale`, `sampling_method`, `scheduler`, `seed` | Sampling controls                                                  |
+| `flow_shift`                                                 | Per-job flow-shift override; Wan 2.1 T2V 1.3B works well at `3.0`  |
+| `init_image`                                                 | First frame for `img2vid`; required by that mode                   |
+| `control_frames`, `vace_strength`                            | Optional VACE guidance                                             |
+| `temporal_tiling`                                            | LTX-only temporal VAE tiling to reduce peak VRAM                   |
+| `cache_mode`, `cache_preset`, `cache_threshold`              | Step-cache controls                                                |
 
 Video output is a single MJPG AVI `Uint8Array`. For LTX-2 models loaded with
 `audioVae`, the AVI also contains a second IEEE-float PCM stream at 48 kHz.
 VLC handles these files well.
+
+### Wan 2.2
+
+The supported Wan 2.2 workflow is the community-distilled TI2V-5B Turbo
+Q5_K_S GGUF for text-to-video. The downloader does not include the CLIP vision
+encoder required by the wrapper's image-to-video path. Download its complete
+text-to-video model layout before running the example:
+
+```sh
+# TI2V-5B Turbo Q5_K_S (4 steps, CFG 1)
+./scripts/download-model-wan2.2.sh
+npm run generate:wan22
+```
+
+The download is approximately 16.4 GB: 3.56 GB for the Q5_K_S diffusion model,
+11.4 GB for the fp16 UMT5-XXL encoder, and 1.41 GB for the Wan 2.2 VAE. The
+backend runs one process on one device with optional CPU offload. Use dimensions
+that are multiples of 32 for this TI2V model so the emitted AVI dimensions match
+the requested dimensions.
 
 ## LTX-2 Text-to-Video With Audio
 
@@ -415,7 +432,10 @@ const model = new VideoStableDiffusion({
     llm: path.join(MODELS_DIR, 'gemma-3-12b-it-UD-Q4_K_XL.gguf'),
     vae: path.join(MODELS_DIR, 'ltx-2.3-22b-distilled_video_vae.safetensors'),
     audioVae: path.join(MODELS_DIR, 'ltx-2.3-22b-distilled_audio_vae.safetensors'),
-    embeddingsConnectors: path.join(MODELS_DIR, 'ltx-2.3-22b-distilled_embeddings_connectors.safetensors')
+    embeddingsConnectors: path.join(
+      MODELS_DIR,
+      'ltx-2.3-22b-distilled_embeddings_connectors.safetensors'
+    )
   },
   config: {
     threads: 4,
@@ -521,8 +541,7 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 - For FLUX.2 img2img/fusion, set `config.prediction: 'flux2_flow'` so the JS
   wrapper and native layer select the in-context conditioning path.
 - Wan I2V requires `files.clipVision`; LTX img2vid does not.
-- Wan dimensions must be multiples of 16; LTX dimensions must be multiples of
-  32.
+- Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
 - Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
 - LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
 

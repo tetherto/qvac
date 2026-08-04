@@ -41,18 +41,39 @@ export const vlaHparamsSchema = z.object({
     .positive()
     .optional()
     .describe(
-      'Number of camera views the model expects (2 for SmolVLA, 3 for π₀.₅). ' +
-        'Pass exactly this many preprocessed frames in `images`. Optional for ' +
-        'back-compat — older addon builds may omit it.'
+      'Number of camera views the model expects (2 for SmolVLA and GR00T, 3 ' +
+        'for π₀.₅). Pass exactly this many preprocessed frames in `images`. ' +
+        'Optional for back-compat — older addon builds may omit it.'
     ),
   stateInputMode: z
     .enum(['continuous', 'discrete'])
     .optional()
     .describe(
-      "How the robot state is consumed. `'continuous'` (SmolVLA): the `state` " +
-        "Float32Array is projected by an in-model linear layer. `'discrete'` " +
-        '(π₀.₅): the state is tokenised into the language prompt and the `state` ' +
-        'buffer is ignored — pass an empty `Float32Array(0)`. Optional for back-compat.'
+      "How the robot state is consumed. `'continuous'` (SmolVLA, GR00T): the " +
+        '`state` Float32Array is projected by an in-model linear layer. ' +
+        "`'discrete'` (π₀.₅): the state is tokenised into the language prompt " +
+        'and the `state` buffer is ignored — pass an empty `Float32Array(0)`. ' +
+        'Optional for back-compat.'
+    ),
+  imageInputMode: z
+    .enum(['pixels', 'patches'])
+    .optional()
+    .describe(
+      "How images are supplied. `'pixels'` (SmolVLA, π₀.₅): each `images` " +
+        'entry is a `3 · imgWidth · imgHeight` CHW plane from ' +
+        "`vlaPreprocessImage`. `'patches'` (GR00T): each entry is a " +
+        'pre-patchified buffer of length `imagePatchElems`. Optional for ' +
+        'back-compat.'
+    ),
+  imagePatchElems: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "For patch-input models (`imageInputMode === 'patches'`), the exact " +
+        'per-camera patch buffer length each `images` entry must have. Absent ' +
+        'for pixel-input models.'
     )
 })
 
@@ -97,9 +118,12 @@ export const vlaRunRequestSchema = z.object({
     .array(z.string().min(1).regex(BASE64_PATTERN))
     .min(1)
     .describe(
-      'Base64-encoded preprocessed images. Each entry is the underlying ' +
-        'ArrayBuffer of a `Float32Array` produced by `vlaPreprocessImage(...)`. ' +
-        'Length per image must equal `3 * imgWidth * imgHeight`.'
+      'Base64-encoded preprocessed images, one per camera. Each entry is the ' +
+        'underlying ArrayBuffer of a `Float32Array`. For pixel-input models ' +
+        '(SmolVLA, π₀.₅) it comes from `vlaPreprocessImage(...)` and its length ' +
+        'must equal `3 * imgWidth * imgHeight`. For patch-input models (GR00T, ' +
+        "`hparams.imageInputMode === 'patches'`) it is a pre-patchified buffer " +
+        'of length `hparams.imagePatchElems`.'
     ),
   imgWidth: z.number().int().positive(),
   imgHeight: z.number().int().positive(),
@@ -107,7 +131,7 @@ export const vlaRunRequestSchema = z.object({
     .string()
     .regex(BASE64_PATTERN)
     .describe(
-      'Base64-encoded `Float32Array`. For continuous-state models (SmolVLA) ' +
+      'Base64-encoded `Float32Array`. For continuous-state models (SmolVLA, GR00T) ' +
         'this is length `hparams.maxStateDim` — use ' +
         '`vlaPadState(state, hparams.maxStateDim)` to zero-pad. For ' +
         "discrete-state models (π₀.₅, `stateInputMode: 'discrete'`) the state " +

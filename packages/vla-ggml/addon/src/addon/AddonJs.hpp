@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -36,6 +37,93 @@ inline VlaModel& vlaFromInstance(js_env_t* env, js_value_t* instanceHandle) {
         "Instance handle does not refer to a VlaModel");
   }
   return *vla;
+}
+
+// Resolve the instance handle to the VlaModel, or null if it refers to some
+// other model type. runJob's dispatch bookkeeping uses this: a wrong model type
+// is not this function's business, so it returns null rather than throwing.
+//
+// NOT noexcept: getInstance still throws StatusError for a handle it does not
+// know, and this is the first thing runJob does that touches that argument. A
+// noexcept here would turn an invalid handle — reachable by exactly the direct
+// binding callers the in-flight guard exists for — into std::terminate instead
+// of the catchable JS error JSCATCH already produces.
+inline VlaModel*
+vlaFromInstanceOrNull(js_env_t* env, js_value_t* instanceHandle) {
+  using namespace qvac_lib_inference_addon_cpp;
+  return dynamic_cast<VlaModel*>(
+      &JsInterface::getInstance(env, instanceHandle).addonCpp->model.get());
+}
+
+// Parse an optional integer that arrived as a config-map string ("" = unset,
+// returned as -1). createInstance's config map is all strings (ggufPath,
+// backend, backendsDir, …), so the embodiment's numeric id and camera-count
+// override come through the same way rather than as JS numbers.
+// `max` is inclusive; an out-of-range or malformed value is an error, never a
+// truncation (std::stoi throws out_of_range on a value past int, and a value
+// past `max` cannot name anything the resolver would accept).
+inline int
+parseOptionalConfigInt(const std::string& s, const char* what, int max) {
+  if (s.empty()) {
+    return -1;
+  }
+  size_t used = 0;
+  int value = 0;
+  try {
+    value = std::stoi(s, &used);
+  } catch (const std::exception&) {
+    used = 0;
+  }
+  if (used != s.size() || value < 0 || value > max) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(what) + " must be an integer in 0.." + std::to_string(max) +
+            ", got '" + s + "'");
+  }
+  return value;
+}
+
+// Largest selectable embodiment id / camera count, mirroring
+// GROOT_MAX_EMBODIMENT_CAT_ID and GROOT_MAX_SANE_NUM_CAMERAS in groot.cpp.
+// Checked at the JS boundary as well, because a JS number reaching the resolver
+// as int32 would otherwise NARROW: 2^32 arrives as 0, i.e. a silent selection
+// of a different embodiment. Anything out of range must be an error, never a
+// cast.
+constexpr double VLA_MAX_EMBODIMENT_CAT_ID = 31;
+constexpr double VLA_MAX_NUM_CAMERAS = 64;
+
+// Read a non-negative integer JS number, rejecting a non-integral or
+// out-of-range value instead of narrowing it. `max` is inclusive.
+inline int
+jsBoundedInt(js_env_t* env, js_value_t* value, const char* what, double max) {
+  const double raw =
+      qvac_lib_inference_addon_cpp::js::Number(env, value).as<double>(env);
+  if (!(raw >= 0) || raw > max || raw != std::floor(raw)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(what) + " must be an integer in 0.." +
+            std::to_string(static_cast<long long>(max)) + ", got " +
+            std::to_string(raw));
+  }
+  return static_cast<int>(raw);
+}
+
+// Read the embodiment selector out of the createInstance config map. All three
+// keys are always present (index.js writes '' when unconfigured).
+inline VlaEmbodimentRequest
+parseEmbodimentRequest(qvac_lib_inference_addon_cpp::JsArgsParser& args) {
+  VlaEmbodimentRequest req;
+  req.tag = args.getMapEntry(1, "embodiment");
+  req.cat_id = parseOptionalConfigInt(
+      args.getMapEntry(1, "embodimentCatId"),
+      "embodimentCatId",
+      static_cast<int>(VLA_MAX_EMBODIMENT_CAT_ID));
+  const int cams = parseOptionalConfigInt(
+      args.getMapEntry(1, "embodimentNumCameras"),
+      "embodimentNumCameras",
+      static_cast<int>(VLA_MAX_NUM_CAMERAS));
+  req.num_cameras = cams > 0 ? cams : 0;
+  return req;
 }
 
 // Copy a JS Float32Array into a std::vector<float>. The framework runs
@@ -125,6 +213,58 @@ inline VlaInput parseRunInput(js_env_t* env, js_value_t* inputVal) {
   return in;
 }
 
+// Builds the JS-side hparams object (field mapping documented on
+// getVlaHparams). Shared with setVlaEmbodiment so a switched model's refreshed
+// hparams go through exactly one mapping.
+inline js_value_t* hparamsToJs(js_env_t* env, const VlaHparamsGeneric& hp) {
+  js_value_t* obj = nullptr;
+  if (js_create_object(env, &obj) != 0) {
+    throw std::runtime_error("js_create_object failed");
+  }
+  auto setInt = [&](const char* name, int32_t value) {
+    js_value_t* v = nullptr;
+    js_create_int32(env, value, &v);
+    js_set_named_property(env, obj, name, v);
+  };
+  auto setStr = [&](const char* name, const char* value) {
+    js_value_t* v = nullptr;
+    js_create_string_utf8(
+        env, reinterpret_cast<const utf8_t*>(value), std::strlen(value), &v);
+    js_set_named_property(env, obj, name, v);
+  };
+  setInt("chunkSize", hp.chunk_size);
+  setInt("actionDim", hp.action_dim);
+  setInt("maxActionDim", hp.max_action_dim);
+  setInt("maxStateDim", hp.max_state_dim);
+  setInt("tokenizerMaxLength", hp.tokenizer_max_length);
+  setInt("visionImageSize", hp.vision_image_size);
+  setInt("numCameras", hp.num_cameras);
+  setInt("imagePatchElems", hp.image_patch_elems);
+  setStr(
+      "stateInputMode",
+      hp.state_input_mode == VlaHparamsGeneric::StateInputMode::Discrete
+          ? "discrete"
+          : "continuous");
+  setStr(
+      "imageInputMode",
+      hp.image_input_mode == VlaHparamsGeneric::ImageInputMode::Patches
+          ? "patches"
+          : "pixels");
+  // GR00T only — omitted for models that resolve no embodiment (SmolVLA, π₀.₅,
+  // or a GR00T GGUF naming none), so the key's presence signals an embodiment
+  // was selected, NOT that it can be changed: a single-embodiment GGUF reports
+  // its baked tag here and still rejects every setEmbodiment(). The cat_id is
+  // the numeric form of the same selection, so a caller can round-trip either
+  // way.
+  if (!hp.selected_embodiment_tag.empty()) {
+    setStr("selectedEmbodimentTag", hp.selected_embodiment_tag.c_str());
+  }
+  if (hp.selected_embodiment_cat_id >= 0) {
+    setInt("selectedEmbodimentCatId", hp.selected_embodiment_cat_id);
+  }
+  return obj;
+}
+
 } // namespace detail
 
 // createInstance(jsHandle, { ggufPath, backend }, outputCb) -> External
@@ -142,9 +282,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   const std::string ggufPath = args.getMapEntry(1, "ggufPath");
   const std::string backend = args.getMapEntry(1, "backend");
   const std::string backendsDir = args.getMapEntry(1, "backendsDir");
+  // Embodiment selector for multi-embodiment GR00T GGUFs; all keys empty = the
+  // GGUF's default. index.js always sets them (empty when unconfigured).
+  const VlaEmbodimentRequest embodiment = detail::parseEmbodimentRequest(args);
   const bool forceCpu = (backend == "cpu");
 
-  auto model = std::make_unique<VlaModel>(ggufPath, forceCpu, backendsDir);
+  auto model =
+      std::make_unique<VlaModel>(ggufPath, forceCpu, backendsDir, embodiment);
 
   // VLA emits a single Float32Array (the action chunk) per job; runtime
   // stats and errors are added to the handler stack by OutputCallBackJs.
@@ -182,8 +326,34 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   std::any input{detail::parseRunInput(env, jsInput)};
-  return JsInterface::getInstance(env, args.get(0, "instance"))
-      .runJob(std::move(input));
+  js_value_t* instanceHandle = args.get(0, "instance");
+  // Count the job in BEFORE handing it over, so there is no window in which the
+  // scheduler has accepted a job that setVlaEmbodiment cannot see (it would
+  // otherwise be free to swap the weights this job is about to read). Released
+  // again below if the job was refused, and by process() once it completes.
+  VlaModel* vla = detail::vlaFromInstanceOrNull(env, instanceHandle);
+  if (vla != nullptr) {
+    vla->noteJobDispatched();
+  }
+  bool accepted = false;
+  try {
+    // Straight to addonCpp (what the framework's instance.runJob does under its
+    // js::Boolean wrapper) so acceptance is a plain bool rather than a JS value
+    // that would have to be read back to decide whether to release the count.
+    accepted = JsInterface::getInstance(env, instanceHandle)
+                   .addonCpp->runJob(std::move(input));
+  } catch (...) {
+    if (vla != nullptr) {
+      vla->noteJobSettled();
+    }
+    throw;
+  }
+  // runJob returns false when a previous job is still in flight — that job was
+  // never queued, so process() will never clear its count.
+  if (vla != nullptr && !accepted) {
+    vla->noteJobSettled();
+  }
+  return js::Boolean::create(env, accepted);
 }
 JSCATCH
 
@@ -216,47 +386,61 @@ JSCATCH
 
 // getVlaHparams(instance) -> { chunkSize, actionDim, maxActionDim,
 //                              maxStateDim, tokenizerMaxLength,
-//                              visionImageSize, numCameras, stateInputMode }
+//                              visionImageSize, numCameras, imagePatchElems,
+//                              stateInputMode, imageInputMode,
+//                              selectedEmbodimentTag? }
 //
-// `numCameras` and `stateInputMode` let JS-side input validation
-// distinguish a SmolVLA model (2 cameras,
-// continuous state) from a π₀.₅ model (up to 3 cameras, discrete state
-// inlined into the prompt). The existing fields are unchanged.
+// `numCameras`, `stateInputMode`, and `imageInputMode` let JS-side input
+// validation tell the architectures apart: SmolVLA (2 cameras, continuous
+// state, pixel images), π₀.₅ (up to 3 cameras, discrete state inlined into
+// the prompt), and GR00T (continuous state, pre-patchified images ->
+// imageInputMode "patches"). `imagePatchElems` is the exact per-camera patch
+// buffer length the patches-path validator checks against (0 on pixel models).
 inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   VlaModel& model = detail::vlaFromInstance(env, args.get(0, "instance"));
-  const VlaHparamsGeneric& hp = model.hparams();
+  return detail::hparamsToJs(env, model.hparams());
+}
+JSCATCH
 
-  js_value_t* obj = nullptr;
-  if (js_create_object(env, &obj) != 0) {
-    throw std::runtime_error("js_create_object failed");
+// setVlaEmbodiment(instance, embodiment, numCameras) -> hparams object
+//
+// Switches a loaded multi-embodiment GR00T model to another embodiment shipped
+// in the same GGUF, so one load can serve any of them (~20MB of row I/O instead
+// of a full reload). `embodiment` is either a tag string or the numeric cat_id;
+// `numCameras` (0 = unset) overrides the GGUF's camera count for that
+// embodiment, which is what makes a row whose count was unknown at conversion
+// time selectable. Returns the refreshed hparams — `numCameras`,
+// `selectedEmbodimentTag` and `selectedEmbodimentCatId` follow the new
+// embodiment, and the JS wrapper caches the result for its run-input
+// validation. Throws for an unknown/unshipped tag or id, an embodiment with no
+// known camera count and no override, a single-embodiment model, or an
+// inference job still in flight (VlaModel::setEmbodiment enforces that last one
+// natively, so it holds for callers that never go through index.js).
+inline js_value_t*
+setVlaEmbodiment(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  VlaModel& model = detail::vlaFromInstance(env, args.get(0, "instance"));
+  js_value_t* selector = args.get(1, "embodiment");
+  VlaEmbodimentRequest req;
+  if (js::is<js::Number>(env, selector)) {
+    req.cat_id = detail::jsBoundedInt(
+        env, selector, "embodiment catId", detail::VLA_MAX_EMBODIMENT_CAT_ID);
+  } else {
+    req.tag = js::String(env, selector).as<std::string>(env);
   }
-  auto setInt = [&](const char* name, int32_t value) {
-    js_value_t* v = nullptr;
-    js_create_int32(env, value, &v);
-    js_set_named_property(env, obj, name, v);
-  };
-  auto setStr = [&](const char* name, const char* value) {
-    js_value_t* v = nullptr;
-    js_create_string_utf8(
-        env, reinterpret_cast<const utf8_t*>(value), std::strlen(value), &v);
-    js_set_named_property(env, obj, name, v);
-  };
-  setInt("chunkSize", hp.chunk_size);
-  setInt("actionDim", hp.action_dim);
-  setInt("maxActionDim", hp.max_action_dim);
-  setInt("maxStateDim", hp.max_state_dim);
-  setInt("tokenizerMaxLength", hp.tokenizer_max_length);
-  setInt("visionImageSize", hp.vision_image_size);
-  setInt("numCameras", hp.num_cameras);
-  setStr(
-      "stateInputMode",
-      hp.state_input_mode == VlaHparamsGeneric::StateInputMode::Discrete
-          ? "discrete"
-          : "continuous");
-  return obj;
+  const int cams = detail::jsBoundedInt(
+      env,
+      args.get(2, "numCameras"),
+      "numCameras",
+      detail::VLA_MAX_NUM_CAMERAS);
+  req.num_cameras = cams > 0 ? cams : 0;
+  model.setEmbodiment(req);
+  return detail::hparamsToJs(env, model.hparams());
 }
 JSCATCH
 

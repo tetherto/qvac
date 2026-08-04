@@ -8,7 +8,7 @@ const { profileDownload } = require('../lib/profiler')
 const REGISTRY_CORE_KEY = process.env.QVAC_REGISTRY_CORE_KEY
 const STATS_INTERVAL_SEC = parseInt(process.env.PROFILE_INTERVAL || '5', 10)
 
-function usage () {
+function usage() {
   console.log(`
 Usage: node profile-download.js [model-path] [source]
 
@@ -26,7 +26,7 @@ Examples:
 `)
 }
 
-async function main () {
+async function main() {
   if (!REGISTRY_CORE_KEY) {
     console.error('QVAC_REGISTRY_CORE_KEY is not set')
     process.exit(1)

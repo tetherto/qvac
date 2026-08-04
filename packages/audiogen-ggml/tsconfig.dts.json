@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "index.d.ts",
+    "audiogen.d.ts",
+    "models.d.ts",
+    "lib/**/*.d.ts",
+    "test/types/**/*.ts"
+  ]
+}

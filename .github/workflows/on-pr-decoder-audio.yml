@@ -2,7 +2,7 @@ name: On PR Trigger (Decoder-audio)
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/decoder-audio/**"
@@ -19,7 +19,7 @@ on:
         required: false
         type: string
       run_verify:
-        description: "Treat this run like a 'verified' run (integration tests)."
+        description: "Run all CI stages (integration tests)."
         required: false
         type: boolean
         default: true
@@ -58,27 +58,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
     permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -102,15 +85,23 @@ jobs:
         uses: ./.github/actions/ci-router
 
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -118,7 +109,7 @@ jobs:
           github-token: ${{ github.token }}
 
   context:
-    needs: authorize
+    needs: [authorize, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
@@ -135,7 +126,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           INPUT_WORKDIR: ${{ inputs.workdir }}
@@ -158,7 +148,7 @@ jobs:
           else
             workdir="packages/decoder-audio"
             repo="$HEAD_REPO"
-            ref="$HEAD_REF"
+            ref="$HEAD_SHA"
             run_verify="true"
             base_sha="$BASE_SHA"
             head_sha="$HEAD_SHA"
@@ -180,12 +170,12 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -203,10 +193,10 @@ jobs:
 
   run-integration-tests:
     needs:
+      - fork-approval
       - context
       - ci-router
-      - label-gate
-    if: needs.context.result == 'success' && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.context.result == 'success' && needs.ci-router.outputs.run_desktop == 'true' 
     permissions:
       contents: read
       packages: read
@@ -225,10 +215,10 @@ jobs:
       pull-requests: write # Allow commenting on PRs
       id-token: write
     needs:
+      - fork-approval
       - context
       - ci-router
-      - label-gate
-    if: needs.context.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.context.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' 
     uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:
@@ -237,7 +227,7 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
-    needs: [authorize, ci-router, label-gate, sanity-checks, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, ci-router, sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:

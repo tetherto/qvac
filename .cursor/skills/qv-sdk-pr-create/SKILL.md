@@ -16,10 +16,22 @@ Generate PR titles and descriptions for SDK pod packages, following the team's t
 - User asks to generate PR description
 - User invokes `/qv-sdk-pr-create`
 
+## Branch / remote preference
+
+**Preferred path for internal SDK work:** push the head branch to the org repo (`tetherto/qvac`) and open a same-repo PR. Org-branch ready PRs get baseline CI without any fork trust gate. Heavy tiers still opt in via labels (`test-e2e-smoke` / `test-e2e-full`, addon stage labels, etc.). Prefer **Ready for review** over Draft when you want baseline checks to run (drafts run nothing until ready).
+
+**Fallback:** personal-fork → org PRs still work, but a personal fork counts as external. Privileged CI needs a merge/release-team member to approve the `fork-ci` environment on each workflow run for the current head SHA; each new push re-prompts. Do not ask the PR author to self-approve `fork-ci`.
+
+Resolve remotes from `git remote -v`:
+- **Org remote** — URL contains `tetherto/qvac` (often named `upstream`, sometimes `origin`)
+- **Fork remote** — contributor fork, if present (often named `origin` when org is `upstream`)
+
+In command examples below, `ORG_REMOTE` / `FORK_REMOTE` / `BRANCH` are placeholders — substitute the resolved remote and branch names. Do not run those tokens literally.
+
 ## Workflow
 
 1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch
-2. Collect commits/diff from `<base>...origin/<branch>`
+2. Resolve the head remote (prefer org remote; see above). Collect commits/diff from `<base>...<head-remote>/<branch>` (or local `HEAD` if not yet pushed)
 3. Infer ticket, prefix, and tags from changes (see Inference Strategy)
 4. Only ask user for input when inference confidence is low
 5. Generate title: `TICKET prefix[tags]: subject`
@@ -87,27 +99,40 @@ TICKET prefix[tags]: subject
 After generating the PR description, check for `gh` CLI:
 
 1. Check if `gh` is installed: `which gh`
-2. Check remotes: `git remote -v` to identify fork (origin) vs upstream
+2. Check remotes: `git remote -v` — identify the **org** remote (`tetherto/qvac`) and any fork remote
 3. If available, ask user: "Create PR now with gh CLI?" [Yes / No / Preview first]
-4. If yes, ensure changes are committed and pushed first
-5. Create PR with explicit repo/base/head for fork workflows:
+4. If yes, ensure changes are committed, then push the head branch to the **org remote** when the user has write access. Only push to a personal fork when org push is unavailable or the user explicitly chooses the fork path
+5. Create the PR:
 
 ```bash
-# For fork -> upstream PRs:
+# Preferred — org-branch (same-repo) PR.
+# ORG_REMOTE = remote whose URL is tetherto/qvac (often `upstream` or `origin`).
+git push -u ORG_REMOTE BRANCH
 gh pr create \
-  --repo UPSTREAM_ORG/REPO \
+  --repo tetherto/qvac \
+  --base main \
+  --head BRANCH \
+  --title "TICKET prefix: subject" \
+  --body "..."
+
+# Fallback — personal fork -> org PR (external CI path; needs merge/release fork-ci approval per run):
+git push -u FORK_REMOTE BRANCH
+gh pr create \
+  --repo tetherto/qvac \
   --base main \
   --head FORK_OWNER:BRANCH \
   --title "TICKET prefix: subject" \
   --body "..."
 
 # Then open in browser:
-gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
+gh pr view --repo tetherto/qvac BRANCH --web
 ```
 
-**Important:** 
+**Important:**
 - `--web` alone only opens browser for manual creation, does NOT create the PR
-- For fork PRs, must specify `--repo`, `--base`, and `--head` explicitly
+- For fork PRs, must specify `--repo`, `--base`, and `--head FORK_OWNER:BRANCH` explicitly
+- For org-branch PRs, `--head BRANCH` (no `owner:`) is enough when `--repo tetherto/qvac`
+- Do not add fork trust gates on org-branch PRs; baseline CI runs without them. For fork PRs, tell the user a merge/release reviewer must approve the pending `fork-ci` deployment after reviewing the current head
 - Commit and push before creating PR
 
 6. If gh not available, output the copy-ready markdown format above
@@ -115,14 +140,14 @@ gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
 
 ## SDK ↔ bare-SDK Sync Trigger
 
-**Trigger:** the PR diff (`<base>...origin/<branch>`) touches `packages/sdk/package.json` and modifies one of: `version`, `dependencies`, `optionalDependencies`, `peerDependencies`.
+**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) touches `packages/sdk/package.json` and modifies one of: `version`, `dependencies`, `optionalDependencies`, `peerDependencies`.
 
 When triggered, prompt the user to run `qv-sdk-bare-sdk-sync` so the same change is mirrored into `packages/bare-sdk/package.json` (with bare-sdk's NOTICE regenerated) in the same commit/PR. `@qvac/sdk` and `@qvac/bare-sdk` ship in lockstep — letting them drift in a PR creates work for the next release.
 
 ### Steps (after Step 7 of Workflow above)
 
 1. Detect the trigger condition by inspecting the diff:
-   - `git diff <base>...origin/<branch> -- packages/sdk/package.json` shows changes
+   - `git diff <base>...<head-remote>/<branch> -- packages/sdk/package.json` (or vs local `HEAD`) shows changes
    - Changes touch the `version` line OR any `dependencies` / `optionalDependencies` / `peerDependencies` block
 2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-bare-sdk-sync` to mirror into bare-sdk?" [Yes / No (skip)]
 3. If yes, read `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` and follow it inline. The skill writes to `packages/bare-sdk/package.json` and regenerates `packages/bare-sdk/NOTICE`.
@@ -165,7 +190,7 @@ When triggered, automatically chain into the `sdk-backmerge` skill so a follow-u
 1. Capture context for the backmerge:
    - Just-created release PR number and URL
    - Release branch name (`release-<pkg>-<x.y.z>`) and parsed `<pkg>` / `<x.y.z>`
-   - Source fork branch (the head of the release PR)
+   - Source head branch, org-remote-qualified when possible (e.g. `ORG_REMOTE/<branch>`, or the release PR `headRefOid` if the remote tip is missing)
    - Ticket number from the title
 2. Invoke the `sdk-backmerge` workflow inline with these inputs (read `.cursor/skills/qv-sdk-backmerge/SKILL.md` and follow it).
 3. **Fail-stop policy** — if the backmerge cherry-pick produces a conflict outside `sdk-backmerge`'s auto-resolve list, STOP. Print:
@@ -196,6 +221,8 @@ Before outputting the PR description, verify:
 - [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
+- [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
+- [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 
 ## References
 
@@ -204,4 +231,5 @@ Before outputting the PR description, verify:
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - Backmerge skill: `.cursor/skills/qv-sdk-backmerge/SKILL.md`
 - sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
-- GitFlow: `docs/gitflow.md`
+- GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill until DevOps updates gitflow
+- Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)
