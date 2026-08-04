@@ -413,13 +413,16 @@ export const ADDON_LLM = '@qvac/llm-llamacpp' as const
 /** Native addon package for text embeddings (llama.cpp) */
 export const ADDON_EMBEDDING = '@qvac/embed-llamacpp' as const
 
-/** Native addon package for Whisper transcription (whisper.cpp) */
+/** Unified native addon package for Whisper and Parakeet transcription */
+export const ADDON_ASR = '@qvac/asr-ggml' as const
+
+/** Legacy native addon package for Whisper transcription (whisper.cpp) */
 export const ADDON_WHISPER = '@qvac/transcription-whispercpp' as const
 
 /** Native addon package for BCI neural-signal transcription (whisper.cpp) */
 export const ADDON_BCI = '@qvac/bci-whispercpp' as const
 
-/** Native addon package for Parakeet transcription (ONNX) */
+/** Legacy native addon package for Parakeet transcription */
 export const ADDON_PARAKEET = '@qvac/transcription-parakeet' as const
 
 /** Native addon package for NMT translation (nmt.cpp) */

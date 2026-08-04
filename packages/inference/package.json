@@ -177,6 +177,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@qvac/asr-ggml": "^0.1.0",
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.15.1",
     "@qvac/decoder-audio": "^0.5.0",
@@ -185,13 +186,14 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.39.2",
     "@qvac/ocr-ggml": "^0.13.1",
-    "@qvac/transcription-parakeet": "^0.10.0",
-    "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.2.1",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.16.2"
   },
   "peerDependenciesMeta": {
+    "@qvac/asr-ggml": {
+      "optional": true
+    },
     "@qvac/bci-whispercpp": {
       "optional": true
     },
@@ -216,12 +218,6 @@
     "@qvac/ocr-ggml": {
       "optional": true
     },
-    "@qvac/transcription-parakeet": {
-      "optional": true
-    },
-    "@qvac/transcription-whispercpp": {
-      "optional": true
-    },
     "@qvac/translation-nmtcpp": {
       "optional": true
     },
@@ -233,6 +229,7 @@
     }
   },
   "devDependencies": {
+    "@qvac/asr-ggml": "^0.1.0",
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.15.1",
     "@qvac/decoder-audio": "^0.5.0",
@@ -241,8 +238,6 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.39.2",
     "@qvac/ocr-ggml": "^0.13.1",
-    "@qvac/transcription-parakeet": "^0.10.0",
-    "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.2.1",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.16.2",

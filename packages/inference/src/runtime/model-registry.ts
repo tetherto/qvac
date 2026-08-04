@@ -5,7 +5,6 @@ import {
 } from '@/errors/index'
 import type { CanonicalModelType } from '@/schemas/index'
 import { getEngineLogger } from '@/logging/index'
-import type BaseInference from '@qvac/infer-base'
 
 const logger = getEngineLogger()
 
@@ -13,8 +12,20 @@ interface AddonInterface {
   cancel(jobId?: string): Promise<void>
 }
 
-// BaseInference provides: load, run (returns QvacResponse), unload, destroy, pause, unpause, stop, status
-export type AnyModel = Omit<BaseInference, 'addon'> & {
+interface ModelRunResponse {
+  iterate(): AsyncIterable<unknown>
+  await(): Promise<unknown>
+}
+
+export interface AnyModel {
+  load(force?: boolean): Promise<void>
+  run(...args: unknown[]): Promise<ModelRunResponse>
+  unload(): void | Promise<void>
+  destroy?(): void | Promise<void>
+  pause(): void | Promise<void>
+  unpause?(): void | Promise<void>
+  stop?(): void | Promise<void>
+  status?(): Promise<string>
   reload?(config: unknown): Promise<void>
   addon?: AddonInterface
 }

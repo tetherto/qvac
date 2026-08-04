@@ -1,6 +1,7 @@
 import test from 'brittle'
 import { z } from 'zod'
 import {
+  ADDON_ASR,
   defineHandler,
   defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema,
@@ -144,6 +145,11 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     import('@/plugins/builtin/ggml-vla/plugin'),
     import('@/plugins/builtin/ggml-classification/plugin')
   ])
+
+  t.is(whisperPlugin.addonPackage, ADDON_ASR, 'whisper uses the unified ASR addon')
+  t.is(parakeetPlugin.addonPackage, ADDON_ASR, 'parakeet uses the unified ASR addon')
+  t.is(whisperPlugin.logging?.namespace, ADDON_ASR, 'whisper uses shared ASR log routing')
+  t.is(parakeetPlugin.logging?.namespace, ADDON_ASR, 'parakeet uses shared ASR log routing')
 
   const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
     [llmPlugin.modelType]: {
