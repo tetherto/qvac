@@ -105,6 +105,23 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureQwen3Family) {
   }
 }
 
+TEST_F(ChatTemplateUtilsTest, IdentifiesDeepSeekV4Architecture) {
+  EXPECT_TRUE(isDeepSeekV4Architecture("deepseek4"));
+  EXPECT_TRUE(isDeepSeekV4Architecture("DeepSeek4"));
+  EXPECT_FALSE(isDeepSeekV4Architecture("deepseek3"));
+  EXPECT_FALSE(isDeepSeekV4Architecture("qwen35"));
+}
+
+TEST_F(
+    ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureDeepSeekV4) {
+  const std::optional<ReasoningTags> tags =
+      selectReasoningTagsForArchitecture(std::string("deepseek4"));
+  ASSERT_TRUE(tags.has_value());
+  EXPECT_EQ(tags->open, "<think>");
+  EXPECT_EQ(tags->close, "</think>");
+  EXPECT_FALSE(isQwen3ReasoningFamilyArchitecture("deepseek4"));
+}
+
 TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
   // Unrelated arches.
   EXPECT_FALSE(
