@@ -1,19 +1,22 @@
 /**
- * DeepSeek V4 tool-calling compatibility test with minimal VRAM usage.
+ * DeepSeek V4 tool-calling compatibility test with reduced VRAM usage.
  *
- * CPU-only inference avoids Vulkan VRAM allocations. The small context,
- * single tool, and short generation limit reduce additional memory usage.
+ * Partial GPU offload avoids the full-model VRAM pressure of the SDK defaults.
+ * The small context, single tool, and short generation limit further reduce
+ * memory usage.
  *
  * Usage:
- *   npm run bare:example -- dist/examples/tools/llamacpp-tools-deepseek-v4-low-vram.js [model-url-or-path]
+ *   npm run bare:example -- dist/examples/tools/llamacpp-tools-deepseek-v4-low-vram.js [model-url-or-path] [gpu-layers]
  */
 import { completion, loadModel, unloadModel, type CompletionEvent, type ToolInput } from '@qvac/sdk'
 import { weatherSchema, mockExecute } from './shared'
 
 const DEEPSEEK_V4_UD_IQ2_M =
   'https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf'
+const DEFAULT_GPU_LAYERS = 40
 
 const modelSrc = process.argv[2] ?? DEEPSEEK_V4_UD_IQ2_M
+const gpuLayers = Number(process.argv[3] ?? DEFAULT_GPU_LAYERS)
 const tools: ToolInput[] = [
   {
     name: 'get_weather',
@@ -24,15 +27,19 @@ const tools: ToolInput[] = [
 
 let modelId: string | undefined
 try {
-  console.log('▸ Loading DeepSeek V4 in CPU-only, low-memory mode')
+  if (!Number.isInteger(gpuLayers) || gpuLayers < 1) {
+    throw new Error(`gpu-layers must be a positive integer, received: ${process.argv[3]}`)
+  }
+
+  console.log(`▸ Loading DeepSeek V4 with ${gpuLayers} GPU layers`)
   modelId = await loadModel({
     modelSrc,
     modelType: 'llamacpp-completion',
     modelConfig: {
-      device: 'cpu',
-      gpu_layers: 0,
+      device: 'gpu',
+      gpu_layers: gpuLayers,
       ctx_size: 1024,
-      predict: 128,
+      predict: 64,
       temp: 0,
       reasoning_budget: 0,
       parallel: 1,
