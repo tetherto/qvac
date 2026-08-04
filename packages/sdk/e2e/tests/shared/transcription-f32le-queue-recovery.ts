@@ -11,7 +11,7 @@ import {
 } from './wav-pcm.js'
 
 const WHISPER_SAMPLE_RATE = 16000
-const MISALIGNED_BUFFER_ERROR = 'f32le buffer length must be a multiple of 4'
+const INCOMPLETE_F32LE_STREAM_ERROR = 'f32le byte stream ends mid-sample'
 
 interface MaterializedF32leAudio {
   validPath: string
@@ -96,12 +96,12 @@ export async function runF32leQueueRecovery(
         output: 'Malformed f32le transcription unexpectedly succeeded'
       }
     }
-    if (!malformedError.includes(MISALIGNED_BUFFER_ERROR)) {
+    if (!malformedError.includes(INCOMPLETE_F32LE_STREAM_ERROR)) {
       return {
         passed: false,
         output:
           `Malformed f32le transcription returned the wrong error: ${malformedError}; ` +
-          `expected to contain "${MISALIGNED_BUFFER_ERROR}"`
+          `expected to contain "${INCOMPLETE_F32LE_STREAM_ERROR}"`
       }
     }
 
