@@ -1284,10 +1284,9 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
-  // llama.cpp's --no-mmap is a valueless flag. The SDK serializes booleans
-  // into this string map, so consume both key spellings before the generic
-  // argument pass-through rather than leaving a stray "true" or "false"
-  // argument after --no-mmap.
+  // The current llama.cpp common-argument parser does not expose --no-mmap,
+  // so map this addon's string configuration directly to the native model
+  // parameter instead of forwarding it through the generic argument parser.
   std::optional<bool> noMmap;
   for (const std::string& key : {"no-mmap", "no_mmap"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
@@ -1314,7 +1313,7 @@ void LlamaModel::commonParamsParse(
     }
   }
   if (noMmap.value_or(false)) {
-    configVector.emplace_back("--no-mmap");
+    params.model.use_mmap = false;
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
