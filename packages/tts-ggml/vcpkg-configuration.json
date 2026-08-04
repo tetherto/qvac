@@ -16,6 +16,13 @@
         "vulkan-loader",
         "spirv-headers"
       ]
+    },
+    {
+      "kind": "git",
+      "reference": "53a22b98e6ea4d90d7532c8540db7d3300ba70ae",
+      "baseline": "53a22b98e6ea4d90d7532c8540db7d3300ba70ae",
+      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
+      "packages": ["tts-cpp"]
     }
   ]
 }
