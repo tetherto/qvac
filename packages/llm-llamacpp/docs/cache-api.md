@@ -17,7 +17,7 @@ await model.run([
 | Option | Type | Description |
 | --- | --- | --- |
 | `cacheKey` | `string` | Path to the cache file. Omit to disable caching. |
-| `saveCacheToDisk` | `boolean` | `true` writes the cache to the `cacheKey` path after inference. If omitted, cache stays in RAM and only auto-saves on cache switch or clear. |
+| `saveCacheToDisk` | `boolean` | `true` writes the cache to the `cacheKey` path after inference and may first commit current same-key RAM before the request to create a rollback checkpoint. If omitted, cache stays in RAM and only auto-saves on cache switch or clear. |
 | `prefill` | `boolean` | Evaluate prompt without generating a response. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
@@ -161,7 +161,7 @@ await model.run(
 
 If a cache write fails (e.g. the disk is full, the path is unwritable, or `llama_state_save_file` returns false), a `StatusError` with code `UnableToSaveSessionFile` is thrown.
 
-- On the **explicit-save** path (`saveCacheToDisk: true`): the error propagates from `model.run()`. The in-memory KV state is still valid; the caller can retry or continue without saving.
+- On the **explicit-save** path (`saveCacheToDisk: true`): the error propagates from `model.run()`. This applies to both the pre-request rollback commit and the end-of-request save. The active cache session is reset and invalidated so later requests do not reuse or auto-save stale RAM state.
 - On the **cache-switch** and **cache-clear** paths (automatic flush on key change or `cacheKey` omission): the error propagates from `model.run()` and the cache is left disabled. Subsequent calls without a `cacheKey` will proceed without attempting the flush again.
 - If the active cache's backing file or parent directory was externally removed before a switch or clear, the stale in-memory cache is discarded and the next request starts from a fresh context instead of throwing `UnableToSaveSessionFile`.
 - On same-key reuse, a removed backing file also starts from a fresh context. If the parent directory was removed and `saveCacheToDisk: true` is set, the fresh request can still throw `UnableToSaveSessionFile` during its explicit save.
