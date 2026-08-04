@@ -11,6 +11,22 @@ const PRODUCT_PACKAGES = [
   '@qvac/harness',
   '@qvac/assistant'
 ] as const
+const APP_DIRECTORIES = [
+  'skill-cli',
+  'task-cli',
+  'task-mobile',
+  'task-shared'
+] as const
+const APP_ALLOWED = new Map<string, readonly string[]>([
+  ['@qvac-poc/skill-cli', ['@qvac/harness']],
+  ['@qvac-poc/task-cli', ['@qvac/assistant', '@qvac-poc/task-shared']],
+  ['@qvac-poc/task-mobile', ['@qvac/sync']],
+  ['@qvac-poc/task-shared', []]
+])
+const INTERNAL_NAMES = new Set([
+  ...PRODUCT_PACKAGES,
+  ...APP_ALLOWED.keys()
+])
 
 const ALLOWED = new Map<string, readonly string[]>([
   ['@qvac/supervisor', []],
@@ -75,6 +91,24 @@ describe('package subsets', function () {
     }
   })
 
+  test('app source imports stay within declared package boundaries', async function () {
+    const manifests = await readAppManifests()
+    for (const [directoryName, manifest] of manifests) {
+      expect(manifest.private).toBe(true)
+      expect(manifest.version).toBe(VERSION)
+      const declared = manifest.dependencies ?? {}
+      const allowed = APP_ALLOWED.get(manifest.name) ?? []
+      const files = await collectTypeScriptFiles(join(ROOT, 'apps', directoryName))
+      for (const file of files) {
+        const source = await readFile(file, 'utf8')
+        for (const dependency of internalImports(source)) {
+          expect(declared[dependency]).toBe(VERSION)
+          expect(allowed).toContain(dependency)
+        }
+      }
+    }
+  })
+
   test('standalone layers do not install unrelated product packages', async function () {
     const manifests = new Map((await readManifests()).map((manifest) => [manifest.name, manifest]))
 
@@ -92,6 +126,16 @@ async function readManifests() {
     PRODUCT_PACKAGES.map(async (name) => {
       const path = join(packageDirectory(name), 'package.json')
       return JSON.parse(await readFile(path, 'utf8')) as Manifest
+    })
+  )
+}
+
+async function readAppManifests() {
+  return Promise.all(
+    APP_DIRECTORIES.map(async (directoryName) => {
+      const manifestPath = join(ROOT, 'apps', directoryName, 'package.json')
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Manifest
+      return [directoryName, manifest] as const
     })
   )
 }
@@ -132,6 +176,22 @@ function productImports(source: string) {
     .map((match) => match[1])
     .filter((name): name is string => typeof name === 'string')
   return [...new Set(names.filter(isProductPackage))]
+}
+
+function internalImports(source: string) {
+  const matches = source.matchAll(
+    /(?:from\s+|import\s*\()['"](@qvac(?:-poc)?\/[^/'"]+)/g
+  )
+  return [
+    ...new Set(
+      [...matches]
+        .map((match) => match[1])
+        .filter(
+          (name): name is string =>
+            typeof name === 'string' && INTERNAL_NAMES.has(name)
+        )
+    )
+  ]
 }
 
 function findCycle(graph: ReadonlyMap<string, readonly string[]>) {

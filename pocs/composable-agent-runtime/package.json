@@ -21,6 +21,7 @@
     "test:assistant": "bun run --cwd packages/assistant test",
     "test:task-shared": "bun run --cwd apps/task-shared test",
     "test:task-cli": "bun run --cwd apps/task-cli test",
+    "test:skill-cli": "bun run --cwd apps/skill-cli test",
     "test:task-mobile": "bun run --cwd apps/task-mobile test",
     "typecheck:task-mobile": "bun run --cwd apps/task-mobile typecheck",
     "test:crash": "vitest run test/crash-isolation.test.ts",

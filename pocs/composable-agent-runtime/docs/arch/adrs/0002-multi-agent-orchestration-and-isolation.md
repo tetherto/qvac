@@ -231,6 +231,7 @@ must call into on every run.
 
 ## Related material
 
+- [Desktop skill sandbox PoC evidence](../desktop-skill-sandbox-poc.md)
 - [Durable agent effect recovery](../tech-debt/TD-DURABLE-AGENT-EFFECT-RECOVERY.md)
 - [Per-agent tool sandboxing](../tech-debt/TD-PER-AGENT-TOOL-SANDBOXING.md)
 

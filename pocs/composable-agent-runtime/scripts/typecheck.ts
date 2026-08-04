@@ -5,6 +5,7 @@ const workspaces = [
   'packages/assistant',
   'apps/task-shared',
   'apps/task-cli',
+  'apps/skill-cli',
   'apps/task-mobile'
 ]
 const root = new URL('..', import.meta.url).pathname

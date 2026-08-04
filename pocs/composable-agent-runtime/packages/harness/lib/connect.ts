@@ -190,6 +190,12 @@ function fromWire(frame: Record<string, WireValue>): HarnessEvent {
         name: typeof frame.name === 'string' ? frame.name : '',
         result: wireValue(frame.result)
       }
+    case 'tool-progress':
+      return {
+        type,
+        name: typeof frame.name === 'string' ? frame.name : '',
+        progress: progressValue(frame.progress)
+      }
     case 'metrics':
       return { type, metrics: numericRecord(frame.metrics) }
     case 'error':
@@ -223,6 +229,17 @@ function numericRecord(value: WireValue | undefined) {
     if (typeof metric === 'number') metrics[key] = metric
   }
   return metrics
+}
+
+function progressValue(value: WireValue | undefined) {
+  if (!isRecord(value)) {
+    return { step: 0, totalSteps: 0, elapsedMs: 0 }
+  }
+  return {
+    step: typeof value.step === 'number' ? value.step : 0,
+    totalSteps: typeof value.totalSteps === 'number' ? value.totalSteps : 0,
+    elapsedMs: typeof value.elapsedMs === 'number' ? value.elapsedMs : 0
+  }
 }
 
 function isHarnessErrorEnvelope(

@@ -147,6 +147,13 @@ function toWire(
         result: event.result,
         traceId
       }
+    case 'tool-progress':
+      return {
+        type: event.type,
+        name: event.name,
+        progress: event.progress,
+        traceId
+      }
     case 'metrics':
       return { type: event.type, metrics: event.metrics, traceId }
     case 'error':

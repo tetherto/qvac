@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "target": "ESNext"
+  },
+  "include": [
+    "index.ts",
+    "bare-probe.ts",
+    "runner.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts"
+  ]
+}

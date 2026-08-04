@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@tool-sandbox/describe",
+      "request": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@tool-sandbox/invoke",
+      "request": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@tool-sandbox/cancel",
+      "request": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@tool-sandbox/configure",
+      "request": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@tool-sandbox/wire-frame",
+        "stream": false
+      },
+      "version": 2
+    }
+  ]
+}

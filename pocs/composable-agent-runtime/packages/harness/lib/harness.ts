@@ -1,15 +1,35 @@
+import { defineAgent } from '@qvac/agents'
+import {
+  agentDefinitionFromRegistration,
+  copyAgentRegistration,
+  type HarnessAgentRegistration
+} from './agent-registration.ts'
+import { createBrokeredModelAdapter } from './brokered-model-adapter.ts'
 import {
   HarnessExecutionError,
   serializeHarnessError
 } from './errors.ts'
 import { createHarnessLogger } from './logger.ts'
 import { createMemoryStateAdapter } from './memory-state.ts'
+import { createAsyncQueue } from './queue.ts'
+import { encodeRunIdentity } from './run-identity.ts'
+import { createRunRegistry } from './run-registry.ts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
+import type { SkillCatalogEntry } from './skills/catalog.ts'
+import {
+  createToolGate,
+  validateSelectedSkills,
+  type HarnessTool,
+  type HarnessToolApprovalPort,
+  type HarnessToolBrokerPort
+} from './tool-broker.ts'
 import type {
+  HarnessAgentRunInput,
+  HarnessAgentRunKey,
   HarnessEvent,
   HarnessLoggingConfig,
   HarnessRunInput,
-  HarnessRuntime,
+  LocalHarnessRuntime,
   HarnessStateAdapter
 } from './types.ts'
 
@@ -17,16 +37,41 @@ export interface CreateHarnessOptions {
   readonly sdk: SdkRuntimePort
   readonly state?: HarnessStateAdapter
   readonly logging?: HarnessLoggingConfig
+  readonly tools?: readonly HarnessTool[]
+  readonly toolBroker?: HarnessToolBrokerPort
+  readonly toolApproval?: HarnessToolApprovalPort
 }
 
 export function createHarness({
   sdk,
   state = createMemoryStateAdapter(),
-  logging
-}: CreateHarnessOptions): HarnessRuntime {
+  logging,
+  tools = [],
+  toolBroker = unavailableToolBroker(),
+  toolApproval
+}: CreateHarnessOptions): LocalHarnessRuntime {
   let closed = false
   const logger = createHarnessLogger(logging)
   const logPrefix = '[harness]'
+  let catalogPromise: Promise<readonly SkillCatalogEntry[]> | undefined
+  const registrations = new Map<string, HarnessAgentRegistration>()
+  const runs = createRunRegistry()
+
+  function loadCatalog() {
+    catalogPromise ??= Promise.all([
+      import('./skills/catalog.ts'),
+      import('./skills/bundled-skills.ts')
+    ]).then(([catalogModule, bundle]) =>
+      catalogModule.createSkillCatalogFromBundle(
+        {
+          files: bundle.BUNDLED_SKILLS,
+          hash: bundle.BUNDLED_SKILLS_HASH
+        },
+        { platform: 'darwin' }
+      )
+    )
+    return catalogPromise
+  }
 
   async function* run(input: HarnessRunInput): AsyncGenerator<HarnessEvent> {
     if (closed) throw new Error('harness is closed')
@@ -73,6 +118,7 @@ export function createHarness({
           return
         }
         const mapped = mapSdkEvent(sdkEvent)
+        if (mapped === null) continue
         const event =
           mapped.type === 'error' && mapped.error === undefined
             ? {
@@ -119,12 +165,102 @@ export function createHarness({
     logger.info(logPrefix, 'run completed', { runId: input.runId, traceId })
   }
 
+  async function registerAgent(registration: HarnessAgentRegistration) {
+    if (closed) throw new Error('harness is closed')
+    if (registrations.has(registration.id)) {
+      throw new Error(`agent is already registered: ${registration.id}`)
+    }
+    validateSelectedSkills(registration, await loadCatalog())
+    defineAgent(agentDefinitionFromRegistration(registration))
+    registrations.set(registration.id, copyAgentRegistration(registration))
+  }
+
+  async function* runAgent(input: HarnessAgentRunInput): AsyncGenerator<HarnessEvent> {
+    if (closed) throw new Error('harness is closed')
+    const registration = registrations.get(input.agentId)
+    if (!registration) throw new Error(`agent is not registered: ${input.agentId}`)
+    const key = { agentId: input.agentId, runId: input.runId }
+    const stateKey = encodeRunIdentity(key)
+    const queue = createAsyncQueue<HarnessEvent>()
+    const gate = createToolGate({
+      registration,
+      catalog: await loadCatalog(),
+      tools,
+      broker: toolBroker,
+      ...(toolApproval ? { approval: toolApproval } : {})
+    })
+    const adapter = createBrokeredModelAdapter({
+      registration,
+      sdk,
+      tools: gate,
+      async onEvent(event) {
+        await state.append(stateKey, event)
+        queue.push(event)
+      }
+    })
+    const agent = defineAgent(agentDefinitionFromRegistration(registration))
+    const agentRun = agent.run({
+      runId: input.runId,
+      input: input.input,
+      adapter
+    })
+    runs.add(key, agentRun)
+
+    const onAbort = () => {
+      void agentRun.cancel(abortReason(input.signal))
+    }
+    if (input.signal?.aborted) void agentRun.cancel(abortReason(input.signal))
+    else input.signal?.addEventListener('abort', onAbort, { once: true })
+
+    void (async () => {
+      try {
+        for await (const event of agentRun.events) {
+          if (event.type === 'content') {
+            const content: HarnessEvent = { type: 'content', text: event.text }
+            await state.append(stateKey, content)
+            queue.push(content)
+          } else if (event.type === 'run-canceled') {
+            const aborted: HarnessEvent = { type: 'aborted' }
+            await state.append(stateKey, aborted)
+            queue.push(aborted)
+          }
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        const error: HarnessEvent = {
+          type: 'error',
+          message,
+          error: serializeHarnessError(
+            new HarnessExecutionError('harness->agent', cause),
+            { boundary: 'harness->agent' }
+          )
+        }
+        await state.append(stateKey, error)
+        queue.push(error)
+      } finally {
+        input.signal?.removeEventListener('abort', onAbort)
+        runs.remove(key, agentRun)
+        queue.end()
+      }
+    })()
+
+    yield* queue
+  }
+
+  function cancelAgentRun(input: HarnessAgentRunKey) {
+    return runs.cancel(input, input.reason)
+  }
+
   return {
     run,
+    registerAgent,
+    runAgent,
+    cancelAgentRun,
     async close() {
       if (closed) return
       closed = true
-      await Promise.all([sdk.close(), state.close()])
+      await runs.close()
+      await Promise.all([sdk.close(), state.close(), toolBroker.close()])
     }
   }
 }
@@ -134,7 +270,7 @@ async function persist(state: HarnessStateAdapter, runId: string, event: Harness
   return event
 }
 
-export function mapSdkEvent(event: SdkRuntimeEvent): HarnessEvent {
+export function mapSdkEvent(event: SdkRuntimeEvent): HarnessEvent | null {
   switch (event.type) {
     case 'content-delta':
     case 'contentDelta':
@@ -148,6 +284,9 @@ export function mapSdkEvent(event: SdkRuntimeEvent): HarnessEvent {
     case 'tool-result':
     case 'toolResult':
       return { type: 'tool-result', name: event.name, result: event.result }
+    case 'completion-done':
+    case 'completionDone':
+      return null
     case 'metrics':
       return { type: 'metrics', metrics: event.metrics }
     case 'error':
@@ -157,5 +296,19 @@ export function mapSdkEvent(event: SdkRuntimeEvent): HarnessEvent {
       return { type: 'aborted' }
     default:
       return { type: 'error', message: `unmapped SDK event: ${Reflect.get(event, 'type')}` }
+  }
+}
+
+function abortReason(signal: HarnessAgentRunInput['signal']) {
+  return typeof signal?.reason === 'string' ? signal.reason : 'aborted'
+}
+
+function unavailableToolBroker(): HarnessToolBrokerPort {
+  return {
+    async execute(input) {
+      throw new Error(`no tool broker configured for ${input.call.name}`)
+    },
+    async cancel() {},
+    async close() {}
   }
 }

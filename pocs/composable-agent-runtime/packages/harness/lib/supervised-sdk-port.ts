@@ -45,6 +45,9 @@ export function createSupervisedSdkPort(createSdk: () => Promise<SdkRuntimePort>
         })()
       }
     },
+    async generateImage(input) {
+      return (await sdk()).generateImage(input)
+    },
     async cancel(input) {
       await (await sdk()).cancel(input)
     },

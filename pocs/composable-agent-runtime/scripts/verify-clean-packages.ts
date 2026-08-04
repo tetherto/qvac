@@ -3,14 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const root = new URL('..', import.meta.url).pathname
-const packagesDirectory = join(root, 'packages')
-const packageNames = [
-  '@qvac/supervisor',
-  '@qvac/agents',
-  '@qvac/sync',
-  '@qvac/harness',
-  '@qvac/assistant'
-] as const
+const packageDirectories = new Map([
+  ['@qvac/supervisor', join(root, 'packages', 'supervisor')],
+  ['@qvac/agents', join(root, 'packages', 'agents')],
+  ['@qvac/sync', join(root, 'packages', 'sync')],
+  ['@qvac/harness', join(root, 'packages', 'harness')],
+  ['@qvac/assistant', join(root, 'packages', 'assistant')],
+  ['@qvac-poc/skill-cli', join(root, 'apps', 'skill-cli')]
+])
+const packageNames = [...packageDirectories.keys()]
+const libraryPackageNames = packageNames.filter(
+  (name) => name !== '@qvac-poc/skill-cli'
+)
 const subsets = new Map<string, readonly string[]>([
   ['supervisor', ['@qvac/supervisor']],
   ['agents', ['@qvac/agents']],
@@ -24,7 +28,16 @@ const subsets = new Map<string, readonly string[]>([
       '@qvac/harness'
     ]
   ],
-  ['assistant', packageNames]
+  ['assistant', libraryPackageNames],
+  [
+    'skill-cli',
+    [
+      '@qvac/supervisor',
+      '@qvac/agents',
+      '@qvac/harness',
+      '@qvac-poc/skill-cli'
+    ]
+  ]
 ])
 
 const expoConsumerDeps = {
@@ -136,7 +149,8 @@ async function packPackages() {
   const tarballs = new Map<string, string>()
 
   for (const packageName of packageNames) {
-    const directory = join(packagesDirectory, packageName.slice('@qvac/'.length))
+    const directory = packageDirectories.get(packageName)
+    if (!directory) throw new Error(`missing package directory: ${packageName}`)
     const before = new Set(await readdir(output))
     await run(['npm', 'pack', '--ignore-scripts', '--pack-destination', output], directory)
     const filename = (await readdir(output)).find((candidate) => !before.has(candidate))
@@ -168,9 +182,18 @@ async function verifySubset(
   await writeFile(join(directory, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   await writeFile(
     join(directory, 'smoke.ts'),
-    `${dependencies.map((dependency) => `await import('${dependency}')`).join('\n')}\n`
+    `${dependencies
+      .filter((dependency) => dependency !== '@qvac-poc/skill-cli')
+      .map((dependency) => `await import('${dependency}')`)
+      .join('\n')}\n`
   )
   await run(['npm', 'install', '--ignore-scripts'], directory)
+  if (dependencies.includes('@qvac/harness')) {
+    await verifyHarnessSkillPackaging(directory)
+  }
+  if (dependencies.includes('@qvac-poc/skill-cli')) {
+    await verifySkillCliPackaging(directory)
+  }
   await run(['bun', 'run', 'smoke.ts'], directory)
   await rm(directory, { recursive: true, force: true })
 }
@@ -369,6 +392,41 @@ async function assertContribution(
   if (contribution.schemaVersion !== 1 || contribution.protocolVersion !== 1) {
     throw new Error(`contribution versions invalid at ${path}: ${JSON.stringify(contribution)}`)
   }
+}
+
+async function verifyHarnessSkillPackaging(directory: string) {
+  const required = [
+    'node_modules/@qvac/harness/lib/skills/bundled-skills.ts',
+    'node_modules/@qvac/harness/lib/skills/materialize.ts',
+    'node_modules/@qvac/harness/tool-sandbox-child-entry.ts',
+    'node_modules/@qvac/harness/spec/tool-sandbox/hrpc/index.js',
+    'node_modules/@qvac/harness/spec/tool-sandbox/hrpc/index.d.ts',
+    'node_modules/@qvac/harness/skills/weather/SKILL.md',
+    'node_modules/@qvac/harness/skills/obsidian/SKILL.md',
+    'node_modules/@qvac/harness/skills/obsidian/cli.schema.json',
+    'node_modules/@qvac/harness/skills/image-generation/SKILL.md'
+  ]
+  for (const relativePath of required) {
+    await access(join(directory, relativePath))
+  }
+}
+
+async function verifySkillCliPackaging(directory: string) {
+  const packageRoot = join(directory, 'node_modules', '@qvac-poc', 'skill-cli')
+  for (const relativePath of [
+    'index.ts',
+    'bare-probe.ts',
+    'runner.ts',
+    'scripts/build-sandbox.ts',
+    'README.md'
+  ]) {
+    await access(join(packageRoot, relativePath))
+  }
+  await run(['bun', 'run', 'build:sandbox'], packageRoot)
+  await run(
+    ['bare', 'index.ts', 'smoke', '--timeout-ms=5000'],
+    packageRoot
+  )
 }
 
 async function run(command: readonly string[], cwd: string) {

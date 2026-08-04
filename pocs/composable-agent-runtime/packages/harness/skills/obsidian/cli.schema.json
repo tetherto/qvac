@@ -1,0 +1,99 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vault": { "type": "string" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "folder": { "type": "string" },
+        "ext": { "type": "string" },
+        "vault": { "type": "string" },
+        "path": {
+          "type": "string",
+          "pattern": "^(?![/\\\\~]|[A-Za-z]:).+$",
+          "description": "vault-relative path (not absolute)"
+        },
+        "limit": { "type": "string" },
+        "total": { "type": "boolean" },
+        "counts": { "type": "boolean" },
+        "verbose": { "type": "boolean" }
+      }
+    },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query"],
+      "properties": {
+        "query": { "type": "string" },
+        "limit": { "type": "string" },
+        "vault": { "type": "string" },
+        "path": {
+          "type": "string",
+          "pattern": "^(?![/\\\\~]|[A-Za-z]:).+$",
+          "description": "vault-relative path (not absolute)"
+        },
+        "folder": { "type": "string" },
+        "verbose": { "type": "boolean" },
+        "total": { "type": "boolean" }
+      }
+    },
+    "read": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "path": {
+          "type": "string",
+          "pattern": "^(?![/\\\\~]|[A-Za-z]:).+$",
+          "description": "vault-relative path (not absolute)"
+        },
+        "vault": { "type": "string" },
+        "verbose": { "type": "boolean" }
+      }
+    },
+    "create": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "path": {
+          "type": "string",
+          "pattern": "^(?![/\\\\~]|[A-Za-z]:).+$",
+          "description": "vault-relative path (not absolute)"
+        },
+        "content": { "type": "string" },
+        "vault": { "type": "string" }
+      }
+    },
+    "append": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "path": {
+          "type": "string",
+          "pattern": "^(?![/\\\\~]|[A-Za-z]:).+$",
+          "description": "vault-relative path (not absolute)"
+        },
+        "content": { "type": "string" },
+        "vault": { "type": "string" }
+      }
+    },
+    "daily:read": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vault": { "type": "string" },
+        "verbose": { "type": "boolean" }
+      }
+    }
+  }
+}

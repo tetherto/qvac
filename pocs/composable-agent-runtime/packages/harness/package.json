@@ -16,26 +16,83 @@
     "./react-native-launcher": "./react-native-launcher.ts",
     "./react-native-stow": "./react-native-stow.ts",
     "./sdk-direct-adapter": "./lib/sdk-direct-adapter.ts",
-    "./expo-plugin": "./dist/expo-plugin.js"
+    "./expo-plugin": "./dist/expo-plugin.js",
+    "./skills": "./lib/skills/index.ts",
+    "./testing": "./testing.ts",
+    "./tool-sandbox-child-entry": "./tool-sandbox-child-entry.ts"
   },
   "imports": {
     "#abort-controller": {
       "bare": "bare-abort-controller",
       "default": "./lib/abort-controller.ts"
+    },
+    "#buffer": {
+      "bare": "bare-buffer",
+      "default": "./lib/node-buffer.ts"
+    },
+    "#fs-promises": {
+      "bare": "bare-fs/promises",
+      "default": "./lib/node-fs-promises.ts"
+    },
+    "#os": {
+      "bare": "bare-os",
+      "default": "./lib/node-os.ts"
+    },
+    "#crypto": {
+      "bare": "bare-crypto",
+      "default": "./lib/node-crypto.ts"
+    },
+    "#dns-promises": {
+      "bare": "./lib/bare-dns-promises.ts",
+      "default": "./lib/node-dns-promises.ts"
+    },
+    "#http": {
+      "bare": "bare-http1",
+      "default": "./lib/node-http.ts"
+    },
+    "#path": {
+      "bare": "bare-path",
+      "default": "./lib/node-path.ts"
+    },
+    "#process": {
+      "bare": "bare-process",
+      "default": "./lib/node-process.ts"
+    },
+    "#weather-https-transport": {
+      "bare": "./lib/tool-sandbox/weather-transport-bare.ts",
+      "default": "./lib/tool-sandbox/weather-transport-node.ts"
     }
   },
   "scripts": {
     "build:schema": "bare schema/build.ts",
     "build:react-native": "bun -e \"import { buildHarnessReactNativeBundle } from './lib/react-native-stow.ts'; await buildHarnessReactNativeBundle()\"",
     "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=bare-* --external=react-native-bare-kit",
+    "build:skills": "bun run scripts/build-skills.ts",
     "test": "bun test/run.ts",
+    "test:adapter": "bun test test/sdk-direct-adapter.test.ts",
+    "test:image": "bun test test/image-generation.test.ts",
+    "test:skills": "bun test test/skills.test.ts",
+    "test:sandbox": "bun test/tool-sandbox-run.ts",
     "test:fast": "bun test/all.ts",
     "test:node": "node --experimental-strip-types ../../node_modules/brittle/brittle-node.js test/agent-state-store.ts",
     "test:bare": "brittle-bare test/all.ts",
     "test:spawn": "node --experimental-strip-types test/spawn.test.ts",
     "test:smoke:qwen": "QVAC_REAL_MODEL_SMOKE=1 node --experimental-strip-types test/qwen-smoke.test.ts",
+    "test:smoke:diffusion": "QVAC_REAL_MODEL_SMOKE=1 bare test/diffusion-smoke.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "files": [
+    "index.ts",
+    "testing.ts",
+    "child-entry.ts",
+    "tool-sandbox-child-entry.ts",
+    "deterministic-sdk-entry.ts",
+    "qwen-sdk-entry.ts",
+    "lib/**/*.ts",
+    "schema/**/*",
+    "spec/**/*",
+    "skills/**/*"
+  ],
   "dependencies": {
     "@qvac/agents": "0.0.0-poc",
     "@qvac/error": "^0.1.1",
@@ -47,8 +104,12 @@
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.1",
     "bare-bundle": "^1.10.0",
+    "bare-crypto": "^1.15.3",
+    "bare-dns": "^2.1.4",
     "bare-events": "^2.9.1",
     "bare-fs": "^4.7.2",
+    "bare-http1": "^4.5.7",
+    "bare-https": "^3.0.0",
     "bare-os": "^3.9.1",
     "bare-path": "^3.0.1",
     "bare-process": "4.5.0",
@@ -56,6 +117,7 @@
     "bare-stow": "0.1.5",
     "bare-stow-target-react-native": "0.1.1",
     "bare-stream": "^2.13.3",
+    "bare-subprocess": "^6.0.0",
     "bare-url": "^2.4.5",
     "compact-encoding": "^3.3.0",
     "hrpc": "^4.3.0",
@@ -75,6 +137,8 @@
   "devDependencies": {
     "@expo/config-plugins": "^54.0.4",
     "@expo/config-types": "^54.0.0",
+    "bare-pipe": "^4.2.3",
+    "bare-tcp": "^2.5.3",
     "brittle": "^4.0.2",
     "hyperdht": "^6.32.0",
     "test-tmp": "^1.4.0",
