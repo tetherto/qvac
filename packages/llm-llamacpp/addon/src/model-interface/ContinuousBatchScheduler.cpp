@@ -411,9 +411,16 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     if (driver->getNPast() <= 0) {
       driver->setEmptyTransactionCheckpoint();
     } else if (isCacheLoaded) {
-      driver->setPersistentTransactionCheckpoint(
-          CacheManager::pinCommittedCacheArtifact(request.cacheKey),
-          driver->getNPast());
+      const std::string pinnedPath =
+          CacheManager::pinCommittedCacheArtifact(request.cacheKey);
+      ScopeGuard pinGuard([&pinnedPath] {
+        std::error_code ec;
+        std::filesystem::remove(pinnedPath, ec);
+      });
+      const auto metadata = CacheManager::readCommittedCacheMetadata(
+          pinnedPath, static_cast<llama_pos>(perSeqMaxTokens_));
+      driver->setPersistentTransactionCheckpoint(pinnedPath, metadata);
+      pinGuard.dismiss();
     } else {
       throw qvac_errors::StatusError(
           ADDON_ID,

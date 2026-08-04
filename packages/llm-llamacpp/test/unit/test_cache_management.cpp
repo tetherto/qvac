@@ -1,4 +1,5 @@
 #include <any>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -20,6 +21,22 @@ namespace fs = std::filesystem;
 using test_common::getStatValue;
 using test_common::processPromptString;
 using test_common::processPromptWithCacheOptions;
+
+void writeCheckpointMetadata(
+    const fs::path& path,
+    const std::array<llama_token, SESSION_METADATA_FIELD_COUNT>& metadata) {
+  std::ofstream out(path, std::ios::binary);
+  const uint32_t magic = LLAMA_STATE_SEQ_MAGIC;
+  const uint32_t version = LLAMA_STATE_SEQ_VERSION;
+  const uint32_t count = SESSION_METADATA_FIELD_COUNT;
+  out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+  out.write(reinterpret_cast<const char*>(&version), sizeof(version));
+  out.write(reinterpret_cast<const char*>(&count), sizeof(count));
+  out.write(
+      reinterpret_cast<const char*>(metadata.data()),
+      static_cast<std::streamsize>(sizeof(llama_token) * metadata.size()));
+  out.put('\0');
+}
 
 TEST(CacheCheckpointPinTest, AtomicReplacementPreservesPinnedIdentity) {
   const fs::path base =
@@ -72,6 +89,47 @@ TEST(CacheCheckpointPinTest, MissingArtifactFailsBeforeUse) {
   EXPECT_THROW(
       (void)CacheManager::pinCommittedCacheArtifact(missing.string()),
       qvac_errors::StatusError);
+}
+
+TEST(CacheCheckpointPinTest, MetadataComesFromPinnedArtifactIdentity) {
+  const fs::path base =
+      fs::temp_directory_path() /
+      ("qvac-checkpoint-metadata-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".bin");
+  const fs::path replacement = base.string() + ".tmp";
+  writeCheckpointMetadata(base, {5, 2, 7, 3});
+  const std::string pinned =
+      CacheManager::pinCommittedCacheArtifact(base.string());
+  writeCheckpointMetadata(replacement, {9, 4, 9, 4});
+  CacheManager::atomicPromoteFile(replacement.string(), base.string());
+
+  const auto pinnedMetadata =
+      CacheManager::readCommittedCacheMetadata(pinned, /*maxContext=*/16);
+  const auto canonicalMetadata = CacheManager::readCommittedCacheMetadata(
+      base.string(), /*maxContext=*/16);
+  EXPECT_EQ(pinnedMetadata.nPast, 5);
+  EXPECT_EQ(pinnedMetadata.cacheTokens, 7);
+  EXPECT_EQ(canonicalMetadata.nPast, 9);
+
+  fs::remove(base);
+  fs::remove(pinned);
+}
+
+TEST(CacheCheckpointPinTest, OutOfRangeMetadataIsRejected) {
+  const fs::path path =
+      fs::temp_directory_path() /
+      ("qvac-invalid-checkpoint-metadata-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".bin");
+  writeCheckpointMetadata(path, {17, 2, 17, 2});
+  EXPECT_THROW(
+      (void)CacheManager::readCommittedCacheMetadata(
+          path.string(), /*maxContext=*/16),
+      qvac_errors::StatusError);
+  fs::remove(path);
 }
 
 class CacheManagementTest : public ::testing::Test {

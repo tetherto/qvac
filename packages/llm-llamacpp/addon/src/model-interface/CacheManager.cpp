@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <system_error>
 
 #include <inference-addon-cpp/Errors.hpp>
@@ -344,8 +345,15 @@ void CacheManager::prepareTransactionCheckpoint(bool persistent) {
             __func__,
             sessionPath_.c_str()));
   }
-  llmContext_->setPersistentTransactionCheckpoint(
-      pinCommittedCacheArtifact(sessionPath_), llmContext_->getNPast());
+  const std::string pinnedPath = pinCommittedCacheArtifact(sessionPath_);
+  ScopeGuard pinGuard([&pinnedPath] {
+    std::error_code ec;
+    std::filesystem::remove(pinnedPath, ec);
+  });
+  const auto metadata = readCommittedCacheMetadata(
+      pinnedPath, llama_n_ctx(llmContext_->getCtx()));
+  llmContext_->setPersistentTransactionCheckpoint(pinnedPath, metadata);
+  pinGuard.dismiss();
 }
 
 void CacheManager::markActiveCacheDirty() {
@@ -501,6 +509,77 @@ std::string CacheManager::pinCommittedCacheArtifact(const std::string& path) {
             ec.message().c_str()));
   }
   return pinnedPath;
+}
+
+qvac_lib_inference_addon_llama::SessionCheckpointMetadata
+CacheManager::readCommittedCacheMetadata(
+    const std::string& path, llama_pos maxContext) {
+  std::error_code sizeEc;
+  const auto fileSize = std::filesystem::file_size(path, sizeEc);
+  constexpr uintmax_t metadataBytes =
+      sizeof(uint32_t) * 3 + sizeof(llama_token) * SESSION_METADATA_FIELD_COUNT;
+  if (sizeEc || fileSize <= metadataBytes) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: checkpoint state payload is missing in '%s'\n",
+            __func__,
+            path.c_str()));
+  }
+  std::ifstream in(path, std::ios::binary);
+  uint32_t magic = 0;
+  uint32_t version = 0;
+  uint32_t count = 0;
+  SessionMetadata metadata;
+  in.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+  in.read(reinterpret_cast<char*>(&version), sizeof(version));
+  in.read(reinterpret_cast<char*>(&count), sizeof(count));
+  if (!in || magic != LLAMA_STATE_SEQ_MAGIC ||
+      version != LLAMA_STATE_SEQ_VERSION ||
+      count != SESSION_METADATA_FIELD_COUNT) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: invalid checkpoint metadata in '%s'\n",
+            __func__,
+            path.c_str()));
+  }
+  in.read(
+      reinterpret_cast<char*>(metadata.data()),
+      static_cast<std::streamsize>(sizeof(llama_token) * metadata.size()));
+  if (!in) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: truncated checkpoint metadata in '%s'\n",
+            __func__,
+            path.c_str()));
+  }
+  const qvac_lib_inference_addon_llama::SessionCheckpointMetadata result{
+      .nPast = static_cast<llama_pos>(metadata.nPast()),
+      .firstMsgTokens = static_cast<llama_pos>(metadata.firstMsgTokens()),
+      .cacheTokens = static_cast<llama_pos>(metadata.cacheTokens()),
+      .firstMsgCacheTokens =
+          static_cast<llama_pos>(metadata.firstMsgCacheTokens())};
+  const bool valid =
+      result.nPast >= 0 && result.nPast <= maxContext &&
+      result.firstMsgTokens >= 0 && result.firstMsgTokens <= result.nPast &&
+      result.cacheTokens >= result.nPast && result.cacheTokens <= maxContext &&
+      result.firstMsgCacheTokens >= result.firstMsgTokens &&
+      result.firstMsgCacheTokens <= result.cacheTokens;
+  if (!valid) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: out-of-range checkpoint metadata in '%s'\n",
+            __func__,
+            path.c_str()));
+  }
+  return result;
 }
 
 void CacheManager::invalidate() {

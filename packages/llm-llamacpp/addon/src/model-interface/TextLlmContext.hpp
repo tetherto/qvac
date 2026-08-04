@@ -210,7 +210,9 @@ public:
 
   void snapshotPreRequestCursor() override;
   void setPersistentTransactionCheckpoint(
-      const std::string& path, llama_pos nPast) override;
+      const std::string& path,
+      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata& metadata)
+      override;
   void setEmptyTransactionCheckpoint() override;
   void clearTransactionCheckpoint() override;
 

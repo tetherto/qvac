@@ -1,5 +1,6 @@
 #include "ReasoningRollbackState.hpp"
 
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <system_error>
@@ -11,12 +12,12 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 void ReasoningRollbackState::setPersistentTransactionCheckpoint(
-    std::string path, llama_pos nPast) noexcept {
+    std::string path, const SessionCheckpointMetadata& metadata) noexcept {
   clearTransactionCheckpoint();
   transactionCheckpointKind_ = TransactionCheckpointKind::Persistent;
   transactionCheckpointPath_ = std::move(path);
   ownsTransactionCheckpointPath_ = true;
-  transactionCheckpointNPast_ = nPast;
+  transactionCheckpointMetadata_ = metadata;
 }
 
 void ReasoningRollbackState::setEmptyTransactionCheckpoint() noexcept {
@@ -24,7 +25,7 @@ void ReasoningRollbackState::setEmptyTransactionCheckpoint() noexcept {
   transactionCheckpointKind_ = TransactionCheckpointKind::Empty;
   transactionCheckpointPath_.clear();
   ownsTransactionCheckpointPath_ = false;
-  transactionCheckpointNPast_ = 0;
+  transactionCheckpointMetadata_ = {};
 }
 
 void ReasoningRollbackState::clearTransactionCheckpoint() noexcept {
@@ -35,7 +36,7 @@ void ReasoningRollbackState::clearTransactionCheckpoint() noexcept {
   transactionCheckpointKind_ = TransactionCheckpointKind::None;
   transactionCheckpointPath_.clear();
   ownsTransactionCheckpointPath_ = false;
-  transactionCheckpointNPast_ = 0;
+  transactionCheckpointMetadata_ = {};
 }
 
 bool ReasoningRollbackState::restoreTransactionCheckpoint(
@@ -48,15 +49,43 @@ bool ReasoningRollbackState::restoreTransactionCheckpoint(
     auto* mem = llama_get_memory(ctx);
     return mem != nullptr && llama_memory_seq_rm(mem, seqId, -1, -1);
   }
+  std::array<llama_token, 4> metadataTokens{};
   size_t tokenCount = 0;
   const size_t loadedBytes = llama_state_seq_load_file(
       ctx,
       transactionCheckpointPath_.c_str(),
       seqId,
-      /*tokens_out=*/nullptr,
-      /*n_token_capacity=*/0,
+      metadataTokens.data(),
+      metadataTokens.size(),
       &tokenCount);
-  return loadedBytes != 0;
+  if (loadedBytes == 0 || tokenCount != metadataTokens.size()) {
+    return false;
+  }
+  const bool metadataMatches =
+      metadataTokens[0] == transactionCheckpointMetadata_.nPast &&
+      metadataTokens[1] == transactionCheckpointMetadata_.firstMsgTokens &&
+      metadataTokens[2] == transactionCheckpointMetadata_.cacheTokens &&
+      metadataTokens[3] == transactionCheckpointMetadata_.firstMsgCacheTokens;
+  if (!metadataMatches) {
+    auto* mem = llama_get_memory(ctx);
+    if (mem != nullptr) {
+      (void)llama_memory_seq_rm(mem, seqId, -1, -1);
+    }
+    return false;
+  }
+  auto* mem = llama_get_memory(ctx);
+  if (mem == nullptr) {
+    return false;
+  }
+  const llama_pos loadedNPast = llama_memory_seq_pos_max(mem, seqId) + 1;
+  const llama_pos loadedCacheTokens =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
+  if (loadedNPast != transactionCheckpointMetadata_.nPast ||
+      loadedCacheTokens != transactionCheckpointMetadata_.cacheTokens) {
+    (void)llama_memory_seq_rm(mem, seqId, -1, -1);
+    return false;
+  }
+  return true;
 }
 
 bool ReasoningRollbackState::captureReasoningBoundary(
@@ -149,7 +178,12 @@ void ReasoningRollbackState::seedReasoningBoundaryForTesting(
 void ReasoningRollbackState::seedTransactionCheckpointForTesting(
     llama_pos nPast) noexcept {
   setPersistentTransactionCheckpoint(
-      "qvac_test_transaction_checkpoint_sentinel.bin", nPast);
+      "qvac_test_transaction_checkpoint_sentinel.bin",
+      SessionCheckpointMetadata{
+          .nPast = nPast,
+          .firstMsgTokens = nPast,
+          .cacheTokens = nPast,
+          .firstMsgCacheTokens = nPast});
 }
 
 } // namespace utils

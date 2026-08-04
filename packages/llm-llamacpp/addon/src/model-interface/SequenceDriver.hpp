@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "../utils/SessionCheckpointMetadata.hpp"
 #include "MediaLoadOrder.hpp"
 #include "addon/LlmErrors.hpp"
 
@@ -269,8 +270,9 @@ public:
   /// Default no-op for drivers whose cancel does not need it.
   virtual void snapshotPreRequestCursor() {}
 
-  virtual void
-  setPersistentTransactionCheckpoint(const std::string&, llama_pos) {}
+  virtual void setPersistentTransactionCheckpoint(
+      const std::string&,
+      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata&) {}
   virtual void setEmptyTransactionCheckpoint() {}
   virtual void clearTransactionCheckpoint() {}
 };

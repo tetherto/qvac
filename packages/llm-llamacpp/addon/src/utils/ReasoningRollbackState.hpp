@@ -7,6 +7,7 @@
 #include <llama.h>
 
 #include "RecurrentStateSnapshot.hpp"
+#include "SessionCheckpointMetadata.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
@@ -40,15 +41,16 @@ public:
   // baselines use an in-memory marker. Non-persistent requests hold no
   // checkpoint and cancellation clears the affected sequence.
   void setPersistentTransactionCheckpoint(
-      std::string path, llama_pos nPast) noexcept;
+      std::string path, const SessionCheckpointMetadata& metadata) noexcept;
   void setEmptyTransactionCheckpoint() noexcept;
   void clearTransactionCheckpoint() noexcept;
   bool restoreTransactionCheckpoint(::llama_context* ctx, llama_seq_id seqId);
   [[nodiscard]] bool hasTransactionCheckpoint() const noexcept {
     return transactionCheckpointKind_ != TransactionCheckpointKind::None;
   }
-  [[nodiscard]] llama_pos transactionCheckpointNPast() const noexcept {
-    return transactionCheckpointNPast_;
+  [[nodiscard]] const SessionCheckpointMetadata&
+  transactionCheckpointMetadata() const noexcept {
+    return transactionCheckpointMetadata_;
   }
 
   // ---- End-of-prefill snapshot (compaction + cancel during generation) ----
@@ -140,7 +142,7 @@ private:
       TransactionCheckpointKind::None;
   std::string transactionCheckpointPath_;
   bool ownsTransactionCheckpointPath_ = false;
-  llama_pos transactionCheckpointNPast_ = 0;
+  SessionCheckpointMetadata transactionCheckpointMetadata_;
   RecurrentStateSnapshot reasoningBoundary_;
   std::vector<llama_token> postReasoningTokens_;
   // Count of structural tokens at the head of `postReasoningTokens_`

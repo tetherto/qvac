@@ -467,14 +467,14 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
       if (rollbackState_.hasTransactionCheckpoint()) {
-        const llama_pos restoredNPast =
-            rollbackState_.transactionCheckpointNPast();
+        const auto metadata = rollbackState_.transactionCheckpointMetadata();
         const bool forceRestoreFailure =
             forceTransactionCheckpointRestoreFailureForTesting_;
         forceTransactionCheckpointRestoreFailureForTesting_ = false;
         if (!forceRestoreFailure && rollbackState_.restoreTransactionCheckpoint(
                                         modelCtx_.lctx, seqId_)) {
-          nPast_ = restoredNPast;
+          nPast_ = metadata.nPast;
+          firstMsgTokens_ = metadata.firstMsgTokens;
         } else {
           QLOG_IF(
               Priority::WARNING,
@@ -483,7 +483,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
                   "failed on cancel (tokenIndex=%d, snapshotNPast=%d, "
                   "seqId=%d); clearing memory and invalidating cache\n",
                   tokenIndex,
-                  restoredNPast,
+                  metadata.nPast,
                   seqId_));
           clearMemoryForRecovery(modelCtx_.lctx, seqId_);
           nPast_ = 0;
@@ -1113,7 +1113,10 @@ bool TextLlmContext::rollbackCurrentRequest(
       .preRequestPos = preRequestNPast_,
       .rollback = rollbackState_,
       .onSnapshotRestored =
-          [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
+          [this](const SessionCheckpointMetadata& metadata) {
+            nPast_ = metadata.nPast;
+            firstMsgTokens_ = metadata.firstMsgTokens;
+          },
       .onCheckpointFailure =
           [this]() {
             nPast_ = 0;
@@ -1283,11 +1286,15 @@ void TextLlmContext::snapshotForRecurrentRollback() {
             .seqId = seqId_,
             .rollback = rollbackState_,
             .onRestored =
-                [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
+                [this](const SessionCheckpointMetadata& metadata) {
+                  nPast_ = metadata.nPast;
+                  firstMsgTokens_ = metadata.firstMsgTokens;
+                },
             .onCleared = [this]() { nPast_ = 0; },
         });
-    firstMsgTokens_ =
-        restoredTransactionCheckpoint ? preRequestFirstMsgTokens_ : 0;
+    if (!restoredTransactionCheckpoint) {
+      firstMsgTokens_ = 0;
+    }
     rollbackState_.clearTransactionCheckpoint();
     rollbackState_.clearReasoningBoundary();
     rollbackState_.clearPostReasoning();
@@ -1568,8 +1575,8 @@ void TextLlmContext::snapshotPreRequestCursor() {
 }
 
 void TextLlmContext::setPersistentTransactionCheckpoint(
-    const std::string& path, llama_pos nPast) {
-  rollbackState_.setPersistentTransactionCheckpoint(path, nPast);
+    const std::string& path, const SessionCheckpointMetadata& metadata) {
+  rollbackState_.setPersistentTransactionCheckpoint(path, metadata);
 }
 
 void TextLlmContext::setEmptyTransactionCheckpoint() {

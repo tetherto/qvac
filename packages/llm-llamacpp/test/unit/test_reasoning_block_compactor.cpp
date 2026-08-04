@@ -14,6 +14,7 @@
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::SessionCheckpointMetadata;
 using qvac_lib_inference_addon_llama::reasoning_recovery::CancelRecoveryHooks;
 using qvac_lib_inference_addon_llama::reasoning_recovery::
     rollbackCancelledRequest;
@@ -121,7 +122,7 @@ TEST(
       .currentPos = 10,
       .preRequestPos = 5,
       .rollback = rollback,
-      .onSnapshotRestored = [](llama_pos) {},
+      .onSnapshotRestored = [](const SessionCheckpointMetadata&) {},
       .onCheckpointFailure = [&]() { checkpointFailureReported = true; },
   });
 

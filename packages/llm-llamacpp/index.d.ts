@@ -251,8 +251,9 @@ export interface RunOptions {
    * pre-request save. Newer unsaved live state may exist; cancellation restores
    * the older committed artifact and may lose that unsaved delta. A non-empty
    * persistent request without a usable artifact fails before request mutation.
-   * If restore later fails, the affected sequence is cleared and the active
-   * cache session is invalidated.
+   * Restore applies sequence bytes and artifact-derived logical/physical cache
+   * metadata together. If restore or metadata validation fails, the affected
+   * sequence is cleared and the active cache session is invalidated.
    *
    * With `saveCacheToDisk: false`, no transaction snapshot is created.
    * Cancellation clears unsaved live state while leaving any existing

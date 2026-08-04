@@ -25,11 +25,11 @@ await model.run([
 
 Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Cache resolution happens first. A non-empty persistent request requires a last-known-valid canonical artifact, which is pinned through a stable artifact alias without serializing model state again. Newer unsaved live state does not block admission and is never silently committed at admission. A missing, unusable, or unpinnable artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
+Cache resolution happens first. A non-empty persistent request requires a last-known-valid canonical artifact, which is pinned through a stable artifact alias without serializing model state again. Metadata is parsed from that exact alias before mutation, including logical position, protected-prefix position, physical KV-cell usage, and protected-prefix KV usage. Newer unsaved live state does not block admission and is never silently committed at admission. A missing, malformed, out-of-range, or unpinnable artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
 
 An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
 
-Explicit prefill or generation cancellation restores the committed cache artifact even when it is older than live state; losing unsaved deltas is expected. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
+Explicit prefill or generation cancellation restores the committed cache bytes and their artifact-derived metadata as one coherent unit even when it is older than live state; losing unsaved deltas is expected. Loaded position and physical KV-cell counts are validated against the pinned metadata before restoration succeeds. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
 
 With `saveCacheToDisk: false`, no pre-request transaction snapshot or file is created. Cancellation clears the affected sequence, resets its cursor/cache metadata, and invalidates unsaved in-memory cache state. Any existing on-disk cache is left untouched and may be loaded by a later request using that key.
 

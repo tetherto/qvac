@@ -49,6 +49,8 @@ public:
   bool wasCacheUsedInLastPrompt() const;
   static void atomicPromoteFile(const std::string& from, const std::string& to);
   static std::string pinCommittedCacheArtifact(const std::string& path);
+  static qvac_lib_inference_addon_llama::SessionCheckpointMetadata
+  readCommittedCacheMetadata(const std::string& path, llama_pos maxContext);
 
 private:
   void saveActiveCacheForTransition();

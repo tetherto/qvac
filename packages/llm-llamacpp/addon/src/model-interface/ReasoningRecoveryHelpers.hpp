@@ -45,16 +45,15 @@ struct TransactionCheckpointRecoveryHooks {
   ::llama_context* ctx = nullptr;
   llama_seq_id seqId = 0;
   qvac_lib_inference_addon_llama::utils::ReasoningRollbackState& rollback;
-  std::function<void(llama_pos restoredNPast)> onRestored;
+  std::function<void(const SessionCheckpointMetadata&)> onRestored;
   std::function<void()> onCleared;
 };
 
 inline bool restoreTransactionCheckpointOrClearSequence(
     const TransactionCheckpointRecoveryHooks& hooks) {
   if (hooks.rollback.hasTransactionCheckpoint()) {
-    const llama_pos restoredNPast = hooks.rollback.transactionCheckpointNPast();
     if (hooks.rollback.restoreTransactionCheckpoint(hooks.ctx, hooks.seqId)) {
-      hooks.onRestored(restoredNPast);
+      hooks.onRestored(hooks.rollback.transactionCheckpointMetadata());
       return true;
     }
   }
@@ -71,15 +70,14 @@ struct CancelRecoveryHooks {
   llama_pos currentPos = 0;
   llama_pos preRequestPos = 0;
   qvac_lib_inference_addon_llama::utils::ReasoningRollbackState& rollback;
-  std::function<void(llama_pos restoredNPast)> onSnapshotRestored;
+  std::function<void(const SessionCheckpointMetadata&)> onSnapshotRestored;
   std::function<void()> onCheckpointFailure;
 };
 
 inline bool rollbackCancelledRequest(const CancelRecoveryHooks& hooks) {
   if (hooks.rollback.hasTransactionCheckpoint()) {
-    const llama_pos restoredNPast = hooks.rollback.transactionCheckpointNPast();
     if (hooks.rollback.restoreTransactionCheckpoint(hooks.ctx, hooks.seqId)) {
-      hooks.onSnapshotRestored(restoredNPast);
+      hooks.onSnapshotRestored(hooks.rollback.transactionCheckpointMetadata());
       return true;
     }
   }

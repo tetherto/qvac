@@ -451,7 +451,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   snapshotPreRequestCursor();
-  const ContextUsage transactionCheckpointUsage = current_;
   forcedTokens_.clear();
   // Set BEFORE `tokenizeChat` so `configureReasoningTags` can suppress
   // the "will hard-fail" preemptive warning for cache-warm requests that
@@ -554,16 +553,14 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
       if (rollbackState_.hasTransactionCheckpoint()) {
-        // Recurrent / hybrid path: restore the pre-prefill snapshot to
-        // drop partially decoded chunks (including any committed image
-        // KV cells) in one call. `nPastLocal` is discarded because the
-        // restore returns the cache to its pre-prefill cursor.
-        const llama_pos restoredPos =
-            rollbackState_.transactionCheckpointNPast();
+        const auto metadata = rollbackState_.transactionCheckpointMetadata();
         if (rollbackState_.restoreTransactionCheckpoint(
                 modelCtx_.lctx, seqId_)) {
-          current_ = transactionCheckpointUsage;
-          refreshCurrentCacheTokensFromMemory();
+          current_ = {
+              .pos = metadata.nPast, .cacheTokens = metadata.cacheTokens};
+          protectedPrefix_ = {
+              .pos = metadata.firstMsgTokens,
+              .cacheTokens = metadata.firstMsgCacheTokens};
         } else {
           // Restore underflowed after mutation. Clear memory and report
           // rollbackOk=false so cache/session save is invalidated.
@@ -575,7 +572,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                   "seqId=%d); recurrent state may be inconsistent until "
                   "the next full reset\n",
                   nPastLocal,
-                  restoredPos,
+                  metadata.nPast,
                   seqId_));
           clearMemoryForRecovery(modelCtx_.lctx, seqId_);
           current_ = {};
@@ -696,10 +693,12 @@ bool MtmdLlmContext::cancelGenerationCleanup(
       .preRequestPos = preRequestUsage_.pos,
       .rollback = rollbackState_,
       .onSnapshotRestored =
-          [this](llama_pos restoredPos) {
-            current_ = preRequestUsage_;
-            current_.pos = restoredPos;
-            refreshCurrentCacheTokensFromMemory();
+          [this](const SessionCheckpointMetadata& metadata) {
+            current_ = {
+                .pos = metadata.nPast, .cacheTokens = metadata.cacheTokens};
+            protectedPrefix_ = {
+                .pos = metadata.firstMsgTokens,
+                .cacheTokens = metadata.firstMsgCacheTokens};
           },
       .onCheckpointFailure =
           [this]() {
@@ -708,9 +707,6 @@ bool MtmdLlmContext::cancelGenerationCleanup(
           },
   });
 
-  if (rollbackOk) {
-    protectedPrefix_ = preRequestProtectedPrefix_;
-  }
   rollbackState_.clearTransactionCheckpoint();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -1238,16 +1234,19 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
             .seqId = seqId_,
             .rollback = rollbackState_,
             .onRestored =
-                [this](llama_pos restoredPos) {
-                  current_ = preRequestUsage_;
-                  current_.pos = restoredPos;
-                  refreshCurrentCacheTokensFromMemory();
+                [this](const SessionCheckpointMetadata& metadata) {
+                  current_ = {
+                      .pos = metadata.nPast,
+                      .cacheTokens = metadata.cacheTokens};
+                  protectedPrefix_ = {
+                      .pos = metadata.firstMsgTokens,
+                      .cacheTokens = metadata.firstMsgCacheTokens};
                 },
             .onCleared = [this]() { current_ = {}; },
         });
-    protectedPrefix_ = restoredTransactionCheckpoint
-                           ? preRequestProtectedPrefix_
-                           : ContextUsage{};
+    if (!restoredTransactionCheckpoint) {
+      protectedPrefix_ = {};
+    }
     pendingBatchFirstMsg_ = false;
     rollbackState_.clearTransactionCheckpoint();
     rollbackState_.clearReasoningBoundary();
@@ -2032,8 +2031,8 @@ void MtmdLlmContext::snapshotPreRequestCursor() {
 }
 
 void MtmdLlmContext::setPersistentTransactionCheckpoint(
-    const std::string& path, llama_pos nPast) {
-  rollbackState_.setPersistentTransactionCheckpoint(path, nPast);
+    const std::string& path, const SessionCheckpointMetadata& metadata) {
+  rollbackState_.setPersistentTransactionCheckpoint(path, metadata);
 }
 
 void MtmdLlmContext::setEmptyTransactionCheckpoint() {

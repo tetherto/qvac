@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 
+#include "../utils/SessionCheckpointMetadata.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
@@ -447,7 +448,9 @@ public:
   virtual void resetState(bool resetStats) = 0;
 
   virtual void setPersistentTransactionCheckpoint(
-      const std::string& path, llama_pos nPast) = 0;
+      const std::string& path,
+      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata&
+          metadata) = 0;
   virtual void setEmptyTransactionCheckpoint() = 0;
   virtual void clearTransactionCheckpoint() = 0;
 
