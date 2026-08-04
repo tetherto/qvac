@@ -9,6 +9,7 @@
   sliding and preserving coherent state for subsequent turns.
 - Persistent cancellation now restores a committed cache artifact, pre-saving
   newer live RAM state for same-key persistent requests before mutation.
+  Restore clears the target sequence before loading the pinned artifact.
   Non-empty persistent requests without a usable or committable artifact fail
   before mutation; non-persistent cancellation clears unsaved sequence state.
 - Tools output tail removal is disabled while `tools_compact` is pending

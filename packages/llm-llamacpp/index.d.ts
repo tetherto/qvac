@@ -251,10 +251,10 @@ export interface RunOptions {
    * session has newer RAM state than disk, that RAM state is first written to
    * `cacheKey` and pinned as the rollback artifact. A non-empty persistent
    * request without a usable artifact or committable live state fails before
-   * request mutation. Restore applies sequence bytes and artifact-derived
-   * logical/physical cache metadata together. If restore or metadata validation
-   * fails, the affected sequence is cleared and the active cache session is
-   * invalidated.
+   * request mutation. Restore clears the target sequence before loading
+   * sequence bytes and artifact-derived logical/physical cache metadata
+   * together. If restore or metadata validation fails, the affected sequence is
+   * cleared and the active cache session is invalidated.
    *
    * With `saveCacheToDisk: false`, no transaction snapshot is created.
    * Cancellation clears unsaved live state while leaving any existing

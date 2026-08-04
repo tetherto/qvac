@@ -70,6 +70,23 @@ bool ReasoningRollbackState::restoreTransactionCheckpoint(
       *currentIdentity != transactionCheckpointIdentity_) {
     return false;
   }
+  auto* mem = llama_get_memory(ctx);
+  if (mem == nullptr) {
+    return false;
+  }
+  auto sequenceEmpty = [mem, seqId]() {
+    return llama_memory_seq_pos_max(mem, seqId) < 0 &&
+           llama_memory_seq_token_count(mem, seqId) == 0;
+  };
+  auto clearSequence = [mem, seqId, &sequenceEmpty]() {
+    (void)llama_memory_seq_rm(mem, seqId, -1, -1);
+    return sequenceEmpty();
+  };
+  // Drop interrupted prompt/output state before loading the pinned artifact;
+  // restore must not rely on the loader replacing every existing cell.
+  if (!clearSequence()) {
+    return false;
+  }
   std::array<llama_token, 4> metadataTokens{};
   size_t tokenCount = 0;
   const size_t loadedBytes = llama_state_seq_load_file(
@@ -80,6 +97,7 @@ bool ReasoningRollbackState::restoreTransactionCheckpoint(
       metadataTokens.size(),
       &tokenCount);
   if (loadedBytes == 0 || tokenCount != metadataTokens.size()) {
+    (void)clearSequence();
     return false;
   }
   const bool metadataMatches =
@@ -88,14 +106,7 @@ bool ReasoningRollbackState::restoreTransactionCheckpoint(
       metadataTokens[2] == transactionCheckpointMetadata_.cacheTokens &&
       metadataTokens[3] == transactionCheckpointMetadata_.firstMsgCacheTokens;
   if (!metadataMatches) {
-    auto* mem = llama_get_memory(ctx);
-    if (mem != nullptr) {
-      (void)llama_memory_seq_rm(mem, seqId, -1, -1);
-    }
-    return false;
-  }
-  auto* mem = llama_get_memory(ctx);
-  if (mem == nullptr) {
+    (void)clearSequence();
     return false;
   }
   const llama_pos loadedNPast = llama_memory_seq_pos_max(mem, seqId) + 1;
@@ -103,7 +114,7 @@ bool ReasoningRollbackState::restoreTransactionCheckpoint(
       static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
   if (loadedNPast != transactionCheckpointMetadata_.nPast ||
       loadedCacheTokens != transactionCheckpointMetadata_.cacheTokens) {
-    (void)llama_memory_seq_rm(mem, seqId, -1, -1);
+    (void)clearSequence();
     return false;
   }
   return true;

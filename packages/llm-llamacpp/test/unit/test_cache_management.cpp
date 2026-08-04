@@ -15,12 +15,14 @@
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 #include "test_prompt_helpers.hpp"
+#include "utils/ReasoningRollbackState.hpp"
 
 namespace fs = std::filesystem;
 
 using test_common::getStatValue;
 using test_common::processPromptString;
 using test_common::processPromptWithCacheOptions;
+using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 
 void writeCheckpointMetadata(
     const fs::path& path,
@@ -338,6 +340,42 @@ TEST_F(CacheManagementTest, SaveCacheToDiskPreCommitsDirtySameKeyOnCancel) {
       CacheManager::inspectCommittedCacheArtifact(session1_path, 2048);
   EXPECT_GT(restoredArtifact.metadata.nPast, firstArtifact.metadata.nPast)
       << "cancel rollback should persist and restore the RAM-only second turn";
+}
+
+TEST_F(CacheManagementTest, FailedPersistentCheckpointRestoreClearsLiveState) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt live;
+  live.input =
+      R"([{"role": "user", "content": "Seed live context before restore."}])";
+  live.prefill = true;
+  live.cacheKey = session1_path;
+  ASSERT_NO_THROW({ (void)model->processPrompt(live); });
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  ASSERT_GT(llama_memory_seq_pos_max(mem, 0), -1)
+      << "test setup must create polluted live sequence memory";
+
+  writeCheckpointMetadata(temp_session_path, {1, 1, 1, 1});
+  const auto checkpoint =
+      CacheManager::inspectCommittedCacheArtifact(temp_session_path, 2048);
+
+  ReasoningRollbackState rollback;
+  rollback.setPersistentTransactionCheckpoint(
+      temp_session_path, checkpoint.metadata, checkpoint.identity);
+
+  EXPECT_FALSE(rollback.restoreTransactionCheckpoint(model->getContext(), 0));
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0), -1)
+      << "failed checkpoint restore must clear live generated/prompt state";
+  EXPECT_EQ(llama_memory_seq_token_count(mem, 0), 0);
 }
 
 TEST_F(CacheManagementTest, SessionPersistence) {
