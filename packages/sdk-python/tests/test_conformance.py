@@ -5,7 +5,7 @@ Python client against a locally-built worker, asserting the same expectations
 the JS runner (packages/sdk/e2e/conformance/run.mjs) checks. One source of
 cases for both clients, so they cannot drift on the covered behaviour.
 
-Gated like test_e2e_sdk_parity: needs the bare-rpc extra and a built SDK worker.
+Gated like test_e2e_sdk_parity: needs bare_rpc and a built SDK worker.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _load_cases() -> list[dict]:
 CASES = _load_cases()
 
 pytestmark = [
-    pytest.mark.skipif(not BARE_RPC_AVAILABLE, reason="bare-rpc extra not installed"),
+    pytest.mark.skipif(not BARE_RPC_AVAILABLE, reason="bare_rpc not installed"),
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
         reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",

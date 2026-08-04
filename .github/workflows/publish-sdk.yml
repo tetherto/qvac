@@ -10,6 +10,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
+      - "packages/sdk-python/**"
   pull_request_target:
     types:
       - opened
@@ -25,6 +26,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
+      - "packages/sdk-python/**"
 
   workflow_dispatch:
     inputs:
@@ -37,6 +39,11 @@ on:
         required: false
         default: ""
         type: string
+      publish_pypi_only:
+        description: "Republish tetherto-qvac-sdk to PyPI only (lockstep version; skip npm)"
+        required: false
+        default: false
+        type: boolean
 
 env:
   WORKDIR: packages/sdk
@@ -316,6 +323,63 @@ jobs:
           path: ${{ env.WORKDIR_BARE }}/dist/
           retention-days: 30
 
+  build-sdk-python:
+    name: Build tetherto-qvac-sdk (Python)
+    needs:
+      - fork-approval
+      - authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+
+      - name: Install build tooling
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -U pip
+          .venv/bin/pip install --quiet build twine
+          .venv/bin/pip install --quiet -e ".[gen]"
+
+      - name: Contract check
+        run: .venv/bin/python3 scripts/generate.py --check
+
+      - name: Build
+        run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
+
+      - name: Verify version lockstep with @qvac/sdk
+        run: |
+          SDK_VER=$(node -p "require('../sdk/package.json').version")
+          PY_VER=$(.venv/bin/python3 -c "from tetherto.qvac_sdk._generated.sdk_version import SDK_VERSION; print(SDK_VERSION)")
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER"
+
+      - name: Check metadata
+        run: .venv/bin/twine check dist/*
+
+      - name: Upload python dist artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: dist-sdk-python
+          path: packages/sdk-python/dist/*
+          if-no-files-found: error
+          retention-days: 30
+
   publish-logic:
     runs-on: ubuntu-latest
     outputs:
@@ -498,7 +562,9 @@ jobs:
       - publish-logic
       - release-merge-guard
     if: >-
-      (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -557,7 +623,9 @@ jobs:
       - publish-logic
       - release-merge-guard
     if: >-
-      (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -602,14 +670,62 @@ jobs:
           tag: ${{ steps.dist-tag-2.outputs.tag }}
           workdir: ${{ env.WORKDIR_BARE }}
 
-  # Create GitHub release only for actual releases (after NPM publish).
-  # Gated on BOTH publish-npm jobs succeeding so we never tag a release
-  # where @qvac/sdk shipped but @qvac/bare-sdk failed (or vice versa)
+  publish-pypi:
+    name: Publish tetherto-qvac-sdk to PyPI
+    needs:
+      - fork-approval
+      - authorize
+      - build-sdk-python
+      - publish-logic
+      - release-merge-guard
+      - publish-npm
+      - publish-npm-bare-sdk
+    # Lockstep release: after both npm packages publish. Escape hatch:
+    # workflow_dispatch with publish_pypi_only=true (npm already shipped).
+    if: >-
+      always() &&
+      github.repository == 'tetherto/qvac' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.build-sdk-python.result == 'success' &&
+      (
+        (
+          needs.publish-logic.outputs.publish_release == 'true' &&
+          (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+          needs.publish-npm.result == 'success' &&
+          needs.publish-npm-bare-sdk.result == 'success'
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          inputs.publish_pypi_only == true
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tetherto-qvac-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: dist-sdk-python
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+
+  # Create GitHub release only for actual releases (after npm + PyPI publish).
+  # Gated on sdk, bare-sdk, and python succeeding so we never tag a release
+  # where one lockstep client failed to ship.
   publish-release:
-    needs: [publish-npm, publish-npm-bare-sdk]
+    needs: [publish-npm, publish-npm-bare-sdk, publish-pypi]
     if: >-
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
       && needs.publish-npm-bare-sdk.result == 'success' && needs.publish-npm-bare-sdk.outputs.published_version != ''
+      && needs.publish-pypi.result == 'success'
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

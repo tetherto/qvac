@@ -55,8 +55,8 @@ pytestmark = [
     pytest.mark.asyncio,
     pytest.mark.skipif(
         not BARE_RPC_AVAILABLE,
-        reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-        "(`pip install -e '.[bare-rpc]'`) to run these tests",
+        reason="bare_rpc not installed -- reinstall tetherto-qvac-sdk "
+        "(depends on bare-rpc from PyPI) to run these tests",
     ),
     pytest.mark.skipif(
         not WORKER_AVAILABLE,

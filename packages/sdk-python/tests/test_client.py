@@ -160,7 +160,7 @@ def test_client_raises_when_resolved_paths_do_not_exist(monkeypatch) -> None:
 
 @pytest.mark.skipif(
     not BARE_RPC_AVAILABLE,
-    reason="Client() constructs a BareRpcTransport -- needs the 'bare-rpc' extra",
+    reason="Client() constructs a BareRpcTransport -- needs bare-rpc installed",
 )
 def test_client_transport_property_requires_connect() -> None:
     # __init__ only checks these paths exist, not that they're a real worker --
@@ -172,8 +172,8 @@ def test_client_transport_property_requires_connect() -> None:
 
 @pytest.mark.skipif(
     not BARE_RPC_AVAILABLE,
-    reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-    "(`pip install -e '.[bare-rpc]'`) to run these tests",
+    reason="bare_rpc not installed -- reinstall tetherto-qvac-sdk "
+    "(depends on bare-rpc from PyPI) to run these tests",
 )
 @pytest.mark.skipif(
     not WORKER_AVAILABLE,
