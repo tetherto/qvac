@@ -31,7 +31,6 @@ async function main() {
       gpu_layers: String(gpuLayers),
       ctx_size: '2048',
       n_predict: '1024',
-      no_mmap: '', // Current-branch equivalent of the teammate script's "true".
       seed: '50',
       temp: '0',
       top_p: '1',
@@ -123,7 +122,7 @@ async function main() {
     const summary = {
       device: 'gpu',
       gpuLayers,
-      noMmap: true,
+      noMmap: false,
       hasOpen: fullResponse.includes('<think>'),
       hasClose: fullResponse.includes('</think>'),
       thinkingBlockDiscards: Number(response.stats.thinkingBlockDiscards || 0),
