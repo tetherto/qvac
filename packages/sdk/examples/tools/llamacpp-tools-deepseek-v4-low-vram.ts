@@ -6,9 +6,19 @@
  * memory usage.
  *
  * Usage:
- *   npm run bare:example -- dist/examples/tools/llamacpp-tools-deepseek-v4-low-vram.js [model-url-or-path] [gpu-layers]
+ *   QVAC_CONFIG_PATH=examples/tools/debug-logging.config.json \
+ *     npm run bare:example -- dist/examples/tools/llamacpp-tools-deepseek-v4-low-vram.js [model-url-or-path] [gpu-layers]
  */
-import { completion, loadModel, unloadModel, type CompletionEvent, type ToolInput } from '@qvac/sdk'
+import {
+  completion,
+  loadModel,
+  subscribeServerLogs,
+  unloadModel,
+  VERBOSITY,
+  type CompletionEvent,
+  type ModelProgressUpdate,
+  type ToolInput
+} from '@qvac/sdk'
 import { weatherSchema, mockExecute } from './shared'
 
 const DEEPSEEK_V4_UD_IQ2_M =
@@ -26,32 +36,40 @@ const tools: ToolInput[] = [
 ]
 
 let modelId: string | undefined
+let stopServerLogs: (() => void) | undefined
 try {
   if (!Number.isInteger(gpuLayers) || gpuLayers < 1) {
     throw new Error(`gpu-layers must be a positive integer, received: ${process.argv[3]}`)
   }
 
-  console.log(`▸ Loading DeepSeek V4 with ${gpuLayers} GPU layers`)
-  modelId = await loadModel({
-    modelSrc,
-    modelType: 'llamacpp-completion',
-    modelConfig: {
-      device: 'gpu',
-      gpu_layers: gpuLayers,
-      ctx_size: 1024,
-      predict: 64,
-      temp: 0,
-      reasoning_budget: 0,
-      parallel: 1,
-      tools: true
-    },
-    onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1)
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
-      if (p.percentage >= 100) process.stderr.write('\n')
-    }
+  console.log('▸ Enabling SDK and native addon logs')
+  stopServerLogs = subscribeServerLogs((log) => {
+    const timestamp = new Date(log.timestamp).toISOString()
+    console.log(`[${timestamp}] [${log.level.toUpperCase()}] [${log.namespace}] ${log.message}`)
   })
+
+  console.log(`▸ Loading DeepSeek V4 with ${gpuLayers} GPU layers`)
+  const stopLoadHeartbeat = startLoadHeartbeat('SDK model load')
+  try {
+    modelId = await loadModel({
+      modelSrc,
+      modelType: 'llamacpp-completion',
+      modelConfig: {
+        device: 'gpu',
+        gpu_layers: gpuLayers,
+        ctx_size: 1024,
+        predict: 64,
+        temp: 0,
+        reasoning_budget: 0,
+        parallel: 1,
+        tools: true,
+        verbosity: VERBOSITY.DEBUG
+      },
+      onProgress: reportLoadProgress
+    })
+  } finally {
+    stopLoadHeartbeat()
+  }
   console.log(`▸ Model loaded: ${modelId}`)
 
   const run = completion({
@@ -78,6 +96,9 @@ try {
 
   console.log('\n\n▸ Raw model output:')
   console.log(final.raw.fullText || '(empty)')
+  console.log(
+    `▸ Raw DSML tool call detected: ${final.raw.fullText.includes('<｜DSML｜tool_calls>') ? 'yes' : 'no'}`
+  )
 
   console.log('\n▸ Parsed tool calls:')
   if (final.toolCalls.length > 0) {
@@ -90,11 +111,41 @@ try {
   }
 
   await unloadModel({ modelId, clearStorage: false })
+  stopServerLogs()
   process.exit(0)
 } catch (error) {
   console.error('✖', error)
   if (modelId) await unloadModel({ modelId, clearStorage: false }).catch(() => {})
+  stopServerLogs?.()
   process.exit(1)
+}
+
+function reportLoadProgress(progress: ModelProgressUpdate) {
+  const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
+  if (progress.shardInfo) {
+    const shard = progress.shardInfo
+    console.log(
+      `▸ Downloading shard ${shard.currentShard}/${shard.totalShards}: ` +
+        `${progress.percentage.toFixed(1)}% (${mb(progress.downloaded)}/${mb(progress.total)} MiB), ` +
+        `overall ${shard.overallPercentage.toFixed(1)}% (${mb(shard.overallDownloaded)}/${mb(shard.overallTotal)} MiB)`
+    )
+    return
+  }
+
+  console.log(
+    `▸ Downloading: ${progress.percentage.toFixed(1)}% ` +
+      `(${mb(progress.downloaded)}/${mb(progress.total)} MiB)`
+  )
+}
+
+function startLoadHeartbeat(label: string) {
+  const startedAt = Date.now()
+  const timer = setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000)
+    console.log(`▸ ${label} still running (${elapsedSeconds}s elapsed)`)
+  }, 10_000)
+
+  return () => clearInterval(timer)
 }
 
 function handleEvent(event: CompletionEvent) {

@@ -9,13 +9,17 @@
  * toolDialect: "qwen35" explicitly if auto-detection does not pick it up.
  *
  * Usage:
- *   bun run bare:example dist/examples/tools/llamacpp-tools-qwen35.js <model-url>
+ *   QVAC_CONFIG_PATH=examples/tools/debug-logging.config.json \
+ *     bun run bare:example dist/examples/tools/llamacpp-tools-qwen35.js <model-url>
  */
 import {
   completion,
   loadModel,
+  subscribeServerLogs,
   unloadModel,
   QWEN3_5_0_8B_MULTIMODAL_Q8_0,
+  VERBOSITY,
+  type ModelProgressUpdate,
   type ToolCall
 } from '@qvac/sdk'
 import { tools, mockExecute } from './shared'
@@ -23,18 +27,30 @@ import { tools, mockExecute } from './shared'
 const modelSrc = process.argv[2] ?? QWEN3_5_0_8B_MULTIMODAL_Q8_0
 
 let modelId: string | undefined
+let stopServerLogs: (() => void) | undefined
 try {
-  modelId = await loadModel({
-    modelSrc,
-    modelType: 'llamacpp-completion',
-    modelConfig: { ctx_size: 4096, tools: true },
-    onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1)
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
-      if (p.percentage >= 100) process.stderr.write('\n')
-    }
+  console.log('▸ Enabling SDK and native addon logs')
+  stopServerLogs = subscribeServerLogs((log) => {
+    const timestamp = new Date(log.timestamp).toISOString()
+    console.log(`[${timestamp}] [${log.level.toUpperCase()}] [${log.namespace}] ${log.message}`)
   })
+
+  console.log('▸ Loading model')
+  const stopLoadHeartbeat = startLoadHeartbeat('SDK model load')
+  try {
+    modelId = await loadModel({
+      modelSrc,
+      modelType: 'llamacpp-completion',
+      modelConfig: {
+        ctx_size: 4096,
+        tools: true,
+        verbosity: VERBOSITY.DEBUG
+      },
+      onProgress: reportLoadProgress
+    })
+  } finally {
+    stopLoadHeartbeat()
+  }
   console.log(`▸ Model loaded: ${modelId}`)
 
   const history = [
@@ -80,8 +96,39 @@ try {
   }
 
   await unloadModel({ modelId, clearStorage: false })
+  stopServerLogs()
+  process.exit(0)
 } catch (error) {
   console.error('✖', error)
   if (modelId) await unloadModel({ modelId, clearStorage: false }).catch(() => {})
+  stopServerLogs?.()
   process.exit(1)
+}
+
+function reportLoadProgress(progress: ModelProgressUpdate) {
+  const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
+  if (progress.shardInfo) {
+    const shard = progress.shardInfo
+    console.log(
+      `▸ Downloading shard ${shard.currentShard}/${shard.totalShards}: ` +
+        `${progress.percentage.toFixed(1)}% (${mb(progress.downloaded)}/${mb(progress.total)} MiB), ` +
+        `overall ${shard.overallPercentage.toFixed(1)}% (${mb(shard.overallDownloaded)}/${mb(shard.overallTotal)} MiB)`
+    )
+    return
+  }
+
+  console.log(
+    `▸ Downloading: ${progress.percentage.toFixed(1)}% ` +
+      `(${mb(progress.downloaded)}/${mb(progress.total)} MiB)`
+  )
+}
+
+function startLoadHeartbeat(label: string) {
+  const startedAt = Date.now()
+  const timer = setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000)
+    console.log(`▸ ${label} still running (${elapsedSeconds}s elapsed)`)
+  }, 10_000)
+
+  return () => clearInterval(timer)
 }
