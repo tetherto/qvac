@@ -376,6 +376,13 @@ jobs:
               # a clear "contract:check failed" instead of being buried inside the
               # test:unit run above.
               run "contract:check" npm run --if-present contract:check
+              run "resource collector packaging" npm run --if-present check:resource-collectors -- \
+                --host darwin-arm64 \
+                --host darwin-x64 \
+                --host linux-arm64 \
+                --host linux-x64 \
+                --host win32-arm64 \
+                --host win32-x64
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else
