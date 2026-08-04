@@ -111,6 +111,8 @@ Third-Party Model Licenses
     https://huggingface.co/bygreencn/whisper-base-ja
   ja-tiny-ggml-model-f16
     https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
+  Kwaipilot_KAT-Coder-V2.5-Dev-GGUF
+    https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF
   laser-dolphin-mixtral-2x7b-dpo-GGUF
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   latin_g2
@@ -320,6 +322,8 @@ Third-Party Model Licenses
     https://huggingface.co/ResembleAI/chatterbox-turbo
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
+  DeepSeek-V4-Flash-0731-GGUF
+    https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF
   es-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-es
   ggml-indictrans2-en-indic-1B-f16
@@ -572,6 +576,8 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
+  groot-q8_vf16
+    https://huggingface.co/nvidia/GR00T-N1.7-3B
 
 --- openrail ---
 
@@ -618,11 +624,13 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
+  @qvac/asr-ggml@0.1.1
+    https://github.com/tetherto/qvac
   @qvac/audiogen-ggml@0.1.0
     https://github.com/tetherto/qvac
   @qvac/bci-whispercpp@0.5.1
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.13.0
+  @qvac/classification-ggml@0.15.1
     https://github.com/tetherto/qvac
   @qvac/decoder-audio@0.5.0
     https://github.com/tetherto/qvac
@@ -630,20 +638,22 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/diffusion-cpp@0.17.0
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.28.0
+  @qvac/embed-llamacpp@0.30.1
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
+  @qvac/fabric@0.3.1
+    https://github.com/tetherto/qvac
   @qvac/infer-base@0.4.2
     https://github.com/tetherto/qvac
   @qvac/infer-base@0.6.2
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.38.2
+  @qvac/llm-llamacpp@0.39.2
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/ocr-ggml@0.12.1
+  @qvac/ocr-ggml@0.13.1
     https://github.com/tetherto/qvac
   @qvac/rag@0.6.4
     https://github.com/tetherto/qvac
@@ -651,15 +661,11 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
-  @qvac/transcription-parakeet@0.10.1
-    https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.12.1
-    https://github.com/tetherto/qvac
   @qvac/translation-nmtcpp@8.2.1
     https://github.com/tetherto/qvac
   @qvac/tts-ggml@0.6.1
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.14.0
+  @qvac/vla-ggml@0.16.2
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
