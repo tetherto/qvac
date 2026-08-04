@@ -4,7 +4,13 @@ import HarnessRPC, {
   type WireValue
 } from '../spec/hrpc/index.js'
 import { createAsyncQueue } from './queue.ts'
-import type { HarnessEvent, HarnessRuntime } from './types.ts'
+import type { HarnessAgentRegistration } from './agent-registration.ts'
+import type {
+  HarnessAgentRunInput,
+  HarnessEvent,
+  HarnessRuntime,
+  LocalHarnessRuntime
+} from './types.ts'
 import type { HarnessStream } from './transport.ts'
 import type { HarnessRuntimeInfo } from './connect.ts'
 
@@ -22,7 +28,8 @@ interface StartFrame {
 export function serveHarness(
   stream: HarnessStream,
   harness: HarnessRuntime,
-  describeRuntime: () => HarnessRuntimeInfo = defaultRuntimeInfo
+  describeRuntime: () => HarnessRuntimeInfo = defaultRuntimeInfo,
+  attachStatePort?: (stream: GeneratedRunStream) => void
 ) {
   const rpc = new HarnessRPC(stream)
   rpc.onDescribeRuntime(async () => {
@@ -46,6 +53,45 @@ export function serveHarness(
     for await (const frame of serveRun(duplex, harness)) duplex.write(frame)
     duplex.end?.()
   })
+  if (isLocalHarness(harness)) {
+    if (attachStatePort) {
+      rpc.onStatePort(async (stateStream) => {
+        attachStatePort(stateStream)
+      })
+    }
+    rpc.onSuspend(async () => {
+      await harness.suspend()
+      return { type: 'suspended' }
+    })
+    rpc.onResume(async () => {
+      await harness.resume()
+      return { type: 'resumed' }
+    })
+    rpc.onListSkills(async () => ({
+      type: 'skills',
+      data: jsonWire(await harness.listSkills())
+    }))
+    rpc.onRegisterAgent(async (frame) => {
+      await harness.registerAgent(parseRegistration(frame.data))
+      return { type: 'registered' }
+    })
+    rpc.onRunAgent(async (duplex) => {
+      for await (const frame of serveAgentRun(duplex, harness)) duplex.write(frame)
+      duplex.end?.()
+    })
+    rpc.onCancelAgentRun(async (frame) => {
+      await harness.cancelAgentRun(parseRunKey(frame))
+      return { type: 'canceled' }
+    })
+    rpc.onReadRun(async (frame) => ({
+      type: 'run-record',
+      data: jsonWire(await harness.readRun(parseRunKey(frame)))
+    }))
+    rpc.onWatchWork(async (duplex) => {
+      for await (const frame of serveWorkWatch(duplex, harness)) duplex.write(frame)
+      duplex.end?.()
+    })
+  }
   return rpc
 }
 
@@ -59,6 +105,62 @@ function defaultRuntimeInfo(): HarnessRuntimeInfo {
     protocolVersion: 1,
     capabilities: ['execution.run', 'state.sync'],
     buildVersion: '0.0.0-poc'
+  }
+}
+
+async function* serveAgentRun(
+  duplex: GeneratedRunStream,
+  harness: LocalHarnessRuntime
+) {
+  const starts = createAsyncQueue<HarnessAgentRunInput>()
+  const controller = new AbortController()
+  let started = false
+  const gone = () => {
+    controller.abort('client gone')
+    starts.end()
+  }
+  duplex.on('close', gone)
+  duplex.readStream?.on('close', gone)
+  duplex.on('data', (frame) => {
+    if (started) return
+    const parsed = parseAgentRun(frame, controller.signal)
+    if (!parsed) return
+    started = true
+    starts.push(parsed)
+    starts.end()
+  })
+  for await (const input of starts) {
+    for await (const event of harness.runAgent(input)) {
+      yield toWire(event, input.runId)
+    }
+    yield { type: 'complete', traceId: input.runId }
+  }
+}
+
+async function* serveWorkWatch(
+  duplex: GeneratedRunStream,
+  harness: LocalHarnessRuntime
+) {
+  const controller = new AbortController()
+  let after: string | undefined
+  let started = false
+  const gone = () => controller.abort('client gone')
+  duplex.on('close', gone)
+  duplex.readStream?.on('close', gone)
+  duplex.on('data', (frame) => {
+    if (started) return
+    started = true
+    after = typeof frame.data === 'string' ? frame.data : undefined
+  })
+  while (!started && !controller.signal.aborted) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  if (controller.signal.aborted) return
+  for await (const change of harness.watchWork({
+    ...(after ? { after } : {}),
+    signal: controller.signal
+  })) {
+    yield { type: 'work-change', data: jsonWire(change) }
   }
 }
 
@@ -128,6 +230,54 @@ function parseStartFrame(frame: Record<string, WireValue>): StartFrame | null {
     model: frame.model,
     messages
   }
+}
+
+function parseAgentRun(
+  frame: Record<string, WireValue>,
+  signal: HarnessAgentRunInput['signal']
+): HarnessAgentRunInput | null {
+  if (
+    frame.type !== 'start' ||
+    typeof frame.agentId !== 'string' ||
+    typeof frame.runId !== 'string' ||
+    typeof frame.input !== 'string'
+  ) {
+    return null
+  }
+  return {
+    agentId: frame.agentId,
+    runId: frame.runId,
+    input: frame.input,
+    signal
+  }
+}
+
+function parseRunKey(frame: Record<string, WireValue>) {
+  if (typeof frame.agentId !== 'string' || typeof frame.runId !== 'string') {
+    throw new Error('invalid Harness run identity')
+  }
+  return {
+    agentId: frame.agentId,
+    runId: frame.runId,
+    ...(typeof frame.reason === 'string' ? { reason: frame.reason } : {})
+  }
+}
+
+function parseRegistration(value: WireValue | undefined): HarnessAgentRegistration {
+  if (!isRecord(value)) throw new Error('invalid Harness agent registration')
+  return value as unknown as HarnessAgentRegistration
+}
+
+function isRecord(value: WireValue | undefined): value is Record<string, WireValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isLocalHarness(runtime: HarnessRuntime): runtime is LocalHarnessRuntime {
+  return 'runAgent' in runtime
+}
+
+function jsonWire(value: unknown): WireValue {
+  return JSON.parse(JSON.stringify(value)) as WireValue
 }
 
 function toWire(

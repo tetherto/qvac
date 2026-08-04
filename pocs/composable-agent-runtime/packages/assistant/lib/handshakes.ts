@@ -30,8 +30,15 @@ export function syncHandshake(): ComponentHandshake {
 export function harnessHandshake(): ComponentHandshake {
   return {
     contract: 'qvac.harness',
-    protocolVersion: 1,
-    capabilities: ['execution.run', 'state.sync'],
+    protocolVersion: 2,
+    capabilities: [
+      'agent.register',
+      'agent.run',
+      'agent.cancel',
+      'run.read',
+      'work.watch',
+      'state.port'
+    ],
     requiredPeerCapabilities: [],
     buildVersion: BUILD_VERSION
   }
@@ -47,7 +54,7 @@ export function expectedSyncHandshake(): ComponentHandshake {
 export function expectedHarnessHandshake(): ComponentHandshake {
   return {
     ...harnessHandshake(),
-    requiredPeerCapabilities: ['execution.run', 'state.sync']
+    requiredPeerCapabilities: ['agent.run', 'run.read', 'state.port']
   }
 }
 

@@ -1,21 +1,35 @@
 import type {
+  HarnessAgentRegistration,
+  HarnessAgentRunKey,
   HarnessEvent,
-  HarnessMessage,
+  HarnessRunRecord,
   HarnessRuntime
-} from '@qvac/harness/types'
+} from '@qvac/harness'
 import type { LogLevel } from '@qvac/logging'
 import type {
   CreateSyncOptions,
+  SyncProfileClient,
   SyncRuntime
 } from '@qvac/sync'
+import type {
+  DurableWorkCommand,
+  DurableWorkQuery,
+  DurableWorkResult
+} from '@qvac/sync/profiles/durable-work'
 import type { ComponentHandshake } from './compatibility.ts'
 
 export type AssistantComponentHandshake = ComponentHandshake
 
+export type AssistantWorkEndpoint = SyncProfileClient<
+  DurableWorkCommand,
+  DurableWorkQuery,
+  DurableWorkResult
+>
+
 export type AssistantStateEndpoint = Pick<
   SyncRuntime,
-  'ready' | 'suspend' | 'resume' | 'lifecycle' | 'runtime' | 'mesh' | 'openProfile'
->
+  'ready' | 'suspend' | 'resume' | 'lifecycle' | 'runtime' | 'mesh'
+> & { readonly work: AssistantWorkEndpoint }
 
 export interface AssistantComponent {
   readonly handshake: AssistantComponentHandshake
@@ -35,13 +49,12 @@ export interface AssistantSyncComponent extends AssistantComponent {
 
 export interface AssistantHarnessComponent extends AssistantComponent {
   readonly harness: HarnessRuntime
-  readRun(runId: string): Promise<readonly HarnessEvent[]>
 }
 
 export interface AssistantComponents {
   startSync(): Promise<AssistantSyncComponent>
   startHarness(input: {
-    readonly state: AssistantStateEndpoint
+    readonly state: SyncRuntime
   }): Promise<AssistantHarnessComponent>
 }
 
@@ -54,21 +67,22 @@ export interface CreateAssistantOptions {
   readonly sync?: Omit<CreateSyncOptions, 'storagePath'>
   readonly inference?: AssistantInference
   readonly logging?: { readonly level?: LogLevel }
-  readonly components?: AssistantComponents
 }
 
 export interface AssistantRunInput {
+  readonly agentId: string
   readonly runId?: string
-  readonly traceId?: string
-  readonly model?: string
-  readonly messages: readonly HarnessMessage[]
+  readonly input: string
   readonly signal?: AbortSignal
 }
 
 export interface AssistantRun extends AsyncIterable<HarnessEvent> {
   readonly id: string
-  readonly traceId: string
 }
+
+export type AssistantAgentRegistration = HarnessAgentRegistration
+export type AssistantRunKey = HarnessAgentRunKey
+export type AssistantRunRecord = HarnessRunRecord
 
 export type AssistantLifecycleEventType =
   | 'child-ready'
@@ -93,7 +107,6 @@ export interface AssistantLifecycleEvent {
 }
 
 export interface AssistantInspection {
-  readonly sdkStarts: number
   readonly children: ReadonlyArray<{
     readonly name: string
     readonly state: string

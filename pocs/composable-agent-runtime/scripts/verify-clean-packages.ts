@@ -34,6 +34,7 @@ const subsets = new Map<string, readonly string[]>([
     [
       '@qvac/supervisor',
       '@qvac/agents',
+      '@qvac/sync',
       '@qvac/harness',
       '@qvac-poc/skill-cli'
     ]
@@ -417,14 +418,12 @@ async function verifySkillCliPackaging(directory: string) {
     'index.ts',
     'bare-probe.ts',
     'runner.ts',
-    'scripts/build-sandbox.ts',
     'README.md'
   ]) {
     await access(join(packageRoot, relativePath))
   }
-  await run(['bun', 'run', 'build:sandbox'], packageRoot)
   await run(
-    ['bare', 'index.ts', 'smoke', '--timeout-ms=5000'],
+    ['bun', 'index.ts', 'smoke', '--timeout-ms=5000'],
     packageRoot
   )
 }

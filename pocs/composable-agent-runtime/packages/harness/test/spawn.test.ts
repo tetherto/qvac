@@ -3,7 +3,7 @@ import { rmSync } from 'fs'
 import os from 'os'
 import { fileURLToPath } from 'url'
 import stow from 'bare-stow'
-import { spawnHarness } from '../index.ts'
+import { spawnHarness } from '../lib/spawn.ts'
 
 async function stowFixture() {
   const outputDirectory = new URL('./fixtures/.stow/', import.meta.url)

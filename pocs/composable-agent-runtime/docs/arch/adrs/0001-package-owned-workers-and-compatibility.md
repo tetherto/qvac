@@ -38,6 +38,13 @@ The owning package also owns `bare-stow` assembly, platform packaging, spawn
 lifecycle, and readiness checks. Workers are not installed or upgraded as
 independent local services.
 
+Worker artifacts and entry modules are package-private implementation files.
+They are included in a published artifact only when a package-owned desktop or
+mobile launcher needs them, but they are not package subpath exports. Public
+consumers start Sync and Harness through `createSync` and `createHarness`, or
+let Assistant compose those lifecycle APIs. They do not import worker entries,
+spawners, generated transport plumbing, sandbox internals, or test helpers.
+
 The
 [interactive deployment and package composition map](https://packages-deployment-options-demo.netlify.app/)
 shows how this ownership rule applies to Assistant-managed and direct package

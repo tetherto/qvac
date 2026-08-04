@@ -1,9 +1,11 @@
 import { connectHarness } from './connect.ts'
 import type { RemoteHarness } from './connect.ts'
+import type { HarnessRunStore } from './run-store.ts'
 
 export interface SpawnHarnessOptions {
   readonly entry: string
   readonly args?: readonly string[]
+  readonly runStore?: HarnessRunStore
 }
 
 export interface HarnessSidecarExit {
@@ -18,7 +20,8 @@ export interface SpawnedHarness extends RemoteHarness {
 
 export function spawnHarness({
   entry,
-  args = []
+  args = [],
+  runStore
 }: SpawnHarnessOptions): SpawnedHarness {
   let child:
     | {
@@ -54,7 +57,7 @@ export function spawnHarness({
     })
     await Promise.race([ipc.ready, earlyExit])
     return ipc
-  })
+  }, { runStore })
   const closeRemote = remote.close.bind(remote)
   return Object.assign(remote, {
     exited,

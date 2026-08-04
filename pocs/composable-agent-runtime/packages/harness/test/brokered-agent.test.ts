@@ -1,16 +1,20 @@
 import test from 'brittle'
 import AbortController from 'bare-abort-controller'
+import type { HarnessAgentRegistration } from '../lib/agent-registration.ts'
 import {
-  createHarness,
+  createHarnessService as createHarness
+} from '../lib/harness.ts'
+import { createInMemoryHarnessRunStore } from '../lib/in-memory-harness-run-store.ts'
+import type { HarnessRunStore } from '../lib/run-store.ts'
+import type { HarnessStateAdapter } from '../lib/types.ts'
+import type { SdkRuntimePort } from '../lib/sdk-runtime-port.ts'
+import {
   memoizeToolApproval,
-  type HarnessAgentRegistration,
-  type HarnessEvent,
-  type HarnessStateAdapter,
   type HarnessTool,
   type HarnessToolApprovalPort,
-  type HarnessToolBrokerPort,
-  type SdkRuntimePort
-} from '../index.ts'
+  type HarnessToolBrokerPort
+} from '../lib/tool-broker.ts'
+import type { HarnessEvent } from '../lib/types.ts'
 import { createRunRegistry } from '../lib/run-registry.ts'
 
 const HTTP_TOOL: HarnessTool = {
@@ -666,24 +670,12 @@ test('run registry close surfaces a bounded drain timeout', async (t) => {
 })
 
 test('Harness isolates persisted and SDK identities for slash-colliding run pairs', async (t) => {
-  const persisted = new Map<string, HarnessEvent[]>()
   const completions: Array<{
     readonly requestId: string
     cancelled: boolean
     release: () => void
   }> = []
   const cancellations: string[] = []
-  const state: HarnessStateAdapter = {
-    async append(runId, event) {
-      const events = persisted.get(runId) ?? []
-      events.push(event)
-      persisted.set(runId, events)
-    },
-    async read(runId) {
-      return persisted.get(runId) ?? []
-    },
-    async close() {}
-  }
   const sdk: SdkRuntimePort = {
     loadModel: async ({ model }) => ({ modelId: model }),
     completion: ({ requestId }) => {
@@ -716,7 +708,6 @@ test('Harness isolates persisted and SDK identities for slash-colliding run pair
   }
   const harness = createHarness({
     sdk,
-    state,
     tools: [HTTP_TOOL],
     toolBroker: createBroker()
   })
@@ -740,10 +731,14 @@ test('Harness isolates persisted and SDK identities for slash-colliding run pair
 
   t.is(new Set(completions.map((completion) => completion.requestId)).size, 2)
   t.is(new Set(cancellations).size, 2)
-  t.is(persisted.size, 2)
-  t.alike([...persisted.values()].map((events) => events.at(-1)?.type), [
-    'aborted',
-    'aborted'
+  const records = await Promise.all([
+    harness.readRun({ agentId: 'a/b', runId: 'c' }),
+    harness.readRun({ agentId: 'a', runId: 'b/c' })
+  ])
+  t.is(records.filter(Boolean).length, 2)
+  t.alike(records.map((record) => record?.outcome?.status), [
+    'canceled',
+    'canceled'
   ])
   await harness.close()
 })
@@ -798,20 +793,24 @@ test('close waits for live agent termination before closing state', async (t) =>
   let releaseCompletion: (() => void) | undefined
   let releaseAppend: (() => void) | undefined
   let appendingAbort = false
-  let stateClosed = false
-  const state: HarnessStateAdapter = {
-    async append(_runId, event) {
-      if (event.type !== 'aborted') return
-      appendingAbort = true
-      await new Promise<void>((resolve) => {
-        releaseAppend = resolve
-      })
-    },
-    async read() {
-      return []
+  let storeClosed = false
+  const memoryStore = createInMemoryHarnessRunStore()
+  const runStore: HarnessRunStore = {
+    ...memoryStore,
+    async appendEvents(input) {
+      if (input.events.some(
+        (entry) => entry.kind === 'agent' && entry.event.type === 'run-canceled'
+      )) {
+        appendingAbort = true
+        await new Promise<void>((resolve) => {
+          releaseAppend = resolve
+        })
+      }
+      return memoryStore.appendEvents(input)
     },
     async close() {
-      stateClosed = true
+      storeClosed = true
+      await memoryStore.close()
     }
   }
   const sdk = createSdk(({ requestId, signal }) => ({
@@ -825,7 +824,7 @@ test('close waits for live agent termination before closing state', async (t) =>
   }))
   const harness = createHarness({
     sdk,
-    state,
+    runStore,
     tools: [HTTP_TOOL],
     toolBroker: createBroker()
   })
@@ -839,11 +838,11 @@ test('close waits for live agent termination before closing state', async (t) =>
 
   const closing = harness.close()
   await waitFor(() => appendingAbort)
-  t.is(stateClosed, false)
+  t.is(storeClosed, false)
   releaseAppend?.()
   await closing
   await draining
-  t.is(stateClosed, true)
+  t.is(storeClosed, true)
 })
 
 async function waitFor(predicate: () => boolean) {

@@ -8,23 +8,22 @@ import { createReactNativeAssistantComponents } from './lib/react-native-adapter
 import type { AssistantInference, CreateAssistantOptions } from './lib/contracts.ts'
 
 export type {
-  AssistantComponent,
-  AssistantComponents,
-  AssistantHarnessComponent,
+  AssistantAgentRegistration,
   AssistantInference,
   AssistantInspection,
   AssistantLifecycleEvent,
   AssistantLifecycleEventType,
   AssistantRun,
   AssistantRunInput,
+  AssistantRunKey,
+  AssistantRunRecord,
   AssistantStateEndpoint,
-  AssistantSyncComponent,
+  AssistantWorkEndpoint,
   CreateAssistantOptions
 } from './lib/contracts.ts'
 export type { AssistantFacade } from './lib/facade.ts'
 export {
   DEFAULT_ASSISTANT_INFERENCE,
-  DEFAULT_ASSISTANT_MODEL,
   DEFAULT_ASSISTANT_STORAGE_PATH
 } from './lib/facade.ts'
 

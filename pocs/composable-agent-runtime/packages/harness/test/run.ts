@@ -3,6 +3,7 @@ const scripts = [
   'test:adapter',
   'test:image',
   'test:sandbox',
+  'test:public',
   'test:fast',
   'test:node',
   'test:bare',

@@ -38,7 +38,7 @@ interface ActiveRun {
 
 type TaskAssistantFacade = Pick<
   AssistantFacade,
-  'ready' | 'run' | 'close' | 'onLifecycle'
+  'ready' | 'registerAgent' | 'run' | 'close' | 'onLifecycle'
 > & {
   readonly state: object
 }
@@ -82,7 +82,7 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
     options.createTaskRepository ??
     ((state: object) =>
       createReplicatedTaskRepository(
-        state as Pick<AssistantFacade['state'], 'openProfile'>
+        state as Pick<AssistantFacade['state'], 'work'>
       ))
   const hasPersistentPairing = options.hasPersistentPairing ?? (() => false)
 
@@ -113,6 +113,13 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
     })
     try {
       await started.ready()
+      await started.registerAgent({
+        id: 'task-mobile-runner',
+        model:
+          'registry://hf/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf',
+        skills: [],
+        toolPolicy: { allow: [], requireApproval: [] }
+      })
       if (currentGeneration !== generation) {
         stopStartedLifecycle()
         await started.close()
@@ -267,8 +274,9 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
     signal: AbortSignal
   ) {
     const input: AssistantRunInput = {
+      agentId: 'task-mobile-runner',
       runId: `task-${taskId}`,
-      messages: [{ role: 'user', content: prompt }],
+      input: prompt,
       signal
     }
     return runtime.run(input)

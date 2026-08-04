@@ -19,13 +19,14 @@ test('sync: package exports hide implementation and select the mobile runtime', 
     await readFile(new URL('../package.json', import.meta.url), 'utf8')
   )
   t.alike(manifest.exports['.'], {
+    types: './index.d.ts',
     'react-native': './react-native.ts',
     default: './index.ts'
   })
   t.is(manifest.exports['./react-native'], './react-native.ts')
-  t.is(manifest.exports['./testing'], './testing.ts')
-  t.is(manifest.exports['./worker'], './worker.ts')
-  t.is(manifest.exports['./types'], './lib/runtime/types.ts')
+  t.absent(manifest.exports['./testing'])
+  t.absent(manifest.exports['./worker'])
+  t.absent(manifest.exports['./types'])
   t.absent(manifest.exports['./sidecar-entry'])
   t.absent(manifest.exports['./mobile-entry'])
   t.absent(manifest.exports['./react-native-launcher'])

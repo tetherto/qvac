@@ -1,14 +1,12 @@
 import test from 'brittle'
 import { defineAgent } from '@qvac/agents'
 import AbortController from '#abort-controller'
-import {
-  createChildEntry,
-  createSdkModelAdapter,
-  createSupervisedSdkPort,
-  duplexPair,
-  type HarnessRuntime,
-  type SdkRuntimePort
-} from '../index.ts'
+import { createSdkModelAdapter } from '../lib/agent-adapter.ts'
+import { createChildEntry } from '../lib/child-entry.ts'
+import type { SdkRuntimePort } from '../lib/sdk-runtime-port.ts'
+import { createSupervisedSdkPort } from '../lib/supervised-sdk-port.ts'
+import { duplexPair } from '../lib/transport.ts'
+import type { HarnessRuntime } from '../lib/types.ts'
 
 test('child entry constructs SDK only after start', async (t) => {
   let constructions = 0

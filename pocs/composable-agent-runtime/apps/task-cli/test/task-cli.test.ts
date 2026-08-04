@@ -102,17 +102,11 @@ describe('task CLI desktop host', () => {
           runtime: 'bare',
           processId: expect.any(Number),
           instanceId: expect.stringMatching(/^harness-/)
-        }),
-        expect.objectContaining({
-          component: 'sdk',
-          runtime: 'bare',
-          processId: expect.any(Number),
-          instanceId: expect.stringMatching(/^sdk-/)
         })
       ])
     )
     const processIds = ready.map((identity) => identity.processId)
-    expect(new Set(processIds).size).toBe(3)
+    expect(new Set(processIds).size).toBe(2)
     expect(processIds).not.toContain(process.pid)
     expect(traces).toEqual(
       expect.arrayContaining([

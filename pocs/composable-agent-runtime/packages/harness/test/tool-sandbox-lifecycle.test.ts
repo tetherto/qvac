@@ -3,12 +3,10 @@ import { chmodSync } from 'node:fs'
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import * as HarnessProduction from '../index.ts'
+import * as HarnessProduction from './internal-sandbox-surface.ts'
 import * as HarnessTesting from '../testing.ts'
-import type {
-  HarnessJsonValue,
-  ToolSandboxResult
-} from '../index.ts'
+import type { HarnessJsonValue } from '../lib/types.ts'
+import type { ToolSandboxResult } from '../lib/tool-sandbox/types.ts'
 
 const Harness = { ...HarnessProduction, ...HarnessTesting }
 

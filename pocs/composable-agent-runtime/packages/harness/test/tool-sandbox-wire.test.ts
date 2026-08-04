@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test'
-import * as Harness from '../index.ts'
+import * as Harness from './internal-tool-sandbox.ts'
 import ToolSandboxRPC from '../spec/tool-sandbox/hrpc/index.js'
 import { parseToolSandboxDescription } from '../lib/tool-sandbox/wire.ts'
 import type {
-  HarnessJsonValue,
   ToolSandboxExecutionRequest
-} from '../index.ts'
+} from './internal-tool-sandbox.ts'
+import type { HarnessJsonValue } from '../lib/types.ts'
 
 test('tool sandbox HRPC describes and returns structured generation-matched results', async () => {
   const duplexPair = Reflect.get(Harness, 'duplexPair')

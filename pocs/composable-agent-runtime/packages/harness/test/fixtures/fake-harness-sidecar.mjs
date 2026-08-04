@@ -1,9 +1,10 @@
-import { createHarness, serveHarness } from '../../index.ts'
+import { createHarnessService } from '../../lib/harness.ts'
+import { serveHarness } from '../../lib/serve.ts'
 
 export default async function start(ipc, ready) {
   serveHarness(
     ipc,
-    createHarness({
+    createHarnessService({
       sdk: {
         loadModel: async ({ model }) => ({ modelId: model }),
         completion: ({ requestId }) => ({

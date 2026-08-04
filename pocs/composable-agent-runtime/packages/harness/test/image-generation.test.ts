@@ -2,14 +2,19 @@ import { expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import * as Harness from '../index.ts'
+import { createHarnessService } from '../lib/harness.ts'
+import {
+  createImageGenerationTooling,
+  type ImageAttachmentFileSystem,
+  type ImageGenerationTooling
+} from '../lib/image-generation.ts'
 import type {
-  HarnessToolInvocation,
-  ImageAttachmentFileSystem,
-  ImageGenerationTooling,
   SdkImageGenerationInput,
   SdkRuntimePort
-} from '../index.ts'
+} from '../lib/sdk-runtime-port.ts'
+import type {
+  HarnessToolInvocation
+} from '../lib/tool-broker.ts'
 
 const PNG = png(512, 512)
 
@@ -84,13 +89,7 @@ function invocation(
 }
 
 function imageToolingFactory() {
-  const factory = Reflect.get(Harness, 'createImageGenerationTooling')
-  expect(typeof factory).toBe('function')
-  return factory as (input: {
-    readonly sdk: SdkRuntimePort
-    readonly attachmentRoot: string
-    readonly fileSystem?: ImageAttachmentFileSystem
-  }) => Promise<ImageGenerationTooling>
+  return createImageGenerationTooling
 }
 
 function failingFileSystem(operation: FailingOperation): ImageAttachmentFileSystem {
@@ -387,7 +386,7 @@ test('persists opaque owner-only PNG attachments atomically', async () => {
   const { sdk } = createFakeSdk()
   const { parent, root } = await createRoot()
   const tooling = await imageToolingFactory()({ sdk, attachmentRoot: root })
-  const harness = Harness.createHarness({
+  const harness = createHarnessService({
     sdk,
     tools: tooling.tools,
     toolBroker: tooling.broker

@@ -3,10 +3,10 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type {
-  HarnessJsonValue,
-  HarnessToolBrokerPort,
-  SdkRuntimeEvent,
-  SdkRuntimePort
+  HarnessAgentRegistration,
+  HarnessAbortSignal,
+  HarnessEvent,
+  HarnessJsonValue
 } from '@qvac/harness'
 import { createHarness } from '@qvac/harness'
 import * as Runner from '../runner.ts'
@@ -28,7 +28,6 @@ test('parses explicit CLI configuration without local path defaults', () => {
       '--diffusion-prediction=v',
       '--attachment-base=/outputs',
       '--bare=/runtime/bare',
-      '--sandbox-entry=/app/tool-sandbox.bundle',
       '--timeout-ms=120000'
     ],
     {}
@@ -43,7 +42,6 @@ test('parses explicit CLI configuration without local path defaults', () => {
     },
     attachmentBase: '/outputs',
     bareExecutable: '/runtime/bare',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     timeoutMs: 120000,
     obsidianApproval: false
   })
@@ -155,7 +153,6 @@ test('preflights every configured boundary and canonicalizes paths', async () =>
     diffusion: { model: '/models/sd.gguf', prediction: 'v' },
     attachmentBase: '/outputs',
     bareExecutable: '/runtime/bare',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     obsidian: {
       executablePath: '/usr/local/bin/obsidian',
       vaultRoot: '/vault',
@@ -218,9 +215,7 @@ test('preflights every configured boundary and canonicalizes paths', async () =>
   expect(result.config.diffusion?.model).toBe('/private/models/sd.gguf')
   expect(result.config.obsidian?.vaultRoot).toBe('/private/vault')
   expect(inspected).toEqual([
-    '/usr/bin/sandbox-exec',
     '/runtime/bare',
-    '/app/tool-sandbox.bundle',
     '/models/qwen.gguf',
     '/models/sd.gguf',
     '/outputs',
@@ -258,7 +253,6 @@ test('all mode records unavailable Obsidian while dedicated mode fails closed', 
     diffusion: { model: '/models/sd.gguf' },
     attachmentBase: '/outputs',
     bareExecutable: '/runtime/bare',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     obsidianApproval: false,
     timeoutMs: 120_000
   }
@@ -303,7 +297,6 @@ test('preflight rejects a script wrapper as the Bare executable', async () => {
     command: 'weather',
     qwenModel: '/models/qwen.gguf',
     bareExecutable: '/runtime/bare-wrapper',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     obsidianApproval: false,
     timeoutMs: 120_000
   }
@@ -331,7 +324,6 @@ test('preflight rejects a native executable that is not Bare', async () => {
     command: 'weather',
     qwenModel: '/models/qwen.gguf',
     bareExecutable: '/runtime/not-bare',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     obsidianApproval: false,
     timeoutMs: 120_000
   }
@@ -365,7 +357,6 @@ test('preflight rejects a hung native Bare probe', async () => {
     command: 'weather',
     qwenModel: '/models/qwen.gguf',
     bareExecutable: '/runtime/hung-bare',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     obsidianApproval: false,
     timeoutMs: 120_000
   }
@@ -504,7 +495,6 @@ test('rejects the Electron app binary and old official CLI versions', async () =
     command: 'obsidian',
     qwenModel: '/models/qwen.gguf',
     bareExecutable: '/runtime/bare',
-    sandboxEntry: '/app/tool-sandbox.bundle',
     obsidian: {
       executablePath: '/Applications/Obsidian.app/Contents/MacOS/Obsidian',
       vaultRoot: '/vault',
@@ -559,73 +549,50 @@ test('rejects the Electron app binary and old official CLI versions', async () =
 
 test('runs all selected skills through one SDK with structured tool rounds', async () => {
   const events: RunnerEvent[] = []
-  const histories: string[][] = []
   const calls: string[] = []
   const closed: string[] = []
-  let sdkCreations = 0
-  const sdk = createToolCallingSdk(histories, closed)
+  let harnessCreations = 0
   const dependencies: DesktopRunnerDependencies = {
-    async createSdk() {
-      sdkCreations++
-      return sdk
-    },
-    async createImageTooling() {
-      let imageClosed = false
+    async createHarness() {
+      harnessCreations++
+      const registrations = new Map<string, HarnessAgentRegistration>()
       return {
-        tools: [tool('generate_image')],
-        broker: broker(calls, 'image', {
-          status: 'success',
-          attachment: {
-            id: 'attachment-1',
-            path: '/outputs/runtime/run/image.png',
-            mimeType: 'image/png',
-            byteLength: 1234,
-            width: 512,
-            height: 512
+        async registerAgent(registration) {
+          registrations.set(registration.id, registration)
+        },
+        async *runAgent({ agentId }): AsyncGenerator<HarnessEvent> {
+          const skill = registrations.get(agentId)?.skills[0]
+          const name =
+            skill === 'weather'
+              ? 'http_request'
+              : skill === 'obsidian'
+                ? 'exec'
+                : 'generate_image'
+          calls.push(name)
+          yield { type: 'tool-call' as const, name, args: {} }
+          const result: HarnessJsonValue =
+            name === 'generate_image'
+              ? {
+                  status: 'success',
+                  attachment: {
+                    id: 'attachment-1',
+                    path: '/outputs/runtime/run/image.png',
+                    mimeType: 'image/png',
+                    byteLength: 1234,
+                    width: 512,
+                    height: 512
+                  }
+                }
+              : { ok: true }
+          yield {
+            type: 'tool-result' as const,
+            name,
+            result
           }
-        }),
-        async cleanupAttachments() {},
+          yield { type: 'content' as const, text: 'Bounded final response.' }
+        },
         async close() {
-          if (imageClosed) return
-          imageClosed = true
-          closed.push('image')
-        }
-      }
-    },
-    async createDesktopTooling(input) {
-      let desktopClosed = false
-      await input.onSandboxEvent({
-        type: 'started',
-        agentId: 'weather-agent',
-        generation: 1,
-        processId: 123
-      })
-      await input.onSandboxEvent({
-        type: 'exit',
-        agentId: 'weather-agent',
-        generation: 1,
-        code: 23,
-        signal: null,
-        expected: false
-      })
-      await input.onSandboxEvent({
-        type: 'started',
-        agentId: 'weather-agent',
-        generation: 2,
-        processId: 124
-      })
-      const desktopBroker = broker(calls, 'desktop', {
-        status: 200,
-        body: 'London: +20 C'
-      }, input.sharedBroker)
-      return {
-        tools: [tool('http_request'), tool('exec')],
-        broker: desktopBroker,
-        async close() {
-          if (desktopClosed) return
-          desktopClosed = true
-          await desktopBroker.close()
-          closed.push('desktop')
+          closed.push('harness')
         }
       }
     },
@@ -642,28 +609,8 @@ test('runs all selected skills through one SDK with structured tool rounds', asy
     dependencies
   )
 
-  expect(sdkCreations).toBe(1)
-  expect(calls).toEqual([
-    'desktop:http_request',
-    'desktop:exec',
-    'image:generate_image'
-  ])
-  expect(histories.filter((history) => history.length >= 4)).toHaveLength(3)
-  expect(histories.some((history) =>
-    history.some((content) => content.includes('# Weather'))
-  )).toBe(true)
-  expect(histories.some((history) =>
-    history.some((content) => content.includes('# Obsidian'))
-  )).toBe(true)
-  expect(histories.some((history) =>
-    history.some((content) => content.includes('# Image generation'))
-  )).toBe(true)
-  expect(histories.some((history) =>
-    history.includes(
-      'Use http_request to get the current weather in London from wttr.in with format=3, then summarize it.'
-    )
-  )).toBe(true)
-  expect(histories.flat()).not.toContain('{{input}}')
+  expect(harnessCreations).toBe(1)
+  expect(calls).toEqual(['http_request', 'exec', 'generate_image'])
   expect(result.status).toBe('success')
   expect(result.runs.map((run) => run.status)).toEqual([
     'success',
@@ -676,27 +623,6 @@ test('runs all selected skills through one SDK with structured tool rounds', asy
     width: 512,
     height: 512
   })
-  expect(events.filter((event) => event.type === 'sandbox-started').map(
-    (event) => event.generation
-  )).toEqual([1, 2])
-  expect(events.some((event) =>
-    event.type === 'sandbox-exit' && event.expected === false
-  )).toBe(true)
-  expect(
-    events
-      .filter((event) => event.type === 'model-loaded')
-      .map((event) => ({
-        runId: event.runId,
-        traceId: event.traceId
-      }))
-  ).toEqual([
-    { runId: undefined, traceId: 'desktop-1-weather/respond' },
-    { runId: undefined, traceId: 'desktop-2-obsidian/respond' },
-    {
-      runId: undefined,
-      traceId: 'desktop-3-image-generation/respond'
-    }
-  ])
   expect(events.filter((event) => event.type === 'tool-call').every(
     (event) => typeof event.runId === 'string' &&
       typeof event.agentId === 'string' &&
@@ -715,7 +641,7 @@ test('runs all selected skills through one SDK with structured tool rounds', asy
   expect(serialized).not.toContain('weather-secret-token')
   expect(serialized).not.toContain('<tool_call>')
   expect(serialized).not.toContain('"image":[137,80,78,71')
-  expect(closed.sort()).toEqual(['desktop', 'image', 'sdk'])
+  expect(closed).toEqual(['harness'])
 })
 
 test('CLI execution emits JSON lines and a concise result', async () => {
@@ -733,7 +659,6 @@ test('CLI execution emits JSON lines and a concise result', async () => {
         'weather',
         '--qwen-model=/models/qwen.gguf',
         '--bare=/runtime/bare',
-        '--sandbox-entry=/app/tool-sandbox.bundle',
         '--timeout-ms=120000'
       ],
       environment: {},
@@ -977,7 +902,7 @@ test('deterministic smoke command exercises all fake model and executor paths', 
   expect(serialized).not.toContain('<tool_call>')
 })
 
-test('production dependency composition passes one shared SDK to both tool layers', async () => {
+test('production dependency composition passes high-level desktop config to Harness', async () => {
   const createProductionRunnerDependencies = Reflect.get(
     Runner,
     'createProductionRunnerDependencies'
@@ -985,41 +910,11 @@ test('production dependency composition passes one shared SDK to both tool layer
   expect(typeof createProductionRunnerDependencies).toBe('function')
   if (typeof createProductionRunnerDependencies !== 'function') return
 
-  const calls: string[] = []
-  const sdk = createToolCallingSdk([], calls)
+  let received: Parameters<typeof createHarness>[0]
   const dependencies = createProductionRunnerDependencies({
-    async createSdkDirectAdapter(options) {
-      calls.push(`sdk:${JSON.stringify(options)}`)
-      return sdk
-    },
-    async createImageGenerationTooling(input: { readonly sdk: SdkRuntimePort }) {
-      expect(input.sdk).toBe(sdk)
-      calls.push('image')
-      return {
-        tools: [tool('generate_image')],
-        broker: broker(calls, 'image', { ok: true }),
-        async cleanupAttachments() {},
-        async close() {}
-      }
-    },
-    async createMacOsDesktopSkillTooling(input) {
-      expect(input.bareExecutable).toBe('/runtime/bare')
-      expect(input.childEntry).toBe('/app/sandbox.bundle')
-      expect(input.sharedBroker).toBeDefined()
-      expect(input.obsidian?.access).toBe('read-only')
-      expect(input.obsidian?.allowedOperations).toEqual([
-        'files',
-        'search',
-        'read',
-        'daily:read',
-        'version'
-      ])
-      calls.push('desktop')
-      return {
-        tools: [tool('http_request'), tool('exec')],
-        broker: broker(calls, 'desktop', { ok: true }, input.sharedBroker),
-        async close() {}
-      }
+    createHarness(options) {
+      received = options
+      return fakePackageHarness()
     }
   })
   const config: RunnerConfig = {
@@ -1028,7 +923,6 @@ test('production dependency composition passes one shared SDK to both tool layer
     diffusion: { model: '/models/sd.gguf', prediction: 'v' },
     attachmentBase: '/outputs',
     bareExecutable: '/runtime/bare',
-    sandboxEntry: '/app/sandbox.bundle',
     obsidian: {
       executablePath: '/cli/obsidian',
       vaultRoot: '/vault',
@@ -1037,137 +931,55 @@ test('production dependency composition passes one shared SDK to both tool layer
     obsidianApproval: false,
     timeoutMs: 120_000
   }
-  const createdSdk = await dependencies.createSdk(config)
-  const image = await dependencies.createImageTooling({
-    sdk: createdSdk,
-    attachmentRoot: '/outputs'
+  await dependencies.createHarness(config)
+  expect(received).toMatchObject({
+    inference: 'qwen',
+    desktop: {
+      bareExecutable: '/runtime/bare',
+      obsidianApproval: false,
+      obsidian: {
+        access: 'read-only',
+        allowedOperations: [
+          'files',
+          'search',
+          'read',
+          'daily:read',
+          'version'
+        ]
+      },
+      image: {
+        attachmentRoot: '/outputs',
+        model: '/models/sd.gguf',
+        prediction: 'v'
+      }
+    }
   })
-  await dependencies.createDesktopTooling({
-    config,
-    selectedSkillsForAgent() {
-      return ['weather']
-    },
-    approval: { async approve() { return true } },
-    sharedBroker: image.broker,
-    async onSandboxEvent() {}
-  })
-
-  expect(calls.slice(0, 3)).toEqual([
-    'sdk:{"diffusion":{"model":"/models/sd.gguf","modelConfig":{"prediction":"v"}}}',
-    'image',
-    'desktop'
-  ])
 })
 
-test('production runner rejects Obsidian mutation before approval or sandbox launch', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'skill-runner-read-only-'))
-  const bareExecutable = path.join(root, 'bare')
-  const sandboxEntry = path.join(root, 'sandbox.bundle')
-  const obsidianExecutable = path.join(root, 'obsidian')
-  const vaultRoot = path.join(root, 'vault')
-  await Promise.all([
-    writeFile(bareExecutable, ''),
-    writeFile(sandboxEntry, ''),
-    writeFile(obsidianExecutable, ''),
-    mkdir(vaultRoot)
-  ])
-  await Promise.all([
-    chmod(bareExecutable, 0o700),
-    chmod(obsidianExecutable, 0o700)
-  ])
-  const sdk: SdkRuntimePort = {
-    async loadModel() {
-      return { modelId: 'fake-model' }
-    },
-    completion({ requestId, messages }) {
-      const hasResult = messages.some((message) => message.role === 'tool')
-      return {
-        requestId,
-        events: (async function* (): AsyncGenerator<SdkRuntimeEvent> {
-          if (!hasResult) {
-            yield {
-              type: 'tool-call',
-              id: 'mutation',
-              name: 'exec',
-              arguments: {
-                command: 'obsidian create path=blocked.md content=blocked'
-              }
-            }
-          }
-        })()
-      }
-    },
-    async generateImage() {
-      throw new Error('not configured')
-    },
-    async cancel() {},
-    async heartbeat() {
-      return { ok: true }
-    },
-    async close() {}
-  }
-  let approvals = 0
-  let sandboxStarts = 0
-  const approval = {
-    async approve() {
-      approvals++
-      return true
+test('production runner delegates read-only Obsidian enforcement to Harness', async () => {
+  let received: Parameters<typeof createHarness>[0]
+  const dependencies = Runner.createProductionRunnerDependencies({
+    createHarness(options) {
+      received = options
+      return fakePackageHarness()
     }
-  }
-  const dependencies = Runner.createProductionRunnerDependencies()
-  const config: RunnerConfig = {
+  })
+  await dependencies.createHarness({
     command: 'obsidian',
     qwenModel: '/models/qwen.gguf',
-    bareExecutable,
-    sandboxEntry,
+    bareExecutable: '/runtime/bare',
     obsidian: {
-      executablePath: obsidianExecutable,
-      vaultRoot,
-      vaultIdentity: 'Test Vault'
+      executablePath: '/cli/obsidian',
+      vaultRoot: '/vault',
+      vaultIdentity: 'Vault'
     },
     obsidianApproval: true,
     timeoutMs: 1_000
-  }
-  const desktop = await dependencies.createDesktopTooling({
-    config,
-    selectedSkillsForAgent() {
-      return ['obsidian']
-    },
-    approval,
-    async onSandboxEvent(event) {
-      if (event.type === 'started') sandboxStarts++
-    }
   })
-  const harness = createHarness({
-    sdk,
-    tools: desktop.tools,
-    toolBroker: desktop.broker,
-    toolApproval: approval
+  expect(received?.desktop?.obsidian).toMatchObject({
+    access: 'read-only',
+    allowedOperations: ['files', 'search', 'read', 'daily:read', 'version']
   })
-  await harness.registerAgent({
-    id: 'obsidian-agent',
-    model: '/models/qwen.gguf',
-    skills: ['obsidian'],
-    toolPolicy: {
-      allow: ['exec'],
-      requireApproval: ['exec']
-    }
-  })
-
-  const events = []
-  for await (const event of harness.runAgent({
-    agentId: 'obsidian-agent',
-    runId: 'read-only-mutation',
-    input: 'Create a note'
-  })) {
-    events.push(event)
-  }
-
-  expect(events.at(-1)?.type).toBe('error')
-  expect(approvals).toBe(0)
-  expect(sandboxStarts).toBe(0)
-  await harness.close()
-  await rm(root, { recursive: true, force: true })
 })
 
 test('approval denial fails closed and still closes every resource', async () => {
@@ -1197,7 +1009,7 @@ test('approval denial fails closed and still closes every resource', async () =>
 
   expect(result.status).toBe('failed')
   expect(calls).toEqual([])
-  expect(closed.sort()).toEqual(['desktop', 'sdk'])
+  expect(closed).toEqual(['harness'])
 })
 
 test('cancellation fences a late tool result and reports cleanup', async () => {
@@ -1242,7 +1054,7 @@ test('cancellation fences a late tool result and reports cleanup', async () => {
   expect(result.status).toBe('cancelled')
   expect(events.some((event) => event.type === 'tool-result')).toBe(false)
   expect(events.some((event) => event.type === 'run-cancelled')).toBe(true)
-  expect(closed.sort()).toEqual(['desktop', 'sdk'])
+  expect(closed).toEqual(['harness'])
 })
 
 test('hung cleanup phases are bounded and all resources are attempted', async () => {
@@ -1280,13 +1092,11 @@ test('hung cleanup phases are bounded and all resources are attempted', async ()
   expect(result.status).toBe('failed')
   expect(events.some((event) =>
     event.type === 'cleanup-error' &&
-    event.message?.includes('harness timed out') &&
-    event.message.includes('desktop timed out') &&
-    event.message.includes('sdk timed out')
+    event.message?.includes('harness timed out')
   )).toBe(true)
 })
 
-test('hung cancellation is bounded and fences events after return', async () => {
+test('cancellation is delegated to Harness and fences events after return', async () => {
   const events: RunnerEvent[] = []
   const calls: string[] = []
   const closed: string[] = []
@@ -1340,10 +1150,9 @@ test('hung cancellation is bounded and fences events after return', async () => 
   await Bun.sleep(120)
 
   expect(elapsed).toBeLessThan(80)
-  expect(result.status).toBe('failed')
+  expect(result.status).toBe('cancelled')
   expect(events.some((event) =>
-    event.type === 'run-cancelled' &&
-    event.message === 'cancellation timed out'
+    event.type === 'run-cancelled'
   )).toBe(true)
   expect(events).toHaveLength(eventCountAtReturn)
   expect(events.some((event) => event.type === 'tool-result')).toBe(false)
@@ -1357,7 +1166,6 @@ function completePreflight() {
       diffusion: { model: '/models/sd.gguf', prediction: 'v' as const },
       attachmentBase: '/outputs',
       bareExecutable: '/runtime/bare',
-      sandboxEntry: '/app/tool-sandbox.bundle',
       obsidian: {
         executablePath: '/usr/local/bin/obsidian',
         vaultRoot: '/vault',
@@ -1374,47 +1182,58 @@ function completePreflight() {
 function fakeDependencies(input: {
   readonly calls: string[]
   readonly closed: string[]
-  readonly execute?: HarnessToolBrokerPort['execute']
-  readonly cancel?: HarnessToolBrokerPort['cancel']
+  readonly execute?: (invocation: FakeInvocation) => Promise<HarnessJsonValue>
+  readonly cancel?: (invocation: FakeInvocation) => Promise<void>
   readonly sdkCloseDelayMs?: number
   readonly desktopCloseDelayMs?: number
 }): DesktopRunnerDependencies {
-  const sdk = createToolCallingSdk(
-    [],
-    input.closed,
-    input.sdkCloseDelayMs
-  )
   return {
-    async createSdk() {
-      return sdk
-    },
-    async createImageTooling() {
-      throw new Error('image tooling was not expected')
-    },
-    async createDesktopTooling(options) {
-      let desktopClosed = false
-      const desktopBroker: HarnessToolBrokerPort = {
-        async execute(invocation) {
-          input.calls.push(`desktop:${invocation.call.name}`)
-          return input.execute
-            ? input.execute(invocation)
-            : { ok: true }
-        },
-        async cancel(invocation) {
-          await input.cancel?.(invocation)
-        },
-        async close() {}
-      }
+    async createHarness(config) {
+      const registrations = new Map<string, HarnessAgentRegistration>()
       return {
-        tools: [tool('http_request'), tool('exec')],
-        broker: desktopBroker,
-        async close() {
-          if (desktopClosed) return
-          if (input.desktopCloseDelayMs) {
-            await Bun.sleep(input.desktopCloseDelayMs)
+        async registerAgent(registration) {
+          registrations.set(registration.id, registration)
+        },
+        async *runAgent({ agentId, runId, signal }) {
+          const registration = registrations.get(agentId)
+          const name = registration?.skills[0] === 'obsidian' ? 'exec' : 'http_request'
+          if (name === 'exec' && !config.obsidianApproval) {
+            yield { type: 'error' as const, message: 'Obsidian approval denied' }
+            return
           }
-          desktopClosed = true
-          input.closed.push('desktop')
+          const invocation: FakeInvocation = {
+            agentId,
+            runId,
+            call: { name },
+            signal: signal ?? new AbortController().signal
+          }
+          input.calls.push(`desktop:${name}`)
+          yield { type: 'tool-call' as const, name, args: {} }
+          const onAbort = () => {
+            void input.cancel?.(invocation)
+          }
+          signal?.addEventListener('abort', onAbort, { once: true })
+          try {
+            const result = input.execute
+              ? await input.execute(invocation)
+              : { ok: true }
+            if (signal?.aborted) {
+              yield { type: 'aborted' as const }
+              return
+            }
+            yield { type: 'tool-result' as const, name, result }
+            yield { type: 'content' as const, text: 'Bounded final response.' }
+          } finally {
+            signal?.removeEventListener('abort', onAbort)
+          }
+        },
+        async close() {
+          const delay = Math.max(
+            input.sdkCloseDelayMs ?? 0,
+            input.desktopCloseDelayMs ?? 0
+          )
+          if (delay) await Bun.sleep(delay)
+          input.closed.push('harness')
         }
       }
     },
@@ -1422,111 +1241,37 @@ function fakeDependencies(input: {
   }
 }
 
-function createToolCallingSdk(
-  histories: string[][],
-  closed: string[],
-  closeDelayMs = 0
-): SdkRuntimePort {
-  let sdkClosed = false
-  return {
-    async loadModel({ model }) {
-      return { modelId: `loaded:${model}` }
-    },
-    completion({ requestId, messages, tools }) {
-      histories.push(messages.map((message) => message.content))
-      const hasResult = messages.some((message) => message.role === 'tool')
-      const events = (async function* (): AsyncGenerator<SdkRuntimeEvent> {
-        if (!hasResult) {
-          const selected = tools?.[0]
-          if (!selected) throw new Error('fake model received no tool')
-          yield {
-            type: 'tool-call',
-            id: `${requestId}/call`,
-            name: selected.name,
-            arguments: argumentsFor(selected.name),
-            raw: '<tool_call>must-not-be-logged</tool_call>'
-          }
-          yield {
-            type: 'completion-done',
-            raw: { fullText: '<tool_call>must-not-be-logged</tool_call>' }
-          }
-          return
-        }
-        yield { type: 'content-delta', text: 'Bounded final ' }
-        yield { type: 'content-delta', text: 'response.' }
-      })()
-      return {
-        requestId,
-        events
-      }
-    },
-    async generateImage() {
-      throw new Error('fake SDK image operation should use the injected broker')
-    },
-    async cancel() {},
-    async heartbeat() {
-      return { ok: true }
-    },
-    async close() {
-      if (sdkClosed) return
-      if (closeDelayMs) await Bun.sleep(closeDelayMs)
-      sdkClosed = true
-      closed.push('sdk')
-    }
-  }
+interface FakeInvocation {
+  readonly agentId: string
+  readonly runId: string
+  readonly call: { readonly name: string }
+  readonly signal: HarnessAbortSignal
 }
 
-function argumentsFor(name: string): Readonly<Record<string, HarnessJsonValue>> {
-  if (name === 'http_request') {
-    return {
-      url: 'https://wttr.in/London?format=3',
-      method: 'GET'
-    }
-  }
-  if (name === 'exec') return { command: 'obsidian files' }
+function fakePackageHarness(): ReturnType<typeof createHarness> {
   return {
-    prompt: 'a red sailboat',
-    width: 512,
-    height: 512,
-    steps: 1,
-    seed: 424242
-  }
-}
-
-function tool(name: string) {
-  return {
-    schema: {
-      type: 'function' as const,
-      name,
-      description: `Fake ${name}`,
-      parameters: {
-        type: 'object' as const,
-        properties: {}
-      }
-    }
-  }
-}
-
-function broker(
-  calls: string[],
-  label: string,
-  result: HarnessJsonValue,
-  shared?: HarnessToolBrokerPort
-): HarnessToolBrokerPort {
-  return {
-    async execute(input) {
-      if (input.call.name === 'generate_image' && shared) {
-        return shared.execute(input)
-      }
-      calls.push(`${label}:${input.call.name}`)
-      return result
+    exited: new Promise(() => {}),
+    lifecycle: { suspend: async () => {}, resume: async () => {} },
+    runtime: {
+      describe: async () => ({
+        component: 'harness',
+        runtime: 'bare',
+        instanceId: 'fake',
+        processId: 1,
+        contract: 'qvac.harness',
+        protocolVersion: 2,
+        capabilities: [],
+        buildVersion: '0.0.0-poc'
+      })
     },
-    async cancel(input) {
-      await shared?.cancel(input)
-    },
-    async close() {
-      await shared?.close()
-    }
+    ready: async () => {},
+    listSkills: async () => [],
+    registerAgent: async () => {},
+    runAgent: async function* () {},
+    cancelAgentRun: async () => {},
+    readRun: async () => null,
+    watchWork: async function* () {},
+    close: async () => {}
   }
 }
 

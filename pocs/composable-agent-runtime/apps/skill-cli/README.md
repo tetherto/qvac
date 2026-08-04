@@ -1,18 +1,16 @@
 # Desktop skill runner
 
 Private macOS PoC runner for the bundled Weather, Obsidian, and image-generation
-skills. It starts one direct SDK runtime, routes desktop tools through per-agent
-Seatbelt children, and keeps image generation in the shared SDK process.
+skills. It starts the package-owned Harness lifecycle, which owns one shared
+SDK runtime and routes desktop tools through per-agent Seatbelt children.
 
-## Build and deterministic smoke
+## Deterministic smoke
 
 ```bash
-bun run build:sandbox
 bun run smoke -- --timeout-ms=5000
 ```
 
-The build command prints the generated sandbox bundle path. The smoke command
-uses only a deterministic fake model and fake executors.
+The smoke command uses only a deterministic fake Harness and fake executors.
 
 ## Real model-driven runs
 
@@ -21,7 +19,6 @@ Set explicit paths before running. The runner has no user-specific defaults.
 ```bash
 export QVAC_QWEN_MODEL="<absolute-path-to-qwen-gguf>"
 export QVAC_BARE_EXECUTABLE="<absolute-path-to-native-Mach-O-bare>"
-export QVAC_SANDBOX_ENTRY="<absolute-path-to-built-entry.bundle>"
 export QVAC_ATTACHMENT_BASE="<absolute-output-directory>"
 export QVAC_DIFFUSION_MODEL="<absolute-path-to-diffusion-gguf>"
 export QVAC_DIFFUSION_PREDICTION="v"
@@ -64,8 +61,6 @@ intentionally rejected. Each run writes redacted, field-allowlisted JSON-line
 lifecycle events to stdout and one concise result to stderr. Weather bodies,
 Obsidian output, model/vault/executable paths, environment tokens, and raw SDK
 errors are never included in public events.
-Model-load events carry the SDK operation identity as `traceId`, not as a
-misleading run ID.
 
 Per-agent sandboxes start lazily and close after 60 seconds without a live
 invocation. The bounded timeout resets after each completed invocation, never

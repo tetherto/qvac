@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { chmod, mkdtemp, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import * as Harness from '../index.ts'
+import * as Harness from './internal-sandbox-surface.ts'
 
 test('Seatbelt profile output is deterministic and narrowly scoped', () => {
   const createPolicy = Reflect.get(Harness, 'createMacOsSandboxPolicy')

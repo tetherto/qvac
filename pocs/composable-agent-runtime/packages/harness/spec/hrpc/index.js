@@ -9,7 +9,25 @@ const methods = new Map([
   ['@harness/run', 0],
   [0, '@harness/run'],
   ['@harness/describe-runtime', 1],
-  [1, '@harness/describe-runtime']
+  [1, '@harness/describe-runtime'],
+  ['@harness/list-skills', 2],
+  [2, '@harness/list-skills'],
+  ['@harness/register-agent', 3],
+  [3, '@harness/register-agent'],
+  ['@harness/run-agent', 4],
+  [4, '@harness/run-agent'],
+  ['@harness/cancel-agent-run', 5],
+  [5, '@harness/cancel-agent-run'],
+  ['@harness/read-run', 6],
+  [6, '@harness/read-run'],
+  ['@harness/watch-work', 7],
+  [7, '@harness/watch-work'],
+  ['@harness/state-port', 8],
+  [8, '@harness/state-port'],
+  ['@harness/suspend', 9],
+  [9, '@harness/suspend'],
+  ['@harness/resume', 10],
+  [10, '@harness/resume']
 ])
 
 class HRPC {
@@ -18,11 +36,29 @@ class HRPC {
     this._handlers = []
     this._requestEncodings = new Map([
       ['@harness/run', getEncoding('@harness/wire-frame')],
-      ['@harness/describe-runtime', getEncoding('@harness/wire-frame')]
+      ['@harness/describe-runtime', getEncoding('@harness/wire-frame')],
+      ['@harness/list-skills', getEncoding('@harness/wire-frame')],
+      ['@harness/register-agent', getEncoding('@harness/wire-frame')],
+      ['@harness/run-agent', getEncoding('@harness/wire-frame')],
+      ['@harness/cancel-agent-run', getEncoding('@harness/wire-frame')],
+      ['@harness/read-run', getEncoding('@harness/wire-frame')],
+      ['@harness/watch-work', getEncoding('@harness/wire-frame')],
+      ['@harness/state-port', getEncoding('@harness/wire-frame')],
+      ['@harness/suspend', getEncoding('@harness/wire-frame')],
+      ['@harness/resume', getEncoding('@harness/wire-frame')]
     ])
     this._responseEncodings = new Map([
       ['@harness/run', getEncoding('@harness/wire-frame')],
-      ['@harness/describe-runtime', getEncoding('@harness/wire-frame')]
+      ['@harness/describe-runtime', getEncoding('@harness/wire-frame')],
+      ['@harness/list-skills', getEncoding('@harness/wire-frame')],
+      ['@harness/register-agent', getEncoding('@harness/wire-frame')],
+      ['@harness/run-agent', getEncoding('@harness/wire-frame')],
+      ['@harness/cancel-agent-run', getEncoding('@harness/wire-frame')],
+      ['@harness/read-run', getEncoding('@harness/wire-frame')],
+      ['@harness/watch-work', getEncoding('@harness/wire-frame')],
+      ['@harness/state-port', getEncoding('@harness/wire-frame')],
+      ['@harness/suspend', getEncoding('@harness/wire-frame')],
+      ['@harness/resume', getEncoding('@harness/wire-frame')]
     ])
     this._rpc = new RPC(stream, async (req) => {
       const command = methods.get(req.command)
@@ -128,6 +164,42 @@ class HRPC {
     return this._call('@harness/describe-runtime', args)
   }
 
+  async listSkills(args) {
+    return this._call('@harness/list-skills', args)
+  }
+
+  async registerAgent(args) {
+    return this._call('@harness/register-agent', args)
+  }
+
+  runAgent(args) {
+    return this._callSync('@harness/run-agent', args)
+  }
+
+  async cancelAgentRun(args) {
+    return this._call('@harness/cancel-agent-run', args)
+  }
+
+  async readRun(args) {
+    return this._call('@harness/read-run', args)
+  }
+
+  watchWork(args) {
+    return this._callSync('@harness/watch-work', args)
+  }
+
+  statePort(args) {
+    return this._callSync('@harness/state-port', args)
+  }
+
+  async suspend(args) {
+    return this._call('@harness/suspend', args)
+  }
+
+  async resume(args) {
+    return this._call('@harness/resume', args)
+  }
+
   onRun(responseFn) {
     this._handlers['@harness/run'] = responseFn
   }
@@ -136,15 +208,57 @@ class HRPC {
     this._handlers['@harness/describe-runtime'] = responseFn
   }
 
+  onListSkills(responseFn) {
+    this._handlers['@harness/list-skills'] = responseFn
+  }
+
+  onRegisterAgent(responseFn) {
+    this._handlers['@harness/register-agent'] = responseFn
+  }
+
+  onRunAgent(responseFn) {
+    this._handlers['@harness/run-agent'] = responseFn
+  }
+
+  onCancelAgentRun(responseFn) {
+    this._handlers['@harness/cancel-agent-run'] = responseFn
+  }
+
+  onReadRun(responseFn) {
+    this._handlers['@harness/read-run'] = responseFn
+  }
+
+  onWatchWork(responseFn) {
+    this._handlers['@harness/watch-work'] = responseFn
+  }
+
+  onStatePort(responseFn) {
+    this._handlers['@harness/state-port'] = responseFn
+  }
+
+  onSuspend(responseFn) {
+    this._handlers['@harness/suspend'] = responseFn
+  }
+
+  onResume(responseFn) {
+    this._handlers['@harness/resume'] = responseFn
+  }
+
   _requestIsStream(command) {
     return [
-      '@harness/run'
+      '@harness/run',
+      '@harness/run-agent',
+      '@harness/watch-work',
+      '@harness/state-port'
     ].includes(command)
   }
 
   _responseIsStream(command) {
     return [
-      '@harness/run'
+      '@harness/run',
+      '@harness/run-agent',
+      '@harness/watch-work',
+      '@harness/state-port'
     ].includes(command)
   }
 

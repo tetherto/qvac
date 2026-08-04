@@ -1,0 +1,184 @@
+import type { HarnessAgentRegistration } from '../agent-registration.ts'
+import type { SyncRuntime } from '@qvac/sync'
+import type { HarnessRuntimeInfo } from '../connect.ts'
+import { createInMemoryHarnessRunStore } from '../in-memory-harness-run-store.ts'
+import { createSyncHarnessRunStore } from '../sync-harness-run-store.ts'
+import type {
+  HarnessRunRecord,
+  HarnessRunStore,
+  HarnessWorkChange,
+  WatchHarnessWork
+} from '../run-store.ts'
+import type {
+  HarnessAgentRunInput,
+  HarnessAgentRunKey,
+  HarnessEvent,
+  HarnessLoggingConfig,
+  HarnessSkillInfo
+} from '../types.ts'
+import {
+  assertCompatibleHarness,
+  harnessCompatibility
+} from './compatibility.ts'
+import {
+  launchDesktopHarness,
+  type DesktopHarnessWorker
+} from './desktop-launcher.ts'
+import type { HarnessDesktopConfig } from './desktop-config.ts'
+
+export interface CreateHarnessOptions {
+  readonly inference?: 'deterministic' | 'qwen'
+  readonly logging?: HarnessLoggingConfig
+  readonly state?: SyncRuntime
+  readonly desktop?: HarnessDesktopConfig
+}
+
+export interface HarnessRuntimeExit {
+  readonly kind: 'closed' | 'crashed'
+  readonly code: number | null
+  readonly signal: string | null
+}
+
+export interface HarnessRuntime {
+  readonly exited: Promise<HarnessRuntimeExit>
+  readonly lifecycle: {
+    suspend(): Promise<void>
+    resume(): Promise<void>
+  }
+  readonly runtime: {
+    describe(): Promise<HarnessRuntimeInfo>
+  }
+  ready(): Promise<void>
+  listSkills(): Promise<readonly HarnessSkillInfo[]>
+  registerAgent(registration: HarnessAgentRegistration): Promise<void>
+  runAgent(input: HarnessAgentRunInput): AsyncIterable<HarnessEvent>
+  cancelAgentRun(input: HarnessAgentRunKey): Promise<void>
+  readRun(input: HarnessAgentRunKey): Promise<HarnessRunRecord | null>
+  watchWork(input?: WatchHarnessWork): AsyncIterable<HarnessWorkChange>
+  close(): Promise<void>
+}
+
+export function createHarness({
+  inference = 'qwen',
+  logging,
+  state,
+  desktop
+}: CreateHarnessOptions = {}): HarnessRuntime {
+  const runStore: HarnessRunStore = state
+    ? createSyncHarnessRunStore(state)
+    : createInMemoryHarnessRunStore()
+  let worker: DesktopHarnessWorker | null = null
+  let readyPromise: Promise<void> | null = null
+  let closePromise: Promise<void> | null = null
+  let terminalError: Error | null = null
+  let resolveExit!: (exit: HarnessRuntimeExit) => void
+  const exited = new Promise<HarnessRuntimeExit>((resolve) => {
+    resolveExit = resolve
+  })
+
+  async function ready() {
+    if (closePromise) throw new Error('Harness runtime is closed')
+    if (terminalError) throw terminalError
+    if (worker) return
+    readyPromise ??= open()
+    await readyPromise
+    if (closePromise) throw new Error('Harness runtime is closed')
+    if (terminalError) throw terminalError
+  }
+
+  async function open() {
+    const next = await launchDesktopHarness({
+      inference,
+      logging,
+      runStore,
+      ...(desktop ? { desktop } : {})
+    })
+    try {
+      const info = await next.client.describeRuntime()
+      assertCompatibleHarness(info)
+      if (closePromise) throw new Error('Harness runtime is closed')
+      worker = next
+      void next.client.exited.then(({ code, signal }) => {
+        const deliberate = closePromise !== null
+        if (!deliberate) {
+          terminalError = new Error('Harness worker crashed')
+          worker = null
+        }
+        resolveExit({
+          kind: deliberate ? 'closed' : 'crashed',
+          code,
+          signal
+        })
+      })
+    } catch (error) {
+      await next.close().catch(() => {})
+      throw error
+    }
+  }
+
+  function requireClient() {
+    if (closePromise) throw new Error('Harness runtime is closed')
+    if (terminalError) throw terminalError
+    if (!worker) throw new Error('Harness runtime is not ready')
+    return worker.client
+  }
+
+  async function close() {
+    closePromise ??= (async () => {
+      if (readyPromise) await readyPromise.catch(() => {})
+      const opened = worker
+      worker = null
+      if (opened) await opened.close()
+      else await runStore.close()
+    })()
+    await closePromise
+  }
+
+  return {
+    exited,
+    ready,
+    lifecycle: {
+      async suspend() {
+        await ready()
+        await requireClient().suspend()
+      },
+      async resume() {
+        await ready()
+        await requireClient().resume()
+      }
+    },
+    runtime: {
+      async describe() {
+        await ready()
+        return requireClient().describeRuntime()
+      }
+    },
+    async listSkills() {
+      await ready()
+      return requireClient().listSkills()
+    },
+    async registerAgent(registration) {
+      await ready()
+      await requireClient().registerAgent(registration)
+    },
+    async *runAgent(input) {
+      await ready()
+      yield* requireClient().runAgent(input)
+    },
+    async cancelAgentRun(input) {
+      await ready()
+      await requireClient().cancelAgentRun(input)
+    },
+    async readRun(input) {
+      await ready()
+      return requireClient().readRun(input)
+    },
+    async *watchWork(input) {
+      await ready()
+      yield* requireClient().watchWork(input)
+    },
+    close
+  }
+}
+
+export const HARNESS_HANDSHAKE = harnessCompatibility

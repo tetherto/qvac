@@ -5,7 +5,7 @@ import os from 'bare-os'
 import path from 'bare-path'
 import process from 'bare-process'
 import * as tcp from 'bare-tcp'
-import * as Harness from '../index.ts'
+import * as Harness from './internal-sandbox-surface.ts'
 
 const START_TIMEOUT_MS = 30_000
 const OPERATION_TIMEOUT_MS = 5_000

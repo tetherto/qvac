@@ -147,6 +147,19 @@ flowchart TB
   records it as interrupted or indeterminate rather than implying rollback or
   silently replaying it.
 
+Harness expresses the durable tier through its `HarnessRunStore` port. That
+port owns run loading, event append, checkpoint save, terminal completion, and
+available-work observation. The in-memory implementation is the standalone
+default. Durable composition adapts the port to Sync through a typed host
+bridge, so the Harness worker never receives a raw Sync profile, Corestore, or
+mesh handle. `@qvac/agents` receives only the checkpoint needed for one run and
+does not publish a state-store abstraction.
+
+Assistant composes Sync and Harness, passes the Sync runtime to the
+package-owned Harness launcher, and exposes stable run operations. It does not
+own worker entry paths, generated clients, SDK adapters, sandbox transports,
+or event-to-storage translation.
+
 ### Garbage collection - three independent clocks
 
 | What | Lifetime | Mechanism |

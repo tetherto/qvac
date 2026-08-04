@@ -221,11 +221,11 @@ function createAssistantHarness({
     return {
       state: {},
       async ready() {},
+      async registerAgent() {},
       run(input: AssistantRunInput) {
         const stream = run(input)
         return {
           id: input.runId ?? 'run',
-          traceId: input.traceId ?? 'trace',
           [Symbol.asyncIterator]() {
             return stream[Symbol.asyncIterator]()
           }
@@ -240,7 +240,7 @@ function createAssistantHarness({
         closes += 1
       },
       inspect() {
-        return { sdkStarts: 0, children: [] }
+        return { children: [] }
       },
       onLifecycle(listener: (event: AssistantLifecycleEvent) => void) {
         lifecycleListeners.add(listener)

@@ -183,10 +183,14 @@ Agents is a TypeScript, Bare-first framework library. It owns:
 - agents, tools, guards, workflows, turn budgets, and orchestration primitives;
 - approval and interruption semantics;
 - versioned run state, events, checkpoints, and stable operation identifiers;
-- interfaces for context management, compaction, and persistence;
+- interfaces for context management and compaction;
 - cancellation and lifecycle hooks that are independent of any process transport.
 
-Agents ingests history/runtime state, emits events, and exports updated state. It owns no worker, network, Corestore, SDK runtime, or application lifecycle.
+Agents ingests run input and an optional checkpoint, emits events and updated
+checkpoints, and owns no durable store, work discovery, worker, network,
+Corestore, SDK runtime, or application lifecycle. Its package root exposes the
+agent-definition API; run machinery and framework types remain implementation
+details used by Harness.
 
 The package should adopt proven agent-framework shapes where they fit QVAC, without requiring a graph DSL, multi-agent handoff, or vendor-specific abstractions before there is a concrete use case.
 
@@ -206,6 +210,20 @@ Harness owns:
 - execution policy for local and remotely submitted work.
 
 Harness does not own P2P storage or mesh membership. Assistant privately gives Harness a typed Sync state endpoint for the default durable mode. Direct Harness use requires no storage configuration and defaults to in-memory state.
+
+Harness owns the `HarnessRunStore` contract for run records, event append,
+checkpoint persistence, terminal outcomes, and available-work observation.
+The Sync-backed implementation crosses the worker boundary through a typed
+host state bridge. Agents does not expose a persistence adapter, and Assistant
+does not translate run events into storage operations.
+
+The public package surface is lifecycle-oriented: desktop consumers use
+`createHarness`, mobile consumers use the React Native entry point, and both
+receive the same high-level agent registration, execution, cancellation,
+inspection, and lifecycle operations. Worker entries, launch plumbing,
+sandbox transports, skill loaders, SDK adapters, and test utilities are
+packaged only when required by package-owned launchers and are not public
+subpath exports.
 
 Product-specific coding tools, workspace policy, git behavior, terminal UX, OAuth integrations, and product skills remain in applications or product packages.
 

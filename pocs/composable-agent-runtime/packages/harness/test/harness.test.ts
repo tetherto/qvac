@@ -1,12 +1,12 @@
 import test from 'brittle'
 import AbortController from '#abort-controller'
 import {
-  createHarness,
-  createMemoryStateAdapter,
-  mapSdkEvent,
-  type HarnessEvent,
-  type SdkRuntimePort
-} from '../index.ts'
+  createHarnessService as createHarness,
+  mapSdkEvent
+} from '../lib/harness.ts'
+import { createMemoryStateAdapter } from '../lib/memory-state.ts'
+import type { SdkRuntimePort } from '../lib/sdk-runtime-port.ts'
+import type { HarnessEvent } from '../lib/types.ts'
 
 function createTraceId() {
   return `harness-test-${Math.random().toString(36).slice(2)}`

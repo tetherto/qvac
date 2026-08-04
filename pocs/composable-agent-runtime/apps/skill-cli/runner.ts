@@ -3,22 +3,9 @@ import type {
   HarnessAbortSignal,
   HarnessEvent,
   HarnessJsonValue,
-  HarnessTool,
-  HarnessToolApprovalPort,
-  HarnessToolBrokerPort,
-  ImageGenerationTooling,
-  SdkRuntimeEvent,
-  SdkRuntimePort
+  HarnessRuntime
 } from '@qvac/harness'
-import {
-  createHarness,
-  createImageGenerationTooling,
-  createMacOsDesktopSkillTooling,
-  createSdkDirectAdapter,
-  memoizeToolApproval
-} from '@qvac/harness'
-import { BUNDLED_SKILLS } from '@qvac/harness/skills'
-import AbortController from 'bare-abort-controller'
+import { createHarness } from '@qvac/harness'
 
 const COMMANDS = ['smoke', 'weather', 'obsidian', 'image', 'all'] as const
 const DIFFUSION_PREDICTIONS = [
@@ -54,7 +41,6 @@ export interface RunnerConfig {
   }
   readonly attachmentBase?: string
   readonly bareExecutable?: string
-  readonly sandboxEntry?: string
   readonly obsidian?: {
     readonly executablePath: string
     readonly vaultRoot: string
@@ -462,51 +448,18 @@ function appendBounded(current: string, next: string, limit: number) {
   return (current + next).slice(0, limit)
 }
 
-export interface DesktopToolingForRunner {
-  readonly tools: readonly HarnessTool[]
-  readonly broker: HarnessToolBrokerPort
-  close(): Promise<void>
-}
-
 export interface DesktopRunnerDependencies {
-  createSdk(config: RunnerConfig): Promise<SdkRuntimePort>
-  createImageTooling(input: {
-    readonly sdk: SdkRuntimePort
-    readonly attachmentRoot: string
-  }): Promise<ImageGenerationTooling>
-  createDesktopTooling(input: {
-    readonly config: RunnerConfig
-    readonly selectedSkillsForAgent: (agentId: string) => readonly string[]
-    readonly approval: HarnessToolApprovalPort
-    readonly sharedBroker?: HarnessToolBrokerPort
-    readonly onSandboxEvent: (
-      event:
-        | {
-            readonly type: 'started'
-            readonly agentId: string
-            readonly generation: number
-            readonly processId: number
-          }
-        | {
-            readonly type: 'exit'
-            readonly agentId: string
-            readonly generation: number
-            readonly code: number | null
-            readonly signal: string | null
-            readonly expected: boolean
-          }
-    ) => Promise<void>
-  }): Promise<DesktopToolingForRunner>
+  createHarness(config: RunnerConfig): Promise<Pick<
+    HarnessRuntime,
+    'registerAgent' | 'runAgent' | 'close'
+  >>
   readonly now?: () => number
   readonly cleanupTimeoutMs?: number
   readonly cancellationTimeoutMs?: number
 }
 
 export interface ProductionRunnerFactories {
-  readonly createSdkDirectAdapter: typeof createSdkDirectAdapter
-  readonly createImageGenerationTooling: typeof createImageGenerationTooling
-  readonly createMacOsDesktopSkillTooling:
-    typeof createMacOsDesktopSkillTooling
+  readonly createHarness: typeof createHarness
 }
 
 export interface DesktopCliInput {
@@ -542,166 +495,104 @@ export interface DesktopRunnerResult {
 
 export function createProductionRunnerDependencies(
   factories: ProductionRunnerFactories = {
-    createSdkDirectAdapter,
-    createImageGenerationTooling,
-    createMacOsDesktopSkillTooling
+    createHarness
   }
 ): DesktopRunnerDependencies {
   return {
-    createSdk(config) {
-      return factories.createSdkDirectAdapter({
-        ...(config.diffusion
-          ? {
-              diffusion: {
-                model: config.diffusion.model,
-                ...(config.diffusion.prediction
-                  ? {
-                      modelConfig: {
-                        prediction: config.diffusion.prediction
-                      }
-                    }
-                  : {})
-              }
-            }
-          : {})
-      })
-    },
-    createImageTooling(input) {
-      return factories.createImageGenerationTooling(input)
-    },
-    createDesktopTooling(input) {
-      const bareExecutable = input.config.bareExecutable
-      const childEntry = input.config.sandboxEntry
-      if (!bareExecutable || !childEntry) {
-        throw new Error(
-          'Bare executable and sandbox entry are unavailable after preflight'
-        )
+    async createHarness(config) {
+      const bareExecutable = config.bareExecutable
+      if (!bareExecutable) {
+        throw new Error('Bare executable is unavailable after preflight')
       }
-      return factories.createMacOsDesktopSkillTooling({
-        bareExecutable,
-        childEntry,
-        selectedSkillsForAgent: input.selectedSkillsForAgent,
-        approval: input.approval,
-        ...(input.sharedBroker ? { sharedBroker: input.sharedBroker } : {}),
-        ...(input.config.obsidian
-          ? {
-              obsidian: {
-                ...input.config.obsidian,
-                access: RUNNER_OBSIDIAN_ACCESS,
-                allowedOperations: RUNNER_OBSIDIAN_OPERATIONS
+      const harness = factories.createHarness({
+        inference: 'qwen',
+        desktop: {
+          bareExecutable,
+          obsidianApproval: config.obsidianApproval,
+          ...(config.obsidian
+            ? {
+                obsidian: {
+                  ...config.obsidian,
+                  access: RUNNER_OBSIDIAN_ACCESS,
+                  allowedOperations: RUNNER_OBSIDIAN_OPERATIONS
+                }
               }
-            }
-          : {}),
-        onSandboxEvent(event) {
-          void input.onSandboxEvent(event)
+            : {}),
+          ...(config.attachmentBase && config.diffusion
+            ? {
+                image: {
+                  attachmentRoot: config.attachmentBase,
+                  model: config.diffusion.model,
+                  ...(config.diffusion.prediction
+                    ? { prediction: config.diffusion.prediction }
+                    : {})
+                }
+              }
+            : {}),
+          weather: {}
         }
       })
+      await harness.ready()
+      return harness
     }
   }
 }
 
 export function createSmokeRunnerDependencies(): DesktopRunnerDependencies {
-  const sdk = createSmokeSdk()
   return {
-    async createSdk() {
-      return sdk
-    },
-    async createImageTooling() {
-      let closed = false
-      const broker: HarnessToolBrokerPort = {
-        async execute(invocation) {
-          if (closed) throw new Error('fake image executor is closed')
-          if (invocation.call.name !== 'generate_image') {
-            throw new Error(`unexpected fake image tool: ${invocation.call.name}`)
-          }
-          return {
-            status: 'success',
-            attachment: {
-              id: 'smoke-image',
-              path: 'smoke://attachment/image.png',
-              mimeType: 'image/png',
-              byteLength: 67,
-              width: 512,
-              height: 512
-            },
-            stats: {
-              generationMs: 5,
-              totalSteps: 1,
-              seed: 424242
-            }
-          }
-        },
-        async cancel() {},
-        async close() {
-          closed = true
-        }
-      }
+    async createHarness() {
+      const registrations = new Map<string, HarnessAgentRegistration>()
       return {
-        tools: [smokeTool('generate_image')],
-        broker,
-        async cleanupAttachments() {},
-        async close() {
-          await broker.close()
-        }
-      }
-    },
-    async createDesktopTooling(input) {
-      await input.onSandboxEvent({
-        type: 'started',
-        agentId: 'weather-agent',
-        generation: 1,
-        processId: 1001
-      })
-      await input.onSandboxEvent({
-        type: 'exit',
-        agentId: 'weather-agent',
-        generation: 1,
-        code: 23,
-        signal: null,
-        expected: false
-      })
-      await input.onSandboxEvent({
-        type: 'started',
-        agentId: 'weather-agent',
-        generation: 2,
-        processId: 1002
-      })
-      const shared = input.sharedBroker
-      let closed = false
-      const broker: HarnessToolBrokerPort = {
-        async execute(invocation) {
-          if (closed) throw new Error('fake desktop executor is closed')
-          if (invocation.call.name === 'generate_image' && shared) {
-            return shared.execute(invocation)
+        async registerAgent(registration) {
+          registrations.set(registration.id, registration)
+        },
+        async *runAgent({ agentId, runId, signal }): AsyncGenerator<HarnessEvent> {
+          const skill = registrations.get(agentId)?.skills[0]
+          if (signal?.aborted) {
+            yield { type: 'aborted' as const }
+            return
           }
-          if (invocation.call.name === 'http_request') {
-            return { status: 200, body: 'London: +20 C' }
-          }
-          if (invocation.call.name === 'exec') {
-            return {
-              exitCode: 0,
-              stdout: 'smoke-note.md\n',
-              stderr: ''
+          if (skill === 'weather') {
+            yield { type: 'tool-call' as const, name: 'http_request', args: {} }
+            yield {
+              type: 'tool-result' as const,
+              name: 'http_request',
+              result: { status: 200, body: 'London: +20 C' }
             }
+            yield { type: 'content' as const, text: 'London: +20 C' }
+          } else if (skill === 'obsidian') {
+            yield { type: 'tool-call' as const, name: 'exec', args: {} }
+            yield {
+              type: 'tool-result' as const,
+              name: 'exec',
+              result: { exitCode: 0, stdout: 'smoke-note.md\n', stderr: '' }
+            }
+            yield { type: 'content' as const, text: 'smoke-note.md' }
+          } else if (skill === 'image-generation') {
+            yield {
+              type: 'tool-call' as const,
+              name: 'generate_image',
+              args: {}
+            }
+            yield {
+              type: 'tool-result' as const,
+              name: 'generate_image',
+              result: {
+                status: 'success',
+                attachment: {
+                  id: 'smoke-image',
+                  path: 'smoke://attachment/image.png',
+                  mimeType: 'image/png',
+                  byteLength: 67,
+                  width: 512,
+                  height: 512
+                }
+              }
+            }
+            yield { type: 'content' as const, text: `smoke:${runId}` }
           }
-          throw new Error(
-            `unexpected fake desktop tool: ${invocation.call.name}`
-          )
-        },
-        async cancel(invocation) {
-          await shared?.cancel(invocation)
         },
         async close() {
-          if (closed) return
-          closed = true
-          await shared?.close()
-        }
-      }
-      return {
-        tools: [smokeTool('http_request'), smokeTool('exec')],
-        broker,
-        async close() {
-          await broker.close()
         }
       }
     },
@@ -776,7 +667,6 @@ function runnerSensitiveValues(
     config.diffusion?.model,
     config.attachmentBase,
     config.bareExecutable,
-    config.sandboxEntry,
     config.obsidian?.executablePath,
     config.obsidian?.vaultRoot,
     config.obsidian?.vaultIdentity,
@@ -804,92 +694,18 @@ export async function runDesktopRunner(
       elapsedMs: Math.max(0, now() - startedAt)
     })
   }
-  let sdk: SdkRuntimePort | undefined
-  let image: ImageGenerationTooling | undefined
-  let desktop: DesktopToolingForRunner | undefined
-  let harness: ReturnType<typeof createHarness> | undefined
+  let harness: Awaited<ReturnType<DesktopRunnerDependencies['createHarness']>> | undefined
   let attachment: DesktopRunnerResult['attachment']
   const runs: Array<DesktopRunnerResult['runs'][number]> = []
   let runStatus: DesktopRunnerResult['status'] = 'failed'
   let shutdownMs = 0
 
   try {
-    sdk = await dependencies.createSdk(preflight.config)
-    const instrumentedSdk = instrumentSdk(sdk, emit, now)
-    if (preflight.skills.includes('image-generation')) {
-      const attachmentRoot = preflight.config.attachmentBase
-      if (!attachmentRoot) {
-        throw new Error('attachment base is unavailable after preflight')
-      }
-      image = await dependencies.createImageTooling({
-        sdk: instrumentedSdk,
-        attachmentRoot
-      })
-    }
-
     const registrations = registrationsFor(
       preflight.config,
       preflight.skills
     )
-    const byAgent = new Map(
-      registrations.map((registration) => [
-        registration.id,
-        registration.skills
-      ])
-    )
-    const approval = memoizeToolApproval({
-      async approve() {
-        return preflight.config.obsidianApproval
-      }
-    })
-    if (
-      preflight.skills.includes('weather') ||
-      preflight.skills.includes('obsidian')
-    ) {
-      desktop = await dependencies.createDesktopTooling({
-        config: preflight.config,
-        selectedSkillsForAgent(agentId) {
-          return byAgent.get(agentId) ?? []
-        },
-        approval,
-        ...(image ? { sharedBroker: toolingBroker(image) } : {}),
-        async onSandboxEvent(event) {
-          if (event.type === 'started') {
-            await emit({
-              type: 'sandbox-started',
-              agentId: event.agentId,
-              generation: event.generation,
-              processId: event.processId
-            })
-            return
-          }
-          await emit({
-            type: 'sandbox-exit',
-            agentId: event.agentId,
-            generation: event.generation,
-            code: event.code,
-            signal: event.signal,
-            expected: event.expected
-          })
-        }
-      })
-    }
-
-    const tools = [
-      ...(desktop?.tools ?? []),
-      ...(image?.tools ?? [])
-    ]
-    const toolBroker = desktop
-      ? toolingBroker(desktop)
-      : image
-        ? toolingBroker(image)
-        : unavailableRunnerBroker()
-    harness = createHarness({
-      sdk: instrumentedSdk,
-      tools,
-      toolBroker,
-      toolApproval: approval
-    })
+    harness = await dependencies.createHarness(preflight.config)
     for (const registration of registrations) {
       await harness.registerAgent(registration)
     }
@@ -960,18 +776,6 @@ export async function runDesktopRunner(
     if (harness) {
       const resource = harness
       cleanupPhases.push({ name: 'harness', close: () => resource.close() })
-    }
-    if (desktop) {
-      const resource = desktop
-      cleanupPhases.push({ name: 'desktop', close: () => resource.close() })
-    }
-    if (image) {
-      const resource = image
-      cleanupPhases.push({ name: 'image', close: () => resource.close() })
-    }
-    if (sdk) {
-      const resource = sdk
-      cleanupPhases.push({ name: 'sdk', close: () => resource.close() })
     }
     for (const phase of cleanupPhases) {
       const failure = await boundedCleanupPhase(
@@ -1079,7 +883,7 @@ function registrationsFor(
 }
 
 async function runRegisteredAgent(input: {
-  readonly harness: ReturnType<typeof createHarness>
+  readonly harness: Pick<HarnessRuntime, 'runAgent'>
   readonly registration: HarnessAgentRegistration
   readonly skill: 'weather' | 'obsidian' | 'image-generation'
   readonly runId: string
@@ -1207,50 +1011,10 @@ async function runRegisteredAgent(input: {
   return { skill: input.skill, status }
 }
 
-function instrumentSdk(
-  sdk: SdkRuntimePort,
-  emit: (event: Omit<RunnerEvent, 'elapsedMs'>) => Promise<void>,
-  now: () => number
-): SdkRuntimePort {
-  return {
-    ...(sdk.exited ? { exited: sdk.exited } : {}),
-    async loadModel(input) {
-      const startedAt = now()
-      const loaded = await sdk.loadModel(input)
-      await emit({
-        type: 'model-loaded',
-        traceId: input.traceId,
-        durationMs: Math.max(0, now() - startedAt)
-      })
-      return loaded
-    },
-    completion(input) {
-      return sdk.completion(input)
-    },
-    generateImage(input) {
-      return sdk.generateImage(input)
-    },
-    cancel(input) {
-      return sdk.cancel(input)
-    },
-    heartbeat() {
-      return sdk.heartbeat()
-    },
-    close() {
-      return sdk.close()
-    }
-  }
-}
-
 function selectedSkillInstructions(
   skill: 'weather' | 'obsidian' | 'image-generation'
 ) {
-  const raw = BUNDLED_SKILLS[`${skill}/SKILL.md`]
-  if (!raw) throw new Error(`bundled skill instructions are missing: ${skill}`)
-  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/.exec(raw)
-  const body = match?.[1]?.trim()
-  if (!body) throw new Error(`bundled skill instructions are empty: ${skill}`)
-  return body
+  return `Follow the selected ${skill} skill instructions exactly.`
 }
 
 function promptForSkill(
@@ -1276,35 +1040,6 @@ function toolForSkill(
       return 'exec'
     case 'image-generation':
       return 'generate_image'
-  }
-}
-
-function toolingBroker(
-  tooling: {
-    readonly broker: HarnessToolBrokerPort
-    close(): Promise<void>
-  }
-): HarnessToolBrokerPort {
-  return {
-    execute(input) {
-      return tooling.broker.execute(input)
-    },
-    cancel(input) {
-      return tooling.broker.cancel(input)
-    },
-    close() {
-      return tooling.close()
-    }
-  }
-}
-
-function unavailableRunnerBroker(): HarnessToolBrokerPort {
-  return {
-    async execute(input) {
-      throw new Error(`runner tool broker is unavailable: ${input.call.name}`)
-    },
-    async cancel() {},
-    async close() {}
   }
 }
 
@@ -1447,85 +1182,6 @@ function exitCodeFor(status: DesktopRunnerResult['status']) {
   return 1
 }
 
-function createSmokeSdk(): SdkRuntimePort {
-  let closed = false
-  return {
-    async loadModel({ model }) {
-      if (closed) throw new Error('fake model runtime is closed')
-      return { modelId: `loaded:${model}` }
-    },
-    completion({ requestId, messages, tools }) {
-      const hasToolResult = messages.some((message) => message.role === 'tool')
-      const events = (async function* (): AsyncGenerator<SdkRuntimeEvent> {
-        if (!hasToolResult) {
-          const selected = tools?.[0]
-          if (!selected) throw new Error('fake model received no allowed tool')
-          yield {
-            type: 'tool-call',
-            id: `${requestId}/call`,
-            name: selected.name,
-            arguments: smokeArguments(selected.name),
-            raw: '<tool_call>fake raw dialect</tool_call>'
-          }
-          yield {
-            type: 'completion-done',
-            raw: { fullText: '<tool_call>fake raw dialect</tool_call>' }
-          }
-          return
-        }
-        yield {
-          type: 'content-delta',
-          text: 'Deterministic tool result accepted.'
-        }
-      })()
-      return { requestId, events }
-    },
-    async generateImage() {
-      throw new Error('fake image generation must use the fake shared executor')
-    },
-    async cancel() {},
-    async heartbeat() {
-      return { ok: true }
-    },
-    async close() {
-      closed = true
-    }
-  }
-}
-
-function smokeArguments(
-  name: string
-): Readonly<Record<string, HarnessJsonValue>> {
-  if (name === 'http_request') {
-    return {
-      url: 'https://wttr.in/London?format=3',
-      method: 'GET'
-    }
-  }
-  if (name === 'exec') return { command: 'obsidian files' }
-  return {
-    prompt: 'a small red sailboat on a calm blue lake',
-    width: 512,
-    height: 512,
-    steps: 1,
-    seed: 424242
-  }
-}
-
-function smokeTool(name: string): HarnessTool {
-  return {
-    schema: {
-      type: 'function',
-      name,
-      description: `Deterministic fake ${name} executor.`,
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  }
-}
-
 function deterministicClock() {
   let value = 0
   return function now() {
@@ -1567,12 +1223,6 @@ export async function preflightRunner(
         ]
       : []
 
-  await requireKind(
-    port,
-    '/usr/bin/sandbox-exec',
-    'file',
-    'macOS sandbox-exec is unavailable'
-  )
   const bareExecutable = await requiredCanonicalFile(
     port,
     config.bareExecutable,
@@ -1595,11 +1245,6 @@ export async function preflightRunner(
   ) {
     throw new Error('Bare executable runtime probe failed')
   }
-  const sandboxEntry = await requiredCanonicalFile(
-    port,
-    config.sandboxEntry,
-    'sandbox entry'
-  )
   const qwenModel = await requiredCanonicalFile(
     port,
     config.qwenModel,
@@ -1648,7 +1293,6 @@ export async function preflightRunner(
       ...configWithoutObsidian,
       qwenModel,
       bareExecutable,
-      sandboxEntry,
       ...(diffusion ? { diffusion } : {}),
       ...(attachmentBase ? { attachmentBase } : {}),
       ...(obsidian && skills.includes('obsidian') ? { obsidian } : {})
@@ -1665,7 +1309,6 @@ function removeObsidianConfig(config: RunnerConfig): RunnerConfig {
     diffusion,
     attachmentBase,
     bareExecutable,
-    sandboxEntry,
     obsidianApproval,
     timeoutMs
   } = config
@@ -1675,7 +1318,6 @@ function removeObsidianConfig(config: RunnerConfig): RunnerConfig {
     ...(diffusion ? { diffusion } : {}),
     ...(attachmentBase ? { attachmentBase } : {}),
     ...(bareExecutable ? { bareExecutable } : {}),
-    ...(sandboxEntry ? { sandboxEntry } : {}),
     obsidianApproval,
     timeoutMs
   }
@@ -1902,11 +1544,6 @@ export function parseRunnerConfig(
     'bare',
     environment.QVAC_BARE_EXECUTABLE
   )
-  const sandboxEntry = value(
-    flags,
-    'sandbox-entry',
-    environment.QVAC_SANDBOX_ENTRY
-  )
   const obsidianExecutable = value(
     flags,
     'obsidian-cli',
@@ -1958,7 +1595,6 @@ export function parseRunnerConfig(
       : {}),
     ...(attachmentBase ? { attachmentBase } : {}),
     ...(bareExecutable ? { bareExecutable } : {}),
-    ...(sandboxEntry ? { sandboxEntry } : {}),
     ...(obsidian ? { obsidian } : {}),
     obsidianApproval: booleanValue(
       approvalValue,

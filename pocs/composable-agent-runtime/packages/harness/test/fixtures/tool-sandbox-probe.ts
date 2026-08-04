@@ -4,7 +4,7 @@ import Pipe from 'bare-pipe'
 import process from 'bare-process'
 import { spawn } from 'bare-subprocess'
 import * as tcp from 'bare-tcp'
-import { serveToolSandbox } from '../../index.ts'
+import { serveToolSandbox } from '../../lib/tool-sandbox/wire.ts'
 import type { HarnessJsonValue } from '../../lib/types.ts'
 import type { HarnessStream } from '../../lib/transport.ts'
 

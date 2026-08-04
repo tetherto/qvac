@@ -6,13 +6,14 @@ import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 import {
   createAssistant,
   DEFAULT_ASSISTANT_INFERENCE,
-  DEFAULT_ASSISTANT_MODEL,
-  DEFAULT_ASSISTANT_STORAGE_PATH,
-  type AssistantComponent,
-  type AssistantHarnessComponent,
-  type AssistantSyncComponent
+  DEFAULT_ASSISTANT_STORAGE_PATH
 } from '../index.ts'
-import { createTraceId } from '../lib/trace.ts'
+import type {
+  AssistantComponent,
+  AssistantHarnessComponent,
+  AssistantSyncComponent
+} from '../lib/contracts.ts'
+import { createAssistantFacade } from '../lib/facade.ts'
 
 const temporaryPaths: string[] = []
 
@@ -26,12 +27,9 @@ describe('assistant composition', () => {
   it('defaults durable state to .assistant', () => {
     expect(DEFAULT_ASSISTANT_STORAGE_PATH).toBe('.assistant')
     expect(DEFAULT_ASSISTANT_INFERENCE).toEqual({ kind: 'qwen' })
-    expect(DEFAULT_ASSISTANT_MODEL).toBe(
-      'registry://hf/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf'
-    )
   })
 
-  it('starts real durable state before Harness and leaves SDK lazy', async () => {
+  it('starts package-owned Sync and Harness before executing agents', async () => {
     const storagePath = await mkdtemp(join(tmpdir(), 'qvac-assistant-'))
     temporaryPaths.push(storagePath)
     const assistant = createAssistant({
@@ -47,7 +45,6 @@ describe('assistant composition', () => {
     expect(assistant.state).toBe(state)
     expect((await identity).deviceId.byteLength).toBeGreaterThan(0)
     expect(assistant.inspect()).toMatchObject({
-      sdkStarts: 0,
       children: [
         {
           name: 'sync',
@@ -83,29 +80,39 @@ describe('assistant composition', () => {
     const pairingInvite = await assistant.state.mesh.createInvite()
     expect(pairingInvite.invite.byteLength).toBeGreaterThan(0)
 
+    await assistant.registerAgent({
+      id: 'assistant',
+      model: 'deterministic',
+      skills: [],
+      toolPolicy: { allow: [], requireApproval: [] }
+    })
     const run = assistant.run({
-      messages: [{ role: 'user', content: 'sort the tasks' }]
+      agentId: 'assistant',
+      input: 'sort the tasks'
     })
     expect(run.id).toMatch(/^run_[a-z0-9_]+$/)
-    expect(run.traceId).toMatch(/^trc_[a-z0-9_]+$/)
 
     const events = []
     for await (const event of run) {
       events.push(event)
     }
     expect(events).toEqual([{ type: 'content', text: 'deterministic: sort the tasks' }])
-    expect(assistant.inspect().sdkStarts).toBe(1)
-    const harnessDetails = assistant.inspect().children[1]?.details
-    expect(harnessDetails?.sdkIdentity).toMatchObject({
-      component: 'sdk',
-      runtime: 'bare',
-      instanceId: expect.stringMatching(/^sdk-/),
-      processId: expect.any(Number)
+    const persisted = await assistant.readRun({
+      agentId: 'assistant',
+      runId: run.id
     })
-    expect(startupProcessIds).not.toContain(
-      Reflect.get(harnessDetails?.sdkIdentity ?? {}, 'processId')
-    )
-    expect(await assistant.readRun(run.id)).toEqual(events)
+    expect(persisted?.events.map(({ kind, event }) => `${kind}:${event.type}`)).toEqual([
+      'agent:run-started',
+      'agent:operation-started',
+      'agent:content',
+      'agent:operation-completed',
+      'agent:checkpoint',
+      'agent:run-completed'
+    ])
+    expect(persisted?.outcome).toEqual({
+      status: 'completed',
+      output: 'deterministic: sort the tasks'
+    })
 
     const firstSyncProcessId = startupProcessIds[0]
     expect(firstSyncProcessId).toEqual(expect.any(Number))
@@ -123,11 +130,16 @@ describe('assistant composition', () => {
     expect((await state.mesh.listDevices()).find(({ local }) => local)?.name).toBe('Ada')
 
     const restartedEvents = []
-    for await (const event of assistant.run({
-      runId: 'run-after-sync-restart',
-      traceId: createTraceId(),
+    await assistant.registerAgent({
+      id: 'assistant-after-restart',
       model: 'deterministic',
-      messages: [{ role: 'user', content: 'resume work' }]
+      skills: [],
+      toolPolicy: { allow: [], requireApproval: [] }
+    })
+    for await (const event of assistant.run({
+      agentId: 'assistant-after-restart',
+      runId: 'run-after-sync-restart',
+      input: 'resume work'
     })) {
       restartedEvents.push(event)
     }
@@ -144,13 +156,14 @@ describe('assistant composition', () => {
       contract: 'qvac.sync',
       protocolVersion: 99
     }) as AssistantSyncComponent
-    const assistant = createAssistant({
-      components: {
+    const assistant = createAssistantFacade(
+      {},
+      {
         startSync: async () => sync,
         startHarness: async () =>
           component('harness', starts, stops) as AssistantHarnessComponent
       }
-    })
+    )
 
     await expect(assistant.ready()).rejects.toThrow(
       'sync handshake failed: protocol mismatch'
@@ -167,14 +180,15 @@ describe('assistant composition', () => {
       name?: string
       timestamp: number
     }> = []
-    const assistant = createAssistant({
-      components: {
+    const assistant = createAssistantFacade(
+      {},
+      {
         startSync: async () =>
           component('sync', starts, stops) as AssistantSyncComponent,
         startHarness: async () =>
           component('harness', starts, stops) as AssistantHarnessComponent
       }
-    })
+    )
     const stopListening = assistant.onLifecycle((event) => {
       lifecycle.push(event)
     })
@@ -230,7 +244,7 @@ async function waitFor(predicate: () => boolean) {
 async function assistantBundleDirectories() {
   const root = fileURLToPath(new URL('../../../', import.meta.url))
   return (await readdir(root))
-    .filter((name) => name.startsWith('.stow-assistant-'))
+    .filter((name) => name.startsWith('.stow-harness-'))
     .sort()
 }
 
@@ -244,7 +258,7 @@ function component(
   return {
     handshake: {
       contract: `qvac.${name}`,
-      protocolVersion: 1,
+      protocolVersion: name === 'sync' ? 1 : 2,
       capabilities:
         name === 'sync'
           ? [
@@ -253,7 +267,14 @@ function component(
               'passive-replication',
               'writer-pairing'
             ]
-          : ['execution.run', 'state.sync'],
+          : [
+              'agent.register',
+              'agent.run',
+              'agent.cancel',
+              'run.read',
+              'work.watch',
+              'state.port'
+            ],
       requiredPeerCapabilities: [],
       buildVersion: '0.0.0-poc',
       ...handshake

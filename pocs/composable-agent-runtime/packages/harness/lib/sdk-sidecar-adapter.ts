@@ -7,17 +7,19 @@ import type { HarnessLoggingConfig } from './types.ts'
 export interface SpawnSdkSidecarOptions {
   readonly entry: string
   readonly logging?: HarnessLoggingConfig
+  readonly args?: readonly string[]
   readonly onIdentity: (identity: HarnessRuntimeInfo) => void
 }
 
 export async function createSdkSidecarAdapter({
   entry,
   logging,
+  args = [],
   onIdentity
 }: SpawnSdkSidecarOptions): Promise<SdkRuntimePort> {
   const remote = spawnHarness({
     entry,
-    args: argvForLogging(logging)
+    args: [...argvForLogging(logging), ...args]
   })
   onIdentity(await remote.describeRuntime())
   return fromRemoteHarness(remote)

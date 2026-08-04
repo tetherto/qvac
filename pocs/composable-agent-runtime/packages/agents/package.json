@@ -7,6 +7,11 @@
   "exports": {
     ".": "./index.ts"
   },
+  "files": [
+    "package.json",
+    "index.ts",
+    "lib/**/*.ts"
+  ],
   "scripts": {
     "test": "bun test/run.ts",
     "test:node": "node --experimental-strip-types test/all.ts",

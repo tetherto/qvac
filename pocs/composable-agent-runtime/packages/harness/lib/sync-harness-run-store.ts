@@ -1,10 +1,4 @@
-import type {
-  AgentCheckpoint,
-  AgentEvent,
-  AgentStateStore,
-  WatchWork,
-  WorkChange
-} from '@qvac/agents'
+import type { AgentCheckpoint } from '@qvac/agents'
 import type { SyncProfileClient, SyncRuntime } from '@qvac/sync'
 import {
   durableWorkProfile,
@@ -13,77 +7,92 @@ import {
   type DurableWorkResult
 } from '@qvac/sync/profiles/durable-work'
 import AbortController from '#abort-controller'
+import { encodeRunIdentity } from './run-identity.ts'
+import type {
+  HarnessRunIdentity,
+  HarnessRunOutcome,
+  HarnessRunStore,
+  HarnessStoredRunEvent,
+  HarnessWorkChange,
+  WatchHarnessWork
+} from './run-store.ts'
 
 const INLINE_CHECKPOINT = 'inline-json:'
 
-export function createSyncAgentStateStore(sync: SyncRuntime): AgentStateStore {
+export function createSyncHarnessRunStore(sync: SyncRuntime): HarnessRunStore {
   const profile = sync.openProfile(durableWorkProfile)
 
-  async function ensureWork(runId: string) {
-    const existing = await profile.query({ type: 'get-work', workId: runId })
+  async function ensureWork(identity: HarnessRunIdentity) {
+    const workId = encodeRunIdentity(identity)
+    const existing = await profile.query({ type: 'get-work', workId })
     if (existing.work) return
     await profile.apply(
       {
         type: 'record-work',
-        workId: runId,
-        payload: Buffer.from(JSON.stringify({ runId })),
-        payloadFormat: 'application/vnd.qvac.agent-run+json',
+        workId,
+        payload: Buffer.from(JSON.stringify(identity)),
+        payloadFormat: 'application/vnd.qvac.harness-run+json',
         payloadVersion: 1
       },
-      { operationId: `record-work:${runId}` }
+      { operationId: `record-work:${workId}` }
     )
   }
 
   return {
-    async loadRun(runId) {
-      const work = await profile.query({ type: 'get-work', workId: runId })
+    async loadRun(identity) {
+      const workId = encodeRunIdentity(identity)
+      const work = await profile.query({ type: 'get-work', workId })
       if (!work.work) return null
-      const journal = await profile.query({ type: 'list-journal', workId: runId })
+      const journal = await profile.query({ type: 'list-journal', workId })
       const checkpoint = await profile.query({
         type: 'get-checkpoint-ref',
-        workId: runId
+        workId
       })
       return {
-        runId,
+        version: 1,
+        ...identity,
         events: journal.entries.flatMap(({ body }) => decodeEvents(body)),
-        checkpoint: decodeCheckpoint(checkpoint.checkpoint?.blobRef)
+        checkpoint: decodeCheckpoint(checkpoint.checkpoint?.blobRef),
+        outcome: decodeOutcome(work.work.outcomeResult)
       }
     },
-    async appendEvents({ runId, operationId, events }) {
-      await ensureWork(runId)
+    async appendEvents({ operationId, events, ...identity }) {
+      await ensureWork(identity)
+      const workId = encodeRunIdentity(identity)
+      const previous = await profile.query({ type: 'list-journal', workId })
+      const offset = previous.entries.reduce(
+        (count, { body }) => count + decodeEvents(body).length,
+        0
+      )
       const revision = (
         await profile.apply(
           {
             type: 'append-journal',
-            workId: runId,
-            entryType: 'agent-events',
-            body: Buffer.from(JSON.stringify(events))
+            workId,
+            entryType: 'harness-run-events',
+            body: Buffer.from(
+              JSON.stringify(
+                events.map((entry, index) => ({
+                  ...entry,
+                  sequence: offset + index + 1
+                }))
+              )
+            )
           },
           { operationId }
         )
       ).revision
-      const terminal = events.find(isTerminalEvent)
-      if (terminal) {
-        await profile.apply(
-          {
-            type: 'record-outcome',
-            workId: runId,
-            status: terminal.type === 'run-completed' ? 'completed' : 'cancelled',
-            result: Buffer.from(JSON.stringify(terminal))
-          },
-          { operationId: `${operationId}:outcome` }
-        )
-      }
       return revision
     },
-    async saveCheckpoint({ runId, operationId, checkpoint }) {
-      await ensureWork(runId)
+    async saveCheckpoint({ operationId, checkpoint, ...identity }) {
+      await ensureWork(identity)
+      const workId = encodeRunIdentity(identity)
       return (
         await profile.apply(
           {
             type: 'save-checkpoint-ref',
-            workId: runId,
-            checkpointId: `${runId}:${checkpoint.nextOperationIndex}`,
+            workId,
+            checkpointId: `${workId}:${checkpoint.nextOperationIndex}`,
             format: 'qvac.agents.checkpoint',
             version: checkpoint.version,
             blobRef: encodeCheckpoint(checkpoint)
@@ -92,8 +101,25 @@ export function createSyncAgentStateStore(sync: SyncRuntime): AgentStateStore {
         )
       ).revision
     },
+    async finish({ operationId, outcome, ...identity }) {
+      await ensureWork(identity)
+      return (
+        await profile.apply(
+          {
+            type: 'record-outcome',
+            workId: encodeRunIdentity(identity),
+            status: durableOutcomeStatus(outcome),
+            result: Buffer.from(JSON.stringify(outcome))
+          },
+          { operationId }
+        )
+      ).revision
+    },
     watchAvailableWork(input = {}) {
       return watchWork(profile, input)
+    },
+    async close() {
+      // The supplied Sync runtime owns the profile lifecycle.
     }
   }
 }
@@ -104,8 +130,8 @@ async function* watchWork(
     DurableWorkQuery,
     DurableWorkResult
   >,
-  { after, signal }: WatchWork
-): AsyncIterable<WorkChange> {
+  { after, signal }: WatchHarnessWork
+): AsyncIterable<HarnessWorkChange> {
   const controller = new AbortController()
   const onAbort = () => controller.abort()
   signal?.addEventListener('abort', onAbort, { once: true })
@@ -149,7 +175,7 @@ function workIds(result: DurableWorkResult) {
 }
 
 function decodeEvents(encoded: Buffer) {
-  return JSON.parse(encoded.toString()) as AgentEvent[]
+  return JSON.parse(encoded.toString()) as HarnessStoredRunEvent[]
 }
 
 function encodeCheckpoint(checkpoint: AgentCheckpoint) {
@@ -163,6 +189,12 @@ function decodeCheckpoint(encoded: string | null | undefined) {
   ) as AgentCheckpoint
 }
 
-function isTerminalEvent(event: AgentEvent) {
-  return event.type === 'run-completed' || event.type === 'run-canceled'
+function decodeOutcome(encoded: Buffer | null | undefined) {
+  return encoded ? JSON.parse(encoded.toString()) as HarnessRunOutcome : null
+}
+
+function durableOutcomeStatus(outcome: HarnessRunOutcome) {
+  if (outcome.status === 'completed') return 'completed' as const
+  if (outcome.status === 'canceled') return 'cancelled' as const
+  return 'failed' as const
 }

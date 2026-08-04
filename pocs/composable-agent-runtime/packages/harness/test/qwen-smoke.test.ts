@@ -7,7 +7,7 @@ import os from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import stow from 'bare-stow'
-import { spawnHarness } from '../index.ts'
+import { spawnHarness } from '../lib/spawn.ts'
 
 test('real SDK streams from pre-provisioned Qwen without downloading', async (t) => {
   t.timeout(120_000)

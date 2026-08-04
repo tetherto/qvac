@@ -1,16 +1,37 @@
 import HarnessRPC, { type GeneratedRunStream, type WireValue } from '../spec/hrpc/index.js'
 import type {
+  HarnessAgentRunInput,
+  HarnessAgentRunKey,
   HarnessErrorEnvelope,
   HarnessEvent,
   HarnessRunInput,
-  HarnessRuntime
+  HarnessRuntime,
+  HarnessSkillInfo
 } from './types.ts'
+import type { HarnessAgentRegistration } from './agent-registration.ts'
+import type {
+  HarnessRunStore,
+  HarnessRunRecord,
+  HarnessWorkChange,
+  WatchHarnessWork
+} from './run-store.ts'
+import { serveHarnessRunStore } from './state-port.ts'
 import type { HarnessStream, HarnessTransport } from './transport.ts'
 
-export interface RemoteHarness extends HarnessRuntime {
+export interface HarnessClient extends HarnessRuntime {
   readonly lives: number
+  suspend(): Promise<void>
+  resume(): Promise<void>
   describeRuntime(): Promise<HarnessRuntimeInfo>
+  listSkills(): Promise<readonly HarnessSkillInfo[]>
+  registerAgent(registration: HarnessAgentRegistration): Promise<void>
+  runAgent(input: HarnessAgentRunInput): AsyncIterable<HarnessEvent>
+  cancelAgentRun(input: HarnessAgentRunKey): Promise<void>
+  readRun(input: HarnessAgentRunKey): Promise<HarnessRunRecord | null>
+  watchWork(input?: WatchHarnessWork): AsyncIterable<HarnessWorkChange>
 }
+
+export type RemoteHarness = HarnessClient
 
 export interface HarnessRuntimeInfo {
   readonly component: string
@@ -30,7 +51,14 @@ export interface HarnessRuntimeInfo {
   }
 }
 
-export function connectHarness(transport: HarnessTransport): RemoteHarness {
+export interface ConnectHarnessOptions {
+  readonly runStore?: HarnessRunStore
+}
+
+export function connectHarness(
+  transport: HarnessTransport,
+  { runStore }: ConnectHarnessOptions = {}
+): RemoteHarness {
   let session: { readonly rpc: HarnessRPC; readonly stream: HarnessStream } | null = null
   let opening: Promise<{ readonly rpc: HarnessRPC; readonly stream: HarnessStream }> | null = null
   let closed = false
@@ -45,6 +73,9 @@ export function connectHarness(transport: HarnessTransport): RemoteHarness {
         throw died('harness closed')
       }
       const next = { rpc: new HarnessRPC(stream), stream }
+      if (runStore) {
+        serveHarnessRunStore(next.rpc.statePort(), runStore)
+      }
       stream.on('close', () => {
         session = null
       })
@@ -102,8 +133,102 @@ export function connectHarness(transport: HarnessTransport): RemoteHarness {
     if (input.signal.aborted && !emittedAborted) yield { type: 'aborted' }
   }
 
+  async function* runAgent(
+    input: HarnessAgentRunInput
+  ): AsyncGenerator<HarnessEvent> {
+    const { rpc } = await open()
+    const duplex = rpc.runAgent()
+    let completed = false
+    const abort = () => duplex.destroy()
+    duplex.write({
+      type: 'start',
+      agentId: input.agentId,
+      runId: input.runId,
+      input: input.input
+    })
+    if (input.signal?.aborted) {
+      duplex.destroy()
+      yield { type: 'aborted' }
+      return
+    }
+    input.signal?.addEventListener('abort', abort, { once: true })
+    try {
+      for await (const frame of frames(duplex)) {
+        if (frame.type === 'complete') {
+          completed = true
+          duplex.end()
+          continue
+        }
+        yield fromWire(frame)
+      }
+    } finally {
+      input.signal?.removeEventListener('abort', abort)
+      duplex.destroy()
+    }
+    if (!completed && input.signal?.aborted) yield { type: 'aborted' }
+  }
+
+  async function* watchWork(
+    input: WatchHarnessWork = {}
+  ): AsyncGenerator<HarnessWorkChange> {
+    const { rpc } = await open()
+    const duplex = rpc.watchWork()
+    const abort = () => duplex.destroy()
+    duplex.write({ type: 'start', ...(input.after ? { data: input.after } : {}) })
+    input.signal?.addEventListener('abort', abort, { once: true })
+    try {
+      for await (const frame of frames(duplex)) {
+        if (frame.type !== 'work-change') continue
+        yield frame.data as unknown as HarnessWorkChange
+      }
+    } finally {
+      input.signal?.removeEventListener('abort', abort)
+      duplex.destroy()
+    }
+  }
+
   return {
     run,
+    runAgent,
+    watchWork,
+    async suspend() {
+      const { rpc } = await open()
+      await rpc.suspend({ type: 'suspend' })
+    },
+    async resume() {
+      const { rpc } = await open()
+      await rpc.resume({ type: 'resume' })
+    },
+    async listSkills() {
+      const { rpc } = await open()
+      const frame = await rpc.listSkills({ type: 'list' })
+      return (frame.data ?? []) as unknown as HarnessSkillInfo[]
+    },
+    async registerAgent(registration) {
+      const { rpc } = await open()
+      await rpc.registerAgent({
+        type: 'register',
+        data: jsonWire(registration)
+      })
+    },
+    async cancelAgentRun(input) {
+      const { rpc } = await open()
+      await rpc.cancelAgentRun({
+        type: 'cancel',
+        agentId: input.agentId,
+        runId: input.runId,
+        ...(input.reason ? { reason: input.reason } : {})
+      })
+    },
+    async readRun(input) {
+      const { rpc } = await open()
+      const frame = await rpc.readRun({
+        type: 'read',
+        agentId: input.agentId,
+        runId: input.runId
+      })
+      return (frame.data ?? null) as unknown as HarnessRunRecord | null
+    },
     async describeRuntime() {
       const { rpc } = await open()
       return parseRuntimeInfo(await rpc.describeRuntime({ type: 'describe' }))
@@ -115,8 +240,13 @@ export function connectHarness(transport: HarnessTransport): RemoteHarness {
       closed = true
       session?.stream.destroy()
       session = null
+      await runStore?.close()
     }
   }
+}
+
+function jsonWire(value: unknown): WireValue {
+  return JSON.parse(JSON.stringify(value)) as WireValue
 }
 
 function parseRuntimeInfo(frame: Record<string, WireValue>): HarnessRuntimeInfo {

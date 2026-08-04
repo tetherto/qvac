@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "schema": [
     {
       "name": "wire-frame",
@@ -117,6 +117,26 @@
           "name": "progress",
           "type": "json",
           "version": 4
+        },
+        {
+          "name": "agentId",
+          "type": "string",
+          "version": 5
+        },
+        {
+          "name": "input",
+          "type": "string",
+          "version": 5
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "version": 5
+        },
+        {
+          "name": "data",
+          "type": "json",
+          "version": 5
         }
       ]
     }

@@ -10,10 +10,12 @@ import {
   serializeHarnessError
 } from './errors.ts'
 import { createHarnessLogger } from './logger.ts'
+import { createInMemoryHarnessRunStore } from './in-memory-harness-run-store.ts'
 import { createMemoryStateAdapter } from './memory-state.ts'
 import { createAsyncQueue } from './queue.ts'
 import { encodeRunIdentity } from './run-identity.ts'
 import { createRunRegistry } from './run-registry.ts'
+import type { HarnessRunStore } from './run-store.ts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
 import type { SkillCatalogEntry } from './skills/catalog.ts'
 import {
@@ -33,24 +35,29 @@ import type {
   HarnessStateAdapter
 } from './types.ts'
 
-export interface CreateHarnessOptions {
+export interface CreateHarnessServiceOptions {
   readonly sdk: SdkRuntimePort
   readonly state?: HarnessStateAdapter
+  readonly runStore?: HarnessRunStore
   readonly logging?: HarnessLoggingConfig
   readonly tools?: readonly HarnessTool[]
   readonly toolBroker?: HarnessToolBrokerPort
   readonly toolApproval?: HarnessToolApprovalPort
+  readonly onRegistration?: (registration: HarnessAgentRegistration) => void
 }
 
-export function createHarness({
+export function createHarnessService({
   sdk,
   state = createMemoryStateAdapter(),
+  runStore = createInMemoryHarnessRunStore(),
   logging,
   tools = [],
   toolBroker = unavailableToolBroker(),
-  toolApproval
-}: CreateHarnessOptions): LocalHarnessRuntime {
+  toolApproval,
+  onRegistration
+}: CreateHarnessServiceOptions): LocalHarnessRuntime {
   let closed = false
+  let suspended = false
   const logger = createHarnessLogger(logging)
   const logPrefix = '[harness]'
   let catalogPromise: Promise<readonly SkillCatalogEntry[]> | undefined
@@ -75,6 +82,7 @@ export function createHarness({
 
   async function* run(input: HarnessRunInput): AsyncGenerator<HarnessEvent> {
     if (closed) throw new Error('harness is closed')
+    if (suspended) throw new Error('harness is suspended')
     const traceId = input.traceId ?? input.runId
     logger.info(logPrefix, 'run started', { runId: input.runId, traceId })
     if (input.signal.aborted) {
@@ -167,20 +175,39 @@ export function createHarness({
 
   async function registerAgent(registration: HarnessAgentRegistration) {
     if (closed) throw new Error('harness is closed')
+    if (suspended) throw new Error('harness is suspended')
     if (registrations.has(registration.id)) {
       throw new Error(`agent is already registered: ${registration.id}`)
     }
     validateSelectedSkills(registration, await loadCatalog())
     defineAgent(agentDefinitionFromRegistration(registration))
     registrations.set(registration.id, copyAgentRegistration(registration))
+    onRegistration?.(registration)
   }
 
   async function* runAgent(input: HarnessAgentRunInput): AsyncGenerator<HarnessEvent> {
     if (closed) throw new Error('harness is closed')
+    if (suspended) throw new Error('harness is suspended')
     const registration = registrations.get(input.agentId)
     if (!registration) throw new Error(`agent is not registered: ${input.agentId}`)
     const key = { agentId: input.agentId, runId: input.runId }
     const stateKey = encodeRunIdentity(key)
+    const previous = await runStore.loadRun(key)
+    if (previous?.outcome?.status === 'completed') {
+      throw new Error(`agent run is already completed: ${stateKey}`)
+    }
+    if (hasIndeterminateToolCall(previous?.events ?? [])) {
+      await runStore.finish({
+        ...key,
+        operationId: `${stateKey}:indeterminate`,
+        outcome: {
+          status: 'indeterminate',
+          reason: 'a side-effecting tool call has no confirmed result'
+        }
+      })
+      throw new Error(`agent run requires explicit retry after an indeterminate tool call: ${stateKey}`)
+    }
+    let eventIndex = previous?.events.length ?? 0
     const queue = createAsyncQueue<HarnessEvent>()
     const gate = createToolGate({
       registration,
@@ -194,7 +221,11 @@ export function createHarness({
       sdk,
       tools: gate,
       async onEvent(event) {
-        await state.append(stateKey, event)
+        await runStore.appendEvents({
+          ...key,
+          operationId: `${stateKey}:event:${++eventIndex}`,
+          events: [{ kind: 'execution', event }]
+        })
         queue.push(event)
       }
     })
@@ -202,7 +233,8 @@ export function createHarness({
     const agentRun = agent.run({
       runId: input.runId,
       input: input.input,
-      adapter
+      adapter,
+      ...(previous?.checkpoint ? { checkpoint: previous.checkpoint } : {})
     })
     runs.add(key, agentRun)
 
@@ -215,14 +247,37 @@ export function createHarness({
     void (async () => {
       try {
         for await (const event of agentRun.events) {
+          await runStore.appendEvents({
+            ...key,
+            operationId: `${stateKey}:event:${++eventIndex}`,
+            events: [{ kind: 'agent', event }]
+          })
+          if (event.type === 'checkpoint') {
+            await runStore.saveCheckpoint({
+              ...key,
+              operationId: `${stateKey}:checkpoint:${event.checkpoint.nextOperationIndex}`,
+              checkpoint: event.checkpoint
+            })
+          }
           if (event.type === 'content') {
             const content: HarnessEvent = { type: 'content', text: event.text }
-            await state.append(stateKey, content)
             queue.push(content)
           } else if (event.type === 'run-canceled') {
             const aborted: HarnessEvent = { type: 'aborted' }
-            await state.append(stateKey, aborted)
             queue.push(aborted)
+          }
+          if (event.type === 'run-completed') {
+            await runStore.finish({
+              ...key,
+              operationId: `${stateKey}:outcome`,
+              outcome: { status: 'completed', output: event.output }
+            })
+          } else if (event.type === 'run-canceled') {
+            await runStore.finish({
+              ...key,
+              operationId: `${stateKey}:outcome`,
+              outcome: { status: 'canceled', reason: event.reason }
+            })
           }
         }
       } catch (cause) {
@@ -235,7 +290,16 @@ export function createHarness({
             { boundary: 'harness->agent' }
           )
         }
-        await state.append(stateKey, error)
+        await runStore.appendEvents({
+          ...key,
+          operationId: `${stateKey}:event:${++eventIndex}`,
+          events: [{ kind: 'execution', event: error }]
+        })
+        await runStore.finish({
+          ...key,
+          operationId: `${stateKey}:outcome`,
+          outcome: { status: 'failed', error: message }
+        })
         queue.push(error)
       } finally {
         input.signal?.removeEventListener('abort', onAbort)
@@ -253,16 +317,60 @@ export function createHarness({
 
   return {
     run,
+    async suspend() {
+      if (closed) throw new Error('harness is closed')
+      if (suspended) return
+      suspended = true
+      await runs.cancelAll()
+    },
+    async resume() {
+      if (closed) throw new Error('harness is closed')
+      suspended = false
+    },
+    async listSkills() {
+      return (await loadCatalog()).map(({ name, description }) => ({
+        name,
+        description
+      }))
+    },
     registerAgent,
     runAgent,
     cancelAgentRun,
+    readRun(input) {
+      return runStore.loadRun(input)
+    },
+    watchWork(input) {
+      return runStore.watchAvailableWork(input)
+    },
     async close() {
       if (closed) return
       closed = true
       await runs.close()
-      await Promise.all([sdk.close(), state.close(), toolBroker.close()])
+      await Promise.all([
+        sdk.close(),
+        state.close(),
+        runStore.close(),
+        toolBroker.close()
+      ])
     }
   }
+}
+
+function hasIndeterminateToolCall(
+  events: readonly import('./run-store.ts').HarnessStoredRunEvent[]
+) {
+  const pending = new Map<string, number>()
+  for (const entry of events) {
+    if (entry.kind !== 'execution') continue
+    if (entry.event.type === 'tool-call') {
+      pending.set(entry.event.name, (pending.get(entry.event.name) ?? 0) + 1)
+    } else if (entry.event.type === 'tool-result') {
+      const count = pending.get(entry.event.name) ?? 0
+      if (count <= 1) pending.delete(entry.event.name)
+      else pending.set(entry.event.name, count - 1)
+    }
+  }
+  return pending.size > 0
 }
 
 async function persist(state: HarnessStateAdapter, runId: string, event: HarnessEvent) {

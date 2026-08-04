@@ -10,42 +10,12 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
-    },
-    "./stow": {
-      "types": "./stow.d.ts",
-      "default": "./stow.js"
-    },
-    "./entry": {
-      "types": "./entry.d.ts",
-      "default": "./entry.js"
-    },
-    "./runner/sidecar": {
-      "types": "./runner/sidecar.d.ts",
-      "default": "./runner/sidecar.js"
-    },
-    "./runner/relay": {
-      "types": "./runner/relay.d.ts",
-      "default": "./runner/relay.js"
-    },
-    "./host/spawner": {
-      "types": "./host/spawner.d.ts",
-      "default": "./host/spawner.js"
     }
   },
   "files": [
     "package.json",
     "index.js",
-    "index.d.ts",
-    "stow.js",
-    "stow.d.ts",
-    "entry.js",
-    "entry.d.ts",
-    "runner/sidecar.js",
-    "runner/sidecar.d.ts",
-    "runner/relay.js",
-    "runner/relay.d.ts",
-    "host/spawner.js",
-    "host/spawner.d.ts"
+    "index.d.ts"
   ],
   "scripts": {
     "test": "npm run test:node && npm run test:bare",
@@ -55,17 +25,17 @@
     "lint": "prettier . --check && lunte"
   },
   "dependencies": {
-    "b4a": "^1.8.1",
-    "bare-sidecar": "^0.5.2",
-    "bare-stream": "^2.13.3",
-    "bare-stow": "^0.1.4",
     "ready-guard": "^1.0.0",
     "ready-resource": "^1.2.0",
     "safety-catch": "^1.0.2"
   },
   "devDependencies": {
+    "b4a": "^1.8.1",
     "bare-fs": "^4.7.2",
     "bare-os": "^3.9.1",
+    "bare-sidecar": "^0.5.2",
+    "bare-stream": "^2.13.3",
+    "bare-stow": "^0.1.4",
     "brittle": "^4.0.2",
     "lunte": "^1.8.3",
     "prettier": "^3.6.2",

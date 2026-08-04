@@ -1,4 +1,8 @@
-import type { HarnessEvent } from '@qvac/harness/types'
+import type {
+  HarnessAgentRegistration,
+  HarnessEvent,
+  HarnessRunRecord
+} from '@qvac/harness'
 import QvacLogger from '@qvac/logging'
 import Supervisor from '@qvac/supervisor'
 import type {
@@ -6,6 +10,8 @@ import type {
   SyncProfileContract,
   SyncRuntime
 } from '@qvac/sync'
+import { SyncGenerationEndedError } from '@qvac/sync'
+import { durableWorkProfile } from '@qvac/sync/profiles/durable-work'
 import {
   checkCompatibility,
   type CompatibilityResult,
@@ -36,8 +42,10 @@ import type {
 export interface AssistantFacade {
   readonly state: AssistantStateEndpoint
   ready(): Promise<void>
+  registerAgent(registration: HarnessAgentRegistration): Promise<void>
   run(input: AssistantRunInput): AssistantRun
-  readRun(runId: string): Promise<readonly HarnessEvent[]>
+  cancelRun(input: { readonly agentId: string; readonly runId: string; readonly reason?: string }): Promise<void>
+  readRun(input: { readonly agentId: string; readonly runId: string }): Promise<HarnessRunRecord | null>
   suspend(): Promise<void>
   resume(): Promise<void>
   close(): Promise<void>
@@ -47,9 +55,6 @@ export interface AssistantFacade {
 
 export const DEFAULT_ASSISTANT_STORAGE_PATH = '.assistant'
 export const DEFAULT_ASSISTANT_INFERENCE = Object.freeze({ kind: 'qwen' } as const)
-export const DEFAULT_ASSISTANT_MODEL =
-  'registry://hf/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf'
-
 export function createAssistantFacade(
   options: CreateAssistantOptions,
   components: AssistantComponents
@@ -66,8 +71,6 @@ export function createAssistantFacade(
   })
   logger.setLevel(options.logging?.level ?? 'info')
   const lifecycle = createLifecycleEvents(supervisor, logger)
-  let sdkStarts = 0
-  let sdkStarted = false
 
   supervisor.add<AssistantSyncComponent>('sync', {
     restart: 'always',
@@ -107,11 +110,9 @@ export function createAssistantFacade(
 
   function run(input: AssistantRunInput): AssistantRun {
     const runId = input.runId ?? createRunId()
-    const traceId = input.traceId ?? createTraceId()
-    const events = runEvents(input, runId, traceId)
+    const events = runEvents(input, runId)
     return {
       id: runId,
-      traceId,
       [Symbol.asyncIterator]() {
         return events
       }
@@ -120,26 +121,19 @@ export function createAssistantFacade(
 
   async function* runEvents(
     input: AssistantRunInput,
-    runId: string,
-    traceId: string
+    runId: string
   ) {
     await supervisor.ready()
     const harness = supervisor.get<AssistantHarnessComponent>('harness')
     const controller = input.signal ? null : new AbortController()
-    logger.info('[assistant]', 'run started', { runId, traceId })
-    yield* harness.harness.run({
+    logger.info('[assistant]', 'run started', { runId, agentId: input.agentId })
+    yield* harness.harness.runAgent({
+      agentId: input.agentId,
       runId,
-      traceId,
-      model: input.model ?? DEFAULT_ASSISTANT_MODEL,
-      messages: input.messages,
-      signal: input.signal ?? controller?.signal ?? abortedSignal()
+      input: input.input,
+      signal: input.signal ?? controller?.signal
     })
-    const details = harness.inspect?.()
-    if (!sdkStarted && isRecord(details) && isRecord(details.sdkIdentity)) {
-      sdkStarted = true
-      sdkStarts++
-    }
-    logger.info('[assistant]', 'run completed', { runId, traceId })
+    logger.info('[assistant]', 'run completed', { runId, agentId: input.agentId })
   }
 
   const state = createStateFacade(supervisor)
@@ -147,19 +141,30 @@ export function createAssistantFacade(
   return {
     state,
     ready: () => supervisor.ready(),
+    async registerAgent(registration) {
+      await supervisor.ready()
+      await supervisor
+        .get<AssistantHarnessComponent>('harness')
+        .harness.registerAgent(registration)
+    },
     run,
-    async readRun(runId) {
+    async cancelRun(input) {
+      await supervisor.ready()
+      await supervisor
+        .get<AssistantHarnessComponent>('harness')
+        .harness.cancelAgentRun(input)
+    },
+    async readRun(input) {
       await supervisor.ready()
       return supervisor
         .get<AssistantHarnessComponent>('harness')
-        .readRun(runId)
+        .harness.readRun(input)
     },
     suspend: () => supervisor.suspend(),
     resume: () => supervisor.resume(),
     close: () => supervisor.close(),
     inspect() {
       return {
-        sdkStarts,
         children: supervisor.inspect().map((child) => ({
           name: child.name,
           state: child.state,
@@ -174,6 +179,18 @@ export function createAssistantFacade(
 }
 
 function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
+  let generation = 0
+  const generationWaiters = new Set<() => void>()
+  const changeGeneration = ({ name }: { readonly name: string }) => {
+    if (name !== 'sync') return
+    generation++
+    for (const resolve of generationWaiters) resolve()
+    generationWaiters.clear()
+  }
+  supervisor.on('child-ready', changeGeneration)
+  supervisor.on('child-died', changeGeneration)
+  supervisor.on('child-reloaded', changeGeneration)
+
   async function current() {
     await supervisor.ready()
     return supervisor.get<AssistantSyncComponent>('sync').state
@@ -187,7 +204,36 @@ function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
     await (await current()).lifecycle.resume()
   }
 
+  function watchCurrent<T>(
+    select: (sync: SyncRuntime) => AsyncIterable<T>
+  ): AsyncIterable<T> {
+    return (async function* () {
+      const sync = await current()
+      const boundGeneration = generation
+      const iterator = select(sync)[Symbol.asyncIterator]()
+      try {
+        while (true) {
+          let wake: (() => void) | undefined
+          const changed = new Promise<IteratorResult<T>>((resolve) => {
+            wake = () => resolve({ value: undefined, done: true })
+            generationWaiters.add(wake)
+          })
+          const result = await Promise.race([iterator.next(), changed])
+          if (wake) generationWaiters.delete(wake)
+          if (generation !== boundGeneration) {
+            throw new SyncGenerationEndedError()
+          }
+          if (result.done) return
+          yield result.value
+        }
+      } finally {
+        await iterator.return?.()
+      }
+    })()
+  }
+
   return {
+    work: createLazyProfile(current, durableWorkProfile),
     ready: () => supervisor.ready(),
     suspend,
     resume,
@@ -211,17 +257,13 @@ function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
         return (await current()).mesh.status()
       },
       watchStatus(options) {
-        return supervisor
-          .get<AssistantSyncComponent>('sync')
-          .state.mesh.watchStatus(options)
+        return watchCurrent((sync) => sync.mesh.watchStatus(options))
       },
       async createInvite(options) {
         return (await current()).mesh.createInvite(options)
       },
       watchPairingRequests() {
-        return supervisor
-          .get<AssistantSyncComponent>('sync')
-          .state.mesh.watchPairingRequests()
+        return watchCurrent((sync) => sync.mesh.watchPairingRequests())
       },
       async approvePairingRequest(id) {
         return (await current()).mesh.approvePairingRequest(id)
@@ -242,9 +284,7 @@ function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
         return (await current()).mesh.listDevices()
       },
       watchDevices() {
-        return supervisor
-          .get<AssistantSyncComponent>('sync')
-          .state.mesh.watchDevices()
+        return watchCurrent((sync) => sync.mesh.watchDevices())
       },
       async renameDevice(name) {
         return (await current()).mesh.renameDevice(name)
@@ -252,9 +292,6 @@ function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
       async removeDevice(id) {
         await (await current()).mesh.removeDevice(id)
       }
-    },
-    openProfile(profile) {
-      return createLazyProfile(current, profile)
     }
   }
 }
@@ -272,7 +309,8 @@ function createLazyProfile<Command, Query, Result, Change>(
     },
     watch(query, options) {
       return (async function* () {
-        yield* (await current()).openProfile(profile).watch(query, options)
+        const sync = await current()
+        yield* sync.openProfile(profile).watch(query, options)
       })()
     }
   }
@@ -382,12 +420,6 @@ function handshakeError(name: string, result: CompatibilityResult) {
     name,
     `${result.reason ?? 'incompatible'}${suffix}`
   )
-}
-
-function abortedSignal() {
-  const controller = new AbortController()
-  controller.abort('Assistant run has no usable signal')
-  return controller.signal
 }
 
 async function startComponent<T>(

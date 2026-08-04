@@ -1,18 +1,25 @@
-import { createHarness } from './harness.ts'
+import {
+  createHarnessService,
+  type CreateHarnessServiceOptions
+} from './harness.ts'
 import { serveHarness } from './serve.ts'
 import type { SdkRuntimePort } from './sdk-runtime-port.ts'
 import type { HarnessStream } from './transport.ts'
 import { createSupervisedSdkPort } from './supervised-sdk-port.ts'
 import type { HarnessRuntimeInfo } from './connect.ts'
+import { createRemoteHarnessRunStore } from './state-port.ts'
 import type { HarnessLoggingConfig } from './types.ts'
 
 export interface ChildEntryOptions {
   readonly createSdk: () => Promise<SdkRuntimePort>
   readonly logging?: HarnessLoggingConfig
   readonly describeRuntime?: () => HarnessRuntimeInfo
+  readonly configure?: (
+    sdk: SdkRuntimePort
+  ) => Promise<Omit<CreateHarnessServiceOptions, 'sdk' | 'logging' | 'runStore'>> | Omit<CreateHarnessServiceOptions, 'sdk' | 'logging' | 'runStore'>
   readonly serve?: (
     stream: HarnessStream,
-    harness: ReturnType<typeof createHarness>,
+    harness: ReturnType<typeof createHarnessService>,
     describeRuntime: () => HarnessRuntimeInfo
   ) => object | void
 }
@@ -20,13 +27,25 @@ export interface ChildEntryOptions {
 export function createChildEntry({
   createSdk,
   logging,
+  configure,
   describeRuntime = missingRuntimeInfo,
   serve = serveHarness
 }: ChildEntryOptions) {
   return async function start(stream: HarnessStream) {
     const sdk = createSupervisedSdkPort(createSdk)
-    const harness = createHarness({ sdk, logging })
-    serve(stream, harness, describeRuntime)
+    const statePort = createRemoteHarnessRunStore()
+    const configured = await configure?.(sdk)
+    const harness = createHarnessService({
+      sdk,
+      logging,
+      runStore: statePort.store,
+      ...configured
+    })
+    if (serve === serveHarness) {
+      serveHarness(stream, harness, describeRuntime, statePort.attach)
+    } else {
+      serve(stream, harness, describeRuntime)
+    }
     let closed = false
     const close = async () => {
       if (closed) return

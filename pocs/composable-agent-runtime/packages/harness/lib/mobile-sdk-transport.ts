@@ -45,7 +45,7 @@ interface PublicSdkCompletionInput {
   readonly stream: true
 }
 
-type PublicSdkCompletionEvent =
+export type PublicSdkCompletionEvent =
   | { readonly type: 'thinkingDelta'; readonly text: string }
   | { readonly type: 'contentDelta'; readonly text: string }
   | {

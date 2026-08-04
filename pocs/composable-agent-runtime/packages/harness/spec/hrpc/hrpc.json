@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 4,
   "schema": [
     {
       "id": 0,
@@ -26,6 +26,123 @@
         "stream": false
       },
       "version": 2
+    },
+    {
+      "id": 2,
+      "name": "@harness/list-skills",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 3
+    },
+    {
+      "id": 3,
+      "name": "@harness/register-agent",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 3
+    },
+    {
+      "id": 4,
+      "name": "@harness/run-agent",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "version": 3
+    },
+    {
+      "id": 5,
+      "name": "@harness/cancel-agent-run",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 3
+    },
+    {
+      "id": 6,
+      "name": "@harness/read-run",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 3
+    },
+    {
+      "id": 7,
+      "name": "@harness/watch-work",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "version": 3
+    },
+    {
+      "id": 8,
+      "name": "@harness/state-port",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "version": 3
+    },
+    {
+      "id": 1,
+      "name": "@harness/suspend",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 4
+    },
+    {
+      "id": 2,
+      "name": "@harness/resume",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 4
     }
   ]
 }

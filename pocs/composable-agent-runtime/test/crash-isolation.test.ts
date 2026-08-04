@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import stow from 'bare-stow'
 import { afterEach, describe, expect, test } from 'vitest'
-import { spawnHarness } from '@qvac/harness'
-import { spawnSync } from '@qvac/sync/testing'
+import { spawnHarness } from '../packages/harness/lib/spawn.ts'
+import { spawnSync } from '../packages/sync/lib/spawn.ts'
 
 const temporary: string[] = []
 const root = new URL('..', import.meta.url)

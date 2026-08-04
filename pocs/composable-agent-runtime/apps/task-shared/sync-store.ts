@@ -1,9 +1,7 @@
 import type {
-  SyncProfileClient,
-  SyncRuntime
-} from '@qvac/sync/types'
+  SyncProfileClient
+} from '@qvac/sync'
 import {
-  durableWorkProfile,
   type DurableWorkCommand,
   type DurableWorkQuery,
   type DurableWorkResult
@@ -54,9 +52,9 @@ type Profile = SyncProfileClient<
 >
 
 export function createReplicatedTaskRepository(
-  runtime: Pick<SyncRuntime, 'openProfile'>
+  state: { readonly work: Profile }
 ): ReplicatedTaskRepository {
-  const profile = runtime.openProfile(durableWorkProfile)
+  const profile = state.work
 
   return {
     async create(request) {

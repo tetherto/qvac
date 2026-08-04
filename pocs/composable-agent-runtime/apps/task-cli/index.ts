@@ -381,28 +381,29 @@ function createRunner(
   model: string,
   trace: boolean
 ): TaskRunner {
+  const agentId = 'task-cli-runner'
+  const registered = assistant.registerAgent({
+    id: agentId,
+    model,
+    skills: [],
+    toolPolicy: { allow: [], requireApproval: [] }
+  })
   return {
     async *run(input): AsyncIterable<TaskRunEvent> {
+      await registered
       const traceId = createTraceId()
       writeTraceIf(trace, 'task-cli.boundary.request', {
         component: 'harness',
-        protocolVersion: 1,
+        protocolVersion: 2,
         buildVersion: '0.0.0-poc',
         runtime: 'bare',
         traceId
       })
       for await (const event of assistant.run({
+        agentId,
         runId: `task-${input.taskId}`,
-        traceId,
-        model,
         signal: input.signal,
-        messages: [
-          {
-            role: 'system',
-            content: `User ${input.user.name}, age ${input.user.age}`
-          },
-          { role: 'user', content: input.prompt }
-        ]
+        input: input.prompt
       })) {
         if (event.type === 'content') {
           yield { type: 'content', text: event.text }
@@ -420,7 +421,7 @@ function createRunner(
       }
       writeTraceIf(trace, 'task-cli.boundary.response', {
         component: 'harness',
-        protocolVersion: 1,
+        protocolVersion: 2,
         buildVersion: '0.0.0-poc',
         runtime: 'bare',
         traceId
@@ -467,14 +468,6 @@ function writeRuntimeIdentities(enabled: boolean, assistant: AssistantFacade) {
   for (const child of assistant.inspect().children) {
     if (child.details) {
       writeTrace('assistant.runtime.ready', child.details)
-      const sdkIdentity = child.details.sdkIdentity
-      if (
-        typeof sdkIdentity === 'object' &&
-        sdkIdentity !== null &&
-        !Array.isArray(sdkIdentity)
-      ) {
-        writeTrace('assistant.runtime.ready', sdkIdentity)
-      }
     }
   }
 }

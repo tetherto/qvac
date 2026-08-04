@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { duplexPair } from '@qvac/harness'
+import { createWorkerSdkRuntimePort } from '../../harness/lib/mobile-sdk-transport.ts'
 import {
   createPublicSdkBridge,
   mapPublicSdkCompletionEvent
-} from '../lib/react-native-adapters.ts'
+} from '../../harness/lib/runtime/create-harness-mobile.ts'
+import { duplexPair } from '../../harness/lib/transport.ts'
 
 describe('react-native public SDK bridge', () => {
   it('maps supported and unsupported SDK events explicitly', () => {
@@ -77,7 +78,6 @@ describe('react-native public SDK bridge', () => {
       }
     })
 
-    const { createWorkerSdkRuntimePort } = await import('@qvac/harness')
     const worker = createWorkerSdkRuntimePort(workerStream)
     const loaded = await worker.loadModel({
       model: 'registry://model.gguf',

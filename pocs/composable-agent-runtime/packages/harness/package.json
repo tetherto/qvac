@@ -5,21 +5,13 @@
   "type": "module",
   "main": "./index.ts",
   "exports": {
-    ".": "./index.ts",
+    ".": {
+      "react-native": "./react-native.ts",
+      "default": "./index.ts"
+    },
+    "./react-native": "./react-native.ts",
     "./package": "./package.json",
-    "./connect": "./lib/connect.ts",
-    "./mobile-sdk-transport": "./lib/mobile-sdk-transport.ts",
-    "./logger": "./lib/logger.ts",
-    "./types": "./lib/types.ts",
-    "./child-entry": "./child-entry.ts",
-    "./mobile-entry": "./mobile-entry.ts",
-    "./react-native-launcher": "./react-native-launcher.ts",
-    "./react-native-stow": "./react-native-stow.ts",
-    "./sdk-direct-adapter": "./lib/sdk-direct-adapter.ts",
-    "./expo-plugin": "./dist/expo-plugin.js",
-    "./skills": "./lib/skills/index.ts",
-    "./testing": "./testing.ts",
-    "./tool-sandbox-child-entry": "./tool-sandbox-child-entry.ts"
+    "./expo-plugin": "./dist/expo-plugin.js"
   },
   "imports": {
     "#abort-controller": {
@@ -73,8 +65,9 @@
     "test:image": "bun test test/image-generation.test.ts",
     "test:skills": "bun test test/skills.test.ts",
     "test:sandbox": "bun test/tool-sandbox-run.ts",
+    "test:public": "bun test/public-api.test.ts",
     "test:fast": "bun test/all.ts",
-    "test:node": "node --experimental-strip-types ../../node_modules/brittle/brittle-node.js test/agent-state-store.ts",
+    "test:node": "node --experimental-strip-types ../../node_modules/brittle/brittle-node.js test/harness-run-store.ts",
     "test:bare": "brittle-bare test/all.ts",
     "test:spawn": "node --experimental-strip-types test/spawn.test.ts",
     "test:smoke:qwen": "QVAC_REAL_MODEL_SMOKE=1 node --experimental-strip-types test/qwen-smoke.test.ts",
@@ -82,13 +75,20 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "files": [
+    "package.json",
     "index.ts",
-    "testing.ts",
+    "react-native.ts",
+    "expo-plugin.ts",
+    "dist/expo-plugin.js",
     "child-entry.ts",
+    "mobile-entry.ts",
+    "react-native-launcher.ts",
+    "react-native-stow.ts",
     "tool-sandbox-child-entry.ts",
     "deterministic-sdk-entry.ts",
     "qwen-sdk-entry.ts",
     "lib/**/*.ts",
+    "lib/**/*.mjs",
     "schema/**/*",
     "spec/**/*",
     "skills/**/*"
@@ -100,7 +100,6 @@
     "@qvac/sdk": "0.15.0",
     "@qvac/sync": "0.0.0-poc",
     "@qvac/supervisor": "0.0.0-poc",
-    "b4a": "^1.8.1",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.1",
     "bare-bundle": "^1.10.0",

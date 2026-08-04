@@ -1,4 +1,5 @@
 import test from 'brittle'
+import * as agents from '../index.ts'
 import {
   defineAgent,
   type AgentEvent,
@@ -16,6 +17,10 @@ async function collect(events: AsyncIterable<AgentEvent>) {
   for await (const event of events) collected.push(event)
   return collected
 }
+
+test('agents exposes only the per-run framework value API', (t) => {
+  t.alike(Object.keys(agents), ['defineAgent'])
+})
 
 test('defineAgent streams one model turn with stable run and operation ids', async function (t) {
   const requests: ModelRequest[] = []

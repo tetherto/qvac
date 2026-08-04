@@ -5,17 +5,33 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": "./index.d.ts",
       "react-native": "./react-native.ts",
       "default": "./index.ts"
     },
     "./react-native": "./react-native.ts",
-    "./types": "./lib/runtime/types.ts",
     "./package": "./package.json",
-    "./testing": "./testing.ts",
-    "./worker": "./worker.ts",
     "./profiles/durable-work": "./profiles/durable-work.ts",
     "./expo-plugin": "./dist/expo-plugin.js"
   },
+  "files": [
+    "package.json",
+    "index.ts",
+    "index.d.ts",
+    "react-native.ts",
+    "expo-plugin.ts",
+    "dist/expo-plugin.js",
+    "sidecar-entry.ts",
+    "mobile-entry.ts",
+    "react-native-launcher.ts",
+    "react-native-stow.ts",
+    "lib/**/*.ts",
+    "lib/**/*.mjs",
+    "profiles/**/*.ts",
+    "schema/**/*",
+    "spec/**/*",
+    "generated/**/*"
+  ],
   "imports": {
     "#process": {
       "bare": "bare-process",

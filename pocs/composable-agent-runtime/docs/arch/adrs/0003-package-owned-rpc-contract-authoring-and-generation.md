@@ -47,6 +47,14 @@ implementation decisions. They may evolve without changing this ownership
 model, provided each package retains one reviewable contract source and the
 same generated guarantees.
 
+In the PoC, Harness's package-owned service declaration covers skill
+inventory, agent registration, run start and cancellation, run inspection,
+available-work observation, state-port attachment, and suspend/resume
+lifecycle operations. Its build derives the HRPC schema and public client
+declarations from that declaration. The host state bridge remains a distinct
+package-internal contract because it connects a packaged Harness worker to the
+host-owned `HarnessRunStore`; it is not a consumer-facing Harness service.
+
 ## Consequences
 
 ### Positive

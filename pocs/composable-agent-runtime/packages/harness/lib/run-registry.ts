@@ -14,6 +14,7 @@ export interface HarnessRunRegistry {
   add(key: HarnessRunKey, run: CancelableRun): void
   remove(key: HarnessRunKey, run: CancelableRun): void
   cancel(key: HarnessRunKey, reason?: string): Promise<void>
+  cancelAll(reason?: string): Promise<void>
   close(): Promise<void>
 }
 
@@ -52,6 +53,10 @@ export function createRunRegistry({
       const run = live.get(key.agentId)?.get(key.runId)
       if (!run) throw new Error(notLiveMessage(key))
       await run.cancel(reason)
+    },
+    async cancelAll(reason = 'harness suspended') {
+      const runs = [...live.values()].flatMap((agentRuns) => [...agentRuns.values()])
+      await Promise.all(runs.map((run) => run.cancel(reason)))
     },
     close() {
       closing ??= withTimeout((async () => {

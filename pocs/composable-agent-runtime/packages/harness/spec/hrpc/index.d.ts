@@ -8,7 +8,7 @@ export type WireValue =
   | WireValue[]
   | { [key: string]: WireValue }
 
-export interface GeneratedRunStream extends AsyncIterable<Record<string, WireValue>> {
+export interface GeneratedHarnessStream extends AsyncIterable<Record<string, WireValue>> {
   on(event: 'data', listener: (frame: Record<string, WireValue>) => void): object
   on(event: 'error', listener: (error: Error) => void): object
   on(event: 'close' | 'end', listener: () => void): object
@@ -20,16 +20,30 @@ export interface GeneratedRunStream extends AsyncIterable<Record<string, WireVal
   }
 }
 
+export type GeneratedRunStream = GeneratedHarnessStream
+
 export default class HarnessRPC {
   constructor(stream: HarnessStream)
-  describeRuntime(
-    input: Record<string, WireValue>
-  ): Promise<Record<string, WireValue>>
-  onDescribeRuntime(
-    handler: (
-      input: Record<string, WireValue>
-    ) => Promise<Record<string, WireValue>> | Record<string, WireValue>
-  ): void
-  run(): GeneratedRunStream
-  onRun(handler: (stream: GeneratedRunStream) => Promise<void> | void): void
+  describeRuntime(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onDescribeRuntime(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  suspend(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onSuspend(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  resume(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onResume(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  run(input?: Record<string, WireValue>): GeneratedHarnessStream
+  onRun(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
+  listSkills(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onListSkills(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  registerAgent(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onRegisterAgent(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  runAgent(input?: Record<string, WireValue>): GeneratedHarnessStream
+  onRunAgent(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
+  cancelAgentRun(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onCancelAgentRun(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  readRun(input: Record<string, WireValue>): Promise<Record<string, WireValue>>
+  onReadRun(handler: (input: Record<string, WireValue>) => Promise<Record<string, WireValue>> | Record<string, WireValue>): void
+  watchWork(input?: Record<string, WireValue>): GeneratedHarnessStream
+  onWatchWork(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
+  statePort(input?: Record<string, WireValue>): GeneratedHarnessStream
+  onStatePort(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
 }

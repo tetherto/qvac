@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
-import * as Harness from '../index.ts'
+import * as Harness from './internal-sandbox-surface.ts'
 
 const EXECUTABLE = '/usr/local/bin/obsidian'
 const VAULT = '/private/tmp/synthetic-vault'

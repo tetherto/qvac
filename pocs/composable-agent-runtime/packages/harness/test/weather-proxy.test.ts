@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import * as Harness from '../index.ts'
+import * as Harness from './internal-sandbox-surface.ts'
 
 const ALLOWED_URL = 'https://wttr.in/London?format=3'
 const NON_PUBLIC_ADDRESSES: readonly (readonly [string, 4 | 6])[] = [

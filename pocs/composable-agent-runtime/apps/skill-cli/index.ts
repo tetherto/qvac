@@ -1,9 +1,8 @@
-import AbortController from 'bare-abort-controller'
-import Buffer from 'bare-buffer'
-import fs from 'bare-fs/promises'
-import os from 'bare-os'
-import process from 'bare-process'
-import { spawn } from 'bare-subprocess'
+import { Buffer } from 'node:buffer'
+import { spawn } from 'node:child_process'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import process from 'node:process'
 import {
   createProductionRunnerDependencies,
   createSmokeRunnerDependencies,
@@ -141,7 +140,7 @@ function createSystemPreflight(): RunnerPreflightPort {
               child.once('error', listener)
             },
             kill(signal) {
-              child.kill(signal === 'SIGTERM' ? 15 : 9)
+              child.kill(signal)
             }
           }
         }

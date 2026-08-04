@@ -1,13 +1,11 @@
 import test from 'brittle'
 import AbortController from '#abort-controller'
-import {
-  connectHarness,
-  createHarness,
-  duplexPair,
-  serveHarness,
-  type HarnessEvent,
-  type SdkRuntimePort
-} from '../index.ts'
+import { connectHarness } from '../lib/connect.ts'
+import { createHarnessService as createHarness } from '../lib/harness.ts'
+import { serveHarness } from '../lib/serve.ts'
+import type { SdkRuntimePort } from '../lib/sdk-runtime-port.ts'
+import { duplexPair } from '../lib/transport.ts'
+import type { HarnessEvent } from '../lib/types.ts'
 
 function createTraceId() {
   return `harness-wire-test-${Math.random().toString(36).slice(2)}`

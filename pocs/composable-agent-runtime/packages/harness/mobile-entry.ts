@@ -38,8 +38,15 @@ export function createMobileHarnessEntry({
         instanceId: `harness-mobile-${processId}`,
         processId,
         contract: 'qvac.harness',
-        protocolVersion: 1,
-        capabilities: ['execution.run', 'state.sync'],
+        protocolVersion: 2,
+        capabilities: [
+          'agent.register',
+          'agent.run',
+          'agent.cancel',
+          'run.read',
+          'work.watch',
+          'state.port'
+        ],
         buildVersion: '0.0.0-poc'
       })
     })

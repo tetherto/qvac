@@ -43,20 +43,37 @@ export function registerHarnessTypes(namespace: SchemaNamespace) {
       { name: 'buildVersion', type: 'string' },
       { name: 'sdkIdentity', type: 'json' },
       { name: 'error', type: 'json' },
-      { name: 'progress', type: 'json' }
+      { name: 'progress', type: 'json' },
+      { name: 'agentId', type: 'string' },
+      { name: 'input', type: 'string' },
+      { name: 'reason', type: 'string' },
+      { name: 'data', type: 'json' }
     ]
   })
 }
 
 export function registerHarnessApi(api: ApiNamespace) {
-  api.register({
-    name: 'describe-runtime',
-    request: { name: '@harness/wire-frame', stream: false },
-    response: { name: '@harness/wire-frame', stream: false }
-  })
-  api.register({
-    name: 'run',
-    request: { name: '@harness/wire-frame', stream: true },
-    response: { name: '@harness/wire-frame', stream: true }
-  })
+  for (const definition of harnessApi) api.register(definition)
+}
+
+export const harnessApi = [
+  method('describe-runtime'),
+  method('suspend'),
+  method('resume'),
+  method('run', true),
+  method('list-skills'),
+  method('register-agent'),
+  method('run-agent', true),
+  method('cancel-agent-run'),
+  method('read-run'),
+  method('watch-work', true),
+  method('state-port', true)
+] as const
+
+function method(name: string, stream = false) {
+  return {
+    name,
+    request: { name: '@harness/wire-frame', stream },
+    response: { name: '@harness/wire-frame', stream }
+  }
 }

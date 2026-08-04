@@ -3,12 +3,10 @@ import fs from '#fs-promises'
 import os from '#os'
 import path from '#path'
 import process from '#process'
-import {
-  createImageGenerationTooling,
-  createSdkDirectAdapter,
-  type HarnessJsonValue,
-  type HarnessToolInvocation
-} from '../index.ts'
+import { createImageGenerationTooling } from '../lib/image-generation.ts'
+import { createSdkDirectAdapter } from '../lib/sdk-direct-adapter.ts'
+import type { HarnessJsonValue } from '../lib/types.ts'
+import type { HarnessToolInvocation } from '../lib/tool-broker.ts'
 
 const PNG_SIGNATURE = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a

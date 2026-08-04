@@ -1,16 +1,30 @@
 import process from 'bare-process'
-import { createHarness } from './lib/harness.ts'
+import Buffer from 'bare-buffer'
+import { createHarnessService } from './lib/harness.ts'
 import { createHarnessLogger, loggingFromArgv } from './lib/logger.ts'
 import { createSdkDirectAdapter } from './lib/sdk-direct-adapter.ts'
 import { serveHarness } from './lib/serve.ts'
 import type { HarnessStream } from './lib/transport.ts'
 
 const logging = loggingFromArgv(process.argv)
+const diffusion = parseDiffusionConfig(argument('--diffusion-config='))
 
 export default async function start(stream: HarnessStream, ready?: () => void) {
   const logger = createHarnessLogger(logging)
-  const harness = createHarness({
-    sdk: await createSdkDirectAdapter({ logger }),
+  const harness = createHarnessService({
+    sdk: await createSdkDirectAdapter({
+      logger,
+      ...(diffusion
+        ? {
+            diffusion: {
+              model: diffusion.model,
+              ...(diffusion.prediction
+                ? { modelConfig: { prediction: diffusion.prediction } }
+                : {})
+            }
+          }
+        : {})
+    }),
     logging
   })
   serveHarness(stream, harness, () => ({
@@ -25,4 +39,16 @@ export default async function start(stream: HarnessStream, ready?: () => void) {
   }))
   ready?.()
   return () => harness.close()
+}
+
+function argument(prefix: string) {
+  return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length)
+}
+
+function parseDiffusionConfig(encoded: string | undefined) {
+  if (!encoded) return undefined
+  return JSON.parse(Buffer.from(encoded, 'base64').toString()) as {
+    readonly model: string
+    readonly prediction?: 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow'
+  }
 }

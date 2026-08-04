@@ -1,4 +1,4 @@
-import type { AgentStateStore } from '@qvac/agents'
+import type { HarnessRunStore } from '../lib/run-store.ts'
 
 interface Assertions {
   is<T>(actual: T, expected: T, message?: string): boolean
@@ -7,7 +7,7 @@ interface Assertions {
 
 export async function verifyAvailabilityLifecycle(
   t: Assertions,
-  store: AgentStateStore,
+  store: HarnessRunStore,
   prefix: string
 ) {
   const watch = store.watchAvailableWork()[Symbol.asyncIterator]()
@@ -19,30 +19,23 @@ export async function verifyAvailabilityLifecycle(
   })
 
   await store.appendEvents({
+    agentId: 'agent-1',
     runId: `${prefix}-run`,
     operationId: `${prefix}-start`,
-    events: [{ type: 'run-started', runId: `${prefix}-run` }]
+    events: [
+      {
+        kind: 'agent',
+        event: { type: 'run-started', runId: `${prefix}-run` }
+      }
+    ]
   })
   t.is((await watch.next()).value.kind, 'available')
 
-  const checkpoint = {
-    version: 1 as const,
+  await store.finish({
     agentId: 'agent-1',
     runId: `${prefix}-run`,
-    nextOperationIndex: 0,
-    outputs: []
-  }
-  await store.appendEvents({
-    runId: `${prefix}-run`,
     operationId: `${prefix}-complete`,
-    events: [
-      {
-        type: 'run-completed',
-        runId: `${prefix}-run`,
-        output: 'done',
-        checkpoint
-      }
-    ]
+    outcome: { status: 'completed', output: 'done' }
   })
   t.is((await watch.next()).value.kind, 'unavailable')
   await watch.return?.()
