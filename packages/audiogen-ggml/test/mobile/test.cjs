@@ -202,7 +202,8 @@ function _makeGen (modelDir) {
     config: {
       inferenceSteps: TURBO_STEPS,
       shift: TURBO_SHIFT,
-      useGPU: false
+      // DO NOT MERGE (QVAC-23118 overlay): exercise Metal/Vulkan on device.
+      useGPU: true
     }
   })
 }
@@ -320,8 +321,22 @@ async function testGenerateMusic () {
       item.outputArray.byteOffset,
       item.outputArray.byteOffset + item.outputArray.byteLength)))
   }
-  await response.await()
+  const stats = await response.await()
   const elapsedMs = Date.now() - t0
+
+  // DO NOT MERGE (QVAC-23118 overlay): the engine silently falls back to the CPU when no
+  // GPU backend can be initialised, so a green run with useGPU:true is not evidence the
+  // GPU path executed. Assert on the backend the engine actually resolved.
+  const _bd = stats && stats.backendDevice
+  const _bi = stats && stats.backendId
+  console.log('[audiogen-mobile] resolved backendDevice=' + _bd + ' backendId=' + _bi)
+  if (_bd == null || _bi == null) {
+    throw new Error('GPU: run stats carry no backendDevice/backendId; cannot prove the GPU ran')
+  }
+  if (_bd !== 1) {
+    throw new Error('GPU: expected a GPU backend but the engine resolved backendDevice=' +
+                    _bd + ' (backendId=' + _bi + ') - useGPU:true silently fell back to CPU')
+  }
 
   await gen.destroy()
 

@@ -16,6 +16,11 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
+# DO NOT MERGE -- overlay pins for QVAC-23118 CI validation.
+# ggml-speech  -> tetherto/qvac-ext-ggml#51             (Metal im2col occupancy + k-quant CPY)
+# audiogen-cpp -> tetherto/qvac-ext-lib-whisper.cpp#122 (LM + FSQ detok on Metal)
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/overlay-ports;${VCPKG_OVERLAY_PORTS}")
+
 project(audiogen-ggml CXX C)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

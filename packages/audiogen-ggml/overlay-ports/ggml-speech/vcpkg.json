@@ -1,0 +1,57 @@
+{
+  "name": "ggml-speech",
+  "version-date": "2026-08-03",
+  "description": "Speech-stack ggml flavour (tetherto/qvac-ext-ggml@speech). This pin lets the Adreno OpenCL fused IM2COL->GEMM path take an unaligned M (PR #50). ggml_cl_can_fuse_im2col_mul_mat required M % 4 == 0 -- the 8x4 image GEMM reads A in float4s down the M axis -- and silently declined every other shape, so a convolution whose output length is not a multiple of 4 materialised and transposed a full im2col matrix and then ran the slow local-memory GEMM. CosyVoice3's CausalHiFT vocoder is the pathological case: reflect_pad_1d makes stage 2 27121 samples, and in one same-run profile the single M=27120 conv fused at 19.3 ms beside 24 convs at M=27121 costing 40.7 s -- 94% of hift_decode. The fused path now builds A into a scratch buffer padded up to a multiple of 4 rows, lets the im2col kernel zero-fill the slack, and passes A's stride to kernel_mul_mm_f32_f32_8x4 separately from dst's, with a row-aware store epilogue; where M % 4 == 0 the epilogue is exactly the old flat-index guard, so existing callers are bit-identical. Measured in isolation by plugin swap on an Adreno 740: hift_decode 13.2x faster, the whole OpenCL path 2.05x, with dit_euler moving 0.4% (the regression control). Covered by a new IM2COL_MUL_MAT case in test-backend-ops. Carries the Adreno OpenCL Parler-TTS fixes (PR #49), Vulkan CPY from the k-quants to F32 (PR #47), the GGML_PREC_F32 work on Vulkan and Metal (PR #46) and the Vulkan ACE-Step Oobleck VAE custom ops (PR #45). CPU output is unchanged.",
+  "homepage": "https://github.com/tetherto/qvac-ext-ggml/tree/speech",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU backend"
+    },
+    "metal": {
+      "description": "Enable Metal GPU backend (macOS/iOS)"
+    },
+    "metal-fuse-mv-bias": {
+      "description": "Compile in the Q-variant mul_mv + ADD(bias) [+ ADD(residual)] fusion in ggml-metal. Off by default: empirically produces zero tokens on parakeet's EOU q8_0 joint network. Opt in only after Metal A/B-validating your model against the fused path."
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend",
+      "dependencies": [
+        "opencl"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        {
+          "name": "spirv-headers",
+          "version>=": "1.4.341.0"
+        }
+      ]
+    }
+  }
+}

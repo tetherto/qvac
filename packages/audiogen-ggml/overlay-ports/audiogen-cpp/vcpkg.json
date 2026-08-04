@@ -1,0 +1,81 @@
+{
+  "name": "audiogen-cpp",
+  "version-date": "2026-08-03",
+  "description": "ACE-Step text-to-music engine in pure C++/ggml, from qvac-ext-lib-whisper.cpp's engines/audiogen. This pin moves onto the shared master REF 1823ab31 that tts-cpp, parakeet-cpp and whisper-cpp also use, and onto the shared ggml-speech 2026-08-03, so all four -cpp ports build from one source archive against one ggml. engines/audiogen/ is byte-identical between the previous pin (26803b09) and this one, so the engine itself does not change: it still carries QVAC-22955 sequential lazy stage loading, where create() loads each stage right before its step and frees it right after, bounding the peak resident set to a single stage so a non-entitled iOS app is no longer jetsam-killed mid-load. The ggml-speech floor stays a hard dependency rather than a courtesy bump: the ACE-Step FSQ detokenizer casts a Q4_K special-tokens tensor to F32 in-graph and runs on the GPU only under Vulkan, so before qvac-ext-ggml PR #47 every Vulkan runner aborted on 'Missing CPY op for types: q4_K f32', with no CPU fallback to absorb it. The new floor adds the Adreno OpenCL ops from PR #49 and the unaligned-M im2col fusion from PR #50 on top, and carries the Vulkan snake / col2im_1d kernels and GGML_PREC_F32 matmul paths from PRs #45 / #46.",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/engines/audiogen",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "version>=": "2026-08-03"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "cuda"
+          ]
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration (macOS / iOS)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "metal"
+          ]
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android / Adreno)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "vulkan"
+          ]
+        }
+      ]
+    }
+  }
+}
