@@ -180,8 +180,8 @@ def _wav_to_s16le_mono_16k(path: str) -> bytes:
 @pytest.mark.heavy
 async def test_transcribe_stream_duplex(transport) -> None:
     """Parakeet's streaming session only decodes when fed at roughly real-time
-    cadence (see transcription-parakeet's live-stream-simulation.test.js /
-    duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep`
+    cadence (see asr-ggml's parakeet-live-stream-simulation.test.js /
+    parakeet-duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep`
     between writes, matching the SDK e2e runner's `writeInChunks(delayMs)`."""
     load_request = LoadModelRequest.model_validate(
         {

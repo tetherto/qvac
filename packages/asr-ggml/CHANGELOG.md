@@ -12,7 +12,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md).
 
-## [Unreleased]
+## [0.1.1] - 2026-08-03
+
+### Changed
+- Update `ggml-speech` dependency version to align with other packages that also depend on it.
 
 ## [0.1.0]
 

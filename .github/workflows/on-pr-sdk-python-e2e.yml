@@ -1,8 +1,8 @@
-# QVAC sdk-python real-worker e2e - PR (verified-gated)
+# QVAC sdk-python real-worker e2e - PR (test-e2e-smoke-gated)
 #
 # The full real-worker suite builds the @qvac/sdk worker and downloads models,
-# so it runs long. Like the other SDK e2es it's gated on the `verified` label
-# rather than running on every PR — the fast leg (pr-checks-sdk-python.yml) runs
+# so it runs long. Like the other SDK e2es it's gated on the `test-e2e-smoke`
+# label rather than running on every PR — the fast leg (pr-checks-sdk-python.yml) runs
 # gen/lint/type + the mocked unit tests on every PR.
 #
 # Plain `pull_request` (not pull_request_target): the worker build uses only the
@@ -10,7 +10,7 @@
 name: QVAC Tests (sdk-python) - PR
 
 on:
-  # Runs only when the `verified` label is applied (or on manual dispatch) —
+  # Runs only when the `test-e2e-smoke` label is applied (or on manual dispatch) —
   # the real-worker suite downloads models and runs long, so it's opt-in per PR
   # rather than firing on every push.
   pull_request:
@@ -27,8 +27,8 @@ concurrency:
 jobs:
   e2e:
     name: real-worker e2e (linux-x64)
-    # Fire only when the label just applied is `verified` (or on manual dispatch).
-    if: github.event.label.name == 'verified' || github.event_name == 'workflow_dispatch'
+    # Fire only when the label just applied is `test-e2e-smoke` (or on manual dispatch).
+    if: github.event.label.name == 'test-e2e-smoke' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:

@@ -37,11 +37,11 @@ const MOE_GPU_LAYERS = (proc.env && proc.env.QVAC_MOE_GPU_LAYERS) || '24'
 const FINETUNE_TIMEOUT_MS = 7200_000
 
 // Opt-in MoE models (~20-27 GB each, gated behind QVAC_RUN_MOE_FINETUNE). Download
-// source (sha256/bytes) is resolved from models.manifest.json by `name`. Unlike the
-// dense archs models, NO inline `url` is carried here ON PURPOSE: scripts/
-// generate-model-manifest.js scrapes name+url pairs to build the mobile prestage
-// list, and these large models must never be prestaged on mobile (the MoE test is
-// desktop / opt-in only and is never scheduled on a mobile shard).
+// source (url/sha256/bytes) is resolved from models.manifest.json by `name`. These
+// models must never be mobile pre-staged — the MoE test is desktop / opt-in only
+// and is not scheduled on any mobile shard in test-groups.json:
+// prestage-ignore: Qwen_Qwen3.6-35B-A3B-Q4_0.gguf — desktop opt-in only (~20 GB)
+// prestage-ignore: gemma-4-26B-A4B-it-Q8_0.gguf — desktop opt-in only (~27 GB)
 //
 // `loraModules` is per-model: it targets the per-expert ffn_*_exps tensors so the
 // expert-LoRA path is exercised (it no-ops on dense models). qwen35moe stores the

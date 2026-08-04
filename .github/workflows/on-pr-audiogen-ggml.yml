@@ -19,7 +19,7 @@ on:
         required: false
         type: string
       run_verify:
-        description: "Treat this run like a 'verified' run (prebuild + integration)."
+        description: "Treat this run like a full CI run (prebuild + integration)."
         required: false
         type: boolean
         default: true
@@ -49,42 +49,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
-  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
-  # merge/release-team approval before ANY privileged job runs; a new push spawns
-  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
-  # to an empty environment and run with no gate. Standalone gate job so it composes
-  # with jobs that call reusable workflows (uses:) or already declare an environment.
-  # Runs ALONGSIDE the SHA-bound label-gate during migration.
   fork-approval:
-    name: Fork approval gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
-    steps:
-      - name: Approved
-        run: echo "fork PR authorised to run privileged jobs"
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -110,15 +78,23 @@ jobs:
         uses: ./.github/actions/ci-router
 
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -181,13 +157,12 @@ jobs:
           echo "  run_verify=$run_verify"
 
   sanity-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - fork-approval
       - authorize
       - context
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -208,8 +183,7 @@ jobs:
       - fork-approval
       - context
       - ci-router
-      - label-gate
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' 
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -235,8 +209,7 @@ jobs:
       - fork-approval
       - context
       - ci-router
-      - label-gate
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' 
     uses: ./.github/workflows/cpp-test-coverage-audiogen-ggml.yml
     secrets: inherit
     with:
@@ -244,12 +217,11 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   detect-native-changes:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     needs:
       - fork-approval
       - authorize
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -269,12 +241,11 @@ jobs:
           workdir: packages/audiogen-ggml
 
   prebuild-artifact-reuse:
-    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    if: needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
       - fork-approval
       - detect-native-changes
       - context
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -310,12 +281,10 @@ jobs:
       - ci-router
       - detect-native-changes
       - prebuild-artifact-reuse
-      - label-gate
     if: |
       always() &&
       !cancelled() &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
-      needs.label-gate.outputs.authorised == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-audiogen-ggml.yml
     secrets: inherit
@@ -324,12 +293,11 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   prebuild-artifact-save:
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.prebuild.result == 'success'
     needs:
       - fork-approval
       - prebuild
       - detect-native-changes
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -364,8 +332,7 @@ jobs:
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-audiogen-ggml.yml
     secrets: inherit
     with:
@@ -389,8 +356,8 @@ jobs:
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+      - authorize
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
     secrets: inherit
     with:

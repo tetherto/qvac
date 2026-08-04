@@ -43,7 +43,10 @@ import { AttachmentNotFoundError } from '@/utils/errors-server'
 import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/server/bare/types/addon-responses'
-import { normalizeCompletionStats } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
+import {
+  normalizeCompletionStats,
+  withEmittedTokens
+} from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
 import fs from 'bare-fs'
 
 const logger = getServerLogger()
@@ -146,12 +149,7 @@ function transformMessage(
 }
 
 function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOptions) {
-  const run = model.run.bind(model) as (
-    prompt: ChatHistory[],
-    opts?: CompletionRunOptions
-  ) => ReturnType<typeof model.run>
-
-  return run(prompt, opts)
+  return model.run(prompt, opts)
 }
 
 export function transformMessages(
@@ -323,11 +321,15 @@ async function* processModelResponse(
 
   let accumulatedText = ''
   let producedTokens = false
+  let emittedPieces = 0
   let toolCallsResult: ToolCall[] = []
 
   for await (const token of response.iterate()) {
     const tokenStr = token as string
-    if (tokenStr.length > 0) producedTokens = true
+    if (tokenStr.length > 0) {
+      producedTokens = true
+      emittedPieces++
+    }
     accumulatedText += tokenStr
     yield { token: tokenStr }
   }
@@ -343,7 +345,7 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats
-  const stats = normalizeCompletionStats(responseWithStats.stats)
+  const stats = withEmittedTokens(normalizeCompletionStats(responseWithStats.stats), emittedPieces)
 
   return {
     ...buildStreamResult(modelExecutionMs, stats),
