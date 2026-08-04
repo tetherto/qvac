@@ -61,7 +61,7 @@ jobs:
       # Fast leg: mocked unit tests only. The real-worker tests (transport, poc,
       # conformance corpus, orchestrate tool loop, disconnect) skip themselves
       # here — no worker is built and bare-rpc isn't installed — and run in the
-      # verified-gated on-pr-sdk-python-e2e.yml instead, which is long (it
+      # test-e2e-smoke-gated on-pr-sdk-python-e2e.yml instead, which is long (it
       # downloads models).
       - name: Test (unit)
         run: .venv/bin/python3 -m pytest tests/ -v

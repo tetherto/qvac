@@ -1,0 +1,171 @@
+{
+  "name": "@qvac/asr-ggml",
+  "version": "0.1.1",
+  "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.20.0"
+  },
+  "scripts": {
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\"",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\"",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "clean": "rm -rf build/ prebuilds/",
+    "check:generated": "npm run build:ts && node ./scripts/check-generated.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:dts": "tsc --noEmit -p tsconfig.dts.json",
+    "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
+    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js",
+    "test:integration": "npm run test:integration:whisper && npm run test:integration:parakeet",
+    "test:integration:whisper": "npm run build:ts && brittle-bare test/integration/addon.test.js",
+    "test:integration:parakeet:generate": "brittle -r test/integration/all.js test/integration/parakeet-*.test.js",
+    "test:integration:parakeet": "npm run build:ts && npm run test:integration:parakeet:generate && bash test/integration/parakeet-run-tests.sh",
+    "test:integration:long": "npm run build:ts && brittle-bare test/integration/**/longES.test.js",
+    "test:integration:multiple": "npm run build:ts && brittle-bare test/integration/**/multiple-transcriptions.test.js",
+    "test:integration:chunking": "npm run build:ts && brittle-bare test/integration/audio-ctx-chunking.test.js",
+    "test:integration:live-stream-simultion": "npm run build:ts && brittle-bare test/integration/live-stream-simulation.test.js",
+    "test:integration:corrupted-model": "npm run build:ts && brittle-bare test/integration/corrupted-model.test.js",
+    "test:integration:model-file-validation": "npm run build:ts && brittle-bare test/integration/model-file-validation.test.js",
+    "test:integration:accuracy": "npm run build:ts && brittle-bare test/integration/accuracy-multilang.test.js",
+    "test:integration:gpu": "npm run build:ts && brittle-bare test/integration/gpu.test.js",
+    "test:unit:reload:esraw": "npm run build:ts && brittle-bare test/stand-alone/addon.reload.esraw.test.js",
+    "test:stand-alone:gpu": "brittle-bare test/stand-alone/seed-vulkan-gpu-speed.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test:benchmark:rtf:parakeet": "npm run build:ts && brittle-bare test/benchmark/parakeet-rtf-benchmark.test.js",
+    "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target asr_ggml_tests && bare-make install",
+    "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./asr_ggml_tests --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target asr_ggml_tests",
+    "coverage:cpp:summary": "cd build/addon/tests && llvm-cov report ./asr_ggml_tests --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/addon/tests/ && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./asr_ggml_tests -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./asr_ggml_tests -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
+    "test": "npm run test:unit && npm run test:integration && npm run test:integration:multiple && npm run test:integration:chunking && npm run test:integration:live-stream-simultion && npm run test:integration:corrupted-model && npm run test:integration:model-file-validation && npm run test:integration:gpu",
+    "download-models": "./scripts/download-models.sh",
+    "download-models:parakeet": "bash scripts/parakeet-download-models.sh",
+    "download-models:parakeet:registry": "node scripts/download-parakeet-models.js",
+    "setup:venv": "bash scripts/setup-venv.sh",
+    "convert-models:parakeet": "bash scripts/convert-nemo.sh",
+    "setup-models:parakeet": "bash scripts/setup-venv.sh && bash scripts/parakeet-download-models.sh && bash scripts/convert-nemo.sh",
+    "stage-models:integration": "node scripts/stage-integration-models.mjs",
+    "generate-model-manifest": "node scripts/generate-model-manifest.mjs",
+    "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "example:whisper": "bare examples/quickstart.js",
+    "example:whisper:streaming-vad": "bare examples/example.streaming-vad.js",
+    "example:whisper:mic": "bare examples/example.mic-conversation.js",
+    "example:parakeet": "bare examples/parakeet-transcribe.js",
+    "example:parakeet:diarize": "bare examples/parakeet-diarized-transcribe.js",
+    "example:parakeet:mic": "bare examples/parakeet-live-mic.js",
+    "example:parakeet:mic-diarize": "bare examples/parakeet-live-mic-diarized.js",
+    "prepare:husky": "husky"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "index.js",
+    "index.d.ts",
+    "engines",
+    "lib",
+    "prebuilds",
+    "test/mobile",
+    "LICENSE",
+    "NOTICE",
+    "test-support.js",
+    "test-support.d.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/asr-ggml"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "qvac",
+    "asr",
+    "speech-to-text",
+    "stt",
+    "transcription",
+    "whisper",
+    "parakeet",
+    "nvidia",
+    "ggml",
+    "bare"
+  ],
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "devDependencies": {
+    "@qvac/decoder-audio": "^0.5.0",
+    "@qvac/registry-client": "^0.4.0",
+    "@types/node": "^22.15.3",
+    "bare-buffer": "^3.4.2",
+    "bare-ffmpeg": "^1.0.0-32",
+    "bare-process": "^4.2.2",
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^6.0.0",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.6.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.7.1",
+    "bare-path": "^3.0.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./binding.js": "./binding.js",
+    "./test-support.js": {
+      "types": "./test-support.d.ts",
+      "default": "./test-support.js"
+    }
+  },
+  "types": "index.d.ts",
+  "lint-staged": {
+    "src/**/*.ts": [
+      "eslint --fix"
+    ],
+    "{examples,test}/**/*.js": [
+      "prettier --write",
+      "lunte"
+    ],
+    "binding.js": [
+      "prettier --write",
+      "lunte"
+    ]
+  }
+}

@@ -41,9 +41,13 @@ function parseArgs (argv) {
   }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--mode') opts.mode = argv[++i]
-    else if (argv[i] === '--changed') { opts.changed = argv[++i]; opts.mode = 'changed' }
-    else if (argv[i] === '--changed-files') { opts.changedFiles = argv[++i]; opts.mode = 'changed' }
-    else if (argv[i] === '--mobile') opts.mobile = true
+    else if (argv[i] === '--changed') {
+      opts.changed = argv[++i]
+      opts.mode = 'changed'
+    } else if (argv[i] === '--changed-files') {
+      opts.changedFiles = argv[++i]
+      opts.mode = 'changed'
+    } else if (argv[i] === '--mobile') opts.mobile = true
     else if (argv[i] === '--only') opts.only = argv[++i]
   }
   return opts
@@ -61,6 +65,40 @@ function changedFromDiff (diffFile) {
     if (m && names.includes(m[1])) changed.add(m[1])
   }
   return [...changed]
+}
+
+function parseNames (csv) {
+  return csv
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+}
+
+function unknownNames (names) {
+  return names.filter(n => !ADDONS[n])
+}
+
+function fail (message) {
+  process.stderr.write(`coload-combinations: ${message}\n`)
+  process.exit(1)
+}
+
+// An addon absent from addons.js yields combos that never load it, so the
+// co-load gate would pass without exercising the caller's addon at all. A
+// green-but-vacuous gate is worse than no gate, so refuse to emit a matrix.
+function requireKnownAddons (names) {
+  const unknown = unknownNames(names)
+  if (unknown.length === 0) return
+  fail(
+    `unknown addon(s) ${unknown.join(', ')} -- not in addons.js. ` +
+    'Add an entry there before gating a PR on the co-load smoke. ' +
+    `Known addons: ${allNames().join(', ')}`
+  )
+}
+
+function requireMatchingCombos (matrix, only) {
+  if (matrix.length > 0) return
+  fail(`--only ${only} matched no combination; the co-load gate would skip silently`)
 }
 
 function combo (name, names) {
@@ -109,11 +147,7 @@ function fullMatrix () {
 
 function changedMatrix (changedCsv) {
   const byStack = stacks()
-  const changed = changedCsv
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-    .filter(n => ADDONS[n])
+  const changed = parseNames(changedCsv).filter(n => ADDONS[n])
 
   if (changed.length === 0) return fullMatrix()
 
@@ -139,7 +173,14 @@ function changedMatrix (changedCsv) {
 const opts = parseArgs(process.argv.slice(2))
 let matrix
 if (opts.mode === 'changed') {
-  const changedCsv = opts.changedFiles ? changedFromDiff(opts.changedFiles).join(',') : opts.changed
+  // Names derived from a diff are best-effort (a PR may touch no addon at all),
+  // but an explicitly requested addon must exist or the caller is being misled.
+  let changedCsv = opts.changed
+  if (opts.changedFiles) {
+    changedCsv = changedFromDiff(opts.changedFiles).join(',')
+  } else {
+    requireKnownAddons(parseNames(opts.changed))
+  }
   matrix = changedMatrix(changedCsv)
 } else {
   matrix = fullMatrix()
@@ -152,8 +193,9 @@ if (opts.mobile) {
 }
 // Keep only named combos (e.g. --only all to run just the full bundle on PRs).
 if (opts.only) {
-  const keep = new Set(opts.only.split(',').map(s => s.trim()).filter(Boolean))
+  const keep = new Set(parseNames(opts.only))
   matrix = matrix.filter(c => keep.has(c.name))
+  requireMatchingCombos(matrix, opts.only)
 }
 const json = JSON.stringify(matrix)
 process.stdout.write(json + '\n')

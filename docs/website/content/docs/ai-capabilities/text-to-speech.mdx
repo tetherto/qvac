@@ -13,6 +13,7 @@ Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/mai
 ## Functions
 
 Use the following sequence of function calls:
+
 1. [`loadModel()`](/reference/api#loadmodel)
 2. [`textToSpeech()`](/reference/api#texttospeech)
 3. [`unloadModel()`](/reference/api#unloadmodel)
@@ -37,9 +38,7 @@ await loadModel({
 });
 ```
 
-<Callout type="info">
-Omitting `ttsEngine` defaults to Chatterbox.
-</Callout>
+<Callout type="info">Omitting `ttsEngine` defaults to Chatterbox.</Callout>
 
 ### Supertonic
 
@@ -55,6 +54,97 @@ await loadModel({
     voice: "F1",
   },
 });
+```
+
+### Parler-TTS
+
+Parler-TTS uses a **single GGUF** and conditions speech from either a free-text
+description or structured voice fields. Load-time fields provide defaults;
+`textToSpeech()` and `textToSpeechStream()` can override them per request.
+The registry includes Mini v1, Large v1, and Indic variants; the Indic model
+supports 21 languages and script-native digit normalization.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "parler",
+    voice: "Laura",
+    seed: 42,
+    topK: 1,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text: "Welcome to Parler text-to-speech.",
+  inputType: "text",
+  stream: false,
+  emotion: "happy",
+  pace: "moderate",
+});
+
+const pcm = await result.buffer;
+```
+
+For free-form conditioning, use `description` or its alias
+`voiceDescription`. Otherwise, compose a description from `voice`, `emotion`,
+`pitch`, `pace`, `expressivity`, `noise`, `reverb`, and `quality`.
+
+<Callout type="warn">
+  `description` and `voiceDescription` cannot be combined with each other or
+  with the structured voice fields. These per-request fields are Parler-only;
+  using them with Chatterbox or Supertonic returns a request-validation error.
+</Callout>
+
+Supported emotions are `command`, `anger`, `narration`, `conversation`,
+`disgust`, `fear`, `happy`, `neutral`, `proper noun`, `news`, `sad`, and
+`surprise`.
+
+Parler supports all three SDK streaming surfaces:
+
+- `textToSpeech({ stream: true })` for incremental PCM samples.
+- `textToSpeech({ stream: true, sentenceStream: true })` for PCM plus
+  sentence/chunk metadata.
+- `textToSpeechStream()` when text itself arrives incrementally.
+
+Set `streamChunkTokens` above zero to enable native chunk streaming;
+`streamFirstChunkTokens` only tunes the first chunk and does not enable
+streaming by itself. Native streaming emits at 44.1 kHz, so omit
+`outputSampleRate` or set it to `44100` when `streamChunkTokens > 0`.
+Integer generation controls use signed 32-bit values. Parler does not support
+LavaSR post-processing.
+
+The generated Python client uses the same contract:
+
+```python
+from tetherto.qvac_sdk import TextToSpeechRequest, load_model, text_to_speech
+from tetherto.qvac_sdk.models import TTS_MINI_V1_EN_PARLER_TTS_Q8_0
+
+model_id = await load_model(
+    transport,
+    model_src=TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+    model_config={
+        "ttsEngine": "parler",
+        "voice": "Laura",
+        "seed": 42,
+        "topK": 1,
+    },
+)
+
+request = TextToSpeechRequest.model_validate({
+    "type": "textToSpeech",
+    "modelId": model_id,
+    "text": "Welcome to Parler text-to-speech.",
+    "inputType": "text",
+    "stream": False,
+    "emotion": "happy",
+})
+
+samples = []
+async for response in text_to_speech(transport, request):
+    samples.extend(response.buffer)
 ```
 
 For model constants, see [SDK — Models](/introduction#models).
@@ -93,7 +183,9 @@ The following script shows an example of Chatterbox TTS with voice cloning from 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/tts/chatterbox.js title="tts-chatterbox.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -101,7 +193,9 @@ The following script shows an example of Chatterbox TTS with voice cloning from 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/chatterbox.ts title="tts-chatterbox.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -115,7 +209,9 @@ The following script shows an example of Supertonic TTS for general-purpose spee
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/tts/supertonic.js title="tts-supertonic.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -123,7 +219,37 @@ The following script shows an example of Supertonic TTS for general-purpose spee
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/supertonic.ts title="tts-supertonic.ts" lineNumbers
+
 ```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parler-TTS
+
+The following TypeScript example loads the registry-hosted Parler Mini v1
+model, applies per-request emotion conditioning, saves the PCM output, and
+plays it:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/parler.js title="tts-parler.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/parler.ts title="tts-parler.ts" lineNumbers
+
+```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -137,7 +263,9 @@ The following script shows Chatterbox TTS with the LavaSR enhancer, which neural
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/tts/chatterbox-enhanced.js title="tts-chatterbox-enhanced.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -145,7 +273,9 @@ The following script shows Chatterbox TTS with the LavaSR enhancer, which neural
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/chatterbox-enhanced.ts title="tts-chatterbox-enhanced.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -159,7 +289,9 @@ The following script shows Supertonic TTS with the full LavaSR pipeline: the den
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/tts/supertonic-enhanced.js title="tts-supertonic-enhanced.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -167,7 +299,9 @@ The following script shows Supertonic TTS with the full LavaSR pipeline: the den
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/supertonic-enhanced.ts title="tts-supertonic-enhanced.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -181,7 +315,9 @@ The following helper script is used by the examples above to convert the raw PCM
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/tts/utils.js title="utils.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -189,11 +325,15 @@ The following helper script is used by the examples above to convert the raw PCM
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/utils.ts title="utils.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+  **Tip:** all examples throughout this documentation are self-contained and
+  runnable. For instructions on how to run them, see [SDK
+  quickstart](/quickstart).
 </Callout>

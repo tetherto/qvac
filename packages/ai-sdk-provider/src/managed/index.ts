@@ -3,8 +3,6 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-
 import {
   DEFAULT_API_KEY,
   DEFAULT_HEADERS,
@@ -15,6 +13,7 @@ import {
   SERVE_HEALTH_POLL_INTERVAL_MS,
   SPAWN_LOCK_STALE_MS
 } from '../defaults.js'
+import { createExternalQvac } from '../provider.js'
 import type { ManagedQvacProvider, QvacManagedOptions } from '../types.js'
 import { synthesizeServeConfig, writeEphemeralConfig } from './config-synthesizer.js'
 import { ServeSpawnFailedError, ServeStartTimeoutError } from './errors.js'
@@ -323,8 +322,7 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
   }
 
   const headers = { ...DEFAULT_HEADERS, ...options.headers }
-  const base = createOpenAICompatible({
-    name: 'qvac',
+  const base = createExternalQvac({
     baseURL: live.baseURL,
     apiKey: options.apiKey ?? DEFAULT_API_KEY,
     headers,
@@ -359,7 +357,7 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
   })
   const managed = Object.assign(base, { close, [Symbol.asyncDispose]: close })
 
-  return managed as unknown as ManagedQvacProvider
+  return managed as ManagedQvacProvider
 }
 
 // Swap the origin (scheme + host + port) of a request URL to the live serve's,

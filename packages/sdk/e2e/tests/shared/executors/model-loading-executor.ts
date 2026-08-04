@@ -5,6 +5,7 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR
 } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult } from '@tetherto/qvac-test-suite'
@@ -13,6 +14,7 @@ import {
   modelLoadLlm,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -28,6 +30,7 @@ const modelLoadTests = [
   modelLoadLlm,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -46,6 +49,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
     [modelLoadOcr.testId]: this.loadOcr.bind(this),
+    [modelLoadOcrDoctr.testId]: this.loadOcrDoctr.bind(this),
     [modelLoadInvalid.testId]: this.loadInvalid.bind(this),
     [modelUnload.testId]: this.unload.bind(this),
     [modelLoadConcurrent.testId]: this.loadConcurrent.bind(this),
@@ -92,6 +96,21 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
       modelConfig: { langList: ['en'] }
     })
     this.resources.register('ocr', modelId)
+    return ValidationHelpers.validate(modelId, expectation)
+  }
+
+  async loadOcrDoctr(
+    params: typeof modelLoadOcrDoctr.params,
+    expectation: typeof modelLoadOcrDoctr.expectation
+  ): Promise<TestResult> {
+    // Deliberately no pipelineType/detectorModelSrc: the plugin must infer
+    // the doctr pipeline from the recognizer src and derive the DBNet
+    // detector itself (QVAC-22514).
+    const modelId = await loadModel({
+      modelSrc: OCR_DOCTR,
+      modelType: 'ggml-ocr'
+    })
+    this.resources.register('doctr', modelId)
     return ValidationHelpers.validate(modelId, expectation)
   }
 

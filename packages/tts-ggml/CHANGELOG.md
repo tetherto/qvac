@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-08-03
+
+### Changed
+- Optimize OpenCL GPU backend implementation (Android) for Parler-TTS model
+- Update `ggml-speech` dependency version to align with other packages that also depend on it.
+
+## [0.6.1] - 2026-07-30
+
+### Fixed
+
+- **Parler no longer fails on iOS with `parler: DAC decode failed`.** The DAC
+  decoder's compute arena grew with the output length (~13.6 + 1.957 MiB per
+  frame, unbounded), and streaming re-decoded the whole code prefix on every
+  chunk, so a streamed utterance walked ~10 growing allocations up to 837 MiB.
+  That is fatal on iOS, where Metal buffers are backed by `posix_memalign`, and
+  invisible on macOS, which uses `vm_allocate`. Decoding is now windowed, so
+  peak DAC memory is constant in output length and streaming is 2.2–2.5×
+  faster. Audio is unchanged.
+
+### Changed
+
+- **Parler always samples.** `topK: 1` selects argmax decoding, which this model
+  family cannot terminate — it collapses into a silence attractor after the
+  first word, and end-of-sequence is gated on the first codebook emitting EOS as
+  its argmax, so generation runs to `maxFrames` and yields a truncated utterance
+  followed by silence. Such requests are now repaired to the model's sampled
+  defaults (temperature 1.0, `topK` 50) with a warning on stderr. Use `seed` for
+  reproducible output — a fixed seed is bit-reproducible.
+
+## [0.6.0] - 2026-07-24
+
+### Added
+
+- **Parler-TTS engine (mini-v1 / large-v1 / indic) (QVAC-19261).** Third
+  engine family under the same `TTSGgml` surface: description-conditioned
+  TTS (Flan-T5 encoder → delay-pattern decoder → DAC codec, native
+  44.1 kHz). Detection via `engine: 'parler'`,
+  `files.parlerModel`, or a `modelDir` containing
+  `parler-<mini|large|indic>[-vN][-<quant>].gguf` (mini > large > indic;
+  q8_0 > q6_k > f16 > f32 within a variant). The indic variant covers 21
+  Indic languages with script-native digit normalization.
+- **Parler Metal GPU support (QVAC-21593).** `config.useGPU: true` /
+  `nGpuLayers` offloads the Parler engine to Metal on Apple (~2.25x vs CPU
+  on indic q8_0; decode flash-attention + fused QKV/heads + DAC phase-matmul);
+  other backends fall back to CPU and the CPU output stays byte-identical.
+  Adds CPU + Metal CI coverage across the published quant tiers.
+- **Parler voice descriptions + emotion flag.** The voice is set either by
+  a free-text `description` (alias `voiceDescription`) or by template
+  fields — `voice`, `emotion`, `pitch`, `pace`, `expressivity`, `noise`,
+  `reverb`, `quality` — rendered natively by tts-cpp's
+  `build_description()` in the models' training-caption phrasing.
+  `emotion` accepts the 12 trained styles (command, anger, narration,
+  conversation, disgust, fear, happy, neutral, proper noun, news, sad,
+  surprise; case-insensitive, invalid values error listing the set).
+  Description and template fields are mutually exclusive at the same
+  level; everything defaults to the models' recommended fallback caption,
+  so Parler works with zero description configuration. Template fields
+  are also accepted **per call** (`run({ input, emotion })`,
+  `runStream`/`runStreaming` options) — the only engine with a per-call
+  channel — merging over the constructor fields without a reload.
+- **Parler sampling/generation knobs.** `temperature`, `topK`, `topP`,
+  `maxFrames`, `minNewTokens`, `normalizeNumbers`, `seed`, `threads`,
+  `config.outputSampleRate` (addon-side resample from the native
+  44.1 kHz), all optional with the GGUF's generation defaults. Requires a
+  `tts-cpp` pin that ships the parler engine (qvac-ext-lib-whisper.cpp
+  PR #92). New `examples/parler-tts.js`, integration/unit suites, C++
+  config tests, and a `parler` model-download group (mini q8_0).
+
 ## [0.5.1] - 2026-07-21
 
 ### Changed

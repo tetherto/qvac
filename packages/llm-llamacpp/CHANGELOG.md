@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.39.2] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+- Qwen3.5-VL cache-stress coverage now creates deterministic cache pressure
+  with measured, bounded prefill chunks while preserving normal EOS behavior.
+
+## [0.39.1] - 2026-07-29
+
+Extends LoRA finetuning to the b9840 model families: Qwen3.5/3.6 and Gemma-4, dense and
+mixture-of-experts. These architectures were previously rejected outright — `finetune()` threw
+`Finetuning is not supported for architecture: <arch>`. MoE models additionally need their expert FFN
+tensors targeted, so four expert LoRA target modules are now accepted. Complements the fabric-side
+training fixes already pinned via `qvac-fabric` 9840.0.1.
+
+### Added
+
+- Qwen3.5/3.6 dense (`qwen35`), Qwen3.x MoE (`qwen35moe`) and Gemma-4 (`gemma4`) are now supported
+  finetuning architectures — the allowlist grows from `gemma3`, `qwen3`, `bitnet` to six entries.
+- Four MoE expert LoRA target modules accepted in `loraModules`: `ffn_gate_exps`, `ffn_up_exps`,
+  `ffn_down_exps`, `ffn_gate_up_exps`. Required to train MoE experts at all — targeting only the dense
+  FFN names leaves expert weights untouched.
+- Integration coverage: `finetuning-archs` finetunes Qwen3.5-0.8B (desktop + mobile) and Gemma-4-E2B
+  (desktop), plus a pause/resume cycle on the new dense architecture; `finetuning-moe` covers
+  Qwen3.6-35B-A3B and Gemma-4-26B-A4B, opt-in behind `QVAC_RUN_MOE_FINETUNE=true` because those models
+  are ~20–27 GB. C++ unit tests lock backend selection for the new architectures and the expert-target
+  bit mapping.
+- `QVAC_QWEN35_MTMD_SIZE` (`0.8b` | `2b`) selects the model size for the Qwen3.5 multimodal
+  cache-stress test.
+
+### Changed
+
+- `docs/finetuning.md` model-format requirements now list the real architecture allowlist and document
+  the MoE expert LoRA targets.
+
+### Pull Requests
+
+- [#3509](https://github.com/tetherto/qvac/pull/3509) - b9840 finetuning (Qwen3.5/3.6 + Gemma-4, dense + MoE)
+
+## [0.39.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1`. This fixes MoE/GDN LoRA
+  finetuning: weight repacking is disabled for training loads (backward ops cannot
+  read repacked layouts), the Metal `acc`/`set` threadgroup dispatch now covers rows
+  wider than one threadgroup, and training on MoE / hybrid / recurrent architectures
+  seeds the backward pass from a down-scaled loss so gradients stay within fp32
+  range (persisted with the optimizer state). No API change for this package.
+
+## [0.38.2] - 2026-07-23
+
+Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.
+
+### Added
+
+- Unlimited-OCR ([baidu/Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR)) OCR VLM support: registry entry, README + NOTICE, a mobile integration test (`runOcrUnlimitedTest`) that parses a scanned CT-scan report, and a perf test (`runUnlimitedOcrPerfTest`) that records encode/prefill/decode timings, both registered in the android/ios weekly groups. GGUFs (`Q4_K_M` + `F16` mmproj) are pulled from the pinned community conversion [`vimalnakrani/unlimited-ocr-gguf`](https://huggingface.co/vimalnakrani/unlimited-ocr-gguf), the same public-repo pattern used by LightON OCR-2. Prompt-sensitive — use `document parsing.`. Requires `qvac-fabric >= 9840` (`deepseek2-ocr` engine + `deepseekocr` clip projector).
+
+### Pull Requests
+
+- [#3419](https://github.com/tetherto/qvac/pull/3419) - add Unlimited-OCR vision-language OCR model
+
 ## [0.38.1] - 2026-07-22
 
 This patch release guarantees that a content token follows the EOS-inside-reasoning recovery, so the forced `</think>` substitution can no longer be immediately followed by another end-of-generation token and produce an empty answer. It also exposes the generation stop reason as a new runtime stat.

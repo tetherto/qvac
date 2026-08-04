@@ -1,0 +1,169 @@
+name: Benchmark Performance (ASR GGML)
+
+# RTF orchestrator for the unified @qvac/asr-ggml addon: prebuild (or pin a
+# published package), run the desktop RTF matrix + the mobile Device Farm
+# benchmark lanes for BOTH engines, then aggregate one consolidated report.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/asr-ggml@1.0.0). When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
+      run_desktop:
+        description: "Run desktop (CPU/GPU) RTF benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs:
+      - context
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+    if: ${{ !inputs.prebuild_package }}
+  desktop-benchmarks:
+    needs:
+      - context
+      - prebuild
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      run_integration_tests: false
+      run_rtf_benchmarks: true
+
+    if: ${{ !cancelled() && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+  mobile-benchmarks:
+    needs:
+      - context
+      - prebuild
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      run_rtf_benchmarks: true
+
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+  summarize:
+    needs:
+      - context
+      - desktop-benchmarks
+      - mobile-benchmarks
+    if: (always())
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      # No merge-multiple: same-platform runners (e.g. qvac-ubuntu2204-x64 and
+      # qvac-ubuntu2204-x64-gpu) emit identically named rtf-benchmark-*.json
+      # files, so merging into one directory would clobber all but the last.
+      # Per-artifact subdirectories keep every runner; the aggregator's
+      # walkFiles recurses and dedupes on device.
+      - name: Download desktop benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: rtf-results-asr-ggml-*
+          path: benchmark-artifacts/desktop
+
+      # Per-platform subdirectories: Android + iOS each upload a
+      # performance-report.json, so a flat merge would collide. The
+      # aggregator's walkFiles recurses and dedupes mobile rows on device.
+      - name: Download mobile benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          pattern: perf-report-asr-ggml-*
+          path: benchmark-artifacts/mobile
+
+      - name: Generate consolidated benchmark report
+        run: |
+          node scripts/perf-report/aggregate-asr-ggml-rtf.js \
+            --dir benchmark-artifacts \
+            --manual-dir packages/asr-ggml/benchmarks/manual-results \
+            --output benchmark-artifacts/asr-ggml-performance-findings.md \
+            --output-json benchmark-artifacts/asr-ggml-performance-findings.json \
+            --output-html benchmark-artifacts/asr-ggml-performance-findings.html
+
+      - name: Add summary
+        run: cat benchmark-artifacts/asr-ggml-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Replaces the retired whisper-performance-findings +
+      # parakeet-performance-findings artifacts.
+      - name: Upload consolidated benchmark report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: asr-ggml-performance-findings
+          path: |
+            benchmark-artifacts/asr-ggml-performance-findings.md
+            benchmark-artifacts/asr-ggml-performance-findings.json
+            benchmark-artifacts/asr-ggml-performance-findings.html
+          retention-days: 30

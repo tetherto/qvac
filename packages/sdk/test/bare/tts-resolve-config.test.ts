@@ -14,6 +14,16 @@ type TtsGgmlDebugModel = {
   _cangjieTsvPath?: string
   _enhancerGgufPath?: string
   _denoiserGgufPath?: string
+  _parlerModelPath?: string
+  _description?: string
+  _voice?: string
+  _emotion?: string
+  _temperature?: number
+  _topK?: number
+  _topP?: number
+  _maxFrames?: number
+  _minNewTokens?: number
+  _normalizeNumbers?: boolean
   _outputSampleRate?: number | null
   _config?: {
     language?: string
@@ -21,6 +31,7 @@ type TtsGgmlDebugModel = {
     outputSampleRate?: number
     vulkanCacheDir?: string
   }
+  getEngineType?: () => string
 }
 
 test('ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsModelDeprecatedError', async (t) => {
@@ -82,6 +93,73 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
   t.is(model._nGpuLayers, 99)
   t.is(model._seed, 42)
   t.alike(model._config, { language: 'en', useGPU: true })
+})
+
+test('ttsPlugin resolveConfig: keeps Parler config runtime-only', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const config = {
+    ttsEngine: 'parler' as const,
+    voice: 'Rohit',
+    emotion: 'happy' as const,
+    temperature: 0.9
+  }
+
+  const resolved = await ttsPlugin.resolveConfig!(config, {
+    resolveModelPath: async () => {
+      throw new Error('Parler has no companion artifacts')
+    },
+    modelSrc: 'registry://s3/parler-mini-v1-q8_0.gguf',
+    modelType: 'tts-ggml'
+  })
+
+  t.alike(resolved.config, config)
+  t.alike(resolved.artifacts, {})
+})
+
+test('ttsPlugin createModel: wires the full Parler constructor surface', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-parler-test',
+    modelPath: '/tmp/parler-mini-v1-q8_0.gguf',
+    modelConfig: {
+      ttsEngine: 'parler',
+      voice: 'Rohit',
+      emotion: 'happy',
+      useGPU: true,
+      outputSampleRate: 44100,
+      streamChunkTokens: 43,
+      streamFirstChunkTokens: 20,
+      threads: 2,
+      nGpuLayers: 99,
+      seed: 7,
+      temperature: 0.9,
+      topK: 40,
+      topP: 0.95,
+      maxFrames: 860,
+      minNewTokens: -1,
+      normalizeNumbers: false
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'parler')
+  t.is(model._parlerModelPath, '/tmp/parler-mini-v1-q8_0.gguf')
+  t.is(model._voice, 'Rohit')
+  t.is(model._emotion, 'happy')
+  t.is(model._temperature, 0.9)
+  t.is(model._topK, 40)
+  t.is(model._topP, 0.95)
+  t.is(model._maxFrames, 860)
+  t.is(model._minNewTokens, -1)
+  t.is(model._normalizeNumbers, false)
+  t.is(model._streamChunkTokens, 43)
+  t.is(model._streamFirstChunkTokens, 20)
+  t.is(model._threads, 2)
+  t.is(model._nGpuLayers, 99)
+  t.is(model._seed, 7)
+  t.is(model._outputSampleRate, 44100)
+  t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
 })
 
 test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets', async (t) => {

@@ -2,9 +2,11 @@
 
 [Vercel AI SDK](https://ai-sdk.dev) provider for the [QVAC](https://qvac.tether.io) local AI runtime.
 
-QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
+QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package implements the native provider contracts for language, embedding, image, file-reference, transcription, and speech operations against a local `qvac serve openai` runtime. It also re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
-> **Status — `0.2.0`.** Two modes:
+The provider is OpenAI-compatible by construction: the OpenAI-compatible transport is its fallback provider, while the SDK's native custom-provider composition adds QVAC-specific files, transcription, and speech capabilities. Existing OpenAI-shaped chat, completion, embedding, and image requests keep the same wire protocol.
+
+> **Runtime modes:**
 >
 > - **External** (default): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
 > - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
@@ -20,7 +22,14 @@ bun add @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
 # or: npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
 ```
 
-`ai` and `@ai-sdk/openai-compatible` are **peer dependencies** — install them alongside.
+Runtime requirements:
+
+- **Node.js 22 or newer.** Node 20 is not supported.
+- **AI SDK 7** (`ai@^7`) and **OpenAI-compatible provider 3** (`@ai-sdk/openai-compatible@^3`).
+- **Provider-v4 contracts.** Custom middleware and direct model integrations must use the AI SDK v4 provider interfaces exposed by these versions.
+- **ESM-only imports.** Use `import` / dynamic `import()`; CommonJS `require()` is not supported.
+
+`ai` and `@ai-sdk/openai-compatible` are **peer dependencies** — install those compatible major versions alongside the provider.
 
 ---
 
@@ -77,7 +86,64 @@ qvac.chatModel('qwen3-600m') // explicit chat model
 qvac.completionModel('qwen3-600m') // legacy completion
 qvac.textEmbeddingModel('embed-gemma') // text embeddings
 qvac.imageModel('flux-schnell') // image generation
+qvac.transcriptionModel('whisper') // speech to text
+qvac.speechModel('tts') // text to speech
+qvac.files() // local ephemeral file uploads
 ```
+
+### Local file references
+
+`uploadFile` stores bytes in the running QVAC process and returns a `qvac` provider reference. Passing that reference to a QVAC language model resolves the bytes through the same local runtime immediately before inference. The reference never becomes a cloud URL and expires with QVAC's ephemeral file store.
+
+```ts
+import { readFileSync } from 'node:fs'
+import { generateText, uploadFile } from 'ai'
+
+const { providerReference } = await uploadFile({
+  api: qvac,
+  data: readFileSync('./sensor.png'),
+  mediaType: 'image/png',
+  filename: 'sensor.png'
+})
+
+const { text } = await generateText({
+  model: qvac('vision'),
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Read the sensor display.' },
+        { type: 'file', mediaType: 'image/png', data: providerReference }
+      ]
+    }
+  ]
+})
+```
+
+### Native speech and transcription
+
+Speech operations use the provider's native model contracts while remaining entirely inside the local QVAC serve:
+
+```ts
+import { generateSpeech, transcribe } from 'ai'
+
+const speech = await generateSpeech({
+  model: qvac.speechModel('tts'),
+  text: 'The sensor temperature is twenty four degrees.',
+  voice: 'alloy',
+  outputFormat: 'wav'
+})
+
+const transcript = await transcribe({
+  model: qvac.transcriptionModel('stt'),
+  audio: speech.audio.uint8Array,
+  providerOptions: {
+    qvac: { prompt: 'Sensor terminology' }
+  }
+})
+```
+
+Per-request transcription `prompt` is supported. Language is selected when the QVAC model is loaded, and speech speed, instructions, and language are not consumed by the current local engines; the provider returns structured warnings when callers supply those options.
 
 ---
 
@@ -187,7 +253,7 @@ Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that ope
 
 - **Startup is gated on model preload.** `qvac serve` does not open its port until every preloaded model is ready, and a cold P2P download can take minutes — hence the generous default `serveStartTimeout`. Raise it for large models.
 - **External mode pays nothing.** The managed subsystem (and its `node:child_process` / `@qvac/cli` resolution) is dynamically imported only when `mode: 'managed'` is set.
-- **Node 20+ and Bun.** The managed subsystem uses only portable `node:` APIs — no Bun-specific calls.
+- **Node 22+ and Bun.** The managed subsystem uses only portable `node:` APIs — no Bun-specific calls.
 - **Typed errors.** Managed setup throws structured errors you can `instanceof`-check: `UnknownManagedModelError`, `DuplicateManagedModelError`, `MultipleDefaultManagedModelsError`, `CliNotFoundError`, `ServeStartTimeoutError`, `ServeSpawnFailedError`, `ServeExitedError`, and `PortAllocationFailedError` (all extending `QvacManagedModeError`, with a `.code` from `QvacManagedErrorCode`). They're exported from the package root.
 
 ---
@@ -318,7 +384,7 @@ type EndpointCategory =
   | 'image'
 ```
 
-The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`onnx-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
+The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`ggml-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
 
 ```bash
 npm run update-models     # writes src/models/constants.ts + models/history/<sha>.txt

@@ -76,7 +76,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const id = ctx.ephemeralFiles.put({
         data: fileBuf,
         fileName: fileMeta.filename.length > 0 ? fileMeta.filename : 'upload.bin',
-        purpose
+        purpose,
+        contentType: fileMeta.mimetype
       })
       ctx.logger.info(`  files upload id=${id} bytes=${fileBuf.length} purpose=${purpose}`)
       const rec = ctx.ephemeralFiles.get(id)
