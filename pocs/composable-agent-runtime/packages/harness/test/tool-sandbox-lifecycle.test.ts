@@ -702,6 +702,42 @@ test('composed skills reject an unscoped exec grant before child invocation', as
   await composed.close()
 })
 
+// A provider's create() binds real resources (the weather skill opens a
+// loopback proxy), so a later provider failing must not strand the earlier ones.
+test('composing closes already-created providers when a later one fails', async () => {
+  const closed: string[] = []
+  const bundle = fixtureSkillBundle()
+  const catalog = await Harness.resolveSkillCatalog({ bundle })
+
+  await expect(
+    Harness.composeSkillHost({
+      sdk: {} as never,
+      catalog,
+      bundle,
+      providers: [
+        {
+          name: 'weather',
+          create: () => ({
+            tools: [],
+            close: async () => {
+              closed.push('weather')
+            }
+          })
+        },
+        {
+          name: 'notes',
+          create: () => {
+            throw new Error('notes provider failed to start')
+          }
+        }
+      ],
+      selectedSkillsForAgent: () => []
+    })
+  ).rejects.toThrow(/notes provider failed to start/)
+
+  expect(closed).toEqual(['weather'])
+})
+
 test('sandbox routing never sends shared or unknown tools to a child', async () => {
   const createFakeLauncher = Reflect.get(Harness, 'createFakeToolSandboxLauncher')
   const createRegistry = Reflect.get(Harness, 'createToolSandboxRegistry')

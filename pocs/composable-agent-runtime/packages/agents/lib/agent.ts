@@ -188,6 +188,22 @@ function assistantHistory(
   })
 }
 
+export const CANCELED_TOOL_RESULT = { status: 'canceled' } as const
+
+/**
+ * Records an outcome for calls a cancelled round never ran. Without this the
+ * saved history announces tool calls that have no result, which a provider
+ * either rejects or "repairs" by calling the tool again.
+ */
+function recordCanceled(
+  messages: AgentMessage[],
+  calls: readonly AgentToolCall[]
+) {
+  for (const _call of calls) {
+    messages.push({ role: 'tool', content: JSON.stringify(CANCELED_TOOL_RESULT) })
+  }
+}
+
 function errorFrom(value: Error | string) {
   return value instanceof Error ? value : new Error(value)
 }
@@ -287,9 +303,13 @@ function createRun(
           messagesFor(definition, promptFor(operation, context))
         let output = ''
         let round = resumed?.round ?? 0
+        // Where a resume should restart. It advances past a round only once
+        // that round's tool calls all have recorded outcomes.
+        let resumeRound = round
         let exhausted = true
 
         for (; round < turnBudget; round++) {
+          resumeRound = round
           if (source.signal.aborted) break
           const request: ModelRequest = {
             model: definition.model,
@@ -345,28 +365,43 @@ function createRun(
             role: 'assistant',
             content: assistantHistory(canonicalRaw, content, calls)
           })
+          // Every announced call must end up with a recorded outcome. A history
+          // where a tool call has no result is rejected by providers, and a
+          // lenient one re-issues the call — running a side effect twice.
           let aborted = false
-          for (const call of calls) {
-            const result = await gate.execute({
-              agentId: definition.id,
-              runId: options.runId,
-              operationId: activeOperationId,
-              call,
-              signal: source.signal,
-              reportProgress: async (progress) => {
-                if (source.signal.aborted) return
-                progressQueue.push({
-                  type: 'tool-progress',
-                  runId: options.runId,
-                  operationId: currentOperationId,
-                  callId: call.id,
-                  name: call.name,
-                  progress
-                })
-              }
-            })
+          for (const [index, call] of calls.entries()) {
             if (source.signal.aborted) {
               aborted = true
+              recordCanceled(messages, calls.slice(index))
+              break
+            }
+            let result
+            try {
+              result = await gate.execute({
+                agentId: definition.id,
+                runId: options.runId,
+                operationId: activeOperationId,
+                call,
+                signal: source.signal,
+                reportProgress: async (progress) => {
+                  if (source.signal.aborted) return
+                  progressQueue.push({
+                    type: 'tool-progress',
+                    runId: options.runId,
+                    operationId: currentOperationId,
+                    callId: call.id,
+                    name: call.name,
+                    progress
+                  })
+                }
+              })
+            } catch (error) {
+              // Buffered approval and progress events explain why this failed,
+              // so they must reach the caller before the failure does.
+              yield* progressQueue.drain()
+              if (!source.signal.aborted) throw error
+              aborted = true
+              recordCanceled(messages, calls.slice(index))
               break
             }
             yield* progressQueue.drain()
@@ -378,9 +413,22 @@ function createRun(
               name: call.name,
               result
             }
+            // Recorded even when the run is aborting: the tool already ran, and
+            // dropping its result would make a resume repeat the side effect.
             messages.push({ role: 'tool', content: JSON.stringify(result) })
+            if (source.signal.aborted) {
+              aborted = true
+              recordCanceled(messages, calls.slice(index + 1))
+              break
+            }
           }
-          if (aborted || source.signal.aborted) break
+          // The round's calls all have outcomes now, so a resume continues from
+          // the next round rather than re-issuing this one.
+          resumeRound = round + 1
+          if (aborted || source.signal.aborted) {
+            yield* progressQueue.drain()
+            break
+          }
           yield* progressQueue.drain()
         }
         if (source.signal.aborted) {
@@ -388,7 +436,7 @@ function createRun(
           // tool calls that already ran.
           pendingOperation = {
             operationId: activeOperationId,
-            round,
+            round: resumeRound,
             messages: messages.map((message) => ({ ...message }))
           }
           break

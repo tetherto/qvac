@@ -874,7 +874,9 @@ test('Harness isolates persisted and SDK identities for slash-colliding run pair
   await harness.close()
 })
 
-test('cancel reaches SDK and broker and fences late tool output', async (t) => {
+// A tool that completed is reported even though the run is cancelling. The
+// alternative — discarding its result — makes a resume re-run a side effect.
+test('cancel reaches SDK and broker and keeps a completed tool result', async (t) => {
   const sdkCancellations: string[] = []
   let releaseBroker: (() => void) | undefined
   const sdk = createSdk(({ requestId }) => ({
@@ -916,7 +918,7 @@ test('cancel reaches SDK and broker and fences late tool output', async (t) => {
 
   t.is(sdkCancellations.length, 1)
   t.alike(broker.cancellations, ['weather-agent/cancel-tool'])
-  t.alike(events.map((event) => event.type), ['tool-call', 'aborted'])
+  t.alike(events.map((event) => event.type), ['tool-call', 'tool-result', 'aborted'])
   await harness.close()
 })
 

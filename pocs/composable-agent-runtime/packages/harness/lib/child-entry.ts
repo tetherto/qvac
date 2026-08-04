@@ -42,11 +42,13 @@ export function createChildEntry({
       logging,
       runStore: statePort.store,
       ...configured,
-      // A host that answers approvals wins over any static configuration; the
-      // configured port remains the fallback while no client is listening.
+      // A host that answers wins outright. The configured port is consulted
+      // only when nobody could answer — falling back on a denial would let a
+      // second authority overturn the host's decision.
       toolApproval: {
         approve: async (invocation) => {
-          if (await approvalPort.port.approve(invocation)) return true
+          const outcome = await approvalPort.ask(invocation)
+          if (outcome !== 'unavailable') return outcome === 'approved'
           return configured?.toolApproval?.approve(invocation) ?? false
         }
       }

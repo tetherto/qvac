@@ -67,7 +67,6 @@
     "test:bare": "brittle-bare test/all.ts",
     "test:spawn": "node --experimental-strip-types test/spawn.test.ts",
     "test:smoke:qwen": "QVAC_REAL_MODEL_SMOKE=1 node --experimental-strip-types test/qwen-smoke.test.ts",
-    "test:smoke:diffusion": "QVAC_REAL_MODEL_SMOKE=1 bare test/diffusion-smoke.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "files": [

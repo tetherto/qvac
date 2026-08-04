@@ -191,12 +191,18 @@ test('same selection materializes into isolated per-agent roots and cleans up', 
 
   expect(first).not.toBe(second)
   expect(path.dirname(first)).not.toBe(path.dirname(second))
+  // Isolated roots, identical contents: the per-agent split is about the tree,
+  // not about what each agent gets to read.
+  expect(await readFile(path.join(first, 'weather', 'SKILL.md'), 'utf8')).toBe(
+    await readFile(path.join(second, 'weather', 'SKILL.md'), 'utf8')
+  )
   await cleanupMaterializedSkills(first)
   await expect(access(first)).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await readFile(path.join(second, 'weather', 'SKILL.md'), 'utf8')).toContain(
     'name: weather'
   )
   await cleanupMaterializedSkills(second)
+  await expect(access(second)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 test('a materializer reuses one tree per selection and replaces it on change', async () => {
@@ -220,7 +226,20 @@ test('a materializer reuses one tree per selection and replaces it on change', a
   })
   expect(changed).not.toBe(first)
   await expect(access(first)).rejects.toMatchObject({ code: 'ENOENT' })
+
+  // A second agent so close() has to reclaim more than the one live tree.
+  const other = await materializer.materialize({
+    agentId: 'agent-b',
+    selectedSkills: ['weather'],
+    bundle: BUNDLE
+  })
+  expect(other).not.toBe(changed)
+
+  // Trees are mode 0500, so only the materializer can remove them. Closing has
+  // to reclaim every live tree or callers are left with undeletable roots.
   await materializer.close()
+  await expect(access(changed)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(access(other)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 test('materializing an unknown skill fails rather than shipping an empty tree', async () => {

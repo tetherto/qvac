@@ -48,8 +48,25 @@ export type ComposedSkillHost = Omit<
 export async function composeSkillHost(
   options: ComposeSkillHostOptions
 ): Promise<ComposedSkillHost> {
-  const byName = new Map(options.catalog.map((entry) => [entry.name, entry]))
   const contributions = new Map<string, SkillHostContribution>()
+  try {
+    return await compose(options, contributions)
+  } catch (error) {
+    // A provider that already ran create() may hold a listening socket or a
+    // child process. Failing to compose must not strand them, and a rollback
+    // failure must not replace the reason composition failed.
+    await Promise.allSettled(
+      [...contributions.values()].map((contribution) => contribution.close?.())
+    )
+    throw error
+  }
+}
+
+async function compose(
+  options: ComposeSkillHostOptions,
+  contributions: Map<string, SkillHostContribution>
+): Promise<ComposedSkillHost> {
+  const byName = new Map(options.catalog.map((entry) => [entry.name, entry]))
   const toolOwners = new Map<string, string>()
   const sandboxTools = new Set<string>()
   const sharedOwners = new Map<string, SkillHostContribution>()
@@ -254,9 +271,19 @@ function requiredGrantsFor(
   byName: ReadonlyMap<string, SkillCatalogEntry>
 ) {
   const required = new Map<string, ToolGrant[]>()
+  const owners = new Map<string, string>()
   for (const provider of providers) {
     for (const raw of byName.get(provider.name)?.tools ?? []) {
       const grant = parseToolGrant(raw)
+      // Two skills declaring the same grant name would each satisfy the
+      // other's scope check, so one skill's grant could unlock another's tool.
+      const owner = owners.get(grant.name)
+      if (owner && owner !== provider.name) {
+        throw new Error(
+          `duplicate grant "${grant.name}" from skills ${owner} and ${provider.name}`
+        )
+      }
+      owners.set(grant.name, provider.name)
       const existing = required.get(grant.name) ?? []
       existing.push(grant)
       required.set(grant.name, existing)

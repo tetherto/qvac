@@ -532,6 +532,156 @@ test('a mid-operation checkpoint resumes the conversation without replaying roun
   t.is(result.status === 'completed' ? result.output : '', 'resumed answer')
 })
 
+// A saved history that announces a tool call with no result is rejected by
+// providers, and "repaired" by lenient ones into calling the tool again.
+test('cancelling while a tool runs keeps its result and balances the history', async function (t) {
+  const executed: string[] = []
+  const adapter = toolAdapter([
+    [{ type: 'tool-call', call: { id: 'c1', name: 'act', arguments: {} } }],
+    [{ type: 'content', text: 'unreachable' }]
+  ])
+  const agent = defineAgent({
+    id: 'canceller',
+    model: 'small',
+    toolPolicy: { allow: ['act'], requireApproval: [] }
+  })
+  let cancel: (() => void) | undefined
+  const run = agent.run({
+    runId: 'run-cancel-tool',
+    input: 'go',
+    adapter,
+    tooling: {
+      tools: [echoTool('act')],
+      grants: grantsOf('act'),
+      broker: {
+        async execute(input) {
+          executed.push(input.call.name)
+          // Cancel while this call is in flight: it completes, and its result
+          // must not be thrown away.
+          cancel?.()
+          return { done: true }
+        },
+        async cancel() {},
+        async close() {}
+      }
+    }
+  })
+  cancel = () => {
+    void run.cancel('user-request')
+  }
+
+  await collect(run.events)
+  const result = await run.result
+
+  t.alike(executed, ['act'], 'the tool ran exactly once')
+  t.is(result.status, 'canceled')
+  const messages = result.checkpoint.operation?.messages ?? []
+  t.alike(
+    messages.map((message) => message.role),
+    ['user', 'assistant', 'tool'],
+    'the completed call keeps its result in the saved history'
+  )
+  t.is(result.checkpoint.operation?.round, 1, 'a resume continues past the round')
+})
+
+test('cancelling between calls in a round records an outcome for every call', async function (t) {
+  const executed: string[] = []
+  const adapter = toolAdapter([
+    [
+      { type: 'tool-call', call: { id: 'c1', name: 'act', arguments: {} } },
+      { type: 'tool-call', call: { id: 'c2', name: 'act', arguments: {} } }
+    ],
+    [{ type: 'content', text: 'unreachable' }]
+  ])
+  const agent = defineAgent({
+    id: 'multi',
+    model: 'small',
+    toolPolicy: { allow: ['act'], requireApproval: [] }
+  })
+  let cancel: (() => void) | undefined
+  const run = agent.run({
+    runId: 'run-cancel-between',
+    input: 'go',
+    adapter,
+    tooling: {
+      tools: [echoTool('act')],
+      grants: grantsOf('act'),
+      broker: {
+        async execute(input) {
+          executed.push(input.call.id)
+          // Cancel once the first call has finished, so the second never runs.
+          cancel?.()
+          return { done: true }
+        },
+        async cancel() {},
+        async close() {}
+      }
+    }
+  })
+  cancel = () => {
+    void run.cancel('user-request')
+  }
+
+  const events = await collect(run.events)
+  const result = await run.result
+
+  t.alike(executed, ['c1'], 'the second call never ran')
+  t.is(result.status, 'canceled', 'cancelling mid-round is not an error')
+  t.is(
+    events.some((event) => event.type === 'run-canceled'),
+    true,
+    'a resumable cancellation is still reported'
+  )
+  const messages = result.checkpoint.operation?.messages ?? []
+  t.alike(
+    messages.map((message) => message.role),
+    ['user', 'assistant', 'tool', 'tool'],
+    'both announced calls have a recorded outcome'
+  )
+  t.is(messages.at(-1)?.content, JSON.stringify({ status: 'canceled' }))
+})
+
+test('a denied approval surfaces its events before the failure', async function (t) {
+  const adapter = toolAdapter([
+    [{ type: 'tool-call', call: { id: 'c1', name: 'danger', arguments: {} } }]
+  ])
+  const agent = defineAgent({
+    id: 'denied',
+    model: 'small',
+    toolPolicy: { allow: ['danger'], requireApproval: ['danger'] }
+  })
+  const run = agent.run({
+    runId: 'run-denied-events',
+    input: 'go',
+    adapter,
+    tooling: {
+      tools: [echoTool('danger')],
+      grants: grantsOf('danger'),
+      approval: { async approve() { return false } },
+      broker: {
+        async execute() {
+          return null
+        },
+        async cancel() {},
+        async close() {}
+      }
+    }
+  })
+
+  const events: AgentEvent[] = []
+  await t.exception(
+    (async () => {
+      for await (const event of run.events) events.push(event)
+    })(),
+    /approval denied/
+  )
+  t.alike(
+    events.filter((event) => event.type.startsWith('approval-')).map((e) => e.type),
+    ['approval-requested', 'approval-resolved'],
+    'the caller can see why the run failed'
+  )
+})
+
 test('a checkpoint from an older version is rejected rather than reinterpreted', async function (t) {
   const adapter = toolAdapter([[{ type: 'content', text: 'unexpected' }]])
   const agent = defineAgent({ id: 'versioned', model: 'small' })

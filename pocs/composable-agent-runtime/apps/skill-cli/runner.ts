@@ -505,9 +505,21 @@ async function answerApprovals(
     for await (const request of harness.watchApprovals()) {
       await harness.resolveApproval({ approvalId: request.approvalId, approved })
     }
-  } catch {
-    // The stream ends with the harness; pending approvals fail closed there.
+  } catch (error) {
+    // The stream ends with the harness and pending approvals fail closed there,
+    // but anything else is a real failure and must not be swallowed silently.
+    if (!isClosedStream(error)) {
+      process.stderr.write(`approval loop failed: ${describeError(error)}\n`)
+    }
   }
+}
+
+function isClosedStream(error: unknown) {
+  return /closed|unavailable|destroyed/i.test(describeError(error))
+}
+
+function describeError(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function createProductionRunnerDependencies(

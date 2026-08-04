@@ -22,8 +22,15 @@ export interface HarnessApprovalDecision {
   readonly reason?: string
 }
 
+/**
+ * `unavailable` means nobody could answer — no listener, a closed stream, or an
+ * aborted call. It is not a denial, and must never be treated as one by a
+ * caller that would then consult a different authority.
+ */
+export type HarnessApprovalOutcome = 'approved' | 'denied' | 'unavailable'
+
 interface Deferred {
-  resolve(approved: boolean): void
+  resolve(outcome: HarnessApprovalOutcome): void
 }
 
 /**
@@ -51,19 +58,34 @@ export function createRemoteToolApprovalPort() {
     if (!deferred) return
     pending.delete(frame.approvalId)
     const data = frame.data as { readonly approved?: unknown } | null | undefined
-    deferred.resolve(data?.approved === true)
+    deferred.resolve(data?.approved === true ? 'approved' : 'denied')
   }
 
   function denyAll() {
     stream = null
-    for (const deferred of pending.values()) deferred.resolve(false)
+    // A closed stream is an unanswered request, not a decision.
+    for (const deferred of pending.values()) deferred.resolve('unavailable')
     pending.clear()
   }
 
+  /**
+   * Tri-state so a caller can tell an explicit denial from an unanswerable
+   * request. Collapsing them lets a denial fall through to a second authority.
+   */
+  function ask(invocation: AgentToolInvocation): Promise<HarnessApprovalOutcome> {
+    if (!stream) return Promise.resolve('unavailable')
+    if (invocation.signal.aborted) return Promise.resolve('unavailable')
+    return askHost(invocation)
+  }
+
   const port: ToolApprovalPort = {
-    approve(invocation: AgentToolInvocation) {
-      if (!stream) return Promise.resolve(false)
-      if (invocation.signal.aborted) return Promise.resolve(false)
+    async approve(invocation: AgentToolInvocation) {
+      return (await ask(invocation)) === 'approved'
+    }
+  }
+
+  function askHost(invocation: AgentToolInvocation): Promise<HarnessApprovalOutcome> {
+    {
       const approvalId = `approval-${++nextApprovalId}`
       const request: HarnessApprovalRequest = {
         approvalId,
@@ -74,17 +96,19 @@ export function createRemoteToolApprovalPort() {
         name: invocation.call.name,
         args: invocation.call.arguments
       }
-      return new Promise<boolean>((resolve) => {
+      return new Promise<HarnessApprovalOutcome>((resolve) => {
         let settled = false
-        const settle = (approved: boolean) => {
+        const settle = (outcome: HarnessApprovalOutcome) => {
           if (settled) return
           settled = true
           pending.delete(approvalId)
           invocation.signal.removeEventListener('abort', onAbort)
-          resolve(approved)
+          // Tell the host to stop showing a request nobody can answer.
+          if (outcome === 'unavailable') withdraw(approvalId)
+          resolve(outcome)
         }
         function onAbort() {
-          settle(false)
+          settle('unavailable')
         }
         pending.set(approvalId, { resolve: settle })
         invocation.signal.addEventListener('abort', onAbort, { once: true })
@@ -95,13 +119,21 @@ export function createRemoteToolApprovalPort() {
             data: request as unknown as WireValue
           })
         } catch {
-          settle(false)
+          settle('unavailable')
         }
       })
     }
   }
 
-  return { port, attach, denyAll }
+  function withdraw(approvalId: string) {
+    try {
+      stream?.write({ type: 'approval-withdrawn', approvalId })
+    } catch {
+      // The stream is gone, so the host has already dropped its request.
+    }
+  }
+
+  return { port, ask, attach, denyAll }
 }
 
 /**
@@ -117,8 +149,12 @@ export function createHarnessApprovalHost() {
   function attach(next: GeneratedHarnessStream) {
     stream = next
     next.on('data', (frame: Record<string, WireValue>) => {
-      if (frame.type !== 'approval-request') return
       if (typeof frame.approvalId !== 'string') return
+      if (frame.type === 'approval-withdrawn') {
+        outstanding.delete(frame.approvalId)
+        return
+      }
+      if (frame.type !== 'approval-request') return
       const payload = frame.data as Partial<HarnessApprovalRequest> | null | undefined
       if (!payload) return
       const request: HarnessApprovalRequest = {

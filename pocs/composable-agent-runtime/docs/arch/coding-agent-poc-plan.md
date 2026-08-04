@@ -49,12 +49,12 @@ These are load-bearing and should not be rebuilt.
 
 | Capability | Where | State |
 | --- | --- | --- |
-| Agentic tool loop | `packages/harness/lib/brokered-model-adapter.ts` | Works; fixed 10-round cap (`MAX_TOOL_ROUNDS`) |
+| Agentic tool loop | `packages/agents/lib/agent.ts` | Works; configurable turn budget |
 | Agent registration (instructions, skills, tool policy) | `packages/harness/lib/agent-registration.ts` | Works; `LocalHarnessRuntime` only |
 | Skill format (`SKILL.md` frontmatter + grants) | `packages/harness/lib/skills/`, `packages/harness/skills/` | Works; same shape as Claude/opencode skills |
 | Scoped tool grants (`exec(obsidian)`, `http_request` + allow-list) | `lib/skills/tool-grants.ts`, `lib/tool-broker.ts` | Works |
 | Per-agent macOS Seatbelt sandbox, lazy start, idle close, fenced generations, cancellation, bounded output | `lib/tool-sandbox/` | Works, **macOS only**, 2 tools |
-| Approval port | `HarnessToolApprovalPort` in `lib/tool-broker.ts` | Exists; internal to harness composition |
+| Approval port | `packages/harness/lib/approval-port.ts`, `AssistantFacade.approvals` | Works across the process boundary, fail-closed |
 | Durable work profile: envelope, journal, cancellation, checkpoint-ref, **gates**, outcome, executor presence | `packages/sync/lib/profiles/durable-work/contract.ts` | Schema complete; semantics unspecified |
 | Transportable run state + checkpoints + available-work watch | `packages/agents/lib/agent-state-store.ts` | Interface exists, Sync + in-memory impls |
 | Supervised 3-runtime topology, restart, suspend/resume | `packages/harness`, `packages/sync`, `@qvac/supervisor` | Validated desktop + Android |
