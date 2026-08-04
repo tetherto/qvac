@@ -143,11 +143,19 @@ TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
 }
 
 TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {
-  // The caller maps every terminal stop reason (EOG, antiprompt, n_predict,
-  // and sequence limit) to hasTerminalReason=true. A checkpoint-backed
-  // context must restore rather than attempting to compact an unclosed span.
+  // Every terminal stop reason (EOG, antiprompt, n_predict, and sequence
+  // limit) must restore a checkpoint-backed context rather than attempting
+  // to compact an unclosed span.
   EXPECT_TRUE(shouldRollbackInterruptedReasoning(
-      /*hasTerminalReason=*/true,
+      GenerationStopReason::Eos,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+  EXPECT_TRUE(shouldRollbackInterruptedReasoning(
+      GenerationStopReason::Antiprompt,
       /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
@@ -158,7 +166,7 @@ TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {
 
 TEST(ReasoningSnapshotPolicy, KeepsCompletedOrNonTerminalReasoning) {
   EXPECT_FALSE(shouldRollbackInterruptedReasoning(
-      /*hasTerminalReason=*/false,
+      GenerationStopReason::None,
       /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
@@ -166,7 +174,7 @@ TEST(ReasoningSnapshotPolicy, KeepsCompletedOrNonTerminalReasoning) {
       /*hasOpenSpan=*/true,
       /*hasCapturedCloseSpan=*/false));
   EXPECT_FALSE(shouldRollbackInterruptedReasoning(
-      /*hasTerminalReason=*/true,
+      GenerationStopReason::Eos,
       /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
@@ -174,7 +182,7 @@ TEST(ReasoningSnapshotPolicy, KeepsCompletedOrNonTerminalReasoning) {
       /*hasOpenSpan=*/true,
       /*hasCapturedCloseSpan=*/false));
   EXPECT_FALSE(shouldRollbackInterruptedReasoning(
-      /*hasTerminalReason=*/true,
+      GenerationStopReason::Eos,
       /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,

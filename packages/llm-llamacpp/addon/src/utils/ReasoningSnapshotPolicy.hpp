@@ -1,5 +1,7 @@
 #pragma once
 
+#include "model-interface/SequenceDriver.hpp"
+
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
@@ -81,11 +83,12 @@ recurrentReasoningBoundaryDecision(
 // to compaction without a close marker would wipe the whole sequence instead
 // of preserving the preceding conversation.
 [[nodiscard]] inline bool shouldRollbackInterruptedReasoning(
-    bool hasTerminalReason, bool needsRecurrentSnapshot,
+    GenerationStopReason terminalReason, bool needsRecurrentSnapshot,
     bool removeThinkingFromContext, bool reasoningEnabled,
     bool insideReasoning, bool hasOpenSpan,
     bool hasCapturedCloseSpan) noexcept {
-  return hasTerminalReason && needsRecurrentSnapshot &&
+  return terminalReason != GenerationStopReason::None &&
+         needsRecurrentSnapshot &&
          removeThinkingFromContext && reasoningEnabled && insideReasoning &&
          hasOpenSpan && !hasCapturedCloseSpan;
 }

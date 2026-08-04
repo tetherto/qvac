@@ -1147,7 +1147,7 @@ bool TextLlmContext::onCancel(
 bool TextLlmContext::shouldRollbackInterruptedReasoning() const {
   return qvac_lib_inference_addon_llama::utils::
       shouldRollbackInterruptedReasoning(
-          generationStopReason_ != GenerationStopReason::None,
+          generationStopReason_,
           needsRecurrentSnapshot_,
           removeThinkingFromContext_,
           reasoningEnabled_,
