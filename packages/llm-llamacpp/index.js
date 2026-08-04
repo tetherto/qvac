@@ -390,15 +390,27 @@ class LlmLlamacpp {
    * a caller who asked to fail fast be admitted and then block behind the
    * batch. `activeSlots()` measures the resource that actually runs out; the
    * job count still matters where slots are not the currency — `parallel: 1`
-   * (no batch scheduler, slots always 0), an exclusive finetune, and the
-   * window between admission and slot enqueue — so capacity is the max of the
-   * two. Optional call so an older/stubbed binding keeps working.
+   * (no batch scheduler, slots always 0) and the window between admission and
+   * slot enqueue — so capacity is the max of the two. Optional call so an
+   * older/stubbed binding keeps working.
+   *
+   * A finetune needs its own check: it is exclusive, so it saturates the model
+   * at any `parallel`, yet it occupies no slot and counts as a single job — so
+   * neither counter reports a full pool for `parallel >= 2`.
    *
    * Fast-fail hint only, like the finetune check below: the native scheduler
    * is the authority, and slot state can change right after this read.
    * @returns {boolean}
    */
   _atCapacity() {
+    // An exclusive finetune holds the whole model however idle the counters
+    // look. The response handler is live exactly while that job is queued or
+    // running — it settles on the finetune's terminal event, on a submission
+    // failure, and on unload — so it mirrors the scheduler's exclusiveActive_
+    // flag on the JS side, without a binding round-trip.
+    if (this._finetuneJob.active) {
+      return true
+    }
     const jobs = this.addon.activeJobs()
     const slots = this.addon.activeSlots?.() ?? 0
     return Math.max(jobs, slots) >= this._maxConcurrency

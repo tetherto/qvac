@@ -341,7 +341,7 @@ The following table describes the expected behavior of `run` and `cancel` depend
 
 Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
 
-"Full" is counted in slots, not calls: a batch run of N prompts is one job that occupies up to N slots, so with `parallel: 4` a single in-flight `run([p, p, p, p])` is enough to fail-fast a following run.
+"Full" is counted in slots, not calls: a batch run of N prompts is one job that occupies up to N slots, so with `parallel: 4` a single in-flight `run([p, p, p, p])` is enough to fail-fast a following run. An active finetune counts as full at any `parallel`, since it holds the model exclusively.
 
 #### Prefill (cache warming) with `parallel >= 2`
 

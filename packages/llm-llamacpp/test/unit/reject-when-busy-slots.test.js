@@ -131,3 +131,47 @@ test('rejectWhenBusy: false queues instead of failing when slots are full', asyn
   await model.run(PROMPT, { rejectWhenBusy: false })
   t.ok(model.addon.runJob.called, 'rejectWhenBusy: false must still be admitted')
 })
+
+// A finetune is exclusive: it saturates the model at any `parallel`, yet it
+// occupies no slot and counts as one job. Neither counter therefore reports a
+// full pool for `parallel >= 2`, so the gate needs the finetune handler itself.
+// `_run` only serializes admission, not a job's lifetime — finetune() returns
+// as soon as the native side accepts it — so a run() really can arrive here
+// while a finetune is still executing.
+
+test('fail-fast run is refused while a finetune is active, though counters show headroom', async (t) => {
+  const model = createModel({ parallel: 4, activeJobs: 1, activeSlots: 0 })
+  model._finetuneJob.start()
+
+  await t.exception(
+    model.run(PROMPT, { rejectWhenBusy: true }),
+    /already set or being processed/,
+    'an exclusive finetune must saturate the pool even at parallel: 4'
+  )
+  t.absent(
+    model.addon.runJob.called,
+    'refused at the JS gate, never submitted to the native scheduler'
+  )
+
+  // Negative control: the gate must reopen once the finetune settles, so this
+  // pins a live-finetune check rather than a permanently closed gate.
+  model._finetuneJob.end(null, { op: 'finetune', status: 'SUCCESS' })
+  await model.run(PROMPT, { rejectWhenBusy: true })
+  t.ok(model.addon.runJob.called, 'the gate reopens when the finetune response settles')
+})
+
+test('fail-fast batch run is refused while a finetune is active', async (t) => {
+  // Both gates share _atCapacity(), so the batch path must agree.
+  const model = createModel({ parallel: 4, activeJobs: 1, activeSlots: 0 })
+  model._finetuneJob.start()
+
+  await t.exception(
+    model.run([
+      { prompt: PROMPT, runOptions: { rejectWhenBusy: true } },
+      { prompt: PROMPT, runOptions: { rejectWhenBusy: true } }
+    ]),
+    /already set or being processed/,
+    'the batch fast-fail path must see the finetune too'
+  )
+  t.absent(model.addon.runJob.called, 'the refused batch must never be submitted')
+})
