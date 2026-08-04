@@ -104,6 +104,37 @@ test('ASR reload config builders keep engine-specific wrappers', (t) => {
   })
 })
 
+test('Whisper prompt reload strips SDK-only keys for asr-ggml', (t) => {
+  const originalConfig = {
+    language: 'en',
+    detect_language: true,
+    vadModelSrc: '/models/vad.bin',
+    initial_prompt: 'old prompt',
+    miscConfig: {
+      caption_enabled: true
+    }
+  }
+
+  t.alike(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: 'new prompt' }), {
+    whisperConfig: {
+      language: 'auto',
+      initial_prompt: 'new prompt'
+    },
+    miscConfig: {
+      caption_enabled: true
+    }
+  })
+  t.alike(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: '' }), {
+    whisperConfig: {
+      language: 'auto',
+      initial_prompt: ''
+    },
+    miscConfig: {
+      caption_enabled: true
+    }
+  })
+})
+
 test('ASR model loggers isolate Whisper and Parakeet streams', (t) => {
   const whisperModelId = 'asr-whisper-logging-test'
   const parakeetModelId = 'asr-parakeet-logging-test'

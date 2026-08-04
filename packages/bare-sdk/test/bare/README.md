@@ -37,7 +37,7 @@ cd packages/bare-sdk
 npm run test:bare
 
 # Inference e2e — install the addons this suite uses, then run:
-npm install --no-save @qvac/llm-llamacpp @qvac/embed-llamacpp @qvac/translation-nmtcpp @qvac/transcription-whispercpp
+npm install --no-save @qvac/llm-llamacpp @qvac/embed-llamacpp @qvac/translation-nmtcpp @qvac/asr-ggml
 npm run test:bare:e2e
 ```
 

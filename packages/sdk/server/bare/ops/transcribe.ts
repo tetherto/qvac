@@ -34,6 +34,7 @@ import {
   toEndOfTurnEvent,
   toVadStateEvent
 } from '@/server/bare/utils/asr-events'
+import { buildWhisperReloadConfig } from '@/server/bare/plugins/asr-ggml/config'
 
 export { assertMetadataSupported, toTranscribeSegment, type WhisperAddonSegment }
 
@@ -98,15 +99,7 @@ async function applyPrompt(
   if (typeof model.reload !== 'function') return null
 
   const originalConfig = getModelConfig(modelId) as WhisperConfig
-  const updatedConfig = { ...originalConfig, initial_prompt: prompt }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { contextParams: _, miscConfig, ...whisperParams } = updatedConfig
-
-  await model.reload({
-    whisperConfig: whisperParams,
-    ...(miscConfig && { miscConfig })
-  })
+  await model.reload(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: prompt }))
 
   return originalConfig
 }
@@ -115,13 +108,7 @@ async function restorePrompt(modelId: string, originalConfig: WhisperConfig): Pr
   const model = getModel(modelId)
   if (typeof model.reload !== 'function') return
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { contextParams: _, miscConfig, ...whisperParams } = originalConfig
-
-  await model.reload({
-    whisperConfig: { ...whisperParams, initial_prompt: '' },
-    ...(miscConfig && { miscConfig })
-  })
+  await model.reload(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: '' }))
 }
 
 type TranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats }
