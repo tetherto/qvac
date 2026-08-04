@@ -802,7 +802,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
       qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapBooleanTrue) {
+TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringTrue) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -817,7 +817,7 @@ TEST_F(LlamaModelTest, CommonParamsParseNoMmapBooleanTrue) {
   EXPECT_FALSE(model.getCommonParams().model.use_mmap);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapBooleanFalse) {
+TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }

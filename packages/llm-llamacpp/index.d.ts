@@ -57,7 +57,7 @@ export interface LlamaConfig {
   top_k?: NumericLike
   predict?: NumericLike
   seed?: NumericLike
-  no_mmap?: boolean
+  no_mmap?: '' | 'true' | 'false'
   reverse_prompt?: string
   repeat_penalty?: NumericLike
   presence_penalty?: NumericLike
