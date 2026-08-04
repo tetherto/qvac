@@ -29,7 +29,8 @@ export function serveHarness(
   stream: HarnessStream,
   harness: HarnessRuntime,
   describeRuntime: () => HarnessRuntimeInfo = defaultRuntimeInfo,
-  attachStatePort?: (stream: GeneratedRunStream) => void
+  attachStatePort?: (stream: GeneratedRunStream) => void,
+  attachApprovals?: (stream: GeneratedRunStream) => void
 ) {
   const rpc = new HarnessRPC(stream)
   rpc.onDescribeRuntime(async () => {
@@ -57,6 +58,11 @@ export function serveHarness(
     if (attachStatePort) {
       rpc.onStatePort(async (stateStream) => {
         attachStatePort(stateStream)
+      })
+    }
+    if (attachApprovals) {
+      rpc.onApprovals(async (approvalStream) => {
+        attachApprovals(approvalStream)
       })
     }
     rpc.onSuspend(async () => {

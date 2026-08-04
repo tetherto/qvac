@@ -47,7 +47,10 @@ export function registerHarnessTypes(namespace: SchemaNamespace) {
       { name: 'agentId', type: 'string' },
       { name: 'input', type: 'string' },
       { name: 'reason', type: 'string' },
-      { name: 'data', type: 'json' }
+      { name: 'data', type: 'json' },
+      // Appended: hyperschema field order is part of the wire contract, so new
+      // fields go at the end rather than where they read best.
+      { name: 'approvalId', type: 'string' }
     ]
   })
 }
@@ -67,7 +70,8 @@ export const harnessApi = [
   method('cancel-agent-run'),
   method('read-run'),
   method('watch-work', true),
-  method('state-port', true)
+  method('state-port', true),
+  method('approvals', true)
 ] as const
 
 function method(name: string, stream = false) {

@@ -18,6 +18,10 @@ export type {
   HarnessToolPolicy
 } from './lib/agent-registration.ts'
 export type {
+  HarnessApprovalDecision,
+  HarnessApprovalRequest
+} from './lib/approval-port.ts'
+export type {
   HarnessRunIdentity,
   HarnessRunOutcome,
   HarnessRunRecord,

@@ -39,6 +39,11 @@ const FIXTURE_FILES: Record<string, string> = {
     name: 'notes',
     description: 'Fixture skill granting a scoped exec tool.',
     tools: ['exec(notes)']
+  }),
+  'danger/SKILL.md': skillManifest({
+    name: 'danger',
+    description: 'Fixture skill granting a tool that should require approval.',
+    tools: ['danger']
   })
 }
 

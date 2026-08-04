@@ -1,6 +1,10 @@
 import type { HarnessAgentRegistration } from '../agent-registration.ts'
 import type { SyncRuntime } from '@qvac/sync'
 import type { HarnessRuntimeInfo } from '../connect.ts'
+import type {
+  HarnessApprovalDecision,
+  HarnessApprovalRequest
+} from '../approval-port.ts'
 import { createInMemoryHarnessRunStore } from '../in-memory-harness-run-store.ts'
 import { createSyncHarnessRunStore } from '../sync-harness-run-store.ts'
 import type {
@@ -55,6 +59,8 @@ export interface HarnessRuntime {
   cancelAgentRun(input: HarnessAgentRunKey): Promise<void>
   readRun(input: HarnessAgentRunKey): Promise<HarnessRunRecord | null>
   watchWork(input?: WatchHarnessWork): AsyncIterable<HarnessWorkChange>
+  watchApprovals(): AsyncIterable<HarnessApprovalRequest>
+  resolveApproval(decision: HarnessApprovalDecision): Promise<void>
   close(): Promise<void>
 }
 
@@ -176,6 +182,14 @@ export function createHarness({
     async *watchWork(input) {
       await ready()
       yield* requireClient().watchWork(input)
+    },
+    async *watchApprovals() {
+      await ready()
+      yield* requireClient().watchApprovals()
+    },
+    async resolveApproval(decision) {
+      await ready()
+      await requireClient().resolveApproval(decision)
     },
     close
   }

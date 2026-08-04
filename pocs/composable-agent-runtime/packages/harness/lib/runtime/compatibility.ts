@@ -19,7 +19,8 @@ export const harnessCompatibility: HarnessRuntimeHandshake = {
     'agent.cancel',
     'run.read',
     'work.watch',
-    'state.port'
+    'state.port',
+    'tool.approval'
   ]
 }
 

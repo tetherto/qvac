@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "schema": [
     {
       "id": 0,
@@ -143,6 +143,19 @@
         "stream": false
       },
       "version": 4
+    },
+    {
+      "id": 11,
+      "name": "@harness/approvals",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "version": 5
     }
   ]
 }

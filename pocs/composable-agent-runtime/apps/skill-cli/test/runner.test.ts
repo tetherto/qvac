@@ -1271,6 +1271,8 @@ function fakePackageHarness(): ReturnType<typeof createHarness> {
     cancelAgentRun: async () => {},
     readRun: async () => null,
     watchWork: async function* () {},
+    watchApprovals: async function* () {},
+    resolveApproval: async () => {},
     close: async () => {}
   }
 }

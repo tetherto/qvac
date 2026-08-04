@@ -16,6 +16,11 @@ import type {
   WatchHarnessWork
 } from './run-store.ts'
 import { serveHarnessRunStore } from './state-port.ts'
+import {
+  createHarnessApprovalHost,
+  type HarnessApprovalDecision,
+  type HarnessApprovalRequest
+} from './approval-port.ts'
 import type { HarnessStream, HarnessTransport } from './transport.ts'
 
 export interface HarnessClient extends HarnessRuntime {
@@ -29,6 +34,8 @@ export interface HarnessClient extends HarnessRuntime {
   cancelAgentRun(input: HarnessAgentRunKey): Promise<void>
   readRun(input: HarnessAgentRunKey): Promise<HarnessRunRecord | null>
   watchWork(input?: WatchHarnessWork): AsyncIterable<HarnessWorkChange>
+  watchApprovals(): AsyncIterable<HarnessApprovalRequest>
+  resolveApproval(decision: HarnessApprovalDecision): Promise<void>
 }
 
 export type RemoteHarness = HarnessClient
@@ -63,6 +70,22 @@ export function connectHarness(
   let opening: Promise<{ readonly rpc: HarnessRPC; readonly stream: HarnessStream }> | null = null
   let closed = false
   let lives = 0
+  const approvals = createHarnessApprovalHost()
+  // Opened only when the application actually handles approvals. An always-open
+  // stream would keep an otherwise idle session alive, and a caller that never
+  // watches should see approval-required tools denied, not queued.
+  let approvalsAttached = false
+
+  function attachApprovalsIfOpen() {
+    if (approvalsAttached || !session) return
+    approvalsAttached = true
+    approvals.attach(session.rpc.approvals())
+  }
+
+  async function openApprovals() {
+    await open()
+    attachApprovalsIfOpen()
+  }
 
   async function open() {
     if (closed) throw died('harness closed')
@@ -78,6 +101,7 @@ export function connectHarness(
       }
       stream.on('close', () => {
         session = null
+        approvalsAttached = false
       })
       session = next
       lives++
@@ -191,6 +215,20 @@ export function connectHarness(
     run,
     runAgent,
     watchWork,
+    watchApprovals() {
+      // Attach at call time, not on first iteration, so a caller that starts
+      // watching before a run cannot miss the first approval.
+      attachApprovalsIfOpen()
+      const opening = openApprovals()
+      return (async function* () {
+        await opening
+        yield* approvals.watch()
+      })()
+    },
+    async resolveApproval(decision) {
+      await openApprovals()
+      await approvals.resolve(decision)
+    },
     async suspend() {
       const { rpc } = await open()
       await rpc.suspend({ type: 'suspend' })

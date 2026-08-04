@@ -149,6 +149,14 @@ export function createMobileHarness({
       await ready()
       yield* requireClient().watchWork(input)
     },
+    async *watchApprovals() {
+      await ready()
+      yield* requireClient().watchApprovals()
+    },
+    async resolveApproval(decision) {
+      await ready()
+      await requireClient().resolveApproval(decision)
+    },
     close
   }
 }

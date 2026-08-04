@@ -56,7 +56,8 @@ const startChild = createChildEntry({
       'agent.cancel',
       'run.read',
       'work.watch',
-      'state.port'
+      'state.port',
+      'tool.approval'
     ],
     buildVersion: '0.0.0-poc',
     ...(sdkIdentity === undefined

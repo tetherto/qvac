@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "schema": [
     {
       "name": "wire-frame",
@@ -137,6 +137,11 @@
           "name": "data",
           "type": "json",
           "version": 5
+        },
+        {
+          "name": "approvalId",
+          "type": "string",
+          "version": 6
         }
       ]
     }

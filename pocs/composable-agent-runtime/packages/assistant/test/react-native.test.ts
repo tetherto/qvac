@@ -235,7 +235,9 @@ function fakeHarnessRuntime({
     runAgent: async function* () {},
     cancelAgentRun: async () => {},
     readRun: async () => null,
-    watchWork: async function* () {}
+    watchWork: async function* () {},
+    watchApprovals: async function* () {},
+    resolveApproval: async () => {}
   }
 }
 
