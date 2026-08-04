@@ -343,9 +343,28 @@ private:
       const std::function<void(const std::string&)>& outputCallback) override;
   [[nodiscard]] llama_pos specPos() const override { return current_.pos; }
   void specSetPos(llama_pos pos) override {
-    // Media never reaches the speculative path, so one KV cell per position.
+    // Delta, not an absolute assign — mirrors advanceTextSpan.
+    //
+    // Under M-RoPE an image occupies MORE KV cells than positions, so
+    // `cacheTokens > pos` whenever media is present. Assigning `cacheTokens =
+    // pos` here would silently discard that surplus.
+    //
+    // It is NOT safe to assume media never reaches this path. In-process it
+    // does not — the image branch tears speculation down (`spec_.reset();
+    // ctxDraft_.reset()`). But `loadCache` restores a media-bearing cache
+    // (surplus included) and calls only `rollbackDraftContext()`, which never
+    // resets `spec_`. So the first TEXT turn after a restore runs speculatively
+    // with the surplus live, and collapsing it here would both defeat the
+    // positional-only ceiling check (physical KV exhausted while
+    // `specPos() + 1 > specCtxCeiling()` still passes) and poison the next
+    // `saveCache`, whose `restoredCacheTokens != getCacheTokens()` check then
+    // makes the file permanently unloadable.
+    //
+    // The speculative loop only ever adds or trims TEXT positions (one KV cell
+    // each) — forward within a round, back by the same delta on the
+    // rejected-tail rollback — so the delta form is correct at both call sites.
+    current_.cacheTokens += pos - current_.pos;
     current_.pos = pos;
-    current_.cacheTokens = pos;
   }
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();

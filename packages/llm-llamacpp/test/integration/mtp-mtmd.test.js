@@ -15,7 +15,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest, getMediaPath } = require('./utils')
+const { ensureModel, safeTest, getMediaPath, cleanupIntegrationCacheFiles } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -243,9 +243,14 @@ safeTest(
     //
     // The existing image test above only covers the image turn itself. Without
     // this, a change that re-armed speculation after an image (or moved the reset)
-    // would silently resume drafting against a misaligned draft cache. It is also
-    // why the specSetPos media-KV accounting path is unreachable today: media and
-    // live speculation cannot coexist on one context.
+    // would silently resume drafting against a misaligned draft cache.
+    //
+    // Scope note: this covers the IN-PROCESS path only. Media and live
+    // speculation CAN coexist on one context via `loadCache`, which restores a
+    // media-bearing cache and calls only `rollbackDraftContext()` — never
+    // resetting `spec_`. That is why `specSetPos` must keep its delta form (see
+    // MtmdLlmContext.hpp); an earlier version of this comment claimed the
+    // media-KV accounting path was unreachable, which is wrong for restores.
     const addon = await loadMtmdMtp(t)
 
     // Turn 1, text only: positive control. If this is 0 the premise is wrong and
@@ -283,6 +288,89 @@ safeTest(
       thirdResp.stats.draftTotal,
       0,
       'turn 3 (text) stays non-speculative — the image disabled MTP for the whole session'
+    )
+  }
+)
+
+safeTest(
+  'mtmd context: a text turn on a restored media cache keeps the KV surplus',
+  { timeout: 900_000 },
+  async (t) => {
+    // Regression guard for specSetPos's KV accounting, and proof the path is
+    // REACHABLE — an earlier comment in this file wrongly claimed it was not.
+    //
+    // Under M-RoPE an image occupies MORE KV cells than positions, so
+    // `cacheTokens > pos`. In-process that surplus never meets live speculation:
+    // the image branch does `spec_.reset(); ctxDraft_.reset()`. But `loadCache`
+    // restores the surplus and calls only `rollbackDraftContext()`, which never
+    // resets `spec_` — so a FRESH context loading a media-bearing cache and
+    // running a TEXT-only turn drafts with the surplus present. Verified: that
+    // turn reports draftTotal > 0 while CacheTokens greatly exceeds the prompt.
+    //
+    // specSetPos used to assign `cacheTokens = pos`, collapsing the surplus.
+    // What this test detects is the second-order consequence: saveCache persists
+    // the understated value, and the NEXT loadCache hard-throws
+    // UnableToLoadSessionFile on its `restoredCacheTokens != getCacheTokens()`
+    // check — the cache file becomes permanently unloadable. Hence three phases.
+    const [, dirPath] = await ensureModel({ modelName: MODEL.name })
+    const cachePath = path.join(dirPath, 'mtp-mtmd-media-surplus.bin')
+    t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+    const runOpts = { cacheKey: cachePath, saveCacheToDisk: true }
+    const imageBytes = new Uint8Array(fs.readFileSync(getMediaPath('elephant.jpg')))
+
+    // Phase 1 — image turn writes a cache carrying the media surplus.
+    const a = await loadMtmdMtp(t)
+    const ra = await a.run(
+      [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', type: 'media', content: imageBytes },
+        { role: 'user', content: 'Describe this image in one sentence.' }
+      ],
+      runOpts
+    )
+    const outA = await collectResponse(ra)
+    t.ok(outA.length > 0, 'phase 1 (image) produced output')
+    t.ok(
+      ra.stats.CacheTokens > 0,
+      `phase 1 wrote a media cache (CacheTokens=${ra.stats.CacheTokens})`
+    )
+    await a.unload()
+
+    // Phase 2 — FRESH context (spec_ alive) loads that cache and runs a
+    // text-only turn, so specSetPos executes with cacheTokens > pos.
+    const b = await loadMtmdMtp(t)
+    const rb = await b.run(TEXT_PROMPT, runOpts)
+    const outB = await collectResponse(rb)
+    t.ok(outB.length > 0, 'phase 2 (text on restored media cache) produced output')
+    console.log(
+      `  phase 2: CacheTokens=${rb.stats.CacheTokens} promptTokens=${rb.stats.promptTokens} ` +
+        `draftTotal=${rb.stats.draftTotal}`
+    )
+    // Positive control: without this the phase-3 check proves nothing, because
+    // specSetPos would never have run.
+    t.ok(
+      rb.stats.draftTotal > 0,
+      `phase 2 really drafted, so specSetPos ran with the surplus live (draftTotal=${rb.stats.draftTotal})`
+    )
+    t.ok(
+      rb.stats.CacheTokens > rb.stats.promptTokens,
+      `phase 2 kept a KV surplus over its own prompt ` +
+        `(CacheTokens=${rb.stats.CacheTokens} > promptTokens=${rb.stats.promptTokens})`
+    )
+    await b.unload()
+
+    // Phase 3 — the assertion that catches the bug. With the absolute assign,
+    // phase 2 persisted a collapsed cacheTokens and this load throws.
+    const c = await loadMtmdMtp(t)
+    const rc = await c.run(TEXT_PROMPT, runOpts)
+    const outC = await collectResponse(rc)
+    t.ok(
+      outC.length > 0,
+      'phase 3 reloaded the cache written after a speculative turn without throwing'
+    )
+    t.ok(
+      rc.stats.CacheTokens > 0,
+      `phase 3 cache still valid (CacheTokens=${rc.stats.CacheTokens})`
     )
   }
 )

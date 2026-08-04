@@ -102,81 +102,12 @@ void MtmdLlmContext::initializeCommonState() {
   }
 
   // MTP draft context: only text-only turns actually draft on the mtmd path
-  // (image turns fall back). On failure `spec_` stays null and generation
-  // runs non-speculatively.
-  const bool specTypeIsMtp =
-      std::find(
-          params_.speculative.types.begin(),
-          params_.speculative.types.end(),
-          COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
-  // MTP self-speculation only runs on the single-prompt generateResponse path;
-  // under continuous batching (n_parallel > 1) the scheduler never calls
-  // runSpeculativeGeneration, so a per-slot draft context is pure waste. Gate
-  // on single-context and warn on the unsupported combo (mirrors
-  // TextLlmContext).
-  if (specTypeIsMtp && params_.n_parallel > 1) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[MtmdLlm] spec-type=draft-mtp is ignored under continuous batching "
-        "(n_parallel > 1); running non-speculatively\n");
-  }
-  // Batch capacity 1 leaves no room for draft tokens in the verify batch
-  // (id_last + drafts): every round would pay fabric's draft forward passes
-  // only to discard the result. Gate construction — see the matching comment
-  // in TextLlmContext.
-  const int specBatchCap = static_cast<int>(llama_n_batch(modelCtx_.lctx));
-  if (specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap <= 1) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[MtmdLlm] spec-type=draft-mtp is ignored with batch capacity <= 1 "
-        "(no room for draft tokens in the verify batch); running "
-        "non-speculatively\n");
-  }
-  const bool wantMtpDraft =
-      specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap > 1;
-  if (wantMtpDraft) {
-    try {
-      auto cparamsMtp = common_context_params_to_llama(params_);
-      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
-      cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
-      cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
-      cparamsMtp.n_rs_seq = 0;
-      cparamsMtp.n_outputs_max =
-          static_cast<uint32_t>(std::max(1, params_.n_parallel));
-      ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
-      if (!ctxDraft_) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[MtmdLlm] MTP draft context could not be created for this "
-            "model; spec-type=draft-mtp will be inert\n");
-      } else {
-        params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
-        params_.speculative.draft.ctx_dft = ctxDraft_.get();
-        // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
-        // draft loop is bounded: it uses its own construction-time params.n_max
-        // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-        // per-round dp.n_max hint. MAX_SPEC_DRAFT matches
-        // runSpeculativeGeneration.
-        params_.speculative.draft.n_max =
-            std::min(params_.speculative.draft.n_max, MAX_SPEC_DRAFT);
-        spec_.reset(common_speculative_init(
-            params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-        ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
-        QLOG_IF(
-            Priority::INFO,
-            "[MtmdLlm] MTP draft context + common_speculative initialized\n");
-      }
-    } catch (const std::exception& e) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[MtmdLlm] MTP draft setup failed (%s); continuing without "
-              "speculative decoding\n",
-              e.what()));
-      ctxDraft_.reset();
-      spec_.reset();
-    }
-  }
+  // (image turns fall back — the vision decode bypasses the draft context, so
+  // the image branch tears speculation down). Shared implementation on
+  // LlmContext; on failure `spec_` stays null and generation runs
+  // non-speculatively.
+  initializeMtpDraftContext(
+      modelCtx_.model, modelCtx_.lctx, params_, "[MtmdLlm]");
 
   if ((llama_model_chat_template(modelCtx_.model, nullptr) == nullptr) &&
       params_.chat_template.empty()) {
@@ -1915,13 +1846,12 @@ PrefillPlan MtmdLlmContext::preparePrefill(
           mtmd_input_chunk_get_tokens_text(chunk, &nTokens);
       plan.tokens.insert(plan.tokens.end(), tokens, tokens + nTokens);
     } else {
-      plan.mediaBarriers.push_back(
-          MediaBarrier{
-              .afterTextTokens = plan.tokens.size(),
-              .mediaIndex = i,
-              .nPos = mtmd_input_chunk_get_n_pos(chunk),
-              .nKvTokens = static_cast<llama_pos>(
-                  mtmd_input_chunk_get_n_tokens(chunk))});
+      plan.mediaBarriers.push_back(MediaBarrier{
+          .afterTextTokens = plan.tokens.size(),
+          .mediaIndex = i,
+          .nPos = mtmd_input_chunk_get_n_pos(chunk),
+          .nKvTokens =
+              static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk))});
     }
   }
 
@@ -2368,9 +2298,8 @@ bool MtmdLlmContext::loadCache(
       sessionTokens[static_cast<size_t>(SessionMetadataField::FirstMsgTokens)]);
   setCacheTokens(
       sessionTokens[static_cast<size_t>(SessionMetadataField::CacheTokens)]);
-  setFirstMsgCacheTokens(
-      sessionTokens[static_cast<size_t>(
-          SessionMetadataField::FirstMsgCacheTokens)]);
+  setFirstMsgCacheTokens(sessionTokens[static_cast<size_t>(
+      SessionMetadataField::FirstMsgCacheTokens)]);
 
   if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(

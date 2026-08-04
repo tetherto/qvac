@@ -14,6 +14,8 @@
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
+// string_format, used by initializeMtpDraftContext's log messages.
+#include "common/common.h"
 #include "common/sampling.h"
 #include "common/speculative.h"
 #include "llama.h"
@@ -748,7 +750,7 @@ protected:
       unsigned generated) {
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
-      return specCancel(outputCallback);
+      return specCancelPublishing(outputCallback, generated);
     }
     // Before specFinish: compaction may take its own snapshot inside
     // onGenerationFinished and only sets it when the slot is still empty, so
@@ -774,6 +776,136 @@ protected:
     return specFinish(outputCallback, /*ok=*/false);
   }
 
+  // Build the MTP draft context and wire up common_speculative, when
+  // spec-type=draft-mtp is requested. Shared by both concrete contexts: the
+  // block is identical apart from the log tag, and every piece of state it
+  // touches (ctxDraft_, spec_, ctxTgtSeqRmType_, MAX_SPEC_DRAFT) already lives
+  // here alongside the draft/verify/accept loop that consumes it. Keeping one
+  // copy is what stops the two contexts drifting when only one gets a fix.
+  //
+  // Takes model/ctx/params as arguments rather than reading them through
+  // getModel()/getCtx()/getParams(): callers run this from their CONSTRUCTOR
+  // body (via initializeCommonState), and passing them explicitly keeps the
+  // helper independent of virtual dispatch during construction.
+  //
+  // Best-effort by design — on any failure spec_ stays null and generation runs
+  // non-speculatively. `logTag` is the caller's "[TextLlm]" / "[MtmdLlm]"
+  // prefix, so warnings still name the context the user configured.
+  void initializeMtpDraftContext(
+      llama_model* model, llama_context* ctxTgt, common_params& params,
+      const char* logTag) {
+    const bool specTypeIsMtp = std::find(
+                                   params.speculative.types.begin(),
+                                   params.speculative.types.end(),
+                                   COMMON_SPECULATIVE_TYPE_DRAFT_MTP) !=
+                               params.speculative.types.end();
+    // MTP self-speculation only runs on the single-prompt generateResponse
+    // path. Under continuous batching (n_parallel > 1) the scheduler decodes
+    // via its own path and never calls runSpeculativeGeneration, so building a
+    // draft context + common_speculative per slot is pure memory waste (and
+    // stats stay 0). Gate construction on single-context and warn.
+    if (specTypeIsMtp && params.n_parallel > 1) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          string_format(
+              "%s spec-type=draft-mtp is ignored under continuous batching "
+              "(n_parallel > 1); running non-speculatively\n",
+              logTag));
+    }
+    // The verify batch holds id_last + the draft tokens, so a validated batch
+    // capacity of 1 leaves room for zero draft tokens: every round would still
+    // pay fabric's draft forward passes (its drafter ignores the per-round
+    // dp.n_max hint) only for runSpeculativeGeneration to discard the result —
+    // strictly worse than plain decoding. llama_n_batch is the VALIDATED
+    // capacity, not the raw config value.
+    const int specBatchCap = static_cast<int>(llama_n_batch(ctxTgt));
+    if (specTypeIsMtp && params.n_parallel <= 1 && specBatchCap <= 1) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          string_format(
+              "%s spec-type=draft-mtp is ignored with batch capacity <= 1 "
+              "(no room for draft tokens in the verify batch); running "
+              "non-speculatively\n",
+              logTag));
+    }
+    const bool wantMtpDraft =
+        specTypeIsMtp && params.n_parallel <= 1 && specBatchCap > 1;
+    if (!wantMtpDraft) {
+      return;
+    }
+    try {
+      auto cparamsMtp = common_context_params_to_llama(params);
+      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+      cparamsMtp.type_k = params.speculative.draft.cache_type_k;
+      cparamsMtp.type_v = params.speculative.draft.cache_type_v;
+      cparamsMtp.n_rs_seq = 0;
+      cparamsMtp.n_outputs_max =
+          static_cast<uint32_t>(std::max(1, params.n_parallel));
+      ctxDraft_.reset(llama_init_from_model(model, cparamsMtp));
+      if (!ctxDraft_) {
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            string_format(
+                "%s MTP draft context could not be created for this model; "
+                "spec-type=draft-mtp will be inert\n",
+                logTag));
+        return;
+      }
+      params.speculative.draft.ctx_tgt = ctxTgt;
+      params.speculative.draft.ctx_dft = ctxDraft_.get();
+      // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
+      // draft loop is bounded: it uses its own construction-time params.n_max
+      // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
+      // per-round dp.n_max hint. MAX_SPEC_DRAFT matches
+      // runSpeculativeGeneration. Both ends are clamped so a negative
+      // spec-draft-n-max can never leave this addon.
+      params.speculative.draft.n_max =
+          std::max(0, std::min(params.speculative.draft.n_max, MAX_SPEC_DRAFT));
+      spec_.reset(common_speculative_init(
+          params.speculative, std::max<uint32_t>(1, params.n_parallel)));
+      ctxTgtSeqRmType_ = common_context_can_seq_rm(ctxTgt);
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          string_format(
+              "%s MTP draft context + common_speculative initialized\n",
+              logTag));
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          string_format(
+              "%s MTP draft setup failed (%s); continuing without speculative "
+              "decoding\n",
+              logTag,
+              e.what()));
+      ctxDraft_.reset();
+      spec_.reset();
+    }
+  }
+
+  // Cancel exit for the speculative loop. Publishes the corrected perf split
+  // FIRST, then cancels.
+  //
+  // A cancelled speculative turn is not an error path: specCancel returns
+  // {.ok = true, .cancelled = true}, so processPromptImpl takes the normal
+  // completion path, returns the partial text, and the caller reads
+  // runtimeStats() for it. Without publishing, userVisiblePerf_ stays unset and
+  // singleRuntimeStatsLocked falls back to a live llama_perf_context() read —
+  // which reports exactly the figures specPublishPerf exists to correct, since
+  // every verify batch carries id_last + drafts and llama books the whole
+  // decode phase as prompt eval. A cancelled multi-hundred-token partial answer
+  // would report generatedTokens ~1, promptTokens inflated by the full decode
+  // span, and TTFT inflated by roughly the entire generation.
+  //
+  // Every cancel return in the speculative loop MUST go through here, for the
+  // same reason specFinishRespectingStop exists: the three sites are easy to
+  // add to and easy to forget.
+  GenerateResponseResult specCancelPublishing(
+      const std::function<void(const std::string&)>& outputCallback,
+      unsigned generated) {
+    specPublishPerf(generated);
+    return specCancel(outputCallback);
+  }
+
   // MTP speculative-decoding generation loop: draft from the MTP head, verify
   // the draft against the target in one batch, accept the longest matching
   // prefix, and feed each accepted token through specProcessToken.
@@ -790,7 +922,9 @@ protected:
 
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
-      return specCancel(outputCallback);
+      // Nothing generated yet, but publish anyway so the prompt-side figures
+      // come from the post-prefill baseline like every other exit.
+      return specCancelPublishing(outputCallback, /*generated=*/0);
     }
 
     common_params& params = getParams();
@@ -894,7 +1028,7 @@ protected:
            generated < static_cast<unsigned>(params.n_predict)) {
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
-        return specCancel(outputCallback);
+        return specCancelPublishing(outputCallback, generated);
       }
 
       if (specPos() + 1 > specCtxCeiling()) {

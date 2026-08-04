@@ -173,84 +173,12 @@ void TextLlmContext::initializeCommonState() {
 
   // MTP speculative decoding: when spec-type=draft-mtp is requested, build an
   // LLAMA_CONTEXT_TYPE_MTP context over the same (bundled-MTP) model and wire
-  // up common_speculative. If the model has no MTP head or context creation
-  // fails, we log and continue without speculation (spec_ stays null).
-  const bool specTypeIsMtp =
-      std::find(
-          params_.speculative.types.begin(),
-          params_.speculative.types.end(),
-          COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
-  // MTP self-speculation only runs on the single-prompt generateResponse path.
-  // Under continuous batching (n_parallel > 1) the scheduler decodes via its
-  // own path and never calls runSpeculativeGeneration, so building an MTP draft
-  // context + common_speculative per slot is pure memory waste (and stats stay
-  // 0). Gate construction on single-context and warn on the unsupported combo.
-  if (specTypeIsMtp && params_.n_parallel > 1) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[TextLlm] spec-type=draft-mtp is ignored under continuous batching "
-        "(n_parallel > 1); running non-speculatively\n");
-  }
-  // The verify batch holds id_last + the draft tokens, so a validated batch
-  // capacity of 1 leaves room for zero draft tokens: every round would still
-  // pay fabric's draft forward passes (its drafter ignores the per-round
-  // dp.n_max hint) only for runSpeculativeGeneration to discard the result —
-  // strictly worse than plain decoding. Gate construction like the
-  // continuous-batching case above. llama_n_batch is the VALIDATED capacity,
-  // not the raw config value.
-  const int specBatchCap = static_cast<int>(llama_n_batch(modelCtx_.lctx));
-  if (specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap <= 1) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[TextLlm] spec-type=draft-mtp is ignored with batch capacity <= 1 "
-        "(no room for draft tokens in the verify batch); running "
-        "non-speculatively\n");
-  }
-  const bool wantMtpDraft =
-      specTypeIsMtp && params_.n_parallel <= 1 && specBatchCap > 1;
-  if (wantMtpDraft) {
-    try {
-      auto cparamsMtp = common_context_params_to_llama(params_);
-      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
-      cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
-      cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
-      cparamsMtp.n_rs_seq = 0;
-      cparamsMtp.n_outputs_max =
-          static_cast<uint32_t>(std::max(1, params_.n_parallel));
-      ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
-      if (!ctxDraft_) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[TextLlm] MTP draft context could not be created for this "
-            "model; spec-type=draft-mtp will be inert\n");
-      } else {
-        params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
-        params_.speculative.draft.ctx_dft = ctxDraft_.get();
-        // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
-        // draft loop is bounded: it uses its own construction-time params.n_max
-        // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-        // per-round dp.n_max hint. MAX_SPEC_DRAFT matches
-        // runSpeculativeGeneration.
-        params_.speculative.draft.n_max =
-            std::min(params_.speculative.draft.n_max, MAX_SPEC_DRAFT);
-        spec_.reset(common_speculative_init(
-            params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
-        ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
-        QLOG_IF(
-            Priority::INFO,
-            "[TextLlm] MTP draft context + common_speculative initialized\n");
-      }
-    } catch (const std::exception& e) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[TextLlm] MTP draft setup failed (%s); continuing without "
-              "speculative decoding\n",
-              e.what()));
-      ctxDraft_.reset();
-      spec_.reset();
-    }
-  }
+  // up common_speculative. Shared with MtmdLlmContext — the whole block lives
+  // on LlmContext next to the loop that consumes it, so a future fix lands
+  // once. If the model has no MTP head or context creation fails, it logs and
+  // continues without speculation (spec_ stays null).
+  initializeMtpDraftContext(
+      modelCtx_.model, modelCtx_.lctx, params_, "[TextLlm]");
 
   if (!llama_model_has_encoder(modelCtx_.model) &&
       llama_vocab_get_add_eos(modelCtx_.vocab)) {
