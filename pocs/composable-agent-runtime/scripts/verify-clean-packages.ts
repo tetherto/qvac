@@ -395,30 +395,50 @@ async function assertContribution(
   }
 }
 
+// Harness ships the generic skill machinery and the authoring kits, and no
+// skill of its own.
 async function verifyHarnessSkillPackaging(directory: string) {
   const required = [
-    'node_modules/@qvac/harness/lib/skills/bundled-skills.ts',
     'node_modules/@qvac/harness/lib/skills/materialize.ts',
-    'node_modules/@qvac/harness/tool-sandbox-child-entry.ts',
+    'node_modules/@qvac/harness/lib/skills/compose.ts',
+    'node_modules/@qvac/harness/skill-host.ts',
+    'node_modules/@qvac/harness/skill-sandbox.ts',
     'node_modules/@qvac/harness/spec/tool-sandbox/hrpc/index.js',
-    'node_modules/@qvac/harness/spec/tool-sandbox/hrpc/index.d.ts',
-    'node_modules/@qvac/harness/skills/weather/SKILL.md',
-    'node_modules/@qvac/harness/skills/obsidian/SKILL.md',
-    'node_modules/@qvac/harness/skills/obsidian/cli.schema.json',
-    'node_modules/@qvac/harness/skills/image-generation/SKILL.md'
+    'node_modules/@qvac/harness/spec/tool-sandbox/hrpc/index.d.ts'
   ]
   for (const relativePath of required) {
     await access(join(directory, relativePath))
   }
+  await assertAbsent(join(directory, 'node_modules/@qvac/harness/skills'))
 }
 
+async function assertAbsent(path: string) {
+  let present = false
+  try {
+    await access(path)
+    present = true
+  } catch {
+    return
+  }
+  if (present) throw new Error(`expected ${path} not to be packaged`)
+}
+
+// The application ships the skills, their worker entries, and the generated
+// bundle those entries import.
 async function verifySkillCliPackaging(directory: string) {
   const packageRoot = join(directory, 'node_modules', '@qvac-poc', 'skill-cli')
   for (const relativePath of [
     'index.ts',
     'bare-probe.ts',
     'runner.ts',
-    'README.md'
+    'README.md',
+    'harness-child-entry.ts',
+    'tool-sandbox-child-entry.ts',
+    'lib/skills/bundled-skills.ts',
+    'skills/weather/SKILL.md',
+    'skills/obsidian/SKILL.md',
+    'skills/obsidian/cli.schema.json',
+    'skills/image-generation/SKILL.md'
   ]) {
     await access(join(packageRoot, relativePath))
   }

@@ -220,10 +220,19 @@ does not translate run events into storage operations.
 The public package surface is lifecycle-oriented: desktop consumers use
 `createHarness`, mobile consumers use the React Native entry point, and both
 receive the same high-level agent registration, execution, cancellation,
-inspection, and lifecycle operations. Worker entries, launch plumbing,
-sandbox transports, skill loaders, SDK adapters, and test utilities are
-packaged only when required by package-owned launchers and are not public
-subpath exports.
+inspection, and lifecycle operations. Worker *entries*, launch plumbing, sandbox
+transports, SDK adapters, and test utilities are packaged only when required by
+package-owned launchers and are not public subpath exports.
+
+Worker *authoring kits* are the deliberate exception. Because product skills
+belong to applications, and because the bundler resolves a worker's contents
+from its static imports, an application that ships a skill necessarily authors
+the worker entry that imports it. Harness therefore exposes the host and
+in-sandbox authoring surfaces under named subpaths, each providing an entry
+factory that retains argv parsing, the generation handshake, and runtime
+identity so an application entry cannot drift from the contract the host
+asserts. These stay on their own subpaths rather than the root entry, so worker
+plumbing never reaches the graph a plain client process imports.
 
 Product-specific coding tools, workspace policy, git behavior, terminal UX, OAuth integrations, and product skills remain in applications or product packages.
 

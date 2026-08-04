@@ -18,6 +18,28 @@ not propose anything that contradicts it.
 > introduced one new obstacle — tool injection is no longer reachable from an
 > application — which now sits on the critical path for G1. Status is marked per
 > gap below; section 4 workstreams are updated accordingly.
+>
+> **Revised again after the skill-boundary branch.** That work removed the G1
+> obstacle and closed the approval half of G2:
+>
+> - Applications now supply skills as providers and own their worker entries, so
+>   adding a coding toolset no longer means editing Harness. The composer merges
+>   permissions, routes sandbox versus in-process tools, and enforces grant
+>   scope generically.
+> - Approval is a real application-facing port: the harness worker asks over a
+>   streaming contract, `AssistantFacade.approvals` surfaces it, and every
+>   failure mode denies. This is the substrate P4 needs; what remains is
+>   committing gates to Sync so the request reaches another device.
+> - Skill instructions now reach the model, closing gap A.
+> - The turn budget is configurable and its exhaustion is distinguishable,
+>   closing gap C.
+> - `@qvac/agents` owns the tool loop, guards, and approval semantics, and
+>   checkpoints span tool rounds — the prerequisite for the compaction work in
+>   G4.
+>
+> Still open: G1 proper (no coding tools exist yet), the rest of G4 (sessions,
+> compaction, context budget), G5 (sandbox is still macOS-only), and the claim
+> state machine in G3.
 
 ---
 

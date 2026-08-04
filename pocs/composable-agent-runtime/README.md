@@ -7,10 +7,18 @@ Composable Agent Runtime QIP. It is evidence, not a production package source.
 
 - `@qvac/assistant` is the application facade and root lifecycle owner.
 - `@qvac/sync` owns cryptographic device identity and replicated state.
-- `@qvac/harness` owns ready-to-run agent execution.
-- `@qvac/agents` contains transport-free agent primitives.
+- `@qvac/harness` owns ready-to-run agent execution: where tools come from and
+  how they run (skills, grants, sandboxing, brokers, transports, persistence).
+- `@qvac/agents` contains transport-free agent primitives: what a tool is and
+  how a run consumes one (the tool loop, guards, approval semantics, turn
+  budget, events, checkpoints).
 - `@qvac/sdk` owns inference through its standard public client and worker path.
 - `@qvac/supervisor` supplies lifecycle mechanics without product policy.
+
+Skills belong to applications. `apps/skill-cli` owns the weather, obsidian, and
+image-generation skills, their worker entries, and the generated skill bundle.
+Harness supplies only the generic machinery, through `@qvac/harness/skill-host`
+and `@qvac/harness/skill-sandbox`.
 
 Sync and Harness are siblings in Assistant's package and artifact hierarchy.
 Each exposes a standalone Expo plugin (`@qvac/sync/expo-plugin`,
