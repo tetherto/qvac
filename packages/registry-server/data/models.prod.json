@@ -3324,7 +3324,7 @@
     "tags": ["vae", "taehv", "abot-world"]
   },
   {
-    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-31/umt5-xxl-enc-f16.gguf",
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-f16.gguf",
     "engine": "@qvac/diffusion-cpp",
     "link": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
     "description": "UMT5-XXL text encoder (encoder-only GGUF) for ABot-World native scene creation",
@@ -3334,7 +3334,7 @@
     "tags": ["text-encoder", "wan", "abot-world"]
   },
   {
-    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-31/umt5-xxl-enc-q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf",
     "engine": "@qvac/diffusion-cpp",
     "link": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
     "description": "UMT5-XXL text encoder (encoder-only GGUF) for ABot-World native scene creation",
