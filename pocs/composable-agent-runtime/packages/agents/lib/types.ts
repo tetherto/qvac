@@ -1,3 +1,12 @@
+import type {
+  AgentJsonValue,
+  AgentToolCall,
+  AgentToolPolicy,
+  AgentToolProgress,
+  AgentToolSchema,
+  AgentToolingOptions
+} from './tools.ts'
+
 export interface AgentMessage {
   readonly role: 'system' | 'user' | 'assistant' | 'tool'
   readonly content: string
@@ -16,6 +25,9 @@ export interface ModelRequest {
   readonly runId: string
   readonly operationId: string
   readonly signal: AgentAbortSignal
+  /** Zero-based tool round within the current operation. */
+  readonly round: number
+  readonly tools?: readonly AgentToolSchema[]
 }
 
 export interface ModelContentEvent {
@@ -23,8 +35,26 @@ export interface ModelContentEvent {
   readonly text: string
 }
 
+export interface ModelToolCallEvent {
+  readonly type: 'tool-call'
+  readonly call: AgentToolCall
+  /** Provider-native rendering of the call, when the provider supplies one. */
+  readonly raw?: string
+}
+
+export interface ModelCompletionDoneEvent {
+  readonly type: 'completion-done'
+  /** Canonical assistant turn text, preferred over concatenated deltas. */
+  readonly raw?: string
+}
+
+export type ModelEvent =
+  | ModelContentEvent
+  | ModelToolCallEvent
+  | ModelCompletionDoneEvent
+
 export interface ModelAdapter {
-  stream(request: ModelRequest): AsyncIterable<ModelContentEvent>
+  stream(request: ModelRequest): AsyncIterable<ModelEvent>
   cancel?(operationId: string): Promise<void> | void
 }
 
@@ -33,12 +63,25 @@ export interface AgentOutput {
   readonly output: string
 }
 
+/**
+ * Mid-operation progress. Present only while an operation is suspended between
+ * tool rounds; a checkpoint taken at an operation boundary omits it.
+ */
+export interface AgentOperationCheckpoint {
+  readonly operationId: string
+  readonly round: number
+  readonly messages: readonly AgentMessage[]
+}
+
+export const CHECKPOINT_VERSION = 2
+
 export interface AgentCheckpoint {
-  readonly version: 1
+  readonly version: typeof CHECKPOINT_VERSION
   readonly agentId: string
   readonly runId: string
   readonly nextOperationIndex: number
   readonly outputs: readonly AgentOutput[]
+  readonly operation?: AgentOperationCheckpoint
 }
 
 export interface WorkflowContext {
@@ -51,11 +94,22 @@ export interface AgentOperation {
   readonly prompt: string | ((context: WorkflowContext) => string)
 }
 
+/** An addressable block of system-prompt text, kept separate so callers can
+ * compose instructions from several sources without string concatenation. */
+export interface AgentPromptBlock {
+  readonly id: string
+  readonly text: string
+}
+
 export interface AgentDefinition {
   readonly id: string
   readonly model: string
   readonly instructions?: string
+  readonly systemPrompt?: readonly AgentPromptBlock[]
   readonly workflow?: readonly AgentOperation[]
+  readonly toolPolicy?: AgentToolPolicy
+  /** Maximum tool rounds per operation. Defaults to DEFAULT_TURN_BUDGET. */
+  readonly turnBudget?: number
 }
 
 interface RunStartedEvent {
@@ -104,10 +158,69 @@ interface RunCanceledEvent {
   readonly checkpoint: AgentCheckpoint
 }
 
+interface ToolCallEvent {
+  readonly type: 'tool-call'
+  readonly runId: string
+  readonly operationId: string
+  readonly call: AgentToolCall
+}
+
+interface ToolResultEvent {
+  readonly type: 'tool-result'
+  readonly runId: string
+  readonly operationId: string
+  readonly callId: string
+  readonly name: string
+  readonly result: AgentJsonValue
+}
+
+interface ToolProgressEvent {
+  readonly type: 'tool-progress'
+  readonly runId: string
+  readonly operationId: string
+  readonly callId: string
+  readonly name: string
+  readonly progress: AgentToolProgress
+}
+
+interface ApprovalRequestedEvent {
+  readonly type: 'approval-requested'
+  readonly runId: string
+  readonly operationId: string
+  readonly callId: string
+  readonly name: string
+}
+
+interface ApprovalResolvedEvent {
+  readonly type: 'approval-resolved'
+  readonly runId: string
+  readonly operationId: string
+  readonly callId: string
+  readonly name: string
+  readonly approved: boolean
+}
+
+/**
+ * The operation stopped because it used its whole turn budget, not because the
+ * model finished. Callers must be able to tell those apart.
+ */
+interface BudgetExhaustedEvent {
+  readonly type: 'budget-exhausted'
+  readonly runId: string
+  readonly operationId: string
+  readonly rounds: number
+}
+
 export type AgentEvent =
   | RunStartedEvent
   | OperationStartedEvent
   | ContentEvent
+  | ToolCallEvent
+  | ToolResultEvent
+  | ToolProgressEvent
+  | ApprovalRequestedEvent
+  | ApprovalResolvedEvent
+  | BudgetExhaustedEvent
   | OperationCompletedEvent
   | CheckpointEvent
   | RunCompletedEvent
@@ -135,6 +248,7 @@ export interface AgentRunOptions {
   readonly adapter: ModelAdapter
   readonly checkpoint?: AgentCheckpoint
   readonly signal?: AgentAbortSignal
+  readonly tooling?: AgentToolingOptions
 }
 
 export interface AgentRun {

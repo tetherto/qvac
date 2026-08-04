@@ -20,7 +20,7 @@ test('harness: in-memory HarnessRunStore round-trips state', async (t) => {
     runId: 'run-1',
     operationId: 'checkpoint-1',
     checkpoint: {
-      version: 1,
+      version: 2,
       agentId: 'agent-1',
       runId: 'run-1',
       nextOperationIndex: 1,

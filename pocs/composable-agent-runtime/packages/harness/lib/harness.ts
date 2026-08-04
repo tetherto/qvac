@@ -1,4 +1,4 @@
-import { defineAgent } from '@qvac/agents'
+import { defineAgent, type AgentEvent } from '@qvac/agents'
 import {
   agentDefinitionFromRegistration,
   copyAgentRegistration,
@@ -22,7 +22,7 @@ import type {
   SkillCatalogSource
 } from './skills/catalog.ts'
 import {
-  createToolGate,
+  grantsFor,
   validateSelectedSkills,
   type HarnessTool,
   type HarnessToolApprovalPort,
@@ -208,31 +208,19 @@ export function createHarnessService({
     }
     let eventIndex = previous?.events.length ?? 0
     const queue = createAsyncQueue<HarnessEvent>()
-    const gate = createToolGate({
-      registration,
-      catalog: await loadCatalog(),
-      tools,
-      broker: toolBroker,
-      ...(toolApproval ? { approval: toolApproval } : {})
-    })
-    const adapter = createBrokeredModelAdapter({
-      registration,
-      sdk,
-      tools: gate,
-      async onEvent(event) {
-        await runStore.appendEvents({
-          ...key,
-          operationId: `${stateKey}:event:${++eventIndex}`,
-          events: [{ kind: 'execution', event }]
-        })
-        queue.push(event)
-      }
-    })
+    const catalog = await loadCatalog()
+    const adapter = createBrokeredModelAdapter({ registration, sdk })
     const agent = defineAgent(agentDefinitionFromRegistration(registration))
     const agentRun = agent.run({
       runId: input.runId,
       input: input.input,
       adapter,
+      tooling: {
+        tools,
+        grants: grantsFor(registration.skills, catalog),
+        broker: toolBroker,
+        ...(toolApproval ? { approval: toolApproval } : {})
+      },
       ...(previous?.checkpoint ? { checkpoint: previous.checkpoint } : {})
     })
     runs.add(key, agentRun)
@@ -258,13 +246,8 @@ export function createHarnessService({
               checkpoint: event.checkpoint
             })
           }
-          if (event.type === 'content') {
-            const content: HarnessEvent = { type: 'content', text: event.text }
-            queue.push(content)
-          } else if (event.type === 'run-canceled') {
-            const aborted: HarnessEvent = { type: 'aborted' }
-            queue.push(aborted)
-          }
+          const projected = harnessEventFor(event)
+          if (projected) queue.push(projected)
           if (event.type === 'run-completed') {
             await runStore.finish({
               ...key,
@@ -355,19 +338,49 @@ export function createHarnessService({
   }
 }
 
+/**
+ * Projects an agent event onto the application-facing harness event stream.
+ * Returns null for events that are run bookkeeping rather than output.
+ */
+function harnessEventFor(event: AgentEvent): HarnessEvent | null {
+  switch (event.type) {
+    case 'content':
+      return { type: 'content', text: event.text }
+    case 'tool-call':
+      return { type: 'tool-call', name: event.call.name, args: event.call.arguments }
+    case 'tool-result':
+      return { type: 'tool-result', name: event.name, result: event.result }
+    case 'tool-progress':
+      return { type: 'tool-progress', name: event.name, progress: event.progress }
+    case 'run-canceled':
+      return { type: 'aborted' }
+    default:
+      return null
+  }
+}
+
+/**
+ * A tool call with no matching result may or may not have taken effect. The
+ * tool loop now lives in @qvac/agents, so these arrive as agent events.
+ */
 function hasIndeterminateToolCall(
   events: readonly import('./run-store.ts').HarnessStoredRunEvent[]
 ) {
   const pending = new Map<string, number>()
+  const started = (name: string) => pending.set(name, (pending.get(name) ?? 0) + 1)
+  const settled = (name: string) => {
+    const count = pending.get(name) ?? 0
+    if (count <= 1) pending.delete(name)
+    else pending.set(name, count - 1)
+  }
   for (const entry of events) {
-    if (entry.kind !== 'execution') continue
-    if (entry.event.type === 'tool-call') {
-      pending.set(entry.event.name, (pending.get(entry.event.name) ?? 0) + 1)
-    } else if (entry.event.type === 'tool-result') {
-      const count = pending.get(entry.event.name) ?? 0
-      if (count <= 1) pending.delete(entry.event.name)
-      else pending.set(entry.event.name, count - 1)
+    if (entry.kind === 'agent') {
+      if (entry.event.type === 'tool-call') started(entry.event.call.name)
+      else if (entry.event.type === 'tool-result') settled(entry.event.name)
+      continue
     }
+    if (entry.event.type === 'tool-call') started(entry.event.name)
+    else if (entry.event.type === 'tool-result') settled(entry.event.name)
   }
   return pending.size > 0
 }

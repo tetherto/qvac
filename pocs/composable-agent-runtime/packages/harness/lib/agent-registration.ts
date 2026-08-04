@@ -1,14 +1,11 @@
-import type { AgentDefinition } from '@qvac/agents'
+import type { AgentDefinition, AgentToolPolicy } from '@qvac/agents'
 
 export interface HarnessAgentWorkflowOperation {
   readonly id: string
   readonly prompt: string
 }
 
-export interface HarnessToolPolicy {
-  readonly allow: readonly string[]
-  readonly requireApproval: readonly string[]
-}
+export type HarnessToolPolicy = AgentToolPolicy
 
 export interface HarnessAgentRegistration {
   readonly id: string
@@ -17,6 +14,8 @@ export interface HarnessAgentRegistration {
   readonly workflow?: readonly HarnessAgentWorkflowOperation[]
   readonly skills: readonly string[]
   readonly toolPolicy: HarnessToolPolicy
+  /** Maximum tool rounds per operation. Defaults to the agents turn budget. */
+  readonly turnBudget?: number
 }
 
 export function agentDefinitionFromRegistration(
@@ -33,7 +32,14 @@ export function agentDefinitionFromRegistration(
             prompt: operation.prompt
           }))
         }
-      : {})
+      : {}),
+    toolPolicy: {
+      allow: [...registration.toolPolicy.allow],
+      requireApproval: [...registration.toolPolicy.requireApproval]
+    },
+    ...(registration.turnBudget === undefined
+      ? {}
+      : { turnBudget: registration.turnBudget })
   }
 }
 
@@ -51,6 +57,9 @@ export function copyAgentRegistration(
     toolPolicy: {
       allow: [...registration.toolPolicy.allow],
       requireApproval: [...registration.toolPolicy.requireApproval]
-    }
+    },
+    ...(registration.turnBudget === undefined
+      ? {}
+      : { turnBudget: registration.turnBudget })
   }
 }
