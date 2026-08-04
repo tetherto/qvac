@@ -56,7 +56,8 @@ platform has no prebuild the package falls back to a local build via
 
 ## Model files
 
-Two engines are wrapped, each with its own GGUF layout under `models/`:
+Four engine families are wrapped (Chatterbox, Supertonic, Parler,
+CosyVoice3), each with its own GGUF layout under `models/`:
 
 ```
 # Chatterbox turbo (English)
@@ -111,7 +112,9 @@ npm run convert-models
 Point the addon at a custom location via `files.modelDir` (engine
 auto-detected from the gguf filenames present), or pass explicit
 `files.t3Model` + `files.s3genModel` (Chatterbox) /
-`files.supertonicModel` (Supertonic) / `files.parlerModel` (Parler).
+`files.supertonicModel` (Supertonic) / `files.parlerModel` (Parler) /
+`files.cosyvoiceModelDir` (CosyVoice3 — a directory, see
+[CosyVoice3 instruct](#cosyvoice3-instruct)).
 
 ## Quick start
 
@@ -425,7 +428,7 @@ CosyVoice3 runs on **CPU** and emits native **24 kHz**.
 
 | Option                    | Type       | Default    | Notes |
 |---------------------------|------------|------------|-------|
-| `files.modelDir`          | string     | —          | Dir containing the two GGUFs |
+| `files.modelDir`          | string     | —          | Dir containing the engine GGUFs (engine auto-detected from the filenames present) |
 | `files.t3Model`           | string     | —          | Overrides `modelDir` for T3 |
 | `files.s3genModel`        | string     | —          | Overrides `modelDir` for S3Gen |
 | `files.supertonicModel`   | string     | —          | Supertonic GGUF (overrides `modelDir`) |
@@ -540,6 +543,7 @@ Runnable demos under `examples/`:
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
+| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz, CPU). `bare examples/cosyvoice-tts.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
@@ -557,7 +561,7 @@ npm run test               # both
 
 Integration tests scan a few candidate `models/` directories for the
 required GGUFs (see `test/utils/downloadModel.js`) and skip cleanly when
-files are absent.  They cover, across both engines:
+files are absent.  They cover, across the engines:
 
 * batch synthesis with full RuntimeStats,
 * sentence-level streaming (`runStream` / `run({ streamOutput: true })`

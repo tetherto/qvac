@@ -265,6 +265,29 @@ jobs:
           echo "Benchmark grep: $GREP"
           printf 'groups=[{"name":"perf","grep":"%s"}]\n' "$GREP" >> "$GITHUB_OUTPUT"
 
+      # Normal (non-benchmark) runs: resolve ONE functional group for this build
+      # row's engine from test-groups.json. Any non-cosyvoice engine uses the
+      # 'chatterbox' catch-all group (full Chatterbox/Supertonic/Parler/LavaSR
+      # coverage); the dedicated 'cosyvoice' row runs only runCosyvoice3Test.
+      # This keeps CosyVoice3 — whose ~2.4 GB models are adb-pre-staged only on
+      # the cosyvoice row and are too large to fetch reliably on-device on the
+      # chatterbox row — off every other row, so the whole matrix stays green.
+      - name: Resolve functional test-groups by engine
+        id: functional_groups
+        if: ${{ !inputs.run_rtf_benchmarks }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        env:
+          PLATFORM_KEY: ${{ matrix.platform == 'iOS' && 'ios' || 'android' }}
+          ENGINE_KEY: ${{ (matrix.engine || 'chatterbox') == 'cosyvoice' && 'cosyvoice' || 'chatterbox' }}
+        run: |
+          GREP=$(jq -r --arg p "$PLATFORM_KEY" --arg e "$ENGINE_KEY" '.[$p][$e] | join("|")' test/mobile/test-groups.json)
+          if [ -z "$GREP" ] || [ "$GREP" = "null" ]; then
+            echo "::error::No functional test group for $PLATFORM_KEY/$ENGINE_KEY in test-groups.json"
+            exit 1
+          fi
+          echo "Functional grep ($PLATFORM_KEY/$ENGINE_KEY): $GREP"
+          printf 'groups=[{"name":"functional","grep":"%s"}]\n' "$GREP" >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -276,9 +299,11 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
-          # Empty on normal runs => action auto-detects test-groups.json
-          # (functional tests). Set on benchmark runs => only the benchmarks.
-          test-groups: ${{ steps.perf_groups.outputs.groups }}
+          # Benchmark runs => only the benchmarks (perf_groups). Normal runs =>
+          # the engine-scoped functional group (functional_groups). Never empty,
+          # so the action's auto-detect (which would run every group on every
+          # row, re-introducing CosyVoice3 on the chatterbox row) is not used.
+          test-groups: ${{ steps.perf_groups.outputs.groups || steps.functional_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           mocha-timeout-ms: '2700000'
           wdio-waitfor-timeout-ms: '600000'
