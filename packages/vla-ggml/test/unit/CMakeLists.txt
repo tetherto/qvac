@@ -17,6 +17,8 @@ add_executable(
   test_groot_m4_7_positions.cpp
   test_groot_surface.cpp
   test_groot_infer_parity.cpp
+  test_groot_embodiment_resolve.cpp
+  test_groot_embodiment_sweep.cpp
   test_pi05_m3_1_siglip.cpp
   test_pi05_m3_2_siglip_block.cpp
   test_pi05_m3_3_siglip_tower.cpp
