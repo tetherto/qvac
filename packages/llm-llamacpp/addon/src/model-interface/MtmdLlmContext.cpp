@@ -1854,12 +1854,13 @@ PrefillPlan MtmdLlmContext::preparePrefill(
           mtmd_input_chunk_get_tokens_text(chunk, &nTokens);
       plan.tokens.insert(plan.tokens.end(), tokens, tokens + nTokens);
     } else {
-      plan.mediaBarriers.push_back(MediaBarrier{
-          .afterTextTokens = plan.tokens.size(),
-          .mediaIndex = i,
-          .nPos = mtmd_input_chunk_get_n_pos(chunk),
-          .nKvTokens =
-              static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk))});
+      plan.mediaBarriers.push_back(
+          MediaBarrier{
+              .afterTextTokens = plan.tokens.size(),
+              .mediaIndex = i,
+              .nPos = mtmd_input_chunk_get_n_pos(chunk),
+              .nKvTokens = static_cast<llama_pos>(
+                  mtmd_input_chunk_get_n_tokens(chunk))});
     }
   }
 
@@ -2308,8 +2309,9 @@ bool MtmdLlmContext::loadCache(
       sessionTokens[static_cast<size_t>(SessionMetadataField::FirstMsgTokens)]);
   setCacheTokens(
       sessionTokens[static_cast<size_t>(SessionMetadataField::CacheTokens)]);
-  setFirstMsgCacheTokens(sessionTokens[static_cast<size_t>(
-      SessionMetadataField::FirstMsgCacheTokens)]);
+  setFirstMsgCacheTokens(
+      sessionTokens[static_cast<size_t>(
+          SessionMetadataField::FirstMsgCacheTokens)]);
 
   if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(

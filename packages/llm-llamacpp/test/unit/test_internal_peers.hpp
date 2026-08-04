@@ -95,4 +95,3 @@ public:
     scheduler.evalMediaFunc_ = std::move(fn);
   }
 };
-

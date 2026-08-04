@@ -301,7 +301,6 @@ private:
   // accessors on the shipped surface.
   friend class MtmdLlmContextTestPeer;
 
-
   /**
    * The check antiprompt method. It checks the antiprompt.
    *

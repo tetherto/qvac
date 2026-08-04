@@ -35,14 +35,6 @@
     {
       "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
       "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
-    },
-    {
-      "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
-    },
-    {
-      "name": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
     }
   ],
   "runFinetuningArchsTest": [
@@ -207,30 +199,6 @@
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
-  "runImageMmprojGpuTest": [
-    {
-      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
-    },
-    {
-      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
-    },
-    {
-      "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
-    },
-    {
-      "name": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
-    }
-  ],
-  "runKvCacheTypeDefaultsTest": [
-    {
-      "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
-    }
-  ],
   "runModelLoadingTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
@@ -253,22 +221,6 @@
     {
       "name": "llama-3.2-3b-instruct-q4_0.gguf",
       "url": "https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/b86ea0e9be1406b59f11a8cf458ae96daaabf5bf/llama-3.2-3b-instruct-q4_0.gguf"
-    }
-  ],
-  "runMtpMtmdTest": [
-    {
-      "name": "Qwen3.5-0.8B-MTP-Q8_0.gguf",
-      "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf"
-    },
-    {
-      "name": "Qwen3.5-0.8B-MTP-mmproj-q8_0.gguf",
-      "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.mmproj-q8_0.gguf"
-    }
-  ],
-  "runMtpTest": [
-    {
-      "name": "Qwen3.5-0.8B-MTP-Q8_0.gguf",
-      "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf"
     }
   ],
   "runMultiGpuTest": [
@@ -411,26 +363,6 @@
       "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
-  "runQwen35ImageTileModeTokensTest": [
-    {
-      "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
-    },
-    {
-      "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
-    }
-  ],
-  "runQwen35MultimodalCacheStressTest": [
-    {
-      "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
-    },
-    {
-      "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
-    }
-  ],
   "runQwen35Test": [
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
@@ -475,6 +407,22 @@
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
+    }
+  ],
+  "runMtpTest": [
+    {
+      "name": "Qwen3.5-0.8B-MTP-Q8_0.gguf",
+      "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf"
+    }
+  ],
+  "runMtpMtmdTest": [
+    {
+      "name": "Qwen3.5-0.8B-MTP-Q8_0.gguf",
+      "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf"
+    },
+    {
+      "name": "Qwen3.5-0.8B-MTP-mmproj-q8_0.gguf",
+      "url": "https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.mmproj-q8_0.gguf"
     }
   ]
 }

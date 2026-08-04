@@ -58,6 +58,9 @@ const MODEL = {
 // memory`), which reddens whichever suite happens to load it. The head-less
 // fallback contract is architecture-level, not device-specific, so desktop
 // coverage is sufficient. Re-enable on mobile once a smaller quant is staged.
+// prestage-ignore: google_gemma-4-E2B-it-Q4_K_M.gguf — the only test naming it
+// is `skip: isMobile` (see the comment above), so staging it to the Device Farm
+// would download a multi-GB model that no mobile shard ever loads.
 const GEMMA_MODEL = {
   name: 'google_gemma-4-E2B-it-Q4_K_M.gguf'
 }
