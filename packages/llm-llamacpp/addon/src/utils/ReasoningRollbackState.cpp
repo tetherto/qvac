@@ -3,7 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <filesystem>
-#include <system_error>
+#include <optional>
 #include <utility>
 
 #include "RecurrentStateSnapshot.hpp"
@@ -11,12 +11,32 @@
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
+namespace {
+std::optional<CacheArtifactIdentity>
+readArtifactIdentity(const std::string& path) {
+  std::error_code ec;
+  const auto size = std::filesystem::file_size(path, ec);
+  if (ec) {
+    return std::nullopt;
+  }
+  const auto modified = std::filesystem::last_write_time(path, ec);
+  if (ec) {
+    return std::nullopt;
+  }
+  return CacheArtifactIdentity{
+      .fileSize = size,
+      .modifiedTicks =
+          static_cast<int64_t>(modified.time_since_epoch().count())};
+}
+} // namespace
+
 void ReasoningRollbackState::setPersistentTransactionCheckpoint(
-    std::string path, const SessionCheckpointMetadata& metadata) noexcept {
+    std::string path, const SessionCheckpointMetadata& metadata,
+    const CacheArtifactIdentity& identity) noexcept {
   clearTransactionCheckpoint();
   transactionCheckpointKind_ = TransactionCheckpointKind::Persistent;
   transactionCheckpointPath_ = std::move(path);
-  ownsTransactionCheckpointPath_ = true;
+  transactionCheckpointIdentity_ = identity;
   transactionCheckpointMetadata_ = metadata;
 }
 
@@ -24,18 +44,14 @@ void ReasoningRollbackState::setEmptyTransactionCheckpoint() noexcept {
   clearTransactionCheckpoint();
   transactionCheckpointKind_ = TransactionCheckpointKind::Empty;
   transactionCheckpointPath_.clear();
-  ownsTransactionCheckpointPath_ = false;
+  transactionCheckpointIdentity_ = {};
   transactionCheckpointMetadata_ = {};
 }
 
 void ReasoningRollbackState::clearTransactionCheckpoint() noexcept {
-  if (ownsTransactionCheckpointPath_ && !transactionCheckpointPath_.empty()) {
-    std::error_code ec;
-    std::filesystem::remove(transactionCheckpointPath_, ec);
-  }
   transactionCheckpointKind_ = TransactionCheckpointKind::None;
   transactionCheckpointPath_.clear();
-  ownsTransactionCheckpointPath_ = false;
+  transactionCheckpointIdentity_ = {};
   transactionCheckpointMetadata_ = {};
 }
 
@@ -48,6 +64,11 @@ bool ReasoningRollbackState::restoreTransactionCheckpoint(
   if (transactionCheckpointKind_ == TransactionCheckpointKind::Empty) {
     auto* mem = llama_get_memory(ctx);
     return mem != nullptr && llama_memory_seq_rm(mem, seqId, -1, -1);
+  }
+  const auto currentIdentity = readArtifactIdentity(transactionCheckpointPath_);
+  if (!currentIdentity.has_value() ||
+      *currentIdentity != transactionCheckpointIdentity_) {
+    return false;
   }
   std::array<llama_token, 4> metadataTokens{};
   size_t tokenCount = 0;
@@ -183,7 +204,8 @@ void ReasoningRollbackState::seedTransactionCheckpointForTesting(
           .nPast = nPast,
           .firstMsgTokens = nPast,
           .cacheTokens = nPast,
-          .firstMsgCacheTokens = nPast});
+          .firstMsgCacheTokens = nPast},
+      {});
 }
 
 } // namespace utils

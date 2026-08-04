@@ -211,7 +211,8 @@ public:
   void snapshotPreRequestCursor() override;
   void setPersistentTransactionCheckpoint(
       const std::string& path,
-      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata& metadata)
+      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata& metadata,
+      const qvac_lib_inference_addon_llama::CacheArtifactIdentity& identity)
       override;
   void setEmptyTransactionCheckpoint() override;
   void clearTransactionCheckpoint() override;

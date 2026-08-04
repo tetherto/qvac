@@ -272,7 +272,8 @@ public:
 
   virtual void setPersistentTransactionCheckpoint(
       const std::string&,
-      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata&) {}
+      const qvac_lib_inference_addon_llama::SessionCheckpointMetadata&,
+      const qvac_lib_inference_addon_llama::CacheArtifactIdentity&) {}
   virtual void setEmptyTransactionCheckpoint() {}
   virtual void clearTransactionCheckpoint() {}
 };

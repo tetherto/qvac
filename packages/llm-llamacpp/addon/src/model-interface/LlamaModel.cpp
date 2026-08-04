@@ -878,6 +878,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   bool shouldSaveCache = false;
   bool shouldResetAfterInference = false;
+  ScopeGuard reservationGuard([this] {
+    if (state_->cacheManager_.has_value()) {
+      state_->cacheManager_->releaseTransactionReservation();
+    }
+  });
   state_->llmContext_->validatePromptPolicy(
       resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 

@@ -1575,8 +1575,9 @@ void TextLlmContext::snapshotPreRequestCursor() {
 }
 
 void TextLlmContext::setPersistentTransactionCheckpoint(
-    const std::string& path, const SessionCheckpointMetadata& metadata) {
-  rollbackState_.setPersistentTransactionCheckpoint(path, metadata);
+    const std::string& path, const SessionCheckpointMetadata& metadata,
+    const CacheArtifactIdentity& identity) {
+  rollbackState_.setPersistentTransactionCheckpoint(path, metadata, identity);
 }
 
 void TextLlmContext::setEmptyTransactionCheckpoint() {

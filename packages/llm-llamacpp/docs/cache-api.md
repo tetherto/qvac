@@ -25,7 +25,7 @@ await model.run([
 
 Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Cache resolution happens first. A non-empty persistent request requires a last-known-valid canonical artifact, which is pinned through a stable artifact alias without serializing model state again. Metadata is parsed from that exact alias before mutation, including logical position, protected-prefix position, physical KV-cell usage, and protected-prefix KV usage. Newer unsaved live state does not block admission and is never silently committed at admission. A missing, malformed, out-of-range, or unpinnable artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
+Cache resolution happens first. A non-empty persistent request requires a last-known-valid canonical artifact and reserves that cache path exclusively within the process. Metadata is parsed directly from that exact artifact before mutation, including logical position, protected-prefix position, physical KV-cell usage, and protected-prefix KV usage. Newer unsaved live state does not block admission and is never silently committed at admission. A missing, malformed, out-of-range, or already-reserved artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
 
 An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
 
@@ -39,7 +39,7 @@ Arbitrary thrown prefill, decode, or replay errors use a different recovery path
 
 ### Storage and lifecycle
 
-The persistent checkpoint is a stable artifact alias to the canonical per-sequence cache file, implemented with a filesystem hard link. It preserves file identity without copying state bytes, so an atomic replacement of the canonical path cannot change the in-flight rollback baseline. The request owns and removes only the alias; it never deletes the canonical artifact. Successful replacement normally happens after the alias is released.
+The persistent checkpoint directly references the canonical per-sequence cache path. Admission records its size, modification time, and parsed metadata, and restoration verifies that identity before loading. The same path cannot be reserved by another persistent request in the process until completion, cancellation, or failure releases ownership. Successful persistence retains that reservation through atomic replacement. Cross-process use of one cache path is unsupported unless callers provide external synchronization; external replacement is detected best-effort and causes rollback failure rather than loading an unverified file.
 
 No transaction checkpoint uses the OS temp directory or working-directory fallback. Sensitive temporary state remains relevant to reasoning removal: when reasoning compaction is active, the distinct end-of-prefill reasoning boundary is stored in a temporary full-state file and removed best-effort on completion, rollback cleanup, replacement, or destruction. Process crashes may leave that reasoning snapshot behind. This layer does not promise encryption or explicitly enforce permissions beyond the platform and llama.cpp file creation.
 

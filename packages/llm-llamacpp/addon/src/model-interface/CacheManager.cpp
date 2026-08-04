@@ -1,11 +1,11 @@
 #include "CacheManager.hpp"
 
 #include <array>
-#include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <system_error>
+#include <unordered_set>
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
@@ -23,6 +23,9 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 
 namespace {
+
+std::mutex CACHE_RESERVATION_MUTEX;
+std::unordered_set<std::string> RESERVED_CACHE_ARTIFACTS;
 
 struct SessionMetadata {
   std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
@@ -75,6 +78,8 @@ CacheManager::CacheManager(
     std::function<void(bool)> resetStateCallback)
     : llmContext_(llmContext), configuredNDiscarded_(configuredNDiscarded),
       resetStateCallback_(std::move(resetStateCallback)) {}
+
+CacheManager::~CacheManager() { releaseTransactionReservation(); }
 
 bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
   std::error_code errorCode;
@@ -328,12 +333,25 @@ void CacheManager::saveCache() {
 }
 
 void CacheManager::prepareTransactionCheckpoint(bool persistent) {
+  releaseTransactionReservation();
   llmContext_->clearTransactionCheckpoint();
   if (!persistent || !hasActiveCache()) {
     return;
   }
+  if (!reserveCacheArtifact(sessionPath_)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: cache artifact '%s' is already in use\n",
+            __func__,
+            sessionPath_.c_str()));
+  }
+  reservedTransactionPath_ = sessionPath_;
+  ScopeGuard reservationGuard([this] { releaseTransactionReservation(); });
   if (llmContext_->getNPast() <= 0) {
     llmContext_->setEmptyTransactionCheckpoint();
+    reservationGuard.dismiss();
     return;
   }
   if (!committedArtifactKnownValid_ || !isFileInitialized(sessionPath_)) {
@@ -345,15 +363,11 @@ void CacheManager::prepareTransactionCheckpoint(bool persistent) {
             __func__,
             sessionPath_.c_str()));
   }
-  const std::string pinnedPath = pinCommittedCacheArtifact(sessionPath_);
-  ScopeGuard pinGuard([&pinnedPath] {
-    std::error_code ec;
-    std::filesystem::remove(pinnedPath, ec);
-  });
-  const auto metadata = readCommittedCacheMetadata(
-      pinnedPath, llama_n_ctx(llmContext_->getCtx()));
-  llmContext_->setPersistentTransactionCheckpoint(pinnedPath, metadata);
-  pinGuard.dismiss();
+  const auto checkpoint = inspectCommittedCacheArtifact(
+      sessionPath_, llama_n_ctx(llmContext_->getCtx()));
+  llmContext_->setPersistentTransactionCheckpoint(
+      sessionPath_, checkpoint.metadata, checkpoint.identity);
+  reservationGuard.dismiss();
 }
 
 void CacheManager::markActiveCacheDirty() {
@@ -489,36 +503,14 @@ void CacheManager::atomicPromoteFile(
 #endif
 }
 
-std::string CacheManager::pinCommittedCacheArtifact(const std::string& path) {
-  static std::atomic<uint64_t> counter{0};
-  const auto timestamp =
-      std::chrono::steady_clock::now().time_since_epoch().count();
-  const std::string pinnedPath =
-      path + ".rollback." + std::to_string(timestamp) + "." +
-      std::to_string(counter.fetch_add(1, std::memory_order_relaxed));
-  std::error_code ec;
-  std::filesystem::create_hard_link(path, pinnedPath, ec);
-  if (ec) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: failed to pin committed cache '%s': %s\n",
-            __func__,
-            path.c_str(),
-            ec.message().c_str()));
-  }
-  return pinnedPath;
-}
-
-qvac_lib_inference_addon_llama::SessionCheckpointMetadata
-CacheManager::readCommittedCacheMetadata(
+CommittedCacheCheckpoint CacheManager::inspectCommittedCacheArtifact(
     const std::string& path, llama_pos maxContext) {
   std::error_code sizeEc;
-  const auto fileSize = std::filesystem::file_size(path, sizeEc);
+  const auto fileSizeBefore = std::filesystem::file_size(path, sizeEc);
+  const auto modifiedBefore = std::filesystem::last_write_time(path, sizeEc);
   constexpr uintmax_t metadataBytes =
       sizeof(uint32_t) * 3 + sizeof(llama_token) * SESSION_METADATA_FIELD_COUNT;
-  if (sizeEc || fileSize <= metadataBytes) {
+  if (sizeEc || fileSizeBefore <= metadataBytes) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
@@ -579,10 +571,49 @@ CacheManager::readCommittedCacheMetadata(
             __func__,
             path.c_str()));
   }
-  return result;
+  const auto fileSizeAfter = std::filesystem::file_size(path, sizeEc);
+  const auto modifiedAfter = std::filesystem::last_write_time(path, sizeEc);
+  if (sizeEc || fileSizeAfter != fileSizeBefore ||
+      modifiedAfter != modifiedBefore) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: checkpoint artifact changed during inspection: '%s'\n",
+            __func__,
+            path.c_str()));
+  }
+  return {
+      .metadata = result,
+      .identity =
+          {
+              .fileSize = fileSizeAfter,
+              .modifiedTicks = static_cast<int64_t>(
+                  modifiedAfter.time_since_epoch().count()),
+          },
+  };
+}
+
+bool CacheManager::reserveCacheArtifact(const std::string& path) {
+  std::scoped_lock lock(CACHE_RESERVATION_MUTEX);
+  return RESERVED_CACHE_ARTIFACTS.insert(path).second;
+}
+
+void CacheManager::releaseCacheArtifact(const std::string& path) noexcept {
+  if (path.empty()) {
+    return;
+  }
+  std::scoped_lock lock(CACHE_RESERVATION_MUTEX);
+  RESERVED_CACHE_ARTIFACTS.erase(path);
+}
+
+void CacheManager::releaseTransactionReservation() noexcept {
+  releaseCacheArtifact(reservedTransactionPath_);
+  reservedTransactionPath_.clear();
 }
 
 void CacheManager::invalidate() {
+  releaseTransactionReservation();
   sessionPath_.clear();
   cacheDisabled_ = true;
   cacheUsedInLastPrompt_ = false;

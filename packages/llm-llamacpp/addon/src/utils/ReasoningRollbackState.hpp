@@ -14,8 +14,8 @@ namespace utils {
 
 // Shared per-inference transaction and reasoning-replay state.
 //
-//   * an optional persistent transaction checkpoint pinning the last committed
-//     cache artifact through a stable hard-link identity;
+//   * an optional persistent transaction checkpoint referencing the canonical
+//     cache artifact under exclusive in-process ownership;
 //   * an end-of-prefill temporary full-state snapshot restored by
 //     thinking-block compaction;
 //   * the post-reasoning token capture buffer used to replay the
@@ -41,7 +41,8 @@ public:
   // baselines use an in-memory marker. Non-persistent requests hold no
   // checkpoint and cancellation clears the affected sequence.
   void setPersistentTransactionCheckpoint(
-      std::string path, const SessionCheckpointMetadata& metadata) noexcept;
+      std::string path, const SessionCheckpointMetadata& metadata,
+      const CacheArtifactIdentity& identity) noexcept;
   void setEmptyTransactionCheckpoint() noexcept;
   void clearTransactionCheckpoint() noexcept;
   bool restoreTransactionCheckpoint(::llama_context* ctx, llama_seq_id seqId);
@@ -141,7 +142,7 @@ private:
   TransactionCheckpointKind transactionCheckpointKind_ =
       TransactionCheckpointKind::None;
   std::string transactionCheckpointPath_;
-  bool ownsTransactionCheckpointPath_ = false;
+  CacheArtifactIdentity transactionCheckpointIdentity_;
   SessionCheckpointMetadata transactionCheckpointMetadata_;
   RecurrentStateSnapshot reasoningBoundary_;
   std::vector<llama_token> postReasoningTokens_;

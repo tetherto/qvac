@@ -38,7 +38,7 @@ void writeCheckpointMetadata(
   out.put('\0');
 }
 
-TEST(CacheCheckpointPinTest, AtomicReplacementPreservesPinnedIdentity) {
+TEST(CacheCheckpointReferenceTest, AtomicReplacementChangesArtifactIdentity) {
   const fs::path base =
       fs::temp_directory_path() /
       ("qvac-cache-checkpoint-pin-" +
@@ -49,36 +49,23 @@ TEST(CacheCheckpointPinTest, AtomicReplacementPreservesPinnedIdentity) {
   fs::remove(base);
   fs::remove(replacement);
 
-  {
-    std::ofstream out(base, std::ios::binary);
-    out << "old";
-  }
-  const std::string pinned =
-      CacheManager::pinCommittedCacheArtifact(base.string());
-  {
-    std::ofstream out(replacement, std::ios::binary);
-    out << "new";
-  }
+  writeCheckpointMetadata(base, {5, 2, 5, 2});
+  const auto before =
+      CacheManager::inspectCommittedCacheArtifact(base.string(), 16);
+  writeCheckpointMetadata(replacement, {9, 4, 9, 4});
   CacheManager::atomicPromoteFile(replacement.string(), base.string());
-
-  std::string canonicalValue;
-  std::string pinnedValue;
-  {
-    std::ifstream in(base, std::ios::binary);
-    in >> canonicalValue;
-  }
-  {
-    std::ifstream in(pinned, std::ios::binary);
-    in >> pinnedValue;
-  }
-  EXPECT_EQ(canonicalValue, "new");
-  EXPECT_EQ(pinnedValue, "old");
+  const auto after =
+      CacheManager::inspectCommittedCacheArtifact(base.string(), 16);
+  EXPECT_TRUE(
+      before.identity != after.identity ||
+      before.metadata.nPast != after.metadata.nPast);
+  EXPECT_EQ(before.metadata.nPast, 5);
+  EXPECT_EQ(after.metadata.nPast, 9);
 
   fs::remove(base);
-  fs::remove(pinned);
 }
 
-TEST(CacheCheckpointPinTest, MissingArtifactFailsBeforeUse) {
+TEST(CacheCheckpointReferenceTest, MissingArtifactFailsBeforeUse) {
   const fs::path missing =
       fs::temp_directory_path() /
       ("qvac-missing-checkpoint-" +
@@ -87,37 +74,20 @@ TEST(CacheCheckpointPinTest, MissingArtifactFailsBeforeUse) {
        ".bin");
   fs::remove(missing);
   EXPECT_THROW(
-      (void)CacheManager::pinCommittedCacheArtifact(missing.string()),
+      (void)CacheManager::inspectCommittedCacheArtifact(missing.string(), 16),
       qvac_errors::StatusError);
 }
 
-TEST(CacheCheckpointPinTest, MetadataComesFromPinnedArtifactIdentity) {
-  const fs::path base =
-      fs::temp_directory_path() /
-      ("qvac-checkpoint-metadata-" +
-       std::to_string(
-           std::chrono::steady_clock::now().time_since_epoch().count()) +
-       ".bin");
-  const fs::path replacement = base.string() + ".tmp";
-  writeCheckpointMetadata(base, {5, 2, 7, 3});
-  const std::string pinned =
-      CacheManager::pinCommittedCacheArtifact(base.string());
-  writeCheckpointMetadata(replacement, {9, 4, 9, 4});
-  CacheManager::atomicPromoteFile(replacement.string(), base.string());
-
-  const auto pinnedMetadata =
-      CacheManager::readCommittedCacheMetadata(pinned, /*maxContext=*/16);
-  const auto canonicalMetadata = CacheManager::readCommittedCacheMetadata(
-      base.string(), /*maxContext=*/16);
-  EXPECT_EQ(pinnedMetadata.nPast, 5);
-  EXPECT_EQ(pinnedMetadata.cacheTokens, 7);
-  EXPECT_EQ(canonicalMetadata.nPast, 9);
-
-  fs::remove(base);
-  fs::remove(pinned);
+TEST(CacheCheckpointReferenceTest, SameKeyReservationIsExclusive) {
+  const std::string key = "/tmp/qvac-exclusive-cache-key.ggsq";
+  ASSERT_TRUE(CacheManager::reserveCacheArtifact(key));
+  EXPECT_FALSE(CacheManager::reserveCacheArtifact(key));
+  CacheManager::releaseCacheArtifact(key);
+  EXPECT_TRUE(CacheManager::reserveCacheArtifact(key));
+  CacheManager::releaseCacheArtifact(key);
 }
 
-TEST(CacheCheckpointPinTest, OutOfRangeMetadataIsRejected) {
+TEST(CacheCheckpointReferenceTest, OutOfRangeMetadataIsRejected) {
   const fs::path path =
       fs::temp_directory_path() /
       ("qvac-invalid-checkpoint-metadata-" +
@@ -126,8 +96,7 @@ TEST(CacheCheckpointPinTest, OutOfRangeMetadataIsRejected) {
        ".bin");
   writeCheckpointMetadata(path, {17, 2, 17, 2});
   EXPECT_THROW(
-      (void)CacheManager::readCommittedCacheMetadata(
-          path.string(), /*maxContext=*/16),
+      (void)CacheManager::inspectCommittedCacheArtifact(path.string(), 16),
       qvac_errors::StatusError);
   fs::remove(path);
 }

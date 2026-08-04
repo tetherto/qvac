@@ -407,20 +407,25 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   const bool persistentCheckpoint =
       request.saveCacheToDisk && !request.cacheKey.empty();
+  std::string reservedCachePath;
+  ScopeGuard reservationGuard([&reservedCachePath] {
+    CacheManager::releaseCacheArtifact(reservedCachePath);
+  });
   if (persistentCheckpoint) {
+    if (!CacheManager::reserveCacheArtifact(request.cacheKey)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          "persistent cache artifact is already in use");
+    }
+    reservedCachePath = request.cacheKey;
     if (driver->getNPast() <= 0) {
       driver->setEmptyTransactionCheckpoint();
     } else if (isCacheLoaded) {
-      const std::string pinnedPath =
-          CacheManager::pinCommittedCacheArtifact(request.cacheKey);
-      ScopeGuard pinGuard([&pinnedPath] {
-        std::error_code ec;
-        std::filesystem::remove(pinnedPath, ec);
-      });
-      const auto metadata = CacheManager::readCommittedCacheMetadata(
-          pinnedPath, static_cast<llama_pos>(perSeqMaxTokens_));
-      driver->setPersistentTransactionCheckpoint(pinnedPath, metadata);
-      pinGuard.dismiss();
+      const auto checkpoint = CacheManager::inspectCommittedCacheArtifact(
+          request.cacheKey, static_cast<llama_pos>(perSeqMaxTokens_));
+      driver->setPersistentTransactionCheckpoint(
+          request.cacheKey, checkpoint.metadata, checkpoint.identity);
     } else {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -522,12 +527,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .tools = std::move(tools),
           .driver = std::move(driver),
           .cacheKey = std::move(request.cacheKey),
+          .reservedCachePath = std::move(reservedCachePath),
           .group = std::move(queued.group),
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
           .activeCacheSavedToDisk = isCacheLoaded,
           .prefillOnly = request.prefill});
   cacheGuard.dismiss();
+  reservationGuard.dismiss();
   return seqId;
 }
 
@@ -1277,6 +1284,9 @@ void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
 
 void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
+    if (slots_[seqId].has_value()) {
+      CacheManager::releaseCacheArtifact(slots_[seqId]->reservedCachePath);
+    }
     slots_[seqId].reset();
   }
 }

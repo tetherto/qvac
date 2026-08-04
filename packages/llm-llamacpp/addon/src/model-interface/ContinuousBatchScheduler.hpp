@@ -343,6 +343,7 @@ private:
     std::unique_ptr<ToolsCompactController> tools;
     std::unique_ptr<SequenceDriver> driver;
     std::string cacheKey;
+    std::string reservedCachePath;
     std::shared_ptr<BatchGroup> group;
     size_t outputIndex = 0;
     bool saveCacheToDisk = false;

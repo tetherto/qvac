@@ -28,11 +28,17 @@ struct ParsedPromptPayload {
   std::vector<PlannedMedia> mediaPlan;
 };
 
+struct CommittedCacheCheckpoint {
+  qvac_lib_inference_addon_llama::SessionCheckpointMetadata metadata;
+  qvac_lib_inference_addon_llama::CacheArtifactIdentity identity;
+};
+
 class CacheManager {
 public:
   CacheManager(
       LlmContext* llmContext, llama_pos configuredNDiscarded,
       std::function<void(bool)> resetStateCallback);
+  ~CacheManager();
 
   bool handleCache(
       ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
@@ -48,9 +54,11 @@ public:
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
   static void atomicPromoteFile(const std::string& from, const std::string& to);
-  static std::string pinCommittedCacheArtifact(const std::string& path);
-  static qvac_lib_inference_addon_llama::SessionCheckpointMetadata
-  readCommittedCacheMetadata(const std::string& path, llama_pos maxContext);
+  static CommittedCacheCheckpoint inspectCommittedCacheArtifact(
+      const std::string& path, llama_pos maxContext);
+  static bool reserveCacheArtifact(const std::string& path);
+  static void releaseCacheArtifact(const std::string& path) noexcept;
+  void releaseTransactionReservation() noexcept;
 
 private:
   void saveActiveCacheForTransition();
@@ -68,4 +76,5 @@ private:
   bool cacheUsedInLastPrompt_ = false;
   bool activeCacheSavedToDisk_ = false;
   bool committedArtifactKnownValid_ = false;
+  std::string reservedTransactionPath_;
 };
