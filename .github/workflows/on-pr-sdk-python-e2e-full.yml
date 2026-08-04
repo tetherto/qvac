@@ -5,7 +5,7 @@
 # desktop platforms, proving the Python client cross-platform. Models are cached
 # (keyed on the shared model registry) so repeat runs skip the cold download.
 #
-# The fast per-PR leg is on-pr-sdk-python-e2e.yml (hosted, `verified` label,
+# The fast per-PR leg is on-pr-sdk-python-e2e.yml (hosted, `test-e2e-smoke` label,
 # minimal models, -m "not heavy"). This heavier leg is gated on `test-e2e-full`.
 #
 # Plain `pull_request` (not pull_request_target): the worker build uses only the

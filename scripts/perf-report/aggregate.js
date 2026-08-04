@@ -10,7 +10,7 @@
  * that mirrors the team's existing Excel spreadsheet format.
  *
  * Usage:
- *   node scripts/perf-report/aggregate.js --addon ocr-onnx --workflow "Integration Tests (OCR)" --runs 6
+ *   node scripts/perf-report/aggregate.js --addon nmtcpp --workflow "Integration Tests (NMTCPP)" --runs 6
  *   node scripts/perf-report/aggregate.js --dir ./downloaded-reports
  *   node scripts/perf-report/aggregate.js --help
  */
@@ -91,7 +91,7 @@ Performance Report Aggregator
 Downloads performance artifacts from CI and generates comparison reports.
 
 OPTIONS:
-  --addon <name>        Addon name to filter artifacts (e.g. ocr-onnx, nmtcpp)
+  --addon <name>        Addon name to filter artifacts (e.g. llamacpp-llm, nmtcpp)
   --addon-type <type>   Addon type for per-device detail tables (default: 'vision')
   --workflow <name>     GitHub Actions workflow name to query
   --runs <n>            Number of recent runs to aggregate (default: 6)
@@ -120,12 +120,12 @@ OPTIONS:
   -h, --help            Show this help
 
 EXAMPLES:
-  # Aggregate last 6 OCR integration test runs from CI
+  # Aggregate last 6 NMTCPP integration test runs from CI
   node scripts/perf-report/aggregate.js \\
-    --addon ocr-onnx \\
-    --workflow "Integration Tests (OCR)" \\
+    --addon nmtcpp \\
+    --workflow "Integration Tests (NMTCPP)" \\
     --runs 6 \\
-    --output reports/ocr-performance.md
+    --output reports/nmtcpp-performance.md
 
   # Aggregate from a local directory of downloaded reports
   node scripts/perf-report/aggregate.js \\

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/vla-ggml",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "VLA vision-language-action inference addon for QVAC (ggml backend)",
   "addon": true,
   "engines": {
@@ -87,7 +87,8 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
-    }
+    },
+    "./binding.js": "./binding.js"
   },
   "main": "index.js",
   "types": "index.d.ts"

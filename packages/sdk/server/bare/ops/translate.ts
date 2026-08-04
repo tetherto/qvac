@@ -8,7 +8,7 @@ import {
   AFRICAN_LANGUAGES_MAP
 } from '@/schemas'
 import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
-import type { GenerationParams, RunOptions } from '@qvac/llm-llamacpp'
+import type { GenerationParams } from '@qvac/llm-llamacpp'
 import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
@@ -194,14 +194,7 @@ export async function* translate(
     canonicalModelType === ModelType.llamacppCompletion &&
     !shouldSkipPerCallSampling(entry.local.name)
   ) {
-    // AnyModel.run is intentionally erased to a single-arg signature in the
-    // registry layer (Omit<BaseInference, "addon">). Re-narrow to the engine
-    // shape so we get the same typing as @qvac/llm-llamacpp.run().
-    const llmRun = model.run.bind(model) as (
-      prompt: typeof input,
-      opts: RunOptions
-    ) => ReturnType<typeof model.run>
-    response = await llmRun(input, {
+    response = await model.run(input, {
       generationParams: LLM_TRANSLATE_GENERATION_PARAMS
     })
   } else {
