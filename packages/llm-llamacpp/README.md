@@ -144,15 +144,15 @@ files: { model: [path.join(dir, 'Llama-3.2-1B-Instruct-Q4_0.gguf')] }
 
 ### 3. Create the `config` obj
 
-The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-*All parameters must by strings.*
+The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model. Numeric values may be strings; boolean options use booleans.
 
 ```js
 // an example of possible configuration
 const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
-  device: 'cpu' // must be specified: 'gpu' or 'cpu' else it will throw an error
+  device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
+  no_mmap: true // disable memory-mapped model loading
 }
 ```
 
@@ -167,7 +167,7 @@ const config = {
 | top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
 | predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
 | seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
-| no_mmap           | "" (passing empty string sets the flag)     | —                            | Disable memory mapping for model loading              |
+| no_mmap           | boolean                                     | false                        | Disable memory mapping for model loading              |
 | reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |

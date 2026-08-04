@@ -802,6 +802,36 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LlamaModelTest, CommonParamsParseNoMmapBooleanTrue) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["no_mmap"] = "true";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_FALSE(model.getCommonParams().model.use_mmap);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseNoMmapBooleanFalse) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["no_mmap"] = "false";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_TRUE(model.getCommonParams().model.use_mmap);
+}
+
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

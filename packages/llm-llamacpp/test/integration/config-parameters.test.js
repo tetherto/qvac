@@ -99,7 +99,7 @@ const scenarios = [
   {
     name: 'no_mmap disables memory-mapped model loading',
     overrides: {
-      no_mmap: '',
+      no_mmap: true,
       n_predict: '16'
     },
     expectSuccess: true
