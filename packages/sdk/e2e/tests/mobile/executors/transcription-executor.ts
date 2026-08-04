@@ -55,10 +55,7 @@ export class MobileTranscriptionExecutor extends ModelAssetExecutor<typeof trans
     return await new File(`file://${uriResult}`).bytes()
   }
 
-  private async f32leQueueRecovery(
-    params: unknown,
-    expectation: unknown
-  ): Promise<TestResult> {
+  private async f32leQueueRecovery(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { audioFileName: string }
     const whisperModelId = await this.resources.ensureLoaded('whisper')
     const audioBytesResult = await this.loadAudioBytes(p.audioFileName)

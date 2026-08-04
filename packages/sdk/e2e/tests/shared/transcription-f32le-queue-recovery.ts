@@ -1,14 +1,6 @@
 import { transcribe } from '@qvac/sdk'
-import {
-  ValidationHelpers,
-  type Expectation,
-  type TestResult
-} from '@tetherto/qvac-test-suite'
-import {
-  decodeWavToMonoF32,
-  f32ToLeBytes,
-  type DecodedPcm
-} from './wav-pcm.js'
+import { ValidationHelpers, type Expectation, type TestResult } from '@tetherto/qvac-test-suite'
+import { decodeWavToMonoF32, f32ToLeBytes, type DecodedPcm } from './wav-pcm.js'
 
 const WHISPER_SAMPLE_RATE = 16000
 const INCOMPLETE_F32LE_STREAM_ERROR = 'f32le byte stream ends mid-sample'
@@ -29,10 +21,7 @@ function downsampleToWhisperRate(
   sourceSampleRate: number
 ): Float32Array | null {
   if (sourceSampleRate === WHISPER_SAMPLE_RATE) return samples
-  if (
-    sourceSampleRate < WHISPER_SAMPLE_RATE ||
-    sourceSampleRate % WHISPER_SAMPLE_RATE !== 0
-  ) {
+  if (sourceSampleRate < WHISPER_SAMPLE_RATE || sourceSampleRate % WHISPER_SAMPLE_RATE !== 0) {
     return null
   }
 
