@@ -10,6 +10,26 @@ Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/mai
 
 `textToSpeech()` returns an object containing `buffer` and, when streaming is enabled, a `bufferStream` for incremental audio output.
 
+## Output format
+
+`textToSpeech().buffer` (and each chunk emitted on `bufferStream`) is a mono, 16-bit signed PCM sample stream — an `Int16Array` in TypeScript / JavaScript, a list of `int16` samples in Python.
+
+The sample rate is engine-default and is **not** reported on the response object; use the value that matches the model you loaded:
+
+| Engine     | Native sample rate |
+| ---------- | ------------------ |
+| Chatterbox | 24000 Hz           |
+| Supertonic | 44100 Hz           |
+| Parler-TTS | 44100 Hz           |
+
+To emit at a different rate, set `modelConfig.outputSampleRate` on `loadModel()` and the engine resamples for you.
+
+<Callout type="info">
+  For Parler native chunk streaming (`streamChunkTokens > 0`), keep
+  `outputSampleRate` at `44100` (or omit it) — see [Parler-TTS](#parler-tts)
+  below.
+</Callout>
+
 ## Functions
 
 Use the following sequence of function calls:
