@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-08-04
+
+### Fixed
+
+- **Parler no longer runs out of memory while loading a model on iOS.** CPU
+  weights are now mapped in place from the GGUF — clean, file-backed, evictable
+  pages — instead of being copied into dirty backend buffers that iOS jetsam
+  counts in full against the app memory limit, so the load fits the default
+  budget on non-entitled devices. Output is byte-identical.
+
+### Changed
+
+- **Parler runs on Vulkan on ARM Mali GPUs** when GPU execution is requested,
+  instead of silently falling back to CPU. Explicit CPU execution is unchanged.
+
 ## [0.6.2] - 2026-08-03
 
 ### Changed
