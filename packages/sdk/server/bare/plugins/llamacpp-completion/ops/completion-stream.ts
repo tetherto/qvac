@@ -149,12 +149,7 @@ function transformMessage(
 }
 
 function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOptions) {
-  const run = model.run.bind(model) as (
-    prompt: ChatHistory[],
-    opts?: CompletionRunOptions
-  ) => ReturnType<typeof model.run>
-
-  return run(prompt, opts)
+  return model.run(prompt, opts)
 }
 
 export function transformMessages(

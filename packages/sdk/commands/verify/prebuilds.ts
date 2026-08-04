@@ -24,7 +24,7 @@ export async function checkPrebuilds(
 
   for (const host of hosts) {
     const hostDir = path.join(addon.packageRoot, 'prebuilds', host)
-    const present = await hasBarePrebuild(hostDir)
+    const present = (await listBarePrebuildFiles(hostDir)).length > 0
     if (!present) {
       issues.push({
         code: 'missing-prebuild',
@@ -42,16 +42,16 @@ export async function checkPrebuilds(
   return issues
 }
 
-async function hasBarePrebuild(hostDir: string): Promise<boolean> {
+export async function listBarePrebuildFiles(hostDir: string): Promise<string[]> {
   let entries
   try {
     entries = await fsp.readdir(hostDir, { withFileTypes: true })
   } catch {
-    return false
+    return []
   }
-  for (const entry of entries) {
-    if (!entry.isFile() && !entry.isSymbolicLink()) continue
-    if (entry.name.endsWith('.bare')) return true
-  }
-  return false
+
+  return entries
+    .filter((entry) => (entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith('.bare'))
+    .map((entry) => path.resolve(hostDir, entry.name))
+    .sort()
 }
