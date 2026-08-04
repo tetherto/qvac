@@ -4,8 +4,10 @@
 // Populates sha256 + bytes in test/integration/models.manifest.json by
 // downloading each pinned URL FRESH into a temp directory and hashing it.
 //
-// NOTE: this is distinct from scripts/generate-model-manifest.js, which builds
-// the Android mobile pre-stage manifest (test/mobile/model-manifest.json).
+// This file is the source of truth for every model URL used by the suite —
+// including the Android mobile pre-stage map (test/mobile/model-manifest.json),
+// which is hand-maintained and checked against this file by
+// scripts/validate-mobile-manifest.js.
 //
 // IMPORTANT (integrity provenance): shas are computed from a clean download of
 // the pinned URL, never from packages/llm-llamacpp/test/model (which may be a

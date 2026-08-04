@@ -99,12 +99,22 @@ void TextLlmContext::initializeCommonState() {
   // predicate is about RoPE-based K-shift (position shifting) and
   // returns `true` for all memory types in fabric today, including
   // recurrent and hybrid. The real architectural property we care
-  // about is "does this model have a recurrent half?", which is
-  // exactly what these two model predicates report.
+  // about is "does this model need full-state replay?" DeepSeek V4 needs that
+  // path as well even though its compressed cache is not reported by either
+  // model predicate.
   const auto* const model = modelCtx_.model;
+  const std::optional<std::string> architecture =
+      qvac_lib_inference_addon_llama::utils::getModelArchitecture(model);
+  const bool isDeepSeekV4 =
+      architecture.has_value() &&
+      qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(
+          architecture.value());
   needsRecurrentSnapshot_ =
       (model != nullptr) &&
-      (llama_model_is_recurrent(model) || llama_model_is_hybrid(model));
+      qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot(
+          llama_model_is_recurrent(model),
+          llama_model_is_hybrid(model),
+          isDeepSeekV4);
   compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the
@@ -115,14 +125,15 @@ void TextLlmContext::initializeCommonState() {
   // tracking / compaction via `reasoningEnabled_`, just not this
   // recovery.
   {
-    const std::optional<std::string> arch =
-        qvac_lib_inference_addon_llama::utils::getModelArchitecture(
-            modelCtx_.model);
     isQwen3ReasoningFamily_ =
-        arch.has_value() &&
+        architecture.has_value() &&
         qvac_lib_inference_addon_llama::utils::
-            isQwen3ReasoningFamilyArchitecture(arch.value());
+            isQwen3ReasoningFamilyArchitecture(architecture.value());
   }
+  setRemoveThinkingFromContext(
+      architecture.has_value() &&
+      qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
+          architecture.value()));
 
   // Precompute the EOG token id set used by the EOS-inside-reasoning recovery
   // (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family arms that
@@ -1107,7 +1118,7 @@ bool TextLlmContext::onGenerationFinished(
   }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
-  if (shouldRollbackKnownReasoningCutoff()) {
+  if (shouldRollbackInterruptedReasoning()) {
     return rollbackCurrentRequest(outputCallback);
   }
   if (generationStarted_) {
@@ -1134,14 +1145,16 @@ bool TextLlmContext::onCancel(
   return rollbackCurrentRequest(outputCallback);
 }
 
-bool TextLlmContext::shouldRollbackKnownReasoningCutoff() const {
-  const bool knownTruncation =
-      generationStopReason_ == GenerationStopReason::PredictionLimit ||
-      generationStopReason_ == GenerationStopReason::SequenceLimit;
-  return knownTruncation && needsRecurrentSnapshot_ &&
-         removeThinkingFromContext_ && reasoningEnabled_ &&
-         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
-         !compactor_.hasCapturedCloseSpan();
+bool TextLlmContext::shouldRollbackInterruptedReasoning() const {
+  return qvac_lib_inference_addon_llama::utils::
+      shouldRollbackInterruptedReasoning(
+          generationStopReason_,
+          needsRecurrentSnapshot_,
+          removeThinkingFromContext_,
+          reasoningEnabled_,
+          reasoningState_.inside_reasoning,
+          compactor_.hasOpenSpan(),
+          compactor_.hasCapturedCloseSpan());
 }
 
 bool TextLlmContext::rollbackCurrentRequest(

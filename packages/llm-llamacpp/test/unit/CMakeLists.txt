@@ -21,6 +21,9 @@ add_executable(
   test_backend_selection.cpp
   test_tune_config_map.cpp
   test_generation_params_apply.cpp
+  test_llm_parsers.cpp
+  test_load_config_handlers.cpp
+  test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
@@ -62,6 +65,8 @@ add_executable(
   test_finetune_cancel_action.cpp
   test_finetune_pending_pause.cpp
   test_whole_model_cancel_finetune.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp

@@ -2,7 +2,7 @@
  * Whisper transcription with prompt example.
  *
  * Usage:
- *   bun examples/transcription/whispercpp-prompt.ts
+ *   bun examples/asr/whispercpp-prompt.ts
  *
  * This example requires a test audio file (default: examples/audio/sample-16khz.wav).
  * Sample audio files are available in the QVAC source repository, but not included in the published npm package.

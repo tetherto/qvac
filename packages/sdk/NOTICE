@@ -623,6 +623,8 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
+  @qvac/asr-ggml@0.1.0
+    https://github.com/tetherto/qvac
   @qvac/bci-whispercpp@0.5.1
     https://github.com/tetherto/qvac
   @qvac/classification-ggml@0.13.0
@@ -652,10 +654,6 @@ JavaScript Dependencies
   @qvac/registry-client@0.6.1
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
-    https://github.com/tetherto/qvac
-  @qvac/transcription-parakeet@0.10.1
-    https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.12.1
     https://github.com/tetherto/qvac
   @qvac/translation-nmtcpp@8.1.0
     https://github.com/tetherto/qvac

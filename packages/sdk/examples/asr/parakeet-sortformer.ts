@@ -2,7 +2,7 @@
  * Parakeet Sortformer diarization + TDT transcription pipeline.
  *
  * Usage:
- *   bun run examples/transcription/parakeet-sortformer.ts [sortformer-gguf] [wav-file]
+ *   bun run examples/asr/parakeet-sortformer.ts [sortformer-gguf] [wav-file]
  *
  * Two-step flow: Sortformer v2.1 diarizes the audio, then TDT transcribes each
  * speaker segment. Defaults to registry GGUFs and

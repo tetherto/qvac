@@ -10,6 +10,7 @@
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/MtmdLlmContext.hpp"
 
 // Friend test peers grant unit tests direct access to internals that are not
 // part of the production public API. The production classes befriend these
@@ -120,5 +121,16 @@ public:
       return std::nullopt;
     }
     return scheduler.slots_[seqId]->admissionId;
+  }
+};
+
+class MtmdLlmContextTestPeer {
+public:
+  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
+    return context.removeThinkingFromContext_;
+  }
+
+  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
+    return context.compactor_.removeThinkingFromContext();
   }
 };
