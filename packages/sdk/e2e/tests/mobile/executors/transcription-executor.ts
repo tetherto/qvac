@@ -74,25 +74,32 @@ export class MobileTranscriptionExecutor extends ModelAssetExecutor<typeof trans
         const suffix = Date.now().toString()
         const validFile = new File(Paths.cache, `qvac-f32le-valid-${suffix}.f32le`)
         const malformedFile = new File(Paths.cache, `qvac-f32le-malformed-${suffix}.f32le`)
+        const cleanup = async () => {
+          const errors: Error[] = []
+          for (const file of [validFile, malformedFile]) {
+            try {
+              if (file.exists) file.delete()
+            } catch (error) {
+              errors.push(error instanceof Error ? error : new Error(String(error)))
+            }
+          }
+          if (errors[0]) throw errors[0]
+        }
 
         try {
           validFile.create()
           malformedFile.create()
           await validFile.write(validAudio)
           await malformedFile.write(malformedAudio)
-        } catch (error) {
-          if (validFile.exists) validFile.delete()
-          if (malformedFile.exists) malformedFile.delete()
-          throw error
-        }
 
-        return {
-          validPath: decodeURIComponent(validFile.uri.replace(/^file:\/\//, '')),
-          malformedPath: decodeURIComponent(malformedFile.uri.replace(/^file:\/\//, '')),
-          cleanup: async () => {
-            if (validFile.exists) validFile.delete()
-            if (malformedFile.exists) malformedFile.delete()
+          return {
+            validPath: decodeURIComponent(validFile.uri.replace(/^file:\/\//, '')),
+            malformedPath: decodeURIComponent(malformedFile.uri.replace(/^file:\/\//, '')),
+            cleanup
           }
+        } catch (error) {
+          await cleanup()
+          throw error
         }
       }
     )
