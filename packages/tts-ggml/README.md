@@ -261,11 +261,20 @@ Notes:
   streaming.
 - That window re-runs the enhancer over a fixed left context + look-ahead around
   every chunk, so streamed enhancement costs a constant factor above a single
-  batch pass: **~1.7×** at the default `streamChunkTokens: 25` (~1 s chunks),
-  ~2.7× at 10 tokens, ~4.4× at 5 tokens. The factor is flat in utterance length,
-  and the enhancer is only a small share of synthesis, so ~1 s chunks cost
-  roughly 2% of total synthesis time. Prefer larger chunks if enhancer CPU
-  matters more to you than first-audio latency.
+  batch pass: **~1.7×** for ~1 s chunks, ~2.7× for ~0.4 s, ~4.4× for ~0.2 s. How
+  many tokens that is depends on the engine's speech-token rate (Chatterbox's S3
+  tokens run at a fixed 25 Hz, so `streamChunkTokens: 25` ≈ 1 s). The factor is
+  flat in utterance length, and the enhancer is only a small share of synthesis,
+  so ~1 s chunks cost roughly 2% of total synthesis time.
+- That extra enhancer CPU buys a real latency win on **Chatterbox**, so prefer
+  larger chunks there only if enhancer CPU matters more to you than first-audio
+  latency. On **CosyVoice3** it currently buys nothing: the tts-cpp engine
+  computes the whole utterance and only then slices it, so chunks arrive
+  progressively but first-audio latency is not yet reduced (true token2wav
+  streaming is reserved upstream). Until that lands, prefer **batch** synthesis
+  when enhancing CosyVoice3 — streaming there pays the reprocess cost and yields
+  a seam-free result that is not bit-identical to the batch pass, with no
+  latency benefit in return.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
   different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
