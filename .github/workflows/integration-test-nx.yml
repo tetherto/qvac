@@ -1,0 +1,321 @@
+# Consolidates 10 of the 12 integration-test-<pkg>.yml files. Shared skeleton
+# (checkout -> setup-bare-tooling -> npm install -> download prebuilds bundle
+# (bash/powershell OS split) -> run tests -> upload perf report) is real and
+# identical across all 10; genuine per-package divergence is: platform matrix
+# rows (each package has its own real row set - flattened below, one entry
+# per (package, platform) pair), whether the test command needs a
+# `${platform}-${arch}` suffix, whether output is tee'd to a log file
+# (bash `tee`/PIPESTATUS on Unix, PowerShell `Tee-Object` on Windows), and an
+# optional manual-dispatch-only `pin-model-manifest` job (diffusion-cpp).
+#
+# Carve-outs, both stay untouched and separate:
+#   - llm-llamacpp: own `label` field disambiguating multiple same-platform
+#     rows, a `test:integration:generate` pre-step, tee-based logging, and a
+#     genuinely different (7-row, GPU-labelled) platform matrix.
+#   - asr-ggml: three distinct test-command variants gated on GPU runner
+#     (test:integration / test:integration:gpu / test:stand-alone:gpu) plus
+#     its own pin-model-manifest job - real complexity beyond a simple
+#     command-suffix/tee toggle.
+name: "Integration Tests (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      pin_model_manifest:
+        description: "Regenerate the pinned model manifest for packages that support it (diffusion-cpp)"
+        type: boolean
+        required: false
+        default: false
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+      prebuild_package:
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages + build matrix (nx affected, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - id: compute
+        uses: ./.github/actions/nx-affected
+        with:
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          config: |
+            - {package: classification-ggml, workdir: packages/classification-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64}
+            - {package: classification-ggml, workdir: packages/classification-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64}
+            - {package: classification-ggml, workdir: packages/classification-ggml, os: ubuntu-22.04-arm, platform: linux, arch: arm64}
+            - {package: classification-ggml, workdir: packages/classification-ggml, os: mac-mini-m4, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu}
+            - {package: classification-ggml, workdir: packages/classification-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-26.04, platform: linux, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: macos-26, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: macos-15-large, platform: darwin, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-26.04, platform: linux, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: macos-26, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: macos-15-large, platform: darwin, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: decoder-audio, workdir: packages/decoder-audio, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: decoder-audio, workdir: packages/decoder-audio, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: decoder-audio, workdir: packages/decoder-audio, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: decoder-audio, workdir: packages/decoder-audio, os: macos-15-large, platform: darwin, arch: x64, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: decoder-audio, workdir: packages/decoder-audio, os: macos-14, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: decoder-audio, workdir: packages/decoder-audio, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: mac-mini-m4, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: macos-15-large, platform: darwin, arch: x64, runner: macos-15-large, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, testCommandSuffix: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, testCommandSuffix: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, testCommandSuffix: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, testCommandSuffix: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: macos-15-xlarge, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, testCommandSuffix: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: macos-15-large, platform: darwin, arch: x64, testCommandSuffix: true}
+            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, testCommandSuffix: true}
+            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: mac-mini-m4, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
+            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
+            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
+            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, testCommandSuffix: true, useTeeLogging: true}
+            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-22.04-arm, platform: linux, arch: arm64, testCommandSuffix: true, useTeeLogging: true}
+            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: macos-14, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, testCommandSuffix: true, useTeeLogging: true}
+            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-26.04, platform: linux, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: macos-26, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: macos-15-large, platform: darwin, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: tts-ggml, workdir: packages/tts-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64, testCommandSuffix: true, useTeeLogging: true}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, testCommandSuffix: true, useTeeLogging: true}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, testCommandSuffix: true, useTeeLogging: true}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: macos-15-xlarge, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, testCommandSuffix: true, useTeeLogging: true}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: macos-15-large, platform: darwin, arch: x64, runner: macos-15-large, testCommandSuffix: true, useTeeLogging: true}
+            - {package: vla-ggml, workdir: packages/vla-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
+
+  pin-model-manifest:
+    name: Pin model manifest (${{ matrix.package }})
+    needs: matrix
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    runs-on: qvac-ubuntu2404-x64-gpu
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      # Only one row per opted-in package needs to actually run this - every
+      # step below is gated on a single fixed os per package, so this runs
+      # (or shows as skipped) exactly once per package, not once per platform
+      # row. `matrix` isn't available in a job-level `if:`, so this has to be
+      # per-step.
+      - name: Manual Workspace Cleanup
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+      - name: Checkout code
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - name: Setup Node.js
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Generate pins from fresh downloads
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        working-directory: ${{ matrix.workdir }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: node scripts/generate-model-manifest.mjs --force
+      - name: Upload pinned model manifest
+        if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ matrix.package }}-model-manifest
+          path: ${{ matrix.workdir }}/test/integration/models.manifest.json
+          if-no-files-found: error
+
+  run-integration-tests:
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests-${{ matrix.package }}
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    timeout-minutes: 30
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Bare runtime
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+
+      - name: Install npm dependencies
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts
+
+      - name: Download prebuilds bundle
+        if: '!inputs.prebuild_package'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: '!inputs.prebuild_package && matrix.platform != ''win32'''
+        shell: bash
+        run: |
+          SRC="${{ runner.temp }}/prebuilds-staging/${{ matrix.platform }}-${{ matrix.arch }}"
+          if [ ! -d "$SRC" ]; then
+            echo "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            exit 1
+          fi
+          mkdir -p ${{ matrix.workdir }}/prebuilds
+          cp -r "$SRC" ${{ matrix.workdir }}/prebuilds/
+
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: '!inputs.prebuild_package && matrix.platform == ''win32'''
+        shell: powershell
+        run: |
+          $src = "${{ runner.temp }}\prebuilds-staging\${{ matrix.platform }}-${{ matrix.arch }}"
+          if (-not (Test-Path $src)) {
+            Write-Output "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            exit 1
+          }
+          $dst = "${{ matrix.workdir }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force $src $dst
+
+      - name: Download prebuilds from package (Linux/macOS)
+        if: 'inputs.prebuild_package && matrix.platform != ''win32'''
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack "${{ inputs.prebuild_package }}" --ignore-scripts
+          tar -xzf *.tgz
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+
+      - name: Download prebuilds from package (Windows)
+        if: 'inputs.prebuild_package && matrix.platform == ''win32'''
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          npm pack "${{ inputs.prebuild_package }}" --ignore-scripts
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          tar -xzf $TARBALL
+          Move-Item package/prebuilds ./prebuilds
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
+
+      - name: Run integration tests (Unix, tee'd)
+        if: matrix.useTeeLogging && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          QVAC_ENV_NAME: ${{ matrix.envVarName }}
+          QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+        run: |
+          [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
+          if [ "${{ matrix.hasGenerateStep }}" = "true" ]; then
+            npm run test:integration:generate
+          fi
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | tee test-output.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Run integration tests (Windows, tee'd)
+        if: matrix.useTeeLogging && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} | Tee-Object test-output.log
+
+      - name: Run integration tests
+        if: '!matrix.useTeeLogging'
+        working-directory: ${{ matrix.workdir }}
+        env:
+          QVAC_ENV_NAME: ${{ matrix.envVarName }}
+          QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+        shell: bash
+        run: |
+          [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
+          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }}
+
+      - name: Upload performance report
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: ${{ matrix.package }}-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ matrix.workdir }}/test/results/performance-report.json
+          if-no-files-found: ignore
+          retention-days: 30
