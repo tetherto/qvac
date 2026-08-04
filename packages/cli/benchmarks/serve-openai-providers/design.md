@@ -36,8 +36,15 @@ It does not cover:
 
 - **PR / `harness-unit`**: TypeScript harness unit tests (no models, no live servers) via
   `.github/workflows/benchmark-cli-serve-openai-providers.yml` and CLI `test:unit`
+- **`workflow_dispatch` `coverage-report`**: provider-free coverage capture on a
+  GitHub-hosted runner; fetches the OpenAI specification, audits runner egress,
+  and uploads `coverage.json` plus a Markdown preview without protected
+  configuration or environment approval
 - **`workflow_dispatch` `smoke` / `full`**: optional live run on a self-hosted
-  `qvac-macos*-gpu` runner when providers and the shared GGUF are already configured
+  `qvac-macos*-gpu` runner when providers and the shared GGUF are already
+  configured; the protected job does not persist checkout credentials, and
+  network monitoring must be provisioned as a runner-level service for the
+  self-hosted bare-metal host
 
 ## Artifacts
 
@@ -45,6 +52,7 @@ Self-contained package under `packages/cli/benchmarks/serve-openai-providers/`:
 
 - `harness.ts`: provider-neutral OpenAI TypeScript SDK streaming helpers + metrics
 - `benchmark.ts`: CLI entry (`digest` / `preflight` / `smoke` / `calibrate` / `full` / `report`)
+- `coverage-preview.ts`: provider-free CI/local coverage JSON and Markdown preview
 - `harness.test.ts`: focused harness and metric tests
 - `benchmark.yaml`: provider endpoints, model IDs, and shared generation settings
 - `prompts.json`: the four fixed prompt bodies
@@ -250,15 +258,18 @@ in a separate table with its proxy caveat.
 The full command captures route coverage once before provider execution. It
 first attempts the live public OpenAI specification with a 15-second timeout
 and then falls back to the last validated QVAC offline cache. A live candidate
-must parse successfully before it atomically replaces that cache. The snapshot
-distinguishes live bytes, ETag-validated cached bytes, and offline fallback, and
-stores the specification SHA-256, endpoint count, consumer-primary and
-primary-AI summaries, exact uncovered endpoint keys, and QVAC-specific
-extensions in `raw.json`. Regenerating `report.md` uses only that persisted
-snapshot. If live and cached specifications are both unavailable, the
-performance benchmark remains valid and the report records coverage as
-unavailable; a specification outage must not discard an otherwise expensive
-valid provider sweep.
+must parse successfully before it atomically replaces that cache. An HTTP 304
+uses cached bytes only when they match the cache's recorded SHA-256; a missing,
+corrupt, or mismatched cache triggers one unconditional live refetch. The
+offline path rejects a mismatch when a hash sidecar exists, while parse-valid
+legacy caches without a sidecar remain usable. The snapshot distinguishes live
+bytes, ETag-validated cached bytes, and offline fallback, and stores the
+specification SHA-256, endpoint count, consumer-primary and primary-AI
+summaries, exact uncovered endpoint keys, and QVAC-specific extensions in
+`raw.json`. Regenerating `report.md` uses only that persisted snapshot. If live
+and cached specifications are both unavailable, the performance benchmark
+remains valid and the report records coverage as unavailable; a specification
+outage must not discard an otherwise expensive valid provider sweep.
 
 An optional qvac SDK-direct spot check may compare one short and one long request with native stats. It is validation context only and must not appear as a fourth comparative provider or alter HTTP metrics.
 

@@ -11,6 +11,7 @@ const TEST_DIR = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_SPEC = join(TEST_DIR, 'fixtures', 'openai-spec-mini.yaml')
 const SPEC_CACHE_NAME = 'openai-spec.yaml'
 const ETAG_CACHE_NAME = 'openai-spec.etag'
+const SHA_CACHE_NAME = 'openai-spec.sha256'
 
 function dependencies(
   cacheDir: string,
@@ -41,6 +42,10 @@ describe('OpenAI specification fetch and cache', () => {
       assert.equal(result.sha256, createHash('sha256').update(yaml).digest('hex'))
       assert.equal(readFileSync(join(cacheDir, SPEC_CACHE_NAME), 'utf8'), yaml)
       assert.equal(readFileSync(join(cacheDir, ETAG_CACHE_NAME), 'utf8'), '"fixture-v1"')
+      assert.equal(
+        readFileSync(join(cacheDir, SHA_CACHE_NAME), 'utf8'),
+        createHash('sha256').update(yaml).digest('hex')
+      )
     } finally {
       rmSync(cacheDir, { recursive: true, force: true })
     }
@@ -50,8 +55,10 @@ describe('OpenAI specification fetch and cache', () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'openai-spec-cache-'))
     try {
       const yaml = readFileSync(FIXTURE_SPEC, 'utf8')
+      const expectedSha256 = createHash('sha256').update(yaml).digest('hex')
       writeFileSync(join(cacheDir, SPEC_CACHE_NAME), yaml)
       writeFileSync(join(cacheDir, ETAG_CACHE_NAME), '"fixture-v1"')
+      writeFileSync(join(cacheDir, SHA_CACHE_NAME), expectedSha256)
 
       const result = await parseSpecWithDependencies(
         {},
@@ -62,7 +69,47 @@ describe('OpenAI specification fetch and cache', () => {
       )
 
       assert.equal(result.sourceMode, 'live-validated-cache')
-      assert.equal(result.sha256, createHash('sha256').update(yaml).digest('hex'))
+      assert.equal(result.sha256, expectedSha256)
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true })
+    }
+  })
+
+  it('repairs a hash-mismatched cached specification after HTTP 304', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'openai-spec-cache-'))
+    try {
+      const yaml = readFileSync(FIXTURE_SPEC, 'utf8')
+      const tamperedYaml = yaml.replace('createChatCompletion', 'tamperedChatCompletion')
+      const expectedSha256 = createHash('sha256').update(yaml).digest('hex')
+      writeFileSync(join(cacheDir, SPEC_CACHE_NAME), tamperedYaml)
+      writeFileSync(join(cacheDir, ETAG_CACHE_NAME), '"fixture-v1"')
+      writeFileSync(join(cacheDir, SHA_CACHE_NAME), expectedSha256)
+      let calls = 0
+
+      const result = await parseSpecWithDependencies(
+        {},
+        dependencies(cacheDir, (_input, init) => {
+          calls += 1
+          if (calls === 1) {
+            assert.deepEqual(init?.headers, { 'If-None-Match': '"fixture-v1"' })
+            return Promise.resolve(new Response(null, { status: 304 }))
+          }
+          assert.deepEqual(init?.headers, {})
+          return Promise.resolve(
+            new Response(yaml, {
+              status: 200,
+              headers: { etag: '"fixture-v2"' }
+            })
+          )
+        })
+      )
+
+      assert.equal(calls, 2)
+      assert.equal(result.sourceMode, 'live')
+      assert.equal(result.sha256, expectedSha256)
+      assert.equal(readFileSync(join(cacheDir, SPEC_CACHE_NAME), 'utf8'), yaml)
+      assert.equal(readFileSync(join(cacheDir, SHA_CACHE_NAME), 'utf8'), expectedSha256)
+      assert.equal(readFileSync(join(cacheDir, ETAG_CACHE_NAME), 'utf8'), '"fixture-v2"')
     } finally {
       rmSync(cacheDir, { recursive: true, force: true })
     }
@@ -108,6 +155,26 @@ describe('OpenAI specification fetch and cache', () => {
       )
       assert.equal(offline.sourceMode, 'offline-cache')
       assert.equal(offline.sha256, createHash('sha256').update(yaml).digest('hex'))
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a hash-mismatched offline cache', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'openai-spec-cache-'))
+    try {
+      const yaml = readFileSync(FIXTURE_SPEC, 'utf8')
+      const tamperedYaml = yaml.replace('createChatCompletion', 'tamperedChatCompletion')
+      writeFileSync(join(cacheDir, SPEC_CACHE_NAME), tamperedYaml)
+      writeFileSync(join(cacheDir, SHA_CACHE_NAME), createHash('sha256').update(yaml).digest('hex'))
+
+      await assert.rejects(
+        parseSpecWithDependencies(
+          { offline: true },
+          dependencies(cacheDir, () => Promise.reject(new Error('must not fetch')))
+        ),
+        /cached OpenAI specification hash mismatch/
+      )
     } finally {
       rmSync(cacheDir, { recursive: true, force: true })
     }

@@ -14,7 +14,11 @@ capability-surface metric only: route presence does not prove behavioral
 compatibility. A live specification fetch is attempted once before provider
 execution with a 15-second timeout and falls back to the last validated QVAC
 offline cache. New live bytes are parsed successfully before atomically
-replacing that cache. If neither source is available, performance measurements
+replacing that cache. An HTTP 304 is accepted only when the cached bytes match
+their recorded SHA-256; otherwise the specification is fetched again without
+the ETag. Offline mode rejects a cache that disagrees with an existing hash
+sidecar while remaining compatible with parse-valid caches created before the
+sidecar existed. If neither source is available, performance measurements
 continue and the coverage section is marked unavailable.
 
 Design details: [`design.md`](./design.md). Host/launch checklist: [`environment.md`](./environment.md).
@@ -29,28 +33,35 @@ coverage denominator.
 
 ## CI
 
-| Trigger                                           | Job               | What runs                                                                        |
-| ------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
-| PR touching this folder / workflow / CLI lockfile | `harness-unit`    | `tsx` unit tests (no models, no live servers) on the PR merge SHA                |
-| CLI `test:unit` (SDK Pod Checks)                  | same harness      | via `npm run test:bench-serve-openai-providers`                                  |
-| `workflow_dispatch` (any mode)                    | `validate-target` | validates the full SHA, checks it out, and typechecks + tests it (GitHub-hosted) |
-| `workflow_dispatch` `mode=coverage-report`        | `coverage-report` | provider-free coverage JSON + Markdown preview artifact on GitHub-hosted infra   |
-| `workflow_dispatch` `mode=smoke` / `full`         | `live`            | live providers on the self-hosted GPU runner, gated by `benchmark-live`          |
+| Trigger                                         | Job               | What runs                                                                        |
+| ----------------------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| PR touching this folder / workflow / CLI config | `harness-unit`    | `tsx` unit tests (no models, no live servers) on the PR merge SHA                |
+| CLI `test:unit` (SDK Pod Checks)                | same harness      | via `npm run test:bench-serve-openai-providers`                                  |
+| `workflow_dispatch` (any mode)                  | `validate-target` | validates the full SHA, checks it out, and typechecks + tests it (GitHub-hosted) |
+| `workflow_dispatch` `mode=coverage-report`      | `coverage-report` | provider-free coverage JSON + Markdown preview artifact on GitHub-hosted infra   |
+| `workflow_dispatch` `mode=smoke` / `full`       | `live`            | live providers on the self-hosted GPU runner, gated by `benchmark-live`          |
 
 Dispatch is **immutable**: the required `target_sha` input must be a full
 40-character commit SHA (`^[0-9a-fA-F]{40}$`); branch names and tags are
 rejected. `validate-target` runs on GitHub-hosted infra and pins the exact
-commit before any self-hosted code runs. The `live` job then requires manual
-approval of the protected `benchmark-live` environment (see
-[`environment.md`](./environment.md)) before it installs or executes anything on
-the self-hosted runner. Approval attests to the selected commit's benchmark
-harness code and dependency install scripts as well as the protected external
-configuration.
+commit before any self-hosted code runs. The `live` job then uses the protected
+`benchmark-live` environment (see [`environment.md`](./environment.md)) before
+it installs or executes anything on the self-hosted runner. The environment
+requires review from `tether-devops` and prevents self-review; repository
+administrators can use GitHub's configured admin bypass. Approval attests to the
+selected commit's benchmark harness code and dependency install scripts as well
+as the protected external configuration. The hosted preview job audits runner
+egress, and both hosted and live checkouts do not persist GitHub credentials.
+Network monitoring for the self-hosted bare-metal live runner must be
+provisioned as a runner-level service rather than a workflow action.
 
 The `coverage-report` mode does not use models, provider servers, protected
 configuration, environments, or self-hosted runners. It fetches the OpenAI
 specification, compares it with the checked-out QVAC router, and uploads
 `coverage.json` plus `report.md` as `openai-coverage-report-<run-id>`.
+The target SHA pins repository source. npm dependencies still resolve from the
+version ranges in `packages/cli/package.json`, because this monorepo intentionally
+does not commit package-level npm lockfiles; runner egress is audited.
 
 The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
 LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`

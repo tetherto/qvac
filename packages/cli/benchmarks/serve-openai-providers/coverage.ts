@@ -58,15 +58,15 @@ export async function captureOpenAiApiCoverage(
     try {
       const report = await buildReport({ offline: true })
       return availableSnapshot(report, [
-        `Live OpenAI specification fetch failed; used offline cache: ${liveMessage}`
+        `Live OpenAI coverage build failed; used offline specification cache: ${liveMessage}`
       ])
     } catch (offlineError) {
       return {
         status: 'unavailable',
         captured_at: now().toISOString(),
         errors: [
-          `Live OpenAI specification fetch failed: ${liveMessage}`,
-          `Offline OpenAI specification cache failed: ${errorMessage(offlineError)}`
+          `Live OpenAI coverage build failed: ${liveMessage}`,
+          `Offline OpenAI coverage build failed: ${errorMessage(offlineError)}`
         ]
       }
     }

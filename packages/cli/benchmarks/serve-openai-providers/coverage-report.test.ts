@@ -113,7 +113,7 @@ describe('OpenAI API capability coverage report', () => {
     if (snapshot.status !== 'available') return
     assert.equal(snapshot.source_mode, 'offline-cache')
     assert.deepEqual(snapshot.warnings, [
-      'Live OpenAI specification fetch failed; used offline cache: network unavailable'
+      'Live OpenAI coverage build failed; used offline specification cache: network unavailable'
     ])
   })
 
@@ -128,8 +128,8 @@ describe('OpenAI API capability coverage report', () => {
       status: 'unavailable',
       captured_at: '2026-08-03T12:00:00.000Z',
       errors: [
-        'Live OpenAI specification fetch failed: network unavailable',
-        'Offline OpenAI specification cache failed: cache missing'
+        'Live OpenAI coverage build failed: network unavailable',
+        'Offline OpenAI coverage build failed: cache missing'
       ]
     })
   })

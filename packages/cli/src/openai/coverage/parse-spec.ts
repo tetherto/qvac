@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { load } from 'js-yaml'
@@ -28,12 +36,26 @@ export interface ParsedSpec {
 function cachePaths(cacheDir: string) {
   return {
     spec: join(cacheDir, 'openai-spec.yaml'),
-    etag: join(cacheDir, 'openai-spec.etag')
+    etag: join(cacheDir, 'openai-spec.etag'),
+    sha256: join(cacheDir, 'openai-spec.sha256')
   }
 }
 
 function sha256(yaml: string): string {
   return createHash('sha256').update(yaml, 'utf8').digest('hex')
+}
+
+function validateCachedSpecHash(yaml: string, hashPath: string, required: boolean): void {
+  if (!existsSync(hashPath)) {
+    if (required) {
+      throw new Error('cached OpenAI specification SHA-256 is missing')
+    }
+    return
+  }
+  const expectedSha256 = readFileSync(hashPath, 'utf8').trim()
+  if (!expectedSha256 || sha256(yaml) !== expectedSha256) {
+    throw new Error('cached OpenAI specification hash mismatch')
+  }
 }
 
 function normalizePath(rawPath: string): string {
@@ -114,18 +136,29 @@ async function fetchSpecLive(dependencies: ParseSpecDependencies): Promise<{
     // no cached etag
   }
 
-  const res = await dependencies.fetch(SPEC_URL, {
+  let res = await dependencies.fetch(SPEC_URL, {
     headers,
     signal: AbortSignal.timeout(dependencies.timeoutMs)
   })
   if (res.status === 304) {
-    const yaml = readFileSync(paths.spec, 'utf8')
-    return {
-      yaml,
-      entries: parseSpecYaml(yaml),
-      source: `${SPEC_URL} (cached, not modified)`,
-      sourceMode: 'live-validated-cache'
+    try {
+      const yaml = readFileSync(paths.spec, 'utf8')
+      validateCachedSpecHash(yaml, paths.sha256, true)
+      return {
+        yaml,
+        entries: parseSpecYaml(yaml),
+        source: `${SPEC_URL} (cached, not modified)`,
+        sourceMode: 'live-validated-cache'
+      }
+    } catch {
+      res = await dependencies.fetch(SPEC_URL, {
+        headers: {},
+        signal: AbortSignal.timeout(dependencies.timeoutMs)
+      })
     }
+  }
+  if (res.status === 304) {
+    throw new Error('OpenAI specification returned HTTP 304 without a valid cache')
   }
   if (!res.ok) {
     throw new Error(`Failed to fetch OpenAI spec: HTTP ${res.status}`)
@@ -133,6 +166,7 @@ async function fetchSpecLive(dependencies: ParseSpecDependencies): Promise<{
   const yaml = await res.text()
   const entries = parseSpecYaml(yaml)
   writeFileAtomically(paths.spec, yaml)
+  writeFileAtomically(paths.sha256, sha256(yaml))
   const newEtag = res.headers.get('etag')
   if (newEtag) {
     writeFileAtomically(paths.etag, newEtag)
@@ -163,15 +197,18 @@ export async function parseSpecWithDependencies(
   if (options.offline) {
     try {
       const yaml = readFileSync(paths.spec, 'utf8')
+      validateCachedSpecHash(yaml, paths.sha256, false)
       return {
         entries: parseSpecYaml(yaml),
         source: `${paths.spec} (offline cache)`,
         sourceMode: 'offline-cache',
         sha256: sha256(yaml)
       }
-    } catch {
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error)
       throw new Error(
-        `Offline mode requires a valid cached spec at ${paths.spec}. Run without --offline once to populate the cache.`
+        `Offline mode requires a valid cached spec at ${paths.spec}: ${detail}. Run without --offline once to populate the cache.`,
+        { cause: error }
       )
     }
   }
