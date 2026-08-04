@@ -4,6 +4,7 @@ import path from 'node:path'
 import {
   BUNDLED_SKILLS,
   BUNDLED_SKILLS_HASH,
+  bundledSkillBundle,
   cleanupMaterializedSkills,
   createSelectedSkillsMaterializer,
   createSkillCatalogFromBundle,
@@ -11,6 +12,7 @@ import {
   materializeSelectedSkills,
   loadBundledSkillCatalog,
   parseToolGrant,
+  resolveSkillCatalog,
   verifyBundledSkillsHash
 } from '../lib/skills/index.ts'
 
@@ -110,17 +112,31 @@ test('parses scoped exec(obsidian) grant', () => {
   expect(parseToolGrant('exec(obsidian)')).toEqual({ name: 'exec', scope: 'obsidian' })
 })
 
-test('bundled catalog defaults to darwin scoping', async () => {
-  const defaultCatalog = await loadBundledSkillCatalog()
+test('bundled catalog scopes by the platform the caller threads', async () => {
+  const unscopedCatalog = await loadBundledSkillCatalog()
   const darwinCatalog = await loadBundledSkillCatalog({ platform: 'darwin' })
   const win32Catalog = await loadBundledSkillCatalog({ platform: 'win32' })
-  const defaultNames = defaultCatalog.map((entry) => entry.name)
+  const unscopedNames = unscopedCatalog.map((entry) => entry.name)
   const darwinNames = darwinCatalog.map((entry) => entry.name)
   const win32Names = win32Catalog.map((entry) => entry.name)
 
-  expect(defaultNames).toEqual(darwinNames)
+  // No implicit host default: an unscoped load sees every bundled skill.
+  expect(unscopedNames).toContain('obsidian')
+  expect(darwinNames).toContain('obsidian')
   expect(win32Names).not.toContain('obsidian')
-  expect(defaultNames).not.toEqual(win32Names)
+  expect(darwinNames).not.toEqual(win32Names)
+})
+
+test('harness catalog is empty until an application supplies skills', async () => {
+  expect(await resolveSkillCatalog(undefined)).toEqual([])
+  expect(
+    (await resolveSkillCatalog({ bundle: bundledSkillBundle(), platform: 'darwin' })).map(
+      (entry) => entry.name
+    )
+  ).toContain('obsidian')
+
+  const preloaded = await loadBundledSkillCatalog({ platform: 'darwin' })
+  expect(await resolveSkillCatalog({ catalog: preloaded })).toBe(preloaded)
 })
 
 test('obsidian cli validation rejects absolute paths and traversal', async () => {

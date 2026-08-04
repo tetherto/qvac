@@ -2,10 +2,14 @@ import type { HarnessAgentRegistration } from '../agent-registration.ts'
 import type { CreateHarnessServiceOptions } from '../harness.ts'
 import { createImageGenerationTooling } from '../image-generation.ts'
 import type { SdkRuntimePort } from '../sdk-runtime-port.ts'
+import { bundledSkillBundle } from '../skills/index.ts'
 import { createMacOsDesktopSkillTooling } from '../tool-sandbox/desktop-factory.ts'
+
+const DESKTOP_SKILL_PLATFORM = 'darwin'
 
 export interface HarnessDesktopConfig {
   readonly bareExecutable: string
+  readonly platform?: string
   readonly temporaryRoot?: string
   readonly sandboxIdleTimeoutMs?: number
   readonly obsidianApproval?: boolean
@@ -35,6 +39,8 @@ export async function createDesktopHarnessConfiguration(
   config: HarnessDesktopConfig & { readonly childEntry: string }
 ): Promise<Omit<CreateHarnessServiceOptions, 'sdk' | 'logging' | 'runStore'>> {
   const registrations = new Map<string, HarnessAgentRegistration>()
+  const platform = config.platform ?? DESKTOP_SKILL_PLATFORM
+  const skillBundle = bundledSkillBundle()
   const image = config.image
     ? await createImageGenerationTooling({
         sdk,
@@ -46,6 +52,8 @@ export async function createDesktopHarnessConfiguration(
       ? await createMacOsDesktopSkillTooling({
           bareExecutable: config.bareExecutable,
           childEntry: config.childEntry,
+          skillBundle,
+          platform,
           selectedSkillsForAgent(agentId) {
             return registrations.get(agentId)?.skills ?? []
           },
@@ -66,6 +74,7 @@ export async function createDesktopHarnessConfiguration(
         })
       : undefined
   return {
+    skills: { bundle: skillBundle, platform },
     tools: [
       ...(desktop?.tools ?? []),
       ...(image?.tools ?? [])

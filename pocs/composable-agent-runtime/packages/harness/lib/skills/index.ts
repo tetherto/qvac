@@ -10,8 +10,10 @@ export { hashBundledSkills, verifyBundledSkillsHash } from './bundled-hash.ts'
 export { BUNDLED_SKILLS, BUNDLED_SKILLS_HASH } from './bundled-skills.ts'
 export {
   createSkillCatalogFromBundle,
+  resolveSkillCatalog,
   type SkillCatalogEntry,
-  type SkillBundleArtifact
+  type SkillBundleArtifact,
+  type SkillCatalogSource
 } from './catalog.ts'
 export {
   cleanupMaterializedSkills,
@@ -29,10 +31,13 @@ export function bundledSkillBundle(): SkillBundleArtifact {
   }
 }
 
+// Platform is threaded by the caller. There is no implicit host default here:
+// the harness must not assume the platform of whoever authored the bundle.
 export function loadBundledSkillCatalog(
   options?: LoadCatalogOptions
 ): Promise<SkillCatalogEntry[]> {
-  return createSkillCatalogFromBundle(bundledSkillBundle(), {
-    platform: options?.platform ?? 'darwin'
-  })
+  return createSkillCatalogFromBundle(
+    bundledSkillBundle(),
+    options?.platform === undefined ? {} : { platform: options.platform }
+  )
 }

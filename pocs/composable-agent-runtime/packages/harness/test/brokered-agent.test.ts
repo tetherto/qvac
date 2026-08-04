@@ -2,8 +2,10 @@ import test from 'brittle'
 import AbortController from 'bare-abort-controller'
 import type { HarnessAgentRegistration } from '../lib/agent-registration.ts'
 import {
-  createHarnessService as createHarness
+  createHarnessService,
+  type CreateHarnessServiceOptions
 } from '../lib/harness.ts'
+import { fixtureSkills } from './skill-fixtures.ts'
 import { createInMemoryHarnessRunStore } from '../lib/in-memory-harness-run-store.ts'
 import type { HarnessRunStore } from '../lib/run-store.ts'
 import type { HarnessStateAdapter } from '../lib/types.ts'
@@ -16,6 +18,12 @@ import {
 } from '../lib/tool-broker.ts'
 import type { HarnessEvent } from '../lib/types.ts'
 import { createRunRegistry } from '../lib/run-registry.ts'
+
+// Skills are application-supplied, so every harness under test declares its
+// own catalog. Individual tests may override `skills` to assert catalog rules.
+function createHarness(options: CreateHarnessServiceOptions) {
+  return createHarnessService({ skills: fixtureSkills(), ...options })
+}
 
 const HTTP_TOOL: HarnessTool = {
   schema: {

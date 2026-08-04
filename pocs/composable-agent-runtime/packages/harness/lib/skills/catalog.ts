@@ -23,6 +23,25 @@ export interface LoadCatalogOptions {
   platform?: string
 }
 
+/**
+ * Where a harness gets its skills. Applications own skill bundles; the harness
+ * only knows how to verify, parse, and materialize them.
+ */
+export type SkillCatalogSource =
+  | { readonly bundle: SkillBundleArtifact; readonly platform?: string }
+  | { readonly catalog: readonly SkillCatalogEntry[] }
+
+export async function resolveSkillCatalog(
+  source: SkillCatalogSource | undefined
+): Promise<readonly SkillCatalogEntry[]> {
+  if (!source) return []
+  if ('catalog' in source) return source.catalog
+  return createSkillCatalogFromBundle(
+    source.bundle,
+    source.platform === undefined ? {} : { platform: source.platform }
+  )
+}
+
 export async function createSkillCatalogFromBundle(
   bundle: SkillBundleArtifact,
   { platform }: LoadCatalogOptions = {}

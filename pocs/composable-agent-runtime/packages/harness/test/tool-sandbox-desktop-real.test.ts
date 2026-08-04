@@ -62,6 +62,8 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
   const tooling = await createTooling({
     bareExecutable,
     childEntry,
+    skillBundle: Harness.bundledSkillBundle(),
+    platform: 'darwin',
     selectedSkillsForAgent: () => ['weather', 'obsidian'],
     approval: {
       async approve() {
@@ -241,6 +243,8 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
     const obsidianOnly = await createTooling({
       bareExecutable,
       childEntry,
+      skillBundle: Harness.bundledSkillBundle(),
+      platform: 'darwin',
       selectedSkillsForAgent: () => ['obsidian'],
       approval: { approve: async () => true },
       temporaryRoot: root,

@@ -7,8 +7,10 @@ import type {
   HarnessToolApprovalPort,
   HarnessToolBrokerPort
 } from '../tool-broker.ts'
-import { BUNDLED_SKILLS, BUNDLED_SKILLS_HASH } from '../skills/bundled-skills.ts'
-import { createSkillCatalogFromBundle } from '../skills/catalog.ts'
+import {
+  createSkillCatalogFromBundle,
+  type SkillBundleArtifact
+} from '../skills/catalog.ts'
 import { createSelectedSkillsMaterializer } from '../skills/materialize.ts'
 import { parseToolGrant } from '../skills/tool-grants.ts'
 import { createDesktopSkillBroker } from './desktop-broker.ts'
@@ -32,6 +34,8 @@ const OBSIDIAN_CLI_SOCKET = () => path.join(os.homedir(), '.obsidian-cli.sock')
 export interface CreateMacOsDesktopSkillToolingOptions {
   readonly bareExecutable: string
   readonly childEntry: string
+  readonly skillBundle: SkillBundleArtifact
+  readonly platform?: string
   readonly selectedSkillsForAgent: (
     agentId: string
   ) => readonly string[] | Promise<readonly string[]>
@@ -93,11 +97,8 @@ export async function createMacOsDesktopSkillTooling(
       ? await canonicalObsidianConfiguration(options.obsidian)
       : undefined
     const catalog = await createSkillCatalogFromBundle(
-      {
-        files: BUNDLED_SKILLS,
-        hash: BUNDLED_SKILLS_HASH
-      },
-      { platform: 'darwin' }
+      options.skillBundle,
+      options.platform === undefined ? {} : { platform: options.platform }
     )
     const byName = new Map(catalog.map((skill) => [skill.name, skill]))
     const launcher = createMacOsToolSandboxLauncher({
@@ -139,10 +140,7 @@ export async function createMacOsDesktopSkillTooling(
         const resourceRoot = await skillMaterializer.materialize({
           agentId,
           selectedSkills: selected,
-          bundle: {
-            files: BUNDLED_SKILLS,
-            hash: BUNDLED_SKILLS_HASH
-          }
+          bundle: options.skillBundle
         })
         return {
           resourceRoots: [resourceRoot],

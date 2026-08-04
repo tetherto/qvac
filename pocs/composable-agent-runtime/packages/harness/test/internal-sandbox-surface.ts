@@ -1,4 +1,5 @@
 export { duplexPair } from '../lib/transport.ts'
+export { bundledSkillBundle } from '../lib/skills/index.ts'
 export { createSandboxArtifacts } from '../lib/tool-sandbox/artifacts.ts'
 export { createSandboxToolBroker } from '../lib/tool-sandbox/broker.ts'
 export { createDesktopSkillBroker } from '../lib/tool-sandbox/desktop-broker.ts'

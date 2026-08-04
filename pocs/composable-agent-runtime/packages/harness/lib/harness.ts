@@ -17,7 +17,10 @@ import { encodeRunIdentity } from './run-identity.ts'
 import { createRunRegistry } from './run-registry.ts'
 import type { HarnessRunStore } from './run-store.ts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
-import type { SkillCatalogEntry } from './skills/catalog.ts'
+import type {
+  SkillCatalogEntry,
+  SkillCatalogSource
+} from './skills/catalog.ts'
 import {
   createToolGate,
   validateSelectedSkills,
@@ -40,6 +43,7 @@ export interface CreateHarnessServiceOptions {
   readonly state?: HarnessStateAdapter
   readonly runStore?: HarnessRunStore
   readonly logging?: HarnessLoggingConfig
+  readonly skills?: SkillCatalogSource
   readonly tools?: readonly HarnessTool[]
   readonly toolBroker?: HarnessToolBrokerPort
   readonly toolApproval?: HarnessToolApprovalPort
@@ -51,6 +55,7 @@ export function createHarnessService({
   state = createMemoryStateAdapter(),
   runStore = createInMemoryHarnessRunStore(),
   logging,
+  skills,
   tools = [],
   toolBroker = unavailableToolBroker(),
   toolApproval,
@@ -64,18 +69,12 @@ export function createHarnessService({
   const registrations = new Map<string, HarnessAgentRegistration>()
   const runs = createRunRegistry()
 
+  // Skills are supplied by the application. A harness with no configured
+  // source has an empty catalog, so validateSelectedSkills rejects every named
+  // skill rather than silently exposing skills it cannot execute.
   function loadCatalog() {
-    catalogPromise ??= Promise.all([
-      import('./skills/catalog.ts'),
-      import('./skills/bundled-skills.ts')
-    ]).then(([catalogModule, bundle]) =>
-      catalogModule.createSkillCatalogFromBundle(
-        {
-          files: bundle.BUNDLED_SKILLS,
-          hash: bundle.BUNDLED_SKILLS_HASH
-        },
-        { platform: 'darwin' }
-      )
+    catalogPromise ??= import('./skills/catalog.ts').then((catalogModule) =>
+      catalogModule.resolveSkillCatalog(skills)
     )
     return catalogPromise
   }
