@@ -2,7 +2,7 @@
  * Test script: pipes a WAV file through transcribeStream to verify
  * the bidirectional streaming + addon processing works end-to-end.
  *
- * Usage: bun run examples/transcription/whispercpp-filesystem-streaming.ts
+ * Usage: bun run examples/asr/whispercpp-filesystem-streaming.ts
  *
  * Uses FFmpeg to convert the WAV to raw f32le and streams chunks
  * through the duplex RPC session to the whisper addon.
