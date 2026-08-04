@@ -16,7 +16,11 @@ export interface DrainedCompletion {
    * throws on both (502 for error, `InferenceCancelledError` for cancelled).
    */
   stopReason: string | undefined
-  /** `stats.generatedTokens` when the SDK reports it, else a whitespace word count. */
+  /**
+   * OpenAI `usage.completion_tokens`: prefers SDK `stats.emittedTokens`
+   * (addon-streamed pieces), then `stats.generatedTokens` (decode count),
+   * then a whitespace word count.
+   */
   completionTokens: number
   /** OpenAI `finish_reason`: `tool_calls` wins, then `length` on truncation, else `stop`. */
   finishReason: OpenAiFinishReason
@@ -77,10 +81,22 @@ export async function drainCompletion(
   return { text, thinking, toolCalls, stats, stopReason, completionTokens, finishReason }
 }
 
+/**
+ * OpenAI `usage.completion_tokens` for a drained run.
+ *
+ * Prefer SDK `emittedTokens` (non-empty addon stream pieces) over
+ * `generatedTokens` (`llama_perf` `n_eval`), which can equal the predict /
+ * `max_tokens` budget when fewer tokens were streamed. Normalized
+ * `contentDelta` / `thinkingDelta` event counts are not used — those are
+ * chunk boundaries, not tokenizer tokens.
+ */
 export function completionTokensFromStats(
   text: string,
   stats: CompletionStats | undefined
 ): number {
+  if (typeof stats?.emittedTokens === 'number' && Number.isFinite(stats.emittedTokens)) {
+    return stats.emittedTokens
+  }
   if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
     return stats.generatedTokens
   }

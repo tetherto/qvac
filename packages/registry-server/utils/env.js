@@ -6,7 +6,7 @@ const path = require('path')
 
 let envCache = null
 
-function loadEnvFile () {
+function loadEnvFile() {
   if (envCache !== null) return envCache
 
   envCache = {}
@@ -20,7 +20,10 @@ function loadEnvFile () {
       const [key, ...valueParts] = trimmed.split('=')
       if (key) {
         let value = valueParts.join('=')
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
+        if (
+          (value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        ) {
           value = value.slice(1, -1)
         }
         envCache[key.trim()] = value
@@ -33,7 +36,7 @@ function loadEnvFile () {
   return envCache
 }
 
-function getEnv (key, defaultValue = undefined) {
+function getEnv(key, defaultValue = undefined) {
   if (process.env[key] !== undefined) {
     return process.env[key]
   }
@@ -44,13 +47,15 @@ function getEnv (key, defaultValue = undefined) {
   return defaultValue
 }
 
-function requireEnv (key) {
+function requireEnv(key) {
   const value = getEnv(key)
-  if (value === undefined) throw new Error(`Required environment variable ${key} not found in process.env or .env file`)
+  if (value === undefined) {
+    throw new Error(`Required environment variable ${key} not found in process.env or .env file`)
+  }
   return value
 }
 
-function getEnvJSON (key, defaultValue = {}) {
+function getEnvJSON(key, defaultValue = {}) {
   const value = getEnv(key)
   if (!value) return defaultValue
   try {
@@ -61,20 +66,23 @@ function getEnvJSON (key, defaultValue = {}) {
   }
 }
 
-function updateEnvFile (key, value) {
+function updateEnvFile(key, value) {
   const envPath = path.join(process.cwd(), '.env')
   try {
     let envContent = ''
     if (fs.existsSync(envPath)) envContent = fs.readFileSync(envPath, 'utf8')
     let formattedValue = value
     if (typeof value === 'object') formattedValue = `'${JSON.stringify(value)}'`
-    else if (typeof value === 'string' && !value.startsWith('"') && !value.startsWith('\'')) {
+    else if (typeof value === 'string' && !value.startsWith('"') && !value.startsWith("'")) {
       if (value.includes(' ') || value.includes('=')) formattedValue = `'${value}'`
     }
     const newLine = `${key}=${formattedValue}`
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    if (envContent.includes(`${key}=`)) envContent = envContent.replace(new RegExp(`^${escapedKey}=.*$`, 'm'), newLine)
-    else envContent = envContent.trimEnd() + `\n${newLine}\n`
+    if (envContent.includes(`${key}=`)) {
+      envContent = envContent.replace(new RegExp(`^${escapedKey}=.*$`, 'm'), newLine)
+    } else {
+      envContent = envContent.trimEnd() + `\n${newLine}\n`
+    }
     fs.writeFileSync(envPath, envContent)
     envCache = null
     return true
@@ -83,13 +91,13 @@ function updateEnvFile (key, value) {
   }
 }
 
-function removeEnvKey (key) {
+function removeEnvKey(key) {
   const envPath = path.join(process.cwd(), '.env')
   try {
     if (!fs.existsSync(envPath)) return true
     const envContent = fs.readFileSync(envPath, 'utf8')
     const lines = envContent.split('\n')
-    const filteredLines = lines.filter(line => {
+    const filteredLines = lines.filter((line) => {
       const trimmed = line.trim()
       if (!trimmed) return true
       if (trimmed.startsWith('#')) return true

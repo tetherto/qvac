@@ -4,6 +4,7 @@
 // the 30-minute mobile cap. Asserts an aurora keyword + records perf.
 
 const test = require('brittle')
+// prestage-uses: vlm-perf-qwen35 — QWEN35_MODEL is defined in _vlm-image-perf.js
 const {
   QWEN35_MODEL,
   IMAGE_CASES,

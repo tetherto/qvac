@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { perCallProfilingSchema } from './profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from './heartbeat'
-import { completionStreamRequestSchema, completionStreamResponseSchema } from './completion-stream'
+import {
+  completionOrchestrateRequestSchema,
+  completionOrchestrateResponseSchema,
+  completionStreamRequestSchema,
+  completionStreamResponseSchema
+} from './completion-stream'
 import {
   batchCompletionStreamRequestSchema,
   batchCompletionStreamResponseSchema
@@ -76,6 +81,10 @@ import {
 import { suspendRequestSchema, suspendResponseSchema } from './suspend'
 import { resumeRequestSchema, resumeResponseSchema } from './resume'
 import { stateRequestSchema, stateResponseSchema } from './state'
+import {
+  getSystemResourcesRequestSchema,
+  getSystemResourcesResponseSchema
+} from './system-resources'
 import { classifyRequestSchema, classifyResponseSchema } from './classification'
 
 export const requestSchema = z.union([
@@ -83,6 +92,7 @@ export const requestSchema = z.union([
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
+  completionOrchestrateRequestSchema,
   batchCompletionStreamRequestSchema,
   unloadModelRequestSchema,
   transcribeRequestSchema,
@@ -114,6 +124,7 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
+  getSystemResourcesRequestSchema,
   classifyRequestSchema
 ])
 
@@ -122,6 +133,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
+  completionOrchestrateResponseSchema,
   batchCompletionStreamResponseSchema,
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
@@ -157,6 +169,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
+  getSystemResourcesResponseSchema,
   classifyResponseSchema
 ])
 

@@ -7,6 +7,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - ready_for_review
     branches:
       - main
       - release-*
@@ -15,9 +16,6 @@ on:
     paths:
       - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
   workflow_dispatch:
 
   workflow_call:
@@ -36,27 +34,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
     permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -82,15 +63,23 @@ jobs:
         uses: ./.github/actions/ci-router
 
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -98,11 +87,11 @@ jobs:
           github-token: ${{ github.token }}
 
   sanity-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -119,66 +108,82 @@ jobs:
           workdir: packages/diffusion-cpp
 
   cpp-tests:
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - sanity-checks
       - ci-router
-      - label-gate
     uses: ./.github/workflows/cpp-tests-diffusion.yml
     secrets: inherit
     with:
       workdir: packages/diffusion-cpp
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   cpp-lint:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/diffusion-cpp
 
-  ts-checks:
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target'
     needs: authorize
     runs-on: ubuntu-latest
+    timeout-minutes: 17
+    permissions:
+      checks: read
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - name: Wait for ts-checks result
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
-          node-version: 20
-      - name: Install dependencies
-        working-directory: packages/diffusion-cpp
-        run: npm install
+          script: |
+            const timeoutAt = Date.now() + 15 * 60 * 1000
 
-      - name: Type declaration check
-        working-directory: packages/diffusion-cpp
-        run: npm run test:dts
+            while (Date.now() < timeoutAt) {
+              const response = await github.rest.checks.listForRef({
+                ...context.repo,
+                ref: process.env.PR_HEAD_SHA,
+                check_name: 'diffusion-pr-head-ts-checks',
+                filter: 'latest',
+                per_page: 100
+              })
+              const check = response.data.check_runs.find(
+                ({ name }) => name === 'diffusion-pr-head-ts-checks'
+              )
 
-      - name: Run lint and unit tests
-        id: run_lint_and_unit_tests
-        uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
-          registry-type: gpr
-          workdir: packages/diffusion-cpp
+              if (check?.status === 'completed') {
+                if (check.conclusion !== 'success') {
+                  core.setFailed(
+                    `diffusion-pr-head-ts-checks completed with conclusion: ${check.conclusion}`
+                  )
+                }
+                return
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, 15_000))
+            }
+
+            core.setFailed('Timed out waiting for the PR-head diffusion TypeScript checks')
 
   detect-native-changes:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -198,11 +203,11 @@ jobs:
           workdir: packages/diffusion-cpp
 
   prebuild-artifact-reuse:
-    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    if: needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
+      - fork-approval
       - detect-native-changes
       - sanity-checks
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -228,18 +233,17 @@ jobs:
 
   prebuild:
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - sanity-checks
       - detect-native-changes
       - prebuild-artifact-reuse
-      - label-gate
     if: |
       always() &&
       !cancelled() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
-      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     permissions:
@@ -251,14 +255,14 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   prebuild-artifact-save:
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -277,13 +281,13 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
+      - fork-approval
       - authorize
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
     permissions:
       contents: read
       packages: read
@@ -292,7 +296,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   run-mobile-integration-tests:
     permissions:
@@ -300,22 +304,22 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
+      - fork-approval
       - authorize
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
     uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [authorize, run-integration-tests, run-mobile-integration-tests]
+    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -342,7 +346,7 @@ jobs:
           report-title: 'Diffusion Performance Report (All Platforms)'
 
   merge-guard:
-    needs: [authorize, ci-router, run-integration-tests, run-mobile-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks]
+    needs: [authorize, ci-router, run-integration-tests, run-mobile-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     permissions:
@@ -351,4 +355,5 @@ jobs:
       packages: read
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      general-checks-status: ${{ github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' }}

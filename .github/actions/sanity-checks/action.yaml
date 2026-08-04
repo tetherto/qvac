@@ -19,7 +19,6 @@ inputs:
     description: "Working directory inside the repo (monorepo package path)"
     required: false
     default: "."
-    type: string
 
 runs:
   using: composite
@@ -28,11 +27,12 @@ runs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       with:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.ref }}
+        ref: ${{ github.event.pull_request.head.sha }}
         token: ${{ inputs.pat-token }}
         fetch-depth: 0
+        persist-credentials: false
 
-    - name: Fetch PR head and target branch
+    - name: Fetch target branch
       shell: bash
       id: fetch_pr
       if: |
@@ -41,13 +41,9 @@ runs:
       continue-on-error: true
       env:
         PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        PR_FORK_URL: ${{ github.event.pull_request.head.repo.clone_url }}
-        PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
       run: |
         git remote set-url origin https://github.com/${{ github.repository }}.git
-        git fetch origin +refs/heads/*:refs/remotes/origin/*
         git fetch origin "$PR_BASE_REF:refs/remotes/origin/$PR_BASE_REF"
-        git fetch origin "$PR_HEAD_REF:refs/pr/head" || git fetch "$PR_FORK_URL" "$PR_HEAD_REF:refs/pr/head"
 
     - name: Check PR status vs. target branch
       shell: bash
@@ -108,7 +104,7 @@ runs:
           count=$((count + 1))
         fi
         if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
-          echo "::error::Step - Fetch PR head and target branch failed"
+          echo "::error::Step - Fetch target branch failed"
           count=$((count + 1))
         fi
         if [ $count -gt 0 ]; then

@@ -1,6 +1,6 @@
 # inference-addon-cpp
 
-**Version:** 1.1.0  
+**Version:** 1.3.3  
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
@@ -9,7 +9,7 @@ A header-only C++ library that provides common abstractions and infrastructure f
 ## Key Features
 
 - **Simple addon framework** with `process(std::any)` interface for flexible model implementations
-- **Single job runner** with cancellation support on a dedicated processing thread
+- **Pluggable job scheduler** — single job by default, opt-in multi-job continuous batching — with per-job cancellation support
 - **Streaming weight loader** for efficient loading of large model files (including sharded GGUF models)
 - **JavaScript-C++ bridge** with comprehensive type marshalling and error handling
 - **Output handlers** for flexible output type conversion
@@ -64,8 +64,8 @@ This is a header-only library. Include it in your addon's `vcpkg.json`:
 {
   "dependencies": [
     {
-      "name": "inference-addon-cpp",
-      "version>=": "1.1.0"
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.3.3"
     }
   ]
 }
@@ -168,8 +168,10 @@ addon.activate(handle)
 // Run a job
 addon.runJob(handle, { type: 'text', input: 'Hello world' })
 
-// Cancel current job (returns a Promise)
-await addon.cancelJob(handle)
+// Cancel (returns a Promise that resolves once the cancelled jobs are gone).
+// No id cancels every job live at the moment of the call; pass an id to
+// cancel just that one on the multi-job path.
+await addon.cancel(handle)
 
 // Cleanup
 addon.destroyInstance(handle)
@@ -246,9 +248,9 @@ function onOutput(handle, event, data, error) {
 }
 ```
 
-### 3. One Job at a Time
+### 3. Single Job by Default, Opt-In Multi-Job
 
-The framework processes one job at a time. If you need to queue multiple jobs, manage the queue in your application code.
+By default the framework processes one job at a time (`SingleJobScheduler`), rejecting a `runJob()` call while another is in flight. To run multiple jobs concurrently, build a `MultiJobScheduler` (sized to a worker count, with an optional bounded queue) and pass it to the `AddonCpp` constructor — `runJob()` then admits jobs up to the pool + queue capacity, minting and returning a `JobId` for each (never reused) so their outputs can be correlated.
 
 ---
 
@@ -262,7 +264,7 @@ Apps may suspend during processing:
 
 ```javascript
 process.on('suspend', async () => {
-  await addon.cancelJob(handle)
+  await addon.cancel(handle)
 })
 ```
 

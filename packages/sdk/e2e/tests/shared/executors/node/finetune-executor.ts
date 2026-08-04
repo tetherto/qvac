@@ -5,9 +5,11 @@ import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
+import { collectTestDeps } from '../../collect-test-deps.js'
 import { finetuneTests } from '../../../finetune-tests.js'
 
-const FINETUNE_DEPENDENCY = 'finetune-llm'
+const DEFAULT_FINETUNE_DEPENDENCY = 'finetune-llm'
+const FINETUNE_DEPENDENCIES = collectTestDeps(finetuneTests)
 
 const STATS_UNCERTAINTY_FIELDS = [
   'train_loss_uncertainty',
@@ -45,6 +47,8 @@ interface DatasetPaths {
 
 interface BaseParams {
   numberOfEpochs?: number
+  resourceKey?: string
+  loraModules?: string
 }
 
 interface PauseResumeParams extends BaseParams {
@@ -70,7 +74,8 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
     'finetune-progress-streaming': this.progressStreaming.bind(this),
     'finetune-error-cases': this.errorCases.bind(this),
     'finetune-progress-zero-drop': this.progressZeroDrop.bind(this),
-    'finetune-progress-loss-schema': this.progressLossSchema.bind(this)
+    'finetune-progress-loss-schema': this.progressLossSchema.bind(this),
+    'finetune-qwen35-arch': this.startComplete.bind(this)
   } as never
 
   async teardown(testId: string, context: unknown) {
@@ -88,13 +93,13 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async startComplete(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as BaseParams
-    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY)
     const paths = await this.createDatasets()
 
     try {
       const handle = finetune({
         modelId,
-        options: this.buildOptions(paths, p.numberOfEpochs ?? 1)
+        options: this.buildOptions(paths, p.numberOfEpochs ?? 1, p.loraModules)
       })
       const progress = await this.collectProgress(handle.progressStream)
       const result = await handle.result
@@ -114,8 +119,27 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
         return { passed: false, output: 'Expected terminal finetune stats.global_steps' }
       }
 
+      const finiteLosses = progress.filter(
+        (update) => update.loss !== null && Number.isFinite(update.loss) && update.loss > 0
+      )
+      if (finiteLosses.length === 0) {
+        return {
+          passed: false,
+          output: `Expected at least one finite positive loss across ${progress.length} progress updates`
+        }
+      }
+
+      const adapterPath = path.join(paths.outputDir, 'trained-lora-adapter.gguf')
+      try {
+        await access(adapterPath)
+      } catch {
+        return { passed: false, output: `Expected trained LoRA adapter at ${adapterPath}` }
+      }
+
       return ValidationHelpers.validate(
-        `Completed finetune with ${progress.length} progress updates and ${result.stats.global_steps} steps`,
+        `Completed finetune with ${progress.length} progress updates, ` +
+          `${result.stats.global_steps} steps, ${finiteLosses.length} finite loss values ` +
+          `and a LoRA adapter`,
         expectation as Expectation
       )
     } catch (error) {
@@ -125,7 +149,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async pauseResume(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as PauseResumeParams
-    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY)
     const paths = await this.createDatasets()
     const pauseAfterGlobalSteps = p.pauseAfterGlobalSteps ?? 2
     const pauseOperation = finetune as (params: {
@@ -136,7 +160,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
     try {
       const initialHandle = finetune({
         modelId,
-        options: this.buildOptions(paths, p.numberOfEpochs ?? 2)
+        options: this.buildOptions(paths, p.numberOfEpochs ?? 2, p.loraModules)
       })
 
       let pauseRequested = false
@@ -183,7 +207,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       const resumeHandle = finetune({
         modelId,
         operation: 'resume',
-        options: this.buildOptions(paths, p.numberOfEpochs ?? 2)
+        options: this.buildOptions(paths, p.numberOfEpochs ?? 2, p.loraModules)
       })
       const resumedProgress = await this.collectProgress(resumeHandle.progressStream)
       const resumedResult = await resumeHandle.result
@@ -219,13 +243,13 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async progressStreaming(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as ProgressParams
-    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY)
     const paths = await this.createDatasets()
 
     try {
       const handle = finetune({
         modelId,
-        options: this.buildOptions(paths, p.numberOfEpochs ?? 1)
+        options: this.buildOptions(paths, p.numberOfEpochs ?? 1, p.loraModules)
       })
       const progress = await this.collectProgress(handle.progressStream)
       const result = await handle.result
@@ -269,7 +293,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
   async errorCases(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { invalidModelId: string }
-    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(DEFAULT_FINETUNE_DEPENDENCY)
     const paths = await this.createDatasets()
     const invalidTrainPath = path.join(paths.tempRoot, 'missing-train.jsonl')
 
@@ -314,13 +338,15 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   }
 
   async progressLossSchema(params: BaseParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(
+      params.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY
+    )
     const paths = await this.createDatasets()
 
     try {
       const handle = finetune({
         modelId,
-        options: this.buildOptions(paths, params.numberOfEpochs ?? 1)
+        options: this.buildOptions(paths, params.numberOfEpochs ?? 1, params.loraModules)
       })
       const progress = await this.collectProgress(handle.progressStream)
       const result = await handle.result
@@ -361,13 +387,15 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   }
 
   async progressZeroDrop(params: BaseParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY)
+    const modelId = await this.resources.ensureLoaded(
+      params.resourceKey ?? DEFAULT_FINETUNE_DEPENDENCY
+    )
     const paths = await this.createDatasets()
 
     try {
       const handle = finetune({
         modelId,
-        options: this.buildOptions(paths, params.numberOfEpochs ?? 2)
+        options: this.buildOptions(paths, params.numberOfEpochs ?? 2, params.loraModules)
       })
       const progress = await this.collectProgress(handle.progressStream)
       const result = await handle.result
@@ -442,7 +470,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
     return updates
   }
 
-  private buildOptions(paths: DatasetPaths, numberOfEpochs: number) {
+  private buildOptions(paths: DatasetPaths, numberOfEpochs: number, loraModules?: string) {
     return {
       trainDatasetDir: paths.trainPath,
       validation: {
@@ -456,7 +484,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       learningRate: 1e-5,
       lrMin: 1e-8,
       assistantLossOnly: true,
-      loraModules: 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down'
+      loraModules: loraModules ?? 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down'
     }
   }
 
@@ -507,14 +535,16 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
   }
 
   private async cancelActiveFinetune() {
-    const modelId = this.resources.getModelId(FINETUNE_DEPENDENCY)
+    for (const dependency of FINETUNE_DEPENDENCIES) {
+      const modelId = this.resources.getModelId(dependency)
 
-    if (!modelId) {
-      return
+      if (!modelId) {
+        continue
+      }
+
+      try {
+        await finetune({ modelId, operation: 'cancel' })
+      } catch {}
     }
-
-    try {
-      await finetune({ modelId, operation: 'cancel' })
-    } catch {}
   }
 }

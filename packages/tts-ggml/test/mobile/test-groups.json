@@ -10,6 +10,7 @@
       "runLavasrEnhancerTest",
       "runMultipleRunsTest",
       "runOutputSampleRateTest",
+      "runParlerTest",
       "runSupertonicMtlTest",
       "runSupertonicTest",
       "runSupertonic3QuantTest"
@@ -25,6 +26,7 @@
       "runLavasrEnhancerTest",
       "runMultipleRunsTest",
       "runOutputSampleRateTest",
+      "runParlerTest",
       "runSupertonicMtlTest",
       "runSupertonicTest",
       "runSupertonic3QuantTest"

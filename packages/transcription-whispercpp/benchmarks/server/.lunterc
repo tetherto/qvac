@@ -1,9 +1,0 @@
-{
-  "rules": {
-    "eqeqeq": "warn",
-    "no-var": "warn",
-    "curly": "warn",
-    "no-unused-vars": "warn",
-    "prefer-const": "warn"
-  }
-}

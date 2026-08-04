@@ -218,43 +218,79 @@ test(
   }
 )
 
+// Shared world-generation-lane provisioning: fetch the model set, verify the
+// encoders needed for native scene creation, and resolve the prompt encoder.
+// Returns null (after t.pass) when the optional encoders are not provisioned.
+async function provisionWorldGeneration(t) {
+  const dir = overrideDir || path.resolve(__dirname, '../model/abot')
+  if (!overrideDir) {
+    await provisionFromS3(dir)
+  }
+
+  const taehvPath = path.join(dir, TAEHV_NAME)
+  const vaePath = path.join(dir, VAE_NAME)
+  if (!fs.existsSync(taehvPath) || !fs.existsSync(vaePath)) {
+    t.pass(
+      'world-generation lane skipped: taew2_2 / Wan2.2 VAE not provisioned ' +
+        `(need ${TAEHV_NAME} + ${VAE_NAME} in ${dir})`
+    )
+    return null
+  }
+
+  // Prompt encoder resolution: prefer the model set's own umT5 GGUFs when
+  // provisioned (S3 / ABOT_MODELS_DIR; Q8_0 is the validated deployment
+  // quant), else fall back to the pinned-manifest safetensors the Wan tests
+  // use. All three forms are gated against the golden PyTorch extraction
+  // (prompt_embeds cosine 0.9973 F16 / 0.9969 Q8 CUDA, latents 0.9987).
+  let t5Xxl = ''
+  for (const name of ['umt5-xxl-enc-q8_0.gguf', 'umt5-xxl-enc-f16.gguf']) {
+    const candidate = path.join(dir, name)
+    if (fs.existsSync(candidate)) {
+      t5Xxl = candidate
+      break
+    }
+  }
+  if (!t5Xxl) {
+    t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
+  }
+  return { dir, taehvPath, vaePath, t5Xxl }
+}
+
+// Walk `world` through `tape` and return the frames of each block.
+async function walkTape(world, tape) {
+  const blocks = []
+  for (const keys of tape) {
+    const frames = []
+    const response = await world.step(keys)
+    await response
+      .onUpdate((data) => {
+        if (data instanceof Uint8Array) frames.push(data)
+      })
+      .await()
+    blocks.push(frames)
+  }
+  return blocks
+}
+
+function framesAre(blocks, width, height, magic) {
+  return blocks.every((frames) =>
+    frames.every((frame) => {
+      if (magic && !(frame[0] === magic[0] && frame[1] === magic[1])) return false
+      const dims = readImageDimensions(frame)
+      return dims && dims.width === width && dims.height === height
+    })
+  )
+}
+
 test(
   'ABot-World: full world generation - native scene creation + KV-cache walk',
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
 
-    const dir = overrideDir || path.resolve(__dirname, '../model/abot')
-    if (!overrideDir) {
-      await provisionFromS3(dir)
-    }
-
-    const taehvPath = path.join(dir, TAEHV_NAME)
-    const vaePath = path.join(dir, VAE_NAME)
-    if (!fs.existsSync(taehvPath) || !fs.existsSync(vaePath)) {
-      t.pass(
-        'world-generation lane skipped: taew2_2 / Wan2.2 VAE not provisioned ' +
-          `(need ${TAEHV_NAME} + ${VAE_NAME} in ${dir})`
-      )
-      return
-    }
-
-    // Prompt encoder resolution: prefer the model set's own umT5 GGUFs when
-    // provisioned (S3 / ABOT_MODELS_DIR; Q8_0 is the validated deployment
-    // quant), else fall back to the pinned-manifest safetensors the Wan tests
-    // use. All three forms are gated against the golden PyTorch extraction
-    // (prompt_embeds cosine 0.9973 F16 / 0.9969 Q8 CUDA, latents 0.9987).
-    let t5Xxl = ''
-    for (const name of ['umt5-xxl-enc-q8_0.gguf', 'umt5-xxl-enc-f16.gguf']) {
-      const candidate = path.join(dir, name)
-      if (fs.existsSync(candidate)) {
-        t5Xxl = candidate
-        break
-      }
-    }
-    if (!t5Xxl) {
-      t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
-    }
+    const provisioned = await provisionWorldGeneration(t)
+    if (!provisioned) return
+    const { dir, taehvPath, vaePath, t5Xxl } = provisioned
 
     const image = fs.readFileSync(
       path.resolve(__dirname, '../../assets/claude-shannon-resized.jpg')
@@ -294,24 +330,93 @@ test(
     t.ok(fs.existsSync(scenePath), 'scene pack written by native scene creation')
     t.ok(/"scene"/.test(sceneMsg), 'scene-creation completion JSON received')
 
-    // 2. Walk the newly created world with the KV cache on.
+    // 2. Walk the newly created world with the KV cache on, covering the
+    //    demo's input space: idle, move, move+camera chord, and the array
+    //    form (bit 0..7 = W,A,S,D,I,J,K,L; see the unit matrix for the full
+    //    mapping coverage).
     await t.execution(world.load(), 'walk session loads the natively created pack')
-    const frames = []
-    for (const keys of [{}, { W: true }]) {
-      const response = await world.step(keys)
-      await response
-        .onUpdate((data) => {
-          if (data instanceof Uint8Array) frames.push(data)
-        })
-        .await()
-    }
-    t.is(frames.length, 9 + 12, 'two KV-cache blocks stream 21 frames')
+
+    // Busy contract: a second step while a block is still streaming must be
+    // rejected, not queued - the demo's key loop relies on this.
+    const inFlight = await world.step({ W: true })
+    await t.exception(
+      world.step({ S: true }),
+      /already set|being processed/,
+      'second step while a block streams is rejected'
+    )
+    const firstBlock = []
+    await inFlight
+      .onUpdate((data) => {
+        if (data instanceof Uint8Array) firstBlock.push(data)
+      })
+      .await()
+    t.is(firstBlock.length, 9, 'first block streams 9 frames (decoder warmup)')
+
+    const blocks = await walkTape(world, [{}, { W: true, L: true }, ['S', 'J']])
     t.ok(
-      frames.every((frame) => {
-        const dims = readImageDimensions(frame)
-        return dims && dims.width === 832 && dims.height === 480
-      }),
-      'every frame is an 832x480 PNG'
+      blocks.every((frames) => frames.length === 12),
+      'idle, W+L chord and S+J (array form) blocks stream 12 frames each'
+    )
+    t.ok(framesAre([firstBlock, ...blocks], 832, 480), 'every frame is an 832x480 image')
+
+    // The walk must react to input: W+L output differs from the idle block.
+    const idleLast = blocks[0][blocks[0].length - 1]
+    const chordLast = blocks[1][blocks[1].length - 1]
+    t.ok(
+      idleLast.length !== chordLast.length || !idleLast.every((v, i) => v === chordLast[i]),
+      'chord block produces different frames than idling'
+    )
+
+    await world.unload().catch(() => {})
+  }
+)
+
+test(
+  'ABot-World: world variations - small-image upscale, 448x256 output, JPEG frames',
+  { skip, timeout: 2_400_000 },
+  async (t) => {
+    setupJsLogger()
+
+    const provisioned = await provisionWorldGeneration(t)
+    if (!provisioned) return
+    const { dir, taehvPath, vaePath, t5Xxl } = provisioned
+
+    // 284x400 portrait: cover-scale forces the upscale + aspect-crop branch
+    // of the native fit (the main lane's 496x624 input covers downscale-crop
+    // at the default 832x480). 448x256 is the validated low-VRAM resolution.
+    const image = fs.readFileSync(path.resolve(__dirname, '../../assets/claude-shannon.jpg'))
+    const scenePath = path.join(dir, 'scene-variations-e2e.safetensors')
+    if (fs.existsSync(scenePath)) fs.unlinkSync(scenePath)
+
+    const world = new WorldStableDiffusion({
+      files: { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath },
+      // frameJpegQuality exercises the demo's streaming transport (MJPEG).
+      config: { seed: 42, kvCache: true, frameJpegQuality: 60 },
+      logger: console,
+      opts: { stats: true }
+    })
+
+    const creation = await world.createScene({
+      prompt:
+        '| unknown | A realistic indoor scene with a person, natural ' +
+        'lighting, detailed textures, stable forward motion.',
+      image,
+      t5: t5Xxl,
+      vae: vaePath,
+      output: scenePath,
+      width: 448,
+      height: 256
+    })
+    await creation.onUpdate(() => {}).await()
+    t.ok(fs.existsSync(scenePath), '448x256 scene pack written from a 284x400 input')
+
+    await t.execution(world.load(), 'walk session loads the 448x256 pack')
+    const blocks = await walkTape(world, [{ W: true }, { W: true, I: true }])
+    t.is(blocks[0].length, 9, 'first 448x256 block streams 9 frames')
+    t.is(blocks[1].length, 12, 'second 448x256 block streams 12 frames')
+    t.ok(
+      framesAre(blocks, 448, 256, [0xff, 0xd8]),
+      'every frame is a 448x256 JPEG (frameJpegQuality transport)'
     )
 
     await world.unload().catch(() => {})

@@ -75,6 +75,34 @@ try {
 node quickstart.js
 ```
 
+## System resource diagnostics
+
+Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and
+driver capabilities. Pass `sample: true` only when you also need a fresh usage
+sample:
+
+```ts
+import { getSystemResources } from '@qvac/sdk'
+
+const resources = await getSystemResources({ sample: true })
+
+if (resources.capabilities.memory.totalBytes.status === 'supported') {
+  console.log('System memory:', resources.capabilities.memory.totalBytes.value)
+}
+
+if (resources.sample?.cpu.status === 'supported') {
+  console.log('CPU utilization:', resources.sample.cpu.value)
+}
+```
+
+See the [system resources support matrix](./docs/system-resources-support-matrix.md)
+for metric-level evidence and platform limitations.
+
+Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
+Supported values include provenance with a source and optional scope. These
+values are diagnostics; they do not reserve memory or guarantee that a model
+can be loaded.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:

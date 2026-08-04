@@ -38,27 +38,6 @@ permissions:
   id-token: write
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -87,7 +66,6 @@ jobs:
   prebuild:
     needs:
       - context
-      - label-gate
     permissions:
       contents: write
       packages: write
@@ -99,14 +77,13 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
-    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
+    if: ${{ !inputs.prebuild_package }}
 
   desktop-benchmarks:
     needs:
       - context
       - prebuild
-      - label-gate
-    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -124,8 +101,7 @@ jobs:
     needs:
       - context
       - prebuild
-      - label-gate
-    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_mobile != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && (needs.context.outputs.run_mobile != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -143,8 +119,7 @@ jobs:
       - context
       - desktop-benchmarks
       - mobile-benchmarks
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (always())
+    if: (always())
     runs-on: ubuntu-latest
     permissions:
       contents: read

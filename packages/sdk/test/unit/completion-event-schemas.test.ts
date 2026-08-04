@@ -73,9 +73,11 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
     cacheTokens: 100,
     promptTokens: 1234,
     generatedTokens: 56,
+    emittedTokens: 40,
     avgConcurrentSeq: 3.5,
     backendDevice: 'gpu'
   })
+  ok({ emittedTokens: 0 })
 
   // Non-numeric values are rejected — the schema must enforce the type
   // so workbench can rely on `stats.promptTokens` being `number |

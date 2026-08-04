@@ -1,0 +1,68 @@
+{
+  "name": "asr-ggml",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.2.4"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["metal"],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["opencl", "vulkan"],
+      "platform": "android"
+    },
+    {
+      "name": "whisper-cpp",
+      "features": ["vulkan"],
+      "platform": "!(osx | ios | android)"
+    },
+    {
+      "name": "parakeet-cpp",
+      "version>=": "2026-08-03",
+      "features": ["metal"],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "parakeet-cpp",
+      "version>=": "2026-08-03",
+      "features": ["vulkan", "opencl"],
+      "platform": "android"
+    },
+    {
+      "name": "parakeet-cpp",
+      "version>=": "2026-08-03",
+      "features": ["vulkan"],
+      "platform": "!(osx | ios | android)"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build C++ unit tests",
+      "dependencies": ["gtest"]
+    }
+  },
+  "overrides": [
+    {
+      "name": "whisper-cpp",
+      "version": "1.9.1",
+      "port-version": 7
+    }
+  ]
+}

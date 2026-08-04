@@ -141,4 +141,3 @@ Release Date: 2026-02-13
 - Model metadata retrieval from the distributed registry
 - Automatic peer discovery and replication via Hyperswarm
 - Compatible with Bare and Node.js runtimes
-

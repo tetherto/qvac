@@ -1,6 +1,6 @@
 # PR Validation and Post-Merge Staging Sync
 #
-# On PR: validates models.prod.json and runs tests (with 'verified' label).
+# On PR: validates models.prod.json and runs tests (fork-ci gates external forks).
 # On merge to main: syncs models to staging registry and runs smoke test.
 
 name: PR Validation and Staging Sync (Registry-server)
@@ -42,36 +42,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
     permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -79,8 +71,11 @@ jobs:
           github-token: ${{ github.token }}
 
   detect-changes:
-    needs: authorize
+    needs: [authorize, fork-approval]
     runs-on: ubuntu-latest
+    # Fork PR code (checkout + git diff, and downstream npm install / tests)
+    # only runs once BOTH gates pass: authorize-pr (draft / same-repo / fork
+    # synchronize safety) AND fork-approval (fork-ci environment approval).
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
@@ -155,7 +150,7 @@ jobs:
           fi
 
   validate-json:
-    needs: [authorize, detect-changes]
+    needs: [authorize, detect-changes, fork-approval]
     if: |
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.models_changed == 'true'
@@ -181,7 +176,7 @@ jobs:
         run: node scripts/validate-models-json.js --file=./data/models.prod.json
 
   test:
-    needs: [authorize, detect-changes]
+    needs: [authorize, detect-changes, fork-approval]
     if: |
       needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.other_changed == 'true'
@@ -200,6 +195,11 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: npm install
+
+      - name: Format
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm run format
 
       - name: Lint
         working-directory: ${{ env.PKG_DIR }}
@@ -227,9 +227,8 @@ jobs:
   # uses bare indices so they never appear in job names either. Fails loudly if
   # unset so a misconfiguration blocks the deploy rather than silently skipping.
   resolve-deploy-targets:
-    needs: [authorize, detect-changes, label-gate]
+    needs: [authorize, detect-changes, fork-approval]
     if: |-
-      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -262,13 +261,13 @@ jobs:
   # Autobase quorum; each node must report indexer status before the next.
   deploy-staging:
     needs:
+      - fork-approval
       - detect-changes
       - validate-json
       - test
-      - label-gate
       - resolve-deploy-targets
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') && (needs.validate-json.result == 'success' || needs.validate-json.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.resolve-deploy-targets.result == 'success')
+      (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') && (needs.validate-json.result == 'success' || needs.validate-json.result == 'skipped') && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.resolve-deploy-targets.result == 'success')
     runs-on: qvac-ubuntu2204-x64
     timeout-minutes: 15
     environment: release
@@ -332,13 +331,13 @@ jobs:
 
   sync-staging:
     needs:
+      - fork-approval
       - detect-changes
       - validate-json
       - test
-      - label-gate
       - deploy-staging
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.deploy-staging.result == 'success' && (github.event.inputs.deploy_mode == '' || github.event.inputs.deploy_mode == 'live'))
+      (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.deploy-staging.result == 'success' && (github.event.inputs.deploy_mode == '' || github.event.inputs.deploy_mode == 'live'))
     runs-on: ubuntu-latest
     environment: release
     env:
@@ -388,8 +387,8 @@ jobs:
 
   smoke-test:
     needs:
+      - fork-approval
       - sync-staging
-      - label-gate
     runs-on: ubuntu-latest
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
@@ -426,4 +425,3 @@ jobs:
         shell: bash
         run: node scripts/smoke-test-client.js --file=./data/models.prod.json
         timeout-minutes: 5
-    if: needs.label-gate.outputs.authorised == 'true'

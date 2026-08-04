@@ -78,6 +78,7 @@ const IMAGE_CASES = {
   }
 }
 
+// prestage-set: vlm-perf-gemma4
 const GEMMA4_MODEL = {
   perfLabel: 'gemma4-vl',
   llmModel: {
@@ -100,6 +101,7 @@ const GEMMA4_MODEL = {
   ctxFor: (imageCase) => imageCase.gemmaCtxSize
 }
 
+// prestage-set: vlm-perf-qwen35
 const QWEN35_MODEL = {
   perfLabel: 'qwen3.5-vl',
   llmModel: {
@@ -161,7 +163,9 @@ async function runVlmImagePerf(t, modelDef, imageCase) {
   async function runImageInference(imageBytes) {
     const messages = [
       { role: 'user', type: 'media', content: imageBytes },
-      { role: 'user', content: 'Describe the image briefly in one sentence.' }
+      // Most VLMs answer a generic caption prompt; OCR models (e.g. Unlimited-OCR)
+      // need their own task prompt, so a case can override it.
+      { role: 'user', content: imageCase.prompt || 'Describe the image briefly in one sentence.' }
     ]
     const startTime = Date.now()
     const response = await inference.run(messages)

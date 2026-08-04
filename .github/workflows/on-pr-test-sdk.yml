@@ -30,37 +30,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+  resolve-config:
+    needs: [fork-approval]
     permissions:
       contents: read
       pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-  resolve-config:
+      statuses: read
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
       suite: ${{ steps.check.outputs.suite }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
           sparse-checkout-cone-mode: false
+          persist-credentials: false
+
 
       - name: Authorize PR
         id: auth
@@ -73,11 +65,11 @@ jobs:
         if: steps.auth.outputs.allowed == 'true'
         id: check
         shell: bash
+        env:
+          EVENT: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          TARGET: ${{ github.base_ref }}
         run: |
-          EVENT="${{ github.event.action }}"
-          LABEL="${{ github.event.label.name }}"
-          TARGET="${{ github.base_ref }}"
-
           if [ "$EVENT" = "labeled" ]; then
             if [ "$LABEL" = "test-e2e-smoke" ]; then
               echo "should-run=true" >> "$GITHUB_OUTPUT"
@@ -100,9 +92,9 @@ jobs:
 
   run-tests:
     needs:
+      - fork-approval
       - resolve-config
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.resolve-config.outputs.should-run == 'true')
+    if: (needs.resolve-config.outputs.should-run == 'true')
     uses: ./.github/workflows/test-sdk.yml
     with:
       targets: desktop + mobile

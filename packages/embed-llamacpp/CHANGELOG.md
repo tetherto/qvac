@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.30.1] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+
+## [0.30.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
+## [0.29.0] - 2026-07-24
+
+This release makes TypeScript the source of truth for the embed-llamacpp
+runtime wrapper and its public declarations.
+
+### Changed
+
+#### TypeScript-authored runtime wrapper and declarations
+
+The BERT wrapper, native-addon bridge, and logging wrapper are now authored in
+TypeScript. The published JavaScript entrypoints (`index.js`, `addon.js`,
+`addonLogging.js`) and their `.d.ts` declarations are generated from those
+sources and committed, guarded by a generated-output freshness check in CI. The
+CommonJS export shape, public API, and runtime behavior are unchanged for SDK
+and Bare consumers, while strict type checking and linting reduce the risk of
+the runtime drifting from the public types.
+
+### Pull Requests
+
+- [#3433](https://github.com/tetherto/qvac/pull/3433) - QVAC-22460 chore[notask]: migrate embed-llamacpp wrapper to TypeScript
+
 ## [0.28.0] - 2026-07-20
 
 ### Changed

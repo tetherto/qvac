@@ -30,6 +30,7 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  getSystemResources,
   loggingStream,
   subscribeServerLogs,
   type ServerLogHandler,
@@ -97,6 +98,10 @@ export {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,
+  type TtsClientParamsInput,
+  type TtsParlerEmotion,
+  type TtsParlerLoadConfig,
+  type TtsParlerRuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
@@ -118,6 +123,18 @@ export {
   type GetModelInfoParams,
   type GetLoadedModelInfoParams,
   type LoadedModelInfo,
+  type GetSystemResourcesInput,
+  type ResourceScope,
+  type ResourceProvenance,
+  type ResourceMetric,
+  type GraphicsDriver,
+  type GraphicsDriverCapabilities,
+  type CPUResourceCapabilities,
+  type GPUResourceCapabilities,
+  type SystemResourceCapabilities,
+  type GPUResourceSample,
+  type SystemResourceSample,
+  type SystemResources,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
@@ -211,7 +228,8 @@ export {
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
-  RequestRejectedByPolicyError
+  RequestRejectedByPolicyError,
+  TranslationFailedError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the

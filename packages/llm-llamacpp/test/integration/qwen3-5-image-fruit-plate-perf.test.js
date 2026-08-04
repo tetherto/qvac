@@ -4,6 +4,7 @@
 // the 30-minute mobile cap. Asserts a fruit keyword + records perf.
 
 const test = require('brittle')
+// prestage-uses: vlm-perf-qwen35 — QWEN35_MODEL is defined in _vlm-image-perf.js
 const { QWEN35_MODEL, IMAGE_CASES, isDarwinX64, runVlmImagePerf } = require('./_vlm-image-perf.js')
 
 test(

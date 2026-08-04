@@ -66,6 +66,21 @@ export const TTS_SUPERTONIC_LANGUAGES = [
   'vi' // Vietnamese
 ] as const
 
+export const TTS_PARLER_EMOTIONS = [
+  'command',
+  'anger',
+  'narration',
+  'conversation',
+  'disgust',
+  'fear',
+  'happy',
+  'neutral',
+  'proper noun',
+  'news',
+  'sad',
+  'surprise'
+] as const
+
 // Supertonic languages not already present in the Chatterbox set, used to keep
 // TTS_LANGUAGES a true union across engines without duplicates.
 const TTS_SUPERTONIC_ONLY_LANGUAGES = [
@@ -93,15 +108,104 @@ export const TTS_LANGUAGES = [
 
 const ttsChatterboxLanguageSchema = z.enum(TTS_CHATTERBOX_LANGUAGES)
 const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES)
+const ttsParlerEmotionSchema = z.enum(TTS_PARLER_EMOTIONS)
 const ttsIntegerSchema = z.number().int()
 const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
 const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
+const ttsInt32Schema = ttsIntegerSchema.min(-2147483648).max(2147483647)
+const ttsNonNegativeInt32Schema = ttsInt32Schema.nonnegative()
+const ttsPositiveInt32Schema = ttsInt32Schema.positive()
 
 // Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
 // accepted range; omit to keep the engine's native rate (or 48 kHz when the
 // LavaSR enhancer is active). Supertonic-only: the Chatterbox engine does not
 // yet resample its output, so the field is not exposed on that config.
 const ttsOutputSampleRateSchema = ttsIntegerSchema.min(8000).max(192000)
+
+const ttsParlerDescriptionFieldsShape = {
+  description: z.string().min(1).optional(),
+  voiceDescription: z.string().min(1).optional(),
+  voice: z.string().min(1).optional(),
+  emotion: ttsParlerEmotionSchema.optional(),
+  pitch: z.string().min(1).optional(),
+  pace: z.string().min(1).optional(),
+  expressivity: z.string().min(1).optional(),
+  noise: z.string().min(1).optional(),
+  reverb: z.string().min(1).optional(),
+  quality: z.string().min(1).optional()
+}
+
+const ttsParlerTemplateFieldNames = [
+  'voice',
+  'emotion',
+  'pitch',
+  'pace',
+  'expressivity',
+  'noise',
+  'reverb',
+  'quality'
+] as const
+
+type TtsParlerDescriptionRefinementInput = {
+  description?: string | undefined
+  voiceDescription?: string | undefined
+  voice?: string | undefined
+  emotion?: string | undefined
+  pitch?: string | undefined
+  pace?: string | undefined
+  expressivity?: string | undefined
+  noise?: string | undefined
+  reverb?: string | undefined
+  quality?: string | undefined
+}
+
+function refineParlerDescriptionFields(
+  config: TtsParlerDescriptionRefinementInput,
+  ctx: z.RefinementCtx
+) {
+  if (config.description !== undefined && config.voiceDescription !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['voiceDescription'],
+      message: 'description and voiceDescription are mutually exclusive.'
+    })
+  }
+
+  if (config.description === undefined && config.voiceDescription === undefined) return
+
+  const conflictingField = ttsParlerTemplateFieldNames.find((field) => config[field] !== undefined)
+  if (conflictingField) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [conflictingField],
+      message:
+        'description and voiceDescription are mutually exclusive with Parler voice-template fields.'
+    })
+  }
+}
+
+type TtsParlerRuntimeRefinementInput = TtsParlerDescriptionRefinementInput & {
+  outputSampleRate?: number | undefined
+  streamChunkTokens?: number | undefined
+}
+
+function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx: z.RefinementCtx) {
+  refineParlerDescriptionFields(config, ctx)
+
+  const nativeStreamingEnabled = (config.streamChunkTokens ?? 0) > 0
+  if (
+    nativeStreamingEnabled &&
+    config.outputSampleRate !== undefined &&
+    config.outputSampleRate !== 44100
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['outputSampleRate'],
+      message:
+        'Parler native streaming emits at 44100 Hz; omit outputSampleRate, use 44100, or disable native streaming.'
+    })
+  }
+}
 
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal('chatterbox'),
@@ -112,6 +216,7 @@ export const ttsChatterboxRuntimeConfigSchema = z.object({
   streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
   streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
   cfmSteps: ttsNonNegativeIntegerSchema.optional(),
+  cfgRate: z.number().nonnegative().optional(),
   threads: ttsPositiveIntegerSchema.optional(),
   nGpuLayers: ttsIntegerSchema.optional(),
   seed: ttsIntegerSchema.optional()
@@ -124,12 +229,34 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
   useGPU: z.boolean().optional(),
-  outputSampleRate: ttsOutputSampleRateSchema.optional()
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  vulkanCacheDir: z.string().min(1).optional()
 })
+
+export const ttsParlerRuntimeConfigSchema = z
+  .object({
+    ttsEngine: z.literal('parler'),
+    ...ttsParlerDescriptionFieldsShape,
+    useGPU: z.boolean().optional(),
+    outputSampleRate: ttsOutputSampleRateSchema.optional(),
+    streamChunkTokens: ttsNonNegativeInt32Schema.optional(),
+    streamFirstChunkTokens: ttsNonNegativeInt32Schema.optional(),
+    threads: ttsPositiveInt32Schema.optional(),
+    nGpuLayers: ttsInt32Schema.optional(),
+    seed: ttsInt32Schema.optional(),
+    temperature: z.number().nonnegative().optional(),
+    topK: ttsNonNegativeInt32Schema.optional(),
+    topP: z.number().positive().max(1).optional(),
+    maxFrames: z.union([z.literal(0), ttsInt32Schema.min(10)]).optional(),
+    minNewTokens: ttsInt32Schema.min(-1).optional(),
+    normalizeNumbers: z.boolean().optional()
+  })
+  .superRefine(refineParlerRuntimeConfig)
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
-  ttsSupertonicRuntimeConfigSchema
+  ttsSupertonicRuntimeConfigSchema,
+  ttsParlerRuntimeConfigSchema
 ])
 
 // Optional LavaSR post-processing model sources, shared across engines. Supply
@@ -154,6 +281,8 @@ export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.ex
 export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
   ...ttsLavasrLoadFieldsShape
 })
+
+export const ttsParlerLoadConfigSchema = ttsParlerRuntimeConfigSchema
 
 type TtsTokenizerAssetRefinementInput = {
   ttsEngine?: string
@@ -186,7 +315,11 @@ function refineChatterboxTokenizerAssets(
 }
 
 export const ttsLoadConfigSchema = z
-  .discriminatedUnion('ttsEngine', [ttsChatterboxLoadConfigSchema, ttsSupertonicLoadConfigSchema])
+  .discriminatedUnion('ttsEngine', [
+    ttsChatterboxLoadConfigSchema,
+    ttsSupertonicLoadConfigSchema,
+    ttsParlerLoadConfigSchema
+  ])
   .superRefine(refineChatterboxTokenizerAssets)
 
 // === Legacy ONNX modelConfig fields (deprecated) ===
@@ -226,27 +359,42 @@ const legacyTtsOnnxFieldsShape = LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS.reduce<
 export const ttsConfigSchema = z
   .discriminatedUnion('ttsEngine', [
     ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
-    ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
+    ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
+    ttsParlerLoadConfigSchema.strict()
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
-export const ttsClientParamsSchema = z.object({
+const ttsClientParamsShape = {
   modelId: z.string(),
   inputType: z.string().default('text'),
   text: z.string().trim().min(1, 'text must not be empty or whitespace-only'),
   stream: z.boolean().default(true),
   sentenceStream: z.boolean().default(false),
   sentenceStreamLocale: z.string().optional(),
-  sentenceStreamMaxChunkScalars: z.number().positive().optional()
-})
+  sentenceStreamMaxChunkScalars: z.number().positive().optional(),
+  ...ttsParlerDescriptionFieldsShape
+}
 
-export const ttsRequestSchema = ttsClientParamsSchema.extend({
-  type: z.literal('textToSpeech')
-})
+// Requests carry only an opaque modelId, so client-side validation cannot know
+// which TTS engine is loaded. Description conflicts are intentionally rejected
+// as malformed request shapes before the server performs engine compatibility
+// validation in assertParlerJobOptionsSupported.
+export const ttsClientParamsSchema = z
+  .object(ttsClientParamsShape)
+  .superRefine(refineParlerDescriptionFields)
+
+export const ttsRequestSchema = z
+  .object({
+    ...ttsClientParamsShape,
+    type: z.literal('textToSpeech')
+  })
+  .superRefine(refineParlerDescriptionFields)
 
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
-  totalSamples: z.number().optional()
+  totalSamples: z.number().optional(),
+  enhancerBackendDevice: z.number().optional(),
+  enhancerBackendId: z.number().optional()
 })
 
 export const ttsResponseSchema = z.object({
@@ -261,18 +409,22 @@ export const ttsResponseSchema = z.object({
 // Internal: kept un-exported to present a single request-schema surface to
 // consumers. The inferred `TextToSpeechStreamClientParams` type below uses
 // this shape via `typeof`, no runtime export needed.
-const textToSpeechStreamRequestBaseSchema = z.object({
+const textToSpeechStreamRequestBaseShape = {
   modelId: z.string(),
   inputType: z.string().default('text'),
   accumulateSentences: z.boolean().optional(),
   sentenceDelimiterPreset: z.enum(['latin', 'cjk', 'multilingual']).optional(),
   maxBufferScalars: z.number().positive().optional(),
-  flushAfterMs: z.number().positive().optional()
-})
+  flushAfterMs: z.number().positive().optional(),
+  ...ttsParlerDescriptionFieldsShape
+}
 
-export const textToSpeechStreamRequestSchema = textToSpeechStreamRequestBaseSchema.extend({
-  type: z.literal('textToSpeechStream')
-})
+export const textToSpeechStreamRequestSchema = z
+  .object({
+    ...textToSpeechStreamRequestBaseShape,
+    type: z.literal('textToSpeechStream')
+  })
+  .superRefine(refineParlerDescriptionFields)
 
 export const textToSpeechStreamResponseSchema = z.object({
   type: z.literal('textToSpeechStream'),
@@ -286,8 +438,10 @@ export const textToSpeechStreamResponseSchema = z.object({
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number]
 export type TtsChatterboxLanguage = (typeof TTS_CHATTERBOX_LANGUAGES)[number]
 export type TtsSupertonicLanguage = (typeof TTS_SUPERTONIC_LANGUAGES)[number]
+export type TtsParlerEmotion = (typeof TTS_PARLER_EMOTIONS)[number]
 export type TtsChatterboxLoadConfig = z.infer<typeof ttsChatterboxLoadConfigSchema>
 export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSchema>
+export type TtsParlerLoadConfig = z.infer<typeof ttsParlerLoadConfigSchema>
 export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>
 /** @deprecated Use {@link TtsChatterboxLoadConfig} */
 export type TtsChatterboxConfig = TtsChatterboxLoadConfig
@@ -295,6 +449,7 @@ export type TtsChatterboxConfig = TtsChatterboxLoadConfig
 export type TtsSupertonicConfig = TtsSupertonicLoadConfig
 export type TtsChatterboxRuntimeConfig = z.infer<typeof ttsChatterboxRuntimeConfigSchema>
 export type TtsSupertonicRuntimeConfig = z.infer<typeof ttsSupertonicRuntimeConfigSchema>
+export type TtsParlerRuntimeConfig = z.infer<typeof ttsParlerRuntimeConfigSchema>
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>
 export type TtsConfig = z.infer<typeof ttsConfigSchema>
 export type TtsClientParamsInput = z.input<typeof ttsClientParamsSchema>
@@ -312,7 +467,9 @@ export type TtsSentenceChunkUpdate = {
 export type TextToSpeechStreamRequest = z.infer<typeof textToSpeechStreamRequestSchema>
 export type TextToSpeechStreamResponse = z.infer<typeof textToSpeechStreamResponseSchema>
 
-export type TextToSpeechStreamClientParams = z.infer<typeof textToSpeechStreamRequestBaseSchema>
+export type TextToSpeechStreamClientParams = z.output<
+  z.ZodObject<typeof textToSpeechStreamRequestBaseShape>
+>
 
 export interface TextToSpeechStreamResult {
   bufferStream: AsyncGenerator<number>
@@ -322,7 +479,7 @@ export interface TextToSpeechStreamResult {
 }
 
 export interface TextToSpeechStreamSession {
-  write(textFragment: string | Buffer): void
+  write(textFragment: string | Uint8Array): void
   end(): void
   destroy(): void
   [Symbol.asyncIterator](): AsyncIterator<TextToSpeechStreamResponse>

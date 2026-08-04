@@ -1,14 +1,24 @@
 {
   "name": "@qvac/infer-base",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Base class for inference clients",
   "main": "index.js",
   "scripts": {
-    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
-    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "test:dts": "tsc index.d.ts --noEmit --esModuleInterop --target es2018 --moduleResolution node",
-    "test:unit": "brittle-bare test/unit/**/*.test.js",
-    "test": "npm run test:unit && npm run test:dts"
+    "build": "npm run build:ts",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "check:generated": "node scripts/check-generated.mjs",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"index.ts\" \"src/**/*.ts\" \"scripts/**/*.mjs\" \"test/**/*.{js,ts}\" \"tsconfig*.json\" && lunte \"scripts/**/*.mjs\" \"test/**/*.js\"",
+    "lint:js:fix": "prettier --write \"index.ts\" \"src/**/*.ts\" \"scripts/**/*.mjs\" \"test/**/*.{js,ts}\" \"tsconfig*.json\"",
+    "lint:ts": "eslint \"index.ts\" \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"index.ts\" \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"index.ts\" \"src/**/*.ts\" \"scripts/**/*.mjs\" \"test/**/*.{js,ts}\" \"tsconfig*.json\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:dts": "node scripts/check-dts.mjs",
+    "test:node": "node --test scripts/*.test.mjs",
+    "test:types": "npm run typecheck && npm run test:dts && npm run check:generated && npm run test:node",
+    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js",
+    "test": "npm run test:types && npm run test:unit"
   },
   "author": "Tether",
   "keywords": [
@@ -18,15 +28,20 @@
   ],
   "license": "Apache-2.0",
   "dependencies": {
+    "bare-abort-controller": "^1.1.2",
     "bare-events": "^2.9.1",
     "bare-os": "^3.2.0"
   },
   "devDependencies": {
     "brittle": "^3.15.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.63.0"
   },
   "repository": {
     "type": "git",
@@ -36,8 +51,10 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "files": [
-    "src",
+    "index.js",
     "index.d.ts",
+    "src/**/*.js",
+    "src/**/*.d.ts",
     "LICENSE",
     "NOTICE"
   ],

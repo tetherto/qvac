@@ -25,7 +25,7 @@
 //      Two co-loaded addons that each export their own ggml copy can interpose
 //      on one another and corrupt the backend registry. Default: report only.
 //      Pass `--enforce-exports` to turn leaked engine exports into a hard fail
-//      (see packages/transcription-parakeet/symbols.map for the fix template).
+//      (see packages/asr-ggml/symbols.map for the fix template).
 //
 // A DT_NEEDED provider does not have to sit in the scanned prebuilds/ tree. A shared
 // runtime like @qvac/fabric (`qvac__fabric@0.bare`) ships in node_modules, not beside
@@ -410,7 +410,7 @@ function main () {
       else ghaWarn(`${m} [Mach-O: warn-only -- provider resolution unavailable]`)
     }
     if (leakedExports.length > 0) {
-      const m = `${rel}: exports ${leakedExports.length} engine symbol(s) at default visibility (cross-addon interposition risk): ${leakedExports.sort().slice(0, 20).join(', ')}${leakedExports.length > 20 ? ', ...' : ''}. Add a symbols.map (see transcription-parakeet) / -Wl,--exclude-libs,ALL.`
+      const m = `${rel}: exports ${leakedExports.length} engine symbol(s) at default visibility (cross-addon interposition risk): ${leakedExports.sort().slice(0, 20).join(', ')}${leakedExports.length > 20 ? ', ...' : ''}. Add a symbols.map (see asr-ggml) / -Wl,--exclude-libs,ALL.`
       if (opts.enforceExports) ghaError(m); else ghaWarn(m)
     }
     if (!opts.quiet && unresolvedEngine.length === 0 && leakedExports.length === 0) {
