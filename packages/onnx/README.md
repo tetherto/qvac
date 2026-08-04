@@ -247,9 +247,9 @@ const float* out = results[0].as<float>();
 
 ## Consumer Addon Integration
 
-ONNX-based consumer addons (e.g. `ocr-onnx`, `tts`) get `@qvac/onnx` via npm. This single dependency provides the C++ headers, ONNX Runtime headers, CMake targets, and — on mobile (when static linking) — static libraries. On desktop, ORT symbols are resolved at runtime from the shared `@qvac/onnx.bare` (installed as a companion library). Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`.
+ONNX-based consumer addons get `@qvac/onnx` via npm. This single dependency provides the C++ headers, ONNX Runtime headers, CMake targets, and — on mobile (when static linking) — static libraries. On desktop, ORT symbols are resolved at runtime from the shared `@qvac/onnx.bare` (installed as a companion library). Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`.
 
-See **[INTEGRATION.md](./INTEGRATION.md)** for a step-by-step guide covering `package.json`, `vcpkg.json`, `CMakeLists.txt`, symbol visibility, and platform-specific setup — including a concrete walkthrough of how `@qvac/ocr-onnx` integrates with this package.
+See **[INTEGRATION.md](./INTEGRATION.md)** for a step-by-step guide covering `package.json`, `vcpkg.json`, `CMakeLists.txt`, symbol visibility, and platform-specific setup (the worked example references the retired `@qvac/ocr-onnx` addon, preserved in git history).
 
 ## Building
 

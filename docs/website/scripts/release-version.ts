@@ -6,7 +6,7 @@
  *
  * The minor and patch flows have very different effects (full freeze +
  * regenerate vs. title-only + append-patch), but from the workflow's
- * perspective they share the same wrapper steps (label-gate, dual
+ * perspective they share the same wrapper steps (fork-approval, dual
  * checkout, link-integrity tests, PR open). A single entry point keeps
  * the GitHub workflow simple while preserving the per-flow invariants
  * inside the existing `release-version-{minor,patch}.ts` modules.

@@ -1,0 +1,22 @@
+# actionlint configuration.
+#
+# Self-hosted runner labels are not discoverable by actionlint, so every label
+# used in a `runs-on:` must be declared here or it reports "label is unknown".
+# Keep this list in sync with the runner groups described in
+# docs/ci/SELF-HOSTED-RUNNERS.md.
+self-hosted-runner:
+  labels:
+    - qvac-ci
+    - qvac-macos26-arm64-gpu
+    - qvac-ubuntu2204-x64
+    - qvac-ubuntu2204-x64-gpu
+    - qvac-ubuntu2404-x64
+    - qvac-ubuntu2404-x64-gpu
+    - qvac-win25-x64
+    - qvac-win25-x64-gpu
+    # Legacy label scheme still referenced by benchmark and image-builder
+    # workflows; kept here so they lint clean until they migrate to qvac-*.
+    - ai-run-linux
+    - ai-run-linux-gpu
+    - ai-run-windows11-gpu
+    - generator-windows11

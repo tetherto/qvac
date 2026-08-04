@@ -1,6 +1,7 @@
 import type { ModelConstant } from '@qvac/sdk'
 import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from './aliases/sdcpp-video.js'
+import { resolveNestedModelSrcConstants } from './resolve-nested-model-src.js'
 import { loadModelConstants } from './sdk-constants.js'
 
 const ENDPOINT_CATEGORY: Record<string, string> = {
@@ -20,6 +21,9 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   'tts-ggml': 'speech',
   'onnx-tts': 'speech',
   ocr: 'ocr',
+  'ggml-ocr': 'ocr',
+  // Legacy model type from the ONNX era — route to the OCR endpoint so the
+  // SDK's migration error surfaces instead of a category-less 400.
   'onnx-ocr': 'ocr',
   diffusion: 'image',
   'sdcpp-generation': 'image'
@@ -270,7 +274,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload !== false,
-    config: resolved.config
+    config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
 }
 
@@ -298,7 +302,7 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload === true,
-    config: resolved.config
+    config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
 }
 

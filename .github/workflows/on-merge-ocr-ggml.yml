@@ -41,32 +41,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   publish-logic:
-    needs:
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: release
@@ -82,10 +57,8 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
-    needs:
-      - label-gate
     if: >-
-      needs.label-gate.outputs.authorised == 'true' && ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-'))
+      ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
@@ -107,9 +80,8 @@ jobs:
     needs:
       - publish-logic
       - release-merge-guard
-      - label-gate
     if: >-
-      needs.label-gate.outputs.authorised == 'true' && (!cancelled() && ( needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' || ( needs.publish-logic.outputs.publish_release == 'true' && needs.release-merge-guard.result == 'success' ) ))
+      (!cancelled() && ( needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' || ( needs.publish-logic.outputs.publish_release == 'true' && needs.release-merge-guard.result == 'success' ) ))
     permissions:
       contents: write
       packages: write
@@ -122,9 +94,8 @@ jobs:
     needs:
       - build
       - publish-logic
-      - label-gate
     if: >-
-      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     timeout-minutes: 20
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -173,9 +144,8 @@ jobs:
       - build
       - publish-logic
       - release-merge-guard
-      - label-gate
     if: >-
-      needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     continue-on-error: false
     timeout-minutes: 20
     outputs:
@@ -242,9 +212,8 @@ jobs:
   create-tag:
     needs:
       - publish-npm
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != '')
+      (!cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != '')
     permissions:
       contents: write
     uses: ./.github/workflows/create-release-tag.yml
@@ -259,8 +228,7 @@ jobs:
     needs:
       - publish-gpr
       - publish-npm
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && !cancelled()
+    if: ${{ !cancelled() }}
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
     steps:
@@ -285,8 +253,7 @@ jobs:
     uses: ./.github/workflows/integration-test-ocr-ggml.yml
     needs:
       - post-build-gate
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.post-build-gate.outputs.should_run_tests == 'true')
+    if: (needs.post-build-gate.outputs.should_run_tests == 'true')
     secrets: inherit
     with:
       repository: ${{ github.repository }}
