@@ -15,6 +15,15 @@ export interface LaunchDesktopHarnessOptions {
   readonly logging?: HarnessLoggingConfig
   readonly runStore: HarnessRunStore
   readonly desktop?: HarnessDesktopConfig
+  /**
+   * Entry sources for the worker bundles. Applications that own skills own
+   * these entries, since the bundler follows static imports and cannot discover
+   * providers at runtime. Harness still performs the bundling.
+   */
+  readonly workers?: {
+    readonly harnessChildEntry?: string
+    readonly toolSandboxChildEntry?: string
+  }
 }
 
 export interface DesktopHarnessWorker {
@@ -26,7 +35,8 @@ export async function launchDesktopHarness({
   inference,
   logging,
   runStore,
-  desktop
+  desktop,
+  workers
 }: LaunchDesktopHarnessOptions): Promise<DesktopHarnessWorker> {
   const directory = await mkdtemp(
     fileURLToPath(
@@ -38,7 +48,8 @@ export async function launchDesktopHarness({
       buildBundle(
         directory,
         'harness',
-        new URL('../../child-entry.ts', import.meta.url).href
+        workers?.harnessChildEntry ??
+          new URL('../../child-entry.ts', import.meta.url).href
       ),
       buildBundle(
         directory,
@@ -54,7 +65,8 @@ export async function launchDesktopHarness({
         ? buildBundle(
             directory,
             'tool-sandbox',
-            new URL('../../tool-sandbox-child-entry.ts', import.meta.url).href
+            workers?.toolSandboxChildEntry ??
+              new URL('../../tool-sandbox-child-entry.ts', import.meta.url).href
           )
         : Promise.resolve(undefined)
     ])
@@ -97,6 +109,8 @@ export async function launchDesktopHarness({
 async function buildBundle(directory: string, name: string, entry: string) {
   const output = pathToFileURL(join(directory, `${name}.js`))
   const artifacts = stow(entry, 'bare-sidecar', output.href, {
+    // The workspace root, so an application-supplied entry inside it resolves.
+    // A published package would have to accept this as an option.
     base: new URL('../../../../', import.meta.url).href,
     hosts: [`${os.platform()}-${os.arch()}`]
   })

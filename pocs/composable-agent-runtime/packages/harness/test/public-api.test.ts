@@ -1,13 +1,19 @@
 import test from 'brittle'
 import { readFile } from 'node:fs/promises'
 
-test('harness exports only package-owned lifecycle surfaces', async (t) => {
+// Worker *entries* stay private; worker *authoring kits* are exported, because
+// once applications own skills they are worker-entry authors by definition.
+// Kept on their own subpaths so the sandbox transport and worker plumbing never
+// reach the root graph a plain client process imports.
+test('harness exports lifecycle surfaces and skill authoring kits', async (t) => {
   const manifest = await readManifest()
   t.alike(Object.keys(manifest.exports).sort(), [
     '.',
     './expo-plugin',
     './package',
-    './react-native'
+    './react-native',
+    './skill-host',
+    './skill-sandbox'
   ])
   t.alike(manifest.exports['.'], {
     'react-native': './react-native.ts',

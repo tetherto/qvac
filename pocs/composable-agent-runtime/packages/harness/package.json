@@ -11,7 +11,9 @@
     },
     "./react-native": "./react-native.ts",
     "./package": "./package.json",
-    "./expo-plugin": "./dist/expo-plugin.js"
+    "./expo-plugin": "./dist/expo-plugin.js",
+    "./skill-host": "./skill-host.ts",
+    "./skill-sandbox": "./skill-sandbox.ts"
   },
   "imports": {
     "#abort-controller": {
@@ -78,6 +80,8 @@
     "package.json",
     "index.ts",
     "react-native.ts",
+    "skill-host.ts",
+    "skill-sandbox.ts",
     "expo-plugin.ts",
     "dist/expo-plugin.js",
     "child-entry.ts",

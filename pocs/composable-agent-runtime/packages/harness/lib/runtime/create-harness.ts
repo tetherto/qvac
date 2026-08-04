@@ -35,6 +35,14 @@ export interface CreateHarnessOptions {
   readonly logging?: HarnessLoggingConfig
   readonly state?: SyncRuntime
   readonly desktop?: HarnessDesktopConfig
+  /**
+   * Worker entry sources. An application that supplies its own skills also
+   * supplies the entries that statically import them.
+   */
+  readonly workers?: {
+    readonly harnessChildEntry?: string
+    readonly toolSandboxChildEntry?: string
+  }
 }
 
 export interface HarnessRuntimeExit {
@@ -68,7 +76,8 @@ export function createHarness({
   inference = 'qwen',
   logging,
   state,
-  desktop
+  desktop,
+  workers
 }: CreateHarnessOptions = {}): HarnessRuntime {
   const runStore: HarnessRunStore = state
     ? createSyncHarnessRunStore(state)
@@ -97,7 +106,8 @@ export function createHarness({
       inference,
       logging,
       runStore,
-      ...(desktop ? { desktop } : {})
+      ...(desktop ? { desktop } : {}),
+      ...(workers ? { workers } : {})
     })
     try {
       const info = await next.client.describeRuntime()
