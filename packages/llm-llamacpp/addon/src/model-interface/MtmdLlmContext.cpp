@@ -1046,6 +1046,11 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   };
 }
 
+void MtmdLlmContext::setRemoveThinkingFromContext(bool value) {
+  removeThinkingFromContext_ = value;
+  compactor_.setRemoveThinkingFromContext(value);
+}
+
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 
 llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }

@@ -2521,6 +2521,81 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
          "must compact at least one thinking block once </think> lands";
 }
 
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchMtmdQwen35HonorsRemoveThinkingOptOut) {
+#if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
+  GTEST_SKIP() << "Qwen3.5 MTMD closed `</think>` is not deterministic on "
+                  "non-Apple-Silicon CI runners (CPU backend).";
+#endif
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  const std::vector<uint8_t> image = readElephantImage();
+  ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
+
+  std::string path = vlmPath;
+  std::string projection = mmprojPath;
+  auto cfg = config_;
+  cfg["ctx_size"] = "4096";
+  cfg["parallel"] = "2";
+  cfg["n_predict"] = "1024";
+  cfg["temp"] = "0";
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr)
+      << "test requires the continuous-batching scheduler";
+
+  auto makeMediaPrompt = [&](const std::string& question) {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        R"([{"role":"system","content":"Answer with just one word: yes or no."},)"
+        R"({"role":"user","type":"media","content":""},)"
+        R"({"role":"user","content":")" +
+        question + R"("}])";
+    prompt.media.push_back(image);
+    prompt.generationParams.remove_thinking_from_context = false;
+    return prompt;
+  };
+
+  std::vector<LlamaModel::Prompt> prompts;
+  prompts.push_back(makeMediaPrompt("Is there fruit in this image?"));
+  prompts.push_back(makeMediaPrompt("Is there an animal in this image?"));
+
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW({ outputs = model->processPromptBatch(prompts); });
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "first MTMD opt-out slot must still generate";
+  EXPECT_FALSE(outputs[1].empty())
+      << "second MTMD opt-out slot must still generate";
+
+  const auto stats = model->runtimeStats();
+  const double discards =
+      test_common::getStatValue(stats, "thinkingBlockDiscards");
+  SCOPED_TRACE(
+      "thinkingBlockDiscards=" + std::to_string(discards) +
+      ", output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
+      ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
+
+  const bool reasoningClosed =
+      outputs[0].find("</think>") != std::string::npos ||
+      outputs[1].find("</think>") != std::string::npos;
+  if (!reasoningClosed) {
+    GTEST_SKIP() << "Qwen3.5 multimodal batch did not close </think> within "
+                    "n_predict=1024 — opt-out discard assertion skipped";
+  }
+  EXPECT_EQ(discards, 0.0)
+      << "MTMD batch remove_thinking_from_context=false must keep the "
+         "per-slot compactor disabled";
+}
+
 /// MTMD + hybrid (Qwen3.5 M-RoPE + recurrent memory) is the hardest cancel
 /// path: partial `seq_rm` is rejected by recurrent memory, so
 /// `cancelGenerationCleanup` restores a full sequence-state snapshot instead

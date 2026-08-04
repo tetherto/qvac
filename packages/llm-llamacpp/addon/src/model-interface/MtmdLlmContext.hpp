@@ -190,6 +190,8 @@ public:
     return generationStopReason_;
   }
 
+  void setRemoveThinkingFromContext(bool value) override;
+
   [[nodiscard]] bool supportsSliding() const override { return false; }
 
   [[nodiscard]] std::optional<llama_perf_context_data>
