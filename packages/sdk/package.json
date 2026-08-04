@@ -217,8 +217,6 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
-    "@qvac/transcription-parakeet": "^0.10.0",
-    "@qvac/transcription-whispercpp": "^0.12.0",
     "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.16.2",
