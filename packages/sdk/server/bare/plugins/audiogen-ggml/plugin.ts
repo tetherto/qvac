@@ -11,7 +11,7 @@ import {
   type CreateModelParams,
   type PluginModelResult
 } from '@/schemas'
-import { createStreamLogger } from '@/logging'
+import { createStreamLogger, registerAddonLogger } from '@/logging'
 import { resolveAudioGenConfig } from '@/server/bare/plugins/audiogen-ggml/config'
 import { audioGenStream } from '@/server/bare/plugins/audiogen-ggml/ops/audio-gen-stream'
 import { ModelLoadFailedError } from '@/utils/errors-server'
@@ -61,6 +61,7 @@ export const audioGenPlugin = definePlugin({
       config: addonConfig,
       logger
     })
+    registerAddonLogger(params.modelId, ModelType.audiogenGgml, logger)
 
     return { model }
   },
