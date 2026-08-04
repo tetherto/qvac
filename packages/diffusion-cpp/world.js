@@ -127,7 +127,13 @@ class WorldStableDiffusion {
     }
 
     try {
-      this.addon = this._createAddon(configurationParams)
+      // createScene() may have created the addon on demand already; reuse it
+      // instead of constructing a second instance - the orphaned native
+      // instance would keep its job-runner thread and JS callback alive,
+      // preventing the process from ever draining its event loop.
+      if (!this.addon) {
+        this.addon = this._createAddon(configurationParams)
+      }
       this.logger.info('Activating ABot-World walk session (loads DiT + taehv + scene)')
       await this.addon.activate()
     } catch (loadError) {
