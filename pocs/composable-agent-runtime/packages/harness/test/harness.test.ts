@@ -3,6 +3,7 @@ import AbortController from '#abort-controller'
 import {
   createHarness,
   createMemoryStateAdapter,
+  mapSdkEvent,
   type HarnessEvent,
   type SdkRuntimePort
 } from '../index.ts'
@@ -43,6 +44,9 @@ function fakeSdk(): SdkRuntimePort & {
         if (signal.aborted) yield { type: 'cancelled' as const }
       })()
     }),
+    generateImage: async () => {
+      throw new Error('image generation is not configured in this test')
+    },
     cancel: async ({ requestId }) => {
       cancelled.push(requestId)
     },
@@ -140,4 +144,39 @@ test('already aborted runs do not load a model', async (t) => {
     [{ type: 'aborted' }]
   )
   t.is(loads, 0)
+})
+
+test('legacy run ignores canonical completion metadata', async (t) => {
+  const sdk = fakeSdk()
+  sdk.completion = ({ requestId }) => ({
+    requestId,
+    events: (async function* () {
+      yield { type: 'content-delta' as const, text: 'legacy content' }
+      yield {
+        type: 'completion-done' as const,
+        raw: { fullText: 'legacy content' }
+      }
+    })()
+  })
+  const harness = createHarness({ sdk })
+
+  const events = await collect(harness.run({
+    runId: 'legacy-completion-metadata',
+    model: '/model.gguf',
+    messages: [{ role: 'user', content: 'hello' }],
+    signal: new AbortController().signal
+  }))
+
+  t.alike(events, [{ type: 'content', text: 'legacy content' }])
+  await harness.close()
+})
+
+test('completion metadata maps to no user-facing Harness event', (t) => {
+  t.is(
+    mapSdkEvent({
+      type: 'completion-done',
+      raw: { fullText: 'canonical output' }
+    }),
+    null
+  )
 })

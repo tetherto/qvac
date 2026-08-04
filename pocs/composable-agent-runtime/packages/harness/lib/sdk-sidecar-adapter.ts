@@ -51,6 +51,11 @@ function fromRemoteHarness(remote: SpawnedHarness): SdkRuntimePort {
         })()
       }
     },
+    async generateImage() {
+      throw new Error(
+        'image generation must use the shared direct SDK runtime, not an SDK sidecar'
+      )
+    },
     async cancel() {},
     async heartbeat() {
       await remote.describeRuntime()

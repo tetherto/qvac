@@ -6,6 +6,7 @@ const scripts = [
   'test:assistant',
   'test:task-shared',
   'test:task-cli',
+  'test:skill-cli',
   'test:task-mobile',
   'test:crash'
 ]

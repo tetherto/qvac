@@ -27,6 +27,9 @@ export default async function start(stream: HarnessStream, ready?: () => void) {
           })()
         }
       },
+      async generateImage() {
+        throw new Error('image generation requires the shared direct SDK runtime')
+      },
       async cancel() {},
       async heartbeat() {
         return { ok: true }

@@ -22,6 +22,7 @@
     "expo-plugin.ts",
     "react-native-launcher.ts",
     "react-native-stow.ts",
+    "tool-sandbox-child-entry.ts",
     "deterministic-sdk-entry.ts",
     "qwen-sdk-entry.ts",
     "lib/**/*.ts",

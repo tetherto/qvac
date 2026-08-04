@@ -1,0 +1,79 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "name": "wire-frame",
+      "namespace": "tool-sandbox",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "type",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "invocationId",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "toolName",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "input",
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "value",
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "code",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "component",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "runtime",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "processId",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "protocolVersion",
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "configuration",
+          "type": "json",
+          "version": 2
+        }
+      ]
+    }
+  ]
+}

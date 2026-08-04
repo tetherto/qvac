@@ -1,4 +1,5 @@
 import './harness.test.ts'
+import './brokered-agent.test.ts'
 import './wire.test.ts'
 import './child-entry.test.ts'
 import './in-memory-agent-state-store.test.ts'

@@ -23,6 +23,9 @@ test('child entry constructs SDK only after start', async (t) => {
       requestId,
       events: (async function* () {})()
     }),
+    generateImage: async () => {
+      throw new Error('image generation is not configured in this test')
+    },
     cancel: async () => {},
     heartbeat: async () => ({ ok: true }),
     close: async () => {}
@@ -64,6 +67,9 @@ test('supervised SDK port starts lazily and closes its child', async (t) => {
         requestId,
         events: (async function* () {})()
       }),
+      generateImage: async () => {
+        throw new Error('image generation is not configured in this test')
+      },
       cancel: async () => {},
       heartbeat: async () => ({ ok: true }),
       close: async () => {
@@ -105,6 +111,9 @@ test('supervised SDK port restarts after its real exit promise settles', async (
         requestId,
         events: (async function* () {})()
       }),
+      generateImage: async () => {
+        throw new Error('image generation is not configured in this test')
+      },
       cancel: async () => {},
       heartbeat: async () => ({ ok: true, life }),
       close: async () => {
@@ -131,6 +140,9 @@ test('SDK model adapter executes through @qvac/agents', async (t) => {
         yield { type: 'contentDelta' as const, text: 'agent output' }
       })()
     }),
+    generateImage: async () => {
+      throw new Error('image generation is not configured in this test')
+    },
     cancel: async () => {},
     heartbeat: async () => ({ ok: true }),
     close: async () => {}

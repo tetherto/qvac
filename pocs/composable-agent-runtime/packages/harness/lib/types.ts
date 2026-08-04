@@ -1,4 +1,5 @@
 import type { LogLevel } from '@qvac/logging'
+import type { HarnessAgentRegistration } from './agent-registration.ts'
 
 export type HarnessJsonValue =
   | boolean
@@ -51,6 +52,15 @@ export type HarnessEvent =
       readonly name: string
       readonly result: HarnessJsonValue
     }
+  | {
+      readonly type: 'tool-progress'
+      readonly name: string
+      readonly progress: {
+        readonly step: number
+        readonly totalSteps: number
+        readonly elapsedMs: number
+      }
+    }
   | { readonly type: 'metrics'; readonly metrics: Readonly<Record<string, number>> }
   | {
       readonly type: 'error'
@@ -67,9 +77,28 @@ export interface HarnessRunInput {
   readonly signal: HarnessAbortSignal
 }
 
+export interface HarnessAgentRunInput {
+  readonly agentId: string
+  readonly runId: string
+  readonly input: string
+  readonly signal?: HarnessAbortSignal
+}
+
+export interface HarnessAgentRunKey {
+  readonly agentId: string
+  readonly runId: string
+  readonly reason?: string
+}
+
 export interface HarnessRuntime {
   run(input: HarnessRunInput): AsyncIterable<HarnessEvent>
   close(): Promise<void>
+}
+
+export interface LocalHarnessRuntime extends HarnessRuntime {
+  registerAgent(registration: HarnessAgentRegistration): Promise<void>
+  runAgent(input: HarnessAgentRunInput): AsyncIterable<HarnessEvent>
+  cancelAgentRun(input: HarnessAgentRunKey): Promise<void>
 }
 
 export interface HarnessStateAdapter {

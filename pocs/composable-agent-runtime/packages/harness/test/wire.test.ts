@@ -33,6 +33,9 @@ function createFakeSdk(onAbort: () => void): SdkRuntimePort {
         if (signal.aborted) onAbort()
       })()
     }),
+    generateImage: async () => {
+      throw new Error('image generation is not configured in this test')
+    },
     cancel: async () => {},
     heartbeat: async () => ({ ok: true }),
     close: async () => {}
@@ -73,6 +76,9 @@ test('wire mapping never silently drops an unknown SDK event', async (t) => {
         yield { type: 'future-event' as never }
       })()
     }),
+    generateImage: async () => {
+      throw new Error('image generation is not configured in this test')
+    },
     cancel: async () => {},
     heartbeat: async () => ({ ok: true }),
     close: async () => {}

@@ -42,7 +42,8 @@ export function registerHarnessTypes(namespace: SchemaNamespace) {
       { name: 'capabilities', type: 'json' },
       { name: 'buildVersion', type: 'string' },
       { name: 'sdkIdentity', type: 'json' },
-      { name: 'error', type: 'json' }
+      { name: 'error', type: 'json' },
+      { name: 'progress', type: 'json' }
     ]
   })
 }
