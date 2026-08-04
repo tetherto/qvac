@@ -330,7 +330,7 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);

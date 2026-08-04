@@ -1929,7 +1929,7 @@ bool MtmdLlmContext::onGenerationFinished(
   }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
-  if (shouldRollbackKnownReasoningCutoff()) {
+  if (shouldRollbackInterruptedReasoning()) {
     return cancelGenerationCleanup(outputCallback);
   }
   compactThinkSpan();
@@ -1940,14 +1940,16 @@ bool MtmdLlmContext::onGenerationFinished(
   return true;
 }
 
-bool MtmdLlmContext::shouldRollbackKnownReasoningCutoff() const {
-  const bool knownTruncation =
-      generationStopReason_ == GenerationStopReason::PredictionLimit ||
-      generationStopReason_ == GenerationStopReason::SequenceLimit;
-  return knownTruncation && needsRecurrentSnapshot_ &&
-         removeThinkingFromContext_ && reasoningEnabled_ &&
-         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
-         !compactor_.hasCapturedCloseSpan();
+bool MtmdLlmContext::shouldRollbackInterruptedReasoning() const {
+  return qvac_lib_inference_addon_llama::utils::
+      shouldRollbackInterruptedReasoning(
+          generationStopReason_ != GenerationStopReason::None,
+          needsRecurrentSnapshot_,
+          removeThinkingFromContext_,
+          reasoningEnabled_,
+          reasoningState_.inside_reasoning,
+          compactor_.hasOpenSpan(),
+          compactor_.hasCapturedCloseSpan());
 }
 
 bool MtmdLlmContext::onCancel(
