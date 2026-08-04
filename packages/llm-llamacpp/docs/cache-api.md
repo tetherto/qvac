@@ -25,11 +25,11 @@ await model.run([
 
 Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Cache resolution happens first. A non-empty persistent request requires a last-known-valid canonical artifact and reserves that cache path exclusively within the process. Metadata is parsed directly from that exact artifact before mutation, including logical position, protected-prefix position, physical KV-cell usage, and protected-prefix KV usage. Newer unsaved live state does not block admission and is never silently committed at admission. A missing, malformed, out-of-range, or already-reserved artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
+Cache resolution happens first. A non-empty persistent request reserves the cache path exclusively within the process. If the active same-key session has newer RAM state than disk, that RAM state is written to the canonical artifact before mutation and becomes the checkpoint. Otherwise, the request requires a last-known-valid canonical artifact. Metadata is parsed directly from the pinned artifact before mutation, including logical position, protected-prefix position, physical KV-cell usage, and protected-prefix KV usage. A missing, malformed, out-of-range, already-reserved, or unwritable artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
 
 An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
 
-Explicit prefill or generation cancellation restores the committed cache bytes and their artifact-derived metadata as one coherent unit even when it is older than live state; losing unsaved deltas is expected. Loaded position and physical KV-cell counts are validated against the pinned metadata before restoration succeeds. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
+Explicit prefill or generation cancellation restores the committed cache bytes and their artifact-derived metadata as one coherent unit. For dirty same-key single-prompt sessions, that committed checkpoint is the RAM state saved immediately before the request. Loaded position and physical KV-cell counts are validated against the pinned metadata before restoration succeeds. Partial output may already have streamed to the caller, but it is not retained in KV or recurrent model memory. A prediction-limit cutoff inside an unclosed reasoning block follows the same transaction policy because there is no retained answer to replay.
 
 With `saveCacheToDisk: false`, no pre-request transaction snapshot or file is created. Cancellation clears the affected sequence, resets its cursor/cache metadata, and invalidates unsaved in-memory cache state. Any existing on-disk cache is left untouched and may be loaded by a later request using that key.
 
@@ -45,9 +45,9 @@ No transaction checkpoint uses the OS temp directory or working-directory fallba
 
 ### Interaction with cache files
 
-- **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the validated canonical artifact is pinned without a pre-request save or state serialization.
-- **Dirty same-key continuation with `saveCacheToDisk: true`:** admission succeeds and pins the older committed artifact. Cancellation restores that artifact and intentionally loses the unsaved delta; successful completion atomically persists the resulting live state normally.
-- **Missing/unusable rollback artifact for a non-empty persistent baseline:** admission fails before request mutation.
+- **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the validated canonical artifact is pinned without rewriting it.
+- **Dirty same-key continuation with `saveCacheToDisk: true`:** admission first commits the current live RAM state to the canonical artifact, then pins that artifact as the rollback checkpoint. Cancellation restores the pre-request RAM state from disk; successful completion atomically persists the updated live state again.
+- **Missing/unusable rollback artifact for a non-empty persistent baseline:** admission fails before request mutation when no live state can be committed or the pre-request commit cannot be validated.
 - **Missing cache file with an empty baseline:** an in-memory empty marker is used; no file is created until successful persistence.
 - **No `cacheKey`, or `saveCacheToDisk: false`:** there is no transaction checkpoint. Cancellation clears unsaved live state.
 - **Existing disk cache with `saveCacheToDisk: false`:** the request may load it, but cancellation does not promise restoration. The disk artifact remains unchanged and can be reloaded later.
@@ -83,7 +83,7 @@ await model.run(
 
 ## Save the cache to disk
 
-`saveCacheToDisk: true` writes the full in-memory KV cache state to the `cacheKey` file after inference completes.
+`saveCacheToDisk: true` writes the full in-memory KV cache state to the `cacheKey` file after inference completes. If the same `cacheKey` already has newer RAM state than disk, the addon also writes that current RAM state before starting the request so cancellation has a committed rollback artifact.
 
 ```js
 await model.run(
@@ -106,7 +106,8 @@ await model.run([{ role: 'user', content: 'Hello' }], { cacheKey: 'a.bin', saveC
 // Turn 2: RAM has turn 1 + 2, but a.bin on disk still only has turn 1
 await model.run([{ role: 'user', content: 'More' }], { cacheKey: 'a.bin' })
 
-// Turn 3: a.bin on disk updated with turn 1 + 2 + 3
+// Turn 3: a.bin is first updated with turn 1 + 2 as rollback,
+// then success writes turn 1 + 2 + 3
 await model.run([{ role: 'user', content: 'Continue' }], { cacheKey: 'a.bin', saveCacheToDisk: true })
 ```
 
@@ -116,7 +117,7 @@ await model.run([{ role: 'user', content: 'Continue' }], { cacheKey: 'a.bin', sa
 // Turn 1: cache in RAM only, no file written
 await model.run([{ role: 'user', content: 'Hello' }], { cacheKey: 'a.bin' })
 
-// Turn 2: saves everything (turn 1 + 2) to disk
+// Turn 2: first saves turn 1 as rollback, then success writes turn 1 + 2
 await model.run([{ role: 'user', content: 'More' }], { cacheKey: 'a.bin', saveCacheToDisk: true })
 ```
 

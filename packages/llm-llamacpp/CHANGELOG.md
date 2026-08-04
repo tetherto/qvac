@@ -7,10 +7,10 @@
 - Reasoning-block removal now always restores the pre-generation state and
   replays retained answer tokens for every model, avoiding in-place cache
   sliding and preserving coherent state for subsequent turns.
-- Persistent cancellation now restores the last committed cache artifact,
-  allowing newer unsaved deltas to be discarded. Non-empty persistent requests
-  without a usable artifact fail before mutation; non-persistent cancellation
-  clears unsaved sequence state.
+- Persistent cancellation now restores a committed cache artifact, pre-saving
+  newer live RAM state for same-key persistent requests before mutation.
+  Non-empty persistent requests without a usable or committable artifact fail
+  before mutation; non-persistent cancellation clears unsaved sequence state.
 - Tools output tail removal is disabled while `tools_compact` is pending
   removal.
 

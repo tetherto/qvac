@@ -354,14 +354,13 @@ void CacheManager::prepareTransactionCheckpoint(bool persistent) {
     reservationGuard.dismiss();
     return;
   }
-  if (!committedArtifactKnownValid_ || !isFileInitialized(sessionPath_)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: persistent request has no usable rollback artifact for '%s'\n",
-            __func__,
-            sessionPath_.c_str()));
+  if (!activeCacheSavedToDisk_ || !committedArtifactKnownValid_ ||
+      !isFileInitialized(sessionPath_)) {
+    // The caller requested durability for the live cache. Commit the current
+    // state before mutating it so the request has a canonical rollback artifact
+    // and the eventual end-of-request save can still persist the full updated
+    // conversation.
+    saveCache();
   }
   const auto checkpoint = inspectCommittedCacheArtifact(
       sessionPath_, llama_n_ctx(llmContext_->getCtx()));

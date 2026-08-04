@@ -250,6 +250,96 @@ TEST_F(CacheManagementTest, EnableCacheWithFilename) {
   EXPECT_TRUE(fs::exists(session1_path));
 }
 
+TEST_F(CacheManagementTest, SaveCacheToDiskPersistsPriorRamOnlyTurns) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  EXPECT_NO_THROW({
+    std::string output1 = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "Remember that cobalt is blue."}])",
+        session1_path);
+    EXPECT_FALSE(output1.empty());
+  });
+  EXPECT_FALSE(fs::exists(session1_path))
+      << "first RAM-only turn must not write the cache file";
+
+  EXPECT_NO_THROW({
+    std::string output2 = processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "What color did I mention?"}])",
+        session1_path,
+        true);
+    EXPECT_FALSE(output2.empty());
+  });
+  EXPECT_TRUE(fs::exists(session1_path));
+  EXPECT_GT(fs::file_size(session1_path), 0u);
+}
+
+TEST_F(CacheManagementTest, SaveCacheToDiskPreCommitsDirtySameKeyOnCancel) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt saved;
+  saved.input =
+      R"([{"role": "user", "content": "Remember that amber is yellow."}])";
+  saved.cacheKey = session1_path;
+  saved.saveCacheToDisk = true;
+  ASSERT_NO_THROW({ (void)model->processPrompt(saved); });
+  ASSERT_TRUE(fs::exists(session1_path));
+
+  const auto firstArtifact =
+      CacheManager::inspectCommittedCacheArtifact(session1_path, 2048);
+
+  LlamaModel::Prompt ramOnly;
+  ramOnly.input =
+      R"([{"role": "user", "content": "Also remember that slate is gray."}])";
+  ramOnly.prefill = true;
+  ramOnly.cacheKey = session1_path;
+  ASSERT_NO_THROW({ (void)model->processPrompt(ramOnly); });
+
+  const auto stillFirstArtifact =
+      CacheManager::inspectCommittedCacheArtifact(session1_path, 2048);
+  EXPECT_EQ(stillFirstArtifact.metadata.nPast, firstArtifact.metadata.nPast)
+      << "RAM-only same-key turn must not update disk before save is requested";
+
+  bool cancelIssued = false;
+  LlamaModel::Prompt cancellable;
+  cancellable.input =
+      R"([{"role": "user", "content": "Write several words before stopping."}])";
+  cancellable.cacheKey = session1_path;
+  cancellable.saveCacheToDisk = true;
+  cancellable.generationParams.n_predict = 64;
+  cancellable.outputCallback = [&](const std::string&) {
+    if (cancelIssued) {
+      return;
+    }
+    cancelIssued = true;
+    model->cancel();
+  };
+
+  ASSERT_NO_THROW({ (void)model->processPrompt(cancellable); });
+  ASSERT_TRUE(cancelIssued)
+      << "test setup: cancellation must happen during generation";
+
+  const auto restoredArtifact =
+      CacheManager::inspectCommittedCacheArtifact(session1_path, 2048);
+  EXPECT_GT(restoredArtifact.metadata.nPast, firstArtifact.metadata.nPast)
+      << "cancel rollback should persist and restore the RAM-only second turn";
+}
+
 TEST_F(CacheManagementTest, SessionPersistence) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";

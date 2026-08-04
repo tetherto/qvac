@@ -246,14 +246,15 @@ export interface RunOptions {
    * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
    * later run keyed by the same string can resume without re-prefilling.
    *
-   * With `cacheKey` and `saveCacheToDisk: true`, the last committed cache
-   * artifact is pinned as the pre-request transaction checkpoint without a
-   * pre-request save. Newer unsaved live state may exist; cancellation restores
-   * the older committed artifact and may lose that unsaved delta. A non-empty
-   * persistent request without a usable artifact fails before request mutation.
-   * Restore applies sequence bytes and artifact-derived logical/physical cache
-   * metadata together. If restore or metadata validation fails, the affected
-   * sequence is cleared and the active cache session is invalidated.
+   * With `cacheKey` and `saveCacheToDisk: true`, a committed cache artifact is
+   * pinned as the pre-request transaction checkpoint. If the active same-key
+   * session has newer RAM state than disk, that RAM state is first written to
+   * `cacheKey` and pinned as the rollback artifact. A non-empty persistent
+   * request without a usable artifact or committable live state fails before
+   * request mutation. Restore applies sequence bytes and artifact-derived
+   * logical/physical cache metadata together. If restore or metadata validation
+   * fails, the affected sequence is cleared and the active cache session is
+   * invalidated.
    *
    * With `saveCacheToDisk: false`, no transaction snapshot is created.
    * Cancellation clears unsaved live state while leaving any existing
