@@ -39,6 +39,7 @@ import {
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
 } from '@qvac/sdk'
@@ -110,6 +111,12 @@ resources.define('tools-batch', {
 
 resources.define('finetune-llm', {
   constant: QWEN3_1_7B_INST_Q4,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('finetune-llm-qwen35', {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
 })

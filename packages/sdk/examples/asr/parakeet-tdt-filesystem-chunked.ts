@@ -2,7 +2,7 @@
  * Parakeet TDT transcription for long audio files.
  *
  * Usage:
- *   bun run examples/transcription/parakeet-tdt-filesystem-chunked.ts <audio-file> [parakeet-tdt-gguf]
+ *   bun run examples/asr/parakeet-tdt-filesystem-chunked.ts <audio-file> [parakeet-tdt-gguf]
  *
  * FFmpeg first detects silence, then this example selects boundaries near
  * 45 seconds and transcribes one segment at a time. Segments never exceed
@@ -180,7 +180,7 @@ const args = process.argv.slice(2)
 
 if (!args[0]) {
   console.error(
-    'Usage: bun run examples/transcription/parakeet-tdt-filesystem-chunked.ts ' +
+    'Usage: bun run examples/asr/parakeet-tdt-filesystem-chunked.ts ' +
       '<audio-file> [parakeet-tdt-gguf]'
   )
   process.exit(1)

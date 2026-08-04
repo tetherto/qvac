@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
   so they no longer OOM on non-entitled devices. Output is byte-identical.
 
+## [0.6.2] - 2026-08-03
+
+### Changed
+- Optimize OpenCL GPU backend implementation (Android) for Parler-TTS model
+- Update `ggml-speech` dependency version to align with other packages that also depend on it.
+
 ## [0.6.1] - 2026-07-30
 
 ### Fixed

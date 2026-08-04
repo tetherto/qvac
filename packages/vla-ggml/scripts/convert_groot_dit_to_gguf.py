@@ -5,9 +5,18 @@ backbone (Qwen3-VL vision + truncated-16-layer text decoder) is converted
 separately via fabric's own convert_hf_to_gguf.py (see _repackage_groot_backbone.py).
 
 Embodiment conditioning (`CategorySpecificLinear`) keeps a weight matrix per
-embodiment (`self.W[cat_ids]`, up to 32). For v1 we slice out one embodiment's row
-at conversion time and store it as a plain dense tensor — no runtime embodiment-ID
-input is needed by the ggml loader.
+embodiment (`self.W[cat_ids]`, up to 32). Two modes:
+
+  * multi-embodiment (default): store one weight row per DISTINCT trained cat_id
+    (`[n_stored, in, out]` W / `[n_stored, out]` b) and an embodiment table
+    (`groot.embodiment.{tags,cat_ids,stored_cat_ids,stored_num_cameras,count,
+    default}`). One GGUF then carries every trained embodiment; groot.cpp maps a
+    selected tag -> cat_id -> stored row and slices it at load. `--embodiments
+    a,b` narrows the ship set to a subset (e.g. libero+droid only).
+  * `--embodiment-tag <tag>`: v1 single-embodiment mode — slice out one row at
+    conversion time and store it as a plain 2D dense tensor, no runtime selector.
+
+groot.cpp distinguishes the two by tensor rank (3D = multi, 2D = v1 sliced).
 
 Real dims (verified against the actual checkpoint's tensor shapes, not
 inferred from the HF config prose):
@@ -29,6 +38,12 @@ inferred from the HF config prose):
          ever indexed at inference (applied to action tokens only, before concat with state)
 
 Usage:
+    # multi-embodiment (default), default selection = libero_sim
+    python convert_groot_dit_to_gguf.py \
+        --checkpoint /path/to/GR00T-N1.7-3B \
+        --out groot-action-head.gguf
+
+    # v1 single-embodiment
     python convert_groot_dit_to_gguf.py \
         --checkpoint /path/to/GR00T-N1.7-3B \
         --embodiment-tag libero_sim \
@@ -37,6 +52,7 @@ Usage:
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import gguf
@@ -65,6 +81,82 @@ MAX_ACTION_DIM = 132
 ACTION_HORIZON = 40
 NUM_CAMERAS = 2  # LIBERO: image + wrist_image
 NUM_EMBODIMENTS_TOTAL = 32
+
+# num_cameras means IMAGES PER INFER: cameras x video history, which is what the
+# runtime consumes and what `hparams.numCameras` reports. It is a property of the
+# DATA CONFIG a row was trained with, not of the weight row, and the checkpoint
+# states it per embodiment tag in `processor_config.json`:
+#
+#     len(modality_configs[tag].video.modality_keys)
+#         * len(modality_configs[tag].video.delta_indices)
+#
+# `read_num_cameras` below derives the counts from there rather than from a
+# hand-maintained list, so any checkpoint describes itself. The fallback table is
+# only for checkpoints predating that key.
+#
+# Because the GGUF stores ONE count per cat_id while several tags (hence several
+# rigs) can share a cat_id, disagreement is expected and is stored as 0
+# (unknown), never as an arbitrary pick: e.g. cat_id 26 is 3 cameras x 2 frames
+# for `real_r1_pro_sharpa_relative_eef`/`_human` but 1 x 2 for `_mecka`/
+# `_maxinsights`. A row with an unknown count still ships and the runtime will not
+# guess one; it is selectable by stating the count
+# (`embodiment: { tag, numCameras }`), because inheriting another embodiment's
+# count would build the wrong image-token layout and infer silently wrong.
+FALLBACK_NUM_CAMERAS = {
+    "libero_sim": 2,  # 2 cameras x 1 frame
+    "oxe_droid_relative_eef_relative_joint": 4,  # 2 x 2
+}
+
+
+def read_num_cameras(checkpoint_dir: Path) -> list:
+    """Per-tag images-per-infer from the checkpoint, most authoritative first.
+
+    Returns `[(source_name, {tag: images_per_infer})]` in precedence order:
+
+      1. `processor_config.json` — how the checkpoint is SERVED now.
+      2. `experiment_cfg/final_processor_config.json` — the training-time data
+         configs, which cover further embodiments but describe historical mixes.
+
+    Kept as separate tiers rather than merged because the two disagree for rows
+    that were trained under several data configs: the base checkpoint's cat_id 24
+    is 2 cameras x 2 frames as served, but the training config also lists a
+    1-frame `oxe_droid_joint_position_relative` and a 3-camera `xdof` on that same
+    row. Merging would make cat_id 24 look ambiguous and drop its count, so a
+    lower tier is consulted only for cat_ids the higher tier says nothing about.
+    """
+    tiers = []
+    for rel in ("processor_config.json", "experiment_cfg/final_processor_config.json"):
+        path = checkpoint_dir / rel
+        if not path.exists():
+            continue
+        raw = json.loads(path.read_text())
+        configs = raw.get("processor_kwargs", raw).get("modality_configs")
+        if configs is None:
+            continue
+        counts = {}
+        # The live config stores real JSON; the training-time one stores a Python
+        # repr of the same structure, so parse the video entries out textually.
+        if isinstance(configs, dict):
+            for tag, cfg in configs.items():
+                video = cfg.get("video") or {}
+                keys = video.get("modality_keys") or []
+                deltas = video.get("delta_indices") or []
+                if keys and deltas:
+                    counts[tag] = len(keys) * len(deltas)
+        elif isinstance(configs, str):
+            for m in re.finditer(
+                r"'([A-Za-z0-9_.\-]+)': \{'video': ModalityConfig\("
+                r"delta_indices=\[([^\]]*)\], modality_keys=\[([^\]]*)\]",
+                configs,
+            ):
+                tag, deltas, keys = m.group(1), m.group(2), m.group(3)
+                n_deltas = len([d for d in deltas.split(",") if d.strip()])
+                n_keys = len([k for k in keys.split(",") if k.strip()])
+                if n_keys and n_deltas:
+                    counts[tag] = n_keys * n_deltas
+        if counts:
+            tiers.append((rel, counts))
+    return tiers
 TIMESTEP_PROJ_CHANNELS = 256
 
 # Backbone hparams (real Qwen3-VL / Cosmos-Reason2-2B config, text decoder
@@ -117,6 +209,30 @@ class Gr00tActionHeadReader:
         """Index a CategorySpecificLinear weight/bias at one embodiment, drop the category dim."""
         t = self.get(key)
         return t[cat_id].contiguous()
+
+    def get_embodiment_rows(self, key: str, cat_ids: list) -> torch.Tensor:
+        """Select the given cat_id rows from a CategorySpecificLinear weight/bias.
+
+        W is [num_categories, in, out], b is [num_categories, out]. Returns
+        [len(cat_ids), ...] in cat_ids order (the tensor row order the GGUF's
+        stored_cat_ids table records); groot.cpp slices the load-time-selected
+        row.
+        """
+        t = self.get(key)
+        # NUM_EMBODIMENTS_TOTAL (and so `--embodiments all`) assumes the
+        # architecture's 32-category bank without consulting the checkpoint. On a
+        # smaller bank the bare index below raises IndexError with no hint of which
+        # flag caused it, so name the mismatch instead.
+        n_rows = t.shape[0]
+        over = sorted(c for c in cat_ids if not 0 <= c < n_rows)
+        if over:
+            raise SystemExit(
+                f"'{key}' has {n_rows} category rows but the requested ship set "
+                f"names cat_id(s) {over}: this checkpoint's category bank is "
+                f"smaller than the expected {NUM_EMBODIMENTS_TOTAL}, so pass an "
+                "explicit --embodiments subset instead of 'all'"
+            )
+        return t[torch.tensor(cat_ids, dtype=torch.long)].contiguous()
 
 
 def add_basic_transformer_block(
@@ -182,24 +298,258 @@ def add_basic_transformer_block(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True, type=Path)
-    ap.add_argument("--embodiment-tag", required=True)
+    ap.add_argument(
+        "--embodiment-tag",
+        help="v1 single-embodiment mode: slice this one embodiment into a 2D "
+        "dense tensor. Omit for multi-embodiment mode (the default).",
+    )
+    ap.add_argument(
+        "--embodiments",
+        help="multi-embodiment mode: which rows to STORE, as comma-separated "
+        "embodiment tags and/or numeric cat_ids, or `all` for every physical row "
+        "of the 32-entry category bank (including untagged ones). Default: every "
+        "distinct trained cat_id in embodiment_id.json. A subset is taken "
+        "literally and must include the default embodiment.",
+    )
+    ap.add_argument(
+        "--default-embodiment",
+        default="libero_sim",
+        help="multi-embodiment mode: the embodiment selected when the runtime "
+        "doesn't specify one (default: libero_sim).",
+    )
+    ap.add_argument(
+        "--embodiment-cameras",
+        action="append",
+        default=[],
+        metavar="TAG=N",
+        help="stamp num_cameras (images per infer) for an embodiment whose count "
+        "the checkpoint does not state, or to pin one rig when tags sharing a "
+        "cat_id disagree (repeatable, or comma-separated). A row with no known "
+        "count ships as a latent weight row: it is selectable at runtime only if "
+        "the caller passes an explicit camera count. Required for the default "
+        "embodiment, whose count must be known for the GGUF to load unselected.",
+    )
     ap.add_argument("--out", required=True, type=Path)
     args = ap.parse_args()
 
+    if args.embodiment_tag and args.embodiments:
+        raise ValueError("--embodiment-tag and --embodiments are mutually exclusive")
+    multi = not args.embodiment_tag  # multi-embodiment is the default
+
     embodiment_ids = json.loads((args.checkpoint / "embodiment_id.json").read_text())
-    if args.embodiment_tag not in embodiment_ids:
-        raise ValueError(
-            f"Unknown embodiment tag '{args.embodiment_tag}'. "
-            f"Known: {sorted(embodiment_ids.keys())}"
+
+    # Camera-count sources, most authoritative first: explicit
+    # --embodiment-cameras, then what the checkpoint says about itself, then the
+    # fallback table for checkpoints that say nothing. cam_for consults a lower
+    # tier only for cat_ids the higher ones do not cover.
+    overrides = {}
+    for entry in args.embodiment_cameras:
+        for pair in entry.split(","):
+            pair = pair.strip()
+            if not pair:
+                continue
+            if "=" not in pair:
+                raise ValueError(f"--embodiment-cameras expects TAG=N, got '{pair}'")
+            tag, _, count = pair.partition("=")
+            tag = tag.strip()
+            try:
+                n = int(count)
+            except ValueError:
+                raise ValueError(
+                    f"--embodiment-cameras: '{count}' is not an integer (tag '{tag}')"
+                ) from None
+            if not 1 <= n <= 64:
+                raise ValueError(
+                    f"--embodiment-cameras: num_cameras {n} for '{tag}' is out of "
+                    "range (1..64)"
+                )
+            if tag not in embodiment_ids:
+                raise ValueError(
+                    f"--embodiment-cameras: unknown embodiment tag '{tag}'. "
+                    f"Known: {sorted(embodiment_ids.keys())}"
+                )
+            overrides[tag] = n
+
+    cam_tiers = (
+        [("--embodiment-cameras", overrides)]
+        + read_num_cameras(args.checkpoint)
+        + [("built-in fallback", FALLBACK_NUM_CAMERAS)]
+    )
+    print(
+        "num_cameras sources: "
+        + ", ".join(f"{name}={len(tier)} tag(s)" for name, tier in cam_tiers if tier)
+    )
+
+    def resolve(tag: str) -> int:
+        if tag not in embodiment_ids:
+            raise ValueError(
+                f"Unknown embodiment tag '{tag}'. "
+                f"Known: {sorted(embodiment_ids.keys())}"
+            )
+        return embodiment_ids[tag]
+
+    # A representative tag per cat_id (first tag in file order) — drives the
+    # per-cat_id num_cameras lookup and human-readable logging.
+    rep_tag = {}
+    for t, cid in embodiment_ids.items():
+        rep_tag.setdefault(cid, t)
+
+    def cam_for(cid: int) -> int:
+        # Walk the sources in precedence order and take the first that says
+        # anything about this cat_id, so a historical training config never
+        # contradicts how the checkpoint is served today.
+        for name, tier in cam_tiers:
+            found = {t: tier[t] for t, c in embodiment_ids.items() if c == cid and t in tier}
+            if not found:
+                continue
+            counts = set(found.values())
+            if len(counts) == 1:
+                return counts.pop()
+            # Several rigs share this row and genuinely differ in view count. One
+            # stored number cannot describe both, and picking one silently would
+            # hand a caller the wrong image-token layout, so store 0 (unknown)
+            # and let the caller state the count.
+            print(
+                f"  cat_id {cid}: {name} disagrees on num_cameras {found} -> storing "
+                "0 (unknown); pass --embodiment-cameras TAG=N to pin one rig"
+            )
+            return 0
+        return 0
+
+    def cam_for_tag(tag: str) -> int:
+        # Exact-tag lookup, v1 only. cam_for answers for a cat_id, which is the
+        # right question for a stored ROW: several rigs can share a row, so a
+        # row whose tags disagree has no one true count and stores 0. A v1 GGUF
+        # bakes ONE tag, though, and that tag's own count is not ambiguous just
+        # because a sibling tag on the same row differs. Falling back to it is
+        # therefore not the guess L1 rules out; it is the more specific answer.
+        for _name, tier in cam_tiers:
+            if tier.get(tag):
+                return tier[tag]
+        return 0
+
+    # The default entry backs the v1 groot.embodiment_tag/_cat_id keys and the
+    # top-level groot.num_cameras, so old loaders and the multi table agree.
+    default_tag = args.default_embodiment if multi else args.embodiment_tag
+    default_cat_id = resolve(default_tag)
+    # Resolve by cat_id first, not by the literal default tag: tags sharing a
+    # cat_id usually share a view count, so an alias tag would otherwise miss a
+    # tier that names only its sibling and fall through to a lower one.
+    default_num_cameras = cam_for(default_cat_id)
+    if not default_num_cameras and not multi:
+        # Only after the cat_id came back unknown, and only in v1. Multi is left
+        # alone deliberately: its stored_num_cameras row would still be 0, so
+        # rescuing just the top-level key would desync the two and skip the
+        # default-row check below.
+        default_num_cameras = cam_for_tag(default_tag)
+        if default_num_cameras:
+            print(
+                f"  cat_id {default_cat_id} has no single num_cameras, but "
+                f"'{default_tag}' itself is described as {default_num_cameras}; "
+                "using that for this single-embodiment GGUF"
+            )
+    if not default_num_cameras:
+        # Fail instead of stamping NUM_CAMERAS. A wrong camera count fails
+        # SILENTLY at inference: it drives the JS image-count validation and the
+        # image-token layout, so a 6-view rig converted as 2 would be rejected for
+        # passing 6 buffers, or produce plausible-looking garbage for 2. Multi mode
+        # already raises here; v1 used to fall through to a hardcoded 2, which put
+        # exactly the guess back that "the runtime never guesses" rules out — just
+        # at conversion time instead.
+        raise SystemExit(
+            f"embodiment '{default_tag}' (cat_id {default_cat_id}) has no known "
+            "num_cameras in this checkpoint: pass "
+            f"--embodiment-cameras {default_tag}=N to pin its view count "
+            "(images per infer = len(video.modality_keys) * len(video.delta_indices))"
         )
-    cat_id = embodiment_ids[args.embodiment_tag]
-    print(f"Embodiment '{args.embodiment_tag}' -> cat_id {cat_id}")
+    if multi:
+        # Ship set = cat_ids to STORE (one weight row each). Default is every
+        # distinct TRAINED cat_id from embodiment_id.json; `--embodiments` names a
+        # subset by tag or by numeric cat_id, and `all` stores every physical row
+        # of the checkpoint's category bank including untagged/untrained ones. The
+        # full tag -> cat_id map (all tags) still ships so the runtime can select
+        # by any tag string and map it to a stored row.
+        if args.embodiments:
+            want = args.embodiments.strip()
+            if want.lower() == "all":
+                want_cids = set(range(NUM_EMBODIMENTS_TOTAL))
+            else:
+                want_cids = set()
+                for item in (s.strip() for s in want.split(",")):
+                    if not item:
+                        continue
+                    if item.isdigit():
+                        cid = int(item)
+                        if not 0 <= cid < NUM_EMBODIMENTS_TOTAL:
+                            raise ValueError(
+                                f"--embodiments: cat_id {cid} is out of range "
+                                f"(0..{NUM_EMBODIMENTS_TOTAL - 1})"
+                            )
+                        want_cids.add(cid)
+                    else:
+                        want_cids.add(resolve(item))
+            # An explicit subset is taken literally: silently adding the default
+            # row would ship a set the caller did not ask for. Tell them instead.
+            if default_cat_id not in want_cids:
+                raise ValueError(
+                    f"--embodiments does not include the default embodiment "
+                    f"'{default_tag}' (cat_id {default_cat_id}); add it or pass "
+                    "--default-embodiment naming one of the requested rows"
+                )
+        else:
+            want_cids = set(embodiment_ids.values())
+        stored_cat_ids = sorted(want_cids)  # tensor row order
+        stored_num_cameras = [cam_for(c) for c in stored_cat_ids]
+        # A multi GGUF whose DEFAULT row has no camera count cannot be loaded
+        # without an explicit selector plus count, because the loader treats the
+        # per-row value as authoritative and ignores the legacy top-level
+        # fallback. Fail at conversion rather than ship that.
+        if stored_num_cameras[stored_cat_ids.index(default_cat_id)] <= 0:
+            raise ValueError(
+                f"default embodiment '{default_tag}' (cat_id {default_cat_id}) has "
+                "no known num_cameras, so the GGUF could not be loaded without an "
+                "explicit selector. Pass --embodiment-cameras "
+                f"{default_tag}=<images per infer>, or pick a --default-embodiment "
+                "whose count is known"
+            )
+
+        emb_tags = list(embodiment_ids.keys())
+        emb_cat_ids = [embodiment_ids[t] for t in emb_tags]
+        print(
+            f"Multi-embodiment: {len(emb_tags)} tags -> "
+            f"{len(stored_cat_ids)} stored cat_ids {stored_cat_ids}; "
+            f"default '{default_tag}' -> cat_id {default_cat_id}"
+        )
+        # Say plainly which rows the file cannot serve on its own, so a ship set
+        # is never assumed runnable end to end just because it converted.
+        unknown = [c for c, n in zip(stored_cat_ids, stored_num_cameras) if n <= 0]
+        if unknown:
+            print(
+                f"  num_cameras unknown for {len(unknown)}/{len(stored_cat_ids)} "
+                f"stored cat_ids {unknown}: selecting one of these at runtime "
+                "requires an explicit camera count "
+                "(embodiment: { catId, numCameras }). Pass "
+                "--embodiment-cameras TAG=N to stamp counts into the GGUF instead."
+            )
+    else:
+        print(f"Embodiment '{default_tag}' -> cat_id {default_cat_id}")
 
     reader = Gr00tActionHeadReader(args.checkpoint)
     writer = gguf.GGUFWriter(str(args.out), "groot")
 
-    writer.add_string("groot.embodiment_tag", args.embodiment_tag)
-    writer.add_uint32("groot.embodiment_cat_id", cat_id)
+    writer.add_string("groot.embodiment_tag", default_tag)
+    writer.add_uint32("groot.embodiment_cat_id", default_cat_id)
+    if multi:
+        # Full tag -> cat_id map (all tags) for runtime tag lookup.
+        writer.add_array("groot.embodiment.tags", emb_tags)
+        writer.add_array("groot.embodiment.cat_ids", emb_cat_ids)
+        # Stored rows: which cat_ids are physically in the weight tensors, in
+        # tensor row order, plus their per-row num_cameras (0 = unknown). The
+        # runtime maps a selected tag -> cat_id -> row via stored_cat_ids.
+        writer.add_uint32("groot.embodiment.count", len(stored_cat_ids))
+        writer.add_array("groot.embodiment.stored_cat_ids", stored_cat_ids)
+        writer.add_array("groot.embodiment.stored_num_cameras", stored_num_cameras)
+        writer.add_string("groot.embodiment.default", default_tag)
     writer.add_uint32("groot.hidden_size", HIDDEN_SIZE)
     writer.add_uint32("groot.input_embedding_dim", DIT_INNER_DIM)
     writer.add_uint32("groot.backbone_embedding_dim", VLFUSION_INNER_DIM)
@@ -219,7 +569,7 @@ def main():
     writer.add_uint32("groot.vlfusion.ffn_inner", VLFUSION_FFN_INNER)
     writer.add_uint32("groot.timestep_proj_channels", TIMESTEP_PROJ_CHANNELS)
     writer.add_uint32("groot.num_inference_timesteps", 4)
-    writer.add_uint32("groot.num_cameras", NUM_CAMERAS)
+    writer.add_uint32("groot.num_cameras", default_num_cameras)
 
     writer.add_uint32("groot.text.num_layers", TEXT_NUM_LAYERS)
     writer.add_uint32("groot.text.hidden_size", TEXT_HIDDEN_SIZE)
@@ -298,19 +648,31 @@ def main():
         reader.get("action_head.position_embedding.weight").numpy(),
     )
 
-    # --- Embodiment-conditioned encode/decode, sliced to one embodiment ---
+    # --- Embodiment-conditioned encode/decode ---
+    # Multi mode keeps the category dim, storing only the ship-set rows
+    # ([n_stored, in, out] / [n_stored, out], rank 3 / rank 2, row order =
+    # stored_cat_ids); v1 mode slices one embodiment ([in, out] / [out],
+    # rank 2 / 1). groot.cpp switches on tensor rank. In BOTH modes the last two
+    # axes carry the CategorySpecificLinear W as [in, out]: forward is x @ W (not
+    # nn.Linear's x @ W^T), so gguf-py reverses numpy shape into ggml ne=[out, in]
+    # — the OPPOSITE of what ggml_mul_mat wants ([in, out]) — and grootLinearXW
+    # applies the compensating ggml_cont(ggml_transpose(...)) at graph-build time.
+    # This is a two-sided invariant: DO NOT "simplify" either side without the
+    # other. See grootLinearXW in groot.cpp. (Transposing here changes the on-disk
+    # layout and requires reconverting every GGUF + a parity run.)
     def add_embodiment_linear(src_prefix: str, dst_prefix: str):
-        w = reader.get_embodiment_slice(f"{src_prefix}.W", cat_id)  # [in, out]
-        b = reader.get_embodiment_slice(f"{src_prefix}.b", cat_id)  # [out]
-        # CategorySpecificLinear.forward does x @ W (not nn.Linear's x @ W^T), so
-        # the sliced weight is numpy [in, out]. gguf-py reverses numpy shape into
-        # ggml ne, giving ne=[out, in] — the OPPOSITE of what ggml_mul_mat wants
-        # ([in, out]). We store it as-is here; groot.cpp's grootLinearXW applies
-        # the compensating ggml_cont(ggml_transpose(...)) at graph-build time.
-        # This is a two-sided invariant: DO NOT "simplify" either side without
-        # the other. See grootLinearXW in groot.cpp. (Emitting w.numpy().T here
-        # and dropping the C++ transpose would encode it once, but changes the
-        # on-disk tensor layout — requires reconverting the GGUF + a parity run.)
+        if multi:
+            w = reader.get_embodiment_rows(f"{src_prefix}.W", stored_cat_ids)  # [n_stored, in, out]
+            b = reader.get_embodiment_rows(f"{src_prefix}.b", stored_cat_ids)  # [n_stored, out]
+            # Store the stacked rows F16, halving the multi weight footprint
+            # (~680 MB -> ~340 MB for 17 rows). quantize_groot_gguf.py never
+            # touches embodiment.* (KEEP_UNQUANTIZED), so this F16 is what ships;
+            # grootSliceEmbodiment copies the load-time-selected row by
+            # ggml_nbytes, handling F16/F32 alike. Bias stays F32 (1-D, tiny).
+            w = w.half()
+        else:
+            w = reader.get_embodiment_slice(f"{src_prefix}.W", default_cat_id)  # [in, out]
+            b = reader.get_embodiment_slice(f"{src_prefix}.b", default_cat_id)  # [out]
         writer.add_tensor(f"{dst_prefix}.weight", w.numpy())
         writer.add_tensor(f"{dst_prefix}.bias", b.numpy())
 

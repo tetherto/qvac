@@ -2,7 +2,7 @@
  * Sortformer v2.1 streaming diarization via duplex `transcribeStream` + AOSC.
  *
  * Usage:
- *   bun run examples/transcription/parakeet-sortformer-streaming.ts <wav-file> [sortformer-gguf]
+ *   bun run examples/asr/parakeet-sortformer-streaming.ts <wav-file> [sortformer-gguf]
  *
  * Streams 16 kHz mono s16le audio in real-time-paced chunks (required for parakeet
  * duplex streaming). Loads v2.1 with AOSC knobs in `modelConfig`. Omit the model
@@ -39,7 +39,7 @@ const args = process.argv.slice(2)
 
 if (!args[0]) {
   console.error(
-    'Usage: bun run examples/transcription/parakeet-sortformer-streaming.ts <wav-file-path> [sortformer-gguf]'
+    'Usage: bun run examples/asr/parakeet-sortformer-streaming.ts <wav-file-path> [sortformer-gguf]'
   )
   console.error('\nDefaults to the v2.1 q8_0 registry model (PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0).')
   process.exit(1)
