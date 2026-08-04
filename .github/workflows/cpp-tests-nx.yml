@@ -1,19 +1,24 @@
-# Consolidates 4 of the 5 reusable cpp-tests-<pkg>.yml files. Shared skeleton
-# (checkout -> optional Vulkan SDK path -> setup-vcpkg -> cleanup -> setup
-# bare tooling -> setup-apple-clang -> npm install -> build -> run) is real
-# and identical, using the same shared composite actions
-# (setup-build-host/setup-aws-prebuild/setup-vcpkg/setup-bare-tooling/
-# setup-apple-clang) across all 4. Real per-package divergence is just data:
-# platform matrix rows (arch/runner vary per package) and which OS needs the
-# Vulkan SDK path set (classification/vla: Linux; diffusion/embed: Windows).
-# Config is flattened to one entry per (package, platform) pair - the nx
-# affected filter matches on `package`, so each package's platform rows
-# repeat the same package name across multiple flat entries.
+# Merges cpp-tests-<pkg>.yml + cpp-test-coverage-<pkg>.yml (7 packages: the
+# 4 standard multi-platform, non-coverage packages classification-ggml/
+# diffusion-cpp/embed-llamacpp/vla-ggml, plus the 3 linux-only, always-
+# coverage packages asr-ggml/bci-whispercpp/tts-ggml) into one job with one
+# flat matrix, gated by a single `mode: standard | coverage` field per row.
 #
-# Carve-out: llm-llamacpp.yml stays untouched and separate - it doesn't use
-# any of the shared composite actions above, has its own model
-# download/caching, a Linux-only coverage build branch, `:ci`-suffixed run
-# commands, and its own test-results.xml validation. Structurally not a fit.
+# Config uses YAML anchors/merge-keys to avoid repeating each package's
+# fixed fields (workdir, vulkan*, mode) across its platform rows - only the
+# per-platform fields (os/platform/arch/runner) and the package name vary
+# per expanded row. The two `&standardBase`/`&coverageBase` anchor entries
+# have no `package` field, so the nx-affected action's own filter
+# (`select(.package ...)`) drops them automatically - they never become
+# real matrix rows.
+#
+# Carve-outs (stay untouched, separate files):
+#   - llm-llamacpp.yml: multi-platform like the standard group but doesn't
+#     use any shared composite (own vcpkg cache, Windows CMake generator,
+#     Apple-clang workaround, own model cache), and its Linux row runs with
+#     coverage on while the other two don't. A real third shape - forcing
+#     it into this matrix would drag `mode` back into per-step boolean soup.
+#   - audiogen-ggml.yml: no-op stub, no C++ tests exist yet.
 name: "CPP Tests (nx)"
 
 on:
@@ -50,7 +55,7 @@ permissions:
 
 jobs:
   matrix:
-    name: Determine affected packages + build matrix (nx affected, transitive)
+    name: Determine affected packages (nx affected, transitive)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
@@ -62,130 +67,155 @@ jobs:
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
           config: |
-            - package: classification-ggml
+            - &standardBase
+              mode: standard
+            - &coverageBase
+              mode: coverage
+              os: ubuntu-22.04
+              platform: linux
+              arch: x64
+              runner: qvac-ubuntu2204-x64-gpu
+
+            - &classification-ggml
+              <<: *standardBase
               workdir: packages/classification-ggml
               vulkanOs: ubuntu-24.04
               vulkanShell: bash
               vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *classification-ggml
+              package: classification-ggml
               os: ubuntu-24.04
               platform: linux
               arch: x64
               runner: qvac-ubuntu2404-x64
-            - package: classification-ggml
-              workdir: packages/classification-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *classification-ggml
+              package: classification-ggml
               os: macos-15
               platform: darwin
               arch: arm64
               runner: qvac-macos26-arm64-gpu
-            - package: classification-ggml
-              workdir: packages/classification-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *classification-ggml
+              package: classification-ggml
               os: windows-2025
               platform: win32
               arch: x64
               runner: qvac-win25-x64
-            - package: diffusion-cpp
+
+            - &diffusion-cpp
+              <<: *standardBase
               workdir: packages/diffusion-cpp
               vulkanOs: windows-2025
               vulkanShell: pwsh
               vulkanPath: 'C:\VulkanSDK'
+            - <<: *diffusion-cpp
+              package: diffusion-cpp
               os: macos-14
               platform: darwin
               arch: arm64
               runner: qvac-macos26-arm64-gpu
-            - package: diffusion-cpp
-              workdir: packages/diffusion-cpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
+            - <<: *diffusion-cpp
+              package: diffusion-cpp
               os: ubuntu-24.04
               platform: linux
               arch: x64
               runner: qvac-ubuntu2404-x64
-            - package: diffusion-cpp
-              workdir: packages/diffusion-cpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
+            - <<: *diffusion-cpp
+              package: diffusion-cpp
               os: windows-2025
               platform: windows
               arch: x64
               runner: qvac-win25-x64
-            - package: embed-llamacpp
+
+            - &embed-llamacpp
+              <<: *standardBase
               workdir: packages/embed-llamacpp
               vulkanOs: windows-2025
               vulkanShell: pwsh
               vulkanPath: 'C:\VulkanSDK'
+            - <<: *embed-llamacpp
+              package: embed-llamacpp
               os: ubuntu-24.04
               platform: linux
               arch: x64
               runner: qvac-ubuntu2404-x64
-            - package: embed-llamacpp
-              workdir: packages/embed-llamacpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
+            - <<: *embed-llamacpp
+              package: embed-llamacpp
               os: macos-14
               platform: darwin
               arch: arm64
               runner: qvac-macos26-arm64-gpu
-            - package: embed-llamacpp
-              workdir: packages/embed-llamacpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
+            - <<: *embed-llamacpp
+              package: embed-llamacpp
               os: macos-15-intel
               platform: darwin
               arch: x64
-            - package: embed-llamacpp
-              workdir: packages/embed-llamacpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
+            - <<: *embed-llamacpp
+              package: embed-llamacpp
               os: windows-2025
               platform: windows
               arch: x64
               runner: qvac-win25-x64
-            - package: vla-ggml
+
+            - &vla-ggml
+              <<: *standardBase
               workdir: packages/vla-ggml
               vulkanOs: ubuntu-24.04
               vulkanShell: bash
               vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *vla-ggml
+              package: vla-ggml
               os: ubuntu-24.04
               platform: linux
               arch: x64
               runner: qvac-ubuntu2404-x64
-            - package: vla-ggml
-              workdir: packages/vla-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *vla-ggml
+              package: vla-ggml
               os: macos-14
               platform: darwin
               arch: arm64
               runner: qvac-macos26-arm64-gpu
-            - package: vla-ggml
-              workdir: packages/vla-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *vla-ggml
+              package: vla-ggml
               os: macos-15-intel
               platform: darwin
               arch: x64
-            - package: vla-ggml
-              workdir: packages/vla-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
+            - <<: *vla-ggml
+              package: vla-ggml
               os: windows-2025
               platform: windows
               arch: x64
               runner: qvac-win25-x64
+
+            - <<: *coverageBase
+              package: asr-ggml
+              workdir: packages/asr-ggml
+              hasCcache: true
+              needsWhisperHfModels: true
+              needsParakeetS3Gguf: true
+              buildOutputDir: build/addon/tests
+              testEnvVars:
+                - name: QVAC_TEST_GGUF
+                  path: models/sortformer-4spk-v1.q4_0.gguf
+            - <<: *coverageBase
+              package: bci-whispercpp
+              workdir: packages/bci-whispercpp
+              hasCcache: false
+              buildOutputDir: build/addon/tests
+              testEnvVars: []
+            - <<: *coverageBase
+              package: tts-ggml
+              workdir: packages/tts-ggml
+              hasCcache: true
+              needsTtsVenvModels: true
+              hardGateCommand: "cd build && ./tts_ggml_tests --gtest_filter='-*RealGguf*'"
+              buildOutputDir: build
+              testEnvVars:
+                - name: QVAC_TEST_CHATTERBOX_T3_GGUF
+                  path: models/chatterbox-t3-mtl.gguf
+                - name: QVAC_TEST_CHATTERBOX_S3GEN_GGUF
+                  path: models/chatterbox-s3gen-mtl.gguf
+                - name: QVAC_TEST_SUPERTONIC_GGUF
+                  path: models/supertonic.gguf
 
   test-cpp:
     name: cpp-tests-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.arch }}
@@ -196,21 +226,23 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      checks: write
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
     env:
-      WORKDIR: ${{ matrix.workdir }}
+      BUILD_TYPE: Debug
+      ENABLE_COVERAGE: ON
     steps:
       - name: Manual Workspace Cleanup
+        if: matrix.mode == 'standard' && runner.environment != 'github-hosted'
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
         working-directory: .
-        if: runner.environment != 'github-hosted'
 
       - name: Setup build host (github-hosted runners only)
-        if: runner.environment == 'github-hosted'
+        if: matrix.mode == 'standard' && runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
         with:
           platform: ${{ matrix.platform }}
@@ -224,21 +256,23 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
+        if: matrix.mode == 'standard'
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - if: matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'bash'
+      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'bash'
         name: Set Vulkan SDK Path (bash)
         shell: bash
         run: echo "VULKAN_SDK=${{ matrix.vulkanPath }}" >> $GITHUB_ENV
 
-      - if: matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'pwsh'
+      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'pwsh'
         name: Set Vulkan SDK Path (pwsh)
         shell: pwsh
         run: echo "VULKAN_SDK=${{ matrix.vulkanPath }}" >> $Env:GITHUB_ENV
 
-      - name: Setup vcpkg
+      - name: Setup vcpkg (composite)
+        if: matrix.mode == 'standard'
         uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
@@ -246,31 +280,228 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
+      - name: Setup vcpkg (system-preinstalled)
+        if: matrix.mode == 'coverage'
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
       - name: Cleanup vcpkg
         shell: bash
         run: |
-          rm -rf $VCPKG_ROOT/buildtrees/*
-          rm -rf $VCPKG_ROOT/packages/*
+          rm -rf "$VCPKG_ROOT/buildtrees"/*
+          rm -rf "$VCPKG_ROOT/packages"/*
+          if [ "${{ matrix.mode }}" = "coverage" ]; then
+            rm -rf "$VCPKG_ROOT/downloads/git-tmp"
+          fi
 
-      - name: Setup Bare tooling
+      - name: Setup ccache
+        if: matrix.hasCcache
+        run: |
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - name: Get ccache cache
+        if: matrix.hasCcache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-cpp-${{ matrix.package }}-${{ hashFiles(format('{0}/vcpkg.json', matrix.workdir)) }}
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-${{ matrix.package }}-
+
+      - name: Setup Node.js
+        if: matrix.mode == 'coverage'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Setup Bare tooling (composite)
+        if: matrix.mode == 'standard'
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
           shell_type: ${{ (matrix.platform == 'win32' || matrix.platform == 'windows') && 'powershell' || 'bash' }}
 
+      - name: Install bare tooling (global)
+        if: matrix.mode == 'coverage'
+        run: npm install -g --force bare bare-make
+
       - name: Setup Apple Clang
-        if: matrix.platform == 'darwin'
+        if: matrix.mode == 'standard' && matrix.platform == 'darwin'
         uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
 
       - name: Install npm dependencies
-        working-directory: ${{ env.WORKDIR }}
-        run: npm install --ignore-scripts
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.mode == 'standard' && 'npm install --ignore-scripts' || 'npm install' }}
+
+      # --- asr-ggml: HuggingFace whisper models (curl, no cache) ---
+      - name: Download whisper test models
+        if: matrix.needsWhisperHfModels
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          mkdir -p models
+          curl -L -o models/ggml-tiny.bin \
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+          curl -L -o models/ggml-silero-v5.1.2.bin \
+            "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+
+      # --- asr-ggml: parakeet GGUF from S3 via AWS OIDC (cached) ---
+      - name: Configure AWS credentials via OIDC
+        if: matrix.needsParakeetS3Gguf
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Cache Parakeet sortformer q4 GGUF
+        if: matrix.needsParakeetS3Gguf
+        id: cache-parakeet-models
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ matrix.workdir }}/models/sortformer-4spk-v1.q4_0.gguf
+          key: ${{ matrix.package }}-cpp-q4-sortformer-v1-${{ hashFiles('.github/workflows/cpp-tests-nx.yml') }}
+          restore-keys: ${{ matrix.package }}-cpp-q4-sortformer-v1-
+
+      - name: Download sortformer q4_0 GGUF from QVAC registry (cache miss)
+        if: matrix.needsParakeetS3Gguf && steps.cache-parakeet-models.outputs.cache-hit != 'true'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf models/
+
+      - name: Verify parakeet GGUF for C++ tests
+        if: matrix.needsParakeetS3Gguf
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s models/sortformer-4spk-v1.q4_0.gguf ]; then
+            echo "ERROR: missing or empty models/sortformer-4spk-v1.q4_0.gguf" >&2
+            exit 1
+          fi
+
+      # --- tts-ggml: Python-venv HF->GGUF conversion pipeline (cached) ---
+      - name: Cache TTS venv + q4 GGUFs
+        if: matrix.needsTtsVenvModels
+        id: cache-tts-models
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: |
+            ${{ matrix.workdir }}/venv
+            ${{ matrix.workdir }}/models/chatterbox-t3-mtl.gguf
+            ${{ matrix.workdir }}/models/chatterbox-s3gen-mtl.gguf
+            ${{ matrix.workdir }}/models/supertonic.gguf
+          key: ${{ matrix.package }}-cpp-mtl-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', matrix.workdir), format('{0}/scripts/setup-venv.sh', matrix.workdir), format('{0}/scripts/requirements.txt', matrix.workdir)) }}
+          restore-keys: ${{ matrix.package }}-cpp-mtl-supertonic-en-q4-v1-
+
+      - name: Convert HF -> q4_0 GGUFs (cache miss)
+        if: matrix.needsTtsVenvModels && steps.cache-tts-models.outputs.cache-hit != 'true'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/setup-venv.sh
+          bash scripts/convert-models.sh -t multilingual -q q4_0
+          bash scripts/convert-models.sh -t supertonic-en -q q4_0
+
+      - name: Verify TTS GGUFs for C++ tests
+        if: matrix.needsTtsVenvModels
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          for f in chatterbox-t3-mtl.gguf chatterbox-s3gen-mtl.gguf supertonic.gguf; do
+            if [ ! -s "models/$f" ]; then
+              echo "WARN: missing or empty models/$f -- gated tests will skip" >&2
+            fi
+          done
 
       - name: Build C++ tests
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run test:cpp:build
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.mode == 'coverage' && 'npm run coverage:cpp:build' || 'npm run test:cpp:build' }}
+
+      - name: Deterministic tier (must pass)
+        if: matrix.hardGateCommand
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.hardGateCommand }}
 
       - name: Run C++ tests
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: ${{ matrix.workdir }}
         env:
           ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
-        run: npm run test:cpp:run
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ matrix.workdir }}/.lsan-suppressions.txt
+        run: |
+          set -uo pipefail
+          for row in $(echo '${{ toJSON(matrix.testEnvVars) }}' | jq -c '.[]?'); do
+            name=$(echo "$row" | jq -r '.name')
+            path=$(echo "$row" | jq -r '.path')
+            export "$name=${{ matrix.workdir }}/$path"
+          done
+          npm run test:cpp:run
+
+      - name: Generate Coverage Report
+        if: matrix.mode == 'coverage'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' "${{ matrix.buildOutputDir }}/coverage-summary.txt" | awk '{print $10}' || echo "0.0")
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+
+      - name: Show ccache statistics
+        if: matrix.hasCcache
+        run: ccache -s
+
+      - name: Archive Coverage Results
+        if: matrix.mode == 'coverage'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report-${{ matrix.package }}
+          path: |
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/coverage-html/
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/lcov.info
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/coverage-summary.txt
+            ${{ matrix.workdir }}/${{ matrix.buildOutputDir }}/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Coverage Summary
+        if: matrix.mode == 'coverage'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          echo "## Coverage Summary (${{ matrix.package }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ matrix.buildOutputDir }}/coverage-summary.txt" ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat "${{ matrix.buildOutputDir }}/coverage-summary.txt" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    permissions:
+      contents: read
+      actions: read
+    needs: test-cpp
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: coverage-report-*
+          path: coverage-reports
+        continue-on-error: true
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## C++ Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              pkg=$(basename $(dirname "$report"))
+              echo "### $pkg" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
