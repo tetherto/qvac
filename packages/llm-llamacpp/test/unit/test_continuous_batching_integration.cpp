@@ -1877,6 +1877,7 @@ TEST_F(
   std::atomic<bool> cancelIssued = false;
   auto cancelPrompt = makePrompt("Say two short sentences about the sky.");
   cancelPrompt.cacheKey = cachePath.string();
+  cancelPrompt.saveCacheToDisk = true;
   cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
@@ -2687,6 +2688,7 @@ TEST_F(
   auto cancelPrompt =
       makePrompt("Continue the description with a short sentence.");
   cancelPrompt.cacheKey = cachePath.string();
+  cancelPrompt.saveCacheToDisk = true;
   cancelPrompt.outputCallback = [&cancelModel,
                                  &cancelIssued](const std::string&) {
     bool expected = false;
