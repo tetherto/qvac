@@ -10,6 +10,51 @@ import * as Harness from './internal-sandbox-surface.ts'
 const START_TIMEOUT_MS = 30_000
 const OPERATION_TIMEOUT_MS = 5_000
 
+/**
+ * Builds the same desktop tooling the runtime composes, from skill providers
+ * rather than a skill-aware factory, so this probe exercises the real path.
+ */
+async function desktopTooling(options: {
+  readonly bareExecutable: string
+  readonly childEntry: string
+  readonly selectedSkillsForAgent: () => readonly string[]
+  readonly temporaryRoot?: string
+  readonly weather?: { readonly fetch?: unknown }
+  readonly obsidian?: Record<string, unknown>
+}) {
+  const bundle = Harness.bundledSkillBundle()
+  const catalog = await Harness.resolveSkillCatalog({ bundle, platform: 'darwin' })
+  const providers = [
+    ...(options.weather
+      ? [Harness.createWeatherSkillHost(options.weather as never)]
+      : []),
+    ...(options.obsidian ? [Harness.createObsidianSkillHost()] : [])
+  ]
+  const composed = await Harness.composeSkillHost({
+    sdk: {} as never,
+    catalog,
+    bundle,
+    providers,
+    config: {
+      ...(options.weather ? { weather: {} } : {}),
+      ...(options.obsidian ? { obsidian: options.obsidian } : {})
+    } as never,
+    selectedSkillsForAgent: options.selectedSkillsForAgent,
+    sandbox: {
+      bareExecutable: options.bareExecutable,
+      childEntry: options.childEntry,
+      ...(options.temporaryRoot ? { temporaryRoot: options.temporaryRoot } : {})
+    }
+  })
+  const broker = composed.toolBroker
+  if (!broker) throw new Error('composed skills produced no tool broker')
+  return {
+    tools: composed.tools ?? [],
+    broker,
+    close: composed.close
+  }
+}
+
 test('real Seatbelt child runs Weather and direct-argv Obsidian within exact capabilities', async (t) => {
   if (
     process.platform !== 'darwin' ||
@@ -19,12 +64,8 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
     return
   }
 
-  const createTooling = Reflect.get(
-    Harness,
-    'createMacOsDesktopSkillTooling'
-  )
+  const createTooling = desktopTooling
   t.is(typeof createTooling, 'function', 'desktop tooling factory is available')
-  if (typeof createTooling !== 'function') return
 
   const root = await fs.mkdtemp(
     path.join(os.tmpdir(), 'qvac-desktop-executor-probe-')
@@ -61,8 +102,8 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
   const tooling = await createTooling({
     bareExecutable,
     childEntry,
-    skillBundle: Harness.bundledSkillBundle(),
-    platform: 'darwin',
+
+
     selectedSkillsForAgent: () => ['weather', 'obsidian'],
     temporaryRoot: root,
     weather: {
@@ -238,8 +279,8 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
     const obsidianOnly = await createTooling({
       bareExecutable,
       childEntry,
-      skillBundle: Harness.bundledSkillBundle(),
-      platform: 'darwin',
+
+
       selectedSkillsForAgent: () => ['obsidian'],
       temporaryRoot: root,
       obsidian: {

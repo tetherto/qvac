@@ -1,9 +1,18 @@
 import process from 'bare-process'
 import type { HarnessStream } from './lib/transport.ts'
-import { createDesktopToolExecutor } from './lib/tool-sandbox/desktop-executor.ts'
+import { createSkillSandboxExecutor } from './lib/skills/sandbox.ts'
+import { createObsidianSkillSandbox } from './lib/skills-impl/obsidian/sandbox.ts'
+import { createWeatherSkillSandbox } from './lib/skills-impl/weather/sandbox.ts'
 import { serveToolSandbox } from './lib/tool-sandbox/wire.ts'
 
 const generation = generationFromArgv()
+
+// The bundler follows static imports, so which skills a sandbox can serve is
+// fixed by this entry rather than discovered at runtime.
+const configure = createSkillSandboxExecutor([
+  createWeatherSkillSandbox(),
+  createObsidianSkillSandbox()
+])
 
 export default async function start(
   stream: HarnessStream,
@@ -12,7 +21,7 @@ export default async function start(
   const server = serveToolSandbox(stream, {
     generation,
     processId: process.pid,
-    configure: createDesktopToolExecutor
+    configure
   })
   ready?.()
   return async function stop() {

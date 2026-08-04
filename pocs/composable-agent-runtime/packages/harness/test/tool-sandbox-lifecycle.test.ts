@@ -635,26 +635,41 @@ test('broker routes side effects to sandboxes and shared tools to injection', as
   await broker.close()
 })
 
-// Approval moved to the agents tool gate so the user is prompted once. What the
-// broker still owns is the grant *scope* check, which the gate does not model.
-test('desktop broker rejects an unscoped exec grant before child invocation', async () => {
+// Approval moved to the agents tool gate so the user is prompted once. The
+// scope of a grant is still enforced below it: the gate knows a tool is
+// granted by name, but only the skill knows "exec" without its scope is a
+// different capability.
+test('composed skills reject an unscoped exec grant before child invocation', async () => {
   const createFakeLauncher = Reflect.get(Harness, 'createFakeToolSandboxLauncher')
-  const createRegistry = Reflect.get(Harness, 'createToolSandboxRegistry')
-  const createBroker = Reflect.get(Harness, 'createDesktopSkillBroker')
   expect(typeof createFakeLauncher).toBe('function')
-  expect(typeof createRegistry).toBe('function')
-  expect(typeof createBroker).toBe('function')
-  if (
-    typeof createFakeLauncher !== 'function' ||
-    typeof createRegistry !== 'function' ||
-    typeof createBroker !== 'function'
-  ) {
-    return
-  }
+  if (typeof createFakeLauncher !== 'function') return
 
   const launcher = createFakeLauncher()
-  const registry = createRegistry({ launcher })
-  const broker = createBroker({ registry })
+  const bundle = Harness.bundledSkillBundle()
+  const catalog = await Harness.resolveSkillCatalog({ bundle, platform: 'darwin' })
+  const composed = await Harness.composeSkillHost({
+    sdk: {} as never,
+    catalog,
+    bundle,
+    providers: [Harness.createObsidianSkillHost()],
+    config: {
+      obsidian: {
+        executablePath: process.execPath,
+        vaultRoot: os.tmpdir(),
+        vaultIdentity: 'SyntheticVault'
+      }
+    } as never,
+    selectedSkillsForAgent: () => ['obsidian'],
+    sandbox: {
+      bareExecutable: process.execPath,
+      childEntry: path.join(os.tmpdir(), 'entry.bundle'),
+      launcher
+    }
+  })
+  const broker = composed.toolBroker
+  expect(broker).toBeDefined()
+  if (!broker) return
+
   const invocation = {
     agentId: 'obsidian-agent',
     runId: 'approval-run',
@@ -668,16 +683,16 @@ test('desktop broker rejects an unscoped exec grant before child invocation', as
     signal: new AbortController().signal
   }
 
-  await expect(broker.execute(invocation)).rejects.toThrow(/not granted/i)
+  await expect(broker.execute(invocation)).rejects.toThrow(/required scope/i)
   expect(launcher.launches).toEqual([])
   expect(launcher.invocations).toEqual([])
-  await broker.close()
+  await composed.close()
 })
 
-test('desktop broker never routes image generation or unknown tools to its child', async () => {
+test('sandbox routing never sends shared or unknown tools to a child', async () => {
   const createFakeLauncher = Reflect.get(Harness, 'createFakeToolSandboxLauncher')
   const createRegistry = Reflect.get(Harness, 'createToolSandboxRegistry')
-  const createBroker = Reflect.get(Harness, 'createDesktopSkillBroker')
+  const createBroker = Reflect.get(Harness, 'createSandboxToolBroker')
   expect(typeof createFakeLauncher).toBe('function')
   expect(typeof createRegistry).toBe('function')
   expect(typeof createBroker).toBe('function')
@@ -694,6 +709,7 @@ test('desktop broker never routes image generation or unknown tools to its child
   const registry = createRegistry({ launcher })
   const broker = createBroker({
     registry,
+    sandboxTools: ['http_request', 'exec'],
     sharedBroker: {
       async execute(input: { call: { name: string } }) {
         sharedCalls.push(input.call.name)
