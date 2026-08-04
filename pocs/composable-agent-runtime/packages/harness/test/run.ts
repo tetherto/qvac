@@ -1,7 +1,6 @@
 const scripts = [
   'test:skills',
   'test:adapter',
-  'test:image',
   'test:sandbox',
   'test:public',
   'test:fast',

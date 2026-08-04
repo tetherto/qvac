@@ -18,7 +18,7 @@ const APP_DIRECTORIES = [
   'task-shared'
 ] as const
 const APP_ALLOWED = new Map<string, readonly string[]>([
-  ['@qvac-poc/skill-cli', ['@qvac/harness']],
+  ['@qvac-poc/skill-cli', ['@qvac/agents', '@qvac/harness']],
   ['@qvac-poc/task-cli', ['@qvac/assistant', '@qvac-poc/task-shared']],
   ['@qvac-poc/task-mobile', ['@qvac/assistant', '@qvac-poc/task-shared']],
   ['@qvac-poc/task-shared', ['@qvac/sync']]

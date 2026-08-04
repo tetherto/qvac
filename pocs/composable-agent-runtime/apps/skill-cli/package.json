@@ -8,6 +8,10 @@
     "index.ts",
     "bare-probe.ts",
     "runner.ts",
+    "harness-child-entry.ts",
+    "tool-sandbox-child-entry.ts",
+    "lib/**/*.ts",
+    "skills/**/*",
     "README.md"
   ],
   "scripts": {
@@ -17,13 +21,68 @@
     "real:image": "bun index.ts image",
     "real:all": "bun index.ts all",
     "test": "bun test",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:skills": "bun run scripts/build-skills.ts"
   },
   "dependencies": {
-    "@qvac/harness": "0.0.0-poc"
+    "@qvac/agents": "0.0.0-poc",
+    "@qvac/harness": "0.0.0-poc",
+    "bare-abort-controller": "^1.1.2",
+    "bare-buffer": "^3.6.1",
+    "bare-crypto": "^1.15.3",
+    "bare-dns": "^2.1.4",
+    "bare-fs": "^4.7.2",
+    "bare-http1": "^4.5.7",
+    "bare-https": "^3.0.0",
+    "bare-os": "^3.9.1",
+    "bare-path": "^3.0.1",
+    "bare-process": "4.5.0",
+    "bare-subprocess": "^6.0.0"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "typescript": "^5.9.3"
+  },
+  "imports": {
+    "#abort-controller": {
+      "bare": "bare-abort-controller",
+      "default": "./lib/shim/abort-controller.ts"
+    },
+    "#buffer": {
+      "bare": "bare-buffer",
+      "default": "./lib/shim/buffer.ts"
+    },
+    "#crypto": {
+      "bare": "bare-crypto",
+      "default": "./lib/shim/crypto.ts"
+    },
+    "#dns-promises": {
+      "bare": "./lib/shim/bare-dns-promises.ts",
+      "default": "./lib/shim/dns-promises.ts"
+    },
+    "#fs-promises": {
+      "bare": "bare-fs/promises",
+      "default": "./lib/shim/fs-promises.ts"
+    },
+    "#http": {
+      "bare": "bare-http1",
+      "default": "./lib/shim/http.ts"
+    },
+    "#os": {
+      "bare": "bare-os",
+      "default": "./lib/shim/os.ts"
+    },
+    "#path": {
+      "bare": "bare-path",
+      "default": "./lib/shim/path.ts"
+    },
+    "#process": {
+      "bare": "bare-process",
+      "default": "./lib/shim/process.ts"
+    },
+    "#weather-https-transport": {
+      "bare": "./lib/weather-transport-bare.ts",
+      "default": "./lib/weather-transport-node.ts"
+    }
   }
 }

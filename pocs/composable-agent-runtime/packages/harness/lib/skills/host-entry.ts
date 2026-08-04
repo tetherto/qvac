@@ -11,9 +11,13 @@ import { resolveSkillCatalog, type SkillBundleArtifact } from './catalog.ts'
 import { composeSkillHost } from './compose.ts'
 import type { SkillHostProvider } from './host.ts'
 
+// Never hash-verified, because it is never materialized.
+const EMPTY_BUNDLE: SkillBundleArtifact = { files: {}, hash: '' }
+
 export interface CreateHarnessChildEntryOptions {
   readonly skills: readonly SkillHostProvider[]
-  readonly skillBundle: SkillBundleArtifact
+  /** Omit for a worker with no skills; a bundle is always hash-verified. */
+  readonly skillBundle?: SkillBundleArtifact
   /** Extra arguments for the SDK sidecar, derived from a skill's config slice. */
   readonly sdkArgs?: (config: WireHostConfig) => readonly string[]
 }
@@ -40,15 +44,18 @@ export function createHarnessChildEntry({
     logging,
     async configure(sdk) {
       const platform = hostConfig?.platform
-      const catalog = await resolveSkillCatalog({
-        bundle: skillBundle,
-        ...(platform === undefined ? {} : { platform })
-      })
+      const bundle: SkillBundleArtifact = skillBundle ?? EMPTY_BUNDLE
+      const catalog = skillBundle
+        ? await resolveSkillCatalog({
+            bundle,
+            ...(platform === undefined ? {} : { platform })
+          })
+        : []
       const registrations = new Map<string, readonly string[]>()
       const composed = await composeSkillHost({
         sdk,
         catalog,
-        bundle: skillBundle,
+        bundle,
         providers: skills,
         ...(hostConfig?.skills ? { config: hostConfig.skills } : {}),
         selectedSkillsForAgent: (agentId) => registrations.get(agentId) ?? [],

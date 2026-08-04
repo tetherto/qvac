@@ -15,4 +15,4 @@ export type {
   ToolSandboxExecutionRequest,
   ToolSandboxExecutor
 } from './lib/tool-sandbox/wire.ts'
-export type { HarnessJsonValue } from './lib/types.ts'
+export type { HarnessAbortSignal, HarnessJsonValue } from './lib/types.ts'

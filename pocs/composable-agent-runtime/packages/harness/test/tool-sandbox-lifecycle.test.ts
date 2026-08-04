@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import * as HarnessProduction from './internal-sandbox-surface.ts'
 import * as HarnessTesting from '../testing.ts'
+import { fixtureSkillBundle } from './skill-fixtures.ts'
 import type { HarnessJsonValue } from '../lib/types.ts'
 import type { ToolSandboxResult } from '../lib/tool-sandbox/types.ts'
 
@@ -645,21 +646,33 @@ test('composed skills reject an unscoped exec grant before child invocation', as
   if (typeof createFakeLauncher !== 'function') return
 
   const launcher = createFakeLauncher()
-  const bundle = Harness.bundledSkillBundle()
-  const catalog = await Harness.resolveSkillCatalog({ bundle, platform: 'darwin' })
+  const bundle = fixtureSkillBundle()
+  const catalog = await Harness.resolveSkillCatalog({ bundle })
+  // The fixture "notes" skill grants exec(notes), so a bare exec grant is a
+  // different capability from the one the skill confers.
   const composed = await Harness.composeSkillHost({
     sdk: {} as never,
     catalog,
     bundle,
-    providers: [Harness.createObsidianSkillHost()],
-    config: {
-      obsidian: {
-        executablePath: process.execPath,
-        vaultRoot: os.tmpdir(),
-        vaultIdentity: 'SyntheticVault'
+    providers: [
+      {
+        name: 'notes',
+        create: () => ({
+          tools: [
+            {
+              schema: {
+                type: 'function' as const,
+                name: 'exec',
+                description: 'fixture exec',
+                parameters: { type: 'object' as const, properties: {} }
+              }
+            }
+          ],
+          sandboxTools: ['exec']
+        })
       }
-    } as never,
-    selectedSkillsForAgent: () => ['obsidian'],
+    ],
+    selectedSkillsForAgent: () => ['notes'],
     sandbox: {
       bareExecutable: process.execPath,
       childEntry: path.join(os.tmpdir(), 'entry.bundle'),

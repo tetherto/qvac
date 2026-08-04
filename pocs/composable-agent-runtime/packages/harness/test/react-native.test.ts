@@ -561,8 +561,13 @@ test('harness cleanup runs after carrier close', async (t) => {
   t.is(cleanupRuns, 1)
 })
 
+// The argv and sidecar wiring moved into the shared entry factory so that
+// application-authored entries cannot drift from it.
 test('desktop child entry still requires sdk sidecar argv', async (t) => {
-  const source = await readFile(new URL('../child-entry.ts', import.meta.url), 'utf8')
+  const source = await readFile(
+    new URL('../lib/skills/host-entry.ts', import.meta.url),
+    'utf8'
+  )
   t.ok(source.includes('--sdk-entry='), 'desktop entry still reads --sdk-entry argument')
   t.ok(
     source.includes('createSdkSidecarAdapter'),

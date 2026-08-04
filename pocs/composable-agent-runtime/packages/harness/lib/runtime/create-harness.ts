@@ -28,13 +28,13 @@ import {
   launchDesktopHarness,
   type DesktopHarnessWorker
 } from './desktop-launcher.ts'
-import type { HarnessDesktopConfig } from './desktop-config.ts'
+import type { HarnessHostConfig, WireHostConfig } from './host-config.ts'
 
 export interface CreateHarnessOptions {
   readonly inference?: 'deterministic' | 'qwen'
   readonly logging?: HarnessLoggingConfig
   readonly state?: SyncRuntime
-  readonly desktop?: HarnessDesktopConfig
+  readonly host?: HarnessHostConfig
   /**
    * Worker entry sources. An application that supplies its own skills also
    * supplies the entries that statically import them.
@@ -76,7 +76,7 @@ export function createHarness({
   inference = 'qwen',
   logging,
   state,
-  desktop,
+  host,
   workers
 }: CreateHarnessOptions = {}): HarnessRuntime {
   const runStore: HarnessRunStore = state
@@ -106,7 +106,7 @@ export function createHarness({
       inference,
       logging,
       runStore,
-      ...(desktop ? { desktop } : {}),
+      ...(host ? { host } : {}),
       ...(workers ? { workers } : {})
     })
     try {

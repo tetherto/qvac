@@ -493,6 +493,23 @@ export interface DesktopRunnerResult {
   readonly shutdownMs: number
 }
 
+/**
+ * This runner is non-interactive, so it answers every approval the same way.
+ * A real application would surface the request to a user here.
+ */
+async function answerApprovals(
+  harness: Pick<HarnessRuntime, 'watchApprovals' | 'resolveApproval'>,
+  approved: boolean
+) {
+  try {
+    for await (const request of harness.watchApprovals()) {
+      await harness.resolveApproval({ approvalId: request.approvalId, approved })
+    }
+  } catch {
+    // The stream ends with the harness; pending approvals fail closed there.
+  }
+}
+
 export function createProductionRunnerDependencies(
   factories: ProductionRunnerFactories = {
     createHarness
@@ -506,33 +523,49 @@ export function createProductionRunnerDependencies(
       }
       const harness = factories.createHarness({
         inference: 'qwen',
-        desktop: {
+        // This application owns its skills, so it also owns the worker entries
+        // that statically import them.
+        workers: {
+          harnessChildEntry: new URL('./harness-child-entry.ts', import.meta.url)
+            .href,
+          toolSandboxChildEntry: new URL(
+            './tool-sandbox-child-entry.ts',
+            import.meta.url
+          ).href
+        },
+        host: {
+          platform: 'darwin',
           bareExecutable,
-          obsidianApproval: config.obsidianApproval,
-          ...(config.obsidian
-            ? {
-                obsidian: {
-                  ...config.obsidian,
-                  access: RUNNER_OBSIDIAN_ACCESS,
-                  allowedOperations: RUNNER_OBSIDIAN_OPERATIONS
+          skills: {
+            weather: {},
+            ...(config.obsidian
+              ? {
+                  obsidian: {
+                    ...config.obsidian,
+                    access: RUNNER_OBSIDIAN_ACCESS,
+                    allowedOperations: [...RUNNER_OBSIDIAN_OPERATIONS]
+                  }
                 }
-              }
-            : {}),
-          ...(config.attachmentBase && config.diffusion
-            ? {
-                image: {
-                  attachmentRoot: config.attachmentBase,
-                  model: config.diffusion.model,
-                  ...(config.diffusion.prediction
-                    ? { prediction: config.diffusion.prediction }
-                    : {})
+              : {}),
+            ...(config.attachmentBase && config.diffusion
+              ? {
+                  'image-generation': {
+                    attachmentRoot: config.attachmentBase,
+                    model: config.diffusion.model,
+                    ...(config.diffusion.prediction
+                      ? { prediction: config.diffusion.prediction }
+                      : {})
+                  }
                 }
-              }
-            : {}),
-          weather: {}
+              : {})
+          }
         }
       })
+      // Approval used to be a static flag in the launch payload. It is now an
+      // application decision answered over the harness approvals stream.
+      const answering = answerApprovals(harness, config.obsidianApproval ?? false)
       await harness.ready()
+      void answering
       return harness
     }
   }

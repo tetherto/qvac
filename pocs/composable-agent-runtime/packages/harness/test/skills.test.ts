@@ -2,61 +2,69 @@ import { expect, test } from 'bun:test'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
-  BUNDLED_SKILLS,
-  BUNDLED_SKILLS_HASH,
-  bundledSkillBundle,
   cleanupMaterializedSkills,
   createSelectedSkillsMaterializer,
   createSkillCatalogFromBundle,
+  composeSkillPrompt,
   hashBundledSkills,
   materializeSelectedSkills,
-  loadBundledSkillCatalog,
   parseToolGrant,
   resolveSkillCatalog,
   verifyBundledSkillsHash
 } from '../lib/skills/index.ts'
+import { fixtureSkillBundle } from './skill-fixtures.ts'
 
-test('catalog contains expected three entries', async (t) => {
-  const catalog = await createSkillCatalogFromBundle(
-    { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH },
-    { platform: 'darwin' }
-  )
-  expect(catalog.map((entry) => entry.name)).toEqual(['image-generation', 'obsidian', 'weather'])
+// Harness owns generic skill machinery, not any particular skill, so these
+// exercise a synthetic bundle rather than whatever an application ships.
+const BUNDLE = fixtureSkillBundle()
+
+test('a catalog is built from a bundle and sorted by name', async () => {
+  const catalog = await createSkillCatalogFromBundle(BUNDLE)
+  expect(catalog.map((entry) => entry.name)).toEqual([
+    'danger',
+    'image-generation',
+    'notes',
+    'weather'
+  ])
 })
 
-test('image-generation grants only generate_image', async () => {
-  const catalog = await createSkillCatalogFromBundle(
-    { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH },
-    { platform: 'darwin' }
-  )
-  const image = catalog.find((entry) => entry.name === 'image-generation')
-  expect(image).toBeDefined()
-  expect(image?.tools).toEqual(['generate_image'])
+test('a catalog entry keeps its grants and instructions', async () => {
+  const catalog = await createSkillCatalogFromBundle(BUNDLE)
+  const weather = catalog.find((entry) => entry.name === 'weather')
+  expect(weather?.tools).toEqual(['http_request'])
+  expect(weather?.instructions).toContain('Fixture instructions for the weather skill')
 })
 
 test('rejects malformed skill manifest frontmatter', async () => {
-  const malformedBundle = {
-    files: {
-      'broken/SKILL.md': ['---', 'name: broken', 'description: missing tools list', '---'].join('\n')
-    },
-    hash: ''
+  const files = {
+    'broken/SKILL.md': ['---', 'name: broken', 'description: missing tools list', '---'].join('\n')
   }
-  malformedBundle.hash = hashBundledSkills(malformedBundle.files)
-  await expect(createSkillCatalogFromBundle(malformedBundle, { platform: 'darwin' })).rejects.toThrow(
-    /required manifest field/i
-  )
+  await expect(
+    createSkillCatalogFromBundle({ files, hash: hashBundledSkills(files) })
+  ).rejects.toThrow(/required manifest field/i)
+})
+
+test('rejects malformed frontmatter delimiter syntax', async () => {
+  const files = {
+    'broken/SKILL.md': [
+      '---',
+      'name: broken',
+      'description: malformed delimiter',
+      'tools: [http_request]',
+      '--',
+      '',
+      '# Broken skill body'
+    ].join('\n')
+  }
+  await expect(
+    createSkillCatalogFromBundle({ files, hash: hashBundledSkills(files) })
+  ).rejects.toThrow(/required manifest field/i)
 })
 
 test('hashing is deterministic and mismatches are rejected', async () => {
-  const files = {
-    'b/file.txt': '2\n',
-    'a/file.txt': '1\n'
-  }
+  const files = { 'b/file.txt': '2\n', 'a/file.txt': '1\n' }
   const hashA = hashBundledSkills(files)
-  const hashB = hashBundledSkills({
-    'a/file.txt': '1\n',
-    'b/file.txt': '2\n'
-  })
+  const hashB = hashBundledSkills({ 'a/file.txt': '1\n', 'b/file.txt': '2\n' })
   expect(hashA).toBe(hashB)
   expect(hashA).toHaveLength(64)
   await expect(verifyBundledSkillsHash(files, 'deadbeefdeadbeef')).rejects.toThrow(
@@ -76,10 +84,7 @@ test('rejects a manifest whose name differs from its skill directory', async () 
     ].join('\n')
   }
   await expect(
-    createSkillCatalogFromBundle(
-      { files, hash: hashBundledSkills(files) },
-      { platform: 'darwin' }
-    )
+    createSkillCatalogFromBundle({ files, hash: hashBundledSkills(files) })
   ).rejects.toThrow(/name.*directory/i)
 })
 
@@ -103,165 +108,127 @@ test('applies platform filtering', async () => {
       ''
     ].join('\n')
   }
-  const hash = hashBundledSkills(files)
-  const darwinCatalog = await createSkillCatalogFromBundle({ files, hash }, { platform: 'darwin' })
-  expect(darwinCatalog.map((entry) => entry.name)).toEqual(['cross'])
-})
-
-test('parses scoped exec(obsidian) grant', () => {
-  expect(parseToolGrant('exec(obsidian)')).toEqual({ name: 'exec', scope: 'obsidian' })
-})
-
-test('bundled catalog scopes by the platform the caller threads', async () => {
-  const unscopedCatalog = await loadBundledSkillCatalog()
-  const darwinCatalog = await loadBundledSkillCatalog({ platform: 'darwin' })
-  const win32Catalog = await loadBundledSkillCatalog({ platform: 'win32' })
-  const unscopedNames = unscopedCatalog.map((entry) => entry.name)
-  const darwinNames = darwinCatalog.map((entry) => entry.name)
-  const win32Names = win32Catalog.map((entry) => entry.name)
-
+  const bundle = { files, hash: hashBundledSkills(files) }
+  const darwin = await createSkillCatalogFromBundle(bundle, { platform: 'darwin' })
+  expect(darwin.map((entry) => entry.name)).toEqual(['cross'])
   // No implicit host default: an unscoped load sees every bundled skill.
-  expect(unscopedNames).toContain('obsidian')
-  expect(darwinNames).toContain('obsidian')
-  expect(win32Names).not.toContain('obsidian')
-  expect(darwinNames).not.toEqual(win32Names)
+  const unscoped = await createSkillCatalogFromBundle(bundle)
+  expect(unscoped.map((entry) => entry.name)).toEqual(['cross', 'linux-only'])
+})
+
+test('parses scoped exec grants', () => {
+  expect(parseToolGrant('exec(obsidian)')).toEqual({ name: 'exec', scope: 'obsidian' })
+  expect(parseToolGrant('http_request')).toEqual({ name: 'http_request', scope: null })
 })
 
 test('harness catalog is empty until an application supplies skills', async () => {
   expect(await resolveSkillCatalog(undefined)).toEqual([])
-  expect(
-    (await resolveSkillCatalog({ bundle: bundledSkillBundle(), platform: 'darwin' })).map(
-      (entry) => entry.name
-    )
-  ).toContain('obsidian')
-
-  const preloaded = await loadBundledSkillCatalog({ platform: 'darwin' })
+  const fromBundle = await resolveSkillCatalog({ bundle: BUNDLE })
+  expect(fromBundle.map((entry) => entry.name)).toContain('weather')
+  const preloaded = await createSkillCatalogFromBundle(BUNDLE)
   expect(await resolveSkillCatalog({ catalog: preloaded })).toBe(preloaded)
 })
 
-test('obsidian cli validation rejects absolute paths and traversal', async () => {
-  const catalog = await createSkillCatalogFromBundle(
-    { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH },
-    { platform: 'darwin' }
-  )
-  const obsidian = catalog.find((entry) => entry.name === 'obsidian')
-  expect(obsidian?.cliValidator).toBeDefined()
-  expect(obsidian?.cliValidator?.check(['read', 'path=Projects/Note.md'])).toBeNull()
-  expect(obsidian?.cliValidator?.check(['read', 'path=/tmp/note.md'])).toBeTruthy()
-  expect(obsidian?.cliValidator?.check(['read', 'path=../../secret.md'])).toBeTruthy()
+test('prompt blocks index every skill and expand only the selected ones', async () => {
+  const catalog = await createSkillCatalogFromBundle(BUNDLE)
+  const blocks = composeSkillPrompt({ catalog, selected: ['weather'] })
+  expect(blocks[0]?.id).toBe('skills-index')
+  expect(blocks[0]?.text).toContain('notes')
+  expect(blocks.map((block) => block.id)).toEqual(['skills-index', 'skill:weather'])
 })
 
-test('rejects malformed frontmatter delimiter syntax', async () => {
-  const malformedBundle = {
-    files: {
-      'broken/SKILL.md': [
-        '---',
-        'name: broken',
-        'description: malformed delimiter',
-        'tools: [http_request]',
-        '--',
-        '',
-        '# Broken skill body'
-      ].join('\n')
-    },
-    hash: ''
-  }
-  malformedBundle.hash = hashBundledSkills(malformedBundle.files)
-  await expect(createSkillCatalogFromBundle(malformedBundle, { platform: 'darwin' })).rejects.toThrow(
-    /required manifest field/i
-  )
+test('a long skill body is truncated with an explicit marker', async () => {
+  const catalog = await createSkillCatalogFromBundle(BUNDLE)
+  const blocks = composeSkillPrompt({
+    catalog,
+    selected: ['weather'],
+    maxBodyChars: 10
+  })
+  expect(blocks[1]?.text).toContain('[skill instructions truncated]')
 })
 
 test('materializes only selected skills with read-only files', async () => {
   const root = await materializeSelectedSkills({
     agentId: 'weather-agent',
     selectedSkills: ['weather'],
-    bundle: { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH }
+    bundle: BUNDLE
   })
-  const entries = await readdir(root)
-  expect(entries).toEqual(['weather'])
-  await expect(readFile(path.join(root, 'obsidian', 'SKILL.md'), 'utf8')).rejects.toMatchObject({
+  expect(await readdir(root)).toEqual(['weather'])
+  await expect(readFile(path.join(root, 'notes', 'SKILL.md'), 'utf8')).rejects.toMatchObject({
     code: 'ENOENT'
   })
 
-  const weatherSkill = path.join(root, 'weather', 'SKILL.md')
-  const weatherMode = (await stat(weatherSkill)).mode & 0o777
-  expect(weatherMode & 0o222).toBe(0)
+  const skill = path.join(root, 'weather', 'SKILL.md')
+  expect((await stat(skill)).mode & 0o222).toBe(0)
   await cleanupMaterializedSkills(root)
 })
 
 test('materialized skill trees are private and read-only', async () => {
-  const bundle = { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH }
   const root = await materializeSelectedSkills({
     agentId: 'private-agent',
     selectedSkills: ['weather'],
-    bundle
+    bundle: BUNDLE
   })
-  const weatherDirectory = path.join(root, 'weather')
-  const weatherSkill = path.join(weatherDirectory, 'SKILL.md')
-
-  const rootMode = (await stat(root)).mode & 0o777
-  const weatherDirectoryMode = (await stat(weatherDirectory)).mode & 0o777
-  const weatherSkillMode = (await stat(weatherSkill)).mode & 0o777
-
-  expect(rootMode).toBe(0o500)
-  expect(weatherDirectoryMode).toBe(0o500)
-  expect(weatherSkillMode).toBe(0o400)
+  const directory = path.join(root, 'weather')
+  expect((await stat(root)).mode & 0o777).toBe(0o500)
+  expect((await stat(directory)).mode & 0o777).toBe(0o500)
+  expect((await stat(path.join(directory, 'SKILL.md'))).mode & 0o777).toBe(0o400)
   expect((await stat(path.dirname(root))).mode & 0o777).toBe(0o700)
   await cleanupMaterializedSkills(root)
 })
 
-test('same skill selection materializes into isolated per-agent roots and cleans up', async () => {
-  const bundle = { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH }
+test('same selection materializes into isolated per-agent roots and cleans up', async () => {
   const first = await materializeSelectedSkills({
     agentId: 'agent-a',
     selectedSkills: ['weather'],
-    bundle
+    bundle: BUNDLE
   })
   const second = await materializeSelectedSkills({
     agentId: 'agent-b',
     selectedSkills: ['weather'],
-    bundle
+    bundle: BUNDLE
   })
 
   expect(first).not.toBe(second)
   expect(path.dirname(first)).not.toBe(path.dirname(second))
-  expect(await readFile(path.join(first, 'weather', 'SKILL.md'), 'utf8')).toBe(
-    await readFile(path.join(second, 'weather', 'SKILL.md'), 'utf8')
-  )
-
   await cleanupMaterializedSkills(first)
   await expect(access(first)).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await readFile(path.join(second, 'weather', 'SKILL.md'), 'utf8')).toContain(
     'name: weather'
   )
   await cleanupMaterializedSkills(second)
-  await expect(access(second)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
-test('per-runtime materializer reuses one agent tree across idle restarts', async () => {
-  const runtime = createSelectedSkillsMaterializer()
-  const bundle = { files: BUNDLED_SKILLS, hash: BUNDLED_SKILLS_HASH }
-  const first = await runtime.materialize({
-    agentId: 'idle-agent',
+test('a materializer reuses one tree per selection and replaces it on change', async () => {
+  const materializer = createSelectedSkillsMaterializer()
+  const first = await materializer.materialize({
+    agentId: 'agent-a',
     selectedSkills: ['weather'],
-    bundle
+    bundle: BUNDLE
   })
-  const restarted = await runtime.materialize({
-    agentId: 'idle-agent',
+  const again = await materializer.materialize({
+    agentId: 'agent-a',
     selectedSkills: ['weather'],
-    bundle
+    bundle: BUNDLE
   })
-  const other = await runtime.materialize({
-    agentId: 'other-agent',
-    selectedSkills: ['weather'],
-    bundle
-  })
+  expect(again).toBe(first)
 
-  expect(restarted).toBe(first)
-  expect(other).not.toBe(first)
-
-  await runtime.close()
+  const changed = await materializer.materialize({
+    agentId: 'agent-a',
+    selectedSkills: ['weather', 'notes'],
+    bundle: BUNDLE
+  })
+  expect(changed).not.toBe(first)
   await expect(access(first)).rejects.toMatchObject({ code: 'ENOENT' })
-  await expect(access(other)).rejects.toMatchObject({ code: 'ENOENT' })
+  await materializer.close()
+})
+
+test('materializing an unknown skill fails rather than shipping an empty tree', async () => {
+  await expect(
+    materializeSelectedSkills({
+      agentId: 'agent-x',
+      selectedSkills: ['missing'],
+      bundle: BUNDLE
+    })
+  ).rejects.toThrow(/missing/)
 })

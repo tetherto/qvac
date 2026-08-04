@@ -19,7 +19,6 @@ export type {
   HarnessApprovalDecision,
   HarnessApprovalRequest
 } from './lib/approval-port.ts'
-export type { HarnessDesktopConfig } from './lib/runtime/desktop-config.ts'
 export type {
   HarnessRunIdentity,
   HarnessRunOutcome,

@@ -1,4 +1,3 @@
-import { buildCliValidatorFromBundle, type CliValidator } from './cli-schema.ts'
 import { assertRequiredManifest, parseSkillFrontMatter } from './frontmatter-parser.ts'
 import type { SkillRequires, SkillSetup } from './manifest.ts'
 import { verifyBundledSkillsHash } from './bundled-hash.ts'
@@ -13,7 +12,6 @@ export interface SkillCatalogEntry {
   platform: string[]
   requires?: SkillRequires
   setup?: SkillSetup
-  cliValidator?: CliValidator
 }
 
 export interface SkillBundleArtifact {
@@ -90,8 +88,6 @@ function loadEntry(files: Readonly<Record<string, string>>, skillName: string): 
     ...(meta.requires ? { requires: meta.requires } : {}),
     ...(meta.setup ? { setup: meta.setup } : {})
   }
-  const validator = buildCliValidatorFromBundle(skillName, tools, files)
-  if (validator) entry.cliValidator = validator
   return entry
 }
 

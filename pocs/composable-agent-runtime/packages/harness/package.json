@@ -51,20 +51,14 @@
     "#process": {
       "bare": "bare-process",
       "default": "./lib/node-process.ts"
-    },
-    "#weather-https-transport": {
-      "bare": "./lib/tool-sandbox/weather-transport-bare.ts",
-      "default": "./lib/tool-sandbox/weather-transport-node.ts"
     }
   },
   "scripts": {
     "build:schema": "bare schema/build.ts",
     "build:react-native": "bun -e \"import { buildHarnessReactNativeBundle } from './lib/react-native-stow.ts'; await buildHarnessReactNativeBundle()\"",
     "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=bare-* --external=react-native-bare-kit",
-    "build:skills": "bun run scripts/build-skills.ts",
     "test": "bun test/run.ts",
     "test:adapter": "bun test test/sdk-direct-adapter.test.ts",
-    "test:image": "bun test test/image-generation.test.ts",
     "test:skills": "bun test test/skills.test.ts",
     "test:sandbox": "bun test/tool-sandbox-run.ts",
     "test:public": "bun test/public-api.test.ts",
@@ -88,14 +82,12 @@
     "mobile-entry.ts",
     "react-native-launcher.ts",
     "react-native-stow.ts",
-    "tool-sandbox-child-entry.ts",
     "deterministic-sdk-entry.ts",
     "qwen-sdk-entry.ts",
     "lib/**/*.ts",
     "lib/**/*.mjs",
     "schema/**/*",
-    "spec/**/*",
-    "skills/**/*"
+    "spec/**/*"
   ],
   "dependencies": {
     "@qvac/agents": "0.0.0-poc",

@@ -24,16 +24,11 @@ test('harness exports lifecycle surfaces and skill authoring kits', async (t) =>
 test('harness ships worker artifacts without exporting them', async (t) => {
   const manifest = await readManifest()
   const files = manifest.files
-  for (const file of [
-    'child-entry.ts',
-    'mobile-entry.ts',
-    'tool-sandbox-child-entry.ts',
-    'schema/**/*',
-    'spec/**/*',
-    'skills/**/*'
-  ]) {
+  for (const file of ['child-entry.ts', 'mobile-entry.ts', 'schema/**/*', 'spec/**/*']) {
     t.ok(files.includes(file), `${file} is packaged`)
   }
+  // Skills belong to applications now, so Harness ships none.
+  t.absent(files.includes('skills/**/*'), 'harness packages no skills')
 })
 
 async function readManifest() {

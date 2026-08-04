@@ -26,10 +26,14 @@ export {
   type SkillCatalogEntry,
   type SkillCatalogSource
 } from './lib/skills/catalog.ts'
-export { buildBundleFromDirectory } from './lib/skills/build-bundle.ts'
 export { hashBundledSkills, verifyBundledSkillsHash } from './lib/skills/bundled-hash.ts'
 export { composeSkillPrompt } from './lib/skills/prompt.ts'
 export { parseToolGrant, type ToolGrant } from './lib/skills/tool-grants.ts'
-export type { SdkRuntimePort } from './lib/sdk-runtime-port.ts'
+export type {
+  SdkImageGenerationInput,
+  SdkImageGenerationResult,
+  SdkImageProgress,
+  SdkRuntimePort
+} from './lib/sdk-runtime-port.ts'
 export type { HarnessHostConfig } from './lib/runtime/host-config.ts'
 export type { HarnessJsonValue } from './lib/types.ts'
