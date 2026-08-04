@@ -13,11 +13,10 @@
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot;
 using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
-using qvac_lib_inference_addon_llama::utils::
-    needsFullStateSnapshot;
 using qvac_lib_inference_addon_llama::utils::
     shouldCaptureRecurrentReasoningBoundary;
 using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;

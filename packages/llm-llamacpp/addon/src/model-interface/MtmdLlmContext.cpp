@@ -192,8 +192,8 @@ void MtmdLlmContext::initializeCommonState() {
             isQwen3ReasoningFamilyArchitecture(arch.value());
     removeThinkingFromContext_ =
         arch.has_value() &&
-        qvac_lib_inference_addon_llama::utils::
-            usesThinkingCompactionByDefault(arch.value());
+        qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
+            arch.value());
   }
   setRemoveThinkingFromContext(removeThinkingFromContext_);
 }

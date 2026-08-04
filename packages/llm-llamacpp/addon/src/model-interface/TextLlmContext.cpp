@@ -125,14 +125,15 @@ void TextLlmContext::initializeCommonState() {
   // tracking / compaction via `reasoningEnabled_`, just not this
   // recovery.
   {
-    isQwen3ReasoningFamily_ = architecture.has_value() &&
+    isQwen3ReasoningFamily_ =
+        architecture.has_value() &&
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(architecture.value());
   }
   setRemoveThinkingFromContext(
       architecture.has_value() &&
-      qvac_lib_inference_addon_llama::utils::
-          usesThinkingCompactionByDefault(architecture.value()));
+      qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
+          architecture.value()));
 
   // Precompute the EOG token id set used by the EOS-inside-reasoning recovery
   // (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family arms that

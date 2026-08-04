@@ -84,13 +84,12 @@ recurrentReasoningBoundaryDecision(
 // of preserving the preceding conversation.
 [[nodiscard]] inline bool shouldRollbackInterruptedReasoning(
     GenerationStopReason terminalReason, bool needsRecurrentSnapshot,
-    bool removeThinkingFromContext, bool reasoningEnabled,
-    bool insideReasoning, bool hasOpenSpan,
-    bool hasCapturedCloseSpan) noexcept {
+    bool removeThinkingFromContext, bool reasoningEnabled, bool insideReasoning,
+    bool hasOpenSpan, bool hasCapturedCloseSpan) noexcept {
   return terminalReason != GenerationStopReason::None &&
-         needsRecurrentSnapshot &&
-         removeThinkingFromContext && reasoningEnabled && insideReasoning &&
-         hasOpenSpan && !hasCapturedCloseSpan;
+         needsRecurrentSnapshot && removeThinkingFromContext &&
+         reasoningEnabled && insideReasoning && hasOpenSpan &&
+         !hasCapturedCloseSpan;
 }
 
 } // namespace utils
