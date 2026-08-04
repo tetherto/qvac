@@ -41,103 +41,84 @@ jobs:
     name: Determine affected packages + build matrix (nx affected, transitive)
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-      any: ${{ steps.matrix.outputs.any }}
-    env:
-      # Config keys are camelCase (not kebab-case) - GHA expressions parse
-      # `matrix.artifact-name-prefix` as subtraction, not property access.
-      # Kebab-case is only used in the final `with:` block below, where the
-      # reusable workflow requires it.
-      PREBUILDS_CONFIG: |
-        - package: asr-ggml
-          workdir: packages/asr-ggml
-          artifactNamePrefix: asr-ggml-
-          linuxExtraPackages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev
-          setupPythonOnWindows: true
-          includeVulkanSdk: true
-        - package: audiogen-ggml
-          workdir: packages/audiogen-ggml
-          artifactNamePrefix: audiogen-ggml-
-          linuxExtraPackages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
-          includeVulkanSdk: true
-        - package: bci-whispercpp
-          workdir: packages/bci-whispercpp
-          artifactNamePrefix: bci-whispercpp-
-          linuxExtraPackages: libopenblas-dev liblapack-dev libfftw3-dev
-          macBrewPackages: openblas lapack fftw
-          includeVulkanSdk: true
-          extraCmakeDefines: -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF
-          platformCmakeDefines: |
-            darwin: -D WHISPER_USE_METAL=ON
-            ios: -D WHISPER_USE_METAL=ON
-            linux: -D WHISPER_USE_METAL=OFF
-            android: -D WHISPER_USE_METAL=OFF
-            win32: -D WHISPER_USE_METAL=OFF
-        - package: classification-ggml
-          workdir: packages/classification-ggml
-          artifactNamePrefix: classification-ggml-
-          includeVulkanSdk: true
-        - package: diffusion-cpp
-          workdir: packages/diffusion-cpp
-          artifactNamePrefix: sd-cpp-
-          includeVulkanSdk: true
-        - package: embed-llamacpp
-          workdir: packages/embed-llamacpp
-          artifactNamePrefix: llama-cpp-
-          includeVulkanSdk: true
-        - package: fabric
-          workdir: packages/fabric
-          artifactNamePrefix: fabric-
-          includeVulkanSdk: true
-        - package: llm-llamacpp
-          workdir: packages/llm-llamacpp
-          artifactNamePrefix: llama-cpp-
-          includeVulkanSdk: true
-        - package: ocr-ggml
-          workdir: packages/ocr-ggml
-          artifactNamePrefix: ggml-ocr-
-          includeVulkanSdk: true
-        - package: onnx
-          workdir: packages/onnx
-          artifactNamePrefix: onnx-
-        - package: translation-nmtcpp
-          workdir: packages/translation-nmtcpp
-          includeVulkanSdk: true
-        - package: tts-ggml
-          workdir: packages/tts-ggml
-          artifactNamePrefix: tts-ggml-
-          linuxExtraPackages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
-          includeVulkanSdk: true
-        - package: vla-ggml
-          workdir: packages/vla-ggml
-          artifactNamePrefix: vla-
-          linuxExtraPackages: libxi-dev libxtst-dev libxrandr-dev
-          includeVulkanSdk: true
-          includeRocm: true
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - id: compute
+        uses: ./.github/actions/nx-affected
         with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-      - run: pnpm install --frozen-lockfile
-      - id: matrix
-        shell: bash
-        run: |
-          set -euo pipefail
-          AFFECTED=$(nx show projects --affected --base="${{ inputs.base-ref }}" --head="${{ inputs.head-ref }}" --json \
-            | jq -c 'map(sub("^@qvac/"; ""))')
-          echo "Affected (transitive): $AFFECTED"
-
-          CONFIG_JSON=$(yq -o=json -I=0 e '.' <<< "$PREBUILDS_CONFIG")
-
-          MATRIX=$(jq -c --argjson affected "$AFFECTED" '[.[] | select(.package as $p | $affected | index($p) != null)]' <<< "$CONFIG_JSON")
-          echo "Matrix (config ∩ affected): $MATRIX"
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-          echo "any=$([ "$MATRIX" != "[]" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          # Config keys are camelCase (not kebab-case) - GHA expressions parse
+          # `matrix.artifact-name-prefix` as subtraction, not property access.
+          # Kebab-case is only used in the final `with:` block below, where
+          # the reusable workflow requires it.
+          config: |
+            - package: asr-ggml
+              workdir: packages/asr-ggml
+              artifactNamePrefix: asr-ggml-
+              linuxExtraPackages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev
+              setupPythonOnWindows: true
+              includeVulkanSdk: true
+            - package: audiogen-ggml
+              workdir: packages/audiogen-ggml
+              artifactNamePrefix: audiogen-ggml-
+              linuxExtraPackages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
+              includeVulkanSdk: true
+            - package: bci-whispercpp
+              workdir: packages/bci-whispercpp
+              artifactNamePrefix: bci-whispercpp-
+              linuxExtraPackages: libopenblas-dev liblapack-dev libfftw3-dev
+              macBrewPackages: openblas lapack fftw
+              includeVulkanSdk: true
+              extraCmakeDefines: -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF
+              platformCmakeDefines: |
+                darwin: -D WHISPER_USE_METAL=ON
+                ios: -D WHISPER_USE_METAL=ON
+                linux: -D WHISPER_USE_METAL=OFF
+                android: -D WHISPER_USE_METAL=OFF
+                win32: -D WHISPER_USE_METAL=OFF
+            - package: classification-ggml
+              workdir: packages/classification-ggml
+              artifactNamePrefix: classification-ggml-
+              includeVulkanSdk: true
+            - package: diffusion-cpp
+              workdir: packages/diffusion-cpp
+              artifactNamePrefix: sd-cpp-
+              includeVulkanSdk: true
+            - package: embed-llamacpp
+              workdir: packages/embed-llamacpp
+              artifactNamePrefix: llama-cpp-
+              includeVulkanSdk: true
+            - package: fabric
+              workdir: packages/fabric
+              artifactNamePrefix: fabric-
+              includeVulkanSdk: true
+            - package: llm-llamacpp
+              workdir: packages/llm-llamacpp
+              artifactNamePrefix: llama-cpp-
+              includeVulkanSdk: true
+            - package: ocr-ggml
+              workdir: packages/ocr-ggml
+              artifactNamePrefix: ggml-ocr-
+              includeVulkanSdk: true
+            - package: onnx
+              workdir: packages/onnx
+              artifactNamePrefix: onnx-
+            - package: translation-nmtcpp
+              workdir: packages/translation-nmtcpp
+              includeVulkanSdk: true
+            - package: tts-ggml
+              workdir: packages/tts-ggml
+              artifactNamePrefix: tts-ggml-
+              linuxExtraPackages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
+              includeVulkanSdk: true
+            - package: vla-ggml
+              workdir: packages/vla-ggml
+              artifactNamePrefix: vla-
+              linuxExtraPackages: libxi-dev libxtst-dev libxrandr-dev
+              includeVulkanSdk: true
+              includeRocm: true
 
   prebuild:
     name: Prebuild (${{ matrix.package }})
