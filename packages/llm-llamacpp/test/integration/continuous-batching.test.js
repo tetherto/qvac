@@ -8,6 +8,7 @@ const process = require('bare-process')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest, getMediaPath } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+// prestage-uses: multimodal-default — MULTIMODAL_MODEL_CONFIG, loaded via ensureModel() below
 const { MULTIMODAL_MODEL_CONFIG } = require('./_image-common.js')
 
 const platform = os.platform()
