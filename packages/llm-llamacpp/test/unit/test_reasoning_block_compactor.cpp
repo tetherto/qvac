@@ -18,6 +18,7 @@ using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::
     shouldCaptureRecurrentReasoningBoundary;
+using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;
 
 // Unit coverage for the hybrid / recurrent reasoning replay seam.
 //
@@ -118,6 +119,47 @@ TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
           /*thinkingForcedOpen=*/true,
           /*closeMarkerSingleToken=*/false),
       RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose);
+}
+
+TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {
+  // The caller maps every terminal stop reason (EOG, antiprompt, n_predict,
+  // and sequence limit) to hasTerminalReason=true. A checkpoint-backed
+  // context must restore rather than attempting to compact an unclosed span.
+  EXPECT_TRUE(shouldRollbackInterruptedReasoning(
+      /*hasTerminalReason=*/true,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+}
+
+TEST(ReasoningSnapshotPolicy, KeepsCompletedOrNonTerminalReasoning) {
+  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
+      /*hasTerminalReason=*/false,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
+      /*hasTerminalReason=*/true,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/false,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
+      /*hasTerminalReason=*/true,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/true));
 }
 
 TEST(ReasoningRollbackStateAppend, AppendsRegardlessOfCaptureFlag) {
