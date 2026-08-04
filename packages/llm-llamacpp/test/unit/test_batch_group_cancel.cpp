@@ -407,10 +407,17 @@ TEST_F(BatchGroupCancelTest, CancelOfQueuedSinglePromptSettlesImmediately) {
   EXPECT_LT(queuedSettledAfter, holderFinishedAfter)
       << "the cancelled prompt outlived the holder it was queued behind";
 
-  // A queued single prompt never ran either, so it reports Cancelled — the
-  // same terminal the queued path gives a group, rather than the empty-output
-  // resolve that an in-slot graceful cancel produces.
-  EXPECT_THROW(queuedFuture.get(), qvac_errors::StatusError);
+  // Settling early must NOT change the terminal a lone request reports. The
+  // single-job contract is a graceful empty-output cancel (see submitLocked's
+  // refusal path and CancelByIdBeforeFirstTokenCancelsJob): a caller cannot
+  // tell a cancel that landed while the request was queued from one that landed
+  // during prefill, and the latter must not throw. Only a multi-prompt group
+  // rejects with Cancelled, because some of its prompts never ran.
+  std::any queuedOut;
+  ASSERT_NO_THROW(queuedOut = queuedFuture.get())
+      << "a cancelled queued single prompt must resolve, not throw";
+  EXPECT_TRUE(std::any_cast<std::string>(queuedOut).empty())
+      << "a prompt cancelled before it ran must come back empty";
   EXPECT_NO_THROW(holderFuture.get());
 }
 

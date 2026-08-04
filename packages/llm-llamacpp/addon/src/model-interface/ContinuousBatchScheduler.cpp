@@ -1165,12 +1165,26 @@ void ContinuousBatchScheduler::applyGroupQueuedCancelLocked(
   if (group->admittedCount >= group->totalCount) {
     return;
   }
-  // Same terminal as cancelPendingLocked and as a refusal at admission: a
-  // queued request never ran, so it is an explicit Cancelled rather than a
-  // silently-successful empty output. failGroupLocked marks the group done and
-  // notifies, which releases its blocked processBatch immediately; the stale
-  // pending_ entries are discarded by admitPendingIntoFreeSlotsLocked's
-  // done-check when a slot next frees.
+  // A lone request keeps the graceful empty-output cancel that the single-job
+  // contract pins — the same choice submitLocked's refusal path makes: its
+  // caller cannot tell a cancel that landed while the request was queued from
+  // one that landed during prefill, and the latter must not throw. Settling it
+  // done-without-error releases its blocked processBatch at once (the point of
+  // this call) while keeping that terminal. `admittedCount == 0` here, so the
+  // group holds no slot to tear down.
+  if (group->totalCount <= 1) {
+    group->stats = stats_;
+    group->done = true;
+    workCv_.notify_all();
+    return;
+  }
+  // A multi-prompt group instead rejects: some of its prompts never ran, so
+  // completing it as a success with empty strings would disguise the
+  // cancellation. Same terminal as cancelPendingLocked and as a refusal at
+  // admission. failGroupLocked marks the group done and notifies, which
+  // releases its blocked processBatch immediately; the stale pending_ entries
+  // are discarded by admitPendingIntoFreeSlotsLocked's done-check when a slot
+  // next frees.
   failGroupLocked(
       group,
       std::make_exception_ptr(
