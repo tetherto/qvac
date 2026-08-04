@@ -1,14 +1,13 @@
 'use strict'
 
-const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const LlmLlamacpp = require('../index')
-const { setLogger, releaseLogger } = require('../addonLogging')
 
-const DEFAULT_GPU_LAYERS = 40
+const DEFAULT_GPU_LAYERS = 999
 const DSML_TOOL_CALL_START = '<｜DSML｜tool_calls>'
 const DSML_WEATHER_INVOKE = '<｜DSML｜invoke name="get_weather">'
+const DSML_LOCAL_TIME_INVOKE = '<｜DSML｜invoke name="get_local_time">'
 
 async function main() {
   const firstShardArg = process.argv[2]
@@ -21,23 +20,23 @@ async function main() {
     throw new Error(`gpu-layers must be a positive integer, received: ${process.argv[3]}`)
   }
 
-  installNativeLogger()
-
-  const modelFiles = expandShardedModelFiles(path.resolve(firstShardArg))
-  printModelFiles(modelFiles)
+  const firstShardPath = path.resolve(firstShardArg)
 
   const model = new LlmLlamacpp({
-    files: { model: modelFiles },
+    files: {
+      model: [firstShardPath]
+    },
     config: {
       device: 'gpu',
       gpu_layers: String(gpuLayers),
-      ctx_size: '1024',
-      predict: '64',
+      ctx_size: '2048',
+      n_predict: '1024',
+      no_mmap: '', // Current-branch equivalent of the teammate script's "true".
+      seed: '50',
       temp: '0',
-      reasoning_budget: '0',
-      parallel: '1',
+      top_p: '1',
       tools: 'true',
-      verbosity: '3'
+      verbosity: '2'
     },
     logger: console,
     opts: { stats: true }
@@ -51,26 +50,50 @@ async function main() {
     const prompt = [
       {
         role: 'system',
-        content: 'Call the provided tool when the user requests weather.'
+        content:
+          'You are a helpful assistant. Call every tool needed to satisfy the request. Do not answer directly when a tool can provide the requested information.'
       },
       {
         type: 'function',
         name: 'get_weather',
-        description: 'Get the current weather for a city',
+        description: 'Get the current weather for a city.',
         parameters: {
           type: 'object',
           properties: {
             city: {
               type: 'string',
-              description: 'City name'
+              description: 'City name.'
+            },
+            country: {
+              type: 'string',
+              description: 'Country name.'
             }
           },
-          required: ['city']
+          required: ['city', 'country']
+        }
+      },
+      {
+        type: 'function',
+        name: 'get_local_time',
+        description: 'Get the current local time for a city.',
+        parameters: {
+          type: 'object',
+          properties: {
+            city: {
+              type: 'string',
+              description: 'City name.'
+            },
+            country: {
+              type: 'string',
+              description: 'Country name.'
+            }
+          },
+          required: ['city', 'country']
         }
       },
       {
         role: 'user',
-        content: 'Call get_weather for Tokyo.'
+        content: 'Use both get_weather and get_local_time for Paris, France. Return the two tool calls.'
       }
     ]
 
@@ -93,71 +116,32 @@ async function main() {
     console.log(fullResponse || '(empty)')
 
     const hasDsmlCall =
-      fullResponse.includes(DSML_TOOL_CALL_START) && fullResponse.includes(DSML_WEATHER_INVOKE)
+      fullResponse.includes(DSML_TOOL_CALL_START) &&
+      fullResponse.includes(DSML_WEATHER_INVOKE) &&
+      fullResponse.includes(DSML_LOCAL_TIME_INVOKE)
+
+    const summary = {
+      device: 'gpu',
+      gpuLayers,
+      noMmap: true,
+      hasOpen: fullResponse.includes('<think>'),
+      hasClose: fullResponse.includes('</think>'),
+      thinkingBlockDiscards: Number(response.stats.thinkingBlockDiscards || 0),
+      stopReason: response.stats.stopReason,
+      responseLength: fullResponse.length,
+      hasDsmlCall
+    }
 
     console.log(`▸ Raw DSML tool call detected: ${hasDsmlCall ? 'yes' : 'no'}`)
     console.log(`▸ Inference stats: ${JSON.stringify(response.stats, null, 2)}`)
+    console.log(`▸ DS4 GPU test summary: ${JSON.stringify(summary)}`)
 
     if (!hasDsmlCall) {
-      throw new Error('DeepSeek V4 did not emit the expected DSML get_weather tool call')
+      throw new Error('DeepSeek V4 did not emit both expected DSML tool calls')
     }
   } finally {
     await model.unload().catch(() => {})
-    releaseLogger()
   }
-}
-
-function installNativeLogger() {
-  const priorityNames = {
-    0: 'ERROR',
-    1: 'WARN',
-    2: 'INFO',
-    3: 'DEBUG',
-    4: 'DEBUG'
-  }
-
-  setLogger((priority, message) => {
-    const timestamp = new Date().toISOString()
-    const level = priorityNames[priority] || 'DEBUG'
-    console.log(`[${timestamp}] [NATIVE ${level}] ${String(message).trimEnd()}`)
-  })
-}
-
-function expandShardedModelFiles(firstShardPath) {
-  const filename = path.basename(firstShardPath)
-  const match = filename.match(/^(.+)-(\d{5})-of-(\d{5})\.gguf$/)
-  if (!match) {
-    throw new Error(`Expected a sharded GGUF path, received: ${firstShardPath}`)
-  }
-
-  const directory = path.dirname(firstShardPath)
-  const baseFilename = match[1]
-  const totalShards = Number(match[3])
-  const totalLabel = String(totalShards).padStart(5, '0')
-  const files = [path.join(directory, `${baseFilename}.tensors.txt`)]
-
-  for (let index = 1; index <= totalShards; index++) {
-    const shardLabel = String(index).padStart(5, '0')
-    files.push(path.join(directory, `${baseFilename}-${shardLabel}-of-${totalLabel}.gguf`))
-  }
-
-  const missing = files.filter((file) => !fs.existsSync(file))
-  if (missing.length > 0) {
-    throw new Error(`Missing required model files:\n${missing.join('\n')}`)
-  }
-
-  return files
-}
-
-function printModelFiles(files) {
-  let totalBytes = 0
-  console.log('▸ Model files:')
-  for (const file of files) {
-    const bytes = fs.statSync(file).size
-    totalBytes += bytes
-    console.log(`▸   ${path.basename(file)} (${formatBytes(bytes)})`)
-  }
-  console.log(`▸ Total model size: ${formatBytes(totalBytes)}`)
 }
 
 async function withLoadHeartbeat(label, load) {
@@ -172,10 +156,6 @@ async function withLoadHeartbeat(label, load) {
   } finally {
     clearInterval(timer)
   }
-}
-
-function formatBytes(bytes) {
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GiB`
 }
 
 main()
