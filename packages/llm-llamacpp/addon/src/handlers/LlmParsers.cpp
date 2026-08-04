@@ -10,7 +10,7 @@
 
 namespace qvac_lib_inference_addon_llama::parsers {
 
-int parseReasoningBudgetConfig(const std::string& raw) {
+int parseReasoningBudgetConfig(std::string_view raw) {
   int value = 0;
   const char* begin = raw.data();
   const char* end = begin + raw.size();

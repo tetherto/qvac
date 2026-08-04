@@ -1,5 +1,9 @@
 #include "handlers/FinetuneParamHandlers.hpp"
 
+#include <string>
+#include <type_traits>
+#include <utility>
+
 namespace qvac_lib_inference_addon_llama {
 
 template <typename JsT, typename ReadT, typename FieldT>
@@ -7,7 +11,11 @@ static void
 readOpt(js_env_t* env, js::Object& obj, const char* key, FieldT& field) {
   auto value = obj.getOptionalPropertyAs<JsT, ReadT>(env, key);
   if (value.has_value()) {
-    field = static_cast<FieldT>(*value);
+    if constexpr (std::is_same_v<FieldT, std::string>) {
+      field = std::move(*value);
+    } else {
+      field = static_cast<FieldT>(*value);
+    }
   }
 }
 

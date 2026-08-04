@@ -1,6 +1,6 @@
 #pragma once
 
-#include <string>
+#include <string_view>
 
 namespace qvac_lib_inference_addon_llama::parsers {
 
@@ -10,6 +10,6 @@ int validateReasoningBudgetOverride(double raw);
 
 // Load-time reasoning-budget (string): -1/0/positive. Throws on non-integer or
 // below -1.
-int parseReasoningBudgetConfig(const std::string& raw);
+int parseReasoningBudgetConfig(std::string_view raw);
 
 } // namespace qvac_lib_inference_addon_llama::parsers
