@@ -7,6 +7,8 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+// prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
+// prestage-uses: multimodal-large — LARGE_MULTIMODAL_CONFIG, passed explicitly below
 const {
   DEVICE_CONFIGS,
   LARGE_MULTIMODAL_CONFIG,

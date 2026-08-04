@@ -37,20 +37,16 @@ const skipFinetuning = useCpu || (noGpu && !isWindows)
 
 const FINETUNE_TIMEOUT_MS = 3600_000
 
-// Download source (sha256/bytes) is resolved from models.manifest.json by `name`
-// at run time; ensureModel ignores the inline `url`. QWEN35_MODEL KEEPS its
-// (commit-pinned) `url` because scripts/generate-model-manifest.js scrapes
-// name+url pairs from this file to (re)generate the mobile prestage manifest, and
-// Qwen3.5-0.8B IS prestaged for this shard — dropping it would make a regen
-// silently lose it. GEMMA4_MODEL deliberately OMITS `url`: it is desktop-only and
-// must NEVER be mobile-prestaged, so it must not be scraped into the mobile
-// manifest (same rationale as finetuning-moe.test.js).
+// Download source (url/sha256/bytes) is resolved from models.manifest.json by
+// `name` at run time; the inline `url` is informational only.
 const QWEN35_MODEL = {
   id: 'qwen3.5-0.8b-q4_0',
   name: 'Qwen3.5-0.8B-Q4_0.gguf',
   url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf'
 }
 
+// prestage-ignore: google_gemma-4-E2B-it-Q4_0.gguf — desktop-only (~3.38 GB); the
+// mobile shard finetunes Qwen3.5-0.8B only, so it must never be pre-staged.
 const GEMMA4_MODEL = {
   id: 'gemma-4-e2b-q4_0',
   name: 'google_gemma-4-E2B-it-Q4_0.gguf'
