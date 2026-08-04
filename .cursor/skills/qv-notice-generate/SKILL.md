@@ -139,9 +139,12 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | `llm-llamacpp` | `@qvac/llm-llamacpp` |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `tts-onnx` | `@qvac/tts-onnx` |
-| `transcription-whispercpp` | `@qvac/transcription-whispercpp` |
-| `ocr-onnx` | `@qvac/ocr-onnx` |
+| `asr-ggml` | `@qvac/transcription-whispercpp`, `@qvac/asr-ggml` |
 | `diffusion-cpp` | `@qvac/diffusion-cpp` |
+
+`asr-ggml` carries two engine keys because the whisper + parakeet packages were
+unified: `models.prod.json` still names the retired
+`@qvac/transcription-whispercpp` engine until the SDK/registry repoint lands.
 
 ## Sorting guarantee
 

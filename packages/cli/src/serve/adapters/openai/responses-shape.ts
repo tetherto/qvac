@@ -36,8 +36,13 @@ export interface BuildResponseObjectParams {
   messageItemId?: string
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
-  /** From SDK completion stats; `generatedTokens` maps to `usage.output_tokens`. */
+  /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
   stats?: CompletionStats
+  /**
+   * When set (from `drainCompletion`), wins over stats-derived usage so
+   * streaming and blocking Responses stay aligned.
+   */
+  completionTokens?: number
   /**
    * Terminal `stopReason` from the SDK. `length` maps to OpenAI's
    * `status: 'incomplete'` + `incomplete_details.reason: 'max_output_tokens'`
@@ -79,7 +84,10 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     }
   }
 
-  const outputTokens = completionTokensFromStats(params.text || '', params.stats)
+  const outputTokens =
+    typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
+      ? params.completionTokens
+      : completionTokensFromStats(params.text || '', params.stats)
   // SDK does not expose prompt token count today; `cacheTokens` is KV-cache hit count, not full prompt size.
   const inputTokens = 0
   const usage = {

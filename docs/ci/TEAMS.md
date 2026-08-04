@@ -14,7 +14,7 @@ The teams that show up in this repo's CI configuration. This doc names them and 
 | `@tetherto/qvac-internal-merge` | Internal reviewers / merge approvers (tier-1 reviewer slot). |
 | `@tetherto/qvac-internal-release` | Release approvers — sign off on npm publishes and `release-*` branch operations. |
 | `@tetherto/qvac-external` | External contributors. Open PRs from forks; do not authorise secret-bearing CI. |
-| `@tetherto/qvac-collabora` | Collabora engineers contributing to QVAC. Trusted to apply the `verified` label and to push without deauthorising it. |
+| `@tetherto/qvac-collabora` | Collabora engineers contributing to QVAC. Trusted merge/release reviewers for the `fork-ci` environment. |
 
 ---
 
@@ -23,7 +23,7 @@ The teams that show up in this repo's CI configuration. This doc names them and 
 The trust model and access rules are encoded in the repo, not in this doc — read those files for the canonical behaviour:
 
 - **Merge approval routing** → [`.github/CODEOWNERS`](../../.github/CODEOWNERS)
-- **`verified` label / secret-bearing CI authorisation** → [`.github/actions/label-gate/README.md`](../../.github/actions/label-gate/README.md), [`.github/actions/label-gate/action.yml`](../../.github/actions/label-gate/action.yml) (default `teams` input)
+- **External fork privileged CI (`fork-ci` environment)** → [`docs/ci/LABELS.md`](LABELS.md), `.github/workflows/*` `fork-approval` jobs (merge/release-team approves per run; records `qvac/fork-verified` commit status)
 - **Tier-1 / tier-2 review computation** → [`.github/workflows/approval-check-worker.yml`](../../.github/workflows/approval-check-worker.yml)
 - **Pod-scoped path ownership** → [`.github/teams/devops.json`](../../.github/teams/devops.json), [`.github/teams/sdk.json`](../../.github/teams/sdk.json)
 - **Branch model + release flow** → [`docs/gitflow.md`](../gitflow.md)
@@ -43,4 +43,4 @@ Pods are smaller, package-scoped groupings inside the umbrella teams. They drive
 
 ## See also
 
-- [`docs/ci/LABELS.md`](LABELS.md) — labels recognised by CI, including the `verified` security gate.
+- [`docs/ci/LABELS.md`](LABELS.md) — labels recognised by CI, the `fork-ci` environment, and retired `verified` label.

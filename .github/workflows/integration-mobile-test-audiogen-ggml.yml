@@ -75,17 +75,16 @@ jobs:
           - platform: Android
             os: ubuntu-24.04
             runner: qvac-ubuntu2404-x64
-          # iOS is intentionally omitted for now. The turbo-q4 ACE-Step stack loads
-          # + generates fine on 8 GB+ iOS hardware (verified on-device, iPad Pro M2,
-          # entitlement-free), but the shared AWS Device Farm iPhones fail at DiT
-          # load and 6 GB devices jetsam-OOM during the ~3 GB load peak — small-device
-          # iOS needs sequential stage load/free in the engine, not just the
-          # increased-memory-limit entitlement. Tracked in QVAC-22838 (iOS
-          # re-enablement). Restore by re-adding the iOS/macos-14 row + the `ios`
-          # group in test-groups.json.
-          # - platform: iOS
-          #   os: macos-14
-          #   runner: macos-14
+          # iOS re-enabled in QVAC-22955. The engine now loads the ACE-Step stages
+          # sequentially (each loaded right before its step, freed right after), so
+          # the load-time peak is a single stage instead of all six at once and
+          # create() no longer jetsam-OOMs on a non-entitled iPhone during the
+          # ~3 GB load. Verified on-device (iPhone 12 Pro Max, 6 GB, entitlement-free:
+          # create() survives + generation renders real audio). Non-blocking
+          # (continue-on-error) like Android until the Device Farm pool is stable.
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
 
     steps:
       - name: Checkout composite action source
