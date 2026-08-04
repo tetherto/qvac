@@ -3,6 +3,14 @@
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
+// Full-state snapshots are required by recurrent and hybrid models, and by
+// DeepSeek V4 whose compressed cache has the same checkpoint/replay
+// requirement despite not reporting either model predicate.
+[[nodiscard]] inline bool needsFullStateSnapshot(
+    bool isRecurrent, bool isHybrid, bool isDeepSeekV4) noexcept {
+  return isRecurrent || isHybrid || isDeepSeekV4;
+}
+
 // Recurrent / hybrid compaction restores an end-of-prefill snapshot and
 // replays the post-reasoning tail. `thinkingForcedOpen` is retained as an
 // input for call-site symmetry only. Force-open templates already have the

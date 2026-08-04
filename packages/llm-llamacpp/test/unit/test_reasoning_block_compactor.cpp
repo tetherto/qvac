@@ -17,6 +17,8 @@ using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::
+    needsFullStateSnapshot;
+using qvac_lib_inference_addon_llama::utils::
     shouldCaptureRecurrentReasoningBoundary;
 using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;
 
@@ -35,6 +37,25 @@ using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;
 //      `recordPreReasoningToken`) feature gates and open-span
 //      invariants,
 //   3. the success path against a seeded boundary snapshot.
+
+TEST(ReasoningSnapshotPolicy, RoutesDeepSeekV4ToFullStateSnapshots) {
+  EXPECT_TRUE(needsFullStateSnapshot(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*isDeepSeekV4=*/true));
+  EXPECT_TRUE(needsFullStateSnapshot(
+      /*isRecurrent=*/true,
+      /*isHybrid=*/false,
+      /*isDeepSeekV4=*/false));
+  EXPECT_TRUE(needsFullStateSnapshot(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/true,
+      /*isDeepSeekV4=*/false));
+  EXPECT_FALSE(needsFullStateSnapshot(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*isDeepSeekV4=*/false));
+}
 
 TEST(ReasoningSnapshotPolicy, CapturesOnlyForForcedOpenRecurrentReasoning) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(

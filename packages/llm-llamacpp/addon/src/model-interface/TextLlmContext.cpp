@@ -111,8 +111,10 @@ void TextLlmContext::initializeCommonState() {
           architecture.value());
   needsRecurrentSnapshot_ =
       (model != nullptr) &&
-      (llama_model_is_recurrent(model) || llama_model_is_hybrid(model) ||
-       isDeepSeekV4);
+      qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot(
+          llama_model_is_recurrent(model),
+          llama_model_is_hybrid(model),
+          isDeepSeekV4);
   compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the
