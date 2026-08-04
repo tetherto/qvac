@@ -1,0 +1,287 @@
+# Consolidates 11 of the 12 integration-mobile-test-<pkg>.yml files (already
+# ~90% consolidated via the shared .github/actions/run-mobile-integration-tests
+# composite - QVAC-18168 - so the remaining per-package differences are just
+# data: workdir, npm package name, prebuild artifact prefix, Device Farm
+# project/pool ARNs (several fall back secrets.X || secrets.Y when a package
+# shares another's Device Farm project), and whether perf collection is on.
+# Carve-out: llm-llamacpp has a bespoke 8+15 shard fan-out (test-groups.json
+# driven), not a fit for this matrix - left untouched.
+#
+# Scope note: this consolidates each package's real workflow_call path (the
+# one actually invoked from CI). Bespoke workflow_dispatch-only extras some
+# packages have (e.g. asr-ggml's run_rtf_benchmarks perf-matrix narrowing) are
+# NOT replicated here - out of scope for this migration.
+name: "Mobile Integration Tests (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages + build matrix (nx affected, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - id: compute
+        uses: ./.github/actions/nx-affected
+        with:
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          config: |
+            - package: asr-ggml
+              workdir: packages/asr-ggml
+              npmName: '@qvac/asr-ggml'
+              prebuildArtifactPrefix: asr-ggml-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML
+              deviceFarmProjectArnFallback: AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_ASR_GGML
+              iosDevicePoolArnFallback: IOS_DEVICE_POOL_ARN_PARAKEET
+              enablesPerf: true
+              extraPreBuildCommand: npm run test:mobile:generate
+            - package: audiogen-ggml
+              workdir: packages/audiogen-ggml
+              npmName: '@qvac/audiogen-ggml'
+              prebuildArtifactPrefix: audiogen-ggml-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML
+              deviceFarmProjectArnFallback: AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_AUDIOGEN_GGML
+              iosDevicePoolArnFallback: IOS_DEVICE_POOL_ARN_ONNX_TTS
+              enablesPerf: false
+            - package: bci-whispercpp
+              workdir: packages/bci-whispercpp
+              npmName: '@qvac/bci-whispercpp'
+              prebuildArtifactPrefix: bci-whispercpp-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_WHISPERCPP
+              enablesPerf: true
+              extraPreBuildCommand: npm run test:mobile:generate
+            - package: classification-ggml
+              workdir: packages/classification-ggml
+              npmName: '@qvac/classification-ggml'
+              prebuildArtifactPrefix: classification-ggml-
+              deviceFarmProjectArnPrimary: LLM_AWS_DEVICE_FARM_PROJECT_ARN
+              androidDevicePoolArnPrimary: LLM_ANDROID_DEVICE_POOL_ARN
+              iosDevicePoolArnPrimary: LLM_IOS_DEVICE_POOL_ARN
+              enablesPerf: false
+              extraPreBuildCommand: npm run mobile:copy-prebuilds
+            - package: decoder-audio
+              workdir: packages/decoder-audio
+              npmName: '@qvac/decoder-audio'
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO
+              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_DECODER_AUDIO
+              enablesPerf: false
+            - package: diffusion-cpp
+              workdir: packages/diffusion-cpp
+              npmName: '@qvac/diffusion-cpp'
+              prebuildArtifactPrefix: sd-cpp-
+              deviceFarmProjectArnPrimary: LLM_AWS_DEVICE_FARM_PROJECT_ARN
+              androidDevicePoolArnPrimary: LLM_ANDROID_DEVICE_POOL_ARN
+              iosDevicePoolArnPrimary: LLM_IOS_DEVICE_POOL_ARN
+              enablesPerf: true
+            - package: embed-llamacpp
+              workdir: packages/embed-llamacpp
+              npmName: '@qvac/embed-llamacpp'
+              prebuildArtifactPrefix: llama-cpp-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED
+              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED
+              enablesPerf: false
+              extraPreBuildCommand: npm run generate:benchmark-shards
+            - package: ocr-ggml
+              workdir: packages/ocr-ggml
+              npmName: '@qvac/ocr-ggml'
+              prebuildArtifactPrefix: ggml-ocr-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT
+              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_OCR_FASTTEXT
+              enablesPerf: true
+            - package: translation-nmtcpp
+              workdir: packages/translation-nmtcpp
+              npmName: '@qvac/translation-nmtcpp'
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_NMTCPP
+              enablesPerf: true
+            - package: tts-ggml
+              workdir: packages/tts-ggml
+              npmName: '@qvac/tts-ggml'
+              prebuildArtifactPrefix: tts-ggml-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML
+              deviceFarmProjectArnFallback: AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_TTS_GGML
+              iosDevicePoolArnFallback: IOS_DEVICE_POOL_ARN_ONNX_TTS
+              enablesPerf: false
+            - package: vla-ggml
+              workdir: packages/vla-ggml
+              npmName: '@qvac/vla-ggml'
+              prebuildArtifactPrefix: vla-
+              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED
+              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED
+              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED
+              enablesPerf: true
+
+  build-and-test:
+    name: Build ${{ matrix.platform.platform }} and Run E2E Tests (${{ matrix.package.package }})
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    runs-on: ${{ matrix.platform.runner }}
+    environment: release
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+        platform:
+          - platform: Android
+            runner: qvac-ubuntu2404-x64
+          - platform: iOS
+            runner: macos-14
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/${{ matrix.package.workdir }}
+        run: npm run test:mobile:validate || true
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform.platform }}
+          addon-workdir: ${{ matrix.package.workdir }}
+          addon-npm-name: ${{ matrix.package.npmName }}
+          prebuild-artifact-prefix: ${{ matrix.package.prebuildArtifactPrefix }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Extra pre-build step
+        if: matrix.package.extraPreBuildCommand
+        working-directory: addon/${{ matrix.package.workdir }}
+        run: ${{ matrix.package.extraPreBuildCommand }}
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform.platform }}
+          addon-workdir: ${{ matrix.package.workdir }}
+          addon-npm-name: ${{ matrix.package.npmName }}
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform.platform }}
+          addon-workdir: ${{ matrix.package.workdir }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets[matrix.package.deviceFarmProjectArnPrimary] || secrets[matrix.package.deviceFarmProjectArnFallback] }}
+          enables-perf: ${{ matrix.package.enablesPerf && 'true' || 'false' }}
+
+      - name: Schedule Device Farm test run
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform.platform }}
+          device-farm-project-arn: ${{ secrets[matrix.package.deviceFarmProjectArnPrimary] || secrets[matrix.package.deviceFarmProjectArnFallback] }}
+          android-device-pool-arn: ${{ secrets[matrix.package.androidDevicePoolArnPrimary] || secrets[matrix.package.androidDevicePoolArnFallback] }}
+          ios-device-pool-arn: ${{ secrets[matrix.package.iosDevicePoolArnPrimary] || secrets[matrix.package.iosDevicePoolArnFallback] }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: 'single-pool'
+
+      - name: Monitor Device Farm test run
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform.platform }}
+          addon-npm-name: ${{ matrix.package.npmName }}
+          enables-perf: ${{ matrix.package.enablesPerf && 'true' || 'false' }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Comment results on PR
+        if: always()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: ${{ matrix.package.npmName }}
+          platform: ${{ matrix.platform.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
