@@ -2,7 +2,7 @@
  * Parakeet TDT transcription from a WAV file.
  *
  * Usage:
- *   bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file> [parakeet-tdt-gguf]
+ *   bun run examples/asr/parakeet-tdt-filesystem.ts <wav-file> [parakeet-tdt-gguf]
  *
  * Loads a single GGUF checkpoint (`PARAKEET_TDT_0_6B_V3_Q8_0` by default) and
  * transcribes the file with the batch `transcribe` API. Omit the model
@@ -16,7 +16,7 @@ const args = process.argv.slice(2)
 
 if (!args[0]) {
   console.error(
-    'Usage: bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file-path> ' +
+    'Usage: bun run examples/asr/parakeet-tdt-filesystem.ts <wav-file-path> ' +
       '[parakeet-tdt-gguf]'
   )
   console.error('\nIf the model path is omitted, defaults to the registry model.')

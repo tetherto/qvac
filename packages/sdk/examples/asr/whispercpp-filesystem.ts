@@ -4,7 +4,7 @@ import { loadModel, unloadModel, transcribe, WHISPER_TINY } from '@qvac/sdk'
 const args = process.argv.slice(2)
 
 if (!args[0]) {
-  console.error('Usage: bun run examples/whispercpp-filesystem.ts <wav-file-path>')
+  console.error('Usage: bun run examples/asr/whispercpp-filesystem.ts <wav-file-path>')
   process.exit(1)
 }
 
