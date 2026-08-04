@@ -184,8 +184,9 @@ export function createHarnessService({
     if (registrations.has(registration.id)) {
       throw new Error(`agent is already registered: ${registration.id}`)
     }
-    validateSelectedSkills(registration, await loadCatalog())
-    defineAgent(agentDefinitionFromRegistration(registration))
+    const registrationCatalog = await loadCatalog()
+    validateSelectedSkills(registration, registrationCatalog)
+    defineAgent(agentDefinitionFromRegistration(registration, registrationCatalog))
     registrations.set(registration.id, copyAgentRegistration(registration))
     onRegistration?.(registration)
   }
@@ -216,7 +217,7 @@ export function createHarnessService({
     const queue = createAsyncQueue<HarnessEvent>()
     const catalog = await loadCatalog()
     const adapter = createBrokeredModelAdapter({ registration, sdk })
-    const agent = defineAgent(agentDefinitionFromRegistration(registration))
+    const agent = defineAgent(agentDefinitionFromRegistration(registration, catalog))
     const agentRun = agent.run({
       runId: input.runId,
       input: input.input,

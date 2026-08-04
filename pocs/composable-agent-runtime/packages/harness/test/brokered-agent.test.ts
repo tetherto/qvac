@@ -155,6 +155,42 @@ test('selected skills expose exactly their granted tool schemas', async (t) => {
   await harness.close()
 })
 
+test('selected skill instructions reach the model as system prompt blocks', async (t) => {
+  const systemMessages: string[][] = []
+  const sdk = createSdk(({ requestId, messages }) => ({
+    requestId,
+    events: (async function* () {
+      systemMessages.push(
+        messages
+          .filter((message) => message.role === 'system')
+          .map((message) => message.content)
+      )
+      yield { type: 'content-delta' as const, text: 'sunny' }
+    })()
+  }))
+  const { harness } = await registerWeatherAgent(sdk)
+
+  await collect(harness.runAgent({
+    agentId: WEATHER_AGENT.id,
+    runId: 'skill-prompt',
+    input: 'Weather?'
+  }))
+
+  const system = systemMessages[0] ?? []
+  t.is(system[0], WEATHER_AGENT.instructions, 'agent instructions come first')
+  // Every skill is listed so the model can say when it lacks one.
+  t.ok(system[1]?.includes('Available skills:') === true)
+  t.ok(system[1]?.includes('image-generation') === true)
+  // Only the selected skill contributes its body.
+  t.ok(system.some((text) => text.includes('Fixture instructions for the weather skill')))
+  t.is(
+    system.some((text) => text.includes('Fixture instructions for the notes skill')),
+    false,
+    'an unselected skill contributes no instructions'
+  )
+  await harness.close()
+})
+
 test('an allowed granted tool without a registered schema fails closed', async (t) => {
   let completions = 0
   const sdk = createSdk(({ requestId }) => {
@@ -538,9 +574,11 @@ test('one tool call emits call and result before final agent content', async (t)
   }))
 
   t.alike(events.map((event) => event.type), ['tool-call', 'tool-result', 'content'])
+  // Three system messages: agent instructions, the skills index, and the
+  // selected skill's own instructions.
   t.alike(histories, [
-    ['system', 'user'],
-    ['system', 'user', 'assistant', 'tool']
+    ['system', 'system', 'system', 'user'],
+    ['system', 'system', 'system', 'user', 'assistant', 'tool']
   ])
   await harness.close()
 })

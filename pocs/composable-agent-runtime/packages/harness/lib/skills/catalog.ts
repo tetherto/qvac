@@ -6,6 +6,8 @@ import { verifyBundledSkillsHash } from './bundled-hash.ts'
 export interface SkillCatalogEntry {
   name: string
   description: string
+  /** SKILL.md body: the prose the model is meant to follow. */
+  instructions: string
   tools: string[]
   allowList: string[]
   platform: string[]
@@ -66,7 +68,7 @@ function collectSkillNames(files: Readonly<Record<string, string>>): string[] {
 function loadEntry(files: Readonly<Record<string, string>>, skillName: string): SkillCatalogEntry {
   const raw = files[`${skillName}/SKILL.md`]
   if (!raw) throw new Error(`missing SKILL.md for ${skillName}`)
-  const { meta, rawBlock } = parseSkillFrontMatter(raw)
+  const { meta, rawBlock, body } = parseSkillFrontMatter(raw)
   assertRequiredManifest(meta)
   if (meta.name !== skillName) {
     throw new Error(
@@ -81,6 +83,7 @@ function loadEntry(files: Readonly<Record<string, string>>, skillName: string): 
   const entry: SkillCatalogEntry = {
     name: skillName,
     description: meta.description ?? '',
+    instructions: body.trim(),
     tools,
     allowList: [...(meta.allowList ?? [])],
     platform: [...(meta.platform ?? [])],

@@ -869,10 +869,10 @@ function registrationsFor(
     return {
       id: `${skill}-agent`,
       model,
-      instructions: [
-        selectedSkillInstructions(skill),
-        'Use the selected tool when required, then answer concisely from its result.'
-      ].join('\n\n'),
+      // The skill's own SKILL.md body is supplied by Harness as system prompt
+      // blocks, so this only adds what the skill file does not say.
+      instructions:
+        'Use the selected tool when required, then answer concisely from its result.',
       skills: [skill],
       toolPolicy: {
         allow: [toolName],
@@ -1009,12 +1009,6 @@ async function runRegisteredAgent(input: {
     message: status
   })
   return { skill: input.skill, status }
-}
-
-function selectedSkillInstructions(
-  skill: 'weather' | 'obsidian' | 'image-generation'
-) {
-  return `Follow the selected ${skill} skill instructions exactly.`
 }
 
 function promptForSkill(

@@ -1,4 +1,6 @@
 import type { AgentDefinition, AgentToolPolicy } from '@qvac/agents'
+import type { SkillCatalogEntry } from './skills/catalog.ts'
+import { composeSkillPrompt } from './skills/prompt.ts'
 
 export interface HarnessAgentWorkflowOperation {
   readonly id: string
@@ -19,12 +21,18 @@ export interface HarnessAgentRegistration {
 }
 
 export function agentDefinitionFromRegistration(
-  registration: HarnessAgentRegistration
+  registration: HarnessAgentRegistration,
+  catalog: readonly SkillCatalogEntry[] = []
 ): AgentDefinition {
+  const systemPrompt = composeSkillPrompt({
+    catalog,
+    selected: registration.skills
+  })
   return {
     id: registration.id,
     model: registration.model,
     ...(registration.instructions ? { instructions: registration.instructions } : {}),
+    ...(systemPrompt.length > 0 ? { systemPrompt } : {}),
     ...(registration.workflow
       ? {
           workflow: registration.workflow.map((operation) => ({
