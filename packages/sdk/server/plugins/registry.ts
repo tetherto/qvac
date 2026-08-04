@@ -11,6 +11,7 @@ import {
   PluginModelTypeReservedError
 } from '@/utils/errors-server'
 import { createAddonLoggerCallback } from '@/logging/addon'
+import { getServerLogger } from '@/logging'
 import { formatZodError } from '@/utils/zod-error'
 
 const plugins = new Map<string, QvacPlugin>()
@@ -108,7 +109,18 @@ export function clearPlugins(): void {
       const loggingModule = plugin.logging.module as {
         releaseLogger?: () => void
       }
-      loggingModule.releaseLogger?.()
+      try {
+        loggingModule.releaseLogger?.()
+      } catch (error) {
+        // A plugin's logger teardown must not abort the sweep or leave the
+        // registry half-cleared for the next caller — but surface it, so a leaked
+        // reference or async handle is not masked as a clean teardown.
+        getServerLogger().warn(
+          `[${plugin.modelType}] releaseLogger failed during clearPlugins: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
     }
   }
   plugins.clear()
