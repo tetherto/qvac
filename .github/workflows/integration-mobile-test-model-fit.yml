@@ -72,8 +72,10 @@ jobs:
     steps:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        env:
+          PKG: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
+          if [[ ! "$PKG" =~ ^@qvac/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* is allowed."
             exit 1
           fi
