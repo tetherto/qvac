@@ -9,6 +9,7 @@ import {
 } from '@/server/utils'
 import { getServerLogger } from '@/logging'
 import { Buffer } from 'bare-buffer'
+import { markAutoCacheKey } from '@/server/bare/ops/kv-cache-retention'
 
 const logger = getServerLogger()
 
@@ -52,23 +53,28 @@ export function generateCacheKey(messages: CacheMessage[]): string {
   return hashString.substring(0, 16)
 }
 
+function resolveCacheFilePath(modelId: string, configHash: string, cacheKey: string): string {
+  const cacheDir = getKVCacheDir()
+  const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
+  const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)
+  return path.join(modelCacheDir, `${configHash}.bin`)
+}
+
 export async function getCacheFilePath(
   modelId: string,
   configHash: string,
   cacheKey: string
 ): Promise<string> {
-  const cacheDir = getKVCacheDir()
-  const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
-  const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)
+  const cachePath = resolveCacheFilePath(modelId, configHash, cacheKey)
+  const modelCacheDir = path.dirname(cachePath)
 
   try {
-    await fsPromises.mkdir(sessionCacheDir, { recursive: true })
     await fsPromises.mkdir(modelCacheDir, { recursive: true })
   } catch {
     // Ignore if directories already exist
   }
 
-  return path.join(modelCacheDir, `${configHash}.bin`)
+  return cachePath
 }
 
 // Used for auto-generated cache key
@@ -83,10 +89,11 @@ export async function findMatchingCache(
 
   const previousHistory = getAutoCacheLookupHistory(currentHistory)
   const cacheKey = generateCacheKey(previousHistory)
-  const cachePath = await getCacheFilePath(modelId, configHash, cacheKey)
+  const cachePath = resolveCacheFilePath(modelId, configHash, cacheKey)
 
   try {
     await fsPromises.access(cachePath)
+    await markAutoCacheKey(cacheKey)
     return { cacheKey, cachePath }
   } catch {
     return null
@@ -102,6 +109,7 @@ export async function getCurrentCacheInfo(
   cachePath: string
 }> {
   const cacheKey = generateCacheKey(currentHistory)
+  await markAutoCacheKey(cacheKey)
   const cachePath = await getCacheFilePath(modelId, configHash, cacheKey)
   return { cacheKey, cachePath }
 }
@@ -116,6 +124,21 @@ export async function renameCacheFile(oldPath: string, newPath: string): Promise
       error instanceof Error ? error.message : String(error)
     )
     return false
+  }
+}
+
+export async function pruneEmptyCacheDirectories(cacheFilePath: string): Promise<void> {
+  const cacheDir = getKVCacheDir()
+  const cacheDirPrefix = `${cacheDir}${path.sep}`
+  let currentDirectory = path.dirname(cacheFilePath)
+
+  while (currentDirectory.startsWith(cacheDirPrefix)) {
+    try {
+      await fsPromises.rmdir(currentDirectory)
+    } catch {
+      return
+    }
+    currentDirectory = path.dirname(currentDirectory)
   }
 }
 

@@ -1,0 +1,1015 @@
+name: Benchmark (ASR GGML)
+
+# Accuracy benchmarks (WER/CER/AraDiaWER) for the unified @qvac/asr-ggml
+# addon, engine-discriminated via the `engine` input.
+#
+# Input compression (GitHub caps workflow_dispatch at 10 inputs):
+#   - `dataset` merges the old whisper `dataset_type` + `arabic_dataset`
+#     inputs (an arabic_* choice implies the Common Voice Arabic path).
+#   - `workdir` is hardcoded to packages/asr-ggml.
+#   - `streaming_chunk_size` is a documented default (64000 bytes ≈ 1s f32le).
+#   - `max_samples: -1` means "engine default": whisper auto-selects by model
+#     size, parakeet defaults to 50.
+# Whisper-scoped inputs (language/model_size/custom_model_repo) are ignored on
+# parakeet runs; `model_type` is ignored on whisper runs.
+#
+# Parakeet model provenance: rows point at GGUF quants from the QVAC registry
+# (s3://$MODEL_S3_BUCKET/qvac_models_compiled/ggml/parakeet/...), NOT the old
+# HuggingFace ONNX community downloads — the GGML addon cannot load those.
+
+on:
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: 'Engine to benchmark'
+        required: true
+        type: choice
+        default: whisper
+        options:
+          - whisper
+          - parakeet
+      repository:
+        description: 'Repository to benchmark'
+        required: false
+        type: string
+      ref:
+        description: 'Git ref (branch/tag/SHA) to benchmark'
+        required: false
+        type: string
+      dataset:
+        description: 'Dataset (arabic_* choices use the Common Voice Arabic S3 sets; whisper only)'
+        required: true
+        type: choice
+        default: librispeech
+        options:
+          - librispeech
+          - fleurs
+          - arabic_validated_all
+          - arabic_levantine
+          - arabic_egyptian
+      language:
+        description: 'Language for benchmarking (whisper; parakeet lanes pick their own)'
+        required: true
+        type: choice
+        default: english
+        options:
+          - english
+          - french
+          - german
+          - spanish
+          - italian
+          - portuguese
+          - mandarin_chinese
+          - arabic
+          - russian
+          - japanese
+          - czech
+      model_size:
+        description: 'Model size (whisper only)'
+        required: true
+        type: choice
+        default: tiny
+        options:
+          - tiny
+          - base
+          - small
+          - medium
+      model_type:
+        description: 'Model type (parakeet only)'
+        required: false
+        type: choice
+        default: tdt
+        options:
+          - tdt
+          - ctc
+          - eou
+          - sortformer
+          - all
+      custom_model_repo:
+        description: 'Custom HuggingFace model repository URL (whisper only; leave empty to use default models)'
+        required: false
+        type: string
+        default: ''
+      streaming_mode:
+        description: 'Enable Streaming Mode (chunked processing)'
+        required: true
+        type: boolean
+        default: false
+      max_samples:
+        description: 'Max samples (-1 = engine default: whisper auto-by-size, parakeet 50; 0 = unlimited)'
+        required: false
+        type: number
+        default: -1
+
+env:
+  WORKDIR: packages/asr-ggml
+  STREAMING_CHUNK_SIZE: "64000"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Generate matrix based on engine and configuration
+        id: set-matrix
+        env:
+          ENGINE: ${{ github.event.inputs.engine }}
+          LANGUAGE: ${{ github.event.inputs.language }}
+          DATASET: ${{ github.event.inputs.dataset }}
+          MODEL_SIZE: ${{ github.event.inputs.model_size }}
+          MODEL_TYPE: ${{ github.event.inputs.model_type || 'tdt' }}
+          CUSTOM_MODEL_REPO: ${{ github.event.inputs.custom_model_repo }}
+          MAX_SAMPLES: ${{ github.event.inputs.max_samples }}
+        run: |
+          MATRIX=$(python3 <<'PYEOF'
+          import json
+          import os
+
+          engine = os.environ["ENGINE"]
+          language = os.environ["LANGUAGE"]
+          dataset = os.environ["DATASET"]
+          model_size = os.environ["MODEL_SIZE"]
+          model_type = os.environ["MODEL_TYPE"]
+          custom_model_repo = os.environ["CUSTOM_MODEL_REPO"]
+          max_samples = int(os.environ["MAX_SAMPLES"] or "-1")
+
+          whisper_lang_by_language = {
+              "english": "",
+              "french": "fr",
+              "german": "de",
+              "spanish": "es",
+              "italian": "it",
+              "portuguese": "pt",
+              "mandarin_chinese": "zh",
+              "arabic": "ar",
+              "russian": "ru",
+              "japanese": "ja",
+              "czech": "cs",
+          }
+
+          include = []
+
+          if engine == "whisper":
+              if custom_model_repo:
+                  include.append({
+                      "engine": "whisper",
+                      "model_variant": "custom",
+                      "model_file": "custom.bin",
+                      "quantization": "f16",
+                      "language": whisper_lang_by_language.get(language, ""),
+                      "source": "custom",
+                  })
+              else:
+                  quant_configs = {
+                      "tiny": ["f16", "q5_1", "q8_0"],
+                      "base": ["f16", "q5_1", "q8_0"],
+                      "small": ["f16", "q5_1", "q8_0"],
+                      "medium": ["f16", "q5_0", "q8_0"],
+                  }
+
+                  for quant in quant_configs[model_size]:
+                      if quant == "f16":
+                          model_file = f"ggml-{model_size}.bin"
+                          variant = model_size
+                      else:
+                          model_file = f"ggml-{model_size}-{quant}.bin"
+                          variant = f"{model_size}-{quant}"
+
+                      include.append({
+                          "engine": "whisper",
+                          "model_variant": variant,
+                          "model_file": model_file,
+                          "quantization": quant,
+                          "language": "auto",
+                          "source": "huggingface",
+                      })
+
+                      if language == "english":
+                          if quant == "f16":
+                              en_file = f"ggml-{model_size}.en.bin"
+                              en_variant = f"{model_size}.en"
+                          else:
+                              en_file = f"ggml-{model_size}.en-{quant}.bin"
+                              en_variant = f"{model_size}.en-{quant}"
+
+                          include.append({
+                              "engine": "whisper",
+                              "model_variant": en_variant,
+                              "model_file": en_file,
+                              "quantization": quant,
+                              "language": "en",
+                              "source": "huggingface",
+                          })
+
+                  if model_size != "medium":
+                      futo_url = f"https://voiceinput.futo.org/VoiceInput/{model_size}_acft_q8_0.bin"
+                      include.append({
+                          "engine": "whisper",
+                          "model_variant": f"futo-{model_size}-acft-q8_0",
+                          "model_file": f"{model_size}_acft_q8_0.bin",
+                          "quantization": "acft-q8_0",
+                          "language": "auto",
+                          "source": "futo",
+                          "download_url": futo_url,
+                      })
+
+                      if language == "english":
+                          futo_en_url = f"https://voiceinput.futo.org/VoiceInput/{model_size}_en_acft_q8_0.bin"
+                          include.append({
+                              "engine": "whisper",
+                              "model_variant": f"futo-{model_size}.en-acft-q8_0",
+                              "model_file": f"{model_size}_en_acft_q8_0.bin",
+                              "quantization": "acft-q8_0",
+                              "language": "en",
+                              "source": "futo",
+                              "download_url": futo_en_url,
+                          })
+          else:
+              # Parakeet lanes. Model rows point at GGUF quants from the QVAC
+              # registry (staged by the benchmark job via the integration model
+              # manifest); f16 keeps the accuracy baseline comparable across
+              # model types.
+              gguf_by_type = {
+                  "tdt": "parakeet-tdt-0.6b-v3.{quant}.gguf",
+                  "ctc": "parakeet-ctc-0.6b.{quant}.gguf",
+                  "eou": "parakeet-eou-120m-v1.{quant}.gguf",
+                  "sortformer": "sortformer-4spk-v1.{quant}.gguf",
+              }
+
+              model_types = [model_type] if model_type != "all" else ["tdt", "ctc", "eou", "sortformer"]
+
+              def get_configs_for_type(mt):
+                  if mt == "sortformer":
+                      return [
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                      ]
+                  elif mt == "eou":
+                      return [
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": True},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                      ]
+                  elif mt == "ctc":
+                      return [
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                      ]
+                  else:
+                      return [
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                          {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                          {"language": "french", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                          {"language": "german", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                          {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                      ]
+
+              quant = "f16"
+              parakeet_max_samples = max_samples if max_samples != -1 else 50
+              for mt in model_types:
+                  for cfg in get_configs_for_type(mt):
+                      mode_str = "streaming" if cfg["streaming"] else "batch"
+                      gpu_str = "gpu" if cfg["use_gpu"] else "cpu"
+                      variant = f"{mt}-{cfg['language']}-{cfg['dataset_type']}-{gpu_str}-{mode_str}"
+                      include.append({
+                          "engine": "parakeet",
+                          "model_variant": variant,
+                          "model_type": mt,
+                          "quant": quant,
+                          "gguf": gguf_by_type[mt].format(quant=quant),
+                          "use_gpu": cfg["use_gpu"],
+                          "language": cfg["language"],
+                          "dataset_type": cfg["dataset_type"],
+                          "streaming": cfg["streaming"],
+                          "max_samples": parakeet_max_samples,
+                      })
+
+          matrix = {
+              "model_variant": [cfg["model_variant"] for cfg in include],
+              "include": include,
+          }
+
+          print(json.dumps(matrix))
+          PYEOF
+          )
+
+          COMPACT_MATRIX=$(echo "$MATRIX" | jq -c .)
+          echo "matrix=$COMPACT_MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for engine: $ENGINE"
+          echo "$MATRIX" | jq .
+
+  benchmark:
+    needs:
+      - generate-matrix
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 1440
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+
+    name: benchmark-${{ matrix.model_variant }}
+
+    steps:
+      - name: Display benchmark configuration
+        run: |
+          echo "=== Benchmark Configuration ==="
+          echo "Engine: ${{ matrix.engine }}"
+          echo "Variant: ${{ matrix.model_variant }}"
+          echo "Dataset input: ${{ github.event.inputs.dataset }}"
+          echo "Streaming Mode: ${{ github.event.inputs.streaming_mode }}"
+          if [ "${{ matrix.engine }}" = "whisper" ]; then
+            echo "Language: ${{ github.event.inputs.language }}"
+            echo "Model Size: ${{ github.event.inputs.model_size }}"
+            if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+              echo "Custom Model Repository: ${{ github.event.inputs.custom_model_repo }}"
+            else
+              echo "Model File: ${{ matrix.model_file }} (${{ matrix.source }})"
+            fi
+          else
+            echo "Model Type: ${{ matrix.model_type }} (${{ matrix.gguf }})"
+            echo "Dataset: ${{ matrix.dataset_type }} / ${{ matrix.language }}"
+            echo "GPU: ${{ matrix.use_gpu }}"
+            echo "Streaming: ${{ matrix.streaming }}"
+            echo "Max Samples: ${{ matrix.max_samples }}"
+          fi
+
+      - name: Maximize build space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+
+          echo "=== Cleaning up disk space ==="
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo apt-get clean
+
+          echo "=== Disk space after cleanup ==="
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.inputs.repository || github.repository }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg build-essential cmake unzip curl
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.14'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Bare runtime
+        run: |
+          npm install -g --force bare-dev
+          npm install -g --force bare bare-make
+
+      - name: Download prebuilds
+        id: prebuilds
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          BENCHMARK_REPOSITORY: ${{ github.event.inputs.repository || github.repository }}
+          BENCHMARK_REF: ${{ github.event.inputs.ref || github.ref_name }}
+        run: |
+          echo "Fetching prebuilds artifact from latest successful prebuilds run..."
+          RUN_ID=$(gh run list --repo "$BENCHMARK_REPOSITORY" --workflow=prebuilds-asr-ggml.yml --branch "$BENCHMARK_REF" --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::No successful prebuilds run found - the benchmark server install will fail (there is no published @qvac/asr-ggml to fall back to yet)"
+            exit 1
+          fi
+
+          echo "Using prebuilds from run ID: $RUN_ID"
+          gh run download "$RUN_ID" --repo "$BENCHMARK_REPOSITORY" -n prebuilds -D "${{ env.WORKDIR }}/prebuilds"
+          ls -la "${{ env.WORKDIR }}/prebuilds/" || true
+
+      # ---------------- whisper-only model staging ----------------
+      - name: Clone custom model repository
+        if: matrix.engine == 'whisper' && github.event.inputs.custom_model_repo != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Cloning custom model from: ${{ github.event.inputs.custom_model_repo }}"
+          git clone ${{ github.event.inputs.custom_model_repo }} /tmp/custom-model
+          ls -lah /tmp/custom-model
+
+      - name: Install conversion requirements
+        if: matrix.engine == 'whisper' && github.event.inputs.custom_model_repo != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          pip install -r benchmarks/ci/requirements-conversion.txt
+
+      - name: Convert custom model to GGML format
+        if: matrix.engine == 'whisper' && github.event.inputs.custom_model_repo != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Converting custom model to GGML format..."
+
+          WHISPER_PATH=$(python -c "import whisper; import os; print(os.path.dirname(whisper.__file__))")
+          WHISPER_PARENT=$(dirname "$WHISPER_PATH")
+          echo "Using whisper package at: $WHISPER_PARENT"
+
+          python benchmarks/ci/convert-hf-to-ggml.py /tmp/custom-model "$WHISPER_PARENT" /tmp/custom-model-ggml
+
+          GGML_FILE=$(find /tmp/custom-model-ggml -name "ggml-model.bin" -type f | head -n 1)
+
+          if [ -z "$GGML_FILE" ]; then
+            echo "Error: ggml-model.bin not found in /tmp/custom-model-ggml"
+            ls -lah /tmp/custom-model-ggml
+            exit 1
+          fi
+
+          mkdir -p examples
+          CUSTOM_MODEL_NAME="custom-$(basename ${{ github.event.inputs.custom_model_repo }})-${{ matrix.model_variant }}.bin"
+          cp "$GGML_FILE" "examples/$CUSTOM_MODEL_NAME"
+          echo "CUSTOM_MODEL_FILE=$CUSTOM_MODEL_NAME" >> $GITHUB_ENV
+
+          echo "Custom model converted and saved to: examples/$CUSTOM_MODEL_NAME"
+          ls -lh "examples/$CUSTOM_MODEL_NAME"
+
+      - name: Configure AWS credentials via OIDC (Arabic dataset)
+        if: matrix.engine == 'whisper' && startsWith(github.event.inputs.dataset, 'arabic_')
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download Arabic Common Voice dataset from S3
+        if: matrix.engine == 'whisper' && startsWith(github.event.inputs.dataset, 'arabic_')
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          ARABIC_DATASET="${{ github.event.inputs.dataset }}"
+
+          echo "=== Downloading Arabic Common Voice dataset from S3 ==="
+          echo "Selected dataset: $ARABIC_DATASET"
+
+          # Create directory structure
+          mkdir -p "benchmarks/data/samples/${ARABIC_DATASET}"
+
+          # Download from S3
+          S3_PATH="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/transcription/arabic/${ARABIC_DATASET}/"
+          echo "Downloading from ${S3_PATH}"
+          aws s3 sync \
+            "${S3_PATH}" \
+            "benchmarks/data/samples/${ARABIC_DATASET}/" \
+            --quiet
+
+          # Verify download
+          if [ ! -f "benchmarks/data/samples/${ARABIC_DATASET}/manifest.json" ]; then
+            echo "Error: manifest.json not found after S3 download"
+            exit 1
+          fi
+
+          echo "=== Download complete ==="
+          echo "Files downloaded:"
+          ls -lh "benchmarks/data/samples/${ARABIC_DATASET}/" | head -20
+
+          # Count samples (try both .wav and .mp3 extensions)
+          WAV_COUNT=$(ls -1 "benchmarks/data/samples/${ARABIC_DATASET}"/*.wav 2>/dev/null | wc -l)
+          MP3_COUNT=$(ls -1 "benchmarks/data/samples/${ARABIC_DATASET}"/*.mp3 2>/dev/null | wc -l)
+          SAMPLE_COUNT=$((WAV_COUNT + MP3_COUNT))
+          echo "Total audio files: $SAMPLE_COUNT (.wav: $WAV_COUNT, .mp3: $MP3_COUNT)"
+
+          # Export for use in later steps
+          echo "ARABIC_DATASET=${ARABIC_DATASET}" >> $GITHUB_ENV
+
+      - name: Download Whisper model (${{ matrix.model_file }})
+        if: matrix.engine == 'whisper' && github.event.inputs.custom_model_repo == ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          mkdir -p examples
+          cd examples
+          if [ ! -f "${{ matrix.model_file }}" ]; then
+            echo "Downloading ${{ matrix.model_file }} from ${{ matrix.source }}..."
+            if [ "${{ matrix.source }}" = "futo" ]; then
+              MODEL_URL="${{ matrix.download_url }}"
+            else
+              MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${{ matrix.model_file }}"
+            fi
+            wget "$MODEL_URL" -O "${{ matrix.model_file }}"
+          else
+            echo "${{ matrix.model_file }} already exists"
+          fi
+          ls -lh ${{ matrix.model_file }}
+
+      # ---------------- parakeet-only model staging ----------------
+      - name: Configure AWS credentials via OIDC (Parakeet GGUF)
+        if: matrix.engine == 'parakeet'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Stage the specific type+quant GGUF requested by the matrix row. The
+      # s3 path is resolved from the integration model manifest so the
+      # benchmark can never drift from the set the addon actually loads.
+      - name: Stage Parakeet GGUF from QVAC registry
+        if: matrix.engine == 'parakeet'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          GGUF="${{ matrix.gguf }}"
+          S3_PATH=$(jq -r --arg f "$GGUF" '.models[$f].s3Path // empty' test/integration/parakeet-models.manifest.json)
+          if [ -z "$S3_PATH" ]; then
+            echo "::error::GGUF '$GGUF' not declared in test/integration/parakeet-models.manifest.json"
+            exit 1
+          fi
+          mkdir -p models
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/${S3_PATH}" models/
+          ls -lh "models/$GGUF"
+
+      # ---------------- config selection & patching ----------------
+      - name: Update config with runner paths (whisper)
+        if: matrix.engine == 'whisper'
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            MODEL_FILE="${CUSTOM_MODEL_FILE}"
+          else
+            MODEL_FILE="${{ matrix.model_file }}"
+          fi
+
+          RUNNER_MODEL_PATH="${GITHUB_WORKSPACE}/${WORKDIR}/examples/${MODEL_FILE}"
+          DATASET_INPUT="${{ github.event.inputs.dataset }}"
+          DATASET_LANGUAGE="${{ github.event.inputs.language }}"
+          MODEL_SIZE="${{ github.event.inputs.model_size }}"
+          STREAMING_MODE="${{ github.event.inputs.streaming_mode }}"
+          INPUT_MAX_SAMPLES="${{ github.event.inputs.max_samples }}"
+
+          # arabic_* dataset choices use the Common Voice Arabic configs and
+          # force the arabic language path.
+          case "$DATASET_INPUT" in
+            arabic_levantine)
+              CONFIG_FILE="config-whisper-arabic-levantine.yaml"
+              DATASET_LANGUAGE="arabic"
+              ;;
+            arabic_egyptian)
+              CONFIG_FILE="config-whisper-arabic-egyptian.yaml"
+              DATASET_LANGUAGE="arabic"
+              ;;
+            arabic_validated_all)
+              CONFIG_FILE="config-whisper-arabic.yaml"
+              DATASET_LANGUAGE="arabic"
+              ;;
+            *)
+              CONFIG_FILE="config-whisper.yaml"
+              ;;
+          esac
+          echo "Using configuration: $CONFIG_FILE"
+          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
+          echo "DATASET_LANGUAGE=$DATASET_LANGUAGE" >> $GITHUB_ENV
+
+          # Set max samples based on input or model size to prevent timeouts
+          if [ "$INPUT_MAX_SAMPLES" != "-1" ]; then
+            MAX_SAMPLES="$INPUT_MAX_SAMPLES"
+            echo "Using user-specified max_samples: $MAX_SAMPLES"
+          else
+            case "$MODEL_SIZE" in
+              tiny) MAX_SAMPLES=0 ;;
+              base) MAX_SAMPLES=0 ;;
+              small) MAX_SAMPLES=1000 ;;
+              medium) MAX_SAMPLES=100 ;;
+              *) MAX_SAMPLES=0 ;;
+            esac
+            echo "Using default max_samples for $MODEL_SIZE: $MAX_SAMPLES"
+          fi
+          echo "MAX_SAMPLES=$MAX_SAMPLES" >> $GITHUB_ENV
+
+          # Set timeout based on model size
+          case "$MODEL_SIZE" in
+            tiny) TIMEOUT=40 ;;
+            base) TIMEOUT=100 ;;
+            small) TIMEOUT=200 ;;
+            medium) TIMEOUT=1000 ;;
+            *) TIMEOUT=40 ;;
+          esac
+
+          # Double timeout for streaming mode
+          if [ "$STREAMING_MODE" = "true" ]; then
+            TIMEOUT=$((TIMEOUT * 2))
+          fi
+
+          # Map dataset language to whisper language code
+          case "$DATASET_LANGUAGE" in
+            english) WHISPER_LANG="" ;;
+            french) WHISPER_LANG="fr" ;;
+            german) WHISPER_LANG="de" ;;
+            spanish) WHISPER_LANG="es" ;;
+            italian) WHISPER_LANG="it" ;;
+            portuguese) WHISPER_LANG="pt" ;;
+            mandarin_chinese) WHISPER_LANG="zh" ;;
+            arabic) WHISPER_LANG="ar" ;;
+            russian) WHISPER_LANG="ru" ;;
+            japanese) WHISPER_LANG="ja" ;;
+            czech) WHISPER_LANG="cs" ;;
+            *) WHISPER_LANG="" ;;
+          esac
+
+          # Override with model-specific language if it's English-only
+          if [ "${{ matrix.language }}" = "en" ]; then
+            WHISPER_LANG="en"
+          fi
+
+          CONFIG_PATH="benchmarks/client/config/${CONFIG_FILE}"
+
+          # Update config file with runtime values
+          sed -i "s|timeout:.*|timeout: ${TIMEOUT}|" "$CONFIG_PATH"
+          sed -i "s|path:.*|path: \"${RUNNER_MODEL_PATH}\"|" "$CONFIG_PATH"
+          sed -i "s|speaker_group:.*|speaker_group: \"clean\"|" "$CONFIG_PATH"
+
+          # arabic_* choices use the common_voice dataset type with a manifest
+          if [ "$DATASET_LANGUAGE" = "arabic" ]; then
+            MANIFEST_PATH="${GITHUB_WORKSPACE}/${WORKDIR}/benchmarks/data/samples/${DATASET_INPUT}/manifest.json"
+            sed -i "s|common_voice_manifest:.*|common_voice_manifest: \"${MANIFEST_PATH}\"|" "$CONFIG_PATH"
+            echo "Updated Common Voice manifest path to: ${MANIFEST_PATH}"
+          else
+            sed -i "/^dataset:/,/^[^ ]/ s|  dataset_type:.*|  dataset_type: \"${DATASET_INPUT}\"|" "$CONFIG_PATH"
+          fi
+
+          sed -i "/^dataset:/,/^[^ ]/ s|  language:.*|  language: \"${DATASET_LANGUAGE}\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  language:.*|  language: \"${WHISPER_LANG}\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  vad:.*|  vad: false|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  vad_model_path:.*|  vad_model_path: \"\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
+
+          echo "=== Updated ${CONFIG_FILE} ==="
+          cat "$CONFIG_PATH"
+
+      - name: Update config with runner paths (parakeet)
+        if: matrix.engine == 'parakeet'
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          RUNNER_MODEL_PATH="${GITHUB_WORKSPACE}/${WORKDIR}/models/${{ matrix.gguf }}"
+          DATASET_TYPE="${{ matrix.dataset_type }}"
+          DATASET_LANGUAGE="${{ matrix.language }}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+          USE_GPU="${{ matrix.use_gpu }}"
+          STREAMING_MODE="${{ matrix.streaming }}"
+          MAX_SAMPLES="${{ matrix.max_samples }}"
+
+          # Select the appropriate config file for this model type
+          case "$MODEL_TYPE" in
+            ctc) CONFIG_FILE="config-parakeet-ctc.yaml" ;;
+            eou) CONFIG_FILE="config-parakeet-eou.yaml" ;;
+            sortformer) CONFIG_FILE="config-parakeet-sortformer.yaml" ;;
+            *) CONFIG_FILE="config-parakeet.yaml" ;;
+          esac
+
+          echo "Using config template: ${CONFIG_FILE}"
+          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
+
+          # Set timeout based on model type
+          case "$MODEL_TYPE" in
+            tdt) TIMEOUT=120 ;;
+            ctc) TIMEOUT=60 ;;
+            eou) TIMEOUT=120 ;;
+            sortformer) TIMEOUT=180 ;;
+            *) TIMEOUT=120 ;;
+          esac
+
+          # Double timeout for streaming mode
+          if [ "$STREAMING_MODE" = "true" ]; then
+            TIMEOUT=$((TIMEOUT * 2))
+          fi
+
+          CONFIG_PATH="benchmarks/client/config/${CONFIG_FILE}"
+
+          # Update config file with runtime values
+          sed -i "s|timeout:.*|timeout: ${TIMEOUT}|" "$CONFIG_PATH"
+          sed -i "s|path:.*|path: \"${RUNNER_MODEL_PATH}\"|" "$CONFIG_PATH"
+          sed -i "s|speaker_group:.*|speaker_group: \"clean\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  dataset_type:.*|  dataset_type: \"${DATASET_TYPE}\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  language:.*|  language: \"${DATASET_LANGUAGE}\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  model_type:.*|  model_type: \"${MODEL_TYPE}\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  use_gpu:.*|  use_gpu: ${USE_GPU}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
+
+          echo "=== Updated ${CONFIG_FILE} ==="
+          cat "$CONFIG_PATH"
+
+      # ---------------- shared server/client trunk ----------------
+      - name: Install main package dependencies
+        if: steps.prebuilds.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      # benchmarks/server/package.json intentionally does NOT list
+      # @qvac/asr-ggml in dependencies: the unified package has not had its
+      # first npm release (the registry carries only a 0.0.0 placeholder), so a
+      # registry range would make the bare `npm install` below fail with
+      # ETARGET on every runner. The addon comes from the local package tree
+      # instead. Restore the npm fallback (and the dependency entry) once
+      # @qvac/asr-ggml is published.
+      - name: Install benchmark server dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          npm install
+          if [ "${{ steps.prebuilds.outcome }}" = "success" ]; then
+            echo "Installing addon from local source (prebuilds available)..."
+            npm install ../../
+          else
+            echo "::error::Prebuilds are unavailable and @qvac/asr-ggml is not published to npm yet (registry has only the 0.0.0 placeholder), so there is no addon to install. Re-run once prebuilds-asr-ggml.yml has a successful run on this ref, or after the first npm release."
+            exit 1
+          fi
+
+      - name: Install benchmark client dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        run: poetry install --no-cache
+
+      - name: Start benchmark server
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Server started successfully"
+
+      - name: Run benchmark
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+        run: |
+          echo "Running benchmark with config: ${CONFIG_FILE}"
+          poetry run python -u -m src.main --config config/${CONFIG_FILE}
+          rm -rf /tmp/hf_cache || true
+
+      - name: Stop benchmark server
+        if: always()
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi
+
+      - name: Display server logs
+        if: always()
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          if [ -f server.log ]; then
+            echo "=== Server Logs ==="
+            cat server.log
+          fi
+
+      # ---------------- results (whisper branch keeps AraDiaWER) ----------------
+      - name: Display results summary (whisper)
+        if: always() && matrix.engine == 'whisper'
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            MODEL_NAME="${CUSTOM_MODEL_FILE}"
+          else
+            MODEL_NAME="${{ matrix.model_file }}"
+          fi
+          MODEL_NAME="${MODEL_NAME%.bin}"
+
+          # Use common_voice for Arabic, otherwise the input dataset type
+          if [ "${DATASET_LANGUAGE}" = "arabic" ]; then
+            DATASET_TYPE="common_voice"
+          else
+            DATASET_TYPE="${{ github.event.inputs.dataset }}"
+          fi
+
+          DATASET_LANG="${DATASET_LANGUAGE}"
+          VAD_SUFFIX="no_vad"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ github.event.inputs.streaming_mode }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_NAME}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_NAME}-${VAD_SUFFIX}-${STREAMING_SUFFIX}.md"
+
+          echo "=== Benchmark Configuration ==="
+          echo "Model Variant: ${{ matrix.model_variant }}"
+          echo "Quantization: ${{ matrix.quantization }}"
+          echo "Model Language: ${{ matrix.language }}"
+          echo "Dataset Language: ${DATASET_LANG}"
+          echo "Source: ${{ matrix.source }}"
+          echo "Model File: ${{ matrix.model_file }}"
+          echo "Streaming Mode: ${{ github.event.inputs.streaming_mode }}"
+          echo "Max Samples: ${MAX_SAMPLES} (0 = unlimited)"
+          echo ""
+
+          if [ -f "$RESULT_FILE" ]; then
+            echo "=== Results from $RESULT_FILE ==="
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "Samples evaluated: $SAMPLES"
+            echo "WER: $WER"
+            echo "CER: $CER"
+
+            # Check for AraDiaWER metrics (Arabic only)
+            if [ "${DATASET_LANG}" = "arabic" ]; then
+              ARADIAWER=$(grep "AraDiaWER:" "$RESULT_FILE" | head -1 | sed 's/.*AraDiaWER: //' | sed 's/\*\*//' || echo "N/A")
+              if [ "$ARADIAWER" != "N/A" ]; then
+                echo "AraDiaWER: $ARADIAWER"
+              fi
+            fi
+
+            echo "Load time: $LOAD_TIME"
+            echo "Run time: $RUN_TIME"
+          else
+            echo "❌ Results file not found: $RESULT_FILE"
+          fi
+
+      - name: Add results to job summary (whisper)
+        if: always() && matrix.engine == 'whisper'
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            MODEL_NAME="${CUSTOM_MODEL_FILE}"
+          else
+            MODEL_NAME="${{ matrix.model_file }}"
+          fi
+          MODEL_NAME="${MODEL_NAME%.bin}"
+
+          # Use common_voice for Arabic, otherwise the input dataset type
+          if [ "${DATASET_LANGUAGE}" = "arabic" ]; then
+            DATASET_TYPE="common_voice"
+          else
+            DATASET_TYPE="${{ github.event.inputs.dataset }}"
+          fi
+
+          DATASET_LANG="${DATASET_LANGUAGE}"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ github.event.inputs.streaming_mode }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_NAME}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_NAME}-no_vad-${STREAMING_SUFFIX}.md"
+
+          echo "### ${{ matrix.model_variant }} (${STREAMING_SUFFIX})" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "$RESULT_FILE" ]; then
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+              echo "| Custom Model | ${{ github.event.inputs.custom_model_repo }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "| Language | ${DATASET_LANG} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Dataset | ${DATASET_TYPE} (clean) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Samples | ${SAMPLES} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Mode | ${STREAMING_SUFFIX} |" >> $GITHUB_STEP_SUMMARY
+            echo "| WER | ${WER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| CER | ${CER} |" >> $GITHUB_STEP_SUMMARY
+
+            # Add AraDiaWER metrics for Arabic
+            if [ "${DATASET_LANG}" = "arabic" ]; then
+              ARADIAWER=$(grep "AraDiaWER:" "$RESULT_FILE" | head -1 | sed 's/.*AraDiaWER: //' | sed 's/\*\*//' || echo "N/A")
+              if [ "$ARADIAWER" != "N/A" ]; then
+                echo "| AraDiaWER | ${ARADIAWER} |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+
+            echo "| Load Time | ${LOAD_TIME} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Run Time | ${RUN_TIME} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Results file not found: $RESULT_FILE" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ---------------- results (parakeet branch keeps its table) ----------------
+      - name: Display results summary (parakeet)
+        if: always() && matrix.engine == 'parakeet'
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          MODEL_NAME="${{ matrix.gguf }}"
+          MODEL_NAME="${MODEL_NAME%.gguf}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+          DATASET_TYPE="${{ matrix.dataset_type }}"
+          DATASET_LANG="${{ matrix.language }}"
+          GPU_SUFFIX="cpu"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ matrix.use_gpu }}" = "true" ]; then
+            GPU_SUFFIX="gpu"
+          fi
+
+          if [ "${{ matrix.streaming }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_NAME}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_TYPE}-${GPU_SUFFIX}-${STREAMING_SUFFIX}.md"
+
+          echo "=== Benchmark Configuration ==="
+          echo "Test: ${{ matrix.model_variant }}"
+          echo "Model Type: ${MODEL_TYPE}"
+          echo "GPU: ${GPU_SUFFIX}"
+          echo "Dataset: ${DATASET_TYPE} / ${DATASET_LANG}"
+          echo "Streaming Mode: ${STREAMING_SUFFIX}"
+          echo ""
+
+          if [ -f "$RESULT_FILE" ]; then
+            echo "=== Results from $RESULT_FILE ==="
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "Samples evaluated: $SAMPLES"
+            echo "WER: $WER"
+            echo "CER: $CER"
+            echo "Load time: $LOAD_TIME"
+            echo "Run time: $RUN_TIME"
+          else
+            echo "❌ Results file not found: $RESULT_FILE"
+          fi
+
+      - name: Add results to job summary (parakeet)
+        if: always() && matrix.engine == 'parakeet'
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          MODEL_NAME="${{ matrix.gguf }}"
+          MODEL_NAME="${MODEL_NAME%.gguf}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+          DATASET_TYPE="${{ matrix.dataset_type }}"
+          DATASET_LANG="${{ matrix.language }}"
+          GPU_SUFFIX="cpu"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ matrix.use_gpu }}" = "true" ]; then
+            GPU_SUFFIX="gpu"
+          fi
+
+          if [ "${{ matrix.streaming }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_NAME}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_TYPE}-${GPU_SUFFIX}-${STREAMING_SUFFIX}.md"
+
+          echo "### ${{ matrix.model_variant }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "$RESULT_FILE" ]; then
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Language | ${DATASET_LANG} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Dataset | ${DATASET_TYPE} (clean) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Model Type | ${MODEL_TYPE} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Samples | ${SAMPLES} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Mode | ${STREAMING_SUFFIX} |" >> $GITHUB_STEP_SUMMARY
+            echo "| WER | ${WER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| CER | ${CER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Load time | ${LOAD_TIME} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Run time | ${RUN_TIME} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Results file not found**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY

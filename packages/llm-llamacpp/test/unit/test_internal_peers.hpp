@@ -65,6 +65,16 @@ public:
   static float* logits(MtmdLlmContext& ctx, int logitIdx) {
     return llama_get_logits_ith(ctx.modelCtx_.lctx, logitIdx);
   }
+
+  /// Thinking-compaction state, so the context's flag and the compactor's copy
+  /// can be asserted to agree.
+  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
+    return context.removeThinkingFromContext_;
+  }
+
+  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
+    return context.compactor_.removeThinkingFromContext();
+  }
 };
 
 class ContinuousBatchSchedulerTestPeer {
@@ -85,3 +95,4 @@ public:
     scheduler.evalMediaFunc_ = std::move(fn);
   }
 };
+

@@ -46,6 +46,36 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
+## Model source constants in config
+
+`serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant
+names, including fields inside nested objects. The CLI resolves those names to
+the same `ModelConstant` objects accepted by the SDK. The snake-case
+`upscaler.model_src` field follows the same rules except in video mode, where
+the SDK ignores the entire `upscaler` block and the CLI leaves it unchanged:
+
+```json
+{
+  "serve": {
+    "models": {
+      "chatterbox": {
+        "model": "TTS_T3_TURBO_EN_CHATTERBOX_Q8_0",
+        "type": "tts",
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "s3genModelSrc": "TTS_S3GEN_EN_CHATTERBOX"
+        }
+      }
+    }
+  }
+}
+```
+
+These fields also accept full source URLs such as `registry://…` and filesystem
+paths. Bare filenames remain unchanged for downstream filesystem resolution.
+Unknown `CONSTANT_CASE` values are rejected with the full config path.
+
 ## `POST /v1/completions`
 
 Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with

@@ -27,26 +27,6 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
   release-merge-guard:
     name: Release Merge Guard
     if: >-
@@ -65,6 +45,33 @@ jobs:
           package-slug: infer-base
           package-json-path: packages/infer-base/package.json
           changelog-path: packages/infer-base/CHANGELOG.md
+
+  # Guards every publish path below. The published index.js, src/**/*.js and
+  # *.d.ts are committed build outputs, so without this gate a stale artifact
+  # that no longer matches the TypeScript sources would ship unchecked.
+  validate-artifacts:
+    name: Validate generated artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/infer-base
+        run: npm install --ignore-scripts --package-lock=false --registry=https://registry.npmjs.org/
+
+      - name: Typecheck, declarations and generated-artifact freshness
+        working-directory: packages/infer-base
+        run: npm run test:types
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -117,8 +124,8 @@ jobs:
   publish-main-gpr-dev:
     needs:
       - publish-logic
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true')
+      - validate-artifacts
+    if: needs.validate-artifacts.result == 'success' && (needs.publish-logic.outputs.publish_main == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -142,13 +149,13 @@ jobs:
     needs:
       - publish-logic
       - release-merge-guard
-      - label-gate
+      - validate-artifacts
     permissions:
       contents: write
       packages: write
       id-token: write
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      (always() && needs.publish-logic.outputs.publish_release == 'true' && needs.validate-artifacts.result == 'success' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     uses: ./.github/workflows/public-reusable-npm.yml
     secrets: inherit
     with:
@@ -169,8 +176,8 @@ jobs:
   publish-feature-gpr:
     needs:
       - publish-logic
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_feature == 'true')
+      - validate-artifacts
+    if: needs.validate-artifacts.result == 'success' && (needs.publish-logic.outputs.publish_feature == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -193,8 +200,8 @@ jobs:
   publish-tmp-gpr:
     needs:
       - publish-logic
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_tmp == 'true')
+      - validate-artifacts
+    if: needs.validate-artifacts.result == 'success' && (needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:

@@ -6,7 +6,7 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "9840.0.1"
+      "version>=": "9840.1.1"
     },
     {
       "name": "qvac-lint-cpp",

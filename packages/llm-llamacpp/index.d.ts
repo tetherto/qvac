@@ -57,7 +57,7 @@ export interface LlamaConfig {
   top_k?: NumericLike
   predict?: NumericLike
   seed?: NumericLike
-  no_mmap?: boolean | ''
+  no_mmap?: '' | 'true' | 'false'
   reverse_prompt?: string
   repeat_penalty?: NumericLike
   presence_penalty?: NumericLike
@@ -186,15 +186,14 @@ export interface GenerationParams {
    * end-of-generation so subsequent turns do not accumulate reasoning
    * history.
    *
-   * Defaults to `true`: for reasoning-capable models the safer
-   * default is to drop hidden reasoning blocks so that later turns
-   * are not steered by internal reasoning that the user never sees.
-   * Set to `false` to preserve reasoning tokens in the KV / SSM
-   * cache across turns (e.g. chain-of-thought agents that want the
-   * next turn to attend to prior reasoning, interpretability
-   * tooling, or cache-reuse patterns that depend on the
-   * reasoning-inclusive state). Supported on both text and
-   * multimodal contexts. No-op for models without a recognised
+   * Defaults to `false` for all models except the Qwen3 reasoning family
+   * (Qwen3, Qwen3.5, and Qwen3.6, including MoE variants), which defaults
+   * to `true`. Set this per-request `generationParams` value to override the
+   * model default. Set to `false` to preserve reasoning tokens in the KV / SSM
+   * cache across turns (e.g. chain-of-thought agents that want the next turn
+   * to attend to prior reasoning, interpretability tooling, or cache-reuse
+   * patterns that depend on the reasoning-inclusive state). Supported on both
+   * text and multimodal contexts. No-op for models without a recognised
    * reasoning channel.
    *
    * Recurrent / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba,

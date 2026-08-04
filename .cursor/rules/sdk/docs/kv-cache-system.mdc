@@ -89,6 +89,18 @@ When a new cache key is used for the first time:
 - `modelId` — Unique identifier for the loaded model instance
 - `configHash` — Hash of system prompt + tool names (ensures cache validity)
 
+### Auto-Cache Retention
+
+Anonymous caches created by `kvCache: true` are tracked with internal marker metadata and bounded independently from caller-owned string keys:
+
+- Empty cache-key directories are removed after rename, rollback, and failed prime operations.
+- A retention sweep runs after an auto-cache turn completes or rolls back, at most once every five minutes.
+- Auto caches idle for more than 24 hours are removed.
+- Least-recently-used auto caches are removed when their total size exceeds 512 MiB on React Native or 4 GiB on other runtimes.
+- Cache paths used by active turns are excluded from eviction.
+
+Named string-key caches are not inferred from their directory names, are not subject to automatic retention, and remain caller-managed through `deleteCache()`. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.
+
 ## Key Implementation Files
 
 | File | Purpose |
@@ -96,6 +108,7 @@ When a new cache key is used for the first time:
 | `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
 | `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers `scope.defer(() => session.rollback(turn))` once, and calls `session.commitTurn(...)` on the happy path (which suppresses the deferred rollback). No direct references to the three layers. |
 | `server/bare/plugins/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
+| `server/bare/ops/kv-cache-retention.ts` | Plans idle and quota-based auto-cache evictions while excluding active turn paths. |
 | `server/bare/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
 | `server/bare/plugins/llamacpp-completion/ops/cache-logger.ts` | Debug logging for cache operations |
 | `server/rpc/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers. |

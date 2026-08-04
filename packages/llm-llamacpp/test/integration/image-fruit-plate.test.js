@@ -3,6 +3,7 @@
 // Split from the former image.test.js so iOS Device Farm can run
 // each image in its own group. See _image-common.js for details.
 
+// prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
 const { runPerImageBackendTests } = require('./_image-common.js')
 
 runPerImageBackendTests({
