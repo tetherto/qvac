@@ -314,6 +314,11 @@ struct CompactorFixture {
 
 } // namespace
 
+TEST(ReasoningBlockCompactor, DefaultsRemoveThinkingOff) {
+  CompactorFixture fx;
+  EXPECT_FALSE(fx.compactor.removeThinkingFromContext());
+}
+
 TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenRemoveThinkingOff) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(false);

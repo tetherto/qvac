@@ -441,14 +441,10 @@ private:
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
 
-  // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-on (opt-out via `generationParams` with
-  // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
-  bool removeThinkingFromContext_ = true;
+  // Per-request toggle for post-generation thinking-block KV compaction.
+  // Default-off, except Qwen3-family models opt in during initialization;
+  // `generationParams` can always override it.
+  bool removeThinkingFromContext_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the end-of-prefill

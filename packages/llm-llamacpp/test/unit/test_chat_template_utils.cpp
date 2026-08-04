@@ -96,7 +96,8 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForNullModelReturnsNullopt) {
 }
 
 TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureQwen3Family) {
-  for (std::string_view arch : {"qwen3", "qwen3moe", "qwen35", "qwen35moe"}) {
+  for (std::string_view arch :
+       {"qwen3", "qwen3moe", "qwen35", "qwen35moe", "qwen36", "qwen36moe"}) {
     const std::optional<ReasoningTags> tags =
         selectReasoningTagsForArchitecture(std::string(arch));
     ASSERT_TRUE(tags.has_value()) << "arch=" << arch;
@@ -135,7 +136,7 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
   // qwen3*-prefixed but not in the allow-list — explicit list (vs prefix
   // match) ensures these don't silently inherit `<think>` reasoning.
   EXPECT_FALSE(
-      selectReasoningTagsForArchitecture(std::string("qwen36")).has_value());
+      selectReasoningTagsForArchitecture(std::string("qwen37")).has_value());
   EXPECT_FALSE(
       selectReasoningTagsForArchitecture(std::string("qwen3vl")).has_value());
   EXPECT_FALSE(
