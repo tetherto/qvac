@@ -717,15 +717,15 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
 
-  # Create GitHub release only for actual releases (after npm + PyPI publish).
-  # Gated on sdk, bare-sdk, and python succeeding so we never tag a release
-  # where one lockstep client failed to ship.
+  # Create GitHub release only for actual releases (after NPM publish).
+  # Gated on BOTH publish-npm jobs succeeding so we never tag a release
+  # where @qvac/sdk shipped but @qvac/bare-sdk failed (or vice versa).
+  # PyPI is separate; recover with workflow_dispatch publish_pypi_only.
   publish-release:
-    needs: [publish-npm, publish-npm-bare-sdk, publish-pypi]
+    needs: [publish-npm, publish-npm-bare-sdk]
     if: >-
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
       && needs.publish-npm-bare-sdk.result == 'success' && needs.publish-npm-bare-sdk.outputs.published_version != ''
-      && needs.publish-pypi.result == 'success'
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

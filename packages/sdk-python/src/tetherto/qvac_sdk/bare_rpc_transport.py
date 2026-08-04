@@ -29,9 +29,6 @@ import bare_rpc
 
 from .errors import reconstruct_error
 
-# Required dependency (see pyproject.toml). Kept for existing test skipifs.
-BARE_RPC_AVAILABLE = True
-
 
 def _json_or_raise(data: bytes) -> Any:
     """Parse a JSON payload; the SDK reports failures in-band as

@@ -11,8 +11,7 @@ cascade: cli / ai-sdk-provider / plugins).
 
 **Use when:**
 
-- User runs `/qv-sdk-lockstep-sync` directly (or the legacy alias
-  `/qv-sdk-bare-sdk-sync`).
+- User runs `/qv-sdk-lockstep-sync` directly.
 - Auto-invoked by `/qv-sdk-changelog` when `--package=sdk`.
 - Auto-invoked by `/qv-sdk-pr-create` when the PR diff touches
   `packages/sdk/package.json` version or dependency blocks.
