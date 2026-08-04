@@ -290,6 +290,7 @@ private:
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
+    std::vector<PlannedMedia> mediaPlan;
     PromptLayout layout;
     bool isCacheLoaded = false;
     bool shouldResetAfterInference = false;

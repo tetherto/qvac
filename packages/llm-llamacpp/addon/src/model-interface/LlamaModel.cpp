@@ -796,9 +796,8 @@ std::any LlamaModel::process(const std::any& input) {
 LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
-  // Load all prompt media (hoisted byte buffers and inline paths) in
-  // prompt-marker order so each bitmap binds to its own MTMD marker.
-  auto loadPlannedMedia = [this, &prompt](const ParsedPromptPayload& parsed) {
+  auto validatePlannedMedia = [this,
+                               &prompt](const ParsedPromptPayload& parsed) {
     if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -806,13 +805,6 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
           "Media not supported by text-only models");
     }
     validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
-    for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
-      if (step.source == MediaSource::ByteBuffer) {
-        loadMedia(prompt.media[step.byteIndex]);
-      } else {
-        state_->llmContext_->loadMedia(step.path);
-      }
-    }
   };
   if (state_->cacheManager_.has_value()) {
     ParsedPromptPayload parsedPrompt;
@@ -823,19 +815,21 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
-    loadPlannedMedia(parsedPrompt);
+    validatePlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.layout = std::move(parsedPrompt.layout);
+    resolved.mediaPlan = std::move(parsedPrompt.mediaPlan);
     resolved.shouldResetAfterInference =
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
     ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
-    loadPlannedMedia(parsedPrompt);
+    validatePlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.layout = std::move(parsedPrompt.layout);
+    resolved.mediaPlan = std::move(parsedPrompt.mediaPlan);
     resolved.shouldResetAfterInference = true;
   }
   return resolved;
@@ -902,6 +896,13 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
           prompt.saveCacheToDisk);
     } else {
       state_->llmContext_->clearTransactionCheckpoint();
+    }
+    for (const auto& step : computeMediaLoadOrder(resolved.mediaPlan)) {
+      if (step.source == MediaSource::ByteBuffer) {
+        loadMedia(prompt.media[step.byteIndex]);
+      } else {
+        state_->llmContext_->loadMedia(step.path);
+      }
     }
 
     const LlmContext::EvalMessageResult evalResult =

@@ -8,8 +8,9 @@
   replays retained answer tokens for every model, avoiding in-place cache
   sliding and preserving coherent state for subsequent turns.
 - Persistent cancellation now restores the last committed cache artifact,
-  allowing newer unsaved deltas to be discarded; cancellation without a valid
-  checkpoint clears unsaved sequence state.
+  allowing newer unsaved deltas to be discarded. Non-empty persistent requests
+  without a usable artifact fail before mutation; non-persistent cancellation
+  clears unsaved sequence state.
 - Tools output tail removal is disabled while `tools_compact` is pending
   removal.
 

@@ -61,6 +61,19 @@ TEST(CacheCheckpointPinTest, AtomicReplacementPreservesPinnedIdentity) {
   fs::remove(pinned);
 }
 
+TEST(CacheCheckpointPinTest, MissingArtifactFailsBeforeUse) {
+  const fs::path missing =
+      fs::temp_directory_path() /
+      ("qvac-missing-checkpoint-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".bin");
+  fs::remove(missing);
+  EXPECT_THROW(
+      (void)CacheManager::pinCommittedCacheArtifact(missing.string()),
+      qvac_errors::StatusError);
+}
+
 class CacheManagementTest : public ::testing::Test {
 protected:
   void SetUp() override {

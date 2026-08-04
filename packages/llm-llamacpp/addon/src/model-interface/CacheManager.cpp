@@ -336,16 +336,16 @@ void CacheManager::prepareTransactionCheckpoint(bool persistent) {
     return;
   }
   if (!committedArtifactKnownValid_ || !isFileInitialized(sessionPath_)) {
-    return;
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: persistent request has no usable rollback artifact for '%s'\n",
+            __func__,
+            sessionPath_.c_str()));
   }
-  try {
-    llmContext_->setPersistentTransactionCheckpoint(
-        pinCommittedCacheArtifact(sessionPath_), llmContext_->getNPast());
-  } catch (const qvac_errors::StatusError&) {
-    // Rollback durability is optional. Admission continues without a
-    // checkpoint; cancellation will clear this sequence coherently.
-    llmContext_->clearTransactionCheckpoint();
-  }
+  llmContext_->setPersistentTransactionCheckpoint(
+      pinCommittedCacheArtifact(sessionPath_), llmContext_->getNPast());
 }
 
 void CacheManager::markActiveCacheDirty() {

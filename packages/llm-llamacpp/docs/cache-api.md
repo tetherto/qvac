@@ -25,7 +25,7 @@ await model.run([
 
 Transaction durability is opt-in. A request has a restorable pre-request checkpoint only when both `cacheKey` and `saveCacheToDisk: true` are set.
 
-Cache resolution happens first. When a last-known-valid canonical artifact exists, it is pinned through a stable hard-link identity without serializing model state again. Newer unsaved live state does not block admission and is never silently committed at admission. If no valid rollback artifact is available, the request proceeds without a checkpoint.
+Cache resolution happens first. A non-empty persistent request requires a last-known-valid canonical artifact, which is pinned through a stable artifact alias without serializing model state again. Newer unsaved live state does not block admission and is never silently committed at admission. A missing, unusable, or unpinnable artifact rejects the request before tokenization, media loading, sliding, or decode mutates request state.
 
 An empty persistent baseline uses an in-memory empty marker and creates no file. Successful requests release the checkpoint before normal end-of-request persistence may atomically replace the canonical cache.
 
@@ -33,13 +33,13 @@ Explicit prefill or generation cancellation restores the committed cache artifac
 
 With `saveCacheToDisk: false`, no pre-request transaction snapshot or file is created. Cancellation clears the affected sequence, resets its cursor/cache metadata, and invalidates unsaved in-memory cache state. Any existing on-disk cache is left untouched and may be loaded by a later request using that key.
 
-If no checkpoint exists or restoration fails after mutation, the affected sequence is cleared, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
+If restoration fails after mutation, the affected sequence is cleared, the active cache session is invalidated, and failed state is not saved over the last-known-good cache file.
 
 Arbitrary thrown prefill, decode, or replay errors use a different recovery path: live model state is reset and the active cache session is invalidated instead of restoring the transaction checkpoint.
 
 ### Storage and lifecycle
 
-The persistent checkpoint is a hard-link pin to the canonical per-sequence cache artifact. It creates a stable file identity without copying state bytes, so an atomic replacement of the canonical path cannot change the in-flight rollback baseline. The request owns and removes only the pin; it never deletes the canonical artifact. Successful replacement normally happens after the pin is released.
+The persistent checkpoint is a stable artifact alias to the canonical per-sequence cache file, implemented with a filesystem hard link. It preserves file identity without copying state bytes, so an atomic replacement of the canonical path cannot change the in-flight rollback baseline. The request owns and removes only the alias; it never deletes the canonical artifact. Successful replacement normally happens after the alias is released.
 
 No transaction checkpoint uses the OS temp directory or working-directory fallback. Sensitive temporary state remains relevant to reasoning removal: when reasoning compaction is active, the distinct end-of-prefill reasoning boundary is stored in a temporary full-state file and removed best-effort on completion, rollback cleanup, replacement, or destruction. Process crashes may leave that reasoning snapshot behind. This layer does not promise encryption or explicitly enforce permissions beyond the platform and llama.cpp file creation.
 
@@ -47,7 +47,7 @@ No transaction checkpoint uses the OS temp directory or working-directory fallba
 
 - **Freshly loaded `cacheKey` with `saveCacheToDisk: true`:** the validated canonical artifact is pinned without a pre-request save or state serialization.
 - **Dirty same-key continuation with `saveCacheToDisk: true`:** admission succeeds and pins the older committed artifact. Cancellation restores that artifact and intentionally loses the unsaved delta; successful completion atomically persists the resulting live state normally.
-- **Missing optional rollback artifact:** admission continues without a checkpoint. Cancellation clears the affected sequence while leaving any last-known-good disk file untouched.
+- **Missing/unusable rollback artifact for a non-empty persistent baseline:** admission fails before request mutation.
 - **Missing cache file with an empty baseline:** an in-memory empty marker is used; no file is created until successful persistence.
 - **No `cacheKey`, or `saveCacheToDisk: false`:** there is no transaction checkpoint. Cancellation clears unsaved live state.
 - **Existing disk cache with `saveCacheToDisk: false`:** the request may load it, but cancellation does not promise restoration. The disk artifact remains unchanged and can be reloaded later.

@@ -74,7 +74,7 @@ Other operations that go through `cancel({ requestId })` (`loadModel`, `download
 Only the targeted call is affected — other in-flight calls on the same `modelId` keep running. To cancel `translate`, `textToSpeech`, `ocr`, `diffusion`, or `upscale` — or to sweep every in-flight call on a model in one shot — use the broad-cancel form below.
 
 <Callout type="info">
-`@qvac/llm-llamacpp` uses addon-specific transaction checkpoints only for requests with `cacheKey` and `saveCacheToDisk: true`. Explicit cancellation restores the last valid committed cache artifact, which may intentionally discard newer unsaved live state. If no checkpoint exists, or without persistent saving, cancellation clears unsaved live model state instead. Partial output may already have streamed to the caller, but it is not retained in the addon's KV/recurrent memory. This behavior is specific to `llm-llamacpp`; other addons may use different cancellation mechanics.
+`@qvac/llm-llamacpp` uses addon-specific transaction checkpoints only for requests with `cacheKey` and `saveCacheToDisk: true`. A non-empty persistent request requires a usable committed rollback artifact and fails before mutation if it cannot be pinned. Explicit cancellation restores that artifact, which may intentionally discard newer unsaved live state. Without persistent saving, cancellation clears unsaved live model state instead. Partial output may already have streamed to the caller, but it is not retained in the addon's KV/recurrent memory. This behavior is specific to `llm-llamacpp`; other addons may use different cancellation mechanics.
 </Callout>
 
 ## Broad cancel by `modelId` (escape hatch)

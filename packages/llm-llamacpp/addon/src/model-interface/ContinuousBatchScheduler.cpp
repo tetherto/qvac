@@ -411,15 +411,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     if (driver->getNPast() <= 0) {
       driver->setEmptyTransactionCheckpoint();
     } else if (isCacheLoaded) {
-      try {
-        driver->setPersistentTransactionCheckpoint(
-            CacheManager::pinCommittedCacheArtifact(request.cacheKey),
-            driver->getNPast());
-      } catch (const qvac_errors::StatusError&) {
-        driver->clearTransactionCheckpoint();
-      }
+      driver->setPersistentTransactionCheckpoint(
+          CacheManager::pinCommittedCacheArtifact(request.cacheKey),
+          driver->getNPast());
     } else {
-      driver->clearTransactionCheckpoint();
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadSessionFile),
+          "persistent batch request has no usable rollback artifact");
     }
   } else {
     driver->clearTransactionCheckpoint();
