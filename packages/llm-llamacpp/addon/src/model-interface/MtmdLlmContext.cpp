@@ -195,7 +195,7 @@ void MtmdLlmContext::initializeCommonState() {
         qvac_lib_inference_addon_llama::utils::
             usesThinkingCompactionByDefault(arch.value());
   }
-  compactor_.setRemoveThinkingFromContext(removeThinkingFromContext_);
+  setRemoveThinkingFromContext(removeThinkingFromContext_);
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -1099,8 +1099,7 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   const bool savedRemoveThinking = removeThinkingFromContext_;
   bool toggled = false;
   if (overrides.remove_thinking_from_context) {
-    removeThinkingFromContext_ = *overrides.remove_thinking_from_context;
-    compactor_.setRemoveThinkingFromContext(removeThinkingFromContext_);
+    setRemoveThinkingFromContext(*overrides.remove_thinking_from_context);
     toggled = true;
   }
 
@@ -1112,14 +1111,18 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
           restoreSampler = std::move(restoreSampler),
           savedRemoveThinking]() {
     restoreSampler();
-    removeThinkingFromContext_ = savedRemoveThinking;
-    compactor_.setRemoveThinkingFromContext(savedRemoveThinking);
+    setRemoveThinkingFromContext(savedRemoveThinking);
   };
 }
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 
 llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }
+
+void MtmdLlmContext::setRemoveThinkingFromContext(bool value) {
+  removeThinkingFromContext_ = value;
+  compactor_.setRemoveThinkingFromContext(value);
+}
 
 llama_pos MtmdLlmContext::getNPast() const { return current_.pos; }
 

@@ -186,6 +186,8 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  void setRemoveThinkingFromContext(bool value) override;
+
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
@@ -285,6 +287,8 @@ public:
   void snapshotPreRequestRollbackAnchor() override;
 
 private:
+  friend class MtmdLlmContextTestPeer;
+
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
