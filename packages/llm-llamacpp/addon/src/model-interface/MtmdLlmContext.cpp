@@ -192,8 +192,8 @@ void MtmdLlmContext::initializeCommonState() {
             isQwen3ReasoningFamilyArchitecture(arch.value());
     removeThinkingFromContext_ =
         arch.has_value() &&
-        qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
-            arch.value());
+        qvac_lib_inference_addon_llama::utils::
+            usesThinkingCompactionByDefault(arch.value());
   }
   setRemoveThinkingFromContext(removeThinkingFromContext_);
 }
@@ -1949,9 +1949,12 @@ bool MtmdLlmContext::onGenerationFinished(
 bool MtmdLlmContext::shouldRollbackInterruptedReasoning() const {
   return qvac_lib_inference_addon_llama::utils::
       shouldRollbackInterruptedReasoning(
-          generationStopReason_, needsRecurrentSnapshot_,
-          removeThinkingFromContext_, reasoningEnabled_,
-          reasoningState_.inside_reasoning, compactor_.hasOpenSpan(),
+          generationStopReason_,
+          needsRecurrentSnapshot_,
+          removeThinkingFromContext_,
+          reasoningEnabled_,
+          reasoningState_.inside_reasoning,
+          compactor_.hasOpenSpan(),
           compactor_.hasCapturedCloseSpan());
 }
 

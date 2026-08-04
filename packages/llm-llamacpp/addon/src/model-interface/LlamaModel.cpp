@@ -1288,7 +1288,7 @@ void LlamaModel::commonParamsParse(
   // so map this addon's string configuration directly to the native model
   // parameter instead of forwarding it through the generic argument parser.
   std::optional<bool> noMmap;
-  for (const std::string &key : {"no-mmap", "no_mmap"}) {
+  for (const std::string& key : {"no-mmap", "no_mmap"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
       std::string value = it->second;
       std::ranges::transform(value, value.begin(), ::tolower);
@@ -1298,8 +1298,8 @@ void LlamaModel::commonParamsParse(
             ADDON_ID,
             qvac_errors::general_error::toString(
                 qvac_errors::general_error::InvalidArgument),
-            string_format("no-mmap must be true or false, got: %s",
-                          it->second.c_str()));
+            string_format(
+                "no-mmap must be true or false, got: %s", it->second.c_str()));
       }
       if (noMmap.has_value() && noMmap.value() != enabled) {
         throw qvac_errors::StatusError(

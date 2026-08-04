@@ -124,7 +124,8 @@ TEST_F(ChatTemplateUtilsTest, IdentifiesDeepSeekV4Architecture) {
   EXPECT_FALSE(isDeepSeekV4Architecture("qwen35"));
 }
 
-TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureDeepSeekV4) {
+TEST_F(
+    ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureDeepSeekV4) {
   const std::optional<ReasoningTags> tags =
       selectReasoningTagsForArchitecture(std::string("deepseek4"));
   ASSERT_TRUE(tags.has_value());

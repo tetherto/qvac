@@ -8,9 +8,8 @@ namespace utils {
 // Full-state snapshots are required by recurrent and hybrid models, and by
 // DeepSeek V4 whose compressed cache has the same checkpoint/replay
 // requirement despite not reporting either model predicate.
-[[nodiscard]] inline bool needsFullStateSnapshot(bool isRecurrent,
-                                                 bool isHybrid,
-                                                 bool isDeepSeekV4) noexcept {
+[[nodiscard]] inline bool needsFullStateSnapshot(
+    bool isRecurrent, bool isHybrid, bool isDeepSeekV4) noexcept {
   return isRecurrent || isHybrid || isDeepSeekV4;
 }
 
@@ -85,12 +84,13 @@ recurrentReasoningBoundaryDecision(
 // of preserving the preceding conversation.
 [[nodiscard]] inline bool shouldRollbackInterruptedReasoning(
     GenerationStopReason terminalReason, bool needsRecurrentSnapshot,
-    bool removeThinkingFromContext, bool reasoningEnabled, bool insideReasoning,
-    bool hasOpenSpan, bool hasCapturedCloseSpan) noexcept {
+    bool removeThinkingFromContext, bool reasoningEnabled,
+    bool insideReasoning, bool hasOpenSpan,
+    bool hasCapturedCloseSpan) noexcept {
   return terminalReason != GenerationStopReason::None &&
-         needsRecurrentSnapshot && removeThinkingFromContext &&
-         reasoningEnabled && insideReasoning && hasOpenSpan &&
-         !hasCapturedCloseSpan;
+         needsRecurrentSnapshot &&
+         removeThinkingFromContext && reasoningEnabled && insideReasoning &&
+         hasOpenSpan && !hasCapturedCloseSpan;
 }
 
 } // namespace utils
