@@ -47,6 +47,11 @@ export interface CreateHarnessServiceOptions {
   readonly tools?: readonly HarnessTool[]
   readonly toolBroker?: HarnessToolBrokerPort
   readonly toolApproval?: HarnessToolApprovalPort
+  /**
+   * Tools that always require approval, whatever an agent's own policy says.
+   * A remotely-submitted registration must not be able to opt itself out.
+   */
+  readonly mandatoryApproval?: readonly string[]
   readonly onRegistration?: (registration: HarnessAgentRegistration) => void
 }
 
@@ -59,6 +64,7 @@ export function createHarnessService({
   tools = [],
   toolBroker = unavailableToolBroker(),
   toolApproval,
+  mandatoryApproval,
   onRegistration
 }: CreateHarnessServiceOptions): LocalHarnessRuntime {
   let closed = false
@@ -219,7 +225,10 @@ export function createHarnessService({
         tools,
         grants: grantsFor(registration.skills, catalog),
         broker: toolBroker,
-        ...(toolApproval ? { approval: toolApproval } : {})
+        ...(toolApproval ? { approval: toolApproval } : {}),
+        ...(mandatoryApproval?.length
+          ? { mandatoryApproval: new Set(mandatoryApproval) }
+          : {})
       },
       ...(previous?.checkpoint ? { checkpoint: previous.checkpoint } : {})
     })

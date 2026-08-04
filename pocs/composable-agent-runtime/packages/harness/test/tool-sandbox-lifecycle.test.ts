@@ -635,7 +635,9 @@ test('broker routes side effects to sandboxes and shared tools to injection', as
   await broker.close()
 })
 
-test('desktop broker denies Obsidian approval before child invocation', async () => {
+// Approval moved to the agents tool gate so the user is prompted once. What the
+// broker still owns is the grant *scope* check, which the gate does not model.
+test('desktop broker rejects an unscoped exec grant before child invocation', async () => {
   const createFakeLauncher = Reflect.get(Harness, 'createFakeToolSandboxLauncher')
   const createRegistry = Reflect.get(Harness, 'createToolSandboxRegistry')
   const createBroker = Reflect.get(Harness, 'createDesktopSkillBroker')
@@ -652,10 +654,7 @@ test('desktop broker denies Obsidian approval before child invocation', async ()
 
   const launcher = createFakeLauncher()
   const registry = createRegistry({ launcher })
-  const broker = createBroker({
-    registry,
-    approval: { approve: async () => false }
-  })
+  const broker = createBroker({ registry })
   const invocation = {
     agentId: 'obsidian-agent',
     runId: 'approval-run',
@@ -665,11 +664,11 @@ test('desktop broker denies Obsidian approval before child invocation', async ()
       name: 'exec',
       arguments: { command: 'obsidian version' }
     },
-    grants: [{ name: 'exec', scope: 'obsidian' }],
+    grants: [{ name: 'exec', scope: null }],
     signal: new AbortController().signal
   }
 
-  await expect(broker.execute(invocation)).rejects.toThrow(/approval denied/i)
+  await expect(broker.execute(invocation)).rejects.toThrow(/not granted/i)
   expect(launcher.launches).toEqual([])
   expect(launcher.invocations).toEqual([])
   await broker.close()
@@ -695,7 +694,6 @@ test('desktop broker never routes image generation or unknown tools to its child
   const registry = createRegistry({ launcher })
   const broker = createBroker({
     registry,
-    approval: { approve: async () => true },
     sharedBroker: {
       async execute(input: { call: { name: string } }) {
         sharedCalls.push(input.call.name)

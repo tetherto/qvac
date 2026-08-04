@@ -57,11 +57,6 @@ export async function createDesktopHarnessConfiguration(
           selectedSkillsForAgent(agentId) {
             return registrations.get(agentId)?.skills ?? []
           },
-          approval: {
-            async approve() {
-              return config.obsidianApproval ?? false
-            }
-          },
           ...(image ? { sharedBroker: image.broker } : {}),
           ...(config.temporaryRoot
             ? { temporaryRoot: config.temporaryRoot }
@@ -83,6 +78,15 @@ export async function createDesktopHarnessConfiguration(
       desktop?.broker ??
       image?.broker ??
       unavailableToolBroker(),
+    // Without this the tool gate has no approval port and denies every
+    // approval-required call, which made a granted Obsidian exec impossible.
+    toolApproval: {
+      async approve() {
+        return config.obsidianApproval ?? false
+      }
+    },
+    // Exec stays approval-gated regardless of what an agent's policy claims.
+    ...(config.obsidian ? { mandatoryApproval: ['exec'] } : {}),
     onRegistration(registration) {
       registrations.set(registration.id, registration)
     }

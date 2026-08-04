@@ -58,19 +58,12 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
   )
   const childEntry = path.join(artifacts, 'entry.bundle')
   const obsidianExecutable = path.join(artifacts, 'obsidian')
-  let approvalCalls = 0
   const tooling = await createTooling({
     bareExecutable,
     childEntry,
     skillBundle: Harness.bundledSkillBundle(),
     platform: 'darwin',
     selectedSkillsForAgent: () => ['weather', 'obsidian'],
-    approval: {
-      async approve() {
-        approvalCalls++
-        return approvalCalls > 1
-      }
-    },
     temporaryRoot: root,
     weather: {
       async fetch(url: URL) {
@@ -96,15 +89,17 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
       ['http_request', 'exec'],
       'factory exposes only low-level desktop tool schemas'
     )
+    // Approval is enforced by the agents tool gate above this broker. What the
+    // broker itself must still refuse is an exec whose grant lacks the scope.
     const denied = await invoke(tooling.broker, {
-      operationId: 'approval-denied',
+      operationId: 'scope-denied',
       name: 'exec',
       arguments: { command: 'obsidian files' },
-      grants: [{ name: 'exec', scope: 'obsidian' }]
+      grants: [{ name: 'exec', scope: null }]
     }).catch((error: Error) => error)
     t.ok(
-      denied instanceof Error && /approval denied/i.test(denied.message),
-      'first Obsidian invocation is denied before sandbox launch'
+      denied instanceof Error && /not granted/i.test(denied.message),
+      'unscoped Obsidian exec is refused before sandbox launch'
     )
 
     const weather = await bounded(
@@ -246,7 +241,6 @@ test('real Seatbelt child runs Weather and direct-argv Obsidian within exact cap
       skillBundle: Harness.bundledSkillBundle(),
       platform: 'darwin',
       selectedSkillsForAgent: () => ['obsidian'],
-      approval: { approve: async () => true },
       temporaryRoot: root,
       obsidian: {
         executablePath: obsidianExecutable,

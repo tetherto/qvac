@@ -371,6 +371,91 @@ test('approval denial prevents broker execution', async (t) => {
   await harness.close()
 })
 
+// Regression: the desktop configuration never supplied a toolApproval port, so
+// the gate denied every approval-required call and a granted exec could not run
+// in production. Only the mocked app tests covered that path.
+test('an approval-required tool runs when the configured port approves it', async (t) => {
+  let round = 0
+  const sdk = createSdk(({ requestId }) => ({
+    requestId,
+    events: (async function* () {
+      round++
+      if (round > 1) {
+        yield { type: 'content-delta' as const, text: 'London: 22 C' }
+        return
+      }
+      yield {
+        type: 'tool-call' as const,
+        id: 'weather-approved',
+        name: 'http_request',
+        arguments: { url: 'https://wttr.in/London?format=3' }
+      }
+    })()
+  }))
+  const broker = createBroker()
+  const harness = createHarness({
+    sdk,
+    tools: [HTTP_TOOL],
+    toolBroker: broker,
+    toolApproval: { approve: async () => true }
+  })
+  await harness.registerAgent({
+    ...WEATHER_AGENT,
+    toolPolicy: { allow: ['http_request'], requireApproval: ['http_request'] }
+  })
+
+  const events = await collect(harness.runAgent({
+    agentId: WEATHER_AGENT.id,
+    runId: 'approval-granted',
+    input: 'Weather?'
+  }))
+
+  t.alike(broker.calls, ['http_request'])
+  t.is(events.some((event) => event.type === 'error'), false)
+  await harness.close()
+})
+
+test('mandatory approval applies to a policy that does not require it', async (t) => {
+  const sdk = createSdk(({ requestId }) => ({
+    requestId,
+    events: (async function* () {
+      yield {
+        type: 'tool-call' as const,
+        id: 'weather-mandatory',
+        name: 'http_request',
+        arguments: { url: 'https://wttr.in/London?format=3' }
+      }
+    })()
+  }))
+  const broker = createBroker()
+  let prompts = 0
+  const harness = createHarness({
+    sdk,
+    tools: [HTTP_TOOL],
+    toolBroker: broker,
+    mandatoryApproval: ['http_request'],
+    toolApproval: {
+      approve: async () => {
+        prompts++
+        return false
+      }
+    }
+  })
+  // The agent's own policy asks for no approval; the host still requires it.
+  await harness.registerAgent(WEATHER_AGENT)
+
+  const events = await collect(harness.runAgent({
+    agentId: WEATHER_AGENT.id,
+    runId: 'mandatory-approval',
+    input: 'Weather?'
+  }))
+
+  t.is(prompts, 1)
+  t.alike(broker.calls, [])
+  t.is(events.at(-1)?.type, 'error')
+  await harness.close()
+})
+
 test('tool validation rejects before approval and broker execution', async (t) => {
   const sdk = createSdk(({ requestId }) => ({
     requestId,

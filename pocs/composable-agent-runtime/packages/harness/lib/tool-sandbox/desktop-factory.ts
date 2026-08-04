@@ -39,7 +39,6 @@ export interface CreateMacOsDesktopSkillToolingOptions {
   readonly selectedSkillsForAgent: (
     agentId: string
   ) => readonly string[] | Promise<readonly string[]>
-  readonly approval?: HarnessToolApprovalPort
   readonly sharedBroker?: HarnessToolBrokerPort
   readonly onSandboxEvent?: (
     event:
@@ -222,7 +221,6 @@ export async function createMacOsDesktopSkillTooling(
     })
     const routed = createDesktopSkillBroker({
       registry,
-      ...(options.approval ? { approval: options.approval } : {}),
       ...(options.sharedBroker
         ? { sharedBroker: options.sharedBroker }
         : {})
