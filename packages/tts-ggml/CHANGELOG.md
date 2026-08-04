@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
   volume / style) via the `instruct` option.
 
+### Fixed
+
+- **iOS model loading.** CosyVoice3 and Parler-TTS now load their models within
+  the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
+  loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
+  so they no longer OOM on non-entitled devices. Output is byte-identical.
+
 ## [0.6.1] - 2026-07-30
 
 ### Fixed
