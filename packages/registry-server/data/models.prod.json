@@ -8238,5 +8238,16 @@
     "tags": ["generation", "instruct", "deepseek-v4", "shard"],
     "notes": "shard 3/3",
     "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "KAT-Coder V2.5 Dev 35B-A3B MoE coding model (bartowski GGUF)",
+    "quantization": "q4_k_m",
+    "params": "35B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "instruct", "moe", "kat-coder"],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
   }
 ]
