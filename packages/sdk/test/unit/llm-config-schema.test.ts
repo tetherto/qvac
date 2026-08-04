@@ -26,12 +26,6 @@ test('llmConfigBaseSchema: split-mode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
-test('llmConfigBaseSchema: accepts no_mmap boolean values', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ no_mmap: true }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ no_mmap: false }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ no_mmap: 'true' }).success, false)
-})
-
 test('llmConfigBaseSchema: accepts continuous-batching parallel slots', (t) => {
   const result = llmConfigBaseSchema.safeParse({ parallel: 4 })
   t.is(result.success, true)

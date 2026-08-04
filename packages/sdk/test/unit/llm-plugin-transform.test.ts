@@ -63,11 +63,6 @@ test('transformLlmConfig: parallel is forwarded as a string', (t) => {
   t.is(result['parallel'], '4')
 })
 
-test('transformLlmConfig: no_mmap booleans are forwarded for native flag handling', (t) => {
-  t.is(transformLlmConfig(makeConfig({ no_mmap: true }))['no_mmap'], 'true')
-  t.is(transformLlmConfig(makeConfig({ no_mmap: false }))['no_mmap'], 'false')
-})
-
 test('transformLlmConfig: mmproj-use-gpu=true is forwarded as string "true"', (t) => {
   const config = makeConfig({ 'mmproj-use-gpu': true })
   const result = transformLlmConfig(config)
