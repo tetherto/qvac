@@ -72,6 +72,34 @@ test('sdcppConfigSchema: rejects invalid device', (t) => {
   t.is(result.success, false)
 })
 
+test('sdcppConfigSchema: accepts main-gpu as a device index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ device: 'gpu', 'main-gpu': 1 })
+  t.is(result.success, true)
+  if (result.success) {
+    t.is(result.data['main-gpu'], 1)
+  }
+})
+
+test("sdcppConfigSchema: accepts main-gpu 'integrated' and 'dedicated'", (t) => {
+  t.is(sdcppConfigSchema.safeParse({ 'main-gpu': 'integrated' }).success, true)
+  t.is(sdcppConfigSchema.safeParse({ 'main-gpu': 'dedicated' }).success, true)
+})
+
+test('sdcppConfigSchema: rejects negative main-gpu index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ 'main-gpu': -1 })
+  t.is(result.success, false)
+})
+
+test('sdcppConfigSchema: rejects non-integer main-gpu index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ 'main-gpu': 0.5 })
+  t.is(result.success, false)
+})
+
+test('sdcppConfigSchema: rejects unknown main-gpu string', (t) => {
+  const result = sdcppConfigSchema.safeParse({ 'main-gpu': 'discrete' })
+  t.is(result.success, false)
+})
+
 test('sdcppConfigSchema: rejects invalid prediction type', (t) => {
   const result = sdcppConfigSchema.safeParse({ prediction: 'unknown' })
   t.is(result.success, false)
@@ -111,6 +139,11 @@ test('diffusionStatsSchema: accepts all C++ RuntimeStats fields', (t) => {
   const result = diffusionStatsSchema.safeParse({
     modelLoadMs: 500,
     generationMs: 1234,
+    conditionerMs: 100,
+    denoiseMs: 800,
+    vaeMs: 200,
+    postProcessMs: 134,
+    stepsPerSecond: 25,
     totalGenerationMs: 1234,
     totalWallMs: 1734,
     totalSteps: 20,
@@ -1178,6 +1211,11 @@ test('diffusion plugin: stats with all RuntimeStats fields passes response valid
   const fullStats = {
     modelLoadMs: 500,
     generationMs: 1234,
+    conditionerMs: 100,
+    denoiseMs: 800,
+    vaeMs: 200,
+    postProcessMs: 134,
+    stepsPerSecond: 25,
     totalGenerationMs: 1234,
     totalWallMs: 1734,
     totalSteps: 20,
@@ -1217,6 +1255,11 @@ test('diffusion plugin: stats with all RuntimeStats fields passes response valid
 
       t.is(receivedStats.modelLoadMs, 500)
       t.is(receivedStats.generationMs, 1234)
+      t.is(receivedStats.conditionerMs, 100)
+      t.is(receivedStats.denoiseMs, 800)
+      t.is(receivedStats.vaeMs, 200)
+      t.is(receivedStats.postProcessMs, 134)
+      t.is(receivedStats.stepsPerSecond, 25)
       t.is(receivedStats.totalGenerationMs, 1234)
       t.is(receivedStats.totalWallMs, 1734)
       t.is(receivedStats.totalSteps, 20)

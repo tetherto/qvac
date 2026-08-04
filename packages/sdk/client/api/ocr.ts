@@ -18,6 +18,15 @@ import { stream as streamRpc } from '@/client/rpc/rpc-client'
  * @returns Object with blockStream generator, blocks promise, and stats promise
  * @example
  * ```typescript
+ * // Load an OCR model first. Registry GGUF models resolve their pipeline
+ * // and detector automatically:
+ * //   EasyOCR (default): OCR_LATIN  (CRAFT detector auto-derived)
+ * //   DocTR:             OCR_DOCTR  (DBNet detector auto-derived)
+ * const modelId = await loadModel({
+ *   modelSrc: OCR_LATIN.src,
+ *   modelType: MODEL_TYPES.ggmlOcr,
+ * });
+ *
  * // Non-streaming mode (default) - get all blocks at once
  * const { blocks } = ocr({ modelId, image: "/path/to/image.png" });
  * for (const block of await blocks) {

@@ -153,6 +153,10 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
+    return generationStopReason_;
+  }
+
   [[nodiscard]] std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() override;
 
@@ -197,8 +201,10 @@ public:
   void onSequenceEnd(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void onGenerationFinished(
-      const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] bool onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback,
+      GenerationStopReason terminalReason =
+          GenerationStopReason::None) override;
 
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
@@ -284,6 +290,9 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
+  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool rollbackCurrentRequest(
+      const std::function<void(const std::string&)>& outputCallback);
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
@@ -339,6 +348,7 @@ private:
   llama_pos preRequestFirstMsgTokens_ = 0;
   bool pendingBatchFirstMsg_ = false;
   bool generationStarted_ = false;
+  GenerationStopReason generationStopReason_ = GenerationStopReason::None;
   std::string assistantOutput_;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
@@ -357,6 +367,23 @@ private:
   // a Qwen3-specific workaround. Detection / span tracking / KV
   // compaction stay family-agnostic via `reasoningEnabled_`.
   bool isQwen3ReasoningFamily_ = false;
+
+  // EOS-inside-reasoning recovery: the recovery substitutes `</think>\n\n` so
+  // the model produces an answer after thinking, but on marginal prompts the
+  // very next sampled token is EOG again, which would defeat the recovery
+  // with an empty answer. One-shot: consumed by the next sampled token.
+  // Narrowed vs the original (reverted in 39a2fef88) fix: all EOG ids are
+  // banned in a single pre-sampling pass (no sample-and-reroll loop). The
+  // ban is unconditional — the generation loop only calls onLogitsReady()
+  // while the n_predict budget allows the current token, so banning EOG on
+  // the final budgeted sample yields a content token without ever
+  // extending generation past the budget.
+  bool banEogAfterReasoningRecovery_ = false;
+
+  // All EOG token ids of the loaded vocab, precomputed once in
+  // initializeCommonState() (Qwen3 family only) so the recovery ban is one
+  // pass over a short list with no mid-stream O(nVocab) scan.
+  std::vector<llama_token> eogTokens_;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

@@ -26,7 +26,9 @@ const BASE_PROMPT = [
   }
 ]
 
-const LONG_PROMPT_TEXT = new Array(6).fill('This is an intentionally verbose filler sentence to stress the context window.').join(' ')
+const LONG_PROMPT_TEXT = new Array(6)
+  .fill('This is an intentionally verbose filler sentence to stress the context window.')
+  .join(' ')
 const LONG_PROMPT = [
   {
     role: 'system',
@@ -38,10 +40,14 @@ const LONG_PROMPT = [
   }
 ]
 
-function createTestLogger () {
+function createTestLogger() {
   return {
     info: (...args) => {
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('Starting inference with prompt')) {
+      if (
+        args[0] &&
+        typeof args[0] === 'string' &&
+        args[0].includes('Starting inference with prompt')
+      ) {
         console.info(args[0], '[prompt omitted for brevity]')
         return
       }
@@ -155,7 +161,11 @@ const scenarios = [
       },
       {
         role: 'user',
-        content: new Array(146).fill('This sentence intentionally bloats the prompt to approach eight thousand tokens of user content.').join(' ')
+        content: new Array(146)
+          .fill(
+            'This sentence intentionally bloats the prompt to approach eight thousand tokens of user content.'
+          )
+          .join(' ')
       }
     ],
     expectRunFailure: /context|ctx[- ]?size|overflow/i,
@@ -176,7 +186,11 @@ const scenarios = [
       },
       {
         role: 'user',
-        content: new Array(146).fill('This sentence intentionally bloats the prompt to approach eight thousand tokens of user content.').join(' ')
+        content: new Array(146)
+          .fill(
+            'This sentence intentionally bloats the prompt to approach eight thousand tokens of user content.'
+          )
+          .join(' ')
       }
     ],
     expectSuccess: true,
@@ -274,7 +288,10 @@ const scenarios = [
     expectSuccess: true,
     assertOutput: (t, output, stats) => {
       t.ok(output.toLowerCase().includes('pizza'), 'reverse prompt output contains keyword')
-      t.ok(output.toLowerCase().split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
+      t.ok(
+        output.toLowerCase().split('').slice(-5).join('') === 'pizza',
+        'reverse prompt output ends with keyword'
+      )
     }
   }
 ]
@@ -284,12 +301,12 @@ const scenarios = [
  * @param {number} [opts.maxChunks] - Cancel after this many chunks (uses opts.model.cancel() when set)
  * @param {object} [opts.model] - Model instance; when maxChunks triggers, cancel via model.cancel()
  */
-async function collectResponse (response, opts = {}) {
+async function collectResponse(response, opts = {}) {
   const { model } = opts
   const chunks = []
   let chunkCount = 0
   await response
-    .onUpdate(async data => {
+    .onUpdate(async (data) => {
       chunks.push(data)
       chunkCount++
       if (opts.maxChunks && chunkCount >= opts.maxChunks) {
@@ -304,7 +321,7 @@ async function collectResponse (response, opts = {}) {
   return chunks.join('').trim()
 }
 
-async function loadAddonOrExpectFailure (t, addon, scenario) {
+async function loadAddonOrExpectFailure(t, addon, scenario) {
   try {
     await addon.load()
     if (scenario.expectLoadFailure) {
@@ -326,7 +343,7 @@ async function loadAddonOrExpectFailure (t, addon, scenario) {
   }
 }
 
-async function runInferenceOrExpectFailure (t, addon, scenario, prompt) {
+async function runInferenceOrExpectFailure(t, addon, scenario, prompt) {
   if (scenario.expectRunFailure) {
     try {
       const response = await addon.run(prompt)
@@ -356,7 +373,7 @@ async function runInferenceOrExpectFailure (t, addon, scenario, prompt) {
   return true
 }
 
-async function executeScenario (t, scenario) {
+async function executeScenario(t, scenario) {
   let specLogger = null
   let addon = null
   let loadSucceeded = false
@@ -364,7 +381,8 @@ async function executeScenario (t, scenario) {
   try {
     const [modelName, dirPath] = await ensureModel({
       modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
-      downloadUrl: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
+      downloadUrl:
+        'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
     })
 
     const modelPath = path.join(dirPath, modelName)
@@ -409,7 +427,7 @@ async function executeScenario (t, scenario) {
     if (scenario.expectedLogs) {
       for (const snippet of scenario.expectedLogs) {
         t.ok(
-          logs.some(entry => entry.includes(snippet)),
+          logs.some((entry) => entry.includes(snippet)),
           `${scenario.name}: log contains "${snippet}"`
         )
       }
@@ -418,7 +436,7 @@ async function executeScenario (t, scenario) {
     if (scenario.expectedLogsAbsent) {
       for (const snippet of scenario.expectedLogsAbsent) {
         t.ok(
-          !logs.some(entry => entry.includes(snippet)),
+          !logs.some((entry) => entry.includes(snippet)),
           `${scenario.name}: log does not contain "${snippet}"`
         )
       }
@@ -427,7 +445,7 @@ async function executeScenario (t, scenario) {
     t.fail(`${scenario.name}: unexpected error: ${err.message || err}`)
   } finally {
     if (scenario.cleanupDelayMs) {
-      await new Promise(resolve => setTimeout(resolve, scenario.cleanupDelayMs))
+      await new Promise((resolve) => setTimeout(resolve, scenario.cleanupDelayMs))
     }
     if (loadSucceeded && addon) {
       await addon.unload().catch(() => {})
@@ -437,7 +455,7 @@ async function executeScenario (t, scenario) {
 }
 
 for (const scenario of scenarios) {
-  test(scenario.name, { timeout: 900_000, skip: isMobile }, async t => {
+  test(scenario.name, { timeout: 900_000, skip: isMobile }, async (t) => {
     console.log(`\n******* TEST scenario '${scenario.name}' *******`)
     await executeScenario(t, scenario)
   })

@@ -587,6 +587,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
 
     if (stopGeneration_.load()) {
+      // A prior chunk may have queued GPU work whose logits are never read on
+      // the cancel path. Finish it before rolling KV/recurrent state back.
+      llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
       if (rollbackState_.hasPrefillEntry()) {
         // Recurrent / hybrid path: restore the pre-prefill snapshot to
@@ -665,7 +668,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             nPastLocal,
             0,
             params_.n_batch,
-            &nPastLocal);
+            &nPastLocal,
+            /*callback=*/nullptr,
+            /*user_data=*/nullptr);
       }
     } else {
       res = mtmd_helper_eval_chunk_single(
@@ -716,11 +721,15 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 
 bool MtmdLlmContext::cancelGenerationCleanup(
     const std::function<void(const std::string&)>& outputCallback) {
-  // Cancel = "request never happened": roll back to the pre-request
-  // cursor for both prefill- and decode-stage cancels.
+  // Rollback = "request never happened": roll back to the pre-request
+  // cursor for both cancellation and n_predict truncation inside reasoning.
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
+  // If cancellation lands after llama_decode() but before the next sampler
+  // read, the implicit sampler-side synchronize is skipped. Finish any queued
+  // backend work before mutating KV/recurrent state during rollback.
+  llama_synchronize(modelCtx_.lctx);
   flushPendingUtf8ToCallback(outputCallback);
 
   const bool rollbackOk = rollbackCancelledRequest({
@@ -762,6 +771,10 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   compactor_.clearSpan();
+  generationStopReason_ = GenerationStopReason::None;
+  // The sampled tokens were accepted before rollback; clear sampler history so
+  // the next clean request cannot inherit a request that "never happened".
+  common_sampler_reset(smpl_.get());
   return rollbackOk;
 }
 
@@ -811,6 +824,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
   compactor_.reset();
+  generationStopReason_ = GenerationStopReason::None;
 
   if (thinkingForcedOpen_) {
     if (outputCallback) {
@@ -860,6 +874,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
               protectedPrefix_.pos,
               tools_.anchor(),
               tools_.enabled() ? "true" : "false"));
+      generationStopReason_ = GenerationStopReason::ContextOverflow;
       return {.ok = false};
     }
     applyContextDiscard();
@@ -939,6 +954,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
         }
       }
       flushPendingUtf8ToCallback(outputCallback);
+      generationStopReason_ = GenerationStopReason::Eos;
       break;
     }
 
@@ -980,11 +996,15 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       ++current_.cacheTokens;
       capturePendingThinkClose();
       flushPendingUtf8ToCallback(outputCallback);
+      generationStopReason_ = GenerationStopReason::Eos;
       break;
     }
 
-    if (isEos || checkAntiprompt()) {
+    const bool stoppedByAntiprompt = checkAntiprompt();
+    if (isEos || stoppedByAntiprompt) {
       flushPendingUtf8ToCallback(outputCallback);
+      generationStopReason_ =
+          isEos ? GenerationStopReason::Eos : GenerationStopReason::Antiprompt;
       break;
     }
 
@@ -1018,17 +1038,13 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
         .cancelled = true,
         .rollbackOk = cancelGenerationCleanup(outputCallback)};
   }
-  if (nRemain == 0) {
-    flushPendingUtf8ToCallback(outputCallback);
+  if (generationStopReason_ == GenerationStopReason::None &&
+      params_.n_predict > 0 && nRemain == 0) {
+    generationStopReason_ = GenerationStopReason::PredictionLimit;
   }
-  // Drop the reasoning block from the KV cache if the caller opted
-  // in and a `<think>...</think>` (or model-equivalent) was emitted.
-  compactThinkSpan();
-  // Generation completed; cancel cannot fire anymore so the
-  // prefill-entry rollback checkpoint is no longer reachable. Drop
-  // its temp file now instead of waiting for the next inference.
-  rollbackState_.clearPrefillEntry();
-  return {};
+  const bool rollbackOk =
+      onGenerationFinished(outputCallback, generationStopReason_);
+  return {.rollbackOk = rollbackOk};
 }
 
 std::function<void()>
@@ -1399,7 +1415,11 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
   }
 
   mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-      visionContext(), media.data(), media.size()));
+                       visionContext(),
+                       media.data(),
+                       media.size(),
+                       /*placeholder=*/false)
+                       .bitmap);
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =
@@ -1431,8 +1451,11 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
-  mtmd::bitmap bmp(
-      mtmd_helper_bitmap_init_from_file(visionContext(), fname.c_str()));
+  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(
+                       visionContext(),
+                       fname.c_str(),
+                       /*placeholder=*/false)
+                       .bitmap);
   if (!bmp.ptr) {
     resetMedia();
     std::string errorMsg = string_format(
@@ -1477,6 +1500,8 @@ void MtmdLlmContext::resetState(bool resetStats) {
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
 
+  // Finish queued backend work before mutating KV/recurrent memory.
+  llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
 
   // Reset the performance metrics
@@ -1486,9 +1511,6 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
-
-  // Synchronize to ensure all operations are complete
-  llama_synchronize(modelCtx_.lctx);
 }
 
 void MtmdLlmContext::resetMedia() { bitmaps_.entries.clear(); }
@@ -1666,7 +1688,9 @@ llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
           pos,
           seqId_,
           params_.n_batch,
-          &newPos);
+          &newPos,
+          /*callback=*/nullptr,
+          /*user_data=*/nullptr);
     }
   } else {
     res = mtmd_helper_eval_chunk_single(
@@ -1768,7 +1792,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
             current_.pos,
             current_.cacheTokens,
             ctxCeiling()));
-    return {.finished = true, .contextOverflow = true};
+    generationStopReason_ = GenerationStopReason::ContextOverflow;
+    return {
+        .finished = true,
+        .contextOverflow = true,
+        .stopReason = GenerationStopReason::ContextOverflow};
   }
   // No applyContextDiscard here: the batcher's per-sequence cap stops a
   // slot before its window fills, and sliding a sequence that holds
@@ -1858,7 +1886,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
       }
     }
     flushPendingUtf8ToCallback(outputCallback);
-    return {.token = tokenId, .finished = true};
+    generationStopReason_ = GenerationStopReason::Eos;
+    return {
+        .token = tokenId,
+        .finished = true,
+        .stopReason = GenerationStopReason::Eos};
   }
 
   // Batch path only: scheduler stops solely on `finished` (see
@@ -1866,11 +1898,20 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   const bool reachedBudget =
       inlineDecodeBatch == nullptr && params_.n_predict > 0 &&
       generatedAfterAccept >= static_cast<unsigned>(params_.n_predict);
-  const bool finished = isEos || reachedBudget || checkAntiprompt();
+  GenerationStopReason stopReason = GenerationStopReason::None;
+  if (isEos) {
+    stopReason = GenerationStopReason::Eos;
+  } else if (reachedBudget) {
+    stopReason = GenerationStopReason::PredictionLimit;
+  } else if (checkAntiprompt()) {
+    stopReason = GenerationStopReason::Antiprompt;
+  }
+  const bool finished = stopReason != GenerationStopReason::None;
   if (finished) {
+    generationStopReason_ = stopReason;
     flushPendingUtf8ToCallback(outputCallback);
   }
-  return {.token = tokenId, .finished = finished};
+  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
 
 void MtmdLlmContext::onSequenceEnd(
@@ -1878,12 +1919,33 @@ void MtmdLlmContext::onSequenceEnd(
   flushPendingUtf8ToCallback(outputCallback);
 }
 
-void MtmdLlmContext::onGenerationFinished(
-    const std::function<void(const std::string&)>& outputCallback) {
+bool MtmdLlmContext::onGenerationFinished(
+    const std::function<void(const std::string&)>& outputCallback,
+    GenerationStopReason terminalReason) {
+  if (terminalReason != GenerationStopReason::None) {
+    generationStopReason_ = terminalReason;
+  }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
+  if (shouldRollbackKnownReasoningCutoff()) {
+    return cancelGenerationCleanup(outputCallback);
+  }
   compactThinkSpan();
   rollbackState_.clearPrefillEntry();
+  // `generationStopReason_` intentionally persists: runtime stats read
+  // it after generation returns; it is re-initialized at the next
+  // generation's entry.
+  return true;
+}
+
+bool MtmdLlmContext::shouldRollbackKnownReasoningCutoff() const {
+  const bool knownTruncation =
+      generationStopReason_ == GenerationStopReason::PredictionLimit ||
+      generationStopReason_ == GenerationStopReason::SequenceLimit;
+  return knownTruncation && needsRecurrentSnapshot_ &&
+         removeThinkingFromContext_ && reasoningEnabled_ &&
+         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
+         !compactor_.hasCapturedCloseSpan();
 }
 
 bool MtmdLlmContext::onCancel(

@@ -18,10 +18,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test; defaults to the ref used to launch the workflow"
         type: string
         required: false
-        default: "main"
       workdir:
         description: "Working directory"
         type: string
@@ -37,6 +36,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write # OIDC to pull the GR00T parity model from S3
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +48,7 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
+            runner: qvac-macos26-arm64-gpu
           - os: macos-15-intel
             platform: darwin
             arch: x64
@@ -197,10 +198,92 @@ jobs:
         shell: bash
         run: npm run test:cpp:build
 
+      # GR00T PyTorch-parity gates. The C++ GrootInferParity end-to-end test AND
+      # the per-stage GrootM4_* / GrootSurface milestone tests are env-gated
+      # (GROOT_TEST_*), so they only run when the artefacts below are present —
+      # this wires them in so the full parity suite runs in CI, not just locally.
+      # Skipped on darwin-x64 (intel-mac): the flaky Apple-Paravirtual GPU plus
+      # model size make it unreliable, same convention as the desktop
+      # integration workflow (integration-test-vla.yml) and the existing
+      # smolvla/pi05 gating. The OIDC/S3 steps below are `if:`-gated and the
+      # GROOT_TEST_* env vars are ternary-gated on the same condition, so on
+      # intel-mac the artefacts are never fetched and the env-gated parity tests
+      # skip cleanly. These run against the SHIPPED groot-q8_vf16.gguf — the same
+      # quantized-model-in-CI convention smolvla (q8) and pi05 (q-aggressive)
+      # use; the per-stage tolerances carry a q8 floor where q8 quantization
+      # noise needs it (see the milestone tests). The single v4 oracle drives
+      # every milestone (the older v1/v2/v3 fixtures were the pre-migration DROID
+      # dims). Developers can run the same tests against the unquantized
+      # groot.gguf locally for tighter f32 parity.
+      - name: Configure AWS credentials via OIDC (GR00T parity)
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # The multi-embodiment GGUF carries every shipped embodiment row, so it is
+      # ~300 MB heavier than the v1 single-embodiment file and every leg below
+      # re-fetched it on each run. Cache it on the self-hosted runners like
+      # integration-test-vla.yml does, keyed on this workflow (the file that
+      # pins the S3 paths) and namespaced away from that workflow's cache so a
+      # restore-keys prefix hit can't cross-populate model/vla. A prefix hit
+      # reports cache-hit 'false', so the download still runs and only an exact
+      # key match skips it; a wrong or truncated restore surfaces as the
+      # Groot-SKIPPED failure below rather than a silent pass.
+      - name: Cache GR00T parity artefacts
+        id: groot-cache
+        if: ${{ runner.environment != 'github-hosted' && !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        uses: ./.github/actions/cache-models
+        with:
+          package: vla-ggml
+          cache-key-suffix: cpp-groot
+          paths: |
+            ${{ env.WORKDIR }}/model/vla/groot
+            ${{ env.WORKDIR }}/test/groot-oracle
+          hash-files-glob: .github/workflows/cpp-tests-vla.yml
+
+      - name: Download GR00T parity artefacts from S3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && steps.groot-cache.outputs.cache-hit != 'true' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model/vla/groot test/groot-oracle
+          S3_ROOT="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla"
+          # TWO GGUFs on purpose, each paired with the oracle dumped from the
+          # SAME checkpoint. Pointing the milestone tests (M4.1-M4.7,
+          # infer-parity) at the multi GGUF while they still read the libero v4
+          # oracle compares one converted checkpoint's weights against another's
+          # recorded activations; that aborted GrootM4_2 inside ggml_mul_mat
+          # (GGML_ASSERT(ggml_can_mul_mat)), and because GGML_ASSERT calls
+          # abort() it took the whole binary down with it, so every test after
+          # M4_2 silently never ran and no results XML was written.
+          #   groot-q8_vf16.gguf       (libero) <-> activations_v4
+          #   groot-multi-q8_vf16.gguf (multi)  <-> activations_sweep
+          # Multi-embodiment parity is the sweep test's job and it has its own
+          # matching oracle, so nothing is lost by keeping the two separate.
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"   test/groot-oracle/activations_v4.safetensors
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/groot-q8_vf16.gguf"            model/vla/groot/groot-multi-q8_vf16.gguf
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/activations_sweep.safetensors" test/groot-oracle/activations_sweep.safetensors
+          ls -la model/vla/groot/ test/groot-oracle/
+
       - name: Run C++ tests
         id: cpp-tests
         working-directory: ${{ env.WORKDIR }}
         shell: bash
+        env:
+          GROOT_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
+          GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
+          # Per-embodiment sweep parity (all 17 stored rows). Reads embodiment.*
+          # + groot.embodiment.* out of the MULTI q8_vf16 GGUF (embodiment.*
+          # ships F16, untouched by quantization) — a different file from
+          # GROOT_TEST_GGUF above, since this is the only oracle dumped from the
+          # multi checkpoint. Gated on the same non-intel-mac condition;
+          # GrootEmbodimentSweep skips cleanly when unset.
+          GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
+          GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set -euo pipefail
 
@@ -210,7 +293,8 @@ jobs:
           fi
 
           cd build/test/unit/
-          ./addon-test --gtest_output=xml:cpp-test-results.xml
+          # Capture test output to a file for later parsing (embodiment sweep results)
+          ./addon-test --gtest_output=xml:cpp-test-results.xml 2>&1 | tee test-output.log
 
           if [ -f cpp-test-results.xml ]; then
             test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
@@ -224,6 +308,27 @@ jobs:
             exit 1
           fi
 
+          # The GR00T parity tests GTEST_SKIP when their env vars are unset, so
+          # a credentials/download/naming regression would turn the whole suite
+          # into a no-op behind a green check. When the artefacts ARE staged,
+          # every Groot* test must actually run.
+          if [ -n "${GROOT_TEST_GGUF:-}" ]; then
+            if grep -q '^\[  SKIPPED \] Groot' test-output.log; then
+              echo "ERROR: GR00T artefacts are staged but Groot tests were skipped:"
+              grep '^\[  SKIPPED \] Groot' test-output.log
+              exit 1
+            fi
+          fi
+
+          if [ -n "${GROOT_TEST_SWEEP_GGUF:-}" ]; then
+            sweep_rows=$(grep -c '\[GrootEmbodimentSweep\]' test-output.log || true)
+            if [ "${sweep_rows:-0}" -eq 0 ]; then
+              echo "ERROR: GROOT_TEST_SWEEP_GGUF is set but the multi-embodiment sweep produced no rows"
+              exit 1
+            fi
+            echo "Multi-embodiment sweep validated $sweep_rows embodiment row(s)"
+          fi
+
       - name: Archive Test Results
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -232,3 +337,40 @@ jobs:
           path: |
             ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
+
+      - name: Parse GR00T embodiment sweep results to Step Summary
+        if: ${{ always() && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        continue-on-error: true
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          # Extract embodiment sweep results from test output on Linux only.
+          # Fallback gracefully if parsing fails (sweep may have been skipped).
+          set +e
+
+          if [ ! -f "build/test/unit/test-output.log" ]; then
+            echo "## GR00T Multi-Embodiment Sweep" >> "$GITHUB_STEP_SUMMARY"
+            echo "Test output not found (sweep may have been skipped on this runner)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Count sweep results. grep -c already prints 0 and exits 1 on no
+          # match, so swallow the exit code with `|| true` — a `|| echo 0` here
+          # would append a second 0 and yield a non-numeric "0\n0".
+          sweep_count=$(grep -c "\[GrootEmbodimentSweep\]" "build/test/unit/test-output.log" || true)
+
+          if [ "$sweep_count" -eq 0 ]; then
+            echo "## GR00T Multi-Embodiment Sweep" >> "$GITHUB_STEP_SUMMARY"
+            echo "No sweep results found in test output" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## GR00T Multi-Embodiment Sweep Results"
+            echo ""
+            echo "**Test:** GrootEmbodimentSweep ($sweep_count embodiment rows validated against PyTorch oracle)"
+            echo ""
+            echo "**Results:**"
+            echo ""
+            grep "\[GrootEmbodimentSweep\]" "build/test/unit/test-output.log" | head -17
+          } >> "$GITHUB_STEP_SUMMARY"

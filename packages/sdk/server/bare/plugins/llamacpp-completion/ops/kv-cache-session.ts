@@ -5,10 +5,19 @@ import {
   generateConfigHash,
   getCacheFilePath,
   getCurrentCacheInfo,
+  pruneEmptyCacheDirectories,
   renameCacheFile,
   deleteCache as deleteCacheUtil
 } from '@/server/bare/ops/kv-cache-utils'
-import type { CacheMessage } from '@/server/utils'
+import {
+  isCachePathWithinDirectory,
+  markAutoCacheKey,
+  planAutoCacheEvictions,
+  removeAutoCacheMarker,
+  removeAutoCacheMarkerIfMissing
+} from '@/server/bare/ops/kv-cache-retention'
+import { isMobile } from '@/server/bare/registry/runtime-context-registry'
+import { type CacheMessage, getKVCacheDir } from '@/server/utils'
 import {
   logCacheSaveError,
   logCacheStatus
@@ -22,47 +31,17 @@ import type { Logger } from '@/logging/types'
 const moduleLogger = getServerLogger()
 
 /**
- * Single owner of the three KV-cache bookkeeping layers.
+ * Coordinates five KV-cache state layers:
  *
- * The llama.cpp completion handler has three independent layers it must
- * keep consistent across every cancel/error branch:
+ * 1. `cachedMessageCounts` — saved message boundaries.
+ * 2. `initializedCaches` — caches primed in this worker.
+ * 3. On-disk `.bin` files written by the addon.
+ * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
+ * 5. `.auto-cache-<key>` markers — SDK-generated cache ownership.
  *
- *   1. `cachedMessageCounts: Map<path, count>` — the "n messages
- *      currently on disk" tracker.
- *   2. `initializedCaches: Set<key>` — the "addon defers disk writes;
- *      we know this cache is primed" tracker.
- *   3. On-disk `.bin` files written by the addon.
- *
- * Without a single owner, every cancel / zero-token / rename-failed /
- * tool-call exit would need to touch all three; any branch that forgets
- * a layer produces three-layer drift bugs.
- *
- * `KvCacheSession` collapses the three layers behind one object with
- * three operations:
- *
- *   - `beginTurn` — resolves the cache file path, primes the system
- *     prompt cache if missing (delegated to a caller-supplied closure
- *     so the session doesn't depend on the model addon), marks the
- *     cache initialized, and returns a `TurnHandle` carrying the
- *     resolved path + the snapshot of the on-disk saved count.
- *   - `commitTurn` — records the new saved count (for custom-key
- *     turns) or renames the addon's pre-response file to the
- *     post-response path and records the count there (for auto-cache
- *     turns). Flips the turn's internal `committed` flag so the
- *     deferred `rollback` becomes a no-op on the happy path.
- *   - `rollback` — atomically deletes the on-disk file, clears the
- *     in-memory init entry, and forgets the saved count. **All three
- *     layers, always, in one place.** Handlers call it once via
- *     `ctx.scope.defer(() => session.rollback(turn))`; `commitTurn`
- *     short-circuits it on success.
- *
- * The module-level `deleteKvCacheState(...)` function (below) provides
- * an administrative cross-model delete API for the
- * `handleDeleteCache` RPC handler.
- *
- * The module-scoped `cachedMessageCounts` and `initializedCaches` maps
- * are *private* to this file — no other module reaches into them.
- * Callers that need cache-status info do so through the session API.
+ * Every turn must finish through `commitTurn` or `rollback` so all
+ * inference state stays aligned, the active-path ref is released, and
+ * marker metadata follows the cache directory lifecycle.
  */
 
 // ----- module-scoped state. The session is the single mutation point
@@ -87,9 +66,120 @@ const cachedMessageCounts = new Map<string, number>()
  * older worker runs still hit the lazy-load path in `beginTurn`.
  */
 const initializedCaches = new Set<string>()
+const activeCachePaths = new Map<string, number>()
+
+const DESKTOP_AUTO_CACHE_MAX_BYTES = 4 * 1024 * 1024 * 1024
+const MOBILE_AUTO_CACHE_MAX_BYTES = 512 * 1024 * 1024
+const AUTO_CACHE_MAX_IDLE_MS = 24 * 60 * 60 * 1000
+const AUTO_CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000
+
+let lastAutoCacheSweepMs = 0
+let autoCacheSweepInFlight: Promise<void> | null = null
+let cacheStateLockTail = Promise.resolve()
 
 function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
   return `${modelId}:${configHash}:${cacheKey}`
+}
+
+function markCachePathActive(cachePath: string): void {
+  activeCachePaths.set(cachePath, (activeCachePaths.get(cachePath) ?? 0) + 1)
+}
+
+function releaseCachePath(cachePath: string): void {
+  const count = activeCachePaths.get(cachePath)
+  if (count === undefined) return
+  if (count === 1) {
+    activeCachePaths.delete(cachePath)
+    return
+  }
+  activeCachePaths.set(cachePath, count - 1)
+}
+
+function isCacheKeyActive(cacheKey: string): boolean {
+  const cacheDirectory = path.join(getKVCacheDir(), cacheKey)
+  return Array.from(activeCachePaths.keys()).some((cachePath) =>
+    isCachePathWithinDirectory(cacheDirectory, cachePath)
+  )
+}
+
+function getAutoCacheMaxBytes(): number {
+  return isMobile() ? MOBILE_AUTO_CACHE_MAX_BYTES : DESKTOP_AUTO_CACHE_MAX_BYTES
+}
+
+async function withCacheStateLock<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = cacheStateLockTail
+  let releaseLock = () => {}
+  cacheStateLockTail = new Promise<void>((resolve) => {
+    releaseLock = resolve
+  })
+
+  await previous
+  try {
+    return await operation()
+  } finally {
+    releaseLock()
+  }
+}
+
+async function maybeSweepAutoCaches(
+  logger: Logger,
+  overrides?: {
+    force?: boolean
+    maxBytes?: number
+    maxIdleMs?: number
+    nowMs?: number
+  }
+): Promise<void> {
+  const nowMs = overrides?.nowMs ?? Date.now()
+  if (autoCacheSweepInFlight !== null) {
+    await autoCacheSweepInFlight
+    if (!overrides?.force) return
+    return maybeSweepAutoCaches(logger, overrides)
+  }
+  if (!overrides?.force && nowMs - lastAutoCacheSweepMs < AUTO_CACHE_SWEEP_INTERVAL_MS) return
+
+  lastAutoCacheSweepMs = nowMs
+  const sweep = async () => {
+    try {
+      const cacheKeys = await planAutoCacheEvictions({
+        activeCachePaths: Array.from(activeCachePaths.keys()),
+        maxBytes: overrides?.maxBytes ?? getAutoCacheMaxBytes(),
+        maxIdleMs: overrides?.maxIdleMs ?? AUTO_CACHE_MAX_IDLE_MS,
+        nowMs
+      })
+      let evictionCount = 0
+      await withCacheStateLock(async () => {
+        for (const cacheKey of cacheKeys) {
+          if (isCacheKeyActive(cacheKey)) continue
+          await deleteKvCacheState({ kvCacheKey: cacheKey })
+          evictionCount++
+        }
+      })
+      if (evictionCount > 0) {
+        logger.debug(`[kv-cache] Evicted ${evictionCount} inactive auto-cache entries`)
+      }
+    } catch (error) {
+      logger.warn(
+        `[kv-cache] Auto-cache retention sweep failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  const sweepPromise = sweep()
+  autoCacheSweepInFlight = sweepPromise
+  try {
+    await sweepPromise
+  } finally {
+    autoCacheSweepInFlight = null
+  }
+}
+
+function scheduleAutoCacheSweep(logger: Logger): void {
+  void maybeSweepAutoCaches(logger).catch((error) => {
+    logger.warn(
+      `[kv-cache] Failed to schedule auto-cache retention sweep: ${error instanceof Error ? error.message : String(error)}`
+    )
+  })
 }
 
 // ----- public types -----
@@ -159,7 +249,8 @@ export interface KvCacheSession {
    * primes the system-prompt cache if needed (delegated to
    * `input.primeIfMissing`), marks the cache initialized, and returns a
    * `TurnHandle` the handler attaches to `ctx.scope.defer(...)` for the
-   * rollback hook.
+   * rollback hook. Auto-cache path resolution is serialized with
+   * retention deletion before the handle is returned.
    */
   beginTurn(input: BeginTurnInput): Promise<TurnHandle>
 
@@ -174,12 +265,13 @@ export interface KvCacheSession {
 
   /**
    * Roll back an in-flight turn — atomically deletes the on-disk cache
-   * file, clears the in-memory `initializedCaches` entry, and forgets
-   * the `cachedMessageCounts` entry. **All three layers, always, in
-   * one place.** Idempotent: a turn that has already been committed
-   * or rolled back is a no-op on subsequent calls. Handlers register
-   * this via `ctx.scope.defer(...)` so it runs regardless of how the
-   * handler exits (success branch removes itself via `commitTurn`).
+   * file, clears the in-memory `initializedCaches` entry, forgets the
+   * `cachedMessageCounts` entry, releases the active-path ref, and
+   * removes orphaned marker metadata. Idempotent: a turn that has
+   * already been committed or rolled back is a no-op on subsequent
+   * calls. Handlers register this via `ctx.scope.defer(...)` so it
+   * runs regardless of how the handler exits (success branch removes
+   * itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
 
@@ -196,6 +288,7 @@ export interface KvCacheSession {
 interface InternalTurnState {
   cachePath: string
   registryKey: string
+  autoCacheKey?: string
   /** Flipped by `commitTurn`; consulted at the top of `rollback`. */
   committed: boolean
   /** Flipped at the end of `rollback`; protects against double-rollback. */
@@ -220,7 +313,7 @@ export function createKvCacheSession(
   // the reference; the module-scoped maps above survive.
   const turnState = new WeakMap<TurnHandle, InternalTurnState>()
 
-  function makeHandle(cachePath: string, registryKey: string): TurnHandle {
+  function makeHandle(cachePath: string, registryKey: string, autoCacheKey?: string): TurnHandle {
     const handle: TurnHandle = {
       cachePath,
       savedCount: cachedMessageCounts.get(cachePath) ?? 0
@@ -228,39 +321,47 @@ export function createKvCacheSession(
     turnState.set(handle, {
       cachePath,
       registryKey,
+      ...(autoCacheKey !== undefined && { autoCacheKey }),
       committed: false,
       rolledBack: false
     })
+    markCachePathActive(cachePath)
     return handle
   }
 
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
     const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
+    const handle = makeHandle(cachePath, registryKey)
 
-    // In-memory registry check first — the addon defers disk writes, so
-    // a freshly-primed cache may not yet exist on disk. If the
-    // in-memory flag isn't set, fall back to a filesystem probe so
-    // caches surviving across worker restarts still hit the reuse path.
-    let exists = initializedCaches.has(registryKey)
-    if (!exists) {
-      try {
-        await fsPromises.access(cachePath)
-        exists = true
-        initializedCaches.add(registryKey)
-      } catch {
-        exists = false
+    try {
+      // In-memory registry check first — the addon defers disk writes, so
+      // a freshly-primed cache may not yet exist on disk. If the
+      // in-memory flag isn't set, fall back to a filesystem probe so
+      // caches surviving across worker restarts still hit the reuse path.
+      let exists = initializedCaches.has(registryKey)
+      if (!exists) {
+        try {
+          await fsPromises.access(cachePath)
+          exists = true
+          initializedCaches.add(registryKey)
+        } catch {
+          exists = false
+        }
       }
-    }
-    logCacheStatus(input.customKey, exists)
+      logCacheStatus(input.customKey, exists)
 
-    if (!exists) {
-      await input.primeIfMissing(cachePath)
-      await verifyPrimedFile(cachePath, logger)
-      initializedCaches.add(registryKey)
-    }
+      if (!exists) {
+        await input.primeIfMissing(cachePath)
+        await verifyPrimedFile(cachePath, logger)
+        initializedCaches.add(registryKey)
+      }
 
-    return makeHandle(cachePath, registryKey)
+      return handle
+    } catch (error) {
+      releaseCachePath(cachePath)
+      throw error
+    }
   }
 
   async function beginAuto(input: BeginAutoTurnInput): Promise<TurnHandle> {
@@ -269,25 +370,37 @@ export function createKvCacheSession(
     // internally. The post-response key (used after a successful turn)
     // is computed by the caller and passed to `commitTurn` as
     // `targetCachePath`.
-    const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
-    const preResponseCacheInfo = await getCurrentCacheInfo(modelId, input.configHash, input.history)
+    const setup = await withCacheStateLock(async () => {
+      const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
+      const cacheInfo =
+        existingCache ?? (await getCurrentCacheInfo(modelId, input.configHash, input.history))
+      const registryKey = initRegistryKey(modelId, input.configHash, cacheInfo.cacheKey)
+      return {
+        cacheExists: existingCache !== null,
+        cachePath: cacheInfo.cachePath,
+        cacheKey: cacheInfo.cacheKey,
+        registryKey,
+        handle: makeHandle(cacheInfo.cachePath, registryKey, cacheInfo.cacheKey)
+      }
+    })
 
-    const cachePath =
-      existingCache !== null ? existingCache.cachePath : preResponseCacheInfo.cachePath
-    const cacheKeyForRegistry =
-      existingCache !== null ? existingCache.cacheKey : preResponseCacheInfo.cacheKey
-    const registryKey = initRegistryKey(modelId, input.configHash, cacheKeyForRegistry)
-
-    const cacheExists = existingCache !== null
+    const { cacheExists, cachePath, cacheKey, registryKey, handle } = setup
     logCacheStatus('auto', cacheExists)
 
-    if (!cacheExists) {
-      await input.primeIfMissing(cachePath)
-      await verifyPrimedFile(cachePath, logger)
-      initializedCaches.add(registryKey)
-    }
+    try {
+      if (!cacheExists) {
+        await input.primeIfMissing(cachePath)
+        await verifyPrimedFile(cachePath, logger)
+        initializedCaches.add(registryKey)
+      }
 
-    return makeHandle(cachePath, registryKey)
+      return handle
+    } catch (error) {
+      releaseCachePath(cachePath)
+      await pruneEmptyCacheDirectories(cachePath)
+      await removeAutoCacheMarkerIfMissing(cacheKey)
+      throw error
+    }
   }
 
   async function beginTurn(input: BeginTurnInput): Promise<TurnHandle> {
@@ -319,29 +432,49 @@ export function createKvCacheSession(
         return
       }
       state.committed = true
+      releaseCachePath(state.cachePath)
       return
     }
 
-    // Auto-rename path: the pre-response file is now stale (its key
-    // refers to history minus the last user turn). Rename it to the
-    // post-response key and record the new count there.
-    if (!(await renameCacheFile(state.cachePath, result.targetCachePath))) {
+    const sourceCachePath = state.cachePath
+    const sourceCacheKey = state.autoCacheKey
+    const targetCacheKey = path.basename(path.dirname(path.dirname(result.targetCachePath)))
+    const renamed = await withCacheStateLock(async () => {
+      markCachePathActive(result.targetCachePath)
+      await fsPromises.mkdir(path.dirname(result.targetCachePath), { recursive: true })
+      await markAutoCacheKey(targetCacheKey)
+
+      if (!(await renameCacheFile(sourceCachePath, result.targetCachePath))) {
+        releaseCachePath(result.targetCachePath)
+        await pruneEmptyCacheDirectories(result.targetCachePath)
+        await removeAutoCacheMarkerIfMissing(targetCacheKey)
+        return false
+      }
+
+      releaseCachePath(sourceCachePath)
+      state.cachePath = result.targetCachePath
+      state.autoCacheKey = targetCacheKey
+      await pruneEmptyCacheDirectories(sourceCachePath)
+      if (sourceCacheKey !== undefined) {
+        await removeAutoCacheMarkerIfMissing(sourceCacheKey)
+      }
+      cachedMessageCounts.delete(sourceCachePath)
+      initializedCaches.delete(state.registryKey)
+      return true
+    })
+
+    if (!renamed) {
       logger.warn(
-        `[kv-cache] Auto cache rename failed; rolling back. from=${state.cachePath} to=${result.targetCachePath}`
+        `[kv-cache] Auto cache rename failed; rolling back. from=${sourceCachePath} to=${result.targetCachePath}`
       )
       await runRollback(state)
       return
     }
 
-    // The source path's entry is gone (the file moved). Drop it and
-    // record the new count at the rename target.
-    cachedMessageCounts.delete(state.cachePath)
-
     const ok = await verifySaveAndRecord(result.targetCachePath, result.messageCount)
     if (!ok) {
       // Rename succeeded but the file isn't where we expected. Roll
       // back via the target path instead of the (now-empty) source.
-      state.cachePath = result.targetCachePath
       await runRollback(state)
       return
     }
@@ -351,6 +484,8 @@ export function createKvCacheSession(
     // is committed and won't roll back. Future turns compute fresh
     // paths.
     state.committed = true
+    releaseCachePath(state.cachePath)
+    scheduleAutoCacheSweep(logger)
   }
 
   async function rollback(turn: TurnHandle): Promise<void> {
@@ -372,9 +507,15 @@ export function createKvCacheSession(
         `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
       )
     }
+    await pruneEmptyCacheDirectories(state.cachePath)
+    if (state.autoCacheKey !== undefined) {
+      await removeAutoCacheMarkerIfMissing(state.autoCacheKey)
+    }
     initializedCaches.delete(state.registryKey)
     cachedMessageCounts.delete(state.cachePath)
+    releaseCachePath(state.cachePath)
     state.rolledBack = true
+    if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
   function dropStaleSavedCount(turn: TurnHandle): void {
@@ -440,6 +581,9 @@ export async function deleteKvCacheState(
     kvCacheKey: target.kvCacheKey,
     ...(target.modelId !== undefined && { modelId: target.modelId })
   })
+  if (target.modelId === undefined) {
+    await removeAutoCacheMarker(target.kvCacheKey)
+  }
 
   // Prefix-cleanup the in-memory counts. The on-disk directory tree
   // is `{kvCacheRoot}/{kvCacheKey}[/{modelId}]/`, so every entry in
@@ -496,6 +640,7 @@ async function verifyPrimedFile(cachePath: string, logger: Logger): Promise<void
   } catch (statError) {
     // ENOENT is the common case here — addon prime returned without
     // calling save (most often: signal abort during prefill).
+    await pruneEmptyCacheDirectories(cachePath)
     throw new Error(
       `[kv-cache] prime closure resolved but no cache file was written. path=${cachePath} cause=${statError instanceof Error ? statError.message : String(statError)}`
     )
@@ -506,6 +651,7 @@ async function verifyPrimedFile(cachePath: string, logger: Logger): Promise<void
     // primary "prime didn't persist" condition.
     try {
       await fsPromises.unlink(cachePath)
+      await pruneEmptyCacheDirectories(cachePath)
     } catch (unlinkError) {
       logger.warn(
         `[kv-cache] Failed to remove empty primed cache file. path=${cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
@@ -601,9 +747,29 @@ export const __kvCacheSessionTestHooks = {
   markInitializedForTest(modelId: string, configHash: string, cacheKey: string): void {
     initializedCaches.add(initRegistryKey(modelId, configHash, cacheKey))
   },
+  getLastAutoCacheSweepMsForTest(): number {
+    return lastAutoCacheSweepMs
+  },
+  setLastAutoCacheSweepMsForTest(value: number): void {
+    lastAutoCacheSweepMs = value
+  },
   resetForTest(): void {
     cachedMessageCounts.clear()
     initializedCaches.clear()
+    activeCachePaths.clear()
+    lastAutoCacheSweepMs = 0
+    autoCacheSweepInFlight = null
+    cacheStateLockTail = Promise.resolve()
+  },
+  waitForAutoCacheSweepForTest(): Promise<void> {
+    return autoCacheSweepInFlight ?? Promise.resolve()
+  },
+  sweepAutoCachesForTest(options: {
+    maxBytes: number
+    maxIdleMs: number
+    nowMs: number
+  }): Promise<void> {
+    return maybeSweepAutoCaches(moduleLogger, { ...options, force: true })
   }
 }
 

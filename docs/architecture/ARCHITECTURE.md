@@ -82,8 +82,8 @@ This enables modular bundles (include only what you need), custom third-party pl
 | Whisper | `whispercpp-transcription` | `@qvac/transcription-whispercpp` |
 | Parakeet | `parakeet-transcription` | `@qvac/transcription-parakeet` |
 | NMT | `nmtcpp-translation` | `@qvac/translation-nmtcpp` |
-| TTS | `onnx-tts` | `@qvac/tts-onnx` |
-| OCR | `onnx-ocr` | `@qvac/ocr-onnx` |
+| TTS | `tts-ggml` | `@qvac/tts-ggml` |
+| OCR | `ggml-ocr` | `@qvac/ocr-ggml` |
 
 Model types follow an `engine-usecase` naming convention. Backward-compatible aliases (`llm`, `whisper`, `embeddings`, `nmt`, `tts`, `ocr`, `parakeet`) are supported and normalized to canonical types.
 
@@ -226,8 +226,6 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 - [Embeddings — llama.cpp](../packages/embed-llamacpp/docs/architecture.md)
 - [Transcription — whisper.cpp](../packages/transcription-whispercpp/docs/architecture.md)
 - [Translation — nmt.cpp](../packages/translation-nmtcpp/docs/architecture.md)
-- [TTS — ONNX](../packages/tts-onnx/docs/architecture.md)
-- [OCR — ONNX](../packages/ocr-onnx/docs/architecture.md)
 
 ---
 
@@ -262,8 +260,8 @@ All packages live in this monorepo under `packages/`:
 | `transcription-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
 | `transcription-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
-| `tts-onnx` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |
-| `ocr-onnx` | `@qvac/ocr-onnx` | OCR (ONNX) |
+| `tts-ggml` | `@qvac/tts-ggml` | Text-to-speech (GGML) |
+| `ocr-ggml` | `@qvac/ocr-ggml` | OCR (GGML) |
 
 **Support Libraries**
 

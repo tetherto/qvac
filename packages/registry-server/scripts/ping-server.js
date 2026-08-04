@@ -7,7 +7,7 @@ const { connectToRegistry } = require('./utils/rpc-client')
 
 const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS, 10) || 30000
 
-function parseArgs () {
+function parseArgs() {
   const args = process.argv.slice(2)
   const result = { targetPeer: null }
 
@@ -21,7 +21,7 @@ function parseArgs () {
   return result
 }
 
-async function pingServer (options = {}) {
+async function pingServer(options = {}) {
   const { targetPeer } = options
   const config = new RegistryConfig()
   const tmpStorage = path.join(os.tmpdir(), `qvac-ping-${Date.now()}`)
@@ -69,7 +69,7 @@ async function pingServer (options = {}) {
 
 if (require.main === module) {
   const args = parseArgs()
-  pingServer(args).catch(err => {
+  pingServer(args).catch((err) => {
     console.error('Fatal error:', err.message)
     process.exit(1)
   })

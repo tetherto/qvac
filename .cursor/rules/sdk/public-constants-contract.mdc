@@ -1,0 +1,82 @@
+---
+description: Every public SDK constant meant for non-JS consumers must be registered in the constants contract
+globs:
+  - packages/sdk/schemas/**
+  - packages/sdk/index.ts
+  - packages/sdk/client/api/**
+  - packages/sdk/constants/**
+alwaysApply: false
+---
+
+# Public Constants Contract
+
+`packages/sdk/index.ts` re-exports plain constants alongside RPC methods —
+`ModelType`, `MODEL_TYPES`, `PLUGIN_LLM` and friends, `SUPPORTED_AUDIO_FORMATS`,
+`TOOLS_MODE`, `VERBOSITY`. Non-JS SDKs (Python, ...) are generated from
+`packages/sdk/contract/{schema.json,manifest.json,models.json}` — they never
+read `index.ts` directly. A constant that isn't in `schema.json`'s `$defs`
+is invisible to every other language, no matter how prominently it's
+exported from JS.
+
+`schema.json` is built purely from Zod schemas via `z.toJSONSchema`. A
+hand-authored `export const FOO = {...}` with no Zod schema behind it — which
+is what `ModelType`, `PLUGIN_*`, and `SUPPORTED_AUDIO_FORMATS` all were
+before this rule existed — has no path into the contract at all. It won't
+cause a build failure; it just silently never reaches Python (or the next
+language).
+
+## The rule
+
+When you add a new constant to `index.ts` that other-language consumers
+should get as a typed, named value, you MUST:
+
+1. Express it as a `z.enum(...)` — works for both string and number values,
+   and for a bare array of strings via identity mapping (`z.enum(['a','b'])`
+   gives `.enum = {a:'a', b:'b'}`).
+2. Add it to `constantsRegistry` in `packages/sdk/schemas/constants-
+   registry.ts`.
+3. Run `bun run contract:export` and commit the resulting `contract/
+   schema.json` diff — a new `constants.<Name>` entry in `$defs`.
+
+`build-contract.ts` merges every `constantsRegistry` entry into the same
+`$defs` object as every request/response type, via the same
+`toWireJsonSchema` call, tagged with an `x-enum-varnames` array (`Object.
+keys(schema.enum)`) — a datamodel-code-generator extension that preserves
+the registered key names through codegen. Plain JSON Schema `enum:` only
+carries *values*; without `x-enum-varnames`, a constant whose keys aren't
+mechanically derivable from their values (`PluginId.LLM` vs.
+`'@qvac/sdk/llamacpp-completion/plugin'`, `Verbosity.ERROR` vs. `0`) would
+silently lose its name and fall back to an ugly auto-slugged one.
+
+```ts
+// schemas/constants-registry.ts
+export const constantsRegistry = {
+  ModelType: z.enum(ModelType),
+  // new: MyNewThing: z.enum(MyNewThing),
+} as const
+```
+
+**If the field that carries this same value in a wire request/response
+isn't already a `z.enum(...)`** (e.g. it's a `z.union([z.literal(...), ...])`
+of literals), convert it to `z.enum(...)` too, or its own value will remain
+untitled in `schema.json` and its name will collide with your registry
+entry once both exist as top-level constants of the same name (this bit us
+once with `Verbosity` — `llamacpp-config.ts`'s `verbositySchema` was a
+`z.union` of literals, invisible to our own titling, and the generator's own
+fallback naming for that untitled field collided with the new top-level
+`Verbosity` def).
+
+**Scoped to name→value maps only.** A standalone scalar constant (e.g.
+`VLA_DEFAULT_IMAGE_SIZE = 512`) has no natural JSON Schema representation as
+a plain value — a `const`-only schema generates an awkward `RootModel
+[Literal[...]]` wrapper class in Python, not a usable constant — so this
+registry doesn't cover scalars. There's no automated path for those yet.
+
+Don't register a constant that's already fully described by a wire schema's
+own inline `z.enum`/`z.literal` field type with no separate named-constant
+object behind it — that's already in `schema.json` and doesn't need a
+second, redundant top-level entry.
+
+See `packages/sdk/contract/README.md` for the exported shape, and
+`.cursor/rules/sdk/sdk-pod-packages.mdc` for what counts as an SDK pod
+package this applies to.

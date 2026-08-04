@@ -1,0 +1,10 @@
+{
+  "ios": {
+    "core": ["runAddonTest", "runModelLoadingTest"],
+    "multi": ["runMultiGpuTest", "runMultiInstanceTest"]
+  },
+  "android": {
+    "core": ["runAddonTest", "runModelLoadingTest"],
+    "multi": ["runMultiGpuTest", "runMultiInstanceTest"]
+  }
+}

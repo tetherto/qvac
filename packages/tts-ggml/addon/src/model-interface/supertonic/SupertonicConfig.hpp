@@ -42,6 +42,9 @@ struct SupertonicConfig {
   std::string backendsDir;
   std::string openclCacheDir;
 
+  // Persistent Vulkan pipeline-cache dir; empty -> no cross-process cache.
+  std::string vulkanCacheDir;
+
   // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the
   // single switch: when set, the model loads the enhancer GGUF and
   // bandwidth-extends the synthesized PCM to 48 kHz before returning it; empty

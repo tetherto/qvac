@@ -2,341 +2,411 @@
   "runApiBehaviorTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     }
   ],
   "runBitnetTest": [
     {
       "name": "bitnet_b1_58-large-TQ2_0.gguf",
-      "url": "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf"
+      "url": "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/e3131d78f06395ab62f7e7fb6c9ae9c00d829db0/bitnet_b1_58-large-TQ2_0.gguf"
     }
   ],
   "runCacheStateMachineTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runConfigParametersTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runContinuousBatchingTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
+    },
+    {
+      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+    },
+    {
+      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+    }
+  ],
+  "runFinetuningArchsTest": [
+    {
+      "name": "Qwen3.5-0.8B-Q4_0.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"
     }
   ],
   "runFinetuningPauseResumeTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     },
     {
       "name": "bitnet_b1_58-large-TQ2_0.gguf",
-      "url": "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf"
+      "url": "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/e3131d78f06395ab62f7e7fb6c9ae9c00d829db0/bitnet_b1_58-large-TQ2_0.gguf"
     }
   ],
   "runGemma4ImageElephantPerfTest": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
   "runGemma4ImageFruitPlatePerfTest": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
   "runGemma4ImageHighResAuroraPerfTest": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
   "runGemma4Test": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     }
   ],
   "runGenerationParamsTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     }
   ],
   "runGrammarTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     }
   ],
   "runImageElephantTest": [
     {
       "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
     },
     {
       "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
     },
     {
       "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
     },
     {
       "name": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
     }
   ],
   "runImageFruitPlateTest": [
     {
       "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
     },
     {
       "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
     },
     {
       "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
     },
     {
       "name": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
     }
   ],
   "runImageHighResAuroraTest": [
     {
       "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
     },
     {
       "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
     },
     {
       "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
     },
     {
       "name": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+    }
+  ],
+  "runImageMmprojGpuTest": [
+    {
+      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+    },
+    {
+      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+    }
+  ],
+  "runKvCacheTypeDefaultsTest": [
+    {
+      "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runModelLoadingTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runMropeSlidingContextTest": [
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     },
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     },
     {
       "name": "llama-3.2-3b-instruct-q4_0.gguf",
-      "url": "https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/main/llama-3.2-3b-instruct-q4_0.gguf"
+      "url": "https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/b86ea0e9be1406b59f11a8cf458ae96daaabf5bf/llama-3.2-3b-instruct-q4_0.gguf"
     }
   ],
   "runMultiGpuTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     }
   ],
   "runMultiInstanceTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runOcrLightonTest": [
     {
       "name": "LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
-      "url": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf"
+      "url": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/a683d3cac5f26cc2039d117528d3e04e400bad56/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf"
     },
     {
       "name": "mmproj-LightOnOCR-2-F16.gguf",
-      "url": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/a683d3cac5f26cc2039d117528d3e04e400bad56/mmproj-F16.gguf"
+    }
+  ],
+  "runOcrUnlimitedTest": [
+    {
+      "name": "unlimited-ocr-Q4_K_M.gguf",
+      "url": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_K_M.gguf"
+    },
+    {
+      "name": "mmproj-unlimited-ocr-F16.gguf",
+      "url": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf"
+    }
+  ],
+  "runUnlimitedOcrPerfTest": [
+    {
+      "name": "unlimited-ocr-Q4_K_M.gguf",
+      "url": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/unlimited-ocr-Q4_K_M.gguf"
+    },
+    {
+      "name": "mmproj-unlimited-ocr-F16.gguf",
+      "url": "https://huggingface.co/vimalnakrani/unlimited-ocr-gguf/resolve/45cd66ec6b46a7c4de49f376084ecec2b8d3c59a/mmproj-unlimited-ocr-F16.gguf"
     }
   ],
   "runOcrPaddleTest": [
     {
       "name": "PaddleOCR-VL-1.5.gguf",
-      "url": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5.gguf"
+      "url": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5.gguf"
     },
     {
       "name": "PaddleOCR-VL-1.5-mmproj.gguf",
-      "url": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj.gguf"
+      "url": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5-mmproj.gguf"
     }
   ],
   "runQuantizedKvcacheTest": [
     {
       "name": "llama-3.2-3b-instruct-q4_0.gguf",
-      "url": "https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/main/llama-3.2-3b-instruct-q4_0.gguf"
+      "url": "https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/b86ea0e9be1406b59f11a8cf458ae96daaabf5bf/llama-3.2-3b-instruct-q4_0.gguf"
     },
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q4_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf?download=true"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"
     }
   ],
   "runQwen35ImageElephantPerfTest": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
   "runQwen35ImageFruitPlatePerfTest": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
   "runQwen35ImageHighResAuroraPerfTest": [
     {
       "name": "google_gemma-4-E2B-it-Q4_K_M.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     },
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
+    }
+  ],
+  "runQwen35ImageTileModeTokensTest": [
+    {
+      "name": "Qwen3.5-0.8B-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
+    },
+    {
+      "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
+    }
+  ],
+  "runQwen35MultimodalCacheStressTest": [
+    {
+      "name": "Qwen3.5-0.8B-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
+    },
+    {
+      "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
     }
   ],
   "runQwen35Test": [
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     }
   ],
   "runReasoningTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf"
     }
   ],
   "runSlidingContextTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runToolCallingTest": [
     {
       "name": "Qwen3-1.7B-Q4_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_0.gguf"
     }
   ],
   "runToolsCompactTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",
-      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
     }
   ],
   "runTurboquantTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ],
   "runUtf8OutputTest": [
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
-      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf"
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
   ]
 }

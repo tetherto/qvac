@@ -7,7 +7,7 @@ const DEFAULT_PORT = 9210
 const DEFAULT_HOST = '127.0.0.1'
 
 class MetricsServer extends ReadyResource {
-  constructor (promRegister, opts = {}) {
+  constructor(promRegister, opts = {}) {
     super()
 
     this._register = promRegister
@@ -17,7 +17,7 @@ class MetricsServer extends ReadyResource {
     this._server = null
   }
 
-  async _open () {
+  async _open() {
     this._server = http.createServer(async (req, res) => {
       if (req.url === '/metrics' && req.method === 'GET') {
         try {
@@ -38,17 +38,20 @@ class MetricsServer extends ReadyResource {
 
     await new Promise((resolve, reject) => {
       this._server.listen(this._port, this._host, () => {
-        this._logger.info({
-          host: this._host,
-          port: this._port
-        }, 'MetricsServer: listening')
+        this._logger.info(
+          {
+            host: this._host,
+            port: this._port
+          },
+          'MetricsServer: listening'
+        )
         resolve()
       })
       this._server.on('error', reject)
     })
   }
 
-  async _close () {
+  async _close() {
     if (!this._server) return
 
     await new Promise((resolve) => {

@@ -17,6 +17,24 @@
 class LlamaBatch;
 struct PromptLayout;
 
+enum class GenerationStopReason : uint8_t {
+  None,
+  Eos,
+  Antiprompt,
+  PredictionLimit,
+  SequenceLimit,
+  ContextOverflow,
+};
+
+// addon.js maps the numeric `stopReason` runtime stat back to a label by
+// indexing its STOP_REASONS array with these values — keep them frozen.
+static_assert(static_cast<uint8_t>(GenerationStopReason::None) == 0);
+static_assert(static_cast<uint8_t>(GenerationStopReason::Eos) == 1);
+static_assert(static_cast<uint8_t>(GenerationStopReason::Antiprompt) == 2);
+static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
+static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
+static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
@@ -26,6 +44,7 @@ struct SequenceStepResult {
   bool finished = false;
   bool decodedInline = false;
   bool contextOverflow = false;
+  GenerationStopReason stopReason = GenerationStopReason::None;
   /// Tokens dropped from this sequence's KV-cache by an in-step context
   /// slide. The scheduler must subtract it from the request's position
   /// before feeding the next token.
@@ -176,7 +195,7 @@ public:
     (void)mediaIndex;
     (void)pos;
     throw qvac_errors::StatusError(
-        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InternalError),
         "SequenceDriver::evalMediaSegment: driver stages no media segments");
@@ -211,9 +230,16 @@ public:
   virtual void onSequenceEnd(
       const std::function<void(const std::string&)>& outputCallback) = 0;
 
-  /// Fired when generation reaches a natural EOG / stop token.
-  virtual void onGenerationFinished(
-      const std::function<void(const std::string&)>& outputCallback) = 0;
+  /// Fired when generation reaches a natural EOG / stop token, generation
+  /// budget limit, or scheduler-imposed sequence limit. `terminalReason`
+  /// carries reasons known only at finalization time (e.g. the scheduler's
+  /// per-sequence slot cap). Returns `false` when finalisation had to roll
+  /// back the request but could not prove live recurrent state matches
+  /// metadata, in which case callers MUST skip cache persistence for this
+  /// request.
+  [[nodiscard]] virtual bool onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback,
+      GenerationStopReason terminalReason = GenerationStopReason::None) = 0;
 
   /// Fired when the sequence is cancelled (user-requested or fatal error).
   /// Returns `true` when internal rollback (metadata + live KV / recurrent

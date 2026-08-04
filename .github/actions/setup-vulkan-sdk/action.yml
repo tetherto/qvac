@@ -78,7 +78,11 @@ runs:
         fi
 
         sudo apt install -y xz-utils
-        wget -q -O /tmp/vulkansdk.tar.xz "$VULKAN_URL"
+        # LunarG's CDN intermittently returns transient HTTP errors (403/429/5xx)
+        # for pinned SDK archives; retry with backoff instead of failing the job.
+        wget -q --tries=5 --waitretry=10 --retry-connrefused \
+          --retry-on-http-error=403,429,500,502,503,504 \
+          -O /tmp/vulkansdk.tar.xz "$VULKAN_URL"
         mkdir -p "$HOME/vulkan"
         tar xf /tmp/vulkansdk.tar.xz --directory "$HOME/vulkan" --strip-components=1
 
@@ -165,7 +169,19 @@ runs:
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
         Write-Host "Downloading Vulkan SDK from $url to $out"
-        Start-BitsTransfer -Source $url -Destination $out
+        # LunarG's CDN intermittently returns transient errors; retry with backoff.
+        $maxAttempts = 5
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+          try {
+            Start-BitsTransfer -Source $url -Destination $out
+            break
+          } catch {
+            if ($attempt -eq $maxAttempts) { throw }
+            $delay = 10 * $attempt
+            Write-Host "Download attempt $attempt failed: $($_.Exception.Message). Retrying in $delay s..."
+            Start-Sleep -Seconds $delay
+          }
+        }
 
         Write-Host "Installing Vulkan SDK..."
         & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install

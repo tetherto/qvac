@@ -1,0 +1,19 @@
+{
+  "name": "@qvac/fabric-integration",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Integration tests that exercise real inference through both llm-llamacpp and embed-llamacpp to prove they share a single @qvac/fabric runtime.",
+  "scripts": {
+    "test": "bare shared-runtime.test.js"
+  },
+  "dependencies": {
+    "@qvac/fabric": "file:../..",
+    "@qvac/llm-llamacpp": "file:../../../llm-llamacpp",
+    "@qvac/embed-llamacpp": "file:../../../embed-llamacpp",
+    "bare-fs": "^4.5.1",
+    "bare-https": "^3.0.0",
+    "bare-os": "^3.6.1",
+    "bare-path": "^3.0.0",
+    "brittle": "^3.16.5"
+  }
+}

@@ -17,12 +17,16 @@ recognise are silently ignored.
 
 ## Starter templates (copy, don't edit in place)
 
-Two ready-to-fill templates live next to this README:
+Three ready-to-fill templates live next to this README:
 
 - `VULKAN_TEMPLATE.json.example` — full schema (same shape the desktop benchmark
   writes into `benchmarks/results/rtf-benchmark-*.json`).
 - `COMPACT_SUMMARY_TEMPLATE.json.example` — compact "summary-only" shape (same
   shape the mobile log extractor produces).
+- `LAVASR_TEMPLATE.json.example` — full schema with the LavaSR enhancer and
+  denoiser axes on (`model.enhancer: "lavasr"`, `model.enhancerVariant: "q8_0"`,
+  `model.denoiser: "lavasr"`), for dropping LavaSR numbers from a backend CI can't
+  reach.
 
 ## Schema overview (v2)
 
@@ -34,6 +38,9 @@ The canonical shape includes:
 | `platform` / `platformName` / `arch` | string   | yes      | e.g. `linux-x64`, `linux`, `x64`. Used for the platform column. |
 | `engine`                      | string   | yes      | `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl`. |
 | `model.variant`               | string   | no       | Label: `q4` / `q8` / `f16` / `mixed` (default `q4`). |
+| `model.enhancer`              | string   | no       | `none` (default) / `lavasr`. `lavasr` marks rows where the LavaSR 48 kHz enhancer was layered on the engine; shown in the `Enhancer` column. Either `model.enhancer` or top-level `enhancer` is accepted. |
+| `model.enhancerVariant`       | string   | no       | Enhancer quant tier: `f16` (default) / `f32` / `q8_0`. Only meaningful with `model.enhancer: "lavasr"`; renders as `lavasr/<tier>` (non-`f16`) in the `Enhancer` column and dedupes each tier as its own row. `model.enhancerVariant`, `requested.enhancerVariant`, or top-level `enhancerVariant` are all accepted. |
+| `model.denoiser`              | string   | no       | `none` (default) / `lavasr`. `lavasr` marks rows where the LavaSR speech denoiser ran before the enhancer; shown in the `Denoiser` column. Either `model.denoiser` or top-level `denoiser` is accepted. |
 | `model.sizeBytes`             | number   | no       | Sum of the engine's GGUF files on disk. Shown as `Model (MB)`. |
 | `labels.backend`              | string   | yes      | `cpu` / `metal` / `vulkan` / `opencl`. |
 | `labels.device`               | string   | yes      | Human-readable device identifier (goes into the `Device` column). |
@@ -46,9 +53,18 @@ The canonical shape includes:
 | `summary.tokensPerSecond.{mean,...}` | object | no    | Available on engines that report `tokensPerSecond`. |
 | `summary.coldRtf`             | number?  | no       | RTF of the first warmup run (captures cold path). |
 | `summary.modelLoadMs`         | number?  | no       | `load()` wall time. |
-| `summary.peakRssBytes`        | number?  | no       | Max RSS observed across warmup + measured runs. |
+| `summary.peakRssBytes`        | number?  | no       | Legacy flat peak RSS. Still read as a fallback for `Peak RSS (MB)` when `summary.memory` is absent. |
+| `summary.memory.avgRssMb`     | number?  | no       | Average process RSS sampled during inference. Shown as `Avg RSS (MB)`. |
+| `summary.memory.peakRssMb`    | number?  | no       | Peak RSS across all runs (never below the post-load footprint). Shown as `Peak RSS (MB)`; preferred over `summary.peakRssBytes`. |
+| `summary.memory.reclaimedMb`  | number?  | no       | Memory returned to the OS after the model is unloaded (`rssAfterLoadMb - rssAfterUnloadMb`, clamped at 0). Shown as `Reclaimed (MB)`. |
 | `summary.modelSizeBytes`      | number?  | no       | Same value as `model.sizeBytes`; either field is acceptable. |
 | `summary.noisy`               | boolean? | no       | When `true`, aggregator prints `⚠`. If absent, derived from `stddev/mean > 0.15`. |
+
+The optional `summary.memory` block captures process resident-set-size (RSS)
+usage for the engine/platform/variant under test. On mobile the same three
+figures arrive as `avg_rss_mb` / `peak_rss_mb` / `reclaimed_mb` metrics in the
+canonical `[PERF_REPORT_START]` payload. Rows without any memory data render as
+`n/a` in those columns, so older artifacts remain valid.
 
 Absolute minimum to get a row rendered: `platform`, `engine`, `labels.backend`,
 `labels.device`, `requested.useGPU`, `summary.rtf.{mean,p50,p95}`.

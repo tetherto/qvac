@@ -5,6 +5,7 @@ import {
   finetuneResponseSchema,
   finetuneValidationSchema
 } from '@/schemas'
+import { contractValidate } from './utils/contract-validator'
 
 test('finetuneValidationSchema: defaults split validation fraction', (t) => {
   const result = finetuneValidationSchema.parse({
@@ -229,4 +230,83 @@ test('finetuneResponseSchema: accepts null terminal uncertainties', (t) => {
   t.is(response.stats?.val_loss_uncertainty, null)
   t.is(response.stats?.train_accuracy_uncertainty, null)
   t.is(response.stats?.val_accuracy_uncertainty, null)
+})
+
+test('contract finetune.request: validates run and control operations', (t) => {
+  const runRequest = {
+    type: 'finetune',
+    modelId: 'm1',
+    options: {
+      trainDatasetDir: '/tmp/train.jsonl',
+      validation: { type: 'none' },
+      outputParametersDir: '/tmp/out'
+    },
+    withProgress: true
+  }
+  t.is(finetuneRequestSchema.safeParse(runRequest).success, true)
+  const runContract = contractValidate('finetune.request', runRequest)
+  t.ok(runContract.valid, `contract accepts run request: ${runContract.errors}`)
+
+  const pauseRequest = { type: 'finetune', modelId: 'model-pause', operation: 'pause' }
+  t.is(finetuneRequestSchema.safeParse(pauseRequest).success, true)
+  const pauseContract = contractValidate('finetune.request', pauseRequest)
+  t.ok(pauseContract.valid, `contract accepts pause control request: ${pauseContract.errors}`)
+
+  const datasetWithoutPath = {
+    type: 'finetune',
+    modelId: 'model-invalid',
+    operation: 'start',
+    options: {
+      trainDatasetDir: '/tmp/train.jsonl',
+      validation: { type: 'dataset' },
+      outputParametersDir: '/tmp/out'
+    }
+  }
+  t.is(finetuneRequestSchema.safeParse(datasetWithoutPath).success, false)
+  t.is(
+    contractValidate('finetune.request', datasetWithoutPath).valid,
+    false,
+    'dataset validation without path is rejected by the contract too'
+  )
+})
+
+test('contract finetune:progress.response: validates progress updates', (t) => {
+  const progress = {
+    type: 'finetune:progress',
+    modelId: 'model-progress',
+    is_train: true,
+    loss: 1.25,
+    loss_uncertainty: null,
+    accuracy: 0.75,
+    accuracy_uncertainty: null,
+    global_steps: 3,
+    current_epoch: 1,
+    current_batch: 2,
+    total_batches: 9,
+    elapsed_ms: 1500,
+    eta_ms: 2500
+  }
+  t.is(finetuneProgressResponseSchema.safeParse(progress).success, true)
+  const contract = contractValidate('finetune:progress.response', progress)
+  t.ok(contract.valid, `contract accepts nullable progress fields: ${contract.errors}`)
+
+  const badLoss = { type: 'finetune:progress', modelId: 'model-progress', loss: 'high' }
+  t.is(finetuneProgressResponseSchema.safeParse(badLoss).success, false)
+  t.is(contractValidate('finetune:progress.response', badLoss).valid, false)
+})
+
+test('contract finetune.response: validates terminal stats payload', (t) => {
+  const terminal = {
+    type: 'finetune',
+    status: 'COMPLETED',
+    stats: {
+      train_loss: 0.8,
+      train_accuracy: 0.9,
+      global_steps: 12,
+      epochs_completed: 2
+    }
+  }
+  t.is(finetuneResponseSchema.safeParse(terminal).success, true)
+  const contract = contractValidate('finetune.response', terminal)
+  t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
 })

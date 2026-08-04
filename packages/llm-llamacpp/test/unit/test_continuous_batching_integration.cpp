@@ -837,6 +837,90 @@ TEST_F(
   // replay path succeeded on both slots.
 }
 
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["ctx_size"] = "512";
+  config_["parallel"] = "2";
+  config_["n_predict"] = "-1";
+  config_["n_discarded"] = "0";
+  config_["temp"] = "0";
+  auto model = loadModel(qwen35HybridModel_);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-qwen35-seqlimit-rollback-" + uniqueTestId() + ".bin");
+
+  const char* systemMsg =
+      R"({"role":"system","content":"You are a helpful assistant. Answer concisely with just the city name."})";
+  const char* userTurn1 =
+      R"({"role":"user","content":"What is the capital of France?"})";
+
+  LlamaModel::Prompt primer;
+  primer.input = std::string("[") + systemMsg + "," + userTurn1 + "]";
+  primer.cacheKey = cachePath.string();
+  primer.saveCacheToDisk = true;
+  primer.generationParams.reasoning_budget = 0;
+  primer.generationParams.n_predict = 16;
+  auto primerOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{primer});
+  ASSERT_EQ(primerOutputs.size(), 1u);
+  ASSERT_TRUE(containsCaseInsensitive(primerOutputs[0], "Paris"))
+      << "primer should answer from the clean cache seed: " << primerOutputs[0];
+  ASSERT_TRUE(fs::exists(cachePath));
+  const double primeCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(primeCacheTokens, 0.0) << "primer did not populate CacheTokens";
+
+  auto makeLimitPrompt = [systemMsg, userTurn1] {
+    LlamaModel::Prompt p;
+    p.input =
+        std::string("[") + systemMsg + "," + userTurn1 +
+        R"(,{"role":"assistant","content":"Paris"},{"role":"user","content":"Before answering, reason in detail for at least 80 sentences, then answer: What is the capital of France?"}])";
+    p.generationParams.remove_thinking_from_context = true;
+    return p;
+  };
+
+  auto limit = makeLimitPrompt();
+  limit.cacheKey = cachePath.string();
+  limit.saveCacheToDisk = true;
+  auto limitOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{limit});
+  ASSERT_EQ(limitOutputs.size(), 1u);
+  EXPECT_FALSE(limitOutputs[0].empty());
+  const double limitGeneratedTokens =
+      test_common::getStatValue(model->runtimeStats(), "generatedTokens");
+  const double limitCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  SCOPED_TRACE(
+      "limitGeneratedTokens=" + std::to_string(limitGeneratedTokens) +
+      ", primeCacheTokens=" + std::to_string(primeCacheTokens) +
+      ", limitCacheTokens=" + std::to_string(limitCacheTokens) +
+      ", limit output (first 240 chars): " + limitOutputs[0].substr(0, 240));
+  EXPECT_GE(limitGeneratedTokens, 64.0)
+      << "n_predict is unbounded, so a long generation here means the "
+         "scheduler slot cap, not n_predict, truncated the request";
+  EXPECT_LE(std::abs(limitCacheTokens - primeCacheTokens), 1.0)
+      << "sequence-limit truncation must roll back to the warm cache baseline";
+
+  auto sibling = makePrompt("What is 2+2? Answer with just the number.");
+  sibling.generationParams.reasoning_budget = 0;
+  sibling.generationParams.n_predict = 16;
+  std::vector<LlamaModel::Prompt> prompts{
+      makeLimitPrompt(), std::move(sibling)};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "sequence-limit truncated prompt should still return partial output";
+  EXPECT_FALSE(outputs[1].empty())
+      << "healthy sibling request must complete instead of being failed by "
+         "the truncated recurrent reasoning request";
+
+  fs::remove(cachePath);
+}
+
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchHarmonyToolCalls) {
   REQUIRE_MODEL(harmonyModel_);
   config_["ctx_size"] = "4096";
@@ -895,6 +979,217 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   EXPECT_FALSE(fs::exists(cachePath.string() + ".tmp"));
 
   fs::remove(cachePath);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDeletedPersistedCacheBackingStoreSkipsTerminalSave) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cacheDir =
+      fs::temp_directory_path() / ("batch-deleted-cache-" + uniqueTestId());
+  const fs::path cachePath = cacheDir / "session.bin";
+
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+
+  auto seed = makePrompt("Remember this batch cache setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> removedBackingStore = false;
+  auto followup = makePrompt("Write several words about the cached setup.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cacheDir,
+                             &removedBackingStore](const std::string&) {
+    if (!removedBackingStore.exchange(true)) {
+      fs::remove_all(cacheDir);
+    }
+  };
+
+  auto outputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(removedBackingStore.load())
+      << "test setup: generation did not reach the deletion callback";
+  EXPECT_FALSE(fs::exists(cacheDir))
+      << "stale deleted cache directory must not be recreated at terminal save";
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDeletedPersistedCacheFileSkipsTerminalSave) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cacheDir = fs::temp_directory_path() /
+                            ("batch-deleted-cache-file-" + uniqueTestId());
+  const fs::path cachePath = cacheDir / "session.bin";
+
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+
+  auto seed = makePrompt("Remember this batch cache file setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> removedCacheFile = false;
+  auto followup =
+      makePrompt("Write several words about the cached file setup.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cachePath,
+                             &removedCacheFile](const std::string&) {
+    if (!removedCacheFile.exchange(true)) {
+      fs::remove(cachePath);
+    }
+  };
+
+  auto outputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(removedCacheFile.load())
+      << "test setup: generation did not reach the deletion callback";
+  EXPECT_TRUE(fs::exists(cacheDir))
+      << "test setup: parent directory should remain present";
+  EXPECT_FALSE(fs::exists(cachePath))
+      << "stale deleted cache file must not be recreated at terminal save";
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchEmptyPersistedCacheFileSkipsTerminalSave) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cacheDir =
+      fs::temp_directory_path() / ("batch-empty-cache-file-" + uniqueTestId());
+  const fs::path cachePath = cacheDir / "session.bin";
+
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+
+  auto seed = makePrompt("Remember this batch empty cache setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> truncatedCacheFile = false;
+  auto followup =
+      makePrompt("Write several words about the cached empty file setup.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cachePath,
+                             &truncatedCacheFile](const std::string&) {
+    if (!truncatedCacheFile.exchange(true)) {
+      std::ofstream truncate(cachePath, std::ios::trunc);
+    }
+  };
+
+  auto outputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(truncatedCacheFile.load())
+      << "test setup: generation did not reach the truncation callback";
+  ASSERT_TRUE(fs::exists(cachePath));
+  EXPECT_EQ(fs::file_size(cachePath), 0u)
+      << "stale empty cache file must not be rewritten at terminal save";
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchUnsavedMissingParentSaveStillThrows) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const fs::path badCacheDir =
+      fs::temp_directory_path() / ("batch-no-such-dir-" + uniqueTestId());
+  const fs::path badCachePath = badCacheDir / "session.bin";
+
+  fs::remove_all(badCacheDir);
+
+  auto prompt = makePrompt("Write a few words about batch cache failures.");
+  prompt.cacheKey = badCachePath.string();
+  prompt.saveCacheToDisk = true;
+
+  try {
+    model->processPromptBatch(
+        std::vector<LlamaModel::Prompt>{std::move(prompt)});
+    FAIL() << "expected UnableToSaveSessionFile throw";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        std::string(e.codeString()).find("UnableToSaveSessionFile"),
+        std::string::npos);
+  }
+
+  EXPECT_FALSE(fs::exists(badCacheDir));
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchPersistedCachePathReplacedByDirectoryStillThrows) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-cache-replaced-by-dir-" + uniqueTestId() + ".bin");
+
+  fs::remove_all(cachePath);
+
+  auto seed = makePrompt("Remember this directory replacement setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> replacedWithDirectory = false;
+  auto followup =
+      makePrompt("Write several words after loading the batch cache.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cachePath,
+                             &replacedWithDirectory](const std::string&) {
+    if (!replacedWithDirectory.exchange(true)) {
+      fs::remove(cachePath);
+      fs::create_directory(cachePath);
+    }
+  };
+
+  try {
+    model->processPromptBatch(
+        std::vector<LlamaModel::Prompt>{std::move(followup)});
+    FAIL() << "expected UnableToSaveSessionFile throw";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        std::string(e.codeString()).find("UnableToSaveSessionFile"),
+        std::string::npos);
+  }
+
+  EXPECT_TRUE(replacedWithDirectory.load())
+      << "test setup: generation did not replace the cache path";
+  EXPECT_TRUE(fs::is_directory(cachePath));
+  fs::remove_all(cachePath);
 }
 
 /// Two prompts in ONE batch that save to the SAME non-empty `cacheKey`

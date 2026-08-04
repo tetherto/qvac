@@ -8,10 +8,7 @@
  */
 
 const test = require('brittle')
-const {
-  normalizeBcp47Lang,
-  getBergamotFileNames
-} = require('../../lib/bergamot-model-fetcher')
+const { normalizeBcp47Lang, getBergamotFileNames } = require('../../lib/bergamot-model-fetcher')
 
 test('normalizeBcp47Lang maps zh to zh-Hans for Firefox Remote Settings', (t) => {
   t.is(normalizeBcp47Lang('zh'), 'zh-Hans')

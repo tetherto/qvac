@@ -3,12 +3,10 @@
 
 /**
  * Aggregate GGML TTS RTF benchmark artifacts (desktop + mobile + manual) into
- * a single findings table (Markdown + JSON). Mirrors the ONNX TTS aggregator
- * (aggregate-onnx-tts-rtf.js) so the two TTS backends share table conventions
- * and reviewers can compare them side-by-side.
+ * a single findings table (Markdown + JSON).
  *
- * GGML differences vs ONNX:
- *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl
+ * GGML backend notes:
+ *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl, supertonic3
  *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
  *     opencl (Adreno android, manual / off the default cascade)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
@@ -25,8 +23,12 @@ const fs = require('fs')
 const path = require('path')
 
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
-const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
+const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic2', 'supertonic3']
+const VALID_BACKENDS = ['cpu', 'gpu', 'vulkan', 'metal', 'opencl', 'mobile-accelerated']
+const VALID_VARIANTS = ['q4', 'q4_0', 'q8_0', 'f16', 'f32', 'english', 'mtl']
+const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'pl', 'tr', 'sv', 'da', 'fi', 'no', 'el', 'ms', 'sw', 'ar', 'ko']
 const NOISY_STDDEV_RATIO = 0.15
+const DEFAULT_ENHANCER_VARIANT = 'f16'
 
 function parseArgs (argv) {
   const args = {
@@ -140,21 +142,47 @@ function isCanonicalReport (report) {
 }
 
 function parseCanonicalTestLabel (testLabel) {
-  // The benchmark file builds `testLabel` as
-  // `[${ep.toUpperCase()}] ${engine} ${variant} ${backend}` for RTF runs and
-  // the streaming benchmark mirrors that with a `streaming ` prefix. Example
-  // labels observed in mobile CI logs:
+  // Labels come from both benchmarks and integration smoke tests, so the tail
+  // is semantic rather than positional. Benchmark labels carry variant/backend,
+  // multilingual integration labels may carry variant/language or just
+  // language, and smoke labels carry a run-type token. LavaSR axes can follow
+  // any of those shapes.
+  // Example labels observed in mobile CI logs:
   //   `[CPU] chatterbox q4 cpu`
+  //   `[CPU] chatterbox mtl es`
+  //   `[GPU] chatterbox gpu-smoke`
   //   `[CPU] streaming chatterbox q4 cpu`
   //   `[GPU] supertonic q4 vulkan`
-  const m = String(testLabel || '').match(/^\[(CPU|GPU)\]\s*(streaming\s+)?(\S+)\s+(\S+)\s+(\S+)$/)
+  //   `[GPU] supertonic q4 vulkan lavasr`
+  //   `[GPU] supertonic q4 vulkan lavasr denoise`
+  //   `[GPU] supertonic q4 vulkan denoise`
+  const m = String(testLabel || '').trim().match(
+    /^\[(CPU|GPU)\]\s+(streaming\s+)?(\S+)(?:\s+(.+))?$/
+  )
   if (!m) return null
+
+  const tokens = (m[4] || '').trim().split(/\s+/).filter(Boolean)
+  const takeToken = predicate => {
+    const index = tokens.findIndex(predicate)
+    return index === -1 ? null : tokens.splice(index, 1)[0]
+  }
+  const enhancer = takeToken(token => token === 'lavasr')
+  const denoiser = takeToken(token => token === 'denoise')
+  const smokeTag = takeToken(token => token === 'gpu-smoke' || token === 'cpu-smoke')
+  const backendHint = takeToken(token => VALID_BACKENDS.includes(token.toLowerCase()))
+  const variant = takeToken(token => VALID_VARIANTS.includes(token.toLowerCase()))
+  const language = takeToken(token => VALID_LANGUAGES.includes(token.toLowerCase()))
+
   return {
     useGPU: m[1] === 'GPU',
     streaming: Boolean(m[2]),
     engine: m[3],
-    variant: m[4],
-    backendHint: m[5]
+    variant: variant || tokens.shift() || null,
+    backendHint,
+    language,
+    runType: smokeTag ? 'smoke' : 'benchmark',
+    enhancer: enhancer ? 'lavasr' : 'none',
+    denoiser: denoiser ? 'lavasr' : 'none'
   }
 }
 
@@ -172,11 +200,28 @@ function expandCanonicalReport (report, sourceFile) {
     if (!parsed || !VALID_ENGINES.includes(parsed.engine)) continue
 
     const m = result.metrics || {}
+    // parseCanonicalTestLabel already defaults the label enhancer / denoiser to
+    // 'none', so prefer the label token and only fall back to the record-level
+    // field when the label carried no token (legacy labels without that axis).
+    const enhancer =
+      parsed.enhancer !== 'none' ? parsed.enhancer : result.enhancer || 'none'
+    const denoiser =
+      parsed.denoiser !== 'none' ? parsed.denoiser : result.denoiser || 'none'
+    // The quant tier isn't in the canonical label (it stays byte-stable at
+    // `lavasr`); read it from the record-level field the benchmark now emits,
+    // defaulting to fp16 for legacy markers that predate the enhancer quant axis.
+    const enhancerVariant = result.enhancerVariant || DEFAULT_ENHANCER_VARIANT
     if (parsed.streaming) {
       streaming.push(normalizeStreamingRecord({
         engine: parsed.engine,
         modelType: parsed.engine,
-        variant: parsed.variant,
+        variant: parsed.variant || 'q4',
+        language: parsed.language,
+        runType: parsed.runType,
+        enhancer,
+        enhancerVariant,
+        denoiser,
+        qualityModel: result.qualityModel || null,
         platform,
         platformName: platformFamily,
         deviceLabel: device.name,
@@ -195,14 +240,24 @@ function expandCanonicalReport (report, sourceFile) {
       records.push(normalizeMobileRecord({
         engine: parsed.engine,
         modelType: parsed.engine,
-        variant: parsed.variant,
+        variant: parsed.variant || 'q4',
+        language: parsed.language,
+        runType: parsed.runType,
+        enhancer,
+        enhancerVariant,
+        denoiser,
+        qualityModel: result.qualityModel || null,
         platform,
         platformName: platformFamily,
         deviceLabel: device.name,
         runnerLabel: device.runner,
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
-        label: `${platformFamily}-${parsed.variant}`,
+        label: [
+          `${platformFamily}-${parsed.variant || 'q4'}`,
+          parsed.language ? `lang=${parsed.language}` : '',
+          parsed.runType === 'smoke' ? 'smoke' : ''
+        ].filter(Boolean).join(', '),
         gpuModel: device.gpu || null,
         summary: {
           rtf: {
@@ -213,7 +268,16 @@ function expandCanonicalReport (report, sourceFile) {
           wallMs: { mean: toNumberOrNull(m.wall_time_ms) },
           coldRtf: toNumberOrNull(m.cold_rtf),
           modelLoadMs: toNumberOrNull(m.model_load_ms),
-          tokensPerSecond: { mean: toNumberOrNull(m.tps) }
+          tokensPerSecond: { mean: toNumberOrNull(m.tps) },
+          memory: {
+            avgRssMb: toNumberOrNull(m.avg_rss_mb),
+            peakRssMb: toNumberOrNull(m.peak_rss_mb),
+            reclaimedMb: toNumberOrNull(m.reclaimed_mb)
+          },
+          quality: {
+            wer: { mean: toNumberOrNull(m.word_error_rate) },
+            cer: { mean: toNumberOrNull(m.character_error_rate) }
+          }
         },
         correlation: { githubRunId: report.run_number }
       }, sourceFile))
@@ -227,6 +291,22 @@ function toNumberOrNull (value) {
   if (value === null || value === undefined) return null
   const num = Number(value)
   return Number.isFinite(num) ? num : null
+}
+
+// Prefer the structured summary.memory block (avg / peak / reclaimed MB written
+// by the RTF benchmark). Fall back to the legacy flat summary.peakRssBytes so
+// artifacts produced before the memory block was added still surface a peak.
+function memoryFromSummary (summary) {
+  const memory = (summary && summary.memory) || {}
+  const peakRssMb = toNumberOrNull(memory.peakRssMb)
+  const legacyPeakMb = summary && summary.peakRssBytes
+    ? Number(summary.peakRssBytes) / 1024 / 1024
+    : null
+  return {
+    avgRssMb: toNumberOrNull(memory.avgRssMb),
+    peakRssMb: peakRssMb !== null ? peakRssMb : legacyPeakMb,
+    reclaimedMb: toNumberOrNull(memory.reclaimedMb)
+  }
 }
 
 function deriveNoisy (rtf, summary) {
@@ -247,6 +327,8 @@ function normalizeDesktopRecord (report, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const quality = summary.quality || {}
+  const memory = memoryFromSummary(summary)
   const platformName = report.platformName || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
   const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '')
@@ -262,6 +344,11 @@ function normalizeDesktopRecord (report, sourceFile) {
     platformFamily: platformName || 'unknown',
     engine: report.engine || 'unknown',
     variant: (report.model && report.model.variant) || (report.requested && report.requested.variant) || 'q4',
+    language: report.language || (report.requested && report.requested.language) || null,
+    runType: report.runType || 'benchmark',
+    enhancer: (report.model && report.model.enhancer) || (report.requested && report.requested.enhancer) || (report.config && report.config.enhancer) || 'none',
+    enhancerVariant: (report.model && report.model.enhancerVariant) || (report.requested && report.requested.enhancerVariant) || (report.config && report.config.enhancerVariant) || DEFAULT_ENHANCER_VARIANT,
+    denoiser: (report.model && report.model.denoiser) || (report.requested && report.requested.denoiser) || (report.config && report.config.denoiser) || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
     gpuModel: (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null,
@@ -273,10 +360,15 @@ function normalizeDesktopRecord (report, sourceFile) {
     stddev: toNumberOrNull(rtf.stddev),
     coldRtf: toNumberOrNull(summary.coldRtf),
     modelLoadMs: toNumberOrNull(summary.modelLoadMs),
-    peakRssMb: summary.peakRssBytes ? Number(summary.peakRssBytes) / 1024 / 1024 : null,
+    avgRssMb: memory.avgRssMb,
+    peakRssMb: memory.peakRssMb,
+    reclaimedMb: memory.reclaimedMb,
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : (report.model && report.model.sizeBytes ? Number(report.model.sizeBytes) / 1024 / 1024 : null),
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
+    meanWer: toNumberOrNull(quality.wer && quality.wer.mean),
+    meanCer: toNumberOrNull(quality.cer && quality.cer.mean),
+    qualityModel: quality.model || null,
     noisy: deriveNoisy(rtf, summary),
     runId: (report.correlation && report.correlation.githubRunId) || '',
     sha: (report.correlation && report.correlation.githubSha) || '',
@@ -289,6 +381,8 @@ function normalizeMobileRecord (record, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const quality = summary.quality || {}
+  const memory = memoryFromSummary(summary)
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
   const backend = normalizeBackend(platformFamily, useGPU, record.backendHint)
@@ -300,6 +394,11 @@ function normalizeMobileRecord (record, sourceFile) {
     platformFamily: platformFamily || 'unknown',
     engine: record.engine || record.modelType || 'unknown',
     variant: record.variant || 'q4',
+    language: record.language || null,
+    runType: record.runType || 'benchmark',
+    enhancer: record.enhancer || 'none',
+    enhancerVariant: record.enhancerVariant || DEFAULT_ENHANCER_VARIANT,
+    denoiser: record.denoiser || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
     gpuModel: record.gpuModel || null,
@@ -311,10 +410,15 @@ function normalizeMobileRecord (record, sourceFile) {
     stddev: toNumberOrNull(rtf.stddev),
     coldRtf: toNumberOrNull(summary.coldRtf),
     modelLoadMs: toNumberOrNull(summary.modelLoadMs),
-    peakRssMb: summary.peakRssBytes ? Number(summary.peakRssBytes) / 1024 / 1024 : null,
+    avgRssMb: memory.avgRssMb,
+    peakRssMb: memory.peakRssMb,
+    reclaimedMb: memory.reclaimedMb,
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : null,
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
+    meanWer: toNumberOrNull(quality.wer && quality.wer.mean),
+    meanCer: toNumberOrNull(quality.cer && quality.cer.mean),
+    qualityModel: record.qualityModel || quality.model || null,
     noisy: deriveNoisy(rtf, summary),
     runId: (record.correlation && record.correlation.githubRunId) || '',
     sha: (record.correlation && record.correlation.githubSha) || '',
@@ -333,6 +437,17 @@ function normalizeManualRecord (record, sourceFile) {
     platformFamily: platformFamily || 'unknown',
     engine: record.engine || record.model || 'unknown',
     variant: record.variant || 'q4',
+    language: record.language || null,
+    runType: record.runType || 'benchmark',
+    // Read the LavaSR axes from a `model` block first, then top-level, mirroring
+    // the desktop reader, so a hand-authored manual file that nests them under
+    // `model` (like LAVASR_TEMPLATE.json.example) isn't silently dropped to none.
+    enhancer: (record.model && record.model.enhancer) || record.enhancer || 'none',
+    enhancerVariant:
+      (record.model && record.model.enhancerVariant) ||
+      record.enhancerVariant ||
+      DEFAULT_ENHANCER_VARIANT,
+    denoiser: (record.model && record.model.denoiser) || record.denoiser || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
     gpuModel: record.gpuModel || record.gpu_model || null,
@@ -344,10 +459,15 @@ function normalizeManualRecord (record, sourceFile) {
     stddev: toNumberOrNull(record.stddev),
     coldRtf: toNumberOrNull(record.coldRtf),
     modelLoadMs: toNumberOrNull(record.modelLoadMs),
+    avgRssMb: toNumberOrNull(record.avgRssMb),
     peakRssMb: toNumberOrNull(record.peakRssMb),
+    reclaimedMb: toNumberOrNull(record.reclaimedMb),
     modelSizeMb: toNumberOrNull(record.modelSizeMb),
     wallMs: toNumberOrNull(record.wallMs),
     tokensPerSecond: toNumberOrNull(record.tokensPerSecond),
+    meanWer: toNumberOrNull(record.meanWer),
+    meanCer: toNumberOrNull(record.meanCer),
+    qualityModel: record.qualityModel || null,
     noisy: typeof record.noisy === 'boolean' ? record.noisy : null,
     runId: '',
     sha: '',
@@ -373,6 +493,11 @@ function normalizeStreamingRecord (report, sourceFile, source) {
     platformFamily: platformName || 'unknown',
     engine: report.engine || report.modelType || 'unknown',
     variant: (report.model && report.model.variant) || report.variant || 'q4',
+    language: report.language || (report.requested && report.requested.language) || null,
+    runType: report.runType || 'benchmark',
+    enhancer: (report.model && report.model.enhancer) || report.enhancer || 'none',
+    enhancerVariant: (report.model && report.model.enhancerVariant) || report.enhancerVariant || DEFAULT_ENHANCER_VARIANT,
+    denoiser: (report.model && report.model.denoiser) || report.denoiser || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
     label: String((report.labels && report.labels.label) || report.label || ''),
@@ -475,10 +600,16 @@ function dedupeRecords (records) {
       record.platform,
       record.engine,
       record.variant,
+      record.language || '',
+      record.runType || 'benchmark',
+      record.enhancer || 'none',
+      record.enhancerVariant || DEFAULT_ENHANCER_VARIANT,
+      record.denoiser || 'none',
       record.gpu,
       record.backend,
       record.device,
       record.label || '',
+      record.qualityModel || '',
       record.numThreads !== undefined && record.numThreads !== null ? String(record.numThreads) : ''
     ].join('::')
     if (!byKey.has(key)) {
@@ -522,6 +653,19 @@ function formatModelSize (mb) {
   return mb.toFixed(1)
 }
 
+function formatErrorRate (rate) {
+  if (rate === null || rate === undefined || Number.isNaN(rate)) return 'n/a'
+  return `${(rate * 100).toFixed(2)}%`
+}
+
+function formatEnhancerCell (enhancer, enhancerVariant) {
+  const name = enhancer || 'none'
+  if (name === 'none') return name
+  const variant = enhancerVariant || DEFAULT_ENHANCER_VARIANT
+  if (variant === DEFAULT_ENHANCER_VARIANT) return name
+  return `${name}/${variant}`
+}
+
 function renderMarkdown (records, streamingRecords) {
   const lines = []
   const gpuCoverage = new Set(
@@ -534,10 +678,12 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('')
   lines.push('RTF = generation_time / audio_duration. Lower is faster. RTF < 1 is faster than real-time.')
   lines.push('')
+  lines.push('WER and CER are optional Whisper round-trip quality metrics. Lower is better.')
+  lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Model (MB) | Tokens/s | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|---------------|------------|----------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | Language | Run Type | Enhancer | Denoiser | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean WER | Mean CER | Quality Model | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|----------|----------|----------|----------|-----|---------|-----------|-------|----------|-----|-----|----------|----------|----------|---------------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -546,6 +692,10 @@ function renderMarkdown (records, streamingRecords) {
       r.platform,
       r.engine,
       r.variant,
+      r.language || '-',
+      r.runType || 'benchmark',
+      formatEnhancerCell(r.enhancer, r.enhancerVariant),
+      r.denoiser || 'none',
       r.gpu,
       r.backend,
       r.gpuModel || '-',
@@ -554,9 +704,14 @@ function renderMarkdown (records, streamingRecords) {
       formatNumber(r.p50),
       formatNumber(r.p95),
       formatNumber(r.coldRtf),
+      formatErrorRate(r.meanWer),
+      formatErrorRate(r.meanCer),
+      r.qualityModel || 'n/a',
       formatMaybeInteger(r.wallMs),
       formatMaybeInteger(r.modelLoadMs),
+      formatMaybeInteger(r.avgRssMb),
       formatMaybeInteger(r.peakRssMb),
+      formatMaybeInteger(r.reclaimedMb),
       formatModelSize(r.modelSizeMb),
       formatNumber(r.tokensPerSecond, 1),
       r.noisy === true ? '⚠' : '-',
@@ -570,8 +725,8 @@ function renderMarkdown (records, streamingRecords) {
     lines.push('')
     lines.push('`TTFA` = Time-to-First-Audio from `run()` call. `Inter-chunk` = gap between successive `onUpdate` deliveries.')
     lines.push('')
-    lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | Label | TTFA Mean (ms) | TTFA P50 | TTFA P95 | Inter-chunk Mean (ms) | Inter-chunk P95 | Chunks/run | Total Wall (ms) | Run |')
-    lines.push('|--------|--------|----------|--------|---------|-----|---------|-------|----------------|----------|----------|-----------------------|-----------------|------------|-----------------|-----|')
+    lines.push('| Source | Device | Platform | Engine | Variant | Language | Run Type | Enhancer | Denoiser | GPU | Backend | Label | TTFA Mean (ms) | TTFA P50 | TTFA P95 | Inter-chunk Mean (ms) | Inter-chunk P95 | Chunks/run | Total Wall (ms) | Run |')
+    lines.push('|--------|--------|----------|--------|---------|----------|----------|----------|----------|-----|---------|-------|----------------|----------|----------|-----------------------|-----------------|------------|-----------------|-----|')
     for (const r of streamingRecords) {
       lines.push('| ' + [
         r.source,
@@ -579,6 +734,10 @@ function renderMarkdown (records, streamingRecords) {
         r.platform,
         r.engine,
         r.variant,
+        r.language || '-',
+        r.runType || 'benchmark',
+        formatEnhancerCell(r.enhancer, r.enhancerVariant),
+        r.denoiser || 'none',
         r.gpu,
         r.backend,
         r.label || '-',
@@ -641,4 +800,18 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  parseCanonicalTestLabel,
+  normalizeDesktopRecord,
+  normalizeMobileRecord,
+  normalizeManualRecord,
+  normalizeStreamingRecord,
+  expandCanonicalReport,
+  memoryFromSummary,
+  dedupeRecords,
+  renderMarkdown
+}

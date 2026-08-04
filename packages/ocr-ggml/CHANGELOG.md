@@ -4,6 +4,68 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-07-30
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `ocr-ggml.js`, `addonLogging.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and OCR output are unchanged.
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+
+## [0.13.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
+## [0.12.2] - 2026-07-21
+
+### Fixed
+
+- The C++ → JS logger callback in `ocr-ggml.js` invoked the logger method detached from its instance (`const write = transitionCb[level]; write(message)`), introduced by the TypeScript-wrapper migration. `QvacLogger` methods use `this` internally, so the first native-side log line crashed with `Cannot read properties of undefined (reading '_log')`. The callback now invokes `transitionCb[level](message)` as a method, restoring the pre-migration behavior (same bug class as the translation-nmtcpp Bergamot e2e failure).
+
+## [0.12.1] - 2026-07-20
+
+### Fixed
+
+- `addonLogging.d.ts` now exports the `AddonLogging` interface. The TypeScript-wrapper migration left it unexported behind an `export =` value, so consumers that embed the logging surface in an exported declaration (such as an SDK plugin returning it from `definePlugin`) failed declaration emit with TS4023. The wrapper now exports the value with `export default` and an explicit `module.exports = addonLogging`, matching the other migrated addon wrappers and keeping the bare CommonJS runtime shape unchanged.
+
+## [0.12.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.11.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.10.2] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (clip flash-attention AUTO fallback on non-coopmat GPUs + bounded ggml-opencl driver submissions — fixes Android vision-encoder crashes on very large encodes; no API change for this package).
+
+## [0.10.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.10.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
 ## [0.9.0] - 2026-07-06
 
 ### Changed

@@ -3,7 +3,7 @@
 const test = require('brittle')
 const { mapAddonEvent } = require('../../addon.js')
 
-function makeState (overrides = {}) {
+function makeState(overrides = {}) {
   return { skipNextRuntimeStats: false, ...overrides }
 }
 

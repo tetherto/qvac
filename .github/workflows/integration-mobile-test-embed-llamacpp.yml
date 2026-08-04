@@ -136,6 +136,22 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Generate the model pre-stage script (Android). The Device Farm host has
+      # reliable network; it downloads embed's models and `adb push`es them to
+      # /data/local/tmp so the phone never fetches from huggingface.co
+      # (QVAC-21799). Embed is single-pool, so all models are staged (no shards).
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/packages/embed-llamacpp
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -151,6 +167,9 @@ jobs:
           # batch; normal mobile runs keep perf off and auto-detect test-groups.
           enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
           test-groups: ${{ inputs.test_groups }}
+          # Android host pre-stages all embed models to /data/local/tmp so the
+          # phone never downloads from huggingface.co (QVAC-21799). Empty on iOS.
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test run
         id: schedule
@@ -189,6 +208,11 @@ jobs:
           enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
+          # Benchmark calls this reusable workflow once per (batchSize, flashAttn)
+          # batch with a distinct artifact_suffix; pass it through so each batch's
+          # console-logs/perf-report artifacts get a unique name instead of all 8
+          # batches colliding on the same one (which dropped every batch's logs).
+          batch-suffix: ${{ inputs.artifact_suffix }}
 
       # Benchmark batches only: pull the per-device perf-report.json the on-device
       # runner emitted out of the Device Farm customer artifacts and upload it

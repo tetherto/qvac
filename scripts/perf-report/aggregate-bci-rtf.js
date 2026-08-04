@@ -14,6 +14,11 @@ const path = require('path')
 // (Adreno android). No CoreML/DirectML path. CUDA is disabled in the build.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
+// ggml active-backend ids reported by the addon, mapped to the backend label.
+// Used to recover the REAL backend a mobile device selected at runtime rather
+// than guessing it from the platform family (Adreno=OpenCL vs Mali=Vulkan).
+const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
+
 function parseArgs (argv) {
   const args = {
     input: '',
@@ -74,6 +79,12 @@ function mean (values) {
   return nums.reduce((sum, value) => sum + value, 0) / nums.length
 }
 
+function maxFinite (values) {
+  const nums = values.filter((value) => Number.isFinite(value))
+  if (nums.length === 0) return NaN
+  return nums.reduce((current, value) => (value > current ? value : current), nums[0])
+}
+
 function stddev (values) {
   const nums = values.filter((value) => Number.isFinite(value))
   if (nums.length === 0) return NaN
@@ -111,6 +122,15 @@ function normalizeBackend (platformName, useGPU, backendHint) {
   }
 }
 
+// Prefer the observed ggml backend id (per-device ground truth) over the
+// platform-family guess. Falls back to normalizeBackend when no id was reported.
+function resolveMobileBackend (backendId, platformName, useGPU) {
+  if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
+    return BACKEND_BY_ID[backendId]
+  }
+  return normalizeBackend(platformName, useGPU)
+}
+
 function num (value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : NaN
 }
@@ -120,6 +140,7 @@ function normalizeReport (report, sourceFile, source) {
   const tps = summary.tokensPerSecond || {}
   const wallMs = summary.wallMs || {}
   const rtf = summary.rtf || {}
+  const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
 
@@ -136,6 +157,9 @@ function normalizeReport (report, sourceFile, source) {
     p50Tps: num(tps.p50),
     wallMs: num(wallMs.mean),
     rtf: num(rtf.mean),
+    avgRssMb: num(memory.avgRssMb),
+    peakRssMb: num(memory.peakRssMb),
+    reclaimedMb: num(memory.reclaimedMb),
     notes: sourceFile ? path.basename(sourceFile) : ''
   }
 }
@@ -195,12 +219,17 @@ function normalizeMobileRecords (report, sourceFile) {
     const metrics = result.metrics || {}
     const key = `${modelTag}|${provider}`
     if (!byModelAndProvider.has(key)) {
-      byModelAndProvider.set(key, { modelTag, provider, tps: [], wallMs: [], rtf: [] })
+      byModelAndProvider.set(key, { modelTag, provider, tps: [], wallMs: [], rtf: [], avgRss: [], peakRss: [], afterLoadRss: [], reclaimed: [], backendId: null })
     }
     const group = byModelAndProvider.get(key)
     if (typeof metrics.tps === 'number') group.tps.push(metrics.tps)
     if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
     if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
+    if (typeof metrics.avg_rss_mb === 'number') group.avgRss.push(metrics.avg_rss_mb)
+    if (typeof metrics.peak_rss_mb === 'number') group.peakRss.push(metrics.peak_rss_mb)
+    if (typeof metrics.rss_after_load_mb === 'number') group.afterLoadRss.push(metrics.rss_after_load_mb)
+    if (typeof metrics.reclaimed_mb === 'number') group.reclaimed.push(metrics.reclaimed_mb)
+    if (group.backendId === null && typeof metrics.backend_id === 'number') group.backendId = metrics.backend_id
   }
 
   const records = []
@@ -213,12 +242,19 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: normalizeBackend(platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
       meanTps: mean(values.tps),
       stddevTps: stddev(values.tps),
       p50Tps: percentile(values.tps, 50),
       wallMs: mean(values.wallMs),
       rtf: mean(values.rtf),
+      avgRssMb: mean(values.avgRss),
+      // Floor the mobile peak at the recorded post-load footprint so it is
+      // computed on the same basis as the desktop peak (which buildMemorySummary
+      // clamps to rssAfterLoad); a run whose sampler missed the true peak can't
+      // then report below the load footprint.
+      peakRssMb: maxFinite(values.peakRss.concat(values.afterLoadRss)),
+      reclaimedMb: maxFinite(values.reclaimed),
       notes
     })
   }
@@ -259,6 +295,9 @@ function scoreRecord (record) {
   if (Number.isFinite(record.meanTps)) score += 8
   if (Number.isFinite(record.p50Tps)) score += 4
   if (Number.isFinite(record.wallMs)) score += 2
+  if (Number.isFinite(record.avgRssMb)) score += 2
+  if (Number.isFinite(record.peakRssMb)) score += 2
+  if (Number.isFinite(record.reclaimedMb)) score += 1
   if (record.device && record.device !== 'unknown') score += 1
   if (record.notes) score += 1
   return score
@@ -290,12 +329,12 @@ function renderMarkdown (records) {
   const lines = [
     '## BCI Performance Findings',
     '',
-    '| Source | Device | Platform | Model | GPU | Backend | Mean tok/s | Stddev tok/s | P50 tok/s | Mean Wall (ms) | RTF | Notes |',
-    '|--------|--------|----------|-------|-----|---------|------------|--------------|-----------|----------------|-----|-------|'
+    '| Source | Device | Platform | Model | GPU | Backend | Mean tok/s | Stddev tok/s | P50 tok/s | Mean Wall (ms) | RTF | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |',
+    '|--------|--------|----------|-------|-----|---------|------------|--------------|-----------|----------------|-----|--------------|---------------|----------------|-------|'
   ]
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanTps)} | ${formatNumber(record.stddevTps)} | ${formatNumber(record.p50Tps)} | ${formatMaybeInteger(record.wallMs)} | ${formatNumber(record.rtf, 4)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanTps)} | ${formatNumber(record.stddevTps)} | ${formatNumber(record.p50Tps)} | ${formatMaybeInteger(record.wallMs)} | ${formatNumber(record.rtf, 4)} | ${formatMaybeInteger(record.avgRssMb)} | ${formatMaybeInteger(record.peakRssMb)} | ${formatMaybeInteger(record.reclaimedMb)} | ${record.notes || ''} |`
     )
   }
   lines.push('')
@@ -313,7 +352,9 @@ function renderHtml (records) {
     return [
       record.source, record.device, record.platform, record.model, record.gpu, record.backend,
       formatNumber(record.meanTps), formatNumber(record.stddevTps), formatNumber(record.p50Tps),
-      formatMaybeInteger(record.wallMs), formatNumber(record.rtf, 4), record.notes || ''
+      formatMaybeInteger(record.wallMs), formatNumber(record.rtf, 4),
+      formatMaybeInteger(record.avgRssMb), formatMaybeInteger(record.peakRssMb), formatMaybeInteger(record.reclaimedMb),
+      record.notes || ''
     ].map((value) => `<td>${escapeHtml(value)}</td>`).join('')
   }).map((cells) => `<tr>${cells}</tr>`).join('\n')
 
@@ -351,6 +392,9 @@ function renderHtml (records) {
     '        <th>P50 tok/s</th>',
     '        <th>Mean Wall (ms)</th>',
     '        <th>RTF</th>',
+    '        <th>Avg RSS (MB)</th>',
+    '        <th>Peak RSS (MB)</th>',
+    '        <th>Reclaimed (MB)</th>',
     '        <th>Notes</th>',
     '      </tr>',
     '    </thead>',
@@ -404,4 +448,14 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  normalizeReport,
+  normalizeMobileRecords,
+  renderMarkdown,
+  renderHtml,
+  buildCoverage
+}

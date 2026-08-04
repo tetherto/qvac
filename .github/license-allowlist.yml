@@ -1,0 +1,37 @@
+# License compliance — exception allowlist
+#
+# Read by the canonical license compliance gate
+# (.github/workflows/license-compliance.yml -> tetherto/qvac-actions
+# public-reusable-license.yml). An entry here resolves an otherwise-blocking
+# High finding (unknown or review-required license) so the gate passes
+# deterministically on re-run. It is the durable, auditable record of a
+# compliance decision — preferred over the one-off `license-override` PR label.
+#
+# This file is CODEOWNERS-protected (see .github/CODEOWNERS): adding or editing
+# an entry requires review by a Tier-1 reviewer, so exceptions are never
+# self-served by the PR author.
+#
+# Critical findings (a disallowed license on a runtime/shipped path) can NOT be
+# resolved here — the dependency must be removed or replaced, or the org policy
+# changed in the reusable workflow.
+#
+# Process for a new exception:
+#   1. The gate blocks a High finding it cannot classify (novel / review-required
+#      license). Its PR comment names the dependency and links this file.
+#   2. Run the compliance SKILL (.cursor/skills/qv-notice-generate) to make the
+#      call: confirm how we use the dependency and whether the terms allow it.
+#   3. If accepted, add an entry below and get it CODEOWNERS-reviewed. If not,
+#      remove/replace the dependency.
+#
+# Entry schema (all keys except `expires` are required):
+#   allow:
+#     - package: "pkg:npm/some-lib"   # dependency name or package URL (purl)
+#       license: "LGPL-3.0"           # optional: pin to one license; omit to allow any for this package
+#       reason: "reviewed: dynamically linked, source offer provided"
+#       approved-by: "@github-handle" # the reviewer who signed off
+#       pr: "https://github.com/tetherto/qvac/pull/1234"
+#       expires: "2027-06-15"         # optional re-review date; expired entries are ignored (finding re-blocks)
+#
+# No exceptions are recorded yet — this gate starts in warn-only (shadow) mode,
+# and entries are added as real findings surface.
+allow: []

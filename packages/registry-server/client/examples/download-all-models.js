@@ -6,7 +6,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') })
 
 const { QVACRegistryClient } = require('../index')
 
-async function downloadAllModelsExample () {
+async function downloadAllModelsExample() {
   const tmpStorage = path.join(process.cwd(), '.cache', `registry-${Date.now()}`)
   const client = new QVACRegistryClient({
     registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY,
@@ -64,7 +64,9 @@ async function downloadAllModelsExample () {
           continue
         } else {
           console.log(`${progress} Removing incomplete file ${model.path}`)
-          console.log(`  Expected: ${(expectedSize / 1024 / 1024).toFixed(2)} MB, Found: ${(stats.size / 1024 / 1024).toFixed(2)} MB`)
+          console.log(
+            `  Expected: ${(expectedSize / 1024 / 1024).toFixed(2)} MB, Found: ${(stats.size / 1024 / 1024).toFixed(2)} MB`
+          )
           await fs.promises.unlink(outputFile)
         }
       }

@@ -17,11 +17,13 @@ const useCpu = isDarwinX64 || isLinuxArm64
 const LIGHTON_OCR_CONFIG = {
   llmModel: {
     modelName: 'LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf',
-    downloadUrl: 'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf'
+    downloadUrl:
+      'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf'
   },
   projModel: {
     modelName: 'mmproj-LightOnOCR-2-F16.gguf',
-    downloadUrl: 'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf'
+    downloadUrl:
+      'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf'
   },
   ctx_size: '4096'
 }
@@ -31,11 +33,10 @@ const TEST_CONSTANTS = {
   maxTokens: isMobile ? '768' : '1800'
 }
 
-const DEVICE_CONFIGS = (isMobile || useCpu)
-  ? [{ id: 'cpu', device: 'cpu' }]
-  : [{ id: 'gpu', device: 'gpu' }]
+const DEVICE_CONFIGS =
+  isMobile || useCpu ? [{ id: 'cpu', device: 'cpu' }] : [{ id: 'gpu', device: 'gpu' }]
 
-function getConfig (device) {
+function getConfig(device) {
   return {
     gpu_layers: '98',
     temp: '0.1',
@@ -46,7 +47,7 @@ function getConfig (device) {
   }
 }
 
-async function setupLightOnInference (t, device = 'gpu') {
+async function setupLightOnInference(t, device = 'gpu') {
   const [modelName, dirPath] = await ensureModel(LIGHTON_OCR_CONFIG.llmModel)
   t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
 
@@ -69,7 +70,7 @@ async function setupLightOnInference (t, device = 'gpu') {
   return { inference }
 }
 
-async function runOcr (inference, imageFilePath) {
+async function runOcr(inference, imageFilePath) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
   const messages = [
@@ -82,11 +83,13 @@ async function runOcr (inference, imageFilePath) {
   const generatedText = []
   let error = null
 
-  response.onUpdate(data => {
-    generatedText.push(data)
-  }).onError(err => {
-    error = err
-  })
+  response
+    .onUpdate((data) => {
+      generatedText.push(data)
+    })
+    .onError((err) => {
+      error = err
+    })
 
   await response.await()
 
@@ -102,35 +105,41 @@ async function runOcr (inference, imageFilePath) {
 }
 
 // Test: LightON OCR-2 can extract text from a newspaper document image
-safeTest('LightON OCR-2 can extract text from document image', { timeout: TEST_CONSTANTS.timeout, skip: isMobile }, async t => {
-  for (const deviceConfig of DEVICE_CONFIGS) {
-    const label = `[${deviceConfig.id.toUpperCase()}]`
+safeTest(
+  'LightON OCR-2 can extract text from document image',
+  { timeout: TEST_CONSTANTS.timeout, skip: isMobile },
+  async (t) => {
+    for (const deviceConfig of DEVICE_CONFIGS) {
+      const label = `[${deviceConfig.id.toUpperCase()}]`
 
-    const { inference } = await setupLightOnInference(t, deviceConfig.device)
+      const { inference } = await setupLightOnInference(t, deviceConfig.device)
 
-    // Use the newspaper image — a small document with clear text
-    const imageFilePath = getMediaPath('news-paper.jpg')
-    t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
+      // Use the newspaper image — a small document with clear text
+      const imageFilePath = getMediaPath('news-paper.jpg')
+      t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
 
-    const { generatedText, startTime, endTime } = await runOcr(inference, imageFilePath)
-    const totalTime = endTime - startTime
+      const { generatedText, startTime, endTime } = await runOcr(inference, imageFilePath)
+      const totalTime = endTime - startTime
 
-    t.comment(`${label} Generated text (${generatedText.length} chars): ${generatedText.substring(0, 500)}...`)
-    t.comment(`${label} Total time: ${(totalTime / 1000).toFixed(2)}s`)
+      t.comment(
+        `${label} Generated text (${generatedText.length} chars): ${generatedText.substring(0, 500)}...`
+      )
+      t.comment(`${label} Total time: ${(totalTime / 1000).toFixed(2)}s`)
 
-    // Assert output is non-empty
-    t.ok(generatedText.length > 0, `${label} Should generate OCR output`)
+      // Assert output is non-empty
+      t.ok(generatedText.length > 0, `${label} Should generate OCR output`)
 
-    // Assert key text from the newspaper is present (Titanic headline)
-    const lowerText = generatedText.toLowerCase()
-    const expectedKeywords = ['titanic', 'new york', 'iceberg']
-    const foundKeywords = expectedKeywords.filter(kw => lowerText.includes(kw))
+      // Assert key text from the newspaper is present (Titanic headline)
+      const lowerText = generatedText.toLowerCase()
+      const expectedKeywords = ['titanic', 'new york', 'iceberg']
+      const foundKeywords = expectedKeywords.filter((kw) => lowerText.includes(kw))
 
-    t.ok(
-      foundKeywords.length >= 1,
-      `${label} OCR output should contain at least one expected keyword. ` +
-      `Found: ${foundKeywords.join(', ') || 'none'}. ` +
-      `Expected any of: ${expectedKeywords.join(', ')}`
-    )
+      t.ok(
+        foundKeywords.length >= 1,
+        `${label} OCR output should contain at least one expected keyword. ` +
+          `Found: ${foundKeywords.join(', ') || 'none'}. ` +
+          `Expected any of: ${expectedKeywords.join(', ')}`
+      )
+    }
   }
-})
+)

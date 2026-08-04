@@ -153,6 +153,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/chatterbox/ChatterboxModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parler/ParlerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/supertonic/SupertonicModel.cpp
 )
 
@@ -315,11 +316,15 @@ if(BUILD_TESTING)
     tts_ggml_tests
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp
+      addon/tests/test_parler_config.cpp
       addon/tests/test_supertonic_config.cpp
       addon/tests/test_time_stretch.cpp
       addon/tests/test_streaming_enhancer.cpp
+      addon/tests/test_output_resampler.cpp
+      addon/tests/test_pcm_conversion.cpp
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
+      addon/src/model-interface/parler/ParlerModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp
   )
 

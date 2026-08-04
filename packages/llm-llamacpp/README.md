@@ -182,6 +182,7 @@ const config = {
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
+| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
 
 
 #### KV-cache type & auto-default
@@ -203,6 +204,27 @@ The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unse
 | System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
 
 For multi-GPU setups using `split-mode` and `tensor-split`, see the **[Multi-GPU Inference guide](./docs/multi-gpu.md)**.
+
+
+#### Multimodal projector (mmproj) backend & auto-default
+
+For vision (VLM) models, the projector / image-encoder backend is auto-selected per device class when
+`mmproj-use-gpu` is unset (QVAC-21867):
+
+| Device class | Projector default | Why |
+|---|---|---|
+| Desktop & iOS | **GPU** | Metal / Vulkan projector encode is faster than CPU. |
+| Android — Adreno 800+ (e.g. Adreno 830) | **GPU** | The only mobile GPU class benchmarked (QVAC-21257) to encode the projector faster than on CPU. |
+| Android — Arm Mali | **CPU** | Projector encode measured slower on the Mali GPU than on CPU (QVAC-21257). |
+| Android — Adreno < 800 (e.g. Adreno 740) | **CPU** | Weaker tiers not yet benchmarked; conservative default (may be relaxed once benchmarked). |
+| Android — undetectable Adreno tier | **CPU** | Conservative default when the GPU's Adreno version can't be parsed. |
+
+In every Android **CPU** case above the LLM layers still run on the GPU — only the projector stays on CPU.
+
+An explicit `mmproj-use-gpu` value always wins over the auto-default, in either direction. When the model
+itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
+projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
+`[LlamaModel] multimodal projector backend: …`.
 
 ### 4. Create Model Instance
 
@@ -384,13 +406,14 @@ npm run quickstart
 
 ## OCR with Vision-Language Models
 
-In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
+In addition to pipeline-based OCR (`@qvac/ocr-ggml`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
 
 ### Supported OCR Models
 
 | Model | Params | Quantization | Description |
 |-------|--------|-------------|-------------|
 | LightON OCR-2 1B | 0.6B (LLM) + ~550M (vision) | Q4_K_M | OCR-specialized, full-page transcription, 11 languages |
+| Unlimited-OCR | 3B (DeepseekV2 MoE) + SAM+CLIP vision | Q4_K_M | OCR-specialized, full-page document parsing with layout boxes + HTML tables |
 | SmolVLM2-500M | 500M | Q8_0 | General vision-language, can follow targeted extraction prompts |
 
 ### LightON OCR-2
@@ -439,6 +462,64 @@ const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
 const messages = [
   { role: 'user', type: 'media', content: imageBytes },
   { role: 'user', content: 'Extract all text from this image and format it as markdown.' }
+]
+
+const response = await model.run(messages)
+const output = []
+
+response.onUpdate(token => {
+  output.push(token)
+})
+
+await response.await()
+
+console.log(output.join(''))
+
+await model.unload()
+```
+
+### Unlimited-OCR
+
+[Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR) is a 3B OCR-specialized vision-language model (Apache 2.0), an advancement of DeepSeek-OCR. It parses full-page documents into text with layout regions (`<|det|>` boxes) and reconstructs tables as HTML — useful for invoices, forms, and scanned reports.
+
+**Characteristics:**
+- DeepEncoder vision tower (SAM ViT-B + CLIP-L) + DeepseekV2 MoE decoder
+- Emits `<|det|>type [x0,y0,x1,y1]<|/det|>` layout regions and `<table>…</table>` structure
+- Requires both the LLM model and the **F16** mmproj (keep the vision projector at F16 — quantizing it hurts OCR accuracy)
+- Requires `qvac-fabric >= 9840` (ships the `deepseek2-ocr` engine + `deepseekocr` clip projector)
+- **Prompt matters:** use `document parsing.` (layout + tables), `Multi page parsing.` (long docs), or `Free OCR. ` (plain text). A generic "extract the text" prompt yields near-empty output.
+
+**Usage Example:**
+
+```js
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const fs = require('bare-fs')
+const path = require('bare-path')
+
+const dirPath = path.resolve('./models')
+
+const model = new LlmLlamacpp({
+  files: {
+    model: [path.join(dirPath, 'unlimited-ocr-Q4_K_M.gguf')],
+    projectionModel: path.join(dirPath, 'mmproj-unlimited-ocr-F16.gguf')
+  },
+  config: {
+    device: 'cpu',
+    gpu_layers: '0',
+    ctx_size: '8192',
+    temp: '0',
+    predict: '2048'
+  },
+  logger: console
+})
+
+await model.load()
+
+const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
+
+const messages = [
+  { role: 'user', type: 'media', content: imageBytes },
+  { role: 'user', content: 'document parsing.' }
 ]
 
 const response = await model.run(messages)

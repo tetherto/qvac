@@ -189,3 +189,32 @@ test('deduplicateModels: preserves companion references across different compani
   t.ok(paths.includes(vocabA.registryPath), 'setA vocab preserved')
   t.ok(paths.includes(vocabB.registryPath), 'setB vocab preserved')
 })
+
+test('groupCompanionSets: groups Chatterbox MeCab dictionary files', (t) => {
+  const dir = 'qvac_models_compiled/chatterbox/mecab-ipadic/'
+  const filenames = ['char.bin', 'dicrc', 'matrix.bin', 'mecabrc', 'sys.dic', 'unk.dic']
+  const models = filenames.map((filename, index) =>
+    makeModel({
+      registryPath: `${dir}${filename}`,
+      addon: 'tts',
+      engine: 'tts-ggml',
+      expectedSize: index + 1,
+      sha256Checksum: `sha-${filename}`
+    })
+  )
+
+  const grouped = groupCompanionSets(models)
+  const primary = grouped.find((model) => model.registryPath.endsWith('/char.bin'))!
+
+  t.ok(primary.companionSet, 'char.bin carries the companion set')
+  t.is(primary.companionSet?.primaryKey, 'mecabDictPath')
+  t.alike(
+    primary.companionSet?.files.map((file) => file.targetName),
+    filenames
+  )
+
+  for (const filename of filenames.slice(1)) {
+    const companion = grouped.find((model) => model.registryPath.endsWith(`/${filename}`))!
+    t.is(companion.isCompanionOnly, true, `${filename} is companion-only`)
+  }
+})

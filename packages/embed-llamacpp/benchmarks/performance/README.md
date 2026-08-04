@@ -21,8 +21,8 @@ npm run benchmarks:param-sweep
 This command runs:
 
 1. `prepare-models.js --target addon`
-2. Bare benchmark runner (`embed-parameter-sweep.js`) with static inputs from
-   `benchmarks/performance/inputs.json`
+2. Bare benchmark runner (`embed-parameter-sweep.js`), which derives each case's
+   input from the batch size and the model's trained context (probed at runtime)
 
 ## Addon Source Selection
 

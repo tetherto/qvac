@@ -16,12 +16,7 @@ export const VERBOSITY = {
   DEBUG: 3
 } as const
 
-const verbositySchema = z.union([
-  z.literal(VERBOSITY.ERROR),
-  z.literal(VERBOSITY.WARN),
-  z.literal(VERBOSITY.INFO),
-  z.literal(VERBOSITY.DEBUG)
-])
+const verbositySchema = z.enum(VERBOSITY)
 
 // Base schema - validates types, all fields optional (for client-side validation)
 export const llmConfigBaseSchema = z.object({
@@ -86,7 +81,18 @@ export const llmConfigBaseSchema = z.object({
    *   - `"disabled"`: no multi-tile encoding (single tile).
    * Ignored by text-only models. Default is `"sequential"`.
    */
-  image_tile_mode: z.enum(['disabled', 'batched', 'sequential']).optional()
+  image_tile_mode: z.enum(['disabled', 'batched', 'sequential']).optional(),
+  /**
+   * Run the multimodal projector (mmproj / vision encoder) on the GPU
+   * (multimodal models only). `true` forces GPU, `false` forces CPU. When
+   * unset, the llm-llamacpp addon auto-selects the backend per device class:
+   * GPU on desktop/iOS and positively-detected Android Adreno 800+ GPUs; CPU on
+   * every other Android GPU — Mali, Adreno <800, and any tier that can't be
+   * detected (only Adreno 800+ is benchmarked to encode the projector faster on
+   * the GPU than the CPU). Only honoured when the model itself runs on a GPU
+   * backend — ignored with a warning on CPU.
+   */
+  'mmproj-use-gpu': z.boolean().optional()
 })
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>

@@ -49,6 +49,11 @@ on:
         description: 'JSON array of device pools [{name, arn}]'
         required: true
         type: string
+      device-pool-name:
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, a random AWS-available pool from device-pools is chosen."
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -63,13 +68,26 @@ on:
         required: false
         type: string
         default: ""
+      overlay-prebuild-addon:
+        description: >-
+          Optional addon short name (e.g. "tts-ggml"). When set, this run's
+          `prebuilds` artifact is downloaded and its android-arm64 build is
+          overlaid onto the installed @qvac/<addon> package before the consumer
+          APK is bundled, so the co-load exercises THIS PR's freshly-built addon
+          instead of the published npm baseline. Empty = published baseline
+          (unchanged; SDK e2e never sets this).
+        required: false
+        type: string
+        default: ""
     secrets:
       # MQTT_* and NPM_TOKEN are typically provided via the release environment
       # (see jobs with `environment: release`). They are declared required: false
       # here so `secrets: inherit` from a caller with no repo-level values does
       # not fail at the workflow_call boundary; the jobs that consume them have
-      # environment access. AWS auth uses OIDC via AWS_OIDC_ROLE_ARN, so
-      # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are not declared.
+      # environment access. AWS auth uses OIDC, so AWS_ACCESS_KEY_ID /
+      # AWS_SECRET_ACCESS_KEY are not declared.
+      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
+      # repo-level.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
@@ -86,6 +104,8 @@ on:
         required: false
       MQTT_CA_CERT:
         required: false
+      AWS_OIDC_ROLE_ARN:
+        required: true
 
 permissions:
   actions: read
@@ -310,6 +330,52 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
+      # ggml co-load smoke (run from PR code): overlay THIS PR's freshly-built
+      # android-arm64 prebuild onto the installed @qvac/<addon> package so the
+      # bundled consumer co-loads the PR's addon, not the npm baseline. No-op for
+      # normal SDK e2e runs (overlay-prebuild-addon empty).
+      - name: Download this PR's freshly-built prebuilds (co-load overlay)
+        if: ${{ inputs.overlay-prebuild-addon != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ runner.temp }}/pr-prebuilds
+
+      - name: Overlay PR android-arm64 prebuild (co-load smoke)
+        if: ${{ inputs.overlay-prebuild-addon != '' }}
+        shell: bash
+        env:
+          ADDON: ${{ inputs.overlay-prebuild-addon }}
+          SRC: ${{ runner.temp }}/pr-prebuilds
+          PROJECT_DIR: ${{ inputs.project-directory }}
+          CONSUMER_DIR: ${{ inputs.working-directory }}
+        run: |
+          set -euo pipefail
+          if [ ! -d "$SRC/android-arm64" ]; then
+            echo "::error::PR prebuilds artifact has no android-arm64/ for $ADDON"
+            ls -R "$SRC" || true
+            exit 1
+          fi
+          # The addon can be hoisted into either the consumer or the project
+          # node_modules; overlay every install so the bundler cannot pick up a
+          # stale baseline copy.
+          mapfile -t PKG_DIRS < <(find "$CONSUMER_DIR" "$PROJECT_DIR" -type d -path "*/node_modules/@qvac/$ADDON" 2>/dev/null || true)
+          if [ "${#PKG_DIRS[@]}" -eq 0 ]; then
+            echo "::error::no installed @qvac/$ADDON found under $CONSUMER_DIR or $PROJECT_DIR to overlay"
+            exit 1
+          fi
+          for pkg in "${PKG_DIRS[@]}"; do
+            dest="$pkg/prebuilds/android-arm64"
+            mkdir -p "$dest"
+            cp -r "$SRC/android-arm64/." "$dest/"
+            # Published @qvac packages use the qvac_ prefix; a freshly-built
+            # prebuild may still carry the tetherto_ build prefix.
+            find "$pkg/prebuilds" -depth -name 'tetherto_*' | while read -r f; do
+              mv "$f" "$(dirname "$f")/$(basename "$f" | sed 's/^tetherto_/qvac_/')"
+            done
+            echo "Overlaid PR android-arm64 prebuild for $ADDON into $dest"
+          done
+
       # ggml co-load smoke: restrict the mobile bundle to a subset of plugins so
       # the consumer co-loads exactly those addons. No-op for normal SDK e2e
       # runs (plugins input empty -> default full plugin bundle).
@@ -353,16 +419,51 @@ jobs:
           path: ${{ inputs.working-directory }}/build/consumers/android/consumer.apk
           retention-days: 7
 
+  select-pool:
+    name: "[android] select-pool"
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      pool: ${{ steps.select.outputs.pool }}
+      name: ${{ steps.select.outputs.name }}
+      availability: ${{ steps.select.outputs.availability }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout-cone-mode: false
+
+      # Only random selection queries Device Farm (GetDevicePool + ListDevices);
+      # an explicit pool name needs no AWS access.
+      - name: Configure AWS credentials
+        if: ${{ inputs.device-pool-name == '' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Select device pool
+        id: select
+        uses: ./.github/actions/sdk-device-farm-select-pool
+        with:
+          # Normalise to strict JSON: the device-pools variable may use lenient
+          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
+          pools: ${{ toJSON(fromJSON(inputs.device-pools)) }}
+          pool-name: ${{ inputs.device-pool-name }}
+
   device-farm:
     name: "[android] device-farm"
-    needs: build
+    needs: [build, select-pool]
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        device: ${{ fromJson(inputs.device-pools) }}
+        device: ${{ fromJson(needs.select-pool.outputs.pool) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -917,7 +1018,7 @@ jobs:
 
   report-finalize:
     name: "[android] report-finalize"
-    needs: [report-start, run-producer]
+    needs: [report-start, run-producer, select-pool]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -938,10 +1039,12 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          device-pool-name: ${{ needs.select-pool.outputs.name }}
+          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
 
   report-artifacts-refresh:
     name: "[android] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm]
+    needs: [report-start, run-producer, cleanup-device-farm, select-pool]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -962,4 +1065,6 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          device-pool-name: ${{ needs.select-pool.outputs.name }}
+          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
           update-summary: "false"

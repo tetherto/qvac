@@ -15,6 +15,7 @@ import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
+  ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
 } from './text-to-speech'
 import { ocrConfigSchema } from './ocr'
@@ -88,6 +89,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
     configKeys(
       ttsChatterboxLoadConfigSchema,
       ttsSupertonicLoadConfigSchema,
+      ttsParlerLoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],
@@ -568,12 +570,14 @@ export const loadClassificationModelRequestSchema = commonModelConfigSchema
   .strict()
 
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
-export const loadCustomPluginModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
-    message: 'Built-in model types must use their specific schema'
-  }),
-  modelConfig: z.record(z.string(), z.unknown()).optional()
-})
+export const loadCustomPluginModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+      message: 'Built-in model types must use their specific schema'
+    }),
+    modelConfig: z.record(z.string(), z.unknown()).optional()
+  })
+  .meta({ title: 'LoadModelCustomPluginRequest' })
 
 // Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z
@@ -595,6 +599,7 @@ export const loadModelSrcRequestSchema = z
     ...data,
     seed: data.seed ?? false
   }))
+  .meta({ title: 'LoadModelSrcRequest' })
 
 // Combined request schema: load new model OR reload config
 export const loadModelRequestSchema = z.union([

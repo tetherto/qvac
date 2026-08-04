@@ -3,14 +3,14 @@
 const { gguf } = require('@huggingface/gguf')
 const logger = require('./logger')
 
-function isGGUFSource (sourceUrl) {
+function isGGUFSource(sourceUrl) {
   if (typeof sourceUrl !== 'string') {
     return false
   }
   return sourceUrl.toLowerCase().endsWith('.gguf')
 }
 
-function isFirstShard (sourceUrl) {
+function isFirstShard(sourceUrl) {
   if (!isGGUFSource(sourceUrl)) {
     return false
   }
@@ -27,7 +27,7 @@ function isFirstShard (sourceUrl) {
   return shardNumber === 1
 }
 
-function serializeBigInts (obj) {
+function serializeBigInts(obj) {
   if (obj === null || obj === undefined) {
     return obj
   }
@@ -51,7 +51,7 @@ function serializeBigInts (obj) {
   return obj
 }
 
-async function extractGGUFMetadata (filePath) {
+async function extractGGUFMetadata(filePath) {
   try {
     const { metadata } = await gguf(filePath, { allowLocalFile: true })
 

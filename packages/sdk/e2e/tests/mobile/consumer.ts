@@ -19,18 +19,18 @@ import {
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q8_0,
-  PARAKEET_CTC_0_6B_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  PARAKEET_EOU_120M_V1_Q8_0,
+  PARAKEET_TDT_0_6B_V3_Q4_0,
+  PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
+  PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  SALAMANDRATA_2B_INST_Q4,
-  AFRICAN_4B_TRANSLATION_Q4_K_M,
   SMOLVLA_LIBERO_VISION_Q8
 } from '@qvac/sdk'
 import { ResourceManager } from '../shared/resource-manager.js'
@@ -65,8 +65,10 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { MobileDownloadResilienceExecutor } from './executors/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/delegated-inference-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
+import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'mobile',
@@ -169,6 +171,12 @@ resources.define('classification', {
   })
 })
 
+resources.define('echo', {
+  type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
+})
+
 resources.define('sharded-embeddings', {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: 'llamacpp-embedding',
@@ -230,27 +238,6 @@ resources.define('bergamot-es-it-pivot', {
   }
 })
 
-resources.define('salamandra', {
-  constant: SALAMANDRATA_2B_INST_Q4,
-  type: 'llamacpp-completion'
-})
-
-resources.define('afriquegemma', {
-  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    tools: true,
-    ctx_size: 2048,
-    top_k: 1,
-    top_p: 1,
-    temp: 0,
-    repeat_penalty: 1,
-    seed: 42,
-    predict: 256,
-    stop_sequences: ['\n']
-  }
-})
-
 /** Look up a bundled audio file by name and resolve it to a POSIX path. */
 async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
   // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
@@ -281,6 +268,33 @@ resources.define('tts-chatterbox', {
     cfmSteps: 1,
     referenceAudioSrc: await resolveBundledAudioUri('transcription-short-wav.wav')
   })
+})
+
+resources.define('tts-parler', {
+  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
+  }
+})
+
+resources.define('tts-parler-indic', {
+  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    normalizeNumbers: true
+  }
 })
 
 resources.define('tts-supertonic', {
@@ -336,25 +350,25 @@ resources.define('tts-supertonic-enhanced', {
 })
 
 resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
+  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q8_0,
+  constant: PARAKEET_CTC_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
+  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  constant: PARAKEET_EOU_120M_V1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
@@ -363,7 +377,7 @@ resources.define('vision', {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
+    ctx_size: 4096,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })
@@ -495,6 +509,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     // Mobile platform skips (before real executors -- first match wins)
+    new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    ),
     new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
     new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
     new SkipExecutor(
@@ -518,6 +536,14 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^vla-groot-/,
+      'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
+    ),
+    new SkipExecutor(
+      /^(ocr-doctr-|model-load-ocr-doctr$)/,
+      'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile'
+    ),
     ...(Platform.OS === 'android'
       ? [
           skipTests(
@@ -548,10 +574,6 @@ export const executor = createExecutor({
               'addon-logging-ocr'
             ],
             'OCR disabled on iOS (ONNX/CoreML OOM)'
-          ),
-          new SkipExecutor(
-            /^translation-afriquegemma-/,
-            'AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget'
           )
         ]
       : []),
@@ -588,8 +610,10 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
-    new MobileCancellationExecutor(resources)
+    new MobileCancellationExecutor(resources),
+    new PluginExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

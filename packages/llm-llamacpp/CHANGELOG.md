@@ -1,5 +1,196 @@
 # Changelog
 
+## [0.39.2] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+- Qwen3.5-VL cache-stress coverage now creates deterministic cache pressure
+  with measured, bounded prefill chunks while preserving normal EOS behavior.
+
+## [0.39.1] - 2026-07-29
+
+Extends LoRA finetuning to the b9840 model families: Qwen3.5/3.6 and Gemma-4, dense and
+mixture-of-experts. These architectures were previously rejected outright — `finetune()` threw
+`Finetuning is not supported for architecture: <arch>`. MoE models additionally need their expert FFN
+tensors targeted, so four expert LoRA target modules are now accepted. Complements the fabric-side
+training fixes already pinned via `qvac-fabric` 9840.0.1.
+
+### Added
+
+- Qwen3.5/3.6 dense (`qwen35`), Qwen3.x MoE (`qwen35moe`) and Gemma-4 (`gemma4`) are now supported
+  finetuning architectures — the allowlist grows from `gemma3`, `qwen3`, `bitnet` to six entries.
+- Four MoE expert LoRA target modules accepted in `loraModules`: `ffn_gate_exps`, `ffn_up_exps`,
+  `ffn_down_exps`, `ffn_gate_up_exps`. Required to train MoE experts at all — targeting only the dense
+  FFN names leaves expert weights untouched.
+- Integration coverage: `finetuning-archs` finetunes Qwen3.5-0.8B (desktop + mobile) and Gemma-4-E2B
+  (desktop), plus a pause/resume cycle on the new dense architecture; `finetuning-moe` covers
+  Qwen3.6-35B-A3B and Gemma-4-26B-A4B, opt-in behind `QVAC_RUN_MOE_FINETUNE=true` because those models
+  are ~20–27 GB. C++ unit tests lock backend selection for the new architectures and the expert-target
+  bit mapping.
+- `QVAC_QWEN35_MTMD_SIZE` (`0.8b` | `2b`) selects the model size for the Qwen3.5 multimodal
+  cache-stress test.
+
+### Changed
+
+- `docs/finetuning.md` model-format requirements now list the real architecture allowlist and document
+  the MoE expert LoRA targets.
+
+### Pull Requests
+
+- [#3509](https://github.com/tetherto/qvac/pull/3509) - b9840 finetuning (Qwen3.5/3.6 + Gemma-4, dense + MoE)
+
+## [0.39.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1`. This fixes MoE/GDN LoRA
+  finetuning: weight repacking is disabled for training loads (backward ops cannot
+  read repacked layouts), the Metal `acc`/`set` threadgroup dispatch now covers rows
+  wider than one threadgroup, and training on MoE / hybrid / recurrent architectures
+  seeds the backward pass from a down-scaled loss so gradients stay within fp32
+  range (persisted with the optimizer state). No API change for this package.
+
+## [0.38.2] - 2026-07-23
+
+Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.
+
+### Added
+
+- Unlimited-OCR ([baidu/Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR)) OCR VLM support: registry entry, README + NOTICE, a mobile integration test (`runOcrUnlimitedTest`) that parses a scanned CT-scan report, and a perf test (`runUnlimitedOcrPerfTest`) that records encode/prefill/decode timings, both registered in the android/ios weekly groups. GGUFs (`Q4_K_M` + `F16` mmproj) are pulled from the pinned community conversion [`vimalnakrani/unlimited-ocr-gguf`](https://huggingface.co/vimalnakrani/unlimited-ocr-gguf), the same public-repo pattern used by LightON OCR-2. Prompt-sensitive — use `document parsing.`. Requires `qvac-fabric >= 9840` (`deepseek2-ocr` engine + `deepseekocr` clip projector).
+
+### Pull Requests
+
+- [#3419](https://github.com/tetherto/qvac/pull/3419) - add Unlimited-OCR vision-language OCR model
+
+## [0.38.1] - 2026-07-22
+
+This patch release guarantees that a content token follows the EOS-inside-reasoning recovery, so the forced `</think>` substitution can no longer be immediately followed by another end-of-generation token and produce an empty answer. It also exposes the generation stop reason as a new runtime stat.
+
+### Fixed
+
+- When a Qwen3-family model emits EOS while still inside the reasoning channel, the recovery that substitutes the `</think>` close marker now bans end-of-generation tokens on the immediately following sample. On marginal prompts the next token could previously be EOG again, defeating the recovery with an empty answer; the ban is applied unconditionally for that one sample (the generation loop only reaches it while the `n_predict` budget allows the token).
+
+### Added
+
+- `stopReason` runtime stat reports why the most recent single-prompt generation stopped (`none`, `eos`, `antiprompt`, `predictionLimit`, `sequenceLimit`, or `contextOverflow`).
+
+### Pull Requests
+
+- [#3389](https://github.com/tetherto/qvac/pull/3389) - guarantee a content token after EOS-inside-reasoning recovery
+
+## [0.38.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.37.1] - 2026-07-18
+
+This patch release hardens reasoning-cache rollback when generation is truncated before a reasoning span closes. It covers both explicit `n_predict` limits and continuous-batching per-sequence slot limits, preserving the last known-good cache state instead of attempting unsafe reasoning compaction.
+
+### Fixed
+
+- Qwen3.5 text and multimodal requests now roll back the current request when `n_predict` is reached inside an open reasoning span, avoiding recurrent compaction failures when no close marker was captured.
+- Continuous batching now propagates scheduler-imposed per-sequence slot truncation as `SequenceLimit`, allowing the driver to use the same rollback path as prediction-limit truncation.
+- Batch stop-reason precedence now preserves `Eos` > `PredictionLimit` > `Antiprompt`, so `n_predict` truncation still triggers rollback when a stop string would also match on the same token.
+- Added focused C++ regression coverage for MTMD `n_predict` rollback, scheduler `LimitReached` propagation, Qwen3.5 continuous-batching sequence-limit rollback, and sibling request survival.
+
+### Pull Requests
+
+- [#3318](https://github.com/tetherto/qvac/pull/3318) - QVAC-22472 fix: handle Qwen3.5 n_predict cutoff inside reasoning
+
+## [0.37.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.36.3] - 2026-07-09
+
+This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
+
+### Fixed
+
+- Continuous-batch `tokensPerSecond`, `ppTPS`, and TTFT timing now include the explicit `llama_synchronize()` boundary after `llama_decode()` and multimodal media evaluation, preventing GPU backends from reporting launch-time-only throughput.
+- Text and multimodal cancellation paths now synchronize before rolling back prefill or generation state when cancellation bypasses the usual sampler-side synchronization.
+- Reset and deferred teardown paths now synchronize before clearing llama memory, including decode/media error paths that can run while a deferred scheduler clear is pending.
+
+### Changed
+
+- Batch and cancellation regression tests were hardened to assert scheduler-owned timing invariants and prefill cancellation rollback without relying on fragile cross-run wall-clock comparisons.
+
+### Pull Requests
+
+- [#3159](https://github.com/tetherto/qvac/pull/3159) - fix: synchronize async llama decode completion
+
+
+## [0.36.2] - 2026-07-09
+
+### Changed
+
+- Android multimodal-projector (mmproj / vision encoder) auto-default narrowed: with `mmproj-use-gpu` unset the projector now defaults to the GPU **only** on positively-detected Adreno 800+ GPUs. All other Android GPU classes — Arm Mali, Adreno < 800, and any GPU whose Adreno tier can't be detected — default to CPU (the LLM layers still run on the GPU). Only Adreno 800+ was benchmarked (QVAC-21257) to encode the projector faster on the mobile GPU than on CPU, so defaulting to GPU on unbenchmarked/undetectable classes was optimistic. Desktop and iOS continue to default to GPU, and an explicit `mmproj-use-gpu` value still overrides the default in either direction.
+
+### Pull Requests
+
+- [#3168](https://github.com/tetherto/qvac/pull/3168) - fix: default Android mmproj projector to GPU only on Adreno 800+
+
+## [0.36.1] - 2026-07-09
+
+### Fixed
+
+- Continuous-batch KV-cache saves now match the single-prompt stale backing-store behavior: when a batch slot loaded a persisted cache and that backing file, empty file, or parent directory is externally removed before terminal save, the scheduler drops the stale backing-store state instead of failing the batch.
+- Batch cache save failures for unsaved or invalid cache paths remain observable as `UnableToSaveSessionFile`, including missing-parent save paths and cache paths replaced by directories.
+- Added focused C++ regression coverage for batch cache round-trips, deleted persisted backing directories, deleted persisted cache files, zero-byte persisted cache files, unsaved missing-parent paths, and directory replacement errors.
+
+### Pull Requests
+
+- [#3157](https://github.com/tetherto/qvac/pull/3157) - QVAC-21944 fix: preserve batch KV cache save failures for stale paths
+
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
+## [0.35.3] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (QVAC-21914: clip flash-attention AUTO fallback on non-coopmat GPUs restores the budget-aware heuristic for huge vision encodes, and ggml-opencl submissions are now bounded — periodic work-budget `clFlush` + flash-attention q-row chunking. Fixes the Pixel 9 Pro (Mali) lmkd OOM and Galaxy S25 Ultra (Adreno 830) driver abort on monolithic 16k-patch tile-mode-disabled encodes; GPU output quality Δ0 and encode/decode within noise on the device farm; no API change for this package).
+
+## [0.35.2] - 2026-07-08
+
+### Fixed
+
+- KV-cache stale backing-store handling now only discards active cache state for caches that were actually persisted before. Unsaved RAM-only cache paths with missing parents, cache paths replaced by directories, or other save-path failures continue to surface `UnableToSaveSessionFile` through the existing throw-and-invalidate path.
+
+### Pull Requests
+
+- [#3121](https://github.com/tetherto/qvac/pull/3121) - QVAC-21302 fix: preserve KV cache save failures after stale-cache handling
+
+## [0.35.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.35.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion, GPU mmproj-encode ~1.46× → ~1.28× of same-device CPU on Pixel 9 Pro — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
 ## [0.34.1] - 2026-07-08
 
 ### Fixed

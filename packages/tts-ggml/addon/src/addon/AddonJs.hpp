@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include <js.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -15,9 +14,11 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
+#include "model-interface/parler/ParlerModel.hpp"
 #include "model-interface/supertonic/SupertonicModel.hpp"
 
 namespace qvac::ttsggml::addon_js {
@@ -25,6 +26,7 @@ namespace qvac::ttsggml::addon_js {
 namespace js = qvac_lib_inference_addon_cpp::js;
 
 using chatterbox::ChatterboxModel;
+using parler::ParlerModel;
 using supertonic::SupertonicModel;
 
 struct JsAudioOutputHandler
@@ -89,7 +91,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   const EngineType engineType = adapter.readEngineType(configurationParams, env);
 
   unique_ptr<model::IModel> model;
-  int sampleRate = 24000;
+  int sampleRate = chatterbox::kChatterboxNativeSampleRate;
 
   // The output sample rate is baked into the JS output handlers at instance
   // creation. Final-rate precedence:
@@ -108,12 +110,21 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
         outSr > 0 ? outSr
                   : (enhanced ? kLavasrEnhancedSampleRate : stm->sampleRate());
     model = std::move(stm);
+  } else if (engineType == EngineType::Parler) {
+    auto cfg = adapter.buildParlerConfig(configurationParams, env);
+    const int outSr = cfg.outputSampleRate.value_or(0);
+    auto ptm = make_unique<ParlerModel>(std::move(cfg));
+    sampleRate = outSr > 0 ? outSr : ptm->sampleRate();
+    model = std::move(ptm);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     sampleRate =
-        outSr > 0 ? outSr : (enhanced ? kLavasrEnhancedSampleRate : 24000);
+        outSr > 0
+            ? outSr
+            : (enhanced ? kLavasrEnhancedSampleRate
+                        : chatterbox::kChatterboxNativeSampleRate);
     model = make_unique<ChatterboxModel>(std::move(cfg));
   }
 
@@ -146,6 +157,25 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   if (auto* st = dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
     SupertonicModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
+  if (auto* pt = dynamic_cast<ParlerModel*>(&instance.addonCpp->model.get())) {
+    ParlerModel::AnyInput modelInput;
+    modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    // Per-call description/template properties are siblings of `input`
+    // on the job object; all-empty means "use the constructor config".
+    JSAdapter adapter;
+    modelInput.desc = adapter.readParlerDescriptionFields(
+        args.getJsObject(1, "inputObj"), env);
+    // Native streaming (config streamChunkTokens > 0) uses the same queue
+    // bridge as chatterbox; a batch config leaves this callback unused.
+    auto outputQueue = instance.addonCpp->outputQueue;
+    modelInput.chunkCallback =
+        [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
+          StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
+          outputQueue->queueResult(std::any(std::move(chunk)));
+        };
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -203,6 +233,22 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
           }
           stm->setConfig(std::move(newCfg));
           stm->reload();
+        });
+  }
+
+  if (auto* pt = dynamic_cast<ParlerModel*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildParlerConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* ptm = dynamic_cast<ParlerModel*>(&addonCpp->model.get());
+          if (ptm == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not a ParlerModel");
+          }
+          ptm->setConfig(std::move(newCfg));
+          ptm->reload();
         });
   }
 

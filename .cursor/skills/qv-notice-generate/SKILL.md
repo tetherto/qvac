@@ -7,6 +7,16 @@ description: Generate NOTICE files with third-party attributions for all package
 
 Generate deterministic, sorted NOTICE files for individual packages or all packages at once, covering model, JS, Python, and C++ dependency attributions.
 
+## Relationship to the CI license gate (this SKILL is the fallback)
+
+As of QVAC-21554, license/compliance enforcement on Tier-1 PRs is primarily a **CI gate** — [`.github/workflows/license-compliance.yml`](../../../.github/workflows/license-compliance.yml), delegating to the org reusable workflow `public-reusable-license.yml` (design: `tetherto/qvac-actions/docs/license-compliance-ci.md`). The gate deterministically classifies newly added PR dependencies against the org policy (allow/deny/review), honours `.github/license-allowlist.yml`, and posts a PR comment.
+
+This SKILL is now the **human fallback** for the long tail the gate cannot decide:
+
+- **Novel / unclassifiable licenses.** When the gate blocks a High finding it cannot classify, run `check-forbidden-licenses.js` to investigate, then record the decision in `.github/license-allowlist.yml` (CODEOWNERS-reviewed) or remove/replace the dependency. The gate is deterministic from then on.
+- **Full transitive audit.** The CI gate reads GitHub's dependency graph, which is manifest-only in this repo (package lockfiles are gitignored), so it does not resolve the full transitive tree. `check-forbidden-licenses.js` does a real `npm install` + `license-checker` (plus Python/C++/model scans) and is the tool for a complete audit — e.g. before a release, or when the gate's coverage is insufficient.
+- **NOTICE authoring.** The gate only *verifies NOTICE presence* (advisory). Generating/updating the NOTICE files themselves remains this SKILL's `generate-notice.js` job.
+
 ## When to use this skill
 
 **Use when:**
@@ -129,9 +139,12 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | `llm-llamacpp` | `@qvac/llm-llamacpp` |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `tts-onnx` | `@qvac/tts-onnx` |
-| `transcription-whispercpp` | `@qvac/transcription-whispercpp` |
-| `ocr-onnx` | `@qvac/ocr-onnx` |
+| `asr-ggml` | `@qvac/transcription-whispercpp`, `@qvac/asr-ggml` |
 | `diffusion-cpp` | `@qvac/diffusion-cpp` |
+
+`asr-ggml` carries two engine keys because the whisper + parakeet packages were
+unified: `models.prod.json` still names the retired
+`@qvac/transcription-whispercpp` engine until the SDK/registry repoint lands.
 
 ## Sorting guarantee
 

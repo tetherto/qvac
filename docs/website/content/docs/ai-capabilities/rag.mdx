@@ -37,7 +37,7 @@ Create your RAG pipeline using [text embeddings](/ai-capabilities/text-embedding
 
 Regarding vector storage, you may use:
 - **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/reference/api#ragingest), [`ragSearch()`](/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
-- **External vector DB:** use the embedding primitives ([`ragChunk()`](/reference/api#ragchunk), [`embed()`](/reference/api#embed)) and store the vectors wherever you want (e.g., LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
+- **External vector DB:** use the embedding primitives ([`ragChunk()`](/reference/api#ragchunk), [`embed()`](/reference/api#embed)) and store the vectors wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
 
 <Callout type="info">
 **Important:** when using an external vector DB, make sure its schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
@@ -68,6 +68,30 @@ The following script shows how to ingest documents into a built-in RAG workspace
 </Tabs>
 
 ### External vector DB
+
+#### MongoDB
+
+The following script stores each document in MongoDB alongside its vector, builds a vector search index over it, and retrieves matches with a `$vectorSearch` aggregation that [pre-filters](https://www.mongodb.com/docs/vector-search/query/aggregation-stages/vector-search-stage/#pre-filter-search-data) by category:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-mongodb.js title="rag-mongodb.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-mongodb.ts title="rag-mongodb.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+#### SQLite
 
 The following script shows the same workflow using `embed()` plus a SQLite vector index:
 

@@ -1,5 +1,142 @@
 # Changelog
 
+## [0.17.0] - 2026-07-23
+
+This release adds the validated Wan 2.2 TI2V-5B Turbo Q5_K_S workflow for
+high-quality text-to-video generation.
+
+### Features
+
+#### Wan 2.2 Turbo text-to-video workflow
+
+The package now provides a pinned downloader, manifest entries, runnable
+example, and opt-in smoke coverage for the community-distilled TI2V-5B Turbo
+Q5_K_S GGUF. The example uses the validated espresso product-film prompt with
+1280×704 output, 121 frames at 24 fps, four denoising steps, and CFG 1.
+
+#### Model-derived video validation
+
+Wan 2.2 TI2V models now derive their 32-pixel spatial alignment from GGUF
+tensor descriptors at load time. Renaming a checkpoint can no longer bypass
+the native constraint, while Wan 2.1 retains its 16-pixel grid.
+
+### Fixed
+
+- Wan 2.2 A14B progress reporting now treats a `high_noise_steps: -1` request
+  with `moe_boundary: 0` as a single denoising sequence, preventing VAE
+  progress from being classified as a second sampler phase.
+- The native `high_noise_steps` sentinel is preserved for A14B
+  `moe_boundary`-based routing.
+
+### Pull Requests
+
+- [#3415](https://github.com/tetherto/qvac/pull/3415) - QVAC-22493 feat(diffusion-cpp): focus Wan 2.2 on Turbo Q5
+
+## [0.16.0] - 2026-07-23
+
+This release makes TypeScript the source of truth for the diffusion runtime
+wrappers and their public declarations. It also strengthens performance
+regression coverage for the per-phase generation metrics introduced in 0.15.0.
+
+### Changed
+
+#### TypeScript-generated runtime wrappers and declarations
+
+The image, video, native-addon, and logging wrappers are now authored in
+TypeScript, with published JavaScript and declaration files generated during
+builds and packaging. CommonJS and ESM exports remain compatible, while strict
+type checking, linting, and generated-output validation reduce the risk of
+runtime behavior drifting from the public types.
+
+#### Per-phase timing regression coverage
+
+Integration performance reports now capture `conditionerMs`, `denoiseMs`,
+`vaeMs`, `postProcessMs`, and `stepsPerSecond` across image and img2img flows.
+The tests verify phase totals and throughput consistency, and mobile CI now
+surfaces these metrics from iOS artifacts and multi-device Android runs.
+
+### Pull Requests
+
+- [#3341](https://github.com/tetherto/qvac/pull/3341) - QVAC-22469 test: profile diffusion per-phase runtime stats in integration tests
+- [#3350](https://github.com/tetherto/qvac/pull/3350) - QVAC-22462 mod: migrate diffusion-cpp to TypeScript
+
+## [0.15.1] - 2026-07-17
+
+### Fixed
+
+- Bumped the `stable-diffusion-cpp` vcpkg dependency to `2026-07-03#5`: the
+  Wan VAE temporal upsample now matches the reference first-chunk "Rep"
+  semantics (`time_conv` runs with causal zero padding on the first latent
+  chunk, the first doubled frame is trimmed, and the temporal feat cache is
+  seeded). This restores Wan2.2 VAE decode parity with the PyTorch reference
+  (cosine 1.000000 / 79 dB PSNR, previously 0.9959 / 27 dB — visually
+  near-identical but numerically wrong on the first frames). Encode and
+  TAEHV paths are unaffected.
+
+## [0.15.0] - 2026-07-16
+
+This release adds an exhaustive per-phase timing breakdown to image and video
+generation runtime statistics.
+
+### Features
+
+- `RuntimeStats` and `VideoRuntimeStats` now report `conditionerMs`,
+  `denoiseMs`, `vaeMs`, `postProcessMs`, and `stepsPerSecond`.
+- The phase timings account for the full generation duration:
+  `conditionerMs + denoiseMs + vaeMs + postProcessMs == generationMs`.
+- Timing boundaries distinguish the text-conditioning, denoising, VAE decode,
+  and post-processing work for image and video jobs. Single-step runs report
+  `denoiseMs` and `stepsPerSecond` as `0`.
+
+## [0.14.1] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.14.0] - 2026-07-13
+
+This release adds Ideogram 4 text-to-image support with split unconditional (CFG) diffusion weights, Qwen3-VL text encoding, and structured caption conditioning. It also includes critical review fixes: explicit CFG enforcement, correct FP8 weight_scale ordering for Ideogram linear layers, and registry-first build resolution that removes local port overlays.
+
+### Features
+
+#### Ideogram 4 text-to-image generation
+
+The diffusion addon now supports Ideogram 4 end-to-end, wiring the split unconditional (CFG) diffusion model through a new `uncondDiffusionModelPath` field in both the JavaScript API and native C++ config. Structured JSON caption conditioning with explicit bounding boxes is required for reliable image quality; plain-text prompts yield degenerate outputs and model placeholder ("Image blocked by safety filter") fallbacks.
+
+`ImgStableDiffusion` accepts a new `uncondModel` file key, `index.d.ts` documents the Qwen3-VL text encoder for Ideogram, and the `examples/generate-ideogram-coffee.js` and `examples/generate-ideogram-tcg.js` scripts demonstrate photoreal and card-game art styles with structured captions.
+
+#### Ideogram CFG enforcement and correctness
+
+- **CFG model requirement**: Ideogram generation now explicitly fails (returns `null` instead of silently falling back to conditional weights) if classifier-free guidance is requested but the unconditional diffusion model was not successfully loaded.
+- **Weight-scale ordering fix**: Ideogram's FP8 `weight_scale` tensors are now applied with the correct computation order: `(x @ W) * weight_scale + b` instead of `(x @ W + b) * weight_scale`. This is critical for official FP8-with-scale checkpoints.
+
+### Changed
+
+- The diffusion-cpp addon now resolves `stable-diffusion-cpp@2026-07-03#4` directly from the qvac-registry-vcpkg instead of a package-local overlay port (PR qvac-registry-vcpkg#242).
+- Parameter lifecycle management restored for reusable contexts: `free_params_immediately`, `offload_params_to_cpu`, `keep_clip_on_cpu`, and `keep_vae_on_cpu` are now properly mapped to `sd_ctx_params_t`, fixing crashes during model cancel/reuse sequences.
+- Video loading now passes the required `uncondDiffusionModelPath` parameter to prevent addon validation errors (related to Ideogram support).
+
+### Fixed
+
+- Mobile integration tests now include explicit model download URL fallbacks, ensuring tests can fetch models when the test manifest is not bundled into the Device Farm app.
+- Mobile Device Farm test parameters (image sizes, generation steps) optimized to fit within 15-minute execution budget without sacrificing desktop test fidelity.
+- `vae_decode_only` config flag added to explicitly disable VAE decoder-only mode, allowing img2img/fusion/hires image-to-image workflows that require the VAE encoder.
+- Upstream `sd_ctx_params_t` API refactoring ported: dropped removed fields (`vae_decode_only`, `free_params_immediately`, `keep_clip_on_cpu`, `keep_vae_on_cpu`) and added `params_backend` for explicit parameter placement intent.
+
+### Pull Requests
+
+- [#3147](https://github.com/tetherto/qvac/pull/3147) - feat(diffusion-cpp): add Ideogram 4 support
+- [qvac-ext-stable-diffusion.cpp#19](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/19) - Ideogram 4 wiring + uncondDiffusionModelPath field
+- [qvac-ext-stable-diffusion.cpp#20](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/20) - Ideogram review fixes (weight_scale ordering, CFG enforcement, parameter staging)
+- [qvac-registry-vcpkg#242](https://github.com/tetherto/qvac-registry-vcpkg/pull/242) - stable-diffusion-cpp 2026-07-03#4 publish
+
+## [0.13.3] - 2026-07-06
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
 ## [0.13.2] - 2026-07-06
 
 This release exposes a `main-gpu` config for image generation, giving callers the same GPU-pinning control the LLM path already has. On multi-GPU hosts, diffusion previously fell back to whatever device the backend picked.

@@ -43,6 +43,7 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64
@@ -118,10 +119,78 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install --ignore-scripts
 
+      # Non-Linux: unit tests only (fuzzing is Linux-only — libFuzzer + ASan,
+      # matching the if(NOT WIN32) ASan gate). These use the vcpkg GoogleTest in
+      # the default build/ tree.
       - name: Build C++ tests
+        if: matrix.platform != 'linux'
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:build
 
       - name: Run C++ tests
+        if: matrix.platform != 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          # addon-test links AddressSanitizer but dynamically loads the
+          # non-ASan, -static-libstdc++ @qvac/fabric prebuild. Cross-module
+          # new/delete and fabric's intentional long-lived runtime allocations
+          # would otherwise abort the run, so relax exactly those two checks.
+          # See packages/classification-ggml/test/unit/CMakeLists.txt for the
+          # full rationale. Harmless on win32 (nothing is ASan-linked there).
+          # test:cpp:run runs test:scripts first (runner exit-code / ASAN_OPTIONS
+          # regressions) before spawning the ASan-instrumented addon-test binary.
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
+        run: npm run test:cpp:run
+
+      # Linux: ONE configure of the build/ tree produces both addon-test and the
+      # bounded fuzz target, sharing the vcpkg GoogleTest, so we pay the CMake
+      # configure cost once instead of configuring two trees separately. The
+      # whole fuzz stack — FuzzTest included — comes from the vcpkg binary cache
+      # configured by setup-vcpkg above, so this needs no egress of its own.
+      # See docs/architecture/ADDON-FUZZING.md.
+      #
+      # The build and run are split per target, in that order, so a fuzz
+      # compile break or a fuzz finding fails after addon-test has already been
+      # built AND run, instead of aborting the job before the unit tests ever
+      # start.
+      #
+      # That ordering does NOT isolate the unit tests from the fuzz
+      # *dependencies*: BUILD_FUZZING=ON activates the `fuzz` vcpkg manifest
+      # feature, so this configure resolves fuzztest[asan], abseil[asan],
+      # re2[asan] and antlr4 before addon-test is configured at all — a
+      # registry or binary-cache failure there takes the Linux unit tests down
+      # with it. That is the accepted price of one configure over two;
+      # splitting the trees would pay a second CMake configure on every run to
+      # guard against it.
+      - name: Configure C++ tests + fuzz targets
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:fuzz:configure
+
+      - name: Build C++ tests (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:fuzz:build:tests
+
+      # Intentionally NO step-level ASAN_OPTIONS on either run step: each runner
+      # applies its own posture — relaxed fabric-boundary options for the
+      # fabric-linked addon-test, full strength (+ LeakSanitizer) for the
+      # non-fabric fuzz target. Setting ASAN_OPTIONS here (or at job level) would
+      # override both; the fuzz runner warns when that happens rather than
+      # silently dropping leak detection.
+      - name: Run C++ tests (Linux)
+        if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:run
+
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:fuzz:build:fuzz
+
+      # Bounded unit-test mode (each FUZZ_TEST ~1s) for free per-PR coverage;
+      # coverage-guided time-boxed fuzzing (`--fuzz_for`) is a separate scheduled job.
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run

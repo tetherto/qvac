@@ -1,0 +1,77 @@
+name: Promote docs to production
+
+# Manually promote the reviewed docs on `main` to the `docs-production` branch,
+# which the hosting provider (Sevalla) watches to deploy the production docs site.
+#
+# This workflow ONLY fast-forwards docs-production to the current main commit:
+#   - it never runs automatically on a merge to main,
+#   - it never opens a PR,
+#   - it never creates a new commit on docs-production,
+#   - it fails (does not merge) if docs-production has diverged from main.
+# See docs/website/docs-workflow.md ("Production (manual promotion)") for the model.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two promotions at once; do not cancel an in-flight promotion.
+concurrency:
+  group: promote-docs-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Fast-forward docs-production to main
+    runs-on: ubuntu-latest
+    # Gate the promotion: the job pauses for approval by a required reviewer
+    # (configured on the docs-production environment) before it can push.
+    environment: docs-production
+    steps:
+      # docs-production is a restricted ref (Restrict updates). The default
+      # GITHUB_TOKEN cannot be a ruleset bypass actor, so the push runs as a
+      # GitHub App: the App is the sole bypass identity on the docs-production
+      # ruleset (github-ops) and must hold `contents: write` on this repo.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.QVAC_DOCS_PROMOTE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.QVAC_DOCS_PROMOTE_APP_PRIVATE_KEY }}
+
+      - name: Checkout docs-production
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: docs-production
+          # Full history so the fast-forward check can see the relationship
+          # between docs-production and main.
+          fetch-depth: 0
+          # Persist the App token so the fast-forward push authenticates as the
+          # App (the docs-production ruleset bypass identity).
+          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Fast-forward docs-production to origin/main
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin main docs-production
+
+          echo "main            = $(git rev-parse --short origin/main)"
+          echo "docs-production = $(git rev-parse --short origin/docs-production)"
+          echo "commits to promote:"
+          git log --oneline origin/docs-production..origin/main
+
+          # --ff-only: promote ONLY when docs-production can fast-forward to main.
+          # If the branches have diverged, this fails instead of creating a merge
+          # commit or resolving conflicts — divergence must be repaired in a
+          # separate, deliberate step (out of scope for this promotion).
+          if ! git merge --ff-only origin/main; then
+            echo "::error::docs-production has diverged from main; fast-forward promotion is not possible. Realign the branches before promoting."
+            exit 1
+          fi
+
+          git push origin HEAD:docs-production
+          echo "Promoted docs-production to $(git rev-parse --short HEAD)."

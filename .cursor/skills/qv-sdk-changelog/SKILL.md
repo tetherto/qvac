@@ -28,6 +28,8 @@ Every step is mandatory. Do **not** ask the user whether to do `CHANGELOG_LLM.md
 
 If the user doesn't specify, ask which SDK pod package they want to generate a changelog for.
 
+Package slugs match git tags (`sdk`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
+
 ### Step 2: Fetch Tags and Resolve Base
 
 Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
@@ -116,6 +118,21 @@ See [references/changelog-llm-format.md](references/changelog-llm-format.md) for
 After writing the file, re-run the raw generator (or rebuild the root aggregate) so
 `packages/<package>/CHANGELOG.md` picks up the new `CHANGELOG_LLM.md` (the aggregator
 prefers it over `CHANGELOG.md`). Easiest way: re-run the script from Step 3 — it's idempotent.
+
+**Format the generated markdown (mandatory).** `CHANGELOG_LLM.md` is authored by
+hand here, so it is the file most likely to carry markdown formatting issues that a
+committed-file format check would later reject. Every SDK pod package uses prettier
+(`format` = `prettier --check .`, `format:fix` = `prettier --write .`). Run the check
+scoped to the changelog output so any issue surfaces now:
+
+```bash
+cd packages/<package>
+bunx prettier --check "changelog/**/*.md" "CHANGELOG.md"
+```
+
+If it reports problems, fix them — `bunx prettier --write` on the same paths, or hand-edit —
+and re-run the check until it passes clean. Do this before moving on so the release commit
+carries only prettier-clean markdown.
 
 **Downstream rendering note:** the docs site reads `CHANGELOG_LLM.md`
 **verbatim** and inlines it under a `### @qvac/<pkg>` subsection of the
@@ -325,6 +342,7 @@ Before completing:
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md generated (mandatory) and follows format guide
+- [ ] Generated markdown is prettier-clean (`prettier --check` on the changelog output passes)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
 - [ ] When `--package=sdk`: `qv-sdk-bare-sdk-sync` run, `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated

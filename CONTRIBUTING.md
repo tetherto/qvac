@@ -16,8 +16,15 @@ Full workflow, CLI flags, determinism guarantees, and troubleshooting are docume
 
 ## PR Labels
 
-CI behaviour is driven by PR labels. The `verified` label is the security gate that authorises every secret-bearing job to run on a PR — see [`docs/ci/LABELS.md`](docs/ci/LABELS.md) for the full reference (purpose, who can apply, behaviour on push), and [`docs/ci/TEAMS.md`](docs/ci/TEAMS.md) for the teams that can apply it.
+CI behaviour is driven by PR labels and the `fork-ci` environment. External fork PRs need merge/release-team approval of the `fork-ci` environment on each workflow run before secret-bearing jobs execute — see [`docs/ci/LABELS.md`](docs/ci/LABELS.md) for the full reference (labels, fork trust, per-commit re-approval), and [`docs/ci/TEAMS.md`](docs/ci/TEAMS.md) for the teams that can approve.
 
 ## Changelog
 
 Version bumps require CHANGELOG.md updates with version, date, changes by category (✨ Features, 🐛 Fixes, 🔧 Changed, etc.), and PR links.
+
+## Development
+
+- For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](./docs/gitflow.md).
+- For development specifics of each QVAC component, refer to the documentation in the respective subdirectory under `/packages`.
+- For the QVAC architecture as a whole, see `/docs/architecture`.
+- For the QVAC monorepo structure, see `docs/repository-layout.md`.

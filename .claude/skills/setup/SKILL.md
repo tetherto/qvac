@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Run packages/ocr-onnx/.agent/setup.sh to install skills, knowledge, and config for Claude Code or Cursor
+description: Run packages/ocr-ggml/.agent/setup.sh to install skills, knowledge, and config for Claude Code or Cursor
 argument-hint: "[claude|cursor|all]"
 disable-model-invocation: true
 ---
@@ -13,7 +13,7 @@ Where <agent> is: claude, cursor, or all
 Execute the following command:
 
 ```bash
-bash packages/ocr-onnx/.agent/setup.sh $ARGUMENTS
+bash packages/ocr-ggml/.agent/setup.sh $ARGUMENTS
 ```
 
 After running, report what was copied/generated.

@@ -16,6 +16,10 @@ on:
     branches:
       - main
   pull_request:
+  schedule:
+    # Weekly full scan (QVAC-19056 rollout). Mondays 07:00 UTC; crons are
+    # staggered across weekdays per repo to spread scheduled-run load.
+    - cron: "0 7 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -29,7 +33,7 @@ jobs:
   baseline:
     # Pinned to the 0.1.0 tag's immutable commit SHA per the org freeze-and-pin
     # convention for reusable workflows (never `@main`).
-    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
     permissions:
       contents: read
       security-events: write
@@ -37,12 +41,140 @@ jobs:
       actions: read
     with:
       # Explicit language list: CodeQL autodetect frequently misses C/C++ in
-      # mixed repos. C/C++ coverage is intentionally deferred for this first
-      # rollout (CodeQL autobuild needs the clang/vcpkg/bare-make toolchain) and
-      # is tracked as a follow-up; this caller covers the JS/TS + Python surface.
-      languages: javascript-typescript,python
+      # mixed repos, so we name every scanned surface (JS/TS + Python + C/C++).
+      languages: c-cpp,javascript-typescript,python
       severity-threshold: high
       # qvac uses GitHub "Default setup" for code scanning, which rejects SARIF
       # from advanced workflows. Skip the upload here; the severity gate and
       # TruffleHog still run (SARIF is written locally for the gate to read).
       codeql-upload: never
+      # Buildless C/C++ extraction (no compilation / submodule checkout), so the
+      # scan doesn't need qvac's clang/vcpkg/bare-make toolchain. Uniform with
+      # the Tier-1 C/C++ callers; requires qvac-actions >= 0.2.0.
+      codeql-build-mode: none
+
+  # Repo-local CI trust-policy regression tests (fork CI hardening). Kept here
+  # instead of a dedicated workflow so the coverage rides along with the security
+  # baseline that already runs on every PR.
+  # Runs UNPRIVILEGED only (plain pull_request, contents: read, no secrets) —
+  # never move this under pull_request_target. NOTE: this job is repo-local and
+  # NOT part of the org reusable baseline above; preserve it across any org
+  # sync of this caller file.
+  policy-tests:
+    name: policy-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # Full history is required for the base..head diff below; the default
+          # shallow clone has no base commit. `blob:none` keeps that cheap —
+          # `git diff --name-only` only needs commits and trees.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - name: Run trust-policy tests
+        run: >-
+          node --test
+          .github/scripts/test/ci-trust-policy.test.mjs
+
+      # The trust-policy suite asserts on workflow *text*, so it stays green even
+      # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
+      # PR, and pull_request_target workflows load from the base branch, so this
+      # is the only place a PR parses its own edited workflows. Only files this PR
+      # changes are linted — no repo-wide baseline file.
+      - name: Collect changed workflow files
+        id: changed-workflows
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Keep the diff and the filter as separate commands: a failing `git diff`
+          # must abort the step, while `rg` exiting 1 on "no workflow files changed"
+          # is a legitimate outcome. Folding both into one `... || true` pipeline
+          # silently reported count=0 and skipped the whole gate.
+          #
+          # --diff-filter=ACMRT drops deletions: actionlint aborts the entire run
+          # (reporting nothing at all) if any path on its command line is missing,
+          # so a PR that deletes a workflow would otherwise lint nothing and pass.
+          git diff --name-only --diff-filter=ACMRT "$BASE_SHA...$HEAD_SHA" \
+            > "$RUNNER_TEMP/changed-all.txt"
+          # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and
+          # a blanket `|| true` turned that `command not found` into count=0 —
+          # the gate reported success while linting nothing. grep exits 1 for
+          # "no matches" (fine) and >1 for a real failure (must not be silent).
+          set +e
+          grep -E '^\.github/(workflows|actions)/.*\.ya?ml$' \
+            "$RUNNER_TEMP/changed-all.txt" > "$RUNNER_TEMP/changed-workflows.txt"
+          filter_status=$?
+          set -e
+          if [ "$filter_status" -gt 1 ]; then
+            echo "::error title=Could not determine changed workflow files::grep exited ${filter_status}"
+            exit 1
+          fi
+          count=$(wc -l < "$RUNNER_TEMP/changed-workflows.txt" | tr -d ' ')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "actionlint scope: ${count} changed workflow/action file(s)"
+
+      # `.cursor/rules/no-remote-code-execution.mdc` forbids fetching a remote
+      # artefact and executing it. actionlint ships no first-party action, so the
+      # release tarball is pinned to a digest here and verified before extraction —
+      # a retagged or tampered release fails the checksum and never runs.
+      # To bump: update both ACTIONLINT_VERSION and ACTIONLINT_SHA256 from
+      # https://github.com/rhysd/actionlint/releases (actionlint_<ver>_checksums.txt).
+      - name: Install actionlint
+        if: github.event_name == 'pull_request' && steps.changed-workflows.outputs.count != '0'
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/actionlint.tgz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${RUNNER_TEMP}/actionlint.tgz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
+
+      - name: Lint changed workflows with actionlint
+        if: github.event_name == 'pull_request' && steps.changed-workflows.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          mapfile -t files < "$RUNNER_TEMP/changed-workflows.txt"
+          # actionlint exits 1 when it reports findings; lint-workflows.mjs decides pass/fail.
+          "$RUNNER_TEMP/actionlint" -oneline -shellcheck= -pyflakes= "${files[@]}" \
+            > "$RUNNER_TEMP/actionlint.txt" || true
+          node .github/scripts/lint-workflows.mjs --input "$RUNNER_TEMP/actionlint.txt"
+
+      # The whole fork trust model collapses to fail-open if the fork-ci
+      # environment loses its required reviewers or is deleted (GitHub silently
+      # recreates it unprotected on next use). Checked on push/schedule/dispatch
+      # rather than per-PR: fork PR tokens cannot read environment settings, so
+      # gating PRs on this would fail for exactly the PRs it is meant to protect.
+      # Exit 1 means the protection actually drifted (hard fail). Any other
+      # non-zero means the check could not run — GITHUB_TOKEN has no dedicated
+      # `environments` permission scope, so a read denial must not be reported
+      # as drift.
+      - name: Verify fork-ci environment protection
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node .github/scripts/verify-fork-ci-environment.mjs
+          status=$?
+          set -e
+          if [ "$status" -eq 1 ]; then
+            echo "::error title=fork-ci environment protection drifted::External fork PRs may run without human approval."
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=Could not verify fork-ci environment::Exit ${status}; GITHUB_TOKEN may lack environment read access. Run .github/scripts/verify-fork-ci-environment.mjs locally with an admin token."
+          fi

@@ -1460,3 +1460,103 @@ TEST_F(LlamaModelTest, CommonParamsParseSplitModeBothKeysRejects) {
       },
       qvac_errors::StatusError);
 }
+
+// QVAC-21867: both mmproj-use-gpu key spellings present is rejected, mirroring
+// the split-mode/main-gpu dual-key precedent. Parsed before the backend
+// branch, so this throws regardless of the resolved backend.
+TEST_F(LlamaModelTest, CommonParamsParseMmprojUseGpuBothKeysRejects) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["mmproj-use-gpu"] = "true";
+  config["mmproj_use_gpu"] = "true";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_THROW(
+      {
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+// QVAC-21867: an unrecognized mmproj-use-gpu value is rejected (not silently
+// coerced to false). Also parsed before the backend branch.
+TEST_F(LlamaModelTest, CommonParamsParseMmprojUseGpuInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["mmproj-use-gpu"] = "maybe";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_THROW(
+      {
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+// QVAC-21867: on the CPU backend the projector always runs on CPU and an
+// explicit mmproj-use-gpu:true override is ignored (no GPU to offload to).
+// device:cpu deterministically selects the CPU branch on any host.
+TEST_F(LlamaModelTest, CommonParamsParseMmprojUseGpuIgnoredOnCpu) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "cpu";
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = "0";
+  config["n_predict"] = "10";
+  config["mmproj-use-gpu"] = "true";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_FALSE(model.getCommonParams().mmproj_use_gpu);
+}

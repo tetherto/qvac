@@ -1,5 +1,75 @@
 # Changelog
 
+## [0.30.1] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+
+## [0.30.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
+
+## [0.29.0] - 2026-07-24
+
+This release makes TypeScript the source of truth for the embed-llamacpp
+runtime wrapper and its public declarations.
+
+### Changed
+
+#### TypeScript-authored runtime wrapper and declarations
+
+The BERT wrapper, native-addon bridge, and logging wrapper are now authored in
+TypeScript. The published JavaScript entrypoints (`index.js`, `addon.js`,
+`addonLogging.js`) and their `.d.ts` declarations are generated from those
+sources and committed, guarded by a generated-output freshness check in CI. The
+CommonJS export shape, public API, and runtime behavior are unchanged for SDK
+and Bare consumers, while strict type checking and linting reduce the risk of
+the runtime drifting from the public types.
+
+### Pull Requests
+
+- [#3433](https://github.com/tetherto/qvac/pull/3433) - QVAC-22460 chore[notask]: migrate embed-llamacpp wrapper to TypeScript
+
+## [0.28.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.27.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.26.2] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (clip flash-attention AUTO fallback on non-coopmat GPUs + bounded ggml-opencl driver submissions — fixes Android vision-encoder crashes on very large encodes; no API change for this package).
+
+## [0.26.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.26.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
 ## [0.25.0] - 2026-07-06
 
 ### Changed

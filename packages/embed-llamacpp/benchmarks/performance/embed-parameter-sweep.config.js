@@ -2,21 +2,22 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const { PARAMETER_SWEEP } = require('./_sweep-grid')
 
 const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
 const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
 const MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
 const RESOLVED_MODELS_PATH = path.resolve(__dirname, 'resolved-models.json')
-const DEFAULT_INPUTS_FILE = path.resolve(__dirname, 'inputs.json')
 const DEFAULT_REPEATS = 5
 
-// Benchmark-controlled runtime defaults used as the baseline reference.
+// Shared runtime defaults every swept case inherits before the case's own
+// (device, batchSize, flashAttn) and derived ctx_size are layered on. The sweep
+// is GPU-only; the embed addon selects its backend from the `device` key and does
+// not read gpu_layers, so the model is offloaded to the GPU by device selection
+// (confirmed by the Vulkan load log). No ngl/gpu_layers is set here, since it
+// would be a dead, ignored key.
 const BENCH_DEFAULT_RUNTIME = {
-  device: 'gpu',
-  batchSize: 512,
-  noMmap: false,
-  flashAttn: 'off',
-  ngl: 99
+  noMmap: false
 }
 
 // Optional per-model runtime overrides. Only add entries when a model needs
@@ -89,13 +90,9 @@ function loadModelsFromManifest () {
 
 const MODELS = loadModelsFromManifest()
 
-const PARAMETER_SWEEP = {
-  quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
-  device: ['cpu', 'gpu'],
-  batchSize: [256, 512, 1024, 2048],
-  noMmap: [false, true],
-  flashAttn: ['off', 'on']
-}
+// Sweep axes (PARAMETER_SWEEP) live in ./_sweep-grid so the Node renderer can
+// share them as its coverage denominator without loading this bare-fs module.
+// ubatch-size and mmap are not swept (mmap is held at its default).
 
 module.exports = {
   DEFAULT_RESULTS_DIR,
@@ -103,7 +100,6 @@ module.exports = {
   MANIFEST_PATH,
   RESOLVED_MODELS_PATH,
   DEFAULT_REPEATS,
-  DEFAULT_INPUTS_FILE,
   BENCH_DEFAULT_RUNTIME,
   MODEL_RUNTIME_OVERRIDES,
   MODELS,

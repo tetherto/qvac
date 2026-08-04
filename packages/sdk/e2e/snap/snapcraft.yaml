@@ -1,0 +1,47 @@
+name: qvac-sdk-e2e
+base: core22
+version: '0.1.0'
+summary: QVAC SDK strict Snap end-to-end consumer
+description: |
+  Packaged Electron consumer used to validate the QVAC SDK, Bare worker,
+  native addons, and stable storage paths under strict Snap confinement.
+grade: devel
+confinement: strict
+
+apps:
+  qvac-sdk-e2e:
+    # Strict Snap confinement provides the outer sandbox. Chromium's nested
+    # credential sandbox is blocked by Snap seccomp on hosted runners.
+    command: app/QVACSDKElectronE2E --no-sandbox
+    extensions:
+      - gnome
+    # Keep runtime interfaces aligned with the production Workbench Snap so
+    # Electron, the Bare worker, and native model backends run under the same
+    # confinement contract.
+    plugs:
+      - audio-playback
+      - audio-record
+      - browser-support
+      - hardware-observe
+      - home
+      - network
+      - network-bind
+      - opengl
+      - process-control
+      - shmem
+    environment:
+      TMPDIR: $XDG_RUNTIME_DIR
+      GTK_USE_PORTAL: '1'
+
+parts:
+  electron-app:
+    plugin: dump
+    source: electron-dist
+    stage-packages:
+      - libasound2
+      - libnss3
+
+plugs:
+  shmem:
+    interface: shared-memory
+    private: true

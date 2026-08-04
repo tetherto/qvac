@@ -43,7 +43,7 @@ on:
         type: string
         default: "full"
       matrix_desktop:
-        description: "  desktop legs, comma-sep <os>-<backend>: linux-cpu,linux-gpu,macos-cpu,macos-gpu,macmini-cpu,macmini-gpu,windows-cpu,windows-gpu (macos = GitHub-hosted VM, macmini = bare-metal M4)"
+        description: "  desktop legs, comma-sep <os>-<backend>: linux-cpu,linux-gpu,macos-cpu,macos-gpu,windows-cpu,windows-gpu (macos = self-hosted qvac-macos26-arm64-gpu / Metal)"
         required: false
         type: string
         default: "linux-cpu,linux-gpu"
@@ -189,20 +189,16 @@ jobs:
               case "$sel" in
                 linux-cpu)   host=linux;   backend=cpu; runner=$cpu_runner;             no_gpu=true ;;
                 linux-gpu)   host=linux;   backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
-                # macOS arm64 (Apple Silicon): same GitHub-hosted runner for both
+                # macOS arm64 (Apple Silicon): same self-hosted runner for both
                 # backends — gpu means Metal there, selected by the addon at runtime.
-                macos-cpu)   host=macos;   backend=cpu; runner=macos-15-xlarge;          no_gpu=true ;;
-                macos-gpu)   host=macos;   backend=gpu; runner=macos-15-xlarge;          no_gpu=false ;;
-                # Bare-metal Apple M4 (self-hosted Mac mini) — real-hardware Metal
-                # numbers vs the virtualized macos-* runner above.
-                macmini-cpu) host=macmini; backend=cpu; runner=mac-mini-m4-gpu;          no_gpu=true ;;
-                macmini-gpu) host=macmini; backend=gpu; runner=mac-mini-m4-gpu;          no_gpu=false ;;
+                macos-cpu)   host=macos;   backend=cpu; runner=qvac-macos26-arm64-gpu;   no_gpu=true ;;
+                macos-gpu)   host=macos;   backend=gpu; runner=qvac-macos26-arm64-gpu;   no_gpu=false ;;
                 # Windows x64: the self-hosted runners the LLM integration tests
                 # use (the gpu one is Vulkan-provisioned).
                 windows-cpu) host=windows; backend=cpu; runner=qvac-win25-x64;           no_gpu=true ;;
                 windows-gpu) host=windows; backend=gpu; runner=qvac-win25-x64-gpu;       no_gpu=false ;;
                 "") continue ;;
-                *) echo "::warning::Unknown matrix_desktop token '$sel' (known: {linux,macos,macmini,windows}-{cpu,gpu})"; continue ;;
+                *) echo "::warning::Unknown matrix_desktop token '$sel' (known: {linux,macos,windows}-{cpu,gpu})"; continue ;;
               esac
               cells=$(echo "$cells" | jq -c \
                 --arg h "$host" --arg b "$backend" --arg r "$runner" --arg n "$no_gpu" \
@@ -509,11 +505,11 @@ jobs:
           echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
           echo "/opt/vulkansdk/x86_64/bin" >> "$GITHUB_PATH"
 
-      # The self-hosted mac-mini-m4-gpu runner does not ship the AWS CLI (hosted
-      # macOS runners do). Install it user-local (no sudo) so the S3 fixture
-      # sync below works. Mirrors integration-test-ocr-ggml.yml.
+      # The self-hosted qvac-macos26-arm64-gpu runner may not ship the AWS CLI
+      # (hosted macOS runners do). Install it user-local (no sudo) so the S3
+      # fixture sync below works. Mirrors integration-test-ocr-ggml.yml.
       - name: Install AWS CLI (self-hosted macOS fallback)
-        if: matrix.host == 'macmini'
+        if: matrix.host == 'macos'
         shell: bash
         run: |
           if command -v aws >/dev/null 2>&1; then
@@ -713,7 +709,7 @@ jobs:
             echo "- addon: \`@qvac/llm-llamacpp@${ADDON_VERSION:-?}\` (published prebuild)"
             echo "- benchmark code: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
             echo "- node: $(node -v 2>/dev/null) · bare: $(bare --version 2>/dev/null || echo n/a)"
-            if [ "${{ matrix.host }}" = "macos" ] || [ "${{ matrix.host }}" = "macmini" ]; then
+            if [ "${{ matrix.host }}" = "macos" ]; then
               echo "- os: $(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null) $(uname -m)"
               echo "- cpu: $(sysctl -n machdep.cpu.brand_string 2>/dev/null) ($(sysctl -n hw.ncpu 2>/dev/null) cores)"
               echo "- ram: $(awk -v b="$(sysctl -n hw.memsize 2>/dev/null)" 'BEGIN{ if (b>0) printf "%.0f GB", b/1073741824; else printf "?" }')"

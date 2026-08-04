@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -279,6 +280,29 @@ struct Number : Value<Number> {
     return result;
   };
 
+  /// Validating parse for untrusted boundary input, unlike as<>() which
+  /// converts with the plain (truncating, range-unchecked) C++ cast.
+  /// Throws InvalidArgument unless the JS number is a finite, non-negative
+  /// integer no larger than 2^53 - 1 (the largest integer a JS double
+  /// represents exactly). Use for numbers that address or size native
+  /// state — job ids, counts, indices — where a truncated or wrapped
+  /// value would silently target the wrong thing.
+  template <typename CppType>
+  CppType asChecked(js_env_t* env) {
+    static_assert(
+        std::is_same_v<CppType, uint64_t>,
+        "asChecked currently supports uint64_t only");
+    const double underlying = as<double>(env);
+    if (!std::isfinite(underlying) || underlying < 0 ||
+        underlying > 9007199254740991.0 /* 2^53 - 1 */ ||
+        std::trunc(underlying) != underlying) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "expected a non-negative integer");
+    }
+    return static_cast<CppType>(underlying);
+  }
+
 protected:
   explicit Number(js_value_t* value) : Value<Number>{value} {}
 
@@ -326,6 +350,12 @@ protected:
   static int as_(js_env_t* env, js_value_t* value, int64_t* result) {
     return js_get_value_int64(env, value, result);
   }
+  /// Truncating cast, no validation: the JS double is static_cast to
+  /// uint64_t as-is. Fractional input truncates (42.9 -> 42); negative,
+  /// non-finite or >= 2^64 input is undefined behaviour per C++
+  /// float-to-unsigned cast rules. Only for values the caller already
+  /// trusts to be in range; parse untrusted boundary input through
+  /// asChecked<uint64_t>() instead.
   static int as_(js_env_t* env, js_value_t* value, uint64_t* result) {
     double underlying{};
     auto ret = js_get_value_double(env, value, &underlying);
@@ -802,7 +832,11 @@ std::vector<CppType> toVector(js_env_t* env, Array array) {
 /// @brief Utility for executing blocking C++ operations asynchronously and
 /// returning a JavaScript Promise/Future
 /// @details Handles thread spawning, promise creation, and result delivery
-/// back to the JavaScript event loop via uv_async.
+/// back to the JavaScript event loop via uv_async. Environment-scoped: a
+/// deferred env teardown callback keeps a dying env (worklet terminate /
+/// unload) alive until the worker finishes, and completion skips every
+/// promise/JS operation once teardown has begun — the promise is simply
+/// abandoned, its env is going away with it.
 ///
 /// @example
 /// return js::JsAsyncTask::run(env, []() {
@@ -814,11 +848,38 @@ class JsAsyncTask {
     js_env_t* env;
     js_deferred_t* deferred;
     uv_async_t* async_handle;
+    /// Blocks env teardown (keeping the env and its loop alive) until the
+    /// worker has finished; finished by the uv close callback.
+    js_deferred_teardown_t* teardown = nullptr;
+    /// Loop-thread only: flipped by onEnvTeardown, read by onComplete. JS
+    /// APIs beyond the teardown handshake are illegal once false.
+    bool envAlive = true;
     std::exception_ptr error;
+    /// The user work, loop-owned: the worker thread only runs it; completion
+    /// destroys it before settling the promise and the uv close callback
+    /// provides cleanup for paths where completion never runs. That ordering
+    /// is the point — captures (commonly the last shared_ptr to the addon)
+    /// have JS-facing destructors, and once the teardown is finished the env
+    /// can be gone. A worker-owned copy would be destroyed after uv_async_send,
+    /// racing exactly that.
+    std::function<void()> work;
 
-    CallbackData(js_env_t* e, js_deferred_t* d, uv_async_t* h)
-        : env(e), deferred(d), async_handle(h), error(nullptr) {}
+    CallbackData(
+        js_env_t* e, js_deferred_t* d, uv_async_t* h, std::function<void()> w)
+        : env(e), deferred(d), async_handle(h), error(nullptr),
+          work(std::move(w)) {}
   };
+
+  /// Deferred env teardown hook (loop thread): the env is dying while the
+  /// worker may still be blocked — e.g. a cancel waiting for the scheduler
+  /// to release a slot. Marking the env dead makes onComplete skip every JS
+  /// operation; deliberately NOT finishing the deferred teardown here keeps
+  /// the env's loop running until the worker is done, so the detached
+  /// thread's uv_async_send always targets a live loop and the uv close
+  /// callback finishes the teardown afterwards.
+  static void onEnvTeardown(js_deferred_teardown_t*, void* data) {
+    static_cast<CallbackData*>(data)->envAlive = false;
+  }
 
   static void
   rejectWithError(js_env_t* env, js_deferred_t* deferred, const char* msg) {
@@ -829,34 +890,68 @@ class JsAsyncTask {
     JS(js_reject_deferred(env, deferred, error));
   }
 
+  /// Loop-side end of every task, successful or aborted (settlement failure,
+  /// worker that never started): provides fallback destruction for the work,
+  /// then finishes the deferred teardown and frees the handle. Requires a
+  /// registered teardown.
+  static void onCloseHandle(uv_handle_t* h) {
+    auto* async = reinterpret_cast<uv_async_t*>(h);
+    std::unique_ptr<CallbackData> data(static_cast<CallbackData*>(async->data));
+    // Normally cleared by onComplete before promise settlement. This also
+    // handles thread-start failure, where completion never runs.
+    data->work = nullptr;
+    data->error = nullptr;
+    // Lets a pending env teardown complete; on the live-env path it just
+    // unregisters the hook. Legal either way (see bare-signals).
+    js_finish_deferred_teardown_callback(data->teardown);
+    delete async;
+  }
+
   static void onComplete(uv_async_t* handle) {
-    std::unique_ptr<CallbackData> data(
-        static_cast<CallbackData*>(handle->data));
+    auto* data = static_cast<CallbackData*>(handle->data);
 
-    js_handle_scope_t* scope;
-    JS(js_open_handle_scope(data->env, &scope));
+    // Release captures before making completion observable to JavaScript.
+    // Otherwise an awaited cancel can proceed into destroyInstance while this
+    // task still owns the AddonCpp (and potentially a multi-gigabyte model)
+    // until the later uv close callback. This runs on the loop while the env
+    // is pinned, preserving the teardown-safety contract.
+    data->work = nullptr;
 
-    if (data->error) {
+    // Once env teardown has begun, settling the promise would touch a dying
+    // env; skip all JS work and just run the close/finish handshake below.
+    // The settlement itself must not throw past this frame: uv calls it
+    // from C (std::terminate), and skipping the handshake would block env
+    // teardown forever — a failed settlement abandons the promise instead.
+    if (data->envAlive) {
+      js_handle_scope_t* scope = nullptr;
       try {
-        std::rethrow_exception(data->error);
-      } catch (const std::exception& e) {
-        rejectWithError(data->env, data->deferred, e.what());
+        JS(js_open_handle_scope(data->env, &scope));
+
+        if (data->error) {
+          try {
+            std::rethrow_exception(data->error);
+          } catch (const std::exception& e) {
+            rejectWithError(data->env, data->deferred, e.what());
+          } catch (...) {
+            const char* unknownMsg = "Unknown error at JsAsyncTask";
+            rejectWithError(data->env, data->deferred, unknownMsg);
+          }
+        } else {
+          // Resolve promise with undefined
+          js_value_t* undefined;
+          JS(js_get_undefined(data->env, &undefined));
+          JS(js_resolve_deferred(data->env, data->deferred, undefined));
+        }
       } catch (...) {
-        const char* unknownMsg = "Unknown error at JsAsyncTask";
-        rejectWithError(data->env, data->deferred, unknownMsg);
+        // Settlement failed; fall through to the handshake regardless.
       }
-    } else {
-      // Resolve promise with undefined
-      js_value_t* undefined;
-      JS(js_get_undefined(data->env, &undefined));
-      JS(js_resolve_deferred(data->env, data->deferred, undefined));
+      if (scope != nullptr) {
+        js_close_handle_scope(data->env, scope);
+      }
     }
 
-    js_close_handle_scope(data->env, scope);
-
-    uv_close(reinterpret_cast<uv_handle_t*>(handle), [](uv_handle_t* h) {
-      delete reinterpret_cast<uv_async_t*>(h);
-    });
+    uv_close(
+        reinterpret_cast<uv_handle_t*>(handle), &JsAsyncTask::onCloseHandle);
   }
 
 public:
@@ -881,17 +976,49 @@ public:
           "Failed to initialize async handle for JsAsyncTask");
     }
 
-    auto* data = new CallbackData(env, deferred, async_handle);
+    auto* data = new CallbackData(env, deferred, async_handle, std::move(work));
     async_handle->data = data;
 
-    std::thread([data, work = std::move(work)]() {
-      try {
-        work();
-      } catch (...) {
-        data->error = std::current_exception();
-      }
-      uv_async_send(data->async_handle);
-    }).detach();
+    // Environment-scope the task before the worker exists, so env teardown
+    // can never race a thread the env does not know about.
+    if (js_add_deferred_teardown_callback(
+            env, &JsAsyncTask::onEnvTeardown, data, &data->teardown) != 0) {
+      uv_close(
+          reinterpret_cast<uv_handle_t*>(async_handle), [](uv_handle_t* h) {
+            auto* async = reinterpret_cast<uv_async_t*>(h);
+            delete static_cast<CallbackData*>(async->data);
+            delete async;
+          });
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InternalError,
+          "Failed to register env teardown callback for JsAsyncTask");
+    }
+
+    try {
+      // The lambda owns nothing JS-facing: the work lives in loop-owned
+      // CallbackData, so once the send is out this frame's destruction is
+      // inert even if the loop finishes the teardown immediately.
+      std::thread([data]() {
+        try {
+          data->work();
+        } catch (...) {
+          data->error = std::current_exception();
+        }
+        // Always safe: either the env is alive, or its teardown is blocked on
+        // this task's unfinished deferred teardown, keeping the loop running.
+        uv_async_send(data->async_handle);
+      }).detach();
+    } catch (...) {
+      // The worker never started, so nobody will ever send: run the
+      // close/finish handshake ourselves or the teardown registered above
+      // blocks unload forever.
+      uv_close(
+          reinterpret_cast<uv_handle_t*>(async_handle),
+          &JsAsyncTask::onCloseHandle);
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InternalError,
+          "Failed to start worker thread for JsAsyncTask");
+    }
 
     return promise;
   }

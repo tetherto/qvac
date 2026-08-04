@@ -18,6 +18,8 @@ interface ModelDefinition {
    * is then invoked without `modelSrc` and `skipPreDownload` is implied.
    */
   constant?: ModelConstant
+  /** Raw `modelSrc` for custom plugin types with no registry constant. */
+  modelSrc?: string
   type: string
   /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
   config?: ModelConfig | ModelConfigResolver
@@ -235,8 +237,14 @@ export class ResourceManager {
     const def = this.definitions.get(dep)
     if (!def) throw new Error(`Unknown dependency: ${dep}`)
 
+    const modelSrcOpts = def.constant
+      ? { modelSrc: def.constant as never }
+      : def.modelSrc !== undefined
+        ? { modelSrc: def.modelSrc }
+        : {}
+
     const modelId = await loadModel({
-      ...(def.constant ? { modelSrc: def.constant as never } : {}),
+      ...modelSrcOpts,
       modelType: def.type as never,
       modelConfig: await this.resolveConfig(dep, def)
     } as never)

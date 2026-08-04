@@ -274,6 +274,9 @@ export function getWorkerLifeSignal(): AbortSignal | null {
   return null
 }
 
+// No life signal on Bare-direct, so the RPC layer never calls this — `#rpc` interface stub.
+export function notifyChannelClosed(): void {}
+
 export async function getRPC() {
   await ensureWorkerReady()
 

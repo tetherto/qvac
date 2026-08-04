@@ -22,6 +22,7 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -30,18 +31,18 @@ import {
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q8_0,
-  PARAKEET_CTC_0_6B_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  PARAKEET_EOU_120M_V1_Q8_0,
+  PARAKEET_TDT_0_6B_V3_Q4_0,
+  PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
+  PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  SALAMANDRATA_2B_INST_Q4,
-  AFRICAN_4B_TRANSLATION_Q4_K_M,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
@@ -78,9 +79,16 @@ import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
+import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
+import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
+
+const isSnapConsumer = process.env['QVAC_TEST_PLATFORM'] === 'snap-linux'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -90,6 +98,18 @@ resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('llm-batch', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llm',
+  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+})
+
+resources.define('tools-batch', {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: 'llm',
+  config: { ctx_size: 4096, tools: true, parallel: 2 }
 })
 
 resources.define('embeddings', {
@@ -154,10 +174,24 @@ resources.define('ocr', {
   config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
 })
 
+// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
+// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
+// the DBNet detector from the recognizer src. Mirrors desktop.
+resources.define('doctr', {
+  constant: OCR_DOCTR,
+  type: 'ggml-ocr'
+})
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define('classification', {
   type: 'ggml-classification'
+})
+
+resources.define('echo', {
+  type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
 })
 
 resources.define('sharded-embeddings', {
@@ -221,27 +255,6 @@ resources.define('bergamot-es-it-pivot', {
   }
 })
 
-resources.define('salamandra', {
-  constant: SALAMANDRATA_2B_INST_Q4,
-  type: 'llamacpp-completion'
-})
-
-resources.define('afriquegemma', {
-  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    tools: true,
-    ctx_size: 2048,
-    top_k: 1,
-    top_p: 1,
-    temp: 0,
-    repeat_penalty: 1,
-    seed: 42,
-    predict: 256,
-    stop_sequences: ['\n']
-  }
-})
-
 resources.define('tts-chatterbox', {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: 'tts-ggml',
@@ -254,6 +267,33 @@ resources.define('tts-chatterbox', {
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
     referenceAudioSrc: path.resolve(process.cwd(), 'assets/audio', 'transcription-short-wav.wav')
+  }
+})
+
+resources.define('tts-parler', {
+  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
+  }
+})
+
+resources.define('tts-parler-indic', {
+  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    normalizeNumbers: true
   }
 })
 
@@ -310,25 +350,25 @@ resources.define('tts-supertonic-enhanced', {
 })
 
 resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
+  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q8_0,
+  constant: PARAKEET_CTC_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
+  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  constant: PARAKEET_EOU_120M_V1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
@@ -354,23 +394,48 @@ resources.define('vision', {
   }
 })
 
+resources.define('vision-batch', {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+  }
+})
+
 function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
 }
 
+function resolveElectronRuntimeDir() {
+  const snapCommon = process.env['SNAP_USER_COMMON']
+  return snapCommon ? path.join(snapCommon, 'qvac-test-runtime') : process.cwd()
+}
+
+function resolveBatchAttachmentPath(inputPath: string) {
+  const fileName = inputPath.split('/').pop()
+  if (!fileName) return inputPath
+  return path.resolve(process.cwd(), 'assets/images', fileName)
+}
+
 function ensureElectronE2EConfig() {
-  const electronFixturePath = path.resolve(process.cwd(), 'fixtures/qvac.config.electron.json')
-  const e2eFixturePath = path.resolve(process.cwd(), 'fixtures/qvac.config.e2e.json')
+  const configDir = process.cwd()
+  const runtimeDir = resolveElectronRuntimeDir()
+  const electronFixturePath = path.resolve(configDir, 'fixtures/qvac.config.electron.json')
+  const e2eFixturePath = path.resolve(configDir, 'fixtures/qvac.config.e2e.json')
   const existingPath = process.env['QVAC_CONFIG_PATH']
   const electronFixtureConfig = readJsonConfig(electronFixturePath)
   const e2eFixtureConfig = readJsonConfig(e2eFixturePath)
-  const existingConfig = existingPath ? readJsonConfig(existingPath) : {}
+  const existingConfig =
+    existingPath && fs.existsSync(existingPath) ? readJsonConfig(existingPath) : {}
   const mergedConfig = {
     ...electronFixtureConfig,
     ...e2eFixtureConfig,
     ...existingConfig
   }
-  const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
+  fs.mkdirSync(runtimeDir, { recursive: true })
+  const generatedPath = path.resolve(runtimeDir, 'qvac.config.e2e.generated.json')
 
   fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
@@ -391,8 +456,20 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
   await resources.downloadAllOnce(console.log, { allowedDeps })
 }
 
+export async function runSnapRefreshProbe() {
+  await executeSnapRefreshProbe(ensureElectronE2EConfig)
+}
+
+const snapStorageHandler = isSnapConsumer
+  ? new SnapStorageExecutor()
+  : new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    )
+
 export const executor = createExecutor({
   handlers: [
+    snapStorageHandler,
     // Electron keeps the stable desktop/shared surface enabled, but excludes
     // suites that are resource-heavy or incompatible with the packaged
     // Electron worker lifecycle.
@@ -417,6 +494,9 @@ export const executor = createExecutor({
       'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
     ),
     new ModelLoadingExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath
+    }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
@@ -448,9 +528,11 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
-    new NodeCancellationExecutor(resources)
+    new NodeCancellationExecutor(resources),
+    new PluginExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

@@ -1,0 +1,93 @@
+{
+  "name": "@qvac/audiogen-ggml",
+  "version": "0.1.1",
+  "description": "Audio generation (music) addon for qvac",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:generated": "node scripts/check-generated.mjs",
+    "test:dts": "tsc --noEmit -p tsconfig.dts.json",
+    "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
+    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js",
+    "test:integration": "npm run build:ts && brittle-bare test/integration/**/*.test.js",
+    "test": "npm run test:types && npm run test:unit && npm run test:integration",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\" && lunte \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
+    "format": "prettier --write \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
+    "download-models:registry": "node scripts/download-audiogen-ggml-models.js"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./models": "./models.js"
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "index.d.ts",
+    "audiogen.js",
+    "audiogen.d.ts",
+    "models.js",
+    "models.d.ts",
+    "lib",
+    "prebuilds",
+    "test/integration",
+    "test/utils/downloadModel.js",
+    "test/utils/runAudioGen.js",
+    "test/mobile",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/audiogen-ggml"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "keywords": [
+    "qvac",
+    "audiogen",
+    "music-generation",
+    "acestep",
+    "ggml"
+  ],
+  "devDependencies": {
+    "@qvac/registry-client": "^0.4.0",
+    "bare-process": "^4.2.2",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.6.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-ffmpeg": "^1.4.0",
+    "bare-fs": "^4.5.6",
+    "bare-os": "^3.8.0",
+    "bare-path": "^3.0.0"
+  },
+  "types": "index.d.ts"
+}

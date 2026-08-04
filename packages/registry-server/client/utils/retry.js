@@ -14,7 +14,7 @@
  * @param {{ warn: Function }} [opts.logger] - Logger instance for retry warnings
  * @returns {Promise<unknown>}
  */
-async function withRetry (fn, opts = {}) {
+async function withRetry(fn, opts = {}) {
   const { maxRetries = 3, retryCodes = [], onRetry, beforeRetry, logger } = opts
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -23,7 +23,8 @@ async function withRetry (fn, opts = {}) {
     } catch (err) {
       const isRetriable = retryCodes.length > 0 && retryCodes.includes(err && err.code)
       if (!isRetriable || attempt >= maxRetries) throw err
-      logger && logger.warn(`Retrying after ${err.code} (attempt ${attempt}/${maxRetries}): ${err.message}`)
+      logger &&
+        logger.warn(`Retrying after ${err.code} (attempt ${attempt}/${maxRetries}): ${err.message}`)
       if (onRetry) await onRetry()
       if (beforeRetry) await beforeRetry()
     }

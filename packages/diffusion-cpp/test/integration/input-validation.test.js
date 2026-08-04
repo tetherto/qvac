@@ -6,7 +6,7 @@ const { EsrganUpscaler } = require('../../index')
 const { readImageDimensions } = require('../../addon')
 const { setupJsLogger, releaseJsLogger } = require('./utils')
 
-function nativeTest (name, fn) {
+function nativeTest(name, fn) {
   test(name, async (t) => {
     setupJsLogger()
     try {
@@ -21,21 +21,45 @@ function nativeTest (name, fn) {
 
 // Valid 24-byte PNG header: magic (8) + IHDR length (4) + "IHDR" (4) + width 64 (4) + height 48 (4)
 const VALID_PNG_HEADER = new Uint8Array([
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // magic
-  0x00, 0x00, 0x00, 0x0D, // IHDR chunk length
-  0x49, 0x48, 0x44, 0x52, // "IHDR"
-  0x00, 0x00, 0x00, 0x40, // width = 64
-  0x00, 0x00, 0x00, 0x30 // height = 48
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a, // magic
+  0x00,
+  0x00,
+  0x00,
+  0x0d, // IHDR chunk length
+  0x49,
+  0x48,
+  0x44,
+  0x52, // "IHDR"
+  0x00,
+  0x00,
+  0x00,
+  0x40, // width = 64
+  0x00,
+  0x00,
+  0x00,
+  0x30 // height = 48
 ])
 
 // Valid JPEG with SOF0 segment: FFD8 + FF C0 + segLen=0011 + precision + height 96 + width 128
 const VALID_JPEG_HEADER = new Uint8Array([
-  0xFF, 0xD8, // SOI
-  0xFF, 0xC0, // SOF0
-  0x00, 0x11, // segment length = 17
+  0xff,
+  0xd8, // SOI
+  0xff,
+  0xc0, // SOF0
+  0x00,
+  0x11, // segment length = 17
   0x08, // precision
-  0x00, 0x60, // height = 96
-  0x00, 0x80 // width = 128
+  0x00,
+  0x60, // height = 96
+  0x00,
+  0x80 // width = 128
 ])
 
 // ---------- readImageDimensions: valid inputs ----------
@@ -67,27 +91,36 @@ nativeTest('readImageDimensions | truncated PNG (magic only) returns null', asyn
   t.is(readImageDimensions(truncated), null, 'PNG with only magic bytes returns null')
 })
 
-nativeTest('readImageDimensions | truncated PNG (23 bytes — one short of IHDR) returns null', async (t) => {
-  const truncated = VALID_PNG_HEADER.slice(0, 23)
-  t.is(readImageDimensions(truncated), null, 'PNG truncated at 23 bytes returns null')
-})
+nativeTest(
+  'readImageDimensions | truncated PNG (23 bytes — one short of IHDR) returns null',
+  async (t) => {
+    const truncated = VALID_PNG_HEADER.slice(0, 23)
+    t.is(readImageDimensions(truncated), null, 'PNG truncated at 23 bytes returns null')
+  }
+)
 
 nativeTest('readImageDimensions | truncated JPEG (SOI only) returns null', async (t) => {
-  const truncated = new Uint8Array([0xFF, 0xD8])
+  const truncated = new Uint8Array([0xff, 0xd8])
   t.is(readImageDimensions(truncated), null, 'JPEG with only SOI returns null')
 })
 
-nativeTest('readImageDimensions | truncated JPEG (SOF marker but missing dimension bytes) returns null', async (t) => {
-  // SOI + SOF0 marker + segment length, but body truncated before height/width
-  const truncated = VALID_JPEG_HEADER.slice(0, 7)
-  t.is(readImageDimensions(truncated), null, 'JPEG truncated mid-SOF returns null')
-})
+nativeTest(
+  'readImageDimensions | truncated JPEG (SOF marker but missing dimension bytes) returns null',
+  async (t) => {
+    // SOI + SOF0 marker + segment length, but body truncated before height/width
+    const truncated = VALID_JPEG_HEADER.slice(0, 7)
+    t.is(readImageDimensions(truncated), null, 'JPEG truncated mid-SOF returns null')
+  }
+)
 
 nativeTest('readImageDimensions | JPEG with zero segment length returns null', async (t) => {
   const badSegLen = new Uint8Array([
-    0xFF, 0xD8,
-    0xFF, 0xE0,
-    0x00, 0x00 // segLen = 0 (invalid, minimum is 2)
+    0xff,
+    0xd8,
+    0xff,
+    0xe0,
+    0x00,
+    0x00 // segLen = 0 (invalid, minimum is 2)
   ])
   t.is(readImageDimensions(badSegLen), null, 'JPEG with segLen=0 returns null')
 })
@@ -260,7 +293,8 @@ nativeTest('EsrganUpscaler | constructor accepts files.esrgan without files.mode
 
 nativeTest('EsrganUpscaler | constructor throws when files.esrgan is missing', async (t) => {
   try {
-    new EsrganUpscaler({ // eslint-disable-line no-new
+    new EsrganUpscaler({
+      // eslint-disable-line no-new
       files: {},
       config: {
         upscaler_tile_size: 128,
@@ -281,7 +315,8 @@ nativeTest('EsrganUpscaler | constructor throws when files.esrgan is missing', a
 
 nativeTest('EsrganUpscaler | constructor throws when files.esrgan is relative', async (t) => {
   try {
-    new EsrganUpscaler({ // eslint-disable-line no-new
+    new EsrganUpscaler({
+      // eslint-disable-line no-new
       files: {
         esrgan: 'RealESRGAN_x4plus_anime_6B.pth'
       },
@@ -320,10 +355,7 @@ nativeTest('EsrganUpscaler | upscale rejects non-Uint8Array input', async (t) =>
     t.fail('should have thrown')
   } catch (err) {
     t.ok(err instanceof TypeError, 'throws TypeError')
-    t.ok(
-      /input image must be a Uint8Array/.test(err.message),
-      'error message explains input type'
-    )
+    t.ok(/input image must be a Uint8Array/.test(err.message), 'error message explains input type')
   }
 })
 
@@ -451,10 +483,7 @@ nativeTest('FLUX img2img | throws when prediction is omitted', async (t) => {
       /FLUX img2img requires an explicit prediction type/.test(err.message),
       'error message mentions FLUX prediction requirement'
     )
-    t.ok(
-      /flux2_flow/.test(err.message),
-      'error message suggests flux2_flow'
-    )
+    t.ok(/flux2_flow/.test(err.message), 'error message suggests flux2_flow')
   }
 })
 
@@ -568,10 +597,7 @@ nativeTest('init_images | rejects combining init_image + init_images', async (t)
     })
     t.fail('should have thrown')
   } catch (err) {
-    t.ok(
-      /mutually exclusive/.test(err.message),
-      'error mentions mutual exclusion'
-    )
+    t.ok(/mutually exclusive/.test(err.message), 'error mentions mutual exclusion')
   }
 })
 
@@ -810,34 +836,37 @@ nativeTest('init_images | logs "fusion" mode info message', async (t) => {
   )
 })
 
-nativeTest('init_image | still works on FLUX.2 (regression — single-image path unchanged)', async (t) => {
-  const model = new ImgStableDiffusion({
-    files: {
-      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
-      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
-    },
-    config: {
-      threads: 1,
-      prediction: 'flux2_flow',
-      diffusion_fa: true,
-      verbosity: 2
-    },
-    logger: console,
-    opts: { stats: true }
-  })
+nativeTest(
+  'init_image | still works on FLUX.2 (regression — single-image path unchanged)',
+  async (t) => {
+    const model = new ImgStableDiffusion({
+      files: {
+        model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+        llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
+      },
+      config: {
+        threads: 1,
+        prediction: 'flux2_flow',
+        diffusion_fa: true,
+        verbosity: 2
+      },
+      logger: console,
+      opts: { stats: true }
+    })
 
-  // Single-image path must NOT trigger any of the new init_images errors.
-  try {
-    await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
-    t.fail('should have thrown (no model loaded)')
-  } catch (err) {
-    t.absent(
-      /mutually exclusive/.test(err.message),
-      'single init_image does not trip the mutual-exclusion guard'
-    )
-    t.absent(
-      /multi-reference fusion/.test(err.message),
-      'single init_image does not trip the fusion/FLUX.2 guard'
-    )
+    // Single-image path must NOT trigger any of the new init_images errors.
+    try {
+      await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
+      t.fail('should have thrown (no model loaded)')
+    } catch (err) {
+      t.absent(
+        /mutually exclusive/.test(err.message),
+        'single init_image does not trip the mutual-exclusion guard'
+      )
+      t.absent(
+        /multi-reference fusion/.test(err.message),
+        'single init_image does not trip the fusion/FLUX.2 guard'
+      )
+    }
   }
-})
+)

@@ -4,7 +4,7 @@ const test = require('brittle')
 const createJobHandler = require('../../src/utils/createJobHandler')
 const { makeAbortable } = require('../mocks/abortable')
 
-test('createJobHandler - start returns a QvacResponse', t => {
+test('createJobHandler - start returns a QvacResponse', (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
 
@@ -16,7 +16,7 @@ test('createJobHandler - start returns a QvacResponse', t => {
   t.is(typeof response.await, 'function', 'should have await')
 })
 
-test('createJobHandler - start sets active response', t => {
+test('createJobHandler - start sets active response', (t) => {
   const job = createJobHandler({ cancel: () => {} })
 
   t.is(job.active, null, 'active should be null before start')
@@ -24,12 +24,12 @@ test('createJobHandler - start sets active response', t => {
   t.is(job.active, response, 'active should be the started response')
 })
 
-test('createJobHandler - output routes data to active response', t => {
+test('createJobHandler - output routes data to active response', (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
   const received = []
 
-  response.onUpdate(data => received.push(data))
+  response.onUpdate((data) => received.push(data))
 
   job.output('hello')
   job.output('world')
@@ -38,13 +38,13 @@ test('createJobHandler - output routes data to active response', t => {
   t.alike(response.output, ['hello', 'world'], 'response.output should accumulate')
 })
 
-test('createJobHandler - output is no-op when no active response', t => {
+test('createJobHandler - output is no-op when no active response', (t) => {
   const job = createJobHandler({ cancel: () => {} })
   job.output('orphan data')
   t.pass('should not throw')
 })
 
-test('createJobHandler - end calls ended on response and clears active', async t => {
+test('createJobHandler - end calls ended on response and clears active', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
 
@@ -56,12 +56,14 @@ test('createJobHandler - end calls ended on response and clears active', async t
   t.is(job.active, null, 'active should be null after end')
 })
 
-test('createJobHandler - end forwards stats before ending', async t => {
+test('createJobHandler - end forwards stats before ending', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
   let receivedStats = null
 
-  response.on('stats', s => { receivedStats = s })
+  response.on('stats', (s) => {
+    receivedStats = s
+  })
 
   const stats = { TPS: 42, totalTime: 100 }
   job.end(stats)
@@ -70,19 +72,37 @@ test('createJobHandler - end forwards stats before ending', async t => {
   t.alike(response.stats, stats, 'response.stats should be set')
 })
 
-test('createJobHandler - end with null stats does not call updateStats', async t => {
+test('createJobHandler - throwing stats listener cannot strand end', async (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.on('stats', () => {
+    throw new Error('stats listener boom')
+  })
+
+  t.exception(() => job.end({ TPS: 42 }), /stats listener boom/)
+  const outcome = await Promise.race([
+    response.await(),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.alike(outcome, [], 'await resolves after stats delivery throws')
+})
+
+test('createJobHandler - end with null stats does not call updateStats', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
   let statsCalled = false
 
-  response.on('stats', () => { statsCalled = true })
+  response.on('stats', () => {
+    statsCalled = true
+  })
 
   job.end(null)
 
   t.not(statsCalled, 'updateStats should not be called with null stats')
 })
 
-test('createJobHandler - end with result passes it to ended()', async t => {
+test('createJobHandler - end with result passes it to ended()', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
 
@@ -93,18 +113,20 @@ test('createJobHandler - end with result passes it to ended()', async t => {
   t.is(result, terminalResult, 'await should resolve with the terminal result')
 })
 
-test('createJobHandler - end is no-op when no active response', t => {
+test('createJobHandler - end is no-op when no active response', (t) => {
   const job = createJobHandler({ cancel: () => {} })
   job.end({ TPS: 42 })
   t.pass('should not throw')
 })
 
-test('createJobHandler - fail calls failed on response and clears active', async t => {
+test('createJobHandler - fail calls failed on response and clears active', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
   let receivedError = null
 
-  response.onError(err => { receivedError = err })
+  response.onError((err) => {
+    receivedError = err
+  })
 
   job.fail(new Error('boom'))
 
@@ -120,12 +142,14 @@ test('createJobHandler - fail calls failed on response and clears active', async
   }
 })
 
-test('createJobHandler - fail with string converts to Error', async t => {
+test('createJobHandler - fail with string converts to Error', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const response = job.start()
   let receivedError = null
 
-  response.onError(err => { receivedError = err })
+  response.onError((err) => {
+    receivedError = err
+  })
 
   job.fail('string error')
 
@@ -133,18 +157,20 @@ test('createJobHandler - fail with string converts to Error', async t => {
   t.is(receivedError.message, 'string error', 'message should match')
 })
 
-test('createJobHandler - fail is no-op when no active response', t => {
+test('createJobHandler - fail is no-op when no active response', (t) => {
   const job = createJobHandler({ cancel: () => {} })
   job.fail(new Error('orphan'))
   t.pass('should not throw')
 })
 
-test('createJobHandler - start while active fails the stale response', async t => {
+test('createJobHandler - start while active fails the stale response', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const first = job.start()
   let firstError = null
 
-  first.onError(err => { firstError = err })
+  first.onError((err) => {
+    firstError = err
+  })
 
   const second = job.start()
 
@@ -160,9 +186,13 @@ test('createJobHandler - start while active fails the stale response', async t =
   }
 })
 
-test('createJobHandler - cancel handler is wired to response', async t => {
+test('createJobHandler - cancel handler is wired to response', async (t) => {
   let cancelCalled = false
-  const job = createJobHandler({ cancel: () => { cancelCalled = true } })
+  const job = createJobHandler({
+    cancel: () => {
+      cancelCalled = true
+    }
+  })
   const response = job.start()
 
   await response.cancel()
@@ -170,14 +200,16 @@ test('createJobHandler - cancel handler is wired to response', async t => {
   t.ok(cancelCalled, 'cancel handler should be invoked')
 })
 
-test('createJobHandler - full lifecycle: start, output, end', async t => {
+test('createJobHandler - full lifecycle: start, output, end', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const updates = []
   let finished = false
 
   const response = job.start()
-  response.onUpdate(data => updates.push(data))
-  response.onFinish(() => { finished = true })
+  response.onUpdate((data) => updates.push(data))
+  response.onFinish(() => {
+    finished = true
+  })
 
   job.output('token1')
   job.output('token2')
@@ -193,7 +225,7 @@ test('createJobHandler - full lifecycle: start, output, end', async t => {
   t.is(job.active, null, 'active cleared')
 })
 
-test('createJobHandler - startWith registers a custom response as active', async t => {
+test('createJobHandler - startWith registers a custom response as active', async (t) => {
   const QvacResponse = require('../../src/QvacResponse')
   const job = createJobHandler({ cancel: () => {} })
 
@@ -210,11 +242,13 @@ test('createJobHandler - startWith registers a custom response as active', async
   t.alike(result, ['data'], 'custom response receives output and ends correctly')
 })
 
-test('createJobHandler - startWith fails stale response', async t => {
+test('createJobHandler - startWith fails stale response', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const first = job.start()
   let firstError = null
-  first.onError(err => { firstError = err })
+  first.onError((err) => {
+    firstError = err
+  })
 
   const QvacResponse = require('../../src/QvacResponse')
   const custom = new QvacResponse({ cancelHandler: () => {} })
@@ -224,7 +258,7 @@ test('createJobHandler - startWith fails stale response', async t => {
   t.is(job.active, custom, 'active should be the custom response')
 })
 
-test('createJobHandler - aborted signal clears active without end()/fail()', async t => {
+test('createJobHandler - aborted signal clears active without end()/fail()', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const controller = makeAbortable()
   const response = job.start({ signal: controller.signal })
@@ -243,7 +277,7 @@ test('createJobHandler - aborted signal clears active without end()/fail()', asy
   t.is(job.active, null, 'active should be cleared on abort')
 })
 
-test('createJobHandler - aborted signal does not clobber a newer active response', async t => {
+test('createJobHandler - aborted signal does not clobber a newer active response', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const controller = makeAbortable()
   const first = job.start({ signal: controller.signal })
@@ -257,7 +291,7 @@ test('createJobHandler - aborted signal does not clobber a newer active response
   t.is(job.active, second, 'late abort on the stale response must not clear the new active')
 })
 
-test('createJobHandler - already-aborted signal clears active once settled', async t => {
+test('createJobHandler - already-aborted signal clears active once settled', async (t) => {
   const job = createJobHandler({ cancel: () => {} })
   const controller = makeAbortable()
   controller.abort(new Error('aborted before start'))
@@ -274,7 +308,33 @@ test('createJobHandler - already-aborted signal clears active once settled', asy
   t.is(job.active, null, 'active should be cleared once the already-aborted response settles')
 })
 
-test('createJobHandler - is exported from package root', t => {
+test('createJobHandler - prepended throwing end listener cannot leave a settled job active', (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.prependListener('end', () => {
+    throw new Error('end listener boom')
+  })
+
+  t.exception(() => response.ended('done'), /end listener boom/)
+
+  t.is(job.active, null, 'settled response must not stay active')
+  job.output('late')
+  t.alike(response.output, [], 'late output must not reach the settled response')
+})
+
+test('createJobHandler - prepended throwing error listener cannot leave a settled job active', (t) => {
+  const job = createJobHandler({ cancel: () => {} })
+  const response = job.start()
+  response.prependListener('error', () => {
+    throw new Error('error listener boom')
+  })
+
+  t.exception(() => response.failed(new Error('job failed')), /error listener boom/)
+
+  t.is(job.active, null, 'settled response must not stay active')
+})
+
+test('createJobHandler - is exported from package root', (t) => {
   const { createJobHandler: exported } = require('../..')
   t.is(typeof exported, 'function', 'should be exported as a function')
   t.is(exported, createJobHandler, 'should be the same function reference')

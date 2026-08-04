@@ -35,19 +35,22 @@ try {
     }
 
     return {
-      setDeviceGpu (name) {
+      setDeviceGpu(name) {
         if (name && !_device.gpu) _device.gpu = name
       },
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         const entry = {
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            total_time_ms: null,
-            detection_time_ms: null,
-            recognition_time_ms: null,
-            text_regions: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              total_time_ms: null,
+              detection_time_ms: null,
+              recognition_time_ms: null,
+              text_regions: null
+            },
+            metrics
+          ),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null,
           quality: (extra && extra.quality) || undefined
@@ -55,7 +58,7 @@ try {
         if (extra && extra.image_path) entry.image_path = extra.image_path
         _results.push(entry)
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -65,7 +68,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         let written = false
         const dirs = []
@@ -78,7 +81,9 @@ try {
         dirs.push('/tmp')
         for (let di = 0; di < dirs.length; di++) {
           try {
-            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(dirs[di], { recursive: true })
+            } catch (_) {}
             const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
@@ -91,17 +96,29 @@ try {
           console.log('[perf-reporter] all write locations failed')
         }
       },
-      writeStepSummary () {},
-      writeToConsole (opts) {
+      writeStepSummary() {},
+      writeToConsole(opts) {
         try {
           const data = this.toJSON()
           const lightweight = opts && opts.lightweight
           data.results = data.results.map(function (r) {
             let q = r.quality
             if (lightweight && q) {
-              q = { cer: q.cer, wer: q.wer, word_recognition_rate: q.word_recognition_rate, keyword_detection_rate: q.keyword_detection_rate, key_value_accuracy: q.key_value_accuracy }
+              q = {
+                cer: q.cer,
+                wer: q.wer,
+                word_recognition_rate: q.word_recognition_rate,
+                keyword_detection_rate: q.keyword_detection_rate,
+                key_value_accuracy: q.key_value_accuracy
+              }
             }
-            return { test: r.test, execution_provider: r.execution_provider, metrics: r.metrics, quality: q, image_path: r.image_path || null }
+            return {
+              test: r.test,
+              execution_provider: r.execution_provider,
+              metrics: r.metrics,
+              quality: q,
+              image_path: r.image_path || null
+            }
           })
           const json = JSON.stringify(data)
           // Android logcat has per-entry size limits that vary by device.
@@ -114,27 +131,43 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
   // --- Inline quality metrics for mobile (pure computation, no external deps) ---
 
-  function _normalize (text) {
-    return String(text).replace(/\r\n/g, '\n').replace(/[\t\v\f]/g, ' ').replace(/ {2,}/g, ' ').trim().toLowerCase()
+  function _normalize(text) {
+    return String(text)
+      .replace(/\r\n/g, '\n')
+      .replace(/[\t\v\f]/g, ' ')
+      .replace(/ {2,}/g, ' ')
+      .trim()
+      .toLowerCase()
   }
 
-  function _tokenize (text) {
+  function _tokenize(text) {
     return _normalize(text).split(/\s+/).filter(Boolean)
   }
 
-  function _levenshtein (a, b) {
+  function _levenshtein(a, b) {
     const m = a.length
     const n = b.length
     if (m === 0) return n
@@ -149,12 +182,16 @@ try {
         const cost = a[i - 1] === b[j - 1] ? 0 : 1
         curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
       }
-      const tmp = prev; prev = curr; curr = tmp
+      const tmp = prev
+      prev = curr
+      curr = tmp
     }
     return prev[n]
   }
 
-  function _round4 (v) { return Math.round(v * 10000) / 10000 }
+  function _round4(v) {
+    return Math.round(v * 10000) / 10000
+  }
 
   evaluateQuality = function (ocrTexts, groundTruth) {
     if (!groundTruth) return null
@@ -168,12 +205,22 @@ try {
       const rTokens = _tokenize(gt.reference_text).sort()
       const h = hTokens.join(' ')
       const r = rTokens.join(' ')
-      result.cer = _round4(r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length)
-      result.wer = _round4(rTokens.length === 0 ? (hTokens.length === 0 ? 0 : 1) : _levenshtein(hTokens, rTokens) / rTokens.length)
+      result.cer = _round4(
+        r.length === 0 ? (h.length === 0 ? 0 : 1) : _levenshtein(h, r) / r.length
+      )
+      result.wer = _round4(
+        rTokens.length === 0
+          ? hTokens.length === 0
+            ? 0
+            : 1
+          : _levenshtein(hTokens, rTokens) / rTokens.length
+      )
 
       const ocrLower = joined.toLowerCase()
       const uniqueRef = {}
-      for (let ri = 0; ri < rTokens.length; ri++) { uniqueRef[rTokens[ri]] = true }
+      for (let ri = 0; ri < rTokens.length; ri++) {
+        uniqueRef[rTokens[ri]] = true
+      }
       const refList = Object.keys(uniqueRef)
       let wrrMatched = 0
       const wrrMissed = []
@@ -191,7 +238,9 @@ try {
       const lower = joined.toLowerCase()
       const wordSet = {}
       const _words = lower.split(/\s+/)
-      for (let wi = 0; wi < _words.length; wi++) { if (_words[wi]) wordSet[_words[wi]] = true }
+      for (let wi = 0; wi < _words.length; wi++) {
+        if (_words[wi]) wordSet[_words[wi]] = true
+      }
       const found = []
       const missing = []
       for (let ki = 0; ki < gt.required_keywords.length; ki++) {
@@ -201,7 +250,10 @@ try {
           const kwParts = kwTarget.split(/\s+/)
           kwMatch = true
           for (let kp = 0; kp < kwParts.length; kp++) {
-            if (kwParts[kp] && !wordSet[kwParts[kp]]) { kwMatch = false; break }
+            if (kwParts[kp] && !wordSet[kwParts[kp]]) {
+              kwMatch = false
+              break
+            }
           }
         }
         if (kwMatch) found.push(gt.required_keywords[ki])
@@ -217,7 +269,9 @@ try {
       const lowerKV = joined.toLowerCase()
       const kvWordSet = {}
       const _kvWords = lowerKV.split(/\s+/)
-      for (let wj = 0; wj < _kvWords.length; wj++) { if (_kvWords[wj]) kvWordSet[_kvWords[wj]] = true }
+      for (let wj = 0; wj < _kvWords.length; wj++) {
+        if (_kvWords[wj]) kvWordSet[_kvWords[wj]] = true
+      }
       const matched = []
       const unmatched = []
       for (let vi = 0; vi < gt.key_values.length; vi++) {
@@ -228,12 +282,21 @@ try {
           const keyParts = kvKeyLower.split(/\s+/)
           keyFound = true
           for (let kpi = 0; kpi < keyParts.length; kpi++) {
-            if (keyParts[kpi] && !kvWordSet[keyParts[kpi]]) { keyFound = false; break }
+            if (keyParts[kpi] && !kvWordSet[keyParts[kpi]]) {
+              keyFound = false
+              break
+            }
           }
         }
         const valueFound = lowerKV.includes(String(pair.value).toLowerCase())
         if (keyFound && valueFound) matched.push(pair)
-        else unmatched.push({ key: pair.key, value: pair.value, key_found: keyFound, value_found: valueFound })
+        else
+          unmatched.push({
+            key: pair.key,
+            value: pair.value,
+            key_found: keyFound,
+            value_found: valueFound
+          })
       }
       result.key_value_accuracy = _round4(matched.length / gt.key_values.length)
       result.key_values_matched = matched.length
@@ -272,7 +335,10 @@ try {
     for (let ci = 0; ci < candidates.length; ci++) {
       try {
         let exists = false
-        try { fs.statSync(candidates[ci]); exists = true } catch (_) {}
+        try {
+          fs.statSync(candidates[ci])
+          exists = true
+        } catch (_) {}
         if (exists) {
           const data = fs.readFileSync(candidates[ci], 'utf-8')
           return JSON.parse(data)
@@ -287,7 +353,7 @@ const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isWindows = platform === 'win32'
 
-function _envInt (key, fallback) {
+function _envInt(key, fallback) {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
   if (!raw && process.env) raw = process.env[key] || ''
@@ -306,7 +372,7 @@ const PREBUILDS_DIR = path.join(__dirname, '..', '..', 'prebuilds')
  * @param {string} dir - directory to search (typically {@link PREBUILDS_DIR})
  * @returns {string|null}
  */
-function findVulkanBackendLib (dir) {
+function findVulkanBackendLib(dir) {
   let entries
   try {
     entries = fs.readdirSync(dir)
@@ -339,7 +405,7 @@ function findVulkanBackendLib (dir) {
  * @param {string} dir - directory to search (typically {@link PREBUILDS_DIR})
  * @returns {string|null}
  */
-function findOpenCLBackendLib (dir) {
+function findOpenCLBackendLib(dir) {
   let entries
   try {
     entries = fs.readdirSync(dir)
@@ -393,13 +459,13 @@ function findOpenCLBackendLib (dir) {
  *   5. Else 'cpu' (desktop without a GPU backend).
  * @returns {'cpu'|'vulkan'|'metal'|'opencl'}
  */
-function getBackendDevice () {
+function getBackendDevice() {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
   if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
   const override = String(raw).trim().toLowerCase()
   if (override !== '') {
-    return (override === 'vulkan' || override === 'metal' || override === 'opencl') ? override : 'cpu'
+    return override === 'vulkan' || override === 'metal' || override === 'opencl' ? override : 'cpu'
   }
   // Apple platforms (desktop + iOS) ship the Metal backend; request it on both.
   if (platform === 'darwin' || platform === 'ios') return 'metal'
@@ -419,7 +485,7 @@ function getBackendDevice () {
  * @param {Object} [opts] - OcrGgml opts (e.g. { stats: true })
  * @returns {Object} new OcrGgml instance
  */
-function createOcrGgml (params = {}, opts) {
+function createOcrGgml(params = {}, opts) {
   const { OcrGgml } = require('../..')
   const instance = new OcrGgml({
     params: { backendDevice: getBackendDevice(), ...params },
@@ -455,7 +521,7 @@ function createOcrGgml (params = {}, opts) {
  *
  * @param {Object} ocrGgml - A loaded OcrGgml instance (call after `load()`)
  */
-function setReportedGpuName (ocrGgml) {
+function setReportedGpuName(ocrGgml) {
   try {
     if (!ocrGgml || typeof ocrGgml.getBackendInfo !== 'function') return
     const info = ocrGgml.getBackendInfo()
@@ -488,14 +554,14 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _reportScheduled = false
 
-function _flushPerfReport () {
+function _flushPerfReport() {
   if (_perfReporter.length > 0) {
     _perfReporter.writeReport(_reportPath)
     _perfReporter.writeToConsole()
   }
 }
 
-function _scheduleReportWrite () {
+function _scheduleReportWrite() {
   if (_reportScheduled) return
   _reportScheduled = true
   process.on('exit', _flushPerfReport)
@@ -519,7 +585,7 @@ const mobileAssetMapping = {
  * @param {string} relativePath - Relative path from root (e.g., '/test/images/basic_test.bmp')
  * @returns {string} Full path to the file
  */
-function getImagePath (relativePath) {
+function getImagePath(relativePath) {
   if (isMobile && global.assetPaths) {
     const originalFilename = path.basename(relativePath)
     // Use renamed filename if mapping exists, otherwise use original
@@ -540,7 +606,7 @@ function getImagePath (relativePath) {
  * @param {string} url - URL to download from
  * @param {string} destPath - Destination file path
  */
-async function downloadFile (url, destPath) {
+async function downloadFile(url, destPath) {
   const fetch = require('bare-fetch')
   console.log(`   Downloading: ${url.substring(0, 60)}...`)
 
@@ -560,7 +626,7 @@ async function downloadFile (url, destPath) {
  * Checks global.assetPaths first, then falls back to known filesystem paths.
  * @returns {Object|null} Parsed URL config or null if not found
  */
-function _loadMobileUrlConfig () {
+function _loadMobileUrlConfig() {
   let urlConfig = null
   if (global.assetPaths) {
     const configPath = global.assetPaths['../../testAssets/ocr-ggml-model-urls.json']
@@ -571,9 +637,15 @@ function _loadMobileUrlConfig () {
     }
   }
   if (!urlConfig) {
-    for (const p of ['../../testAssets/ocr-ggml-model-urls.json', '../testAssets/ocr-ggml-model-urls.json']) {
+    for (const p of [
+      '../../testAssets/ocr-ggml-model-urls.json',
+      '../testAssets/ocr-ggml-model-urls.json'
+    ]) {
       if (fs.existsSync(p)) {
-        try { urlConfig = JSON.parse(fs.readFileSync(p, 'utf8')); break } catch (_) {}
+        try {
+          urlConfig = JSON.parse(fs.readFileSync(p, 'utf8'))
+          break
+        } catch (_) {}
       }
     }
   }
@@ -588,7 +660,7 @@ function _loadMobileUrlConfig () {
  * @param {string} modelName - 'detector_craft' or 'recognizer_latin'
  * @returns {Promise<string>} Path to the model file
  */
-async function ensureModelPath (modelName) {
+async function ensureModelPath(modelName) {
   const desktopDefaults = {
     detector_craft: process.env.OCR_GGML_DETECTOR || 'models/craft_mlt_25k.gguf',
     recognizer_latin: process.env.OCR_GGML_RECOGNIZER || 'models/latin_g2.gguf'
@@ -637,8 +709,10 @@ async function ensureModelPath (modelName) {
       lastError = e
       if (attempt < maxAttempts) {
         const delayMs = attempt * 10000
-        console.log(`   Attempt ${attempt}/${maxAttempts} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
-        await new Promise(resolve => setTimeout(resolve, delayMs))
+        console.log(
+          `   Attempt ${attempt}/${maxAttempts} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`
+        )
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
       }
     }
   }
@@ -653,17 +727,25 @@ async function ensureModelPath (modelName) {
  *
  * @returns {Promise<{db_mobilenet_v3_large: string, crnn_mobilenet_v3_small: string}|null>}
  */
-async function ensureDoctrModels () {
+async function ensureDoctrModels() {
   if (!isMobile) {
     return {
-      db_mobilenet_v3_large: process.env.OCR_GGML_DOCTR_DETECTOR || 'models/db_mobilenet_v3_large.gguf',
-      crnn_mobilenet_v3_small: process.env.OCR_GGML_DOCTR_RECOGNIZER || 'models/crnn_mobilenet_v3_small.gguf'
+      db_mobilenet_v3_large:
+        process.env.OCR_GGML_DOCTR_DETECTOR || 'models/db_mobilenet_v3_large.gguf',
+      crnn_mobilenet_v3_small:
+        process.env.OCR_GGML_DOCTR_RECOGNIZER || 'models/crnn_mobilenet_v3_small.gguf'
     }
   }
 
   const mobileModels = {
-    db_mobilenet_v3_large: { filename: 'db_mobilenet_v3_large.gguf', urlKey: 'db_mobilenet_v3_large_url' },
-    crnn_mobilenet_v3_small: { filename: 'crnn_mobilenet_v3_small.gguf', urlKey: 'crnn_mobilenet_v3_small_url' }
+    db_mobilenet_v3_large: {
+      filename: 'db_mobilenet_v3_large.gguf',
+      urlKey: 'db_mobilenet_v3_large_url'
+    },
+    crnn_mobilenet_v3_small: {
+      filename: 'crnn_mobilenet_v3_small.gguf',
+      urlKey: 'crnn_mobilenet_v3_small_url'
+    }
   }
 
   const urlConfig = _loadMobileUrlConfig()
@@ -690,11 +772,15 @@ async function ensureDoctrModels () {
       } catch (e) {
         if (attempt < maxAttempts) {
           const delayMs = attempt * 10000
-          console.log(`   Attempt ${attempt}/${maxAttempts} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
-          await new Promise(resolve => setTimeout(resolve, delayMs))
+          console.log(
+            `   Attempt ${attempt}/${maxAttempts} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`
+          )
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
         } else {
           console.log(`[ensureDoctrModels] Failed to download ${filename}: ${e.message}`)
-          console.log('[ensureDoctrModels] Returning null — DocTR tests will be skipped on this device')
+          console.log(
+            '[ensureDoctrModels] Returning null — DocTR tests will be skipped on this device'
+          )
           return null
         }
       }
@@ -719,7 +805,7 @@ async function ensureDoctrModels () {
  * @param {'cpu'|'gpu'|null} device - Resolved backend, derived from stats
  * @returns {string} Label with a backend token matching the actual backend
  */
-function _normalizeBackendToken (label, device) {
+function _normalizeBackendToken(label, device) {
   if (device !== 'gpu' && device !== 'cpu') return label
   const token = device === 'gpu' ? '[GPU]' : '[CPU]'
   if (/\[(?:cpu|gpu)\]/i.test(label)) {
@@ -739,7 +825,7 @@ function _normalizeBackendToken (label, device) {
  * @param {Object} [opts.groundTruth] - Explicit ground truth (overrides auto-discovery)
  * @returns {string} Formatted performance metrics string
  */
-function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
+function formatOCRPerformanceMetrics(label, stats, outputTexts = [], opts) {
   const totalTimeMs = stats.totalTime ? stats.totalTime * 1000 : 0
   const detectionTimeMs = stats.detectionTime ? stats.detectionTime * 1000 : 0
   const recognitionTimeMs = stats.recognitionTime ? stats.recognitionTime * 1000 : 0
@@ -750,11 +836,16 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   // `execution_provider` stays truthful even on a Vulkan-requested CPU
   // fallback. Fall back to the label regex when the stat is unavailable
   // (e.g. DocTR `skipReport` calls on hosts without the stat).
-  const device = stats.backendIsGpu === 1
-    ? 'gpu'
-    : stats.backendIsGpu === 0
-      ? 'cpu'
-      : /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  const device =
+    stats.backendIsGpu === 1
+      ? 'gpu'
+      : stats.backendIsGpu === 0
+        ? 'cpu'
+        : /\[gpu\]/i.test(label)
+          ? 'gpu'
+          : /\[cpu\]/i.test(label)
+            ? 'cpu'
+            : null
 
   // Normalize the `[CPU]`/`[GPU]` token in the label so it matches the actual
   // backend the addon resolved (see `device` above). Several callers hardcode
@@ -765,7 +856,8 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   const normalizedLabel = _normalizeBackendToken(label, device)
 
   let quality = null
-  const gt = (opts && opts.groundTruth) || (opts && opts.imagePath ? findGroundTruth(opts.imagePath) : null)
+  const gt =
+    (opts && opts.groundTruth) || (opts && opts.imagePath ? findGroundTruth(opts.imagePath) : null)
   if (gt && outputTexts.length > 0) {
     try {
       quality = evaluateQuality(outputTexts, gt)
@@ -775,17 +867,21 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
   }
 
   if (!(opts && opts.skipReport)) {
-    _perfReporter.record(normalizedLabel, {
-      total_time_ms: Math.round(totalTimeMs),
-      detection_time_ms: Math.round(detectionTimeMs),
-      recognition_time_ms: Math.round(recognitionTimeMs),
-      text_regions: textRegionsCount
-    }, {
-      execution_provider: device,
-      output: JSON.stringify(outputTexts),
-      quality,
-      image_path: (opts && opts.imagePath) || null
-    })
+    _perfReporter.record(
+      normalizedLabel,
+      {
+        total_time_ms: Math.round(totalTimeMs),
+        detection_time_ms: Math.round(detectionTimeMs),
+        recognition_time_ms: Math.round(recognitionTimeMs),
+        text_regions: textRegionsCount
+      },
+      {
+        execution_provider: device,
+        output: JSON.stringify(outputTexts),
+        quality,
+        image_path: (opts && opts.imagePath) || null
+      }
+    )
     _scheduleReportWrite()
 
     if (isMobile) {
@@ -819,7 +915,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
       out += `\n    - Missing keywords: ${JSON.stringify(quality.keywords_missing)}`
     }
     if (quality.key_values_unmatched && quality.key_values_unmatched.length > 0) {
-      const unmatchedKeys = quality.key_values_unmatched.map(u => u.key)
+      const unmatchedKeys = quality.key_values_unmatched.map((u) => u.key)
       out += `\n    - Unmatched KV keys: ${JSON.stringify(unmatchedKeys)}`
     }
   }
@@ -834,7 +930,7 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = [], opts) {
  * @param {number} [timeoutMs=10000] - Max time to wait for unload
  * @returns {Promise<void>}
  */
-async function safeUnload (ocrInstance, timeoutMs = 10000) {
+async function safeUnload(ocrInstance, timeoutMs = 10000) {
   try {
     let timeoutId
     const unloadPromise = ocrInstance.unload()
@@ -858,7 +954,7 @@ async function safeUnload (ocrInstance, timeoutMs = 10000) {
  * @param {string} imagePath - Path to the image file
  * @returns {Promise<{results: Array, stats: Object}>}
  */
-async function runDoctrOCR (t, params, imagePath) {
+async function runDoctrOCR(t, params, imagePath) {
   const { OcrGgml } = require('../..')
 
   const ocrGgml = new OcrGgml({
@@ -886,13 +982,13 @@ async function runDoctrOCR (t, params, imagePath) {
     let results = []
 
     await response
-      .onUpdate(output => {
+      .onUpdate((output) => {
         t.ok(Array.isArray(output), 'output should be an array')
         console.log('[runDoctrOCR] onUpdate: got ' + output.length + ' items')
-        results = output.map(o => ({ text: o[1], confidence: o[2], bbox: o[0] }))
+        results = output.map((o) => ({ text: o[1], confidence: o[2], bbox: o[0] }))
         console.log('[runDoctrOCR] onUpdate: mapped ' + results.length + ' results')
       })
-      .onError(error => {
+      .onError((error) => {
         t.fail('unexpected error: ' + JSON.stringify(error))
       })
       .await()
@@ -901,7 +997,7 @@ async function runDoctrOCR (t, params, imagePath) {
     return { results, stats: response.stats || {} }
   } finally {
     await safeUnload(ocrGgml)
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 }
 
@@ -915,18 +1011,23 @@ async function runDoctrOCR (t, params, imagePath) {
 // fallback means Adreno (use OpenCL). null = not yet resolved.
 let _androidGpuDevice = null
 
-function _hasBackendOverride () {
+function _hasBackendOverride() {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv('OCR_GGML_BACKEND') || ''
   if (!raw && process.env) raw = process.env.OCR_GGML_BACKEND || ''
   return String(raw).trim() !== ''
 }
 
-async function ensureAndroidGpuResolved (detectorPath, recognizerPath) {
+async function ensureAndroidGpuResolved(detectorPath, recognizerPath) {
   if (_androidGpuDevice) return _androidGpuDevice
   const { OcrGgml } = require('../..')
   const probe = new OcrGgml({
-    params: { pathDetector: detectorPath, pathRecognizer: recognizerPath, langList: ['en'], backendDevice: 'vulkan' },
+    params: {
+      pathDetector: detectorPath,
+      pathRecognizer: recognizerPath,
+      langList: ['en'],
+      backendDevice: 'vulkan'
+    },
     opts: {}
   })
   try {
@@ -940,7 +1041,7 @@ async function ensureAndroidGpuResolved (detectorPath, recognizerPath) {
     _androidGpuDevice = 'vulkan' // safe default on probe failure
   } finally {
     await safeUnload(probe)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return _androidGpuDevice
 }
@@ -957,12 +1058,17 @@ async function ensureAndroidGpuResolved (detectorPath, recognizerPath) {
  * @param {boolean} forceCpu - when true, override `params.backendDevice` to 'cpu'
  * @returns {Promise<{output: Array, stats: Object, backendInfo: Object|null, isGpuPass: boolean}>}
  */
-async function _runOcrPass (t, cfg, forceCpu) {
+async function _runOcrPass(t, cfg, forceCpu) {
   const { params, imagePath, runOptions, perfLabel, perfOpts, assertResult } = cfg
   let passParams
   if (forceCpu) {
     passParams = { ...params, backendDevice: 'cpu' }
-  } else if (platform === 'android' && !_hasBackendOverride() && params.pathDetector && params.pathRecognizer) {
+  } else if (
+    platform === 'android' &&
+    !_hasBackendOverride() &&
+    params.pathDetector &&
+    params.pathRecognizer
+  ) {
     // EasyOCR GPU pass on Android: Vulkan on Mali, OpenCL on Adreno (QVAC-20949).
     const resolved = await ensureAndroidGpuResolved(params.pathDetector, params.pathRecognizer)
     passParams = { ...params, backendDevice: resolved }
@@ -981,17 +1087,31 @@ async function _runOcrPass (t, cfg, forceCpu) {
     })
 
     await response
-      .onUpdate(o => { output = o })
-      .onError(error => { t.fail('unexpected error: ' + JSON.stringify(error)) })
+      .onUpdate((o) => {
+        output = o
+      })
+      .onError((error) => {
+        t.fail('unexpected error: ' + JSON.stringify(error))
+      })
       .await()
 
     const stats = response.stats || {}
-    const backendInfo = typeof ocrGgml.getBackendInfo === 'function' ? ocrGgml.getBackendInfo() : null
-    const isGpuPass = stats.backendIsGpu === 1 ||
-      (!!backendInfo && (backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'))
+    const backendInfo =
+      typeof ocrGgml.getBackendInfo === 'function' ? ocrGgml.getBackendInfo() : null
+    const isGpuPass =
+      stats.backendIsGpu === 1 ||
+      (!!backendInfo &&
+        (backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'))
 
     if (perfLabel) {
-      t.comment(formatOCRPerformanceMetrics(perfLabel, stats, output.map(o => o[1]), perfOpts))
+      t.comment(
+        formatOCRPerformanceMetrics(
+          perfLabel,
+          stats,
+          output.map((o) => o[1]),
+          perfOpts
+        )
+      )
     }
 
     if (typeof assertResult === 'function') {
@@ -1001,7 +1121,7 @@ async function _runOcrPass (t, cfg, forceCpu) {
     return { output, stats, backendInfo, isGpuPass }
   } finally {
     await safeUnload(ocrGgml)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 }
 
@@ -1031,7 +1151,7 @@ async function _runOcrPass (t, cfg, forceCpu) {
  * @param {Function} [cfg.assertResult] - `assertResult(output, { stats, backendInfo, isGpuPass })`, run per pass
  * @returns {Promise<{output: Array, stats: Object, backendInfo: Object|null, isGpuPass: boolean}>} pass-1 result
  */
-async function runOcrComparison (t, cfg) {
+async function runOcrComparison(t, cfg) {
   const pass1 = await _runOcrPass(t, cfg, false)
   if (pass1.isGpuPass) {
     await _runOcrPass(t, cfg, true)
@@ -1054,13 +1174,20 @@ async function runOcrComparison (t, cfg) {
  * @param {Function} [cfg.assertResult] - `assertResult(results, { stats, isGpuPass })`, run per pass
  * @returns {Promise<{results: Array, stats: Object}>} last-pass result (CPU pass on GPU hosts, else the single pass)
  */
-async function runDoctrComparison (t, cfg) {
+async function runDoctrComparison(t, cfg) {
   const { params, imagePath, perfLabel, perfOpts, assertResult } = cfg
 
   const pass1 = await runDoctrOCR(t, params, imagePath)
   const isGpuPass1 = !!(pass1.stats && pass1.stats.backendIsGpu === 1)
   if (perfLabel) {
-    t.comment(formatOCRPerformanceMetrics(perfLabel, pass1.stats, pass1.results.map(r => r.text), perfOpts))
+    t.comment(
+      formatOCRPerformanceMetrics(
+        perfLabel,
+        pass1.stats,
+        pass1.results.map((r) => r.text),
+        perfOpts
+      )
+    )
   }
   if (typeof assertResult === 'function') {
     assertResult(pass1.results, { stats: pass1.stats, isGpuPass: isGpuPass1 })
@@ -1075,7 +1202,14 @@ async function runDoctrComparison (t, cfg) {
       const passCl = await runDoctrOCR(t, { ...params, backendDevice: 'opencl' }, imagePath)
       const isGpuCl = !!(passCl.stats && passCl.stats.backendIsGpu === 1)
       if (perfLabel) {
-        t.comment(formatOCRPerformanceMetrics(perfLabel, passCl.stats, passCl.results.map(r => r.text), perfOpts))
+        t.comment(
+          formatOCRPerformanceMetrics(
+            perfLabel,
+            passCl.stats,
+            passCl.results.map((r) => r.text),
+            perfOpts
+          )
+        )
       }
       if (typeof assertResult === 'function') {
         assertResult(passCl.results, { stats: passCl.stats, isGpuPass: isGpuCl })
@@ -1087,7 +1221,14 @@ async function runDoctrComparison (t, cfg) {
 
   const pass2 = await runDoctrOCR(t, { ...params, backendDevice: 'cpu' }, imagePath)
   if (perfLabel) {
-    t.comment(formatOCRPerformanceMetrics(perfLabel, pass2.stats, pass2.results.map(r => r.text), perfOpts))
+    t.comment(
+      formatOCRPerformanceMetrics(
+        perfLabel,
+        pass2.stats,
+        pass2.results.map((r) => r.text),
+        perfOpts
+      )
+    )
   }
   if (typeof assertResult === 'function') {
     assertResult(pass2.results, { stats: pass2.stats, isGpuPass: false })
@@ -1101,7 +1242,7 @@ async function runDoctrComparison (t, cfg) {
  * (includes Vulkan pipeline/shader compilation); later runs are warm
  * steady-state. Separates one-time cold-start cost from real inference.
  */
-async function runDoctrWarmProfile (t, cfg) {
+async function runDoctrWarmProfile(t, cfg) {
   const { OcrGgml } = require('../..')
   const { params = {}, imagePath, runs = 4, label = '' } = cfg
   const ocrGgml = new OcrGgml({
@@ -1120,7 +1261,20 @@ async function runDoctrWarmProfile (t, cfg) {
   // Clinical-chemistry accuracy guard: every run must keep recognising these
   // 12 keywords (case-insensitive substring over all recognised rows), so perf
   // changes that degrade recognition are caught in the same device round.
-  const KEYWORDS = ['clinical', 'chemistry', 'alkaline', 'phosphatase', 'hemoglobin', 'creatinine', 'cholesterol', 'triglycerides', 'bilirubin', 'albumin', 'protein', 'lipid']
+  const KEYWORDS = [
+    'clinical',
+    'chemistry',
+    'alkaline',
+    'phosphatase',
+    'hemoglobin',
+    'creatinine',
+    'cholesterol',
+    'triglycerides',
+    'bilirubin',
+    'albumin',
+    'protein',
+    'lipid'
+  ]
   // Fastest steady-state (warm) run, recorded as the canonical warm metric.
   let best = null
   try {
@@ -1129,22 +1283,31 @@ async function runDoctrWarmProfile (t, cfg) {
       let boxes = 0
       let texts = []
       let originalTexts = []
-      await response.onUpdate(o => {
-        boxes = Array.isArray(o) ? o.length : 0
-        if (Array.isArray(o)) {
-          originalTexts = o.map(row => String(row[1]))
-          texts = originalTexts.map(tx => tx.toLowerCase())
-        }
-      }).onError(() => {}).await()
+      await response
+        .onUpdate((o) => {
+          boxes = Array.isArray(o) ? o.length : 0
+          if (Array.isArray(o)) {
+            originalTexts = o.map((row) => String(row[1]))
+            texts = originalTexts.map((tx) => tx.toLowerCase())
+          }
+        })
+        .onError(() => {})
+        .await()
       const s = response.stats || {}
       const ms = (v) => ((v || 0) * 1000).toFixed(0)
-      const hits = KEYWORDS.filter(w => texts.some(tx => tx.includes(w)))
-      console.log(`[WARM${label}] run ${i} gpu=${s.backendIsGpu} boxes=${boxes} kw=${hits.length}/${KEYWORDS.length} total=${ms(s.totalTime)}ms det=${ms(s.detectionTime)}ms rec=${ms(s.recognitionTime)}ms`)
+      const hits = KEYWORDS.filter((w) => texts.some((tx) => tx.includes(w)))
+      console.log(
+        `[WARM${label}] run ${i} gpu=${s.backendIsGpu} boxes=${boxes} kw=${hits.length}/${KEYWORDS.length} total=${ms(s.totalTime)}ms det=${ms(s.detectionTime)}ms rec=${ms(s.recognitionTime)}ms`
+      )
       // Run 0 is cold (Vulkan pipeline/shader compile); runs >=1 are warm
       // steady-state. Guard accuracy on every warm run and keep the fastest as
       // the recorded warm number — this is the inference time the effort targets.
       if (i >= 1) {
-        t.is(hits.length, KEYWORDS.length, `[WARM${label}] run ${i} keeps all ${KEYWORDS.length} clinical keywords`)
+        t.is(
+          hits.length,
+          KEYWORDS.length,
+          `[WARM${label}] run ${i} keeps all ${KEYWORDS.length} clinical keywords`
+        )
         const totalMs = (s.totalTime || 0) * 1000
         if (!best || totalMs < best.totalMs) best = { totalMs, stats: s, texts: originalTexts }
       }
@@ -1154,7 +1317,14 @@ async function runDoctrWarmProfile (t, cfg) {
     // token keeps it within the mobile perf_report_filter; the backend token is
     // normalized to the resolved accelerator by formatOCRPerformanceMetrics.
     if (best) {
-      t.comment(formatOCRPerformanceMetrics('[DocTR clinical_chemistry warm] [GPU]', best.stats, best.texts, { imagePath }))
+      t.comment(
+        formatOCRPerformanceMetrics(
+          '[DocTR clinical_chemistry warm] [GPU]',
+          best.stats,
+          best.texts,
+          { imagePath }
+        )
+      )
     }
     t.pass('warm profile complete')
   } finally {

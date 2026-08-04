@@ -1,14 +1,56 @@
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
+import type { VideoRuntimeStats } from '@qvac/diffusion-cpp'
+import type { z } from 'zod'
 import { getServerLogger } from '@/logging'
 import { getModel, getModelEntry } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { ModelOperationNotSupportedError } from '@/utils/errors-server'
+import {
+  ModelOperationNotSupportedError,
+  PluginRequestValidationFailedError
+} from '@/utils/errors-server'
+import { formatZodError } from '@/utils/zod-error'
 import { ModelType } from '@/schemas'
-import type { VideoRequest, VideoStreamResponse, VideoStats } from '@/schemas/sdcpp-config'
+import {
+  ltxVideoRequestSchema,
+  singleExpertVideoRequestSchema,
+  type VideoRequest,
+  type VideoStreamResponse,
+  type VideoStats
+} from '@/schemas/sdcpp-config'
 
 interface ResponseWithStats {
-  stats?: VideoStats
+  stats?: VideoRuntimeStats
+}
+
+const ltxVideoModels = new WeakSet<VideoStableDiffusion>()
+const moeCapableVideoModels = new WeakSet<VideoStableDiffusion>()
+
+export function markLtxVideoModel(model: VideoStableDiffusion) {
+  ltxVideoModels.add(model)
+}
+
+export function markMoeCapableVideoModel(model: VideoStableDiffusion) {
+  moeCapableVideoModels.add(model)
+}
+
+function parseVideoRequest(schema: z.ZodType, request: VideoRequest) {
+  const result = schema.safeParse(request)
+  if (!result.success) {
+    throw new PluginRequestValidationFailedError('videoStream', formatZodError(result.error))
+  }
+}
+
+// The addon reports `hasAudio` as a numeric flag (1/0); the SDK surfaces it as
+// a boolean so consumers get a readable `stats.hasAudio` instead of a magic
+// number. Everything else passes through and is validated client-side.
+function toVideoStats(stats: VideoRuntimeStats | undefined): VideoStats | undefined {
+  if (!stats) return undefined
+  const { hasAudio, ...rest } = stats
+  return {
+    ...rest,
+    ...(hasAudio !== undefined && { hasAudio: hasAudio !== 0 })
+  }
 }
 
 // The diffusion plugin instantiates `VideoStableDiffusion` when the model is
@@ -34,6 +76,8 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
   const model = asVideoModel(getModel(request.modelId), request.modelId)
+  if (ltxVideoModels.has(model)) parseVideoRequest(ltxVideoRequestSchema, request)
+  if (!moeCapableVideoModels.has(model)) parseVideoRequest(singleExpertVideoRequestSchema, request)
 
   const onAbort = () => {
     model.cancel().catch((err: unknown) => {
@@ -105,6 +149,9 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     ...(request.vae_tile_overlap !== undefined && {
       vae_tile_overlap: request.vae_tile_overlap
     }),
+    ...(request.temporal_tiling !== undefined && {
+      temporal_tiling: request.temporal_tiling
+    }),
     ...(request.cache_mode !== undefined && { cache_mode: request.cache_mode }),
     ...(request.cache_preset !== undefined && {
       cache_preset: request.cache_preset
@@ -145,6 +192,6 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   yield {
     type: 'videoStream',
     done: true,
-    stats: responseWithStats.stats ?? undefined
+    stats: toVideoStats(responseWithStats.stats)
   }
 }

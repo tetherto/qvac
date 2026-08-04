@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <tts-cpp/lavasr/denoiser.h>
@@ -17,9 +18,23 @@
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
+#include "model-interface/PcmConversion.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml::supertonic {
+
+void detail::applyVulkanPipelineCache(
+    tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg) {
+  if (opts.n_gpu_layers <= 0 || cfg.vulkanCacheDir.empty())
+    return;
+  opts.vulkan_env_overrides[detail::VULKAN_PIPELINE_CACHE_DIR_ENV] =
+      cfg.vulkanCacheDir;
+  if (opts.prewarm_text.empty()) {
+    opts.prewarm_text = detail::VULKAN_PREWARM_TEXT;
+  }
+}
 
 namespace {
 
@@ -40,7 +55,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
-    opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
+    opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
   opts.noise_npy_path = cfg.noiseNpyPath;
 
@@ -71,17 +86,9 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
     opts.backends_dir = backendsDirPath.string();
   }
   opts.opencl_cache_dir = cfg.openclCacheDir;
-  return opts;
-}
 
-std::vector<int16_t> pcmFloatToInt16(const float* pcm, size_t samples) {
-  std::vector<int16_t> out;
-  out.resize(samples);
-  for (size_t i = 0; i < samples; ++i) {
-    float s = std::clamp(pcm[i], -1.0f, 1.0f);
-    out[i] = static_cast<int16_t>(std::lround(s * 32767.0f));
-  }
-  return out;
+  detail::applyVulkanPipelineCache(opts, cfg);
+  return opts;
 }
 
 }
@@ -130,12 +137,12 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
         TTSErrorCode::ModelFileNotFound,
         "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
   }
-  // Defense-in-depth: the JS layer (index.js::_validateConfig) runs the
-  // same conflict check before this method is reached, so direct C++
-  // callers are the only ones who can actually trip this branch.
-  // Mirror the Chatterbox suffix verbatim so users see an identical
-  // hint regardless of which engine they instantiated.  `layers != 0`
-  // matches llama.cpp's "-1 = offload all" sentinel convention.
+  // Defense-in-depth: the JS binding runs the same useGPU/nGpuLayers conflict
+  // check before this method is reached, so direct C++ callers are the only
+  // ones who can actually trip this branch. Mirror the Chatterbox suffix
+  // verbatim so users see an identical hint regardless of which engine they
+  // instantiated. `layers != 0` matches llama.cpp's "-1 = offload all"
+  // sentinel convention.
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpuFlag   = *cfg.useGpu;
     const int  layers         = *cfg.nGpuLayers;
@@ -190,20 +197,20 @@ void SupertonicModel::loadLocked() {
   backendId_     = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
 
-  // LavaSR enhancer: load when a GGUF path is set (the path is the on switch).
-  // CPU-only neural post-process; empty path = disabled.
-  if (!cfg_.enhancerGgufPath.empty()) {
-    try {
-      enhancer_ = tts_cpp::lavasr::Enhancer::load(cfg_.enhancerGgufPath);
-    } catch (const std::exception& e) {
-      enhancer_.reset();
-      throw createTTSError(
-          TTSErrorCode::InitializationFailed,
-          std::string("SupertonicModel::load: lavasr enhancer: ") + e.what());
-    }
-  } else {
-    enhancer_.reset();
-  }
+  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
+  // Neural post-process; the ConvNeXt backbone + spec head run on the GPU when
+  // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
+  // Pass the engine's *resolved* device, not the requested switch: if the
+  // engine fell back to CPU, keep the enhancer on CPU too instead of forcing it
+  // onto the GPU. Shared with Chatterbox via loadEnhancer so the two loaders
+  // can't drift.
+  LoadedEnhancer loaded = loadEnhancer(
+      cfg_.enhancerGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "SupertonicModel::load: lavasr enhancer: ");
+  enhancer_ = std::move(loaded.enhancer);
+  enhancerBackendDevice_ = loaded.backendDevice;
+  enhancerBackendId_ = loaded.backendId;
 
   // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
   // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
@@ -357,6 +364,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats SupertonicModel::runtimeStats() const
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
+  stats.emplace_back(
+      "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
   return stats;
 }
 

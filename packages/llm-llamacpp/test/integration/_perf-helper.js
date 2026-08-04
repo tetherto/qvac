@@ -27,7 +27,9 @@ const process = require('bare-process')
 // fallback below leaves gpu=null on Device Farm where the probes
 // wouldn't work anyway.
 let _subprocess = null
-try { _subprocess = require('bare-subprocess') } catch (_) {}
+try {
+  _subprocess = require('bare-subprocess')
+} catch (_) {}
 
 const platform = os.platform()
 const arch = os.arch()
@@ -80,16 +82,17 @@ try {
       runner: 'device-farm'
     }
 
-    function _trim (text) {
+    function _trim(text) {
       if (text == null) return null
       const s = String(text)
       if (s.length <= OUTPUT_CAP_CHARS) return s
-      return s.substring(0, OUTPUT_CAP_CHARS) + '...[truncated ' +
-        (s.length - OUTPUT_CAP_CHARS) + 'c]'
+      return (
+        s.substring(0, OUTPUT_CAP_CHARS) + '...[truncated ' + (s.length - OUTPUT_CAP_CHARS) + 'c]'
+      )
     }
 
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         const entry = {
           test: testName,
           // QVAC-17830: scenario is a top-level group key (e.g.
@@ -103,24 +106,27 @@ try {
           // forget to pass it still produce valid output.
           model: (extra && extra.model) || null,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            backend: null,
-            platform: null,
-            total_time_ms: null,
-            prefill_time_ms: null,
-            decode_time_ms: null,
-            vision_encode_time_ms: null,
-            ttft_ms: null,
-            generated_tokens: null,
-            prompt_tokens: null,
-            tps: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              backend: null,
+              platform: null,
+              total_time_ms: null,
+              prefill_time_ms: null,
+              decode_time_ms: null,
+              vision_encode_time_ms: null,
+              ttft_ms: null,
+              generated_tokens: null,
+              prompt_tokens: null,
+              tps: null
+            },
+            metrics
+          ),
           input: (extra && extra.input) || null,
           output: _trim(extra && extra.output)
         }
         _results.push(entry)
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -130,7 +136,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         let written = false
         const dirs = []
@@ -143,7 +149,9 @@ try {
         dirs.push('/tmp')
         for (let di = 0; di < dirs.length; di++) {
           try {
-            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(dirs[di], { recursive: true })
+            } catch (_) {}
             const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
@@ -156,8 +164,8 @@ try {
           console.log('[perf-reporter] all write locations failed')
         }
       },
-      writeStepSummary () {},
-      writeToConsole (consoleOpts) {
+      writeStepSummary() {},
+      writeToConsole(consoleOpts) {
         try {
           const data = this.toJSON()
           const lightweight = consoleOpts && consoleOpts.lightweight
@@ -171,7 +179,7 @@ try {
           const delta = consoleOpts && consoleOpts.delta
           let rows = data.results
           if (delta && rows.length > 0) rows = [rows[rows.length - 1]]
-          data.results = rows.map(r => ({
+          data.results = rows.map((r) => ({
             test: r.test,
             scenario: r.scenario || 'default',
             model: r.model || null,
@@ -187,14 +195,25 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -214,13 +233,17 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _exitHookInstalled = false
 
-function _installExitHook () {
+function _installExitHook() {
   if (_exitHookInstalled) return
   _exitHookInstalled = true
   process.on('exit', () => {
     if (_perfReporter.length > 0) {
-      try { _perfReporter.writeReport(_reportPath) } catch (_) {}
-      try { _perfReporter.writeStepSummary() } catch (_) {}
+      try {
+        _perfReporter.writeReport(_reportPath)
+      } catch (_) {}
+      try {
+        _perfReporter.writeStepSummary()
+      } catch (_) {}
       // No extra cumulative console emit on mobile: the per-test
       // delta emits already carry every row, and extract-from-log.js
       // --merge reassembles them. Emitting a large cumulative payload
@@ -230,11 +253,12 @@ function _installExitHook () {
   })
 }
 
-function resolveBackend (device) {
+function resolveBackend(device) {
   if (!device || device === 'cpu') return 'cpu'
   if (platform === 'darwin' || platform === 'ios') return 'metal'
   if (platform === 'android') {
-    const override = (process.env && process.env.QVAC_GPU_BACKEND) ||
+    const override =
+      (process.env && process.env.QVAC_GPU_BACKEND) ||
       (typeof os.getEnv === 'function' ? os.getEnv('QVAC_GPU_BACKEND') : '')
     return String(override || 'vulkan').toLowerCase()
   }
@@ -242,7 +266,7 @@ function resolveBackend (device) {
   return 'gpu'
 }
 
-function _num (v) {
+function _num(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
@@ -271,7 +295,7 @@ function _num (v) {
  *                                  Model column in the perf renderer.
  * @param {string} [extra._output]  Generated text (will be capped for mobile).
  */
-function recordPerformance (label, totalTime, extra) {
+function recordPerformance(label, totalTime, extra) {
   const stats = (extra && extra.stats) || null
   const totalSeconds = (totalTime / 1000).toFixed(2)
 
@@ -281,9 +305,10 @@ function recordPerformance (label, totalTime, extra) {
   const generatedTokens = stats ? _num(stats.generatedTokens) : null
   const promptTokens = stats ? _num(stats.promptTokens) : null
 
-  const reportedDevice = stats && (stats.backendDevice === 'cpu' || stats.backendDevice === 'gpu')
-    ? stats.backendDevice
-    : null
+  const reportedDevice =
+    stats && (stats.backendDevice === 'cpu' || stats.backendDevice === 'gpu')
+      ? stats.backendDevice
+      : null
 
   const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
   const effectiveDevice = reportedDevice || (extra && extra.deviceId) || labelDevice
@@ -296,28 +321,32 @@ function recordPerformance (label, totalTime, extra) {
     decodeMs = Math.round((generatedTokens / tps) * 1000)
   }
 
-  _perfReporter.record(label, {
-    backend,
-    platform: platformLabel,
-    total_time_ms: Math.round(totalTime),
-    prefill_time_ms: ttftMs !== null ? Math.round(ttftMs) : null,
-    decode_time_ms: decodeMs,
-    // mmproj / vision-encoder time. Native side wiring tracked under
-    // https://app.asana.com/1/45238840754660/project/1212638335655990/task/1214371583877702
-    // — until then this stays null and the column in the detail
-    // table renders as `-`.
-    vision_encode_time_ms: null,
-    ttft_ms: ttftMs !== null ? Math.round(ttftMs) : null,
-    generated_tokens: generatedTokens,
-    prompt_tokens: promptTokens,
-    tps: tps !== null ? Number(tps.toFixed(2)) : null,
-    pp_tps: ppTps !== null ? Number(ppTps.toFixed(2)) : null
-  }, {
-    scenario: (extra && extra.scenario) || 'default',
-    model: (extra && extra.model) || null,
-    execution_provider: effectiveDevice,
-    output: (extra && extra._output) || null
-  })
+  _perfReporter.record(
+    label,
+    {
+      backend,
+      platform: platformLabel,
+      total_time_ms: Math.round(totalTime),
+      prefill_time_ms: ttftMs !== null ? Math.round(ttftMs) : null,
+      decode_time_ms: decodeMs,
+      // mmproj / vision-encoder time. Native side wiring tracked under
+      // https://app.asana.com/1/45238840754660/project/1212638335655990/task/1214371583877702
+      // — until then this stays null and the column in the detail
+      // table renders as `-`.
+      vision_encode_time_ms: null,
+      ttft_ms: ttftMs !== null ? Math.round(ttftMs) : null,
+      generated_tokens: generatedTokens,
+      prompt_tokens: promptTokens,
+      tps: tps !== null ? Number(tps.toFixed(2)) : null,
+      pp_tps: ppTps !== null ? Number(ppTps.toFixed(2)) : null
+    },
+    {
+      scenario: (extra && extra.scenario) || 'default',
+      model: (extra && extra.model) || null,
+      execution_provider: effectiveDevice,
+      output: (extra && extra._output) || null
+    }
+  )
 
   _installExitHook()
 

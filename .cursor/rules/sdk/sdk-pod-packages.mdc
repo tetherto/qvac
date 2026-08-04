@@ -13,12 +13,28 @@ The following packages belong to the SDK pod:
 - `packages/logging`
 - `packages/error`
 - `packages/ai-sdk-provider`
+- `packages/inference`
+- `packages/registry-server`
+- `plugins/opencode` (tag slug: `opencode-plugin`)
+- `plugins/openclaw` (tag slug: `openclaw-plugin`)
 
 When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
 
-## Glob Patterns
+Changelog / release `--package=` values use the **tag slug** (see `scripts/sdk/package-paths.cjs`).
 
-For rules that need glob patterns:
+## Agent stack (release cascade subset)
+
+```text
+@qvac/sdk
+  -> @qvac/cli
+    -> @qvac/ai-sdk-provider
+      -> @qvac/opencode-plugin
+      -> @qvac/openclaw-plugin
+```
+
+`@qvac/bare-sdk` stays lockstep with `@qvac/sdk` via `qv-sdk-bare-sdk-sync` (not listed above). Use `/qv-agent-stack-sync` for plan / prepare-cascade / promote.
+
+## Glob Patterns
 
 ```yaml
 globs:
@@ -28,14 +44,12 @@ globs:
   - packages/logging/**
   - packages/error/**
   - packages/ai-sdk-provider/**
+  - packages/inference/**
+  - packages/registry-server/**
+  - plugins/opencode/**
+  - plugins/openclaw/**
 ```
 
 ## Skill Naming Convention
 
-Skills for SDK pod should use the `qv-sdk-` prefix:
-
-- `qv-sdk-pr-create`
-- `qv-sdk-changelog`
-- `qv-sdk-backmerge`
-- `qv-sdk-e2e-create`
-- `qv-sdk-pr-status`
+SDK pod skills use the `qv-sdk-` prefix (`qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`, `qv-sdk-e2e-create`, `qv-sdk-pr-status`, `qv-sdk-update-models`). Agent-stack orchestration is `qv-agent-stack-sync`.

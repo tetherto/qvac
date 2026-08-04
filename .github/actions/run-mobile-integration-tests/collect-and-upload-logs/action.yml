@@ -31,6 +31,10 @@ inputs:
     description: "JSON array of Device Farm run ARNs (any length)"
     required: false
     default: "[]"
+  batch-suffix:
+    description: "Optional per-batch infix (e.g. 'bs256-faoff-') so a workflow that calls this action once per matrix batch does not collide artifact names. Must end with '-' when set. Empty = single-call behaviour."
+    required: false
+    default: ""
 
 outputs:
   console-log-artifact:
@@ -422,7 +426,7 @@ runs:
       if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
       uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
       with:
-        name: console-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        name: console-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.batch-suffix }}${{ inputs.platform }}
         path: console-logs/
         retention-days: 30
         if-no-files-found: ignore
@@ -504,7 +508,7 @@ runs:
       if: always() && inputs.enables-perf == 'true' && steps.extract_perf.outputs.found == 'true'
       uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
       with:
-        name: perf-report-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        name: perf-report-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.batch-suffix }}${{ inputs.platform }}
         path: perf-report/
         retention-days: 30
         if-no-files-found: ignore

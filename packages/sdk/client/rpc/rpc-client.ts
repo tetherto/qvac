@@ -8,9 +8,15 @@ import {
   type RPCOptions
 } from '@/schemas'
 import { reconstructError } from './rpc-error'
-import { withTimeout, withTimeoutStream } from '@/utils/withTimeout'
+import { withTimeout, withTimeoutStream, OperationTimeoutError } from '@/utils/withTimeout'
 import { getClientLogger, summarizeRequest } from '@/logging'
-import { getRPC, close as closeRPC, createDuplexSession, getWorkerLifeSignal } from '#rpc'
+import {
+  getRPC,
+  close as closeRPC,
+  createDuplexSession,
+  getWorkerLifeSignal,
+  notifyChannelClosed
+} from '#rpc'
 import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors-client'
 import { formatZodError } from '@/utils/zod-error'
 import { z } from 'zod'
@@ -87,10 +93,25 @@ function parseRequest<T extends Request>(request: T): Request {
 }
 
 // Race in-flight reply/stream pulls against the worker-life signal —
-// bare-rpc's `_onerror` does not iterate `_outgoingRequests`, so without
-// this they hang on a dead socket.
+// bare-rpc's `_onerror`/`_onclose` reject a pending reply or destroy a
+// stream with its own generic `RPCError` (e.g. `CHANNEL_CLOSED`) as soon
+// as the channel dies, which can beat the SDK's own crash detection
+// (driven by the child process's `'exit'` event). Since `req.reply()` and
+// response streams never reject with an application-level error — those
+// always arrive as a resolved payload handled by `checkAndThrowError` —
+// any rejection reaching these helpers other than our own `withTimeout`
+// is transport failure. Under our IPC transport a channel close always
+// means the worker is gone, so remapping it to the life signal's reason
+// (or a generic crash if the signal hasn't fired yet) is safe.
+//
+// When we win that race, the life signal hasn't aborted yet, so nothing
+// has invalidated the cached RPC connection — the next call would reuse
+// the same dead channel and fail again. `notifyChannelClosed()` tears it
+// down eagerly instead of waiting on the slow exit event; it's a no-op
+// once the signal is already aborted, so this is safe to call every time.
 
 function lifeSignalAbortError(signal: AbortSignal): Error {
+  if (!signal.aborted) notifyChannelClosed()
   if (signal.reason instanceof Error) return signal.reason
   return new WorkerCrashedError(null, null)
 }
@@ -99,7 +120,14 @@ async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
   // Null on Bare-direct / Expo and pre-spawn.
   const lifeSignal = getWorkerLifeSignal()
   if (!lifeSignal) return p
-  if (lifeSignal.aborted) throw lifeSignalAbortError(lifeSignal)
+  if (lifeSignal.aborted) {
+    // `p` (e.g. `req.reply()`) may already be a rejected promise — bare-rpc
+    // 1.3.8 rejects synchronously once its channel is closed. We're
+    // discarding it in favour of the life signal's classification, so give
+    // it a handler or its rejection surfaces as an unhandled rejection.
+    p.catch(() => {})
+    throw lifeSignalAbortError(lifeSignal)
+  }
   return await new Promise<T>((resolve, reject) => {
     let settled = false
     const onAbort = () => {
@@ -120,8 +148,7 @@ async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
         if (settled) return
         settled = true
         lifeSignal.removeEventListener('abort', onAbort)
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
-        reject(err)
+        reject(err instanceof OperationTimeoutError ? err : lifeSignalAbortError(lifeSignal))
       }
     )
   })
@@ -158,8 +185,7 @@ async function* iterateWithLifeSignal<T>(source: AsyncGenerator<T>): AsyncGenera
             if (settled) return
             settled = true
             lifeSignal.removeEventListener('abort', onAbort)
-            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- forwarding upstream rejection as-is
-            reject(err)
+            reject(err instanceof OperationTimeoutError ? err : lifeSignalAbortError(lifeSignal))
           }
         )
       })
@@ -513,6 +539,29 @@ export interface DuplexSession {
   responseStream: DuplexReadable
 }
 
+// bare-rpc's own teardown can destroy the duplex streams with the raw
+// transport error before the worker-life-signal's onAbort handler (in
+// `createDuplexSession`) gets to destroy them with the classified one —
+// same race as the plain reply/stream paths above, so route consumption
+// through the same remap.
+function toAsyncGenerator<T>(iterable: AsyncIterable<T>): AsyncGenerator<T> {
+  return (async function* () {
+    yield* iterable
+  })()
+}
+
+function withLifeSignalDuplex(raw: DuplexReadable): DuplexReadable {
+  const generator = iterateWithLifeSignal(toAsyncGenerator(raw))
+  return {
+    [Symbol.asyncIterator]() {
+      return generator[Symbol.asyncIterator]()
+    },
+    destroy() {
+      raw.destroy()
+    }
+  }
+}
+
 export async function duplex<T extends Request>(
   request: T,
   options?: RPCOptions
@@ -541,7 +590,7 @@ async function duplexBase<T extends Request>(
   const session = await withTimeout(sessionPromise, timeout)
   return {
     requestStream: session.requestStream,
-    responseStream: session.responseStream as DuplexReadable
+    responseStream: withLifeSignalDuplex(session.responseStream as DuplexReadable)
   }
 }
 
@@ -586,7 +635,7 @@ async function duplexProfiled<T extends Request>(
 
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined
 
-  const rawReadable = session.responseStream as DuplexReadable
+  const rawReadable = withLifeSignalDuplex(session.responseStream as DuplexReadable)
 
   async function* profiledResponseStream(): AsyncGenerator<string> {
     let lineBuffer = ''

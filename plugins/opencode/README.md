@@ -124,7 +124,8 @@ running `opencode` from the terminal.
 
 ## Requirements
 
-- [`@qvac/ai-sdk-provider@^0.2.2`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
-  for managed mode.
-- [`@qvac/cli@^0.7.0`](https://www.npmjs.com/package/@qvac/cli) available so the
-  host can run `qvac serve` (resolved by the provider's managed mode).
+- [`@qvac/ai-sdk-provider@^0.4.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
+  for managed mode (AI SDK 7).
+- [`@qvac/cli@^0.9.0`](https://www.npmjs.com/package/@qvac/cli) available so the
+  host can run `qvac serve` (SDK 0.16 runtime).
+- Node.js 22 or newer.

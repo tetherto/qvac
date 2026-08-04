@@ -10,8 +10,6 @@ import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
 import { translationLlmTests } from './translation-llm-tests.js'
-import { translationSalamandraTests } from './translation-salamandra-tests.js'
-import { translationAfriquegemmaTests } from './translation-afriquegemma-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
 import { errorTests } from './error-tests.js'
@@ -40,6 +38,9 @@ import { wrongModelTests } from './wrong-model-tests.js'
 import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
+import { pluginTests } from './plugin-tests.js'
+import { snapStorageTests } from './snap-storage-tests.js'
+import { systemResourcesTests } from './system-resources-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -68,6 +69,23 @@ export const modelLoadEmbedding: TestDefinition = {
 
 export const modelLoadOcr: TestDefinition = {
   testId: 'model-load-ocr',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 90000
+  }
+}
+
+// Loads OCR_DOCTR with no explicit pipelineType/detectorModelSrc — the
+// gap that let QVAC-22514 ship: with only OCR_LATIN (EasyOCR) covered, the
+// plugin could assume the EasyOCR pipeline for every recognizer and no e2e
+// test noticed. This exercises the auto pipelineType: "doctr" inference and
+// DBNet detector derivation on the load path.
+export const modelLoadOcrDoctr: TestDefinition = {
+  testId: 'model-load-ocr-doctr',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
@@ -199,6 +217,7 @@ export const tests = [
   modelLoadLlm,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -238,12 +257,6 @@ export const tests = [
 
   // Translation: LLM (open-vocabulary via from/to)
   ...translationLlmTests,
-
-  // Translation: Salamandra (EU languages)
-  ...translationSalamandraTests,
-
-  // Translation: AfriqueGemma (African languages)
-  ...translationAfriquegemmaTests,
 
   // Sharded model tests
   ...shardedModelTests,
@@ -321,6 +334,15 @@ export const tests = [
   // (see mobile/consumer.ts) because the GGUFs are too large for the
   // Device Farm infra (see note there).
   ...vlaTests,
+
+  // Custom plugin system tests (custom-echo-plugin, error paths)
+  ...pluginTests,
+
+  // Strict Snap storage-path conformance
+  ...snapStorageTests,
+
+  // Local hardware capabilities and on-demand usage sampling
+  ...systemResourcesTests,
 
   // Additional model tests
   modelSwitchLlm,

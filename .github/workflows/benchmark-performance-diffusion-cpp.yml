@@ -7,6 +7,10 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/diffusion-cpp@1.0.0). When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
       qvac_perf_runs:
         description: "QVAC_PERF_RUNS — counted iterations per perf test"
         required: false
@@ -34,27 +38,6 @@ permissions:
   id-token: write
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -75,8 +58,7 @@ jobs:
   prebuild:
     needs:
       - context
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true'
+    if: ${{ !inputs.prebuild_package }}
     permissions:
       contents: write
       packages: write
@@ -92,8 +74,7 @@ jobs:
     needs:
       - context
       - prebuild
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop
+    if: ${{ !cancelled() && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -103,6 +84,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
       qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
 
@@ -116,8 +98,7 @@ jobs:
     needs:
       - context
       - prebuild
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -128,14 +109,14 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
 
   summarize:
     needs:
       - context
       - desktop-benchmarks
       - mobile-benchmarks
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.context.result == 'success')
+    if: (always() && needs.context.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

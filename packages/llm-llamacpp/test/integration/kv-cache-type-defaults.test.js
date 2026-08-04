@@ -41,7 +41,7 @@ const PROMPT = [
 // Return { k, v } from the most recent `llama_kv_cache:` line, or null if no
 // such line was logged. Scans from the end so we read the current run's line,
 // not a previous test's.
-function parseKvCacheTypes (logs) {
+function parseKvCacheTypes(logs) {
   const lineRe = /llama_kv_cache:/
   const kRe = /K\s*\(([^)]+)\)/
   const vRe = /V\s*\(([^)]+)\)/
@@ -62,11 +62,11 @@ function parseKvCacheTypes (logs) {
 // quantized KV-cache shifts abort there). Using the addon's own decision log is
 // robust: raw llama.cpp signals like "no usable GPU found" are NOT routed through
 // the logger, so they cannot be relied on here.
-function expectedGpuDefault (logText) {
+function expectedGpuDefault(logText) {
   return /defaulting kv-cache to q8_0/i.test(logText) ? 'q8_0' : 'f16'
 }
 
-async function loadWithConfig (extraConfig) {
+async function loadWithConfig(extraConfig) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -96,7 +96,11 @@ async function loadWithConfig (extraConfig) {
     await model.load()
     const response = await model.run(PROMPT)
     const chunks = []
-    await response.onUpdate(data => { chunks.push(data) }).await()
+    await response
+      .onUpdate((data) => {
+        chunks.push(data)
+      })
+      .await()
     const output = chunks.join('').trim()
     const kvTypes = parseKvCacheTypes(specLogger.logs)
     const logText = specLogger.logs.join('\n')
@@ -107,19 +111,23 @@ async function loadWithConfig (extraConfig) {
   }
 }
 
-safeTest('GPU defaults KV-cache to q8_0 (Metal/Vulkan) when unset', { timeout: 900_000 }, async t => {
-  // device=gpu, no cache-type-k/v (flash-attn set on in loadWithConfig). The
-  // expected default adapts to the backend the runner actually selected.
-  const { output, kvTypes, logText } = await loadWithConfig({ device: 'gpu' })
-  const expected = expectedGpuDefault(logText)
+safeTest(
+  'GPU defaults KV-cache to q8_0 (Metal/Vulkan) when unset',
+  { timeout: 900_000 },
+  async (t) => {
+    // device=gpu, no cache-type-k/v (flash-attn set on in loadWithConfig). The
+    // expected default adapts to the backend the runner actually selected.
+    const { output, kvTypes, logText } = await loadWithConfig({ device: 'gpu' })
+    const expected = expectedGpuDefault(logText)
 
-  t.ok(output.length > 0, 'GPU run produced output')
-  t.ok(kvTypes, 'KV-cache allocation line was logged')
-  t.is(kvTypes.k, expected, `cache-type-k default matches backend policy (${expected})`)
-  t.is(kvTypes.v, expected, `cache-type-v default matches backend policy (${expected})`)
-})
+    t.ok(output.length > 0, 'GPU run produced output')
+    t.ok(kvTypes, 'KV-cache allocation line was logged')
+    t.is(kvTypes.k, expected, `cache-type-k default matches backend policy (${expected})`)
+    t.is(kvTypes.v, expected, `cache-type-v default matches backend policy (${expected})`)
+  }
+)
 
-safeTest('CPU keeps KV-cache at f16 when unset', { timeout: 900_000 }, async t => {
+safeTest('CPU keeps KV-cache at f16 when unset', { timeout: 900_000 }, async (t) => {
   // device=cpu, no cache-type-k/v. The auto-default must not apply on CPU.
   const { output, kvTypes } = await loadWithConfig({ device: 'cpu' })
 
@@ -129,30 +137,34 @@ safeTest('CPU keeps KV-cache at f16 when unset', { timeout: 900_000 }, async t =
   t.is(kvTypes.v, 'f16', 'cache-type-v stays f16 on CPU')
 })
 
-safeTest('GPU respects an explicit cache type over the default', { timeout: 900_000 }, async t => {
-  // QVAC-21318: explicit q4_0 is honoured verbatim on CPU / Vulkan / Metal. On
-  // OpenCL (Adreno) quantized KV is now REJECTED (it aborts on a KV-cache shift),
-  // so load() throws a clear StatusError instead — accept whichever applies to
-  // the backend the CI runner selected.
-  let result
-  try {
-    result = await loadWithConfig({
-      device: 'gpu',
-      'cache-type-k': 'q4_0',
-      'cache-type-v': 'q4_0'
-    })
-  } catch (err) {
-    const msg = err?.message || String(err)
-    t.ok(
-      /opencl/i.test(msg) && /quantized|not supported/i.test(msg),
-      `quantized KV rejected on OpenCL with a clear error: "${msg.slice(0, 160)}"`
-    )
-    return
-  }
+safeTest(
+  'GPU respects an explicit cache type over the default',
+  { timeout: 900_000 },
+  async (t) => {
+    // QVAC-21318: explicit q4_0 is honoured verbatim on CPU / Vulkan / Metal. On
+    // OpenCL (Adreno) quantized KV is now REJECTED (it aborts on a KV-cache shift),
+    // so load() throws a clear StatusError instead — accept whichever applies to
+    // the backend the CI runner selected.
+    let result
+    try {
+      result = await loadWithConfig({
+        device: 'gpu',
+        'cache-type-k': 'q4_0',
+        'cache-type-v': 'q4_0'
+      })
+    } catch (err) {
+      const msg = err?.message || String(err)
+      t.ok(
+        /opencl/i.test(msg) && /quantized|not supported/i.test(msg),
+        `quantized KV rejected on OpenCL with a clear error: "${msg.slice(0, 160)}"`
+      )
+      return
+    }
 
-  const { output, kvTypes } = result
-  t.ok(output.length > 0, 'GPU run produced output')
-  t.ok(kvTypes, 'KV-cache allocation line was logged')
-  t.is(kvTypes.k, 'q4_0', 'user cache-type-k respected (not defaulted to q8_0)')
-  t.is(kvTypes.v, 'q4_0', 'user cache-type-v respected (not defaulted to q8_0)')
-})
+    const { output, kvTypes } = result
+    t.ok(output.length > 0, 'GPU run produced output')
+    t.ok(kvTypes, 'KV-cache allocation line was logged')
+    t.is(kvTypes.k, 'q4_0', 'user cache-type-k respected (not defaulted to q8_0)')
+    t.is(kvTypes.v, 'q4_0', 'user cache-type-v respected (not defaulted to q8_0)')
+  }
+)

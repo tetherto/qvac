@@ -48,8 +48,12 @@ public:
   static void atomicPromoteFile(const std::string& from, const std::string& to);
 
 private:
+  void saveActiveCacheForTransition();
+  bool discardActiveCacheIfBackingStoreMissing();
   void writeCacheFile(const std::string& path);
   static bool isFileInitialized(const std::filesystem::path& path);
+  static bool isFileMissingOrEmpty(const std::filesystem::path& path);
+  static bool isParentDirectoryMissing(const std::filesystem::path& path);
 
   LlmContext* llmContext_;
   llama_pos configuredNDiscarded_;
@@ -57,4 +61,5 @@ private:
   std::string sessionPath_;
   bool cacheDisabled_ = true;
   bool cacheUsedInLastPrompt_ = false;
+  bool activeCacheSavedToDisk_ = false;
 };
