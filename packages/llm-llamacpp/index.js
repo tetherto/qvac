@@ -155,6 +155,10 @@ function normalizeGenerationParams(generationParams) {
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
+/// Upper bound for `parallel`, mirroring kMaxParallelWorkers in
+/// addon/src/addon/AddonJs.hpp — the engine's own n_seq_max ceiling
+/// (LLAMA_MAX_SEQ in qvac-fabric). Keep the two in sync.
+const MAX_PARALLEL = 256
 
 function normalizeFinetuneParams(opts) {
   const validation = opts.validation
@@ -272,18 +276,19 @@ class LlmLlamacpp {
     this._checkpointSaveDir = null
     // Concurrency is the caller's configured `parallel` (n_seq_max); values
     // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
-    // derived once here rather than queried from the loaded model. The 1..1024
+    // derived once here rather than queried from the loaded model. The 1..256
     // range mirrors the native kMaxParallelWorkers contract in createInstance
-    // (addon/src/addon/AddonJs.hpp) — keep the two in sync.
+    // (addon/src/addon/AddonJs.hpp) — keep the two in sync. 256 is the
+    // engine's own n_seq_max ceiling (LLAMA_MAX_SEQ in qvac-fabric).
     if (config?.parallel !== undefined) {
       const parallel = Number(config.parallel)
       if (
         !/^[0-9]+$/.test(String(config.parallel)) ||
         !Number.isSafeInteger(parallel) ||
         parallel < 1 ||
-        parallel > 1024
+        parallel > MAX_PARALLEL
       ) {
-        throw new TypeError('parallel must be an integer between 1 and 1024')
+        throw new TypeError(`parallel must be an integer between 1 and ${MAX_PARALLEL}`)
       }
       this._maxConcurrency = parallel
     } else {
@@ -376,6 +381,29 @@ class LlmLlamacpp {
     return this._run(() => this._runInternal(prompt, runOptions))
   }
 
+  /**
+   * True when the pool has no room for another request right now — the
+   * fast-fail condition behind `rejectWhenBusy: true`.
+   *
+   * Capacity is consumed in scheduler slots, but a batch run of N prompts is
+   * ONE job, so `activeJobs()` alone reports a full pool as `1` and would let
+   * a caller who asked to fail fast be admitted and then block behind the
+   * batch. `activeSlots()` measures the resource that actually runs out; the
+   * job count still matters where slots are not the currency — `parallel: 1`
+   * (no batch scheduler, slots always 0), an exclusive finetune, and the
+   * window between admission and slot enqueue — so capacity is the max of the
+   * two. Optional call so an older/stubbed binding keeps working.
+   *
+   * Fast-fail hint only, like the finetune check below: the native scheduler
+   * is the authority, and slot state can change right after this read.
+   * @returns {boolean}
+   */
+  _atCapacity() {
+    const jobs = this.addon.activeJobs()
+    const slots = this.addon.activeSlots?.() ?? 0
+    return Math.max(jobs, slots) >= this._maxConcurrency
+  }
+
   async _runBatchInternal(batchInput) {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
@@ -386,7 +414,7 @@ class LlmLlamacpp {
     // batch is refused even when slots are free.
     if (
       (BatchHandler.groupRejectWhenBusy(batchInput) ?? this._rejectWhenBusy) &&
-      this.addon.activeJobs() >= this._maxConcurrency
+      this._atCapacity()
     ) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
@@ -414,10 +442,7 @@ class LlmLlamacpp {
     // rejectWhenBusy gates only this fast-fail pre-check: true rejects the moment
     // the pool is full (never queues); false falls through to the scheduler's
     // nearly unbounded queue, so it's only refused (below) under a runaway backlog.
-    if (
-      (rejectWhenBusy ?? this._rejectWhenBusy) &&
-      this.addon.activeJobs() >= this._maxConcurrency
-    ) {
+    if ((rejectWhenBusy ?? this._rejectWhenBusy) && this._atCapacity()) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 

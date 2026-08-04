@@ -203,6 +203,12 @@ public:
   /// (`n_seq_max > 1`, i.e. `parallel >= 2`).
   [[nodiscard]] bool supportsBatching() const;
 
+  /// @brief Requests occupying or waiting for a batch slot (active + pending).
+  /// 0 when no batch scheduler is active (`parallel: 1`, or between reloads),
+  /// where capacity is a job count instead — an admission check must therefore
+  /// take the max of this and the scheduler's job count, never this alone.
+  [[nodiscard]] unsigned activeSlots() const;
+
   /**
    * The Reset method.
    */
@@ -305,10 +311,12 @@ private:
       size_t requestIndex, uint32_t seqId, uint64_t admissionId)>;
   /// Observes the slot's end (fired from onDone, any outcome).
   using SeqObserver = std::function<void(size_t requestIndex, uint32_t seqId)>;
+  /// @p groupTag (non-zero) tags the scheduler group with the job id, so a
+  /// cancel can settle it while its requests are still queued for slots.
   batching::BatchResult processPromptBatchImpl(
       const std::vector<Prompt>& prompts,
       const SeqAssignedObserver& onSeqAssigned = {},
-      const SeqObserver& onSeqDone = {});
+      const SeqObserver& onSeqDone = {}, uint64_t groupTag = 0);
   void cancelInference() const;
   void cancelImpl() const;
 

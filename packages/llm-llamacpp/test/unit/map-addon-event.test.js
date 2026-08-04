@@ -21,6 +21,30 @@ test('TPS-shaped data preserves unknown backendDevice values as-is', function (t
   t.is(result.data.backendDevice, 2)
 })
 
+// stopReason rides the per-job stats on both the sequential and the concurrent
+// path. It is index-matched to the C++ GenerationStopReason enum, and absent
+// when the native side could not attribute one (e.g. a batch group whose
+// requests ended differently) — so the mapping must stay guarded on `number`.
+
+test('numeric stopReason maps to its label', function (t) {
+  const result = mapAddonEvent('anything', { TPS: 1, stopReason: 3 }, null)
+  t.is(
+    result.data.stopReason,
+    'predictionLimit',
+    'index 3 must map to predictionLimit (what reasoning.test.js discriminates on)'
+  )
+})
+
+test('out-of-range stopReason falls back to "none"', function (t) {
+  const result = mapAddonEvent('anything', { TPS: 1, stopReason: 99 }, null)
+  t.is(result.data.stopReason, 'none')
+})
+
+test('absent stopReason stays absent rather than becoming a label', function (t) {
+  const result = mapAddonEvent('anything', { TPS: 1 }, null)
+  t.absent('stopReason' in result.data, 'a stats payload without stopReason must not gain one')
+})
+
 test('finetune terminal payload maps to JobEnded', function (t) {
   const payload = { op: 'finetune', status: 'COMPLETED', stats: { loss: 0.1 } }
   const result = mapAddonEvent('anything', payload, null)

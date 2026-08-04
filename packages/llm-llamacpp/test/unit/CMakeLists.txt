@@ -58,6 +58,7 @@ add_executable(
   test_job_cancel_registry.cpp
   test_reasoning_block_compactor.cpp
   test_parse_unsigned.cpp
+  test_parallel_ceiling.cpp
   test_finetune_cancel_action.cpp
   test_finetune_pending_pause.cpp
   test_whole_model_cancel_finetune.cpp

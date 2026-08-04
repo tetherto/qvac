@@ -26,6 +26,7 @@
 #include "addon/PayloadHandler.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "utils/ParallelLimits.hpp"
 #include "utils/ParseUnsigned.hpp"
 
 namespace qvac_lib_inference_addon_llama {
@@ -519,14 +520,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // moved into the model; absent means single-slot (1), a malformed or
   // out-of-range value throws before the model or scheduler is constructed.
   auto config = args.getSubmap(1, "config");
-  // Explicit safe ceiling for the scheduler's thread pool; keep in sync with
-  // the JS constructor validation in index.js. The pool is thread-per-slot
-  // and eager: `parallel` OS threads are spawned at load and live for the
-  // model's lifetime, so a server pays the whole cost upfront and is ready
-  // to serve at full concurrency with no warm-up. The ceiling only bounds
-  // the config; the per-value cost is the user's documented choice (see
-  // `parallel` in index.d.ts and docs/continuous-batching.md).
-  constexpr unsigned kMaxParallelWorkers = 1024;
+  // Bounded by kMaxParallelWorkers (the engine's n_seq_max ceiling; see its
+  // definition above). The pool is thread-per-slot and eager: `parallel` OS
+  // threads are spawned at load and live for the model's lifetime, so a server
+  // pays the whole cost upfront and is ready to serve at full concurrency with
+  // no warm-up. The per-value cost below the ceiling is the user's documented
+  // choice (see `parallel` in index.d.ts and docs/continuous-batching.md).
   unsigned maxConcurrency = 1;
   if (auto it = config.find("parallel"); it != config.end()) {
     try {
@@ -638,6 +637,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         env, "id", js::Number::create(env, static_cast<double>(*jobId)));
   }
   return result;
+}
+JSCATCH
+
+/// Requests occupying or waiting for a continuous-batching slot. Complements
+/// JsInterface::activeJobs (a job count): one batch job of N prompts consumes
+/// up to N slots, so only this number tracks the resource that runs out. 0
+/// when no batch scheduler is active (`parallel: 1`), hence the JS admission
+/// check takes the max of the two rather than replacing one with the other.
+inline js_value_t* activeSlots(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  return js::Number::create(
+      env, static_cast<double>(getLlamaModel(instance)->activeSlots()));
 }
 JSCATCH
 

@@ -341,6 +341,8 @@ The following table describes the expected behavior of `run` and `cancel` depend
 
 Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
 
+"Full" is counted in slots, not calls: a batch run of N prompts is one job that occupies up to N slots, so with `parallel: 4` a single in-flight `run([p, p, p, p])` is enough to fail-fast a following run.
+
 #### Prefill (cache warming) with `parallel >= 2`
 
 A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it is *persistable*: `saveCacheToDisk: true` plus a `cacheKey`. A live-only prefill (no persistence) warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
@@ -352,7 +354,9 @@ A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model 
 - **In-flight prompts** (already decoding in a slot) are cancelled gracefully: they keep whatever they generated so far and the call resolves normally — no error.
 - **Queued prompts** (still waiting, never admitted to a slot) had no chance to run and produced nothing. These are surfaced as an error rather than silent empty results: the batch call rejects with a `Cancelled` `StatusError`.
 
-So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts.
+So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts. A single (non-batch) run that was still queued when it was cancelled rejects the same way, for the same reason.
+
+Cancelling a queued job resolves immediately, whether or not the slots it was waiting for are held by an unrelated run — you never wait out someone else's generation to cancel your own queued work.
 
 
 ## Fine-tuning

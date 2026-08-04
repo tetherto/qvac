@@ -644,16 +644,32 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .lctx = ctx,
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
   };
-  return std::make_unique<batching::ContinuousBatchScheduler>(
-      shared,
-      maxChunkSize,
-      ctxTotalTokens,
-      batchSize,
-      batchCapacity,
-      cparams,
-      state.configuredNDiscarded_,
-      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
-      buildDriverFactory(shared, state.llmContext_->visionContext()));
+  // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
+  // batchCapacity >= batchSize) with std::invalid_argument, which would escape
+  // load unmapped. Both traps are really a `parallel` misconfiguration, so
+  // they are reported as InvalidArgument naming the knobs the caller sets.
+  try {
+    return std::make_unique<batching::ContinuousBatchScheduler>(
+        shared,
+        maxChunkSize,
+        ctxTotalTokens,
+        batchSize,
+        batchCapacity,
+        cparams,
+        state.configuredNDiscarded_,
+        state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
+        buildDriverFactory(shared, state.llmContext_->visionContext()));
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "[LlamaModel] parallel=%zu is too large for this context "
+            "(ctx_size=%u, batch_size=%d): %s",
+            batchSize,
+            ctxTotalTokens,
+            batchCapacity,
+            e.what()));
+  }
 }
 
 void LlamaModel::setWeightsForFile(
@@ -1002,17 +1018,10 @@ std::any LlamaModel::process(
 std::vector<std::string> LlamaModel::processConcurrentBatch(
     const std::vector<Prompt>& prompts,
     const qvac_lib_inference_addon_cpp::JobId id) {
-  // A whole-model cancel parked between the scheduler dequeue and here
-  // (jobStarting -> parkAll) is taken explicitly, with the same terminal the
-  // scheduler gives a queued drop.
-  if (liveJobs_.consumeParked(id)) {
-    throw std::runtime_error("Job cancelled");
-  }
-  // Registered before submission so a cancel arriving while the group is
-  // still queued for slots is parked instead of dropped as an unknown id.
-  liveJobs_.add(id);
-  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
-
+  // Tag the scheduler group with the job id so a cancel can target it before
+  // any admission. Job ids are minted monotonically and never reused, so a tag
+  // cannot be confused with a later group's.
+  const auto groupTag = static_cast<uint64_t>(id);
   // The group's live slots, shared with its cancel action: every admission's
   // (seqId -> admissionId) ownership pair. A slot joins at admission and
   // leaves the moment it ends — the scheduler may recycle the seqId to a
@@ -1028,11 +1037,14 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   };
   auto slots = std::make_shared<GroupSlots>();
 
-  // The group's cancel action: tear down every slot it currently holds. Runs
-  // under the canceller's shared stateMtx_ (see cancelById), so state_ stays
-  // valid; it releases slots->mtx before touching the scheduler, so it never
-  // holds both locks at once.
-  const auto cancelGroup = [this, slots] {
+  // The group's cancel action: tear down every slot it currently holds, and
+  // settle the group when some of its requests are still queued — those have
+  // no slot to tear down, and waiting for them to be admitted means waiting on
+  // whichever unrelated group currently holds the pool. Runs under the
+  // canceller's shared stateMtx_ (see cancelById), so state_ stays valid; it
+  // releases slots->mtx before touching the scheduler, so it never holds both
+  // locks at once.
+  const auto cancelGroup = [this, slots, groupTag] {
     std::vector<std::pair<uint32_t, uint64_t>> seqs;
     {
       std::lock_guard<std::mutex> seqsLock(slots->mtx);
@@ -1044,8 +1056,21 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
       for (const auto& [seqId, admissionId] : seqs) {
         state_->batchScheduler_->cancel(seqId, admissionId);
       }
+      // No-op once every request of the group holds a slot: the loop above
+      // already covers it, and the scheduler keeps the graceful in-slot cancel.
+      state_->batchScheduler_->cancelGroupQueued(groupTag);
     }
   };
+
+  // Armed BEFORE submission: a cancel that arrives while the group is still
+  // entirely queued must reach the drain above, not sit parked until the group
+  // is finally admitted. The arming registration also hands back a cancel
+  // parked between the scheduler dequeue and here (jobStarting -> parkAll),
+  // which is refused with the same terminal the scheduler gives a queued drop.
+  if (liveJobs_.add(id, cancelGroup)) {
+    throw std::runtime_error("Job cancelled");
+  }
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
   const SeqAssignedObserver onSeqAssigned =
       [this, id, slots, cancelGroup](
@@ -1075,7 +1100,7 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   };
 
   batching::BatchResult result =
-      processPromptBatchImpl(prompts, onSeqAssigned, onSeqDone);
+      processPromptBatchImpl(prompts, onSeqAssigned, onSeqDone, groupTag);
   // Leave the group's complete terminal snapshot behind for the tagged
   // jobEnded event: model-level figures from the run's own stats snapshot,
   // TTFT/TPS averaged over the group's requests that produced them, token
@@ -1091,9 +1116,24 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
 
 std::string LlamaModel::processConcurrent(
     const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id) {
-  // Registered before submission so a cancel arriving while the request is
-  // still queued for a slot is parked instead of dropped as an unknown id.
-  liveJobs_.add(id);
+  // Tagged like the batch path, so a cancel arriving while this request is
+  // still queued behind a wider group settles it now instead of waiting for
+  // that group to release a slot.
+  const auto groupTag = static_cast<uint64_t>(id);
+  // Armed BEFORE submission with the queued drain, for the same reason the
+  // batch path is: until admission there is no slot to cancel, and a parked
+  // cancel would otherwise only be consumed once a slot frees. Arming here
+  // also surfaces a cancel parked between the scheduler dequeue and this call
+  // (jobStarting -> parkAll), which the batch path already refused explicitly
+  // — so both paths now give the same terminal for that race.
+  const auto cancelQueued = [this, groupTag] {
+    if (state_ && state_->batchScheduler_) {
+      state_->batchScheduler_->cancelGroupQueued(groupTag);
+    }
+  };
+  if (liveJobs_.add(id, cancelQueued)) {
+    throw std::runtime_error("Job cancelled");
+  }
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
   // Bind the slot teardown as the cancel action at admission, before the
@@ -1123,7 +1163,7 @@ std::string LlamaModel::processConcurrent(
 
   const std::vector<Prompt> singleBatch{prompt};
   batching::BatchResult result =
-      processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone);
+      processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone, groupTag);
   // Leave the job's complete terminal snapshot behind for the tagged
   // jobEnded event (consumeJobStats), queued right after this returns. A
   // throwing job never gets a jobEnded, so nothing is stored on that path.
@@ -1145,7 +1185,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
   // snapshot — no live scheduler read, no llama_perf_context_reset: a peer
   // job may be mid-decode on the shared context, and the reset belongs only
   // to the explicitly requested whole-model runtimeStats().
-  return {
+  qvac_lib_inference_addon_cpp::RuntimeStats terminal = {
       {"TTFT", observed.ttftMs},
       {"TPS", observed.genTps},
       {"ppTPS", stats.prefillTokensPerSecond()},
@@ -1159,6 +1199,17 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // per-context accumulator, so a per-job value would be misattributed.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
+  // Unlike the vision counters, the stop reason IS per-sequence, so a job can
+  // report its own without misattribution — a single concurrent prompt would
+  // otherwise silently lose the stat the sequential path emits. Present only
+  // when it is honest: absent for a group whose requests disagree (see
+  // aggregateObservedStats), which addon.js tolerates by mapping only a
+  // numeric value.
+  if (observed.stopReason.has_value()) {
+    terminal.emplace_back(
+        "stopReason", static_cast<int64_t>(*observed.stopReason));
+  }
+  return terminal;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::consumeJobStats(
@@ -1391,9 +1442,18 @@ bool LlamaModel::supportsBatching() const {
   return state_ && isMultiBatchActivated(*state_);
 }
 
+unsigned LlamaModel::activeSlots() const {
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    return 0;
+  }
+  return state_->batchScheduler_->occupancy();
+}
+
 batching::BatchResult LlamaModel::processPromptBatchImpl(
     const std::vector<Prompt>& prompts,
-    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone) {
+    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone,
+    const uint64_t groupTag) {
   // `onSeqAssigned` (optional) fires once per request when the scheduler
   // assigns its seqId. Serialize the entry section (prior-count check, cache
   // invalidation, KV wipe) under batchEntryMutex_: without it a second caller
@@ -1564,7 +1624,7 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     requests.push_back(std::move(sr));
   }
 
-  return scheduler.processBatch(std::move(requests));
+  return scheduler.processBatch(std::move(requests), groupTag);
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {

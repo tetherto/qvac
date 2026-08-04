@@ -326,6 +326,85 @@ TEST(ObservedRequestStats, GroupAggregateOfNothingIsZero) {
   EXPECT_DOUBLE_EQ(agg.genTps, 0.0);
   EXPECT_EQ(agg.generatedTokens, 0);
   EXPECT_EQ(agg.promptTokens, 0);
+  EXPECT_FALSE(agg.stopReason.has_value());
+}
+
+// The stop reason is per-sequence, so unlike the shared per-context vision
+// counters it can be reported for one request without misattribution. It rides
+// the observed stats so the concurrent path can emit it for a single prompt.
+
+TEST(ObservedRequestStats, CarriesTheFinalizedStopReason) {
+  constexpr unsigned maxTokens = 256;
+  Request req(/*rid=*/0, std::vector<llama_token>{1, 2}, maxTokens);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+
+  const ObservedRequestStats observed = computeObservedStats(
+      std::chrono::steady_clock::time_point{},
+      req,
+      GenerationStopReason::PredictionLimit);
+  ASSERT_TRUE(observed.stopReason.has_value());
+  EXPECT_EQ(*observed.stopReason, GenerationStopReason::PredictionLimit);
+}
+
+TEST(ObservedRequestStats, StopReasonIsAbsentWhenNotSupplied) {
+  constexpr unsigned maxTokens = 256;
+  Request req(/*rid=*/0, std::vector<llama_token>{1, 2}, maxTokens);
+
+  const ObservedRequestStats observed =
+      computeObservedStats(std::chrono::steady_clock::time_point{}, req);
+  EXPECT_FALSE(observed.stopReason.has_value());
+}
+
+TEST(ObservedRequestStats, UniformGroupKeepsItsStopReason) {
+  // A one-item group is the concurrent single-prompt path: its reason must
+  // survive aggregation, which is the regression this pins.
+  const std::vector<ObservedRequestStats> lone{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::PredictionLimit}};
+  const ObservedRequestStats loneAgg = aggregateObservedStats(lone);
+  ASSERT_TRUE(loneAgg.stopReason.has_value());
+  EXPECT_EQ(*loneAgg.stopReason, GenerationStopReason::PredictionLimit);
+
+  const std::vector<ObservedRequestStats> agreed{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::Eos},
+      {.generatedTokens = 6,
+       .promptTokens = 3,
+       .stopReason = GenerationStopReason::Eos}};
+  const ObservedRequestStats agreedAgg = aggregateObservedStats(agreed);
+  ASSERT_TRUE(agreedAgg.stopReason.has_value());
+  EXPECT_EQ(*agreedAgg.stopReason, GenerationStopReason::Eos);
+}
+
+TEST(ObservedRequestStats, MixedGroupReportsNoStopReason) {
+  // One reason cannot describe requests that ended differently, so the group
+  // reports none rather than picking a winner.
+  const std::vector<ObservedRequestStats> mixed{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::Eos},
+      {.generatedTokens = 6,
+       .promptTokens = 3,
+       .stopReason = GenerationStopReason::PredictionLimit}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(mixed);
+  EXPECT_FALSE(agg.stopReason.has_value());
+}
+
+TEST(ObservedRequestStats, GroupWithAnUnknownStopReasonReportsNone) {
+  // A request that was never finalized (cancelled, or still unknown) makes the
+  // group's reason indeterminate too.
+  const std::vector<ObservedRequestStats> partial{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::Eos},
+      {.generatedTokens = 0, .promptTokens = 3}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(partial);
+  EXPECT_FALSE(agg.stopReason.has_value());
 }
 
 TEST(ObservedRequestStats, SingleTokenHasTtftButNoRate) {

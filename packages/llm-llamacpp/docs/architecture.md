@@ -178,6 +178,7 @@ classDiagram
         +cancel() Promise~void~
         +cancelJob(id) Promise~void~
         +activeJobs() number
+        +activeSlots() number
         +unload() Promise~void~
     }
 
@@ -829,6 +830,8 @@ Without coordination, a `run()` could interleave with `load()`/`unload()` transi
 
 Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)`. The queue serializes the *admission* section only: `run()`'s wrapped body resolves once the native scheduler has admitted the job and returned its id, so with `parallel >= 2` many admitted jobs generate concurrently while the next admission proceeds. When the effective `rejectWhenBusy` policy is `true` and the pool is full — always the case at `parallel: 1`, the backward-compatible default — the admission fails fast with the consistent busy error:
 - `"Cannot set new job: a job is already set or being processed"`
+
+"Full" is measured in scheduler slots (`activeSlots()`), not admitted jobs, because one batch job of N prompts occupies up to N slots; the job count is still used where slots are not the currency (`parallel: 1`, which has no scheduler, and exclusive finetune), so the check takes the max of the two.
 
 **Note:** C++ level thread safety (multi-job scheduler with per-slot admission ids, whole-model IModelCancel plus per-job IModelCancelById) is handled by the addon-cpp 1.3.x framework; see addon-cpp docs for architecture and decisions.
 

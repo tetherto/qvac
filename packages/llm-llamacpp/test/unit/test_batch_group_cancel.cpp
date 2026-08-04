@@ -21,6 +21,14 @@ namespace {
 
 using qvac_lib_inference_addon_cpp::JobId;
 
+/// How long a cancel of a fully-queued job may take to settle. With the
+/// targeted queued-cancel path this costs roughly one decode step — a lock, a
+/// flag and a notify — so seconds are a very loose ceiling even on slow CI.
+/// Without it the settle can only happen once a foreign job releases a slot,
+/// which means a whole 256-token generation. Sized to sit far below that and
+/// far above the fixed path's real cost.
+constexpr auto kQueuedCancelSettleBudget = std::chrono::seconds(3);
+
 class BatchGroupCancelTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -190,6 +198,15 @@ TEST_F(BatchGroupCancelTest, CancelWithQueuedOverflowRejectsCancelled) {
   }
   ASSERT_TRUE(groupTokenSeen.load())
       << "test setup: group never emitted a token";
+
+  // Admission capacity is measured in slots, not jobs: this ONE batch job of 4
+  // prompts occupies both slots and queues the other two, so occupancy is 4
+  // while the scheduler's job count is 1. Gating `rejectWhenBusy` on the job
+  // count is what let a fail-fast caller be admitted into a full pool.
+  EXPECT_EQ(model->activeSlots(), 4u)
+      << "a 4-prompt batch on parallel=2 must report 4 occupied-or-queued "
+         "slots, not the 1 job it is";
+
   model->cancelById(kGroupId);
 
   ASSERT_EQ(
@@ -204,4 +221,274 @@ TEST_F(BatchGroupCancelTest, CancelWithQueuedOverflowRejectsCancelled) {
     EXPECT_NE(e.codeString().find("Cancelled"), std::string::npos)
         << "expected a Cancelled error code, got: " << e.codeString();
   }
+
+  // Everything the group held is released once it settles.
+  EXPECT_EQ(model->activeSlots(), 0u)
+      << "slots must drain after the cancelled group settles";
+}
+
+/// Cancelling a group whose requests are ALL still queued — behind a *foreign*
+/// group holding the whole pool — must settle it immediately, not when that
+/// unrelated group finally frees a slot.
+///
+/// CancelWithQueuedOverflowRejectsCancelled above cannot catch this: there the
+/// cancelled group owns the slots itself, so tearing them down admits its own
+/// overflow at once. With a foreign group holding the pool there is nothing to
+/// tear down, the parked cancel is consumed only at a much later admission, and
+/// `cancelJobs` blocks on the job's departure for that whole time — so
+/// `response.cancel()` hangs for the length of someone else's generation.
+///
+/// The bound is what makes this a regression test. A purely relative "B before
+/// A" check is NOT enough: A's slots do not finish together, so the first one
+/// to free admits (and refuses) B's queued request before A's group as a whole
+/// completes — that passes even with the fix reverted. B must instead settle
+/// within a budget far shorter than any single generation: with the fix it
+/// takes about one decode step (a lock, a flag, a notify), while waiting on a
+/// freed slot costs a full 256-token generation. The margin between the two is
+/// orders of magnitude, so the budget is generous without being permissive.
+TEST_F(
+    BatchGroupCancelTest, CancelOfFullyQueuedGroupDoesNotWaitForForeignWork) {
+  REQUIRE_MODEL(model_);
+  // parallel=2: group A's two prompts take both slots, so both of group B's sit
+  // in pending_ with no slot of their own to cancel.
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  constexpr JobId kHolderId = 101;
+  constexpr JobId kQueuedId = 102;
+  std::atomic<bool> holderTokenSeen = false;
+
+  std::vector<LlamaModel::Prompt> holder;
+  for (int i = 0; i < 2; ++i) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "astronomy.");
+    prompt.outputCallback = [&holderTokenSeen](const std::string&) {
+      holderTokenSeen.store(true);
+    };
+    holder.push_back(std::move(prompt));
+  }
+
+  std::vector<LlamaModel::Prompt> queued;
+  for (int i = 0; i < 2; ++i) {
+    queued.push_back(makePrompt(
+        "Write a long, detailed, multi-paragraph essay about ocean currents."));
+  }
+
+  auto holderFuture = std::async(std::launch::async, [&model, &holder] {
+    return model->process(std::any(holder), kHolderId);
+  });
+  // Only submitted once A owns both slots, so B cannot win one.
+  const auto tokenDeadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!holderTokenSeen.load() &&
+         std::chrono::steady_clock::now() < tokenDeadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(holderTokenSeen.load())
+      << "test setup: holder group never emitted a token";
+
+  auto queuedFuture = std::async(std::launch::async, [&model, &queued] {
+    return model->process(std::any(queued), kQueuedId);
+  });
+  // Let the queued group reach pending_ before cancelling it.
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+  const auto cancelAt = std::chrono::steady_clock::now();
+  model->cancelById(kQueuedId);
+
+  ASSERT_EQ(
+      queuedFuture.wait_for(std::chrono::seconds(120)),
+      std::future_status::ready)
+      << "cancelled queued group never settled";
+  const auto queuedSettledAfter = std::chrono::steady_clock::now() - cancelAt;
+
+  EXPECT_LT(queuedSettledAfter, kQueuedCancelSettleBudget)
+      << "the cancelled queued group took "
+      << std::chrono::duration_cast<std::chrono::milliseconds>(
+             queuedSettledAfter)
+             .count()
+      << "ms to settle: it waited for a slot the holder group had to release, "
+         "i.e. on foreign work";
+
+  ASSERT_EQ(
+      holderFuture.wait_for(std::chrono::seconds(180)),
+      std::future_status::ready);
+  const auto holderFinishedAfter = std::chrono::steady_clock::now() - cancelAt;
+  EXPECT_LT(queuedSettledAfter, holderFinishedAfter)
+      << "the cancelled group outlived the holder it was queued behind";
+
+  // Never ran, so it is an explicit Cancelled — same terminal as a whole-model
+  // cancel draining pending_, and what the README documents.
+  try {
+    const std::any out = queuedFuture.get();
+    const auto outputs = std::any_cast<std::vector<std::string>>(out);
+    FAIL() << "queued group completed as a success after a targeted cancel "
+              "(outputs="
+           << outputs.size() << ")";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("Cancelled"), std::string::npos)
+        << "expected a Cancelled error code, got: " << e.codeString();
+  }
+
+  // The holder is untouched: a targeted cancel must not disturb a peer.
+  const std::any holderOut = holderFuture.get();
+  const auto holderOutputs = std::any_cast<std::vector<std::string>>(holderOut);
+  ASSERT_EQ(holderOutputs.size(), 2u);
+  for (size_t i = 0; i < holderOutputs.size(); i++) {
+    EXPECT_FALSE(holderOutputs[i].empty())
+        << "holder member " << i << " lost its output to a peer's cancel";
+  }
+}
+
+/// The same hazard for a single tagged prompt queued behind a wider group: its
+/// cancel must not wait for that group either. Covers the `processConcurrent`
+/// path, which — unlike the batch path — had no pre-admission cancel handling
+/// at all.
+TEST_F(BatchGroupCancelTest, CancelOfQueuedSinglePromptSettlesImmediately) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  constexpr JobId kHolderId = 111;
+  constexpr JobId kQueuedId = 112;
+  std::atomic<bool> holderTokenSeen = false;
+
+  std::vector<LlamaModel::Prompt> holder;
+  for (int i = 0; i < 2; ++i) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "cartography.");
+    prompt.outputCallback = [&holderTokenSeen](const std::string&) {
+      holderTokenSeen.store(true);
+    };
+    holder.push_back(std::move(prompt));
+  }
+
+  auto holderFuture = std::async(std::launch::async, [&model, &holder] {
+    return model->process(std::any(holder), kHolderId);
+  });
+  const auto tokenDeadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!holderTokenSeen.load() &&
+         std::chrono::steady_clock::now() < tokenDeadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(holderTokenSeen.load())
+      << "test setup: holder group never emitted a token";
+
+  auto queuedPrompt = makePrompt(
+      "Write a long, detailed, multi-paragraph essay about ocean currents.");
+  auto queuedFuture = std::async(std::launch::async, [&model, &queuedPrompt] {
+    return model->process(std::any(queuedPrompt), kQueuedId);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+  const auto cancelAt = std::chrono::steady_clock::now();
+  model->cancelById(kQueuedId);
+
+  ASSERT_EQ(
+      queuedFuture.wait_for(std::chrono::seconds(120)),
+      std::future_status::ready)
+      << "cancelled queued single prompt never settled";
+  const auto queuedSettledAfter = std::chrono::steady_clock::now() - cancelAt;
+
+  EXPECT_LT(queuedSettledAfter, kQueuedCancelSettleBudget)
+      << "the cancelled queued prompt took "
+      << std::chrono::duration_cast<std::chrono::milliseconds>(
+             queuedSettledAfter)
+             .count()
+      << "ms to settle: its cancel waited on foreign work";
+
+  ASSERT_EQ(
+      holderFuture.wait_for(std::chrono::seconds(180)),
+      std::future_status::ready);
+  const auto holderFinishedAfter = std::chrono::steady_clock::now() - cancelAt;
+  EXPECT_LT(queuedSettledAfter, holderFinishedAfter)
+      << "the cancelled prompt outlived the holder it was queued behind";
+
+  // A queued single prompt never ran either, so it reports Cancelled — the
+  // same terminal the queued path gives a group, rather than the empty-output
+  // resolve that an in-slot graceful cancel produces.
+  EXPECT_THROW(queuedFuture.get(), qvac_errors::StatusError);
+  EXPECT_NO_THROW(holderFuture.get());
+}
+
+/// The queued-group cancel must survive being issued from the scheduler's own
+/// worker thread, where a streaming callback runs with the scheduler mutex
+/// held: taking that mutex would self-deadlock, so the cancel has to be
+/// recorded and applied at the worker's next reconciliation (the same
+/// contract cancel(seqId, admissionId) already honours).
+TEST_F(
+    BatchGroupCancelTest, CancelOfQueuedGroupFromWorkerThreadDoesNotDeadlock) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  constexpr JobId kHolderId = 121;
+  constexpr JobId kQueuedId = 122;
+  std::atomic<bool> holderTokenSeen = false;
+  // Set once the queued group has been submitted, so the holder's callback
+  // only fires the cancel when there is actually a queued group to hit.
+  std::atomic<bool> queuedSubmitted = false;
+  std::atomic<bool> workerCancelIssued = false;
+  std::atomic<bool> workerCancelReturned = false;
+
+  std::vector<LlamaModel::Prompt> holder;
+  for (int i = 0; i < 2; ++i) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "astronomy.");
+    // Runs on the scheduler's worker thread WITH its mutex held — the exact
+    // reentrancy the deferred-apply path exists for. A cancelGroupQueued that
+    // took the scheduler mutex here would self-deadlock and this test would
+    // hang rather than fail.
+    prompt.outputCallback = [&](const std::string&) {
+      holderTokenSeen.store(true);
+      if (!queuedSubmitted.load() || workerCancelIssued.exchange(true)) {
+        return;
+      }
+      model->cancelById(kQueuedId);
+      workerCancelReturned.store(true);
+    };
+    holder.push_back(std::move(prompt));
+  }
+
+  auto holderFuture = std::async(std::launch::async, [&model, &holder] {
+    return model->process(std::any(holder), kHolderId);
+  });
+  const auto tokenDeadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!holderTokenSeen.load() &&
+         std::chrono::steady_clock::now() < tokenDeadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(holderTokenSeen.load())
+      << "test setup: holder group never emitted a token";
+
+  std::vector<LlamaModel::Prompt> queued;
+  for (int i = 0; i < 2; ++i) {
+    queued.push_back(makePrompt(
+        "Write a long, detailed, multi-paragraph essay about ocean currents."));
+  }
+  auto queuedFuture = std::async(std::launch::async, [&model, &queued] {
+    return model->process(std::any(queued), kQueuedId);
+  });
+  // Let it reach pending_, then arm the worker-thread cancel.
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  queuedSubmitted.store(true);
+
+  ASSERT_EQ(
+      queuedFuture.wait_for(std::chrono::seconds(120)),
+      std::future_status::ready)
+      << "queued group never settled after a worker-thread cancel (deadlock?)";
+  ASSERT_EQ(
+      holderFuture.wait_for(std::chrono::seconds(180)),
+      std::future_status::ready)
+      << "holder never finished after a worker-thread cancel (deadlock?)";
+
+  EXPECT_TRUE(workerCancelReturned.load())
+      << "the worker-thread cancel never returned from cancelById";
+  EXPECT_THROW(queuedFuture.get(), qvac_errors::StatusError);
+  EXPECT_NO_THROW(holderFuture.get());
 }

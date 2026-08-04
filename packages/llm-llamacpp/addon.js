@@ -125,6 +125,19 @@ class LlamaInterface {
   }
 
   /**
+   * @returns {number} requests occupying or waiting for a continuous-batching
+   * slot (active + pending). Capacity is consumed in slots, not jobs: one
+   * batch job of N prompts takes up to N of them, so `activeJobs()` alone
+   * under-reports a full pool. 0 when no batch scheduler is active
+   * (`parallel: 1`), where the job count is the right measure — admission
+   * therefore compares the max of the two against `parallel`.
+   */
+  activeSlots() {
+    if (!this._handle) return 0
+    return this._binding.activeSlots(this._handle)
+  }
+
+  /**
    * Cancel every inference job live at the moment of this call (or pause a
    * running finetune). Snapshot-based: the native binding captures the live
    * job ids synchronously before deferring the cancellation, so a job started

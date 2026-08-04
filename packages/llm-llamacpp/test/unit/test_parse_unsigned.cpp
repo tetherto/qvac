@@ -8,15 +8,17 @@
 using qvac_lib_inference_addon_llama::parseUnsignedInRange;
 
 namespace {
+/// Mirrors createInstance's range (kMaxParallelWorkers == the engine's
+/// LLAMA_MAX_SEQ); test_parallel_ceiling.cpp pins the constant itself.
 unsigned parseParallel(const std::string& raw) {
-  return parseUnsignedInRange(raw, 1, 1024, "parallel");
+  return parseUnsignedInRange(raw, 1, 256, "parallel");
 }
 } // namespace
 
 TEST(ParseUnsignedInRangeTest, AcceptsWholeStringIntegersInRange) {
   EXPECT_EQ(parseParallel("1"), 1U);
   EXPECT_EQ(parseParallel("4"), 4U);
-  EXPECT_EQ(parseParallel("1024"), 1024U);
+  EXPECT_EQ(parseParallel("256"), 256U);
 }
 
 TEST(ParseUnsignedInRangeTest, RejectsMalformedInput) {
@@ -26,7 +28,8 @@ TEST(ParseUnsignedInRangeTest, RejectsMalformedInput) {
 }
 
 TEST(ParseUnsignedInRangeTest, RejectsOutOfRangeValues) {
-  for (const char* raw : {"0", "1025", "4294967296", "99999999999999999999"}) {
+  for (const char* raw :
+       {"0", "257", "1025", "4294967296", "99999999999999999999"}) {
     EXPECT_THROW(parseParallel(raw), std::invalid_argument) << raw;
   }
 }

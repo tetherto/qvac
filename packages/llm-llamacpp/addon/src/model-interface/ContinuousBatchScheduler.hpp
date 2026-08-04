@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <common/sampling.h>
@@ -76,16 +77,24 @@ struct ObservedRequestStats {
   double genTps = 0.0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  /// Why this request's generation stopped. Per-sequence, so it is honest for
+  /// a single request; `nullopt` when unknown (never finalized) or when a
+  /// group's requests disagree, since one reason cannot describe many.
+  std::optional<GenerationStopReason> stopReason;
 };
 
 /// Compute a request's observed stats from its stamps. @p enqueuedAt is when
 /// the caller handed the request to the scheduler (queue wait included).
+/// @p stopReason is the finalized driver's reason, when it is known.
 [[nodiscard]] ObservedRequestStats computeObservedStats(
-    std::chrono::steady_clock::time_point enqueuedAt, const Request& req);
+    std::chrono::steady_clock::time_point enqueuedAt, const Request& req,
+    std::optional<GenerationStopReason> stopReason = std::nullopt);
 
 /// Group-level view of one submitted batch: TTFT and rate average across the
 /// requests that actually produced them (a request that never sampled a token
-/// does not drag the averages down), token counts sum over all.
+/// does not drag the averages down), token counts sum over all. `stopReason`
+/// survives only when every request agrees (so a one-item group keeps its
+/// reason); a mixed group reports none rather than picking a winner.
 [[nodiscard]] ObservedRequestStats
 aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
 
@@ -279,7 +288,12 @@ public:
 
   /// Queue a group of requests and block until every request in the group has
   /// completed, failed, or been cancelled. Outputs are returned in input order.
-  [[nodiscard]] BatchResult processBatch(std::vector<SubmitRequest>&& requests);
+  /// @p groupTag (non-zero) lets the submitter target this group through
+  /// `cancelGroupQueued` for as long as this call is on the stack; the tag must
+  /// be unique among live groups and is forgotten when the call returns. Pass 0
+  /// for an untargetable group.
+  [[nodiscard]] BatchResult
+  processBatch(std::vector<SubmitRequest>&& requests, uint64_t groupTag = 0);
 
   /// Admit one request and return the assigned slot id (`seqId`).
   ///
@@ -300,6 +314,15 @@ public:
   [[nodiscard]] bool hasWork() const;
 
   [[nodiscard]] unsigned numActive() const;
+
+  /// Requests occupying or waiting for a slot: active slots plus the pending
+  /// backlog. This is the resource that actually runs out, so it — not a job
+  /// count — is what an at-capacity admission check must compare against
+  /// `parallel` (one batch job of N prompts consumes up to N of these).
+  /// The pending part is `size_approx()`, so the total may momentarily be off
+  /// by a request in either direction; callers use it as a fast-fail hint,
+  /// never as an invariant.
+  [[nodiscard]] unsigned occupancy() const;
 
   void resetRuntimeStats();
   [[nodiscard]] RuntimeStatsSnapshot runtimeStats() const;
@@ -328,6 +351,30 @@ public:
   /// always returns true -- the recorded cancel no-ops later if the
   /// admission is already gone.
   bool cancel(uint32_t seqId, uint64_t admissionId);
+
+  /// Settle the group tagged @p groupTag when it still has requests waiting in
+  /// `pending_`, so cancelling it does not have to wait for a *foreign* group
+  /// to release the slots those requests need. `cancel(seqId, admissionId)`
+  /// only reaches admitted requests, and `pending_` is FIFO across groups with
+  /// no selective removal, so without this a fully-queued group is settled only
+  /// when it is eventually admitted and refused — arbitrarily far in the
+  /// future, with its caller's cancel blocked for the whole wait.
+  ///
+  /// A group whose every request already holds a slot is left alone: slot
+  /// teardown reaches all of it, and that path keeps the documented graceful
+  /// partial-output cancel. Stale `pending_` entries are not removed; the
+  /// group is marked done and `admitPendingIntoFreeSlotsLocked` discards them
+  /// when it next dequeues, so no request can run after this.
+  ///
+  /// Same threading contract as `cancel(seqId, admissionId)`: safe from the
+  /// worker's own streaming callbacks (records only, no lock), applied by the
+  /// worker between decode steps otherwise, synchronous when no worker runs.
+  /// @return whether the tag named a live group when the cancel was issued; a
+  /// worker-thread call cannot check that (no lock) and always returns true --
+  /// the recorded cancel no-ops later if the group is already gone. Always
+  /// false for tag 0, which is the untagged sentinel.
+  bool cancelGroupQueued(uint64_t groupTag);
+
   void requestCancelAll();
 
   /// Cancel every active request. Deferred to the worker thread when it
@@ -392,6 +439,13 @@ private:
     RuntimeStatsSnapshot stats;
     size_t completedCount = 0;
     size_t totalCount = 0;
+    /// Requests of this group that have reached a slot. `< totalCount` means
+    /// some are still queued in `pending_`, i.e. a targeted cancel cannot
+    /// reach them through slot teardown alone (see cancelGroupQueued).
+    size_t admittedCount = 0;
+    /// The submitter's opaque handle for this group, used to target it while
+    /// it may still be entirely queued. 0 when untagged.
+    uint64_t tag = 0;
     bool done = false;
     std::exception_ptr error;
   };
@@ -461,7 +515,15 @@ private:
   /// The single mutation path shared by worker-thread callers (which must
   /// not touch `mutex_`) and cross-thread callers (which already hold it).
   void recordPendingSlotCancel(uint32_t seqId, uint64_t admissionId);
-  [[nodiscard]] bool hasPendingSlotCancels() const;
+  /// Same, for a deferred group cancel (see cancelGroupQueued).
+  void recordPendingGroupCancel(uint64_t groupTag);
+  /// Whether any deferred cancel (per-slot or per-group) is waiting to be
+  /// applied by the worker.
+  [[nodiscard]] bool hasPendingCancels() const;
+  /// Settle a tagged group that still has queued requests. The apply half of
+  /// `cancelGroupQueued`, re-resolving the tag because the group may have
+  /// finished, or become fully admitted, between record and apply.
+  void applyGroupQueuedCancelLocked(uint64_t groupTag) noexcept;
   /// Whether `seqId` currently holds the admission identified by
   /// `admissionId`. False for free slots, out-of-range ids, and slots whose
   /// admission id differs (the seqId was recycled to a newer request).
@@ -558,7 +620,15 @@ private:
   /// always `mutex_` -> `pendingCancelsMtx_`, never the reverse.
   mutable std::mutex pendingCancelsMtx_;
   std::vector<PendingSlotCancel> pendingSlotCancels_;
+  /// Deferred group cancels, same threading rationale as pendingSlotCancels_.
+  std::vector<uint64_t> pendingGroupCancels_;
   bool clearRequested_ = false;
+  /// Live tagged groups, so a cancel can find a group that holds no slot yet.
+  /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`
+  /// call. Weak, so a group settled and abandoned by its submitter cannot be
+  /// kept alive here. Tags come from the submitter (never reused while live),
+  /// so an entry can never be mistaken for a later group.
+  std::unordered_map<uint64_t, std::weak_ptr<BatchGroup>> taggedGroups_;
   /// Source of the strictly-incrementing per-admission ownership tokens.
   /// Guarded by `mutex_` (minted inside submitLocked). Starts past
   /// `K_UNKNOWN_ADMISSION_ID` so the sentinel never matches a live slot.

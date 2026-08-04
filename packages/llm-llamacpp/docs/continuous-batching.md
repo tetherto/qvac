@@ -58,6 +58,8 @@ const model = new LlmLlamacpp({
 
 `parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
+The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
+
 `parallel` also sizes the native multi-job scheduler's worker pool one-to-one: that many OS threads are created eagerly at load and held for the model's lifetime, whether or not requests are in flight. This is deliberate — a serving deployment pays the whole cost upfront and is then ready to serve at full concurrency with no warm-up — but it makes a large `parallel` a real resource commitment (threads and stack address space, plus the smaller per-slot KV window) even while idle. Size it to the concurrency you actually intend to serve.
 
 Continuous batching works on both text and multimodal (vision) models. A batch prompt may include media messages; each sequence runs its own per-slot MTMD driver that loads its media, sharing the model's mmproj weights.
@@ -118,8 +120,10 @@ Every `run()` call is admitted by the native multi-job scheduler before it resol
 
 Whether a call at capacity is rejected or queued is the `rejectWhenBusy` policy:
 
-- `true` — fail fast: throw `RUN_BUSY` the moment active jobs reach the `parallel` pool size.
+- `true` — fail fast: throw `RUN_BUSY` the moment the slot pool is full, i.e. as soon as the requests occupying or waiting for a slot reach `parallel`.
 - `false` — queue: the job waits in the scheduler's nearly unbounded queue and starts as slots free.
+
+Capacity is measured in slots rather than jobs because a batch run of N prompts is a single job that consumes up to N slots: with `parallel: 4`, one in-flight `run([p, p, p, p])` fills the pool, so a following `run(p, { rejectWhenBusy: true })` is refused even though only one job is active. At `parallel: 1` there are no scheduler slots and the job count is the measure, which keeps the sequential fail-fast behaviour unchanged. Either way this is a fast-fail hint evaluated just before submission — the native scheduler remains the authority.
 
 The instance default follows `parallel` (`true` at `1`, `false` at `>= 2`); `opts.rejectWhenBusy` overrides it per instance and `runOptions.rejectWhenBusy` per call. A batch run derives ONE group policy from its items' `runOptions` — a batch is one native job, so items that disagree are refused with a `TypeError` before admission.
 
@@ -354,11 +358,17 @@ Within a cancelled job/group, the effect depends on where each prompt is when th
 | Prompt state | What happens |
 |--------------|--------------|
 | In a slot (decoding) | Cancelled gracefully. The slot runs `onCancel`, flushes its UTF-8 buffer, and the batch call resolves normally with whatever was generated so far. |
-| In `pending_` (never admitted) | Drained without running. The associated `BatchGroup` is failed with a `Cancelled` `StatusError`. |
+| In `pending_` (never admitted) | Never runs. The associated `BatchGroup` is failed with a `Cancelled` `StatusError` as soon as the cancel is applied. |
 
-If a batch had overflow prompts still in `pending_`, the batch call rejects with `Cancelled`. Callers should handle that rejection rather than expecting empty strings for the prompts that never ran.
+If a batch had overflow prompts still in `pending_`, the batch call rejects with `Cancelled`. Callers should handle that rejection rather than expecting empty strings for the prompts that never ran. The same holds for a single tagged prompt that was still queued: it rejects with `Cancelled` rather than resolving empty, because it produced nothing at all.
 
-Natively, a targeted cancel stops only the slots and pending entries registered under that job's admission id, while `requestCancelAll()` sets `cancelRequested_` atomically for the global path. The worker loop detects the flag after each step: it drains `pending_` (failing pending groups) before the flag is cleared, so active and queued prompts are both covered.
+Natively the two halves of a targeted cancel are separate, because a queued request has no slot to stop. Slot teardown is keyed by admission id, so it can only reach requests that were admitted. For the rest, the job's cancel action is armed *before* submission and calls `cancelGroupQueued(tag)`, which settles the group the moment the cancel is applied — and critically without waiting for a slot. That matters when an unrelated job holds the whole pool: the group's queued requests cannot be admitted until that foreign work finishes, so a cancel that relied on admission would resolve only then, hanging the caller's `cancel()` promise for the length of someone else's generation.
+
+`cancelGroupQueued` deliberately does nothing once every request of the group holds a slot: teardown covers the whole group then, and that path keeps the graceful partial-output cancel above. The stale `pending_` entries are not removed from the queue (it is FIFO across groups with no selective removal); the group is marked done, and `admitPendingIntoFreeSlotsLocked` discards them when it next dequeues, so none of them can run.
+
+The global path instead sets `cancelRequested_` atomically via `requestCancelAll()`. The worker loop detects the flag after each step: it drains `pending_` (failing pending groups) before the flag is cleared, so active and queued prompts are both covered.
+
+Both targeted forms honour the same threading rule as `cancel(seqId, admissionId)`: issued from the scheduler's own streaming callbacks (which run on the worker thread with the scheduler mutex held) they only record the cancel, which the worker applies at its next reconciliation; issued from any other thread they are applied under the lock, or synchronously when no worker is running.
 
 ---
 
@@ -386,8 +396,10 @@ Additionally, `BatchResult.requestStats` carries each request's observed end-to-
 ## Runtime stats: JSON shapes per request mode
 
 Every completed job emits one `JobEnded` event whose payload is the stats
-JSON below. The keys are ALWAYS the same; what changes per mode is where the
-values come from:
+JSON below. The keys are the same across modes with two documented exceptions —
+`stopReason`, which is present only when it can be attributed to a single
+request, and the `visionEncode*` counters, which only multimodal models report.
+What otherwise changes per mode is where the values come from:
 
 Every job is tagged — the model is always driven through the multi-job
 scheduler, so even at `parallel: 1` admission mints a job id. What differs is

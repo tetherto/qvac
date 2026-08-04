@@ -35,6 +35,14 @@ export interface Addon {
   cancelJob(id: number): Promise<void>
   /** Active jobs (in-flight + queued) per the native scheduler — the authoritative admission count. */
   activeJobs(): number
+  /**
+   * Requests occupying or waiting for a continuous-batching slot
+   * (active + pending). Capacity is consumed in slots, not jobs — one batch
+   * job of N prompts takes up to N — so admission compares the max of this and
+   * `activeJobs()` against `parallel`. 0 when no batch scheduler is active
+   * (`parallel: 1`). Optional: an older binding may not export it.
+   */
+  activeSlots?(): number
   /** Resolves the scheduler-minted exclusive-job id when admitted, `false` when rejected. */
   finetune?(params: FinetuneOptions): Promise<number | false>
   unload(): Promise<void>
@@ -134,6 +142,13 @@ export interface LlamaConfig {
    * KV cache is split evenly across the slots (each gets `ctx_size /
    * parallel` tokens). Size it to the concurrency you actually intend to
    * serve, not to a generous upper bound.
+   *
+   * Range `1..256`. The upper bound is the engine's own sequence limit
+   * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
+   * spawning its whole thread pool and then failing the model load with a
+   * generic error. `ctx_size / parallel` must also leave at least one token
+   * per slot, so a `parallel` too large for the context is refused as an
+   * `InvalidArgument` naming both knobs.
    */
   parallel?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined
@@ -419,6 +434,26 @@ export interface RuntimeStats {
    */
   avgConcurrentSeq: number
   backendDevice: 'cpu' | 'gpu'
+  /**
+   * Why generation stopped. Per-sequence, so it is reported for a single
+   * request on either path (sequential or one prompt on a parallel model).
+   *
+   * Absent when it cannot be attributed to one request: a `runBatched` group
+   * whose prompts stopped for different reasons reports nothing rather than
+   * picking one, and the whole-model `runtimeStats()` view omits it while
+   * continuous batching is active for the same reason.
+   */
+  stopReason?:
+    | 'none'
+    | 'eos'
+    | 'antiprompt'
+    | 'predictionLimit'
+    | 'sequenceLimit'
+    | 'contextOverflow'
+  /** Vision-encode time for the most recent inference. Multimodal models only. */
+  visionEncodeMs?: number
+  /** Vision slice/tile count for the most recent inference. Multimodal models only. */
+  visionEncodeTiles?: number
 }
 
 export interface FinetuneValidationNone {
