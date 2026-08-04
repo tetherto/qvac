@@ -356,11 +356,19 @@ private:
     // ctxDraft_.reset()`). But `loadCache` restores a media-bearing cache
     // (surplus included) and calls only `rollbackDraftContext()`, which never
     // resets `spec_`. So the first TEXT turn after a restore runs speculatively
-    // with the surplus live, and collapsing it here would both defeat the
-    // positional-only ceiling check (physical KV exhausted while
-    // `specPos() + 1 > specCtxCeiling()` still passes) and poison the next
-    // `saveCache`, whose `restoredCacheTokens != getCacheTokens()` check then
-    // makes the file permanently unloadable.
+    // with the surplus live. Collapsing it here breaks two things:
+    //
+    //   1. `saveCache` persists the understated `cacheTokens`, and the next
+    //      `loadCache` then throws on its `restoredCacheTokens !=
+    //      getCacheTokens()` check — the cache file is permanently unloadable.
+    //   2. The loop's context budget under-reports, because `specBudgetUsed()`
+    //      reads this value via `specKvCellsUsed()`. Physical KV would run out
+    //      while the budget check still passed, giving a hard `FailedToDecode`
+    //      instead of a graceful stop.
+    //
+    // Consequence 2 only holds because the guards read cells as well as
+    // positions; they were positional-only when this delta form first landed,
+    // which made preserving the surplus necessary but not yet sufficient.
     //
     // The speculative loop only ever adds or trims TEXT positions (one KV cell
     // each) — forward within a round, back by the same delta on the
@@ -370,6 +378,12 @@ private:
   }
   [[nodiscard]] llama_pos specCtxCeiling() const override {
     return ctxCeiling();
+  }
+  /// Physical KV cells, which exceed `pos` whenever media is in the cache.
+  /// Delegates to the same accessor the continuous-batching scheduler uses, so
+  /// there is one definition of "cells in use" rather than two.
+  [[nodiscard]] llama_pos specKvCellsUsed() const override {
+    return getKvCellsUsed();
   }
   void specApplyContextDiscard() override { applyContextDiscard(); }
   // `specRecoverReasoning` commits only the substituted close marker (one

@@ -666,13 +666,33 @@ protected:
   // threading a `needed` count through shared non-speculative slide code, so it
   // is deliberately left out of this MTP change — the current behavior is a
   // safe stop, not a hard failure.
+  // What the context budget must be measured against: the LARGER of the
+  // positional cursor and the physical KV-cell count.
+  //
+  // These diverge only on MtmdLlmContext with media in the cache
+  // (`cacheTokens > pos` under M-RoPE). Guarding on position alone lets the
+  // physical cells run out while `specPos() + 1 > specCtxCeiling()` still
+  // passes: with ctx_size 4096 and a 228-cell surplus restored by loadCache,
+  // usage hits 4096 at pos ~3868, no slide ever fires, and llama_decode finds
+  // no KV slot -> a hard FailedToDecode instead of the graceful ContextOverflow
+  // the non-speculative path produces. Those paths already check both
+  // quantities (MtmdLlmContext.cpp `pos + 1 > n_ctx || cacheTokens + 1 >
+  // n_ctx`, and ContextSlider), so this keeps the speculative loop consistent
+  // with them.
+  //
+  // Identical to specPos() for text-only contexts, so the default path is
+  // unchanged.
+  [[nodiscard]] llama_pos specBudgetUsed() const {
+    return std::max(specPos(), specKvCellsUsed());
+  }
+
   [[nodiscard]] bool specEnsureRecoveryHeadroom() {
     const llama_pos needed = specRecoveryPositions();
-    if (specPos() + needed <= specCtxCeiling()) {
+    if (specBudgetUsed() + needed <= specCtxCeiling()) {
       return true;
     }
     specApplyContextDiscard();
-    return specPos() + needed <= specCtxCeiling();
+    return specBudgetUsed() + needed <= specCtxCeiling();
   }
 
   // Repair the user-visible perf split for a speculative generation.
@@ -1030,7 +1050,7 @@ protected:
         return specCancelPublishing(outputCallback, generated);
       }
 
-      if (specPos() + 1 > specCtxCeiling()) {
+      if (specBudgetUsed() + 1 > specCtxCeiling()) {
         // Accepted graceful degradation: a successful slide here (and the
         // end-of-generation reasoning-block compaction) shifts the TARGET KV
         // without mirroring onto ctxDraft_, so the draft context lags until it
@@ -1040,7 +1060,7 @@ protected:
         // mirror is not a plain seq_rm, and clearing the draft mid-loop is
         // riskier than the benign lag fabric's begin() already handles.
         specApplyContextDiscard();
-        if (specPos() + 1 > specCtxCeiling()) {
+        if (specBudgetUsed() + 1 > specCtxCeiling()) {
           return specFail(outputCallback, generated);
         }
       }
@@ -1052,7 +1072,11 @@ protected:
       // FailedToDecode at the boundary instead of a graceful stop), the draft
       // length must be <= headroom. headroom >= 0 here (guaranteed by the
       // guard); 0 means "no draft this round, just re-decode id_last".
-      const llama_pos headroom = specCtxCeiling() - specPos() - 1;
+      //
+      // Measured against specBudgetUsed(), not specPos(): each drafted token
+      // costs a physical KV cell, so with a media surplus present the real
+      // headroom is smaller than the positional distance to the ceiling.
+      const llama_pos headroom = specCtxCeiling() - specBudgetUsed() - 1;
       const int roundNMax = headroom < static_cast<llama_pos>(nMax)
                                 ? static_cast<int>(headroom)
                                 : nMax;
@@ -1201,6 +1225,14 @@ protected:
   [[nodiscard]] virtual llama_pos specPos() const = 0;
   virtual void specSetPos(llama_pos pos) = 0;
   [[nodiscard]] virtual llama_pos specCtxCeiling() const = 0;
+  /// PHYSICAL KV-cell usage, which can exceed the positional cursor. Under
+  /// M-RoPE an image commits more cells than positions, so a context restored
+  /// from a media-bearing cache has `cacheTokens > pos`. Defaults to the
+  /// positional cursor, which is exact for text-only contexts. Mirrors
+  /// `SequenceDriver::getKvCellsUsed`, which the continuous-batching scheduler
+  /// already uses for admission for the same reason; the base cannot call that
+  /// one because it lives on the sibling `SequenceDriver` interface.
+  [[nodiscard]] virtual llama_pos specKvCellsUsed() const { return specPos(); }
   virtual void specApplyContextDiscard() = 0;
   virtual llama_token specSampleFirstToken(bool& sampled) = 0;
   virtual llama_token specSampleAndAccept(int logitIdx) = 0;

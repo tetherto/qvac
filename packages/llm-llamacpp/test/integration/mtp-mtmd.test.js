@@ -374,3 +374,77 @@ safeTest(
     )
   }
 )
+
+safeTest(
+  'mtmd context: a media surplus exhausting KV stops gracefully, not FailedToDecode',
+  { timeout: 900_000 },
+  async (t) => {
+    // Preserving the media surplus (previous test) is necessary but not
+    // sufficient: something has to READ it. The speculative loop's budget checks
+    // were positional-only, so with `cacheTokens > pos` the physical KV could run
+    // out while `specPos() + 1 > specCtxCeiling()` still passed — llama_decode
+    // then finds no free cell and the loop throws FailedToDecode, where the
+    // non-speculative path stops gracefully with ContextOverflow.
+    //
+    // `specBudgetUsed()` now gates on max(position, KV cells), matching what the
+    // non-speculative Mtmd loops and ContextSlider already do.
+    //
+    // Setup: a small ctx makes the surplus dominate. The image commits ~287 cells
+    // against ctx_size 512, so a long text turn on the restored cache exhausts
+    // cells while `pos` stays far below 512. Verified against the unfixed build:
+    // this run raised "[LlmContext] failed to decode speculative batch"; with the
+    // fix it raises the graceful "context overflow".
+    const [, dirPath] = await ensureModel({ modelName: MODEL.name })
+    const cachePath = path.join(dirPath, 'mtp-mtmd-surplus-exhaustion.bin')
+    t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+    const runOpts = { cacheKey: cachePath, saveCacheToDisk: true }
+    const imageBytes = new Uint8Array(fs.readFileSync(getMediaPath('elephant.jpg')))
+
+    const a = await loadMtmdMtp(t, { ctx_size: '512', n_predict: '24' })
+    const ra = await a.run(
+      [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', type: 'media', content: imageBytes },
+        { role: 'user', content: 'Describe this image in one sentence.' }
+      ],
+      runOpts
+    )
+    await collectResponse(ra)
+    t.ok(
+      ra.stats.CacheTokens > 0,
+      `phase 1 wrote a media cache (CacheTokens=${ra.stats.CacheTokens})`
+    )
+    await a.unload()
+
+    // Fresh context: spec_ is live across the load, surplus restored.
+    const b = await loadMtmdMtp(t, { ctx_size: '512', n_predict: '400' })
+    let threw = null
+    let stats = null
+    try {
+      const rb = await b.run(
+        [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          {
+            role: 'user',
+            content:
+              'Explain in as much detail as you can, over many sentences, how quantization reduces the memory footprint of a neural network and what trade-offs it introduces.'
+          }
+        ],
+        runOpts
+      )
+      await collectResponse(rb)
+      stats = rb.stats
+    } catch (err) {
+      threw = err && err.message ? err.message : String(err)
+    }
+    console.log(`  phase 2: threw=${threw} stopReason=${stats && stats.stopReason}`)
+
+    // The assertion: whichever way it ends, it must NOT be the hard decode
+    // failure. A graceful ContextOverflow, or completing under the budget, are
+    // both acceptable outcomes; FailedToDecode is not.
+    t.absent(
+      threw !== null && /failed to decode/i.test(threw),
+      `long text turn on a restored media cache did not hard-fail (${threw || 'no throw'})`
+    )
+  }
+)
