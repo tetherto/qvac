@@ -68,5 +68,19 @@ recurrentReasoningBoundaryDecision(
          RecurrentReasoningBoundaryDecision::Capture;
 }
 
+// Any terminal generation reason that interrupts an open reasoning span must
+// restore the pre-request checkpoint on the snapshot/replay path. Continuing
+// to compaction without a close marker would wipe the whole sequence instead
+// of preserving the preceding conversation.
+[[nodiscard]] inline bool shouldRollbackInterruptedReasoning(
+    bool hasTerminalReason, bool needsRecurrentSnapshot,
+    bool removeThinkingFromContext, bool reasoningEnabled,
+    bool insideReasoning, bool hasOpenSpan,
+    bool hasCapturedCloseSpan) noexcept {
+  return hasTerminalReason && needsRecurrentSnapshot &&
+         removeThinkingFromContext && reasoningEnabled && insideReasoning &&
+         hasOpenSpan && !hasCapturedCloseSpan;
+}
+
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

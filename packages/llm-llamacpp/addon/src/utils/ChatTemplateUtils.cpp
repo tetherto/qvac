@@ -178,10 +178,15 @@ bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
          QWEN3_REASONING_FAMILY_ARCHES.end();
 }
 
+bool isDeepSeekV4Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "deepseek4";
+}
+
 std::optional<ReasoningTags> selectReasoningTagsForArchitecture(
     const std::optional<std::string>& architecture) {
   if (architecture.has_value() &&
-      isQwen3ReasoningFamilyArchitecture(architecture.value())) {
+      (isQwen3ReasoningFamilyArchitecture(architecture.value()) ||
+       isDeepSeekV4Architecture(architecture.value()))) {
     return ReasoningTags{.open = "<think>", .close = "</think>"};
   }
   return std::nullopt;
