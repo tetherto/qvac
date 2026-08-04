@@ -59,6 +59,10 @@ interface DelegatedOptions {
 }
 
 let ready = false
+let readyPromise: Promise<void> | null = null
+// The current init generation. `close()` bumps it so an init still in flight
+// does not mark readiness.
+let generation = 0
 
 function ensurePluginsRegistered(): void {
   if (getAllPlugins().length === 0) {
@@ -93,12 +97,30 @@ async function initializeConfig(): Promise<void> {
   setRuntimeContext(runtimeContext)
 }
 
-async function ensureReady(): Promise<void> {
-  if (ready) return
+async function performReady(gen: number): Promise<void> {
   initialize()
   ensurePluginsRegistered()
   await initializeConfig()
-  ready = true
+  // Mark ready only while this generation is current — a `close()` during the
+  // await bumps it past this now-superseded init.
+  if (gen === generation) ready = true
+}
+
+async function ensureReady(): Promise<void> {
+  if (ready) return
+  // A single shared promise serializes concurrent first calls: `ready` only
+  // flips after `initializeConfig` awaits, so overlapping callers must run
+  // `setConfig` exactly once — a second run throws `ConfigAlreadySetError`.
+  // Cleared on failure so a later call can retry (e.g. after plugins register),
+  // unless a newer generation already replaced this promise.
+  if (!readyPromise) {
+    const gen = generation
+    readyPromise = performReady(gen).catch((error) => {
+      if (gen === generation) readyPromise = null
+      throw error
+    })
+  }
+  await readyPromise
 }
 
 function getHandlerEntry(type: string): HandlerEntry {
@@ -340,6 +362,10 @@ export async function duplex<T extends Request>(
 }
 
 export async function close(): Promise<void> {
+  // Bump the generation so an in-flight `performReady` does not mark readiness;
+  // the next send re-initializes.
+  generation++
   ready = false
+  readyPromise = null
   await closeEngine()
 }

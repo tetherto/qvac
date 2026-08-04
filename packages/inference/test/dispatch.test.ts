@@ -1,5 +1,6 @@
 import test from 'brittle'
 import env from 'bare-env'
+import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 import { send, stream, close } from '@/dispatch'
@@ -72,6 +73,59 @@ test('send rejects an unknown request type at the validation guard', async funct
     await close()
     clearPlugins()
   }
+})
+
+test('concurrent first sends share one initialization', async function (t) {
+  // Force a resolvable on-disk config so `initializeConfig` calls `setConfig`.
+  // With that, overlapping first calls that each ran their own initialization
+  // would have the second `setConfig` throw `ConfigAlreadySetError`; the shared
+  // readiness promise keeps it to exactly one.
+  const configPath = path.join(os.tmpdir(), `qvac-inference-config-${os.pid()}.json`)
+  fs.writeFileSync(configPath, JSON.stringify({ loggerLevel: 'info' }))
+  const previousConfigPath = env['QVAC_CONFIG_PATH']
+  env['QVAC_CONFIG_PATH'] = configPath
+
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  try {
+    const responses = (await Promise.all([
+      send(fakeRequest('heartbeat')),
+      send(fakeRequest('heartbeat'))
+    ])) as Response[]
+    t.is(responses.length, 2, 'both concurrent first calls resolved')
+    t.ok(
+      responses.every((r) => r.type === 'heartbeat'),
+      'neither call rejected on a duplicate setConfig'
+    )
+  } finally {
+    await close()
+    clearPlugins()
+    // bare-env is a proxy that rejects `delete`; an empty string is falsy, so
+    // `resolveConfig` ignores it just as an unset variable.
+    env['QVAC_CONFIG_PATH'] = previousConfigPath ?? ''
+    fs.unlinkSync(configPath)
+  }
+})
+
+test('close during in-flight init does not latch readiness', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+
+  // Kick a first send so `performReady` is suspended at `initializeConfig`,
+  // then close before it resolves. The suspended init must not flip `ready`
+  // true after teardown — otherwise the next send skips the guard against a
+  // closed engine. The racing send's own outcome is undefined, so swallow it.
+  const pending = send(fakeRequest('heartbeat')).catch(() => {})
+  await close()
+  await pending
+
+  clearPlugins()
+  await t.exception(
+    () => send(fakeRequest('heartbeat')),
+    PluginsNotRegisteredError,
+    'readiness was reset by close, so the guard runs again'
+  )
+  await close()
 })
 
 test('close resets readiness so the next call re-runs the guard', async function (t) {
