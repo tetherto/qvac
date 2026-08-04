@@ -122,6 +122,8 @@ The `kvCache` parameter on `completion()` both enables caching and sets the cach
 - `true` — SDK-managed auto cache. The SDK generates the key internally from the conversation history. Convenient for single-session use, but you don't get a stable key for manual cleanup.
 - `false` or `undefined` — no caching (default).
 
+SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. Caller-managed string-key caches are not subject to this automatic retention policy.
+
 There is no separate `kvCacheKey` completion parameter — when you want a caller-managed cache, pass the key string directly as `kvCache`:
 
 ```js

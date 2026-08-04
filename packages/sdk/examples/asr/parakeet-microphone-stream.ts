@@ -2,7 +2,7 @@
  * Microphone → Parakeet duplex streaming (`transcribeStream`).
  *
  * Usage:
- *   bun run examples/transcription/parakeet-microphone-stream.ts
+ *   bun run examples/asr/parakeet-microphone-stream.ts
  *
  * Streams microphone audio through `transcribeStream` with
  * `parakeetStreamingConfig`. Uses the EOU checkpoint so you may see

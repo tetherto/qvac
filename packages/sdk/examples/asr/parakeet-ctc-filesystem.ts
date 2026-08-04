@@ -2,7 +2,7 @@
  * Parakeet CTC transcription from a WAV file.
  *
  * Usage:
- *   bun run examples/transcription/parakeet-ctc-filesystem.ts <wav-file> [parakeet-ctc-gguf]
+ *   bun run examples/asr/parakeet-ctc-filesystem.ts <wav-file> [parakeet-ctc-gguf]
  *
  * Loads a single GGUF checkpoint (`PARAKEET_CTC_0_6B_Q8_0` by default) and
  * transcribes the file with the batch `transcribe` API. Omit the model
@@ -16,8 +16,7 @@ const args = process.argv.slice(2)
 
 if (!args[0]) {
   console.error(
-    'Usage: bun run examples/transcription/parakeet-ctc-filesystem.ts <wav-file> ' +
-      '[parakeet-ctc-gguf]'
+    'Usage: bun run examples/asr/parakeet-ctc-filesystem.ts <wav-file> ' + '[parakeet-ctc-gguf]'
   )
   console.error('\nIf the model path is omitted, defaults to the registry model.')
   process.exit(1)
