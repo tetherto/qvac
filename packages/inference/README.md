@@ -57,7 +57,7 @@ const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 })
 const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 ```
 
-An operation called before any plugin is registered throws `WorkerPluginsNotRegisteredError`.
+An operation called before any plugin is registered throws `PluginsNotRegisteredError`.
 
 ## Capability to addon package
 
