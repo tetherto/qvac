@@ -90,9 +90,10 @@ jobs:
       device-farm-timeout: 90
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
-    # AWS_OIDC_ROLE_ARN is an environment secret resolved by the called
-    # workflow's `environment: release` jobs; it is intentionally not a
-    # workflow_call secret. Pass only caller-owned repository secrets here.
+    # AWS_OIDC_ROLE_ARN is a repository secret, not a `release` environment
+    # secret, so the called workflow's `environment: release` jobs cannot
+    # resolve it on their own. Omitting it here leaves `role-to-assume` empty
+    # and every Device Farm job fails to authenticate.
     secrets:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -102,3 +103,4 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+      AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
