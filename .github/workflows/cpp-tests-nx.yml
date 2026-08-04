@@ -1,0 +1,276 @@
+# Consolidates 4 of the 5 reusable cpp-tests-<pkg>.yml files. Shared skeleton
+# (checkout -> optional Vulkan SDK path -> setup-vcpkg -> cleanup -> setup
+# bare tooling -> setup-apple-clang -> npm install -> build -> run) is real
+# and identical, using the same shared composite actions
+# (setup-build-host/setup-aws-prebuild/setup-vcpkg/setup-bare-tooling/
+# setup-apple-clang) across all 4. Real per-package divergence is just data:
+# platform matrix rows (arch/runner vary per package) and which OS needs the
+# Vulkan SDK path set (classification/vla: Linux; diffusion/embed: Windows).
+# Config is flattened to one entry per (package, platform) pair - the nx
+# affected filter matches on `package`, so each package's platform rows
+# repeat the same package name across multiple flat entries.
+#
+# Carve-out: llm-llamacpp.yml stays untouched and separate - it doesn't use
+# any of the shared composite actions above, has its own model
+# download/caching, a Linux-only coverage build branch, `:ci`-suffixed run
+# commands, and its own test-results.xml validation. Structurally not a fit.
+name: "CPP Tests (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages + build matrix (nx affected, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - id: compute
+        uses: ./.github/actions/nx-affected
+        with:
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+          config: |
+            - package: classification-ggml
+              workdir: packages/classification-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: ubuntu-24.04
+              platform: linux
+              arch: x64
+              runner: qvac-ubuntu2404-x64
+            - package: classification-ggml
+              workdir: packages/classification-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: macos-15
+              platform: darwin
+              arch: arm64
+              runner: qvac-macos26-arm64-gpu
+            - package: classification-ggml
+              workdir: packages/classification-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: windows-2025
+              platform: win32
+              arch: x64
+              runner: qvac-win25-x64
+            - package: diffusion-cpp
+              workdir: packages/diffusion-cpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: macos-14
+              platform: darwin
+              arch: arm64
+              runner: qvac-macos26-arm64-gpu
+            - package: diffusion-cpp
+              workdir: packages/diffusion-cpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: ubuntu-24.04
+              platform: linux
+              arch: x64
+              runner: qvac-ubuntu2404-x64
+            - package: diffusion-cpp
+              workdir: packages/diffusion-cpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: windows-2025
+              platform: windows
+              arch: x64
+              runner: qvac-win25-x64
+            - package: embed-llamacpp
+              workdir: packages/embed-llamacpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: ubuntu-24.04
+              platform: linux
+              arch: x64
+              runner: qvac-ubuntu2404-x64
+            - package: embed-llamacpp
+              workdir: packages/embed-llamacpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: macos-14
+              platform: darwin
+              arch: arm64
+              runner: qvac-macos26-arm64-gpu
+            - package: embed-llamacpp
+              workdir: packages/embed-llamacpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: macos-15-intel
+              platform: darwin
+              arch: x64
+            - package: embed-llamacpp
+              workdir: packages/embed-llamacpp
+              vulkanOs: windows-2025
+              vulkanShell: pwsh
+              vulkanPath: 'C:\VulkanSDK'
+              os: windows-2025
+              platform: windows
+              arch: x64
+              runner: qvac-win25-x64
+            - package: vla-ggml
+              workdir: packages/vla-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: ubuntu-24.04
+              platform: linux
+              arch: x64
+              runner: qvac-ubuntu2404-x64
+            - package: vla-ggml
+              workdir: packages/vla-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: macos-14
+              platform: darwin
+              arch: arm64
+              runner: qvac-macos26-arm64-gpu
+            - package: vla-ggml
+              workdir: packages/vla-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: macos-15-intel
+              platform: darwin
+              arch: x64
+            - package: vla-ggml
+              workdir: packages/vla-ggml
+              vulkanOs: ubuntu-24.04
+              vulkanShell: bash
+              vulkanPath: /opt/vulkansdk/x86_64
+              os: windows-2025
+              platform: windows
+              arch: x64
+              runner: qvac-win25-x64
+
+  test-cpp:
+    name: cpp-tests-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.arch }}
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    env:
+      WORKDIR: ${{ matrix.workdir }}
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Setup build host (github-hosted runners only)
+        if: runner.environment == 'github-hosted'
+        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - if: matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'bash'
+        name: Set Vulkan SDK Path (bash)
+        shell: bash
+        run: echo "VULKAN_SDK=${{ matrix.vulkanPath }}" >> $GITHUB_ENV
+
+      - if: matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'pwsh'
+        name: Set Vulkan SDK Path (pwsh)
+        shell: pwsh
+        run: echo "VULKAN_SDK=${{ matrix.vulkanPath }}" >> $Env:GITHUB_ENV
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: ${{ (matrix.platform == 'win32' || matrix.platform == 'windows') && 'powershell' || 'bash' }}
+
+      - name: Setup Apple Clang
+        if: matrix.platform == 'darwin'
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install --ignore-scripts
+
+      - name: Build C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:build
+
+      - name: Run C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
+        run: npm run test:cpp:run
