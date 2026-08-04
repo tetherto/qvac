@@ -25,6 +25,7 @@
 #include "utils/safetensors_lite.hpp"
 
 using qvac_lib_infer_vla_ggml::GrootModel;
+using qvac_lib_infer_vla_ggml::VlaEmbodimentRequest;
 using qvac_lib_infer_vla_ggml::VlaTimingGeneric;
 
 namespace {
@@ -122,7 +123,28 @@ TEST(GrootInferParity, FinalActionSampleMatchesPytorch) {
   // + ggml_backend_sched) against the same oracle — the parity gate below then
   // validates GPU numerics too (e.g. Vulkan on Linux, Metal on mac).
   const bool forceCpu = envOrNull("GROOT_TEST_GPU") == nullptr;
-  GrootModel model(ggufPath, forceCpu, /*backendsDir=*/"");
+  // GROOT_TEST_EMBODIMENT selects a non-default embodiment out of a
+  // multi-embodiment GGUF (tag or numeric cat_id), and
+  // GROOT_TEST_EMBODIMENT_CAMERAS states its camera count for a row whose count
+  // the GGUF doesn't carry. That is what lets this same test gate end-to-end
+  // parity for an embodiment other than the GGUF's default, given an oracle
+  // dumped for that embodiment (nImages/nTok already come from the oracle).
+  VlaEmbodimentRequest embodiment;
+  if (const char* sel = envOrNull("GROOT_TEST_EMBODIMENT")) {
+    const std::string selStr(sel);
+    const bool numeric =
+        selStr.find_first_not_of("0123456789") == std::string::npos;
+    if (numeric) {
+      embodiment.cat_id = std::stoi(selStr);
+    } else {
+      embodiment.tag = selStr;
+    }
+    std::cerr << "[GrootInferParity] embodiment=" << selStr << "\n";
+  }
+  if (const char* cams = envOrNull("GROOT_TEST_EMBODIMENT_CAMERAS")) {
+    embodiment.num_cameras = std::stoi(cams);
+  }
+  GrootModel model(ggufPath, forceCpu, /*backendsDir=*/"", embodiment);
   if (!forceCpu) {
     std::cerr << "[GrootInferParity] backend=" << model.backendName()
               << " hasGpu=" << (model.hasGpu() ? "true" : "false") << "\n";

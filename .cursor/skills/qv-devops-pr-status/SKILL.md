@@ -95,7 +95,7 @@ Bullet format for the active sections (Stale / Needs Review / Re-review):
 - `<author-login>` is wrapped in backticks.
 - `<age>` is the script's age string (e.g., `4d 13h`).
 - `<approvals/notes>` lists `:white_check_mark: <login>` / `:x: <login>` / `:arrows_counterclockwise: <login>` for any non-pending reviews on the PR (from the script's `Reviews:` / `Other:` lines).
-- `<blockers/notes>` is bolded — "needs team-lead approval", "needs team-member approval", "needs team-member + team-lead approval", or any `:warning: merge conflicts` flag. Include labels in plain backticks (e.g., `` `verified` ``) when present.
+- `<blockers/notes>` is bolded — "needs team-lead approval", "needs team-member approval", "needs team-member + team-lead approval", "needs fork-ci approval", or any `:warning: merge conflicts` flag. Include labels in plain backticks (e.g., `` `safe-to-test` ``) when present.
 
 Bullet format for the Excluded section (compact — these are not the pod's review queue):
 

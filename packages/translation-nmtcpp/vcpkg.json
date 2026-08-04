@@ -35,6 +35,11 @@
     {
       "name": "flatbuffers",
       "version": "23.5.26"
+    },
+    {
+      "name": "marian-dev",
+      "version": "1.0.0",
+      "port-version": 1
     }
   ]
 }

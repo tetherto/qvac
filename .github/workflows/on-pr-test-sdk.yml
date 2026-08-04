@@ -30,53 +30,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+  resolve-config:
+    needs: [fork-approval]
     permissions:
       contents: read
       pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
-  # Fork trust gate (fork-ci environment). External-fork PRs pause here for a
-  # merge/release-team approval before ANY privileged job runs; a new push spawns
-  # a fresh run that must be re-approved. Same-repo PRs (and non-PR events) resolve
-  # to an empty environment and run with no gate. Standalone gate job so it composes
-  # with jobs that call reusable workflows (uses:) or already declare an environment.
-  # Runs ALONGSIDE the SHA-bound label-gate during migration.
-  fork-approval:
-    name: Fork approval gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
-    steps:
-      - name: Approved
-        run: echo "fork PR authorised to run privileged jobs"
-  resolve-config:
+      statuses: read
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
       suite: ${{ steps.check.outputs.suite }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
           sparse-checkout-cone-mode: false
+          persist-credentials: false
+
 
       - name: Authorize PR
         id: auth
@@ -89,11 +65,11 @@ jobs:
         if: steps.auth.outputs.allowed == 'true'
         id: check
         shell: bash
+        env:
+          EVENT: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          TARGET: ${{ github.base_ref }}
         run: |
-          EVENT="${{ github.event.action }}"
-          LABEL="${{ github.event.label.name }}"
-          TARGET="${{ github.base_ref }}"
-
           if [ "$EVENT" = "labeled" ]; then
             if [ "$LABEL" = "test-e2e-smoke" ]; then
               echo "should-run=true" >> "$GITHUB_OUTPUT"
@@ -118,8 +94,7 @@ jobs:
     needs:
       - fork-approval
       - resolve-config
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.resolve-config.outputs.should-run == 'true')
+    if: (needs.resolve-config.outputs.should-run == 'true')
     uses: ./.github/workflows/test-sdk.yml
     with:
       targets: desktop + mobile

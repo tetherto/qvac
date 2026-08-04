@@ -1,0 +1,58 @@
+name: Mobile Integration Tests (inference-addon-cpp)
+
+# BOOTSTRAP ANCHOR — no-op placeholder. Temporary; superseded by QVAC-22948.
+#
+# Why this file exists: GitHub only registers a `workflow_dispatch` workflow when
+# the file is present on the DEFAULT branch, so until something lives at this path
+# on main there is no "Run workflow" button at all. The real inference-addon-cpp
+# mobile pipeline is still under review and its branch cannot be selected as a
+# dispatch ref, so the on-device (AWS Device Farm) leg has never been exercised.
+#
+# Landing this stub registers the workflow PATH. Dispatching it while selecting a
+# feature branch then runs THAT branch's version of this same path — the full
+# pipeline — because a dispatch resolves the workflow definition from the selected
+# ref. That lets the device leg be proven before any PR-triggered wiring exists.
+#
+# Triggers, and why they are safe:
+#   workflow_dispatch — the point of the file (see above).
+#   pull_request      — path-scoped to this package and this workflow family, so
+#                       the stub is exercised on PRs that actually touch it and
+#                       nowhere else. `pull_request` (NOT pull_request_target)
+#                       means a fork PR gets a read-only GITHUB_TOKEN and no
+#                       secrets, and this job is a no-op `echo` with
+#                       `permissions: {}` — no checkout, no actions, no AWS, no
+#                       Device Farm, nothing to exfiltrate and nothing to spend.
+#
+# Deliberately has NO pull_request_target / push / schedule / workflow_call
+# trigger: nothing here may run privileged, publish, or spend Device Farm minutes.
+#
+# This job MUST NOT be added to a branch-protection ruleset or to
+# `qvac-merge-guard`: the full pipeline replaces this file wholesale at the same
+# path, so the `anchor` job disappears and any required check bound to it would
+# break silently. Do not add jobs here.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/inference-addon-cpp/**"
+      - ".github/workflows/*inference-addon-cpp*.yml"
+
+permissions: {}
+
+jobs:
+  anchor:
+    name: Mobile CI anchor (no-op)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Explain
+        run: |
+          echo "Placeholder for the inference-addon-cpp mobile pipeline."
+          echo "This job intentionally does nothing."
+          echo
+          echo "To run the real pipeline, dispatch this workflow and select a"
+          echo "feature branch that carries it: the selected ref supplies the"
+          echo "workflow definition, so that branch's full pipeline runs instead"
+          echo "of this placeholder. Seeing THIS message after selecting a"
+          echo "feature branch means the definition came from the default branch."
