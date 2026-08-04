@@ -1120,38 +1120,75 @@ std::string LlamaModel::processConcurrent(
   // still queued behind a wider group settles it now instead of waiting for
   // that group to release a slot.
   const auto groupTag = static_cast<uint64_t>(id);
-  // Armed BEFORE submission with the queued drain, for the same reason the
-  // batch path is: until admission there is no slot to cancel, and a parked
-  // cancel would otherwise only be consumed once a slot frees. Arming here
-  // also surfaces a cancel parked between the scheduler dequeue and this call
-  // (jobStarting -> parkAll), which the batch path already refused explicitly
-  // — so both paths now give the same terminal for that race.
-  const auto cancelQueued = [this, groupTag] {
+  // The job's slot identity, shared with its ONE cancel action — the same
+  // shape the batch path uses (GroupSlots), for the same reason: the action is
+  // installed once and re-reads live state, so ordering against admission
+  // cannot matter. Replacing the action at admission instead (the previous
+  // design) lost exactly that race: JobCancelRegistry::cancel copies the
+  // action out and runs it outside the registry lock, so a copy of the
+  // queued-only action could run after admission had already made
+  // cancelGroupQueued a no-op (admittedCount == totalCount) — the freshly
+  // bound slot action was never invoked, the cancel evaporated, and the
+  // caller's promise waited out the whole generation.
+  struct SlotIdentity {
+    std::mutex mtx;
+    std::optional<std::pair<uint32_t, uint64_t>> admission;
+    bool cancelled = false;
+  };
+  auto slot = std::make_shared<SlotIdentity>();
+
+  // The cancel action: tear down the slot when one is held (the scheduler
+  // validates the admission id, so a stale pair can never hit the seqId's
+  // next occupant), and settle the request through cancelGroupQueued while it
+  // is still queued (a no-op once admitted). Whichever side of admission the
+  // cancel lands on, exactly one mechanism acts. Runs under the canceller's
+  // shared stateMtx_ (see cancelById), so state_ stays valid; slot->mtx is
+  // released before touching the scheduler, so it never holds both locks.
+  const auto cancelSingle = [this, slot, groupTag] {
+    std::optional<std::pair<uint32_t, uint64_t>> admission;
+    {
+      std::lock_guard<std::mutex> slotLock(slot->mtx);
+      slot->cancelled = true;
+      admission = slot->admission;
+    }
     if (state_ && state_->batchScheduler_) {
+      if (admission.has_value()) {
+        state_->batchScheduler_->cancel(admission->first, admission->second);
+      }
       state_->batchScheduler_->cancelGroupQueued(groupTag);
     }
   };
-  if (liveJobs_.add(id, cancelQueued)) {
+  // Armed BEFORE submission, for the same reason the batch path is: until
+  // admission there is no slot to cancel, and a parked cancel would otherwise
+  // only be consumed once a slot frees. Arming here also surfaces a cancel
+  // parked between the scheduler dequeue and this call (jobStarting ->
+  // parkAll), refused with the same terminal the batch path gives it.
+  if (liveJobs_.add(id, cancelSingle)) {
     throw std::runtime_error("Job cancelled");
   }
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
-  // Bind the slot teardown as the cancel action at admission, before the
-  // slot decodes anything. The action may run on any thread -- including the
-  // scheduler's own worker when cancelById is issued from a streaming
-  // callback: scheduler cancel() records lock-free on that thread. It runs
-  // under the canceller's shared stateMtx_, so state_ stays valid. The
-  // captured (seqId, admissionId) pair is this admission's full identity:
-  // the scheduler rejects the cancel once the admission is gone, so even an
-  // action copied out of the registry right before the job finished cannot
-  // hit the seqId's next occupant.
   const SeqAssignedObserver onSeqAssigned =
-      [this, id](size_t, uint32_t seqId, uint64_t admissionId) {
-        return liveJobs_.bind(id, [this, seqId, admissionId] {
-          if (state_ && state_->batchScheduler_) {
-            state_->batchScheduler_->cancel(seqId, admissionId);
+      [this, id, slot, cancelSingle](
+          size_t, uint32_t seqId, uint64_t admissionId) {
+        {
+          std::lock_guard<std::mutex> slotLock(slot->mtx);
+          if (slot->cancelled) {
+            return true;
           }
-        });
+          slot->admission = {seqId, admissionId};
+        }
+        // Idempotent re-arm of the SAME action, exactly like the batch path:
+        // a true return means a whole-model cancel parked between add() and
+        // this admission — mark the job cancelled and let the scheduler kill
+        // the slot before it decodes.
+        if (liveJobs_.bind(id, cancelSingle)) {
+          std::lock_guard<std::mutex> slotLock(slot->mtx);
+          slot->cancelled = true;
+          slot->admission.reset();
+          return true;
+        }
+        return false;
       };
   // Drop the job the moment the slot ends. The scheduler frees the seqId
   // here and may hand it to a peer job before this call returns and mapGuard
