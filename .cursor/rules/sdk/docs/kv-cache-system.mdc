@@ -94,9 +94,9 @@ When a new cache key is used for the first time:
 Anonymous caches created by `kvCache: true` are tracked with internal marker metadata and bounded independently from caller-owned string keys:
 
 - Empty cache-key directories are removed after rename, rollback, and failed prime operations.
-- A retention sweep runs at most once every five minutes while auto caching is in use.
+- A retention sweep runs after an auto-cache turn completes or rolls back, at most once every five minutes.
 - Auto caches idle for more than 24 hours are removed.
-- Least-recently-used auto caches are removed when their total size exceeds 4 GiB.
+- Least-recently-used auto caches are removed when their total size exceeds 512 MiB on React Native or 4 GiB on other runtimes.
 - Cache paths used by active turns are excluded from eviction.
 
 Named string-key caches are not inferred from their directory names, are not subject to automatic retention, and remain caller-managed through `deleteCache()`. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.

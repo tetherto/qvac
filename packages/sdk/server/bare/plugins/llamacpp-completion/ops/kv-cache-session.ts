@@ -10,11 +10,13 @@ import {
   deleteCache as deleteCacheUtil
 } from '@/server/bare/ops/kv-cache-utils'
 import {
+  isCachePathWithinDirectory,
   markAutoCacheKey,
   planAutoCacheEvictions,
   removeAutoCacheMarker,
   removeAutoCacheMarkerIfMissing
 } from '@/server/bare/ops/kv-cache-retention'
+import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { type CacheMessage, getKVCacheDir } from '@/server/utils'
 import {
   logCacheSaveError,
@@ -96,11 +98,12 @@ const cachedMessageCounts = new Map<string, number>()
 const initializedCaches = new Set<string>()
 const activeCachePaths = new Map<string, number>()
 
-const AUTO_CACHE_MAX_BYTES = 4 * 1024 * 1024 * 1024
+const DESKTOP_AUTO_CACHE_MAX_BYTES = 4 * 1024 * 1024 * 1024
+const MOBILE_AUTO_CACHE_MAX_BYTES = 512 * 1024 * 1024
 const AUTO_CACHE_MAX_IDLE_MS = 24 * 60 * 60 * 1000
 const AUTO_CACHE_SWEEP_INTERVAL_MS = 5 * 60 * 1000
 
-let lastAutoCacheSweepMs = Date.now()
+let lastAutoCacheSweepMs = 0
 let autoCacheSweepInFlight: Promise<void> | null = null
 let cacheStateLockTail = Promise.resolve()
 
@@ -124,10 +127,13 @@ function releaseCachePath(cachePath: string): void {
 
 function isCacheKeyActive(cacheKey: string): boolean {
   const cacheDirectory = path.join(getKVCacheDir(), cacheKey)
-  const prefix = `${cacheDirectory}${path.sep}`
-  return Array.from(activeCachePaths.keys()).some(
-    (cachePath) => cachePath === cacheDirectory || cachePath.startsWith(prefix)
+  return Array.from(activeCachePaths.keys()).some((cachePath) =>
+    isCachePathWithinDirectory(cacheDirectory, cachePath)
   )
+}
+
+function getAutoCacheMaxBytes(): number {
+  return isMobile() ? MOBILE_AUTO_CACHE_MAX_BYTES : DESKTOP_AUTO_CACHE_MAX_BYTES
 }
 
 async function withCacheStateLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -165,14 +171,14 @@ async function maybeSweepAutoCaches(
   lastAutoCacheSweepMs = nowMs
   const sweep = async () => {
     try {
+      const cacheKeys = await planAutoCacheEvictions({
+        activeCachePaths: Array.from(activeCachePaths.keys()),
+        maxBytes: overrides?.maxBytes ?? getAutoCacheMaxBytes(),
+        maxIdleMs: overrides?.maxIdleMs ?? AUTO_CACHE_MAX_IDLE_MS,
+        nowMs
+      })
       let evictionCount = 0
       await withCacheStateLock(async () => {
-        const cacheKeys = await planAutoCacheEvictions({
-          activeCachePaths: Array.from(activeCachePaths.keys()),
-          maxBytes: overrides?.maxBytes ?? AUTO_CACHE_MAX_BYTES,
-          maxIdleMs: overrides?.maxIdleMs ?? AUTO_CACHE_MAX_IDLE_MS,
-          nowMs
-        })
         for (const cacheKey of cacheKeys) {
           if (isCacheKeyActive(cacheKey)) continue
           await deleteKvCacheState({ kvCacheKey: cacheKey })
@@ -194,7 +200,7 @@ async function maybeSweepAutoCaches(
   try {
     await sweepPromise
   } finally {
-    if (autoCacheSweepInFlight === sweepPromise) autoCacheSweepInFlight = null
+    autoCacheSweepInFlight = null
   }
 }
 
@@ -779,9 +785,12 @@ export const __kvCacheSessionTestHooks = {
     cachedMessageCounts.clear()
     initializedCaches.clear()
     activeCachePaths.clear()
-    lastAutoCacheSweepMs = Date.now()
+    lastAutoCacheSweepMs = 0
     autoCacheSweepInFlight = null
     cacheStateLockTail = Promise.resolve()
+  },
+  waitForAutoCacheSweepForTest(): Promise<void> {
+    return autoCacheSweepInFlight ?? Promise.resolve()
   },
   sweepAutoCachesForTest(options: {
     maxBytes: number

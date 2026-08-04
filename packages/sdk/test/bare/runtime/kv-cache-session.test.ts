@@ -289,7 +289,7 @@ test('kv-cache-session: retention removes markers whose cache directory is missi
   }
 })
 
-test('kv-cache-session: beginTurn does not run retention before inference', async (t) => {
+test('kv-cache-session: beginTurn defers retention until turn cleanup', async (t) => {
   const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
   try {
     const staleKey = '8888888888888888'
@@ -317,11 +317,13 @@ test('kv-cache-session: beginTurn does not run retention before inference', asyn
     t.ok(fs.existsSync(stalePath), 'stale cache remains available before inference starts')
 
     await session.rollback(turn)
-    await mod.__kvCacheSessionTestHooks.sweepAutoCachesForTest({
-      maxBytes: Number.MAX_SAFE_INTEGER,
-      maxIdleMs: 1,
-      nowMs: Date.now()
-    })
+    await mod.__kvCacheSessionTestHooks.waitForAutoCacheSweepForTest()
+
+    t.ok(
+      mod.__kvCacheSessionTestHooks.getLastAutoCacheSweepMsForTest() > 0,
+      'turn cleanup scheduled the first retention sweep'
+    )
+    t.is(fs.existsSync(stalePath), false, 'cleanup sweep removed the stale cache')
   } finally {
     cleanup()
   }

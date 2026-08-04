@@ -21,7 +21,7 @@ interface AutoCacheEntry {
 }
 
 const AUTO_CACHE_MARKER_PREFIX = '.auto-cache-'
-const AUTO_CACHE_MARKER = /^\.auto-cache-([a-f0-9]{16})$/
+const AUTO_CACHE_MARKER_PATTERN = /^\.auto-cache-([a-f0-9]{16})$/
 
 function getAutoCacheMarkerPath(cacheKey: string) {
   return path.join(getKVCacheDir(), `${AUTO_CACHE_MARKER_PREFIX}${cacheKey}`)
@@ -53,11 +53,9 @@ export async function removeAutoCacheMarkerIfMissing(cacheKey: string) {
   }
 }
 
-function isActiveDirectory(directoryPath: string, activeCachePaths: string[]) {
+export function isCachePathWithinDirectory(directoryPath: string, cachePath: string) {
   const prefix = `${directoryPath}${path.sep}`
-  return activeCachePaths.some(
-    (cachePath) => cachePath === directoryPath || cachePath.startsWith(prefix)
-  )
+  return cachePath === directoryPath || cachePath.startsWith(prefix)
 }
 
 async function readDirectory(directoryPath: string) {
@@ -101,7 +99,9 @@ async function inspectAutoCacheEntry(
     directoryPath,
     size,
     lastModifiedMs,
-    active: isActiveDirectory(directoryPath, activeCachePaths)
+    active: activeCachePaths.some((cachePath) =>
+      isCachePathWithinDirectory(directoryPath, cachePath)
+    )
   }
 }
 
@@ -111,7 +111,7 @@ export async function planAutoCacheEvictions(options: AutoCacheRetentionOptions)
 
   const entries: AutoCacheEntry[] = []
   for (const rootEntry of rootEntries) {
-    const markerMatch = AUTO_CACHE_MARKER.exec(rootEntry.toString())
+    const markerMatch = AUTO_CACHE_MARKER_PATTERN.exec(rootEntry.toString())
     if (markerMatch === null) continue
     const cacheKey = markerMatch[1]
     if (cacheKey === undefined) continue
