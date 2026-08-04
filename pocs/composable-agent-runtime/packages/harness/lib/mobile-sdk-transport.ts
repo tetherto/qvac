@@ -249,6 +249,11 @@ export function createWorkerSdkRuntimePort(stream: Duplex): SdkRuntimePort {
         })()
       }
     },
+    async generateImage() {
+      throw new Error(
+        'image generation must use the shared direct SDK runtime, not a mobile SDK transport'
+      )
+    },
     async cancel({ requestId }) {
       await cancelRemoteRequest(requestId)
     },
