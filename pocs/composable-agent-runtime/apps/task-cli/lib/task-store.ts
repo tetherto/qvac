@@ -1,9 +1,9 @@
 import type { AssistantStateEndpoint } from '@qvac/assistant'
-import type {
-  Task,
-  TaskStatus,
-  TaskStore
-} from '@qvac-poc/task-shared'
+import type { Task, TaskStatus, TaskStore } from '@qvac-poc/task-shared'
+import {
+  createReplicatedTaskRepository,
+  type ReplicatedTask
+} from '@qvac-poc/task-shared/sync-store'
 
 const PROFILE_ID = '@task-cli/profile'
 const TASK_PREFIX = 'task-cli/task/'
@@ -21,55 +21,44 @@ export interface TaskCliStore extends TaskStore {
 export function createTaskCliStore(
   state: AssistantStateEndpoint
 ): TaskCliStore {
+  const tasks = createReplicatedTaskRepository(state)
   return {
     async seedProfile(profile) {
-      await state.setUserProfile({ name: profile.name })
-      const existing = await state.getTask({ id: PROFILE_ID })
-      if (!existing.task) {
-        await state.createTask({
+      if (!(await tasks.get(PROFILE_ID))) {
+        await tasks.create({
           id: PROFILE_ID,
-          title: 'Task CLI user profile',
+          title: profile.name,
           input: JSON.stringify({ age: profile.age })
         })
       }
-      await state.updateTask({
-        id: PROFILE_ID,
-        title: 'Task CLI user profile',
-        status: 'completed',
-        result: JSON.stringify({ age: profile.age })
-      })
     },
     async loadCurrentUser() {
-      const [profileResult, identity, metadataResult] = await Promise.all([
-        state.getUserProfile(),
-        state.getIdentity(),
-        state.getTask({ id: PROFILE_ID })
+      const [profile, identity] = await Promise.all([
+        tasks.get(PROFILE_ID),
+        state.mesh.identity()
       ])
-      if (!profileResult.profile) {
-        throw new Error('Task user profile is not seeded')
-      }
-      if (!metadataResult.task?.result) {
-        throw new Error('Task user metadata is not seeded')
-      }
-      const metadata = parseProfileMetadata(metadataResult.task.result)
+      if (!profile?.title) throw new Error('Task user profile is not seeded')
+      const metadata = parseProfileMetadata(profile.input)
       const deviceId = identity.deviceId.toString('hex')
       return {
         id: `user:${deviceId}`,
-        name: profileResult.profile.name,
+        name: profile.title,
         age: metadata.age,
         deviceIds: [deviceId]
       }
     },
     async listTasks() {
-      const { tasks } = await state.listTasks()
-      return tasks
+      return (await tasks.list())
         .filter(isApplicationTask)
         .map(decodeTask)
-        .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+        .sort(
+          (left, right) =>
+            left.order - right.order || left.id.localeCompare(right.id)
+        )
     },
     async *watchTasks() {
-      for await (const { tasks } of state.watchTasks()) {
-        yield tasks
+      for await (const snapshot of tasks.watch()) {
+        yield snapshot
           .filter(isApplicationTask)
           .map(decodeTask)
           .sort(
@@ -80,43 +69,41 @@ export function createTaskCliStore(
     },
     async saveTask(_userId, task) {
       let id = task.id
-      let existing = await state.getTask({ id })
+      let existing = await tasks.get(id)
       const prefixedId = `${TASK_PREFIX}${task.id}`
-      if (!existing.task) {
+      if (!existing) {
         id = prefixedId
-        existing = await state.getTask({ id })
+        existing = await tasks.get(id)
       }
-      if (!existing.task) {
-        await state.createTask({
+      if (!existing) {
+        existing = await tasks.create({
           id,
           title: task.text,
           input: JSON.stringify({ text: task.text, order: task.order })
         })
       }
-      await state.updateTask({
-        id,
-        title: task.text,
-        status: encodeStatus(task.status),
-        result: JSON.stringify({
-          result: task.result ?? null,
-          error: task.error ?? null
+      if (
+        existing.status !== encodeStatus(task.status) ||
+        existing.result !== encodeOutcome(task)
+      ) {
+        await tasks.update({
+          id,
+          status: encodeStatus(task.status),
+          result: encodeOutcome(task)
         })
-      })
+      }
     }
   }
 }
 
-function isApplicationTask(task: { readonly id: string }) {
-  return task.id.startsWith(TASK_PREFIX) || task.id.startsWith(MOBILE_TASK_PREFIX)
+function isApplicationTask(task: ReplicatedTask) {
+  return (
+    task.id.startsWith(TASK_PREFIX) ||
+    task.id.startsWith(MOBILE_TASK_PREFIX)
+  )
 }
 
-function decodeTask(task: {
-  readonly id: string
-  readonly input: string
-  readonly status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  readonly result?: string | null
-  readonly createdAt: number
-}): Task {
+function decodeTask(task: ReplicatedTask): Task {
   const input = parseTaskInput(task.input, task.createdAt)
   const outcome = task.result ? parseTaskOutcome(task.result) : {}
   return {
@@ -131,35 +118,28 @@ function decodeTask(task: {
 }
 
 function encodeStatus(status: TaskStatus) {
-  switch (status) {
-    case 'running':
-      return 'running' as const
-    case 'completed':
-      return 'completed' as const
-    case 'failed':
-      return 'failed' as const
-    case 'pending':
-      return 'pending' as const
-  }
+  return status
 }
 
-function decodeStatus(
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-): TaskStatus {
+function decodeStatus(status: ReplicatedTask['status']): TaskStatus {
   if (status === 'cancelled') return 'failed'
   return status
 }
 
+function encodeOutcome(task: Task) {
+  return JSON.stringify({
+    result: task.result ?? null,
+    error: task.error ?? null
+  })
+}
+
 function parseProfileMetadata(serialized: string) {
-  const value = JSON.parse(serialized)
-  const age = typeof value === 'object' && value !== null
-    ? Reflect.get(value, 'age')
-    : undefined
-  if (
-    typeof age !== 'number'
-  ) {
-    throw new Error('Invalid task user metadata')
-  }
+  const value: unknown = JSON.parse(serialized)
+  const age =
+    typeof value === 'object' && value !== null
+      ? Reflect.get(value, 'age')
+      : undefined
+  if (typeof age !== 'number') throw new Error('Invalid task user metadata')
   return { age }
 }
 
@@ -170,12 +150,14 @@ function parseTaskInput(serialized: string, createdAt: number) {
   } catch {
     return { text: serialized, order: createdAt }
   }
-  const text = typeof value === 'object' && value !== null
-    ? Reflect.get(value, 'text')
-    : undefined
-  const order = typeof value === 'object' && value !== null
-    ? Reflect.get(value, 'order')
-    : undefined
+  const text =
+    typeof value === 'object' && value !== null
+      ? Reflect.get(value, 'text')
+      : undefined
+  const order =
+    typeof value === 'object' && value !== null
+      ? Reflect.get(value, 'order')
+      : undefined
   if (typeof text !== 'string' || typeof order !== 'number') {
     return { text: serialized, order: createdAt }
   }
@@ -183,7 +165,7 @@ function parseTaskInput(serialized: string, createdAt: number) {
 }
 
 function parseTaskOutcome(serialized: string) {
-  const value = JSON.parse(serialized)
+  const value: unknown = JSON.parse(serialized)
   if (typeof value !== 'object' || value === null) {
     throw new Error('Invalid task outcome')
   }

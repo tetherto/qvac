@@ -11,44 +11,25 @@ const VERSION = 1
 // eslint-disable-next-line no-unused-vars
 let version = VERSION
 
-// @local/user-profile
+// @local/mesh-session
 const encoding0 = {
   preencode(state, m) {
     c.string.preencode(state, m.id)
-    c.string.preencode(state, m.name)
-  },
-  encode(state, m) {
-    c.string.encode(state, m.id)
-    c.string.encode(state, m.name)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-    const r1 = c.string.decode(state)
-
-    return {
-      id: r0,
-      name: r1
-    }
-  }
-}
-
-// @local/mesh-session
-const encoding1 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
     c.fixed32.preencode(state, m.seed)
-    state.end++ // max flag is 2 so always one byte
+    state.end++ // max flag is 4 so always one byte
 
     if (m.key) c.fixed32.preencode(state, m.key)
+    if (m.writerSeed) c.fixed32.preencode(state, m.writerSeed)
   },
   encode(state, m) {
-    const flags = (m.key ? 1 : 0) | (m.creator ? 2 : 0)
+    const flags = (m.key ? 1 : 0) | (m.writerSeed ? 2 : 0) | (m.creator ? 4 : 0)
 
     c.string.encode(state, m.id)
     c.fixed32.encode(state, m.seed)
     c.uint.encode(state, flags)
 
     if (m.key) c.fixed32.encode(state, m.key)
+    if (m.writerSeed) c.fixed32.encode(state, m.writerSeed)
   },
   decode(state) {
     const r0 = c.string.decode(state)
@@ -59,7 +40,29 @@ const encoding1 = {
       id: r0,
       seed: r1,
       key: (flags & 1) !== 0 ? c.fixed32.decode(state) : null,
-      creator: (flags & 2) !== 0
+      writerSeed: (flags & 2) !== 0 ? c.fixed32.decode(state) : null,
+      creator: (flags & 4) !== 0
+    }
+  }
+}
+
+// @local/device
+const encoding1 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.id)
+    c.string.encode(state, m.name)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.string.decode(state)
+
+    return {
+      id: r0,
+      name: r1
     }
   }
 }
@@ -87,9 +90,9 @@ function getEnum(name) {
 
 function getEncoding(name) {
   switch (name) {
-    case '@local/user-profile':
-      return encoding0
     case '@local/mesh-session':
+      return encoding0
+    case '@local/device':
       return encoding1
     default:
       throw new Error('Encoder not found ' + name)

@@ -5,48 +5,17 @@ import type {
 } from '@qvac/harness/types'
 import type { LogLevel } from '@qvac/logging'
 import type {
-  SyncCoreOptions,
-  SyncPairingInvite,
-  SyncPairingRequest,
-  SyncTask,
-  SyncTaskStatus,
-  SyncUserProfile
+  CreateSyncOptions,
+  SyncRuntime
 } from '@qvac/sync'
 import type { ComponentHandshake } from './compatibility.ts'
 
 export type AssistantComponentHandshake = ComponentHandshake
 
-export interface AssistantStateEndpoint {
-  getIdentity(): Promise<{ deviceId: Buffer }>
-  getUserProfile(): Promise<{ profile?: SyncUserProfile | null }>
-  setUserProfile(profile: SyncUserProfile): Promise<SyncUserProfile>
-  createTask(request: {
-    id: string
-    title: string
-    input: string
-  }): Promise<SyncTask>
-  updateTask(request: {
-    id: string
-    title?: string | null
-    status?: SyncTaskStatus | null
-    result?: string | null
-  }): Promise<SyncTask>
-  getTask(request: { id: string }): Promise<{ task?: SyncTask | null }>
-  listTasks(): Promise<{ tasks: SyncTask[] }>
-  watchTasks(): AsyncIterable<{ tasks: SyncTask[] }>
-  createPairingInvite(request?: {
-    expiresInMs?: number
-  }): Promise<SyncPairingInvite>
-  approvePairingRequest(request: {
-    id: Buffer
-  }): Promise<SyncPairingRequest>
-  rejectPairingRequest(request: {
-    id: Buffer
-  }): Promise<SyncPairingRequest>
-  watchPairingRequests(): AsyncIterable<{
-    requests: SyncPairingRequest[]
-  }>
-}
+export type AssistantStateEndpoint = Pick<
+  SyncRuntime,
+  'ready' | 'suspend' | 'resume' | 'lifecycle' | 'runtime' | 'mesh' | 'openProfile'
+>
 
 export interface AssistantComponent {
   readonly handshake: AssistantComponentHandshake
@@ -61,7 +30,7 @@ export interface AssistantComponent {
 }
 
 export interface AssistantSyncComponent extends AssistantComponent {
-  readonly state: AssistantStateEndpoint
+  readonly state: SyncRuntime
 }
 
 export interface AssistantHarnessComponent extends AssistantComponent {
@@ -82,7 +51,7 @@ export type AssistantInference =
 
 export interface CreateAssistantOptions {
   readonly storagePath?: string
-  readonly sync?: Omit<SyncCoreOptions, 'storagePath'>
+  readonly sync?: Omit<CreateSyncOptions, 'storagePath'>
   readonly inference?: AssistantInference
   readonly logging?: { readonly level?: LogLevel }
   readonly components?: AssistantComponents

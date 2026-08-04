@@ -2,9 +2,10 @@ import path from 'path'
 import test from 'brittle'
 import crypto from 'hypercore-crypto'
 import { SyncCore } from '../lib/core.ts'
+import { durableWorkProfile } from '../profiles/durable-work.ts'
 import { openPair, testContext, waitFor } from './helpers.ts'
 
-test('sync: a passive peer receives task profiles over an isolated DHT testnet', async (t) => {
+test('sync: a passive peer receives profile state over an isolated DHT testnet', async (t) => {
   t.timeout(120_000)
   const { dir, testnet } = await testContext(t)
   const meshSeed = crypto.randomBytes(32)
@@ -23,18 +24,35 @@ test('sync: a passive peer receives task profiles over an isolated DHT testnet',
   const connected = await waitFor(() => creator.core.peerCount > 0 && peer.core.peerCount > 0)
   t.ok(connected, 'the real Hyperswarms connected')
 
-  const created = await creator.client.createTask({
-    id: 'replicated-task',
-    title: 'Replicate me',
-    input: 'from creator'
-  })
+  await creator.client.openProfile(durableWorkProfile).apply(
+    {
+      type: 'record-work',
+      workId: 'replicated-work',
+      payload: Buffer.from('from creator'),
+      payloadFormat: 'text/plain',
+      payloadVersion: 1
+    },
+    { operationId: 'replicated-create' }
+  )
   const replicated = await waitFor(async () => {
-    const tasks = await peer.client.listTasks()
-    return tasks.tasks.find((task) => task.id === created.id)
+    return (
+      await peer.client
+        .openProfile(durableWorkProfile)
+        .query({ type: 'get-work', workId: 'replicated-work' })
+    ).work
   })
-  t.alike(replicated, created)
+  t.is(replicated?.workId, 'replicated-work')
   await t.exception(
-    peer.client.createTask({ id: 'rejected', title: 'Passive', input: 'read only' }),
+    peer.client.openProfile(durableWorkProfile).apply(
+      {
+        type: 'record-work',
+        workId: 'rejected',
+        payload: Buffer.from('read only'),
+        payloadFormat: 'text/plain',
+        payloadVersion: 1
+      },
+      { operationId: 'rejected-create' }
+    ),
     /read-only/i
   )
 })
@@ -59,16 +77,23 @@ test('sync: a restarted passive peer catches up after an offline interval', asyn
   t.ok(await waitFor(() => peer.core.peerCount > 0), 'peer connected before interruption')
   await peer.close()
 
-  await creator.client.createTask({
-    id: 'while-offline',
-    title: 'Catch up',
-    input: 'created during disconnect'
-  })
+  await creator.client.openProfile(durableWorkProfile).apply(
+    {
+      type: 'record-work',
+      workId: 'while-offline',
+      payload: Buffer.from('created during disconnect'),
+      payloadFormat: 'text/plain',
+      payloadVersion: 1
+    },
+    { operationId: 'offline-create' }
+  )
 
   const reconnected = await openPair(t, peerOptions)
   const caughtUp = await waitFor(async () => {
-    const tasks = await reconnected.client.listTasks()
-    return tasks.tasks.some((task) => task.id === 'while-offline')
+    const result = await reconnected.client
+      .openProfile(durableWorkProfile)
+      .query({ type: 'get-work', workId: 'while-offline' })
+    return result.work?.workId === 'while-offline'
   })
   t.ok(caughtUp, 'the reopened peer replicated changes missed while offline')
 })
@@ -118,7 +143,7 @@ test('sync: rejected pairing leaves the candidate read-only', async (t) => {
   await requests.return?.()
 })
 
-test('sync: approval admits a phone writer and desktop updates preserve its origin', async (t) => {
+test('sync: approval admits a phone writer and profiles replicate both ways', async (t) => {
   t.timeout(120_000)
   const { dir, testnet } = await testContext(t)
   const host = await openPair(t, {
@@ -146,28 +171,45 @@ test('sync: approval admits a phone writer and desktop updates preserve its orig
     'approved peers connect to the mesh'
   )
 
-  const created = await phone.client.createTask({
-    id: 'phone-origin',
-    title: 'From phone',
-    input: 'run this on desktop'
-  })
+  await phone.client.openProfile(durableWorkProfile).apply(
+    {
+      type: 'record-work',
+      workId: 'phone-origin',
+      payload: Buffer.from('run this on desktop'),
+      payloadFormat: 'text/plain',
+      payloadVersion: 1
+    },
+    { operationId: 'phone-create' }
+  )
   const desktopCopy = await waitFor(async () => {
-    const result = await host.client.getTask({ id: created.id })
-    return result.task
+    return (
+      await host.client
+        .openProfile(durableWorkProfile)
+        .query({ type: 'get-work', workId: 'phone-origin' })
+    ).work
   })
-  t.alike(desktopCopy, created, 'phone-created task replicates to desktop')
+  t.is(desktopCopy?.workId, 'phone-origin', 'phone-created work replicates to desktop')
 
-  const completed = await host.client.updateTask({
-    id: created.id,
-    status: 'completed',
-    result: 'desktop result'
-  })
-  t.alike(completed.originDeviceId, created.originDeviceId, 'task origin is immutable')
+  await host.client.openProfile(durableWorkProfile).apply(
+    {
+      type: 'record-outcome',
+      workId: 'phone-origin',
+      status: 'completed',
+      result: Buffer.from('desktop result')
+    },
+    { operationId: 'desktop-outcome' }
+  )
   const phoneCopy = await waitFor(async () => {
-    const result = await phone.client.getTask({ id: created.id })
-    return result.task?.status === 'completed' ? result.task : null
+    const result = await phone.client
+      .openProfile(durableWorkProfile)
+      .query({ type: 'get-work', workId: 'phone-origin' })
+    return result.work?.outcomeStatus === 'completed' ? result.work : null
   })
-  t.alike(phoneCopy, completed, 'desktop update replicates back to phone')
+  t.alike(
+    phoneCopy?.outcomeResult,
+    Buffer.from('desktop result'),
+    'desktop outcome replicates back to phone'
+  )
   await requests.return?.()
 
   const reused = new SyncCore({

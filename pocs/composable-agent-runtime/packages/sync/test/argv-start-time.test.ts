@@ -47,13 +47,17 @@ test('sync mobile entry resolves argv at start time', async (t) => {
 test('sync worklet argv layout round-trips launcher to entry parser', async (t) => {
   const argv = createSyncWorkletArgv({
     storagePath: '/tmp/roundtrip',
-    invite: '-_8AAQ'
+    pairingInvite: Buffer.from('fbff0001', 'hex')
   })
   t.is(argv[WORKLET_ARGV_LAYOUT.runtime], 'react-native-bare-kit')
   t.is(argv[WORKLET_ARGV_LAYOUT.entry], 'sync.js')
   const parsed = parseSyncWorkletArgv(argv)
   t.alike(parsed, {
     storagePath: '/tmp/roundtrip',
-    invite: '-_8AAQ'
+    bootstrap: undefined,
+    meshSeed: undefined,
+    meshKey: undefined,
+    pairingInvite: Buffer.from('fbff0001', 'hex'),
+    logging: undefined
   })
 })

@@ -30,6 +30,7 @@
     "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=bare-* --external=react-native-bare-kit",
     "test": "bun test/run.ts",
     "test:fast": "bun test/all.ts",
+    "test:node": "node --experimental-strip-types ../../node_modules/brittle/brittle-node.js test/agent-state-store.ts",
     "test:bare": "brittle-bare test/all.ts",
     "test:spawn": "node --experimental-strip-types test/spawn.test.ts",
     "test:smoke:qwen": "QVAC_REAL_MODEL_SMOKE=1 node --experimental-strip-types test/qwen-smoke.test.ts",
@@ -40,6 +41,7 @@
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.0",
     "@qvac/sdk": "0.15.0",
+    "@qvac/sync": "0.0.0-poc",
     "@qvac/supervisor": "0.0.0-poc",
     "b4a": "^1.8.1",
     "bare-abort-controller": "^1.1.2",
@@ -74,6 +76,8 @@
     "@expo/config-plugins": "^54.0.4",
     "@expo/config-types": "^54.0.0",
     "brittle": "^4.0.2",
+    "hyperdht": "^6.32.0",
+    "test-tmp": "^1.4.0",
     "typescript": "^5.9.3"
   }
 }

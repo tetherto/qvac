@@ -1,9 +1,17 @@
 import type { HarnessEvent } from '@qvac/harness/types'
 import type { AssistantStateEndpoint } from './contracts.ts'
+import type { SyncProfileClient } from '@qvac/sync'
+import {
+  durableWorkProfile,
+  type DurableWorkCommand,
+  type DurableWorkQuery,
+  type DurableWorkResult
+} from '@qvac/sync/profiles/durable-work'
 
 const PERSIST_INTERVAL_MS = 250
 
-export function createRunStateAdapter(state: AssistantStateEndpoint) {
+export function createRunStateAdapter(sync: AssistantStateEndpoint) {
+  const profile = sync.openProfile(durableWorkProfile)
   const runs = new Map<string, RunState>()
 
   return {
@@ -12,22 +20,33 @@ export function createRunStateAdapter(state: AssistantStateEndpoint) {
       assertNoFailure(run)
       run.pending.push(event)
       if (isTerminal(event)) {
-        await flush(state, run)
+        await flush(profile, run)
         return
       }
-      scheduleFlush(state, run)
+      scheduleFlush(profile, run)
     },
     async read(runId: string) {
       const run = runs.get(runId)
-      if (!run) return readPersisted(state, runId)
-      await flush(state, run)
+      if (!run) return readPersisted(profile, runId)
+      await flush(profile, run)
       assertNoFailure(run)
       return run.persisted
     },
-    async finish(runId: string) {
+    async finish(runId: string, completed = false) {
       const run = runs.get(runId)
       if (!run) return
-      await flush(state, run)
+      await flush(profile, run)
+      if (completed && !run.terminal && run.exists) {
+        await profile.apply(
+          {
+            type: 'record-outcome',
+            workId: run.id,
+            status: 'completed'
+          },
+          { operationId: `assistant-outcome:${run.id}:completed` }
+        )
+        run.terminal = true
+      }
       assertNoFailure(run)
     },
     async close() {
@@ -36,88 +55,135 @@ export function createRunStateAdapter(state: AssistantStateEndpoint) {
   }
 }
 
+type Profile = SyncProfileClient<
+  DurableWorkCommand,
+  DurableWorkQuery,
+  DurableWorkResult
+>
+
 interface RunState {
   readonly id: string
   readonly pending: HarnessEvent[]
   persisted: HarnessEvent[]
-  exists: boolean | null
+  loaded: boolean
+  exists: boolean
   timer: ReturnType<typeof setTimeout> | null
   flushing: Promise<void> | null
   failure: Error | null
+  terminal: boolean
 }
 
 function getRun(runs: Map<string, RunState>, runId: string) {
   const existing = runs.get(runId)
   if (existing) return existing
   const run: RunState = {
-    id: runStateId(runId),
+    id: runId,
     pending: [],
     persisted: [],
-    exists: null,
+    loaded: false,
+    exists: false,
     timer: null,
     flushing: null,
-    failure: null
+    failure: null,
+    terminal: false
   }
   runs.set(runId, run)
   return run
 }
 
-function scheduleFlush(state: AssistantStateEndpoint, run: RunState) {
+function scheduleFlush(profile: Profile, run: RunState) {
   if (run.timer) return
   run.timer = setTimeout(() => {
     run.timer = null
-    void flush(state, run).catch((error: unknown) => {
+    void flush(profile, run).catch((error: unknown) => {
       run.failure = toError(error)
     })
   }, PERSIST_INTERVAL_MS)
 }
 
-function flush(state: AssistantStateEndpoint, run: RunState): Promise<void> {
+function flush(profile: Profile, run: RunState): Promise<void> {
   if (run.timer) {
     clearTimeout(run.timer)
     run.timer = null
   }
   if (run.flushing) return run.flushing
-  run.flushing = flushPending(state, run).finally(() => {
-    run.flushing = null
-  })
+  run.flushing = flushPending(profile, run)
+    .then(() => {
+      run.failure = null
+    })
+    .finally(() => {
+      run.flushing = null
+    })
   return run.flushing
 }
 
-async function flushPending(state: AssistantStateEndpoint, run: RunState) {
-  await loadPersisted(state, run)
+async function flushPending(profile: Profile, run: RunState) {
+  await loadPersisted(profile, run)
   while (run.pending.length > 0) {
-    const pending = run.pending.splice(0)
-    const lastEvent = pending.at(-1)
-    if (!lastEvent) throw new Error('Expected pending Harness event')
+    const pending = run.pending.slice()
     if (!run.exists) {
-      await state.createTask({
-        id: run.id,
-        title: `Harness run ${run.id.replace('@harness/', '')}`,
-        input: run.id.replace('@harness/', '')
-      })
+      await profile.apply(
+        {
+          type: 'record-work',
+          workId: run.id,
+          payload: Buffer.from(JSON.stringify({ runId: run.id })),
+          payloadFormat: 'application/vnd.qvac.assistant-run+json',
+          payloadVersion: 1
+        },
+        { operationId: `assistant-run:${run.id}` }
+      )
       run.exists = true
     }
-    const events = [...run.persisted, ...pending]
-    await state.updateTask({
-      id: run.id,
-      status: eventStatus(lastEvent),
-      result: JSON.stringify(events)
-    })
-    run.persisted = events
+    await profile.apply(
+      {
+        type: 'append-journal',
+        workId: run.id,
+        entryType: 'harness-events',
+        body: Buffer.from(JSON.stringify(pending))
+      },
+      {
+        operationId: `assistant-events:${run.id}:${run.persisted.length}`
+      }
+    )
+    const terminal = pending.findLast(isTerminal)
+    if (terminal) {
+      await profile.apply(
+        {
+          type: 'record-outcome',
+          workId: run.id,
+          status: terminal.type === 'aborted' ? 'cancelled' : 'failed',
+          result: Buffer.from(JSON.stringify(terminal))
+        },
+        {
+          operationId: `assistant-outcome:${run.id}:${run.persisted.length}`
+        }
+      )
+      run.terminal = true
+    }
+    run.persisted.push(...pending)
+    run.pending.splice(0, pending.length)
   }
 }
 
-async function loadPersisted(state: AssistantStateEndpoint, run: RunState) {
-  if (run.exists !== null) return
-  const current = await state.getTask({ id: run.id })
-  run.exists = Boolean(current.task)
-  run.persisted = current.task?.result ? parseEvents(current.task.result) : []
+async function loadPersisted(profile: Profile, run: RunState) {
+  if (run.loaded) return
+  const [work, journal] = await Promise.all([
+    profile.query({ type: 'get-work', workId: run.id }),
+    profile.query({ type: 'list-journal', workId: run.id })
+  ])
+  run.exists = work.work != null
+  run.persisted = journal.entries
+    .filter(({ entryType }) => entryType === 'harness-events')
+    .flatMap(({ body }) => parseEvents(body))
+  run.terminal = run.persisted.some(isTerminal)
+  run.loaded = true
 }
 
-async function readPersisted(state: AssistantStateEndpoint, runId: string) {
-  const result = await state.getTask({ id: runStateId(runId) })
-  return result.task?.result ? parseEvents(result.task.result) : []
+async function readPersisted(profile: Profile, runId: string) {
+  const journal = await profile.query({ type: 'list-journal', workId: runId })
+  return journal.entries
+    .filter(({ entryType }) => entryType === 'harness-events')
+    .flatMap(({ body }) => parseEvents(body))
 }
 
 function assertNoFailure(run: RunState) {
@@ -128,22 +194,12 @@ function isTerminal(event: HarnessEvent) {
   return event.type === 'error' || event.type === 'aborted'
 }
 
-function runStateId(runId: string) {
-  return `@harness/${runId}`
-}
-
-function eventStatus(event: HarnessEvent) {
-  if (event.type === 'error') return 'failed' as const
-  if (event.type === 'aborted') return 'cancelled' as const
-  return 'running' as const
-}
-
 function toError(error: unknown) {
   return error instanceof Error ? error : new Error(String(error))
 }
 
-function parseEvents(serialized: string): HarnessEvent[] {
-  const parsed: unknown = JSON.parse(serialized)
+function parseEvents(serialized: Buffer): HarnessEvent[] {
+  const parsed: unknown = JSON.parse(serialized.toString())
   if (!Array.isArray(parsed) || !parsed.every(isHarnessEvent)) {
     throw new Error('Invalid persisted Harness event stream')
   }

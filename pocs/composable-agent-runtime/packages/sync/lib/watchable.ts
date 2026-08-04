@@ -14,7 +14,7 @@ export function watchable<Request, Result>(
   return (request: Request): Readable & AsyncIterable<Result> => {
     let dirty = true
     let last = ''
-    let wake: PromiseWithResolvers<void> | null = null
+    let wake: { readonly promise: Promise<void>; resolve(): void } | null = null
     const changed = () => {
       dirty = true
       wake?.resolve()
@@ -33,7 +33,7 @@ export function watchable<Request, Result>(
               break
             }
             if (!dirty) {
-              wake = Promise.withResolvers()
+              wake = createWake()
               await wake.promise
               continue
             }
@@ -59,5 +59,18 @@ export function watchable<Request, Result>(
       }
     })
     return stream as Readable & AsyncIterable<Result>
+  }
+}
+
+function createWake() {
+  let resolvePromise: (() => void) | null = null
+  const promise = new Promise<void>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve() {
+      resolvePromise?.()
+    }
   }
 }

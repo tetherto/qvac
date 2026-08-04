@@ -1,42 +1,23 @@
 import type { Test } from 'brittle'
 import createTestnet from 'hyperdht/testnet.js'
 import tmp from 'test-tmp'
-import { Duplex } from 'streamx'
+import type {
+  CreateSyncOptions,
+  SyncRuntime
+} from '../lib/runtime/types.ts'
 import { SyncClient } from '../lib/client.ts'
 import { SyncCore, type SyncCoreOptions } from '../lib/core.ts'
+import { duplexPair } from '../lib/transport/duplex-pair.ts'
 
-export function duplexPair(): [Duplex, Duplex] {
-  let left: Duplex
-  let right: Duplex
-  left = new Duplex({
-    write(data: Buffer, cb: (error: Error | null) => void) {
-      right.push(data)
-      cb(null)
-    },
-    final(cb: (error: Error | null) => void) {
-      right.push(null)
-      cb(null)
-    },
-    destroy(cb: (error: Error | null) => void) {
-      right.destroy()
-      cb(null)
-    }
-  })
-  right = new Duplex({
-    write(data: Buffer, cb: (error: Error | null) => void) {
-      left.push(data)
-      cb(null)
-    },
-    final(cb: (error: Error | null) => void) {
-      left.push(null)
-      cb(null)
-    },
-    destroy(cb: (error: Error | null) => void) {
-      left.destroy()
-      cb(null)
-    }
-  })
-  return [left, right]
+export { duplexPair }
+export type { SyncRuntime }
+
+export async function openSyncRuntime(t: Test, options: CreateSyncOptions) {
+  const { createSync } = await import('../index.ts')
+  const sync = createSync(options)
+  await sync.ready()
+  t.teardown(() => sync.close())
+  return sync
 }
 
 export async function openPair(t: Test, options: SyncCoreOptions = {}) {

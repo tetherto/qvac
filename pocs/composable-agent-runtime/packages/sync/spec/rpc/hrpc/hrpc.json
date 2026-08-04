@@ -29,110 +29,175 @@
     },
     {
       "id": 2,
-      "name": "@rpc/get-user-profile",
+      "name": "@rpc/runtime-status",
       "request": {
         "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/user-profile-result",
+        "name": "@rpc/runtime-status",
         "stream": false
       },
       "version": 1
     },
     {
       "id": 3,
-      "name": "@rpc/set-user-profile",
+      "name": "@rpc/runtime-diagnostics",
       "request": {
-        "name": "@rpc/user-profile",
+        "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/user-profile",
+        "name": "@rpc/runtime-diagnostics",
         "stream": false
       },
       "version": 1
     },
     {
       "id": 4,
-      "name": "@rpc/watch-user-profile",
+      "name": "@rpc/suspend",
       "request": {
         "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/user-profile-result",
-        "stream": true
+        "name": "@rpc/ok",
+        "stream": false
       },
       "version": 1
     },
     {
       "id": 5,
-      "name": "@rpc/create-task",
+      "name": "@rpc/resume",
       "request": {
-        "name": "@rpc/create-task-request",
+        "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/task",
+        "name": "@rpc/ok",
         "stream": false
       },
       "version": 1
     },
     {
       "id": 6,
-      "name": "@rpc/update-task",
+      "name": "@rpc/mesh-status",
       "request": {
-        "name": "@rpc/update-task-request",
+        "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/task",
+        "name": "@rpc/mesh-status",
         "stream": false
       },
       "version": 1
     },
     {
       "id": 7,
-      "name": "@rpc/get-task",
-      "request": {
-        "name": "@rpc/task-id",
-        "stream": false
-      },
-      "response": {
-        "name": "@rpc/task-result",
-        "stream": false
-      },
-      "version": 1
-    },
-    {
-      "id": 8,
-      "name": "@rpc/list-tasks",
+      "name": "@rpc/watch-mesh-status",
       "request": {
         "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/task-list",
+        "name": "@rpc/mesh-status",
+        "stream": true
+      },
+      "version": 1
+    },
+    {
+      "id": 8,
+      "name": "@rpc/join-mesh",
+      "request": {
+        "name": "@rpc/mesh-join-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/ok",
         "stream": false
       },
       "version": 1
     },
     {
       "id": 9,
-      "name": "@rpc/watch-tasks",
+      "name": "@rpc/cancel-mesh-join",
       "request": {
         "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/task-list",
-        "stream": true
+        "name": "@rpc/ok",
+        "stream": false
       },
       "version": 1
     },
     {
       "id": 10,
+      "name": "@rpc/leave-mesh",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/ok",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 11,
+      "name": "@rpc/list-devices",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/device-list",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 12,
+      "name": "@rpc/watch-devices",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/device-list",
+        "stream": true
+      },
+      "version": 1
+    },
+    {
+      "id": 13,
+      "name": "@rpc/rename-device",
+      "request": {
+        "name": "@rpc/rename-device-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/device",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 14,
+      "name": "@rpc/remove-device",
+      "request": {
+        "name": "@rpc/remove-device-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/ok",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 15,
       "name": "@rpc/create-pairing-invite",
       "request": {
         "name": "@rpc/create-pairing-invite-request",
@@ -145,7 +210,7 @@
       "version": 1
     },
     {
-      "id": 11,
+      "id": 16,
       "name": "@rpc/approve-pairing-request",
       "request": {
         "name": "@rpc/pairing-request-id",
@@ -158,7 +223,7 @@
       "version": 1
     },
     {
-      "id": 12,
+      "id": 17,
       "name": "@rpc/reject-pairing-request",
       "request": {
         "name": "@rpc/pairing-request-id",
@@ -171,7 +236,7 @@
       "version": 1
     },
     {
-      "id": 13,
+      "id": 18,
       "name": "@rpc/watch-pairing-requests",
       "request": {
         "name": "@rpc/empty",
@@ -179,6 +244,45 @@
       },
       "response": {
         "name": "@rpc/pairing-request-list",
+        "stream": true
+      },
+      "version": 1
+    },
+    {
+      "id": 19,
+      "name": "@rpc/apply-profile",
+      "request": {
+        "name": "@rpc/profile-apply-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/profile-apply-result",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 20,
+      "name": "@rpc/query-profile",
+      "request": {
+        "name": "@rpc/profile-query-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/profile-query-result",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 21,
+      "name": "@rpc/watch-profile",
+      "request": {
+        "name": "@rpc/profile-watch-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/profile-watch-frame",
         "stream": true
       },
       "version": 1

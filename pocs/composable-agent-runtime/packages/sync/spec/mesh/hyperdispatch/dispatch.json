@@ -4,20 +4,32 @@
   "schema": [
     {
       "id": 0,
-      "name": "@sync/put-task",
-      "requestType": "@sync/put-task-operation",
+      "name": "@sync/add-writer",
+      "requestType": "@sync/add-writer-operation",
       "version": 1
     },
     {
       "id": 1,
-      "name": "@sync/update-task",
-      "requestType": "@sync/update-task-operation",
+      "name": "@sync/put-device",
+      "requestType": "@sync/put-device-operation",
       "version": 1
     },
     {
       "id": 2,
-      "name": "@sync/add-writer",
-      "requestType": "@sync/add-writer-operation",
+      "name": "@sync/rename-device",
+      "requestType": "@sync/rename-device-operation",
+      "version": 1
+    },
+    {
+      "id": 3,
+      "name": "@sync/remove-writer",
+      "requestType": "@sync/remove-writer-operation",
+      "version": 1
+    },
+    {
+      "id": 4,
+      "name": "@sync/apply-profile",
+      "requestType": "@sync/apply-profile-operation",
       "version": 1
     }
   ]

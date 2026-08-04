@@ -41,7 +41,7 @@ describe('assistant composition', () => {
     })
     onTestFinished(() => assistant.close())
     const state = assistant.state
-    const identity = state.getIdentity()
+    const identity = state.mesh.identity()
 
     await assistant.ready()
     expect(assistant.state).toBe(state)
@@ -78,11 +78,9 @@ describe('assistant composition', () => {
     expect(new Set(startupProcessIds).size).toBe(2)
     expect(startupProcessIds).not.toContain(process.pid)
 
-    await state.setUserProfile({ name: 'Ada' })
-    expect(await state.getUserProfile()).toEqual({
-      profile: { name: 'Ada' }
-    })
-    const pairingInvite = await assistant.state.createPairingInvite()
+    await state.mesh.renameDevice('Ada')
+    expect((await state.mesh.listDevices()).find(({ local }) => local)?.name).toBe('Ada')
+    const pairingInvite = await assistant.state.mesh.createInvite()
     expect(pairingInvite.invite.byteLength).toBeGreaterThan(0)
 
     const run = assistant.run({
@@ -122,9 +120,7 @@ describe('assistant composition', () => {
     expect(restartedProcessIds[0]).not.toBe(firstSyncProcessId)
     expect(restartedProcessIds[1]).not.toBe(startupProcessIds[1])
     expect(assistant.state).toBe(state)
-    expect(await state.getUserProfile()).toEqual({
-      profile: { name: 'Ada' }
-    })
+    expect((await state.mesh.listDevices()).find(({ local }) => local)?.name).toBe('Ada')
 
     const restartedEvents = []
     for await (const event of assistant.run({
@@ -252,9 +248,8 @@ function component(
       capabilities:
         name === 'sync'
           ? [
-              'local-profile',
-              'tasks',
-              'task-watches',
+              'profile-protocol',
+              'durable-work',
               'passive-replication',
               'writer-pairing'
             ]

@@ -3,6 +3,11 @@ import {
   type AssistantFacade,
   type AssistantRunInput
 } from '@qvac/assistant'
+import {
+  createReplicatedTaskRepository,
+  type ReplicatedTask,
+  type ReplicatedTaskRepository
+} from '@qvac-poc/task-shared/sync-store'
 import { parsePairingUri } from './pairing-uri.ts'
 
 const TASK_PREFIX = 'phone-'
@@ -35,17 +40,10 @@ type TaskAssistantFacade = Pick<
   AssistantFacade,
   'ready' | 'run' | 'close' | 'onLifecycle'
 > & {
-  readonly state: Pick<
-    AssistantFacade['state'],
-    'createTask' | 'updateTask' | 'getTask' | 'watchTasks'
-  >
+  readonly state: object
 }
 
-type TaskControllerStateEndpoint = TaskAssistantFacade['state']
-
-export type TaskControllerTask = Awaited<
-  ReturnType<TaskControllerStateEndpoint['createTask']>
->
+export type TaskControllerTask = ReplicatedTask
 
 export interface TaskControllerOptions {
   readonly storagePath: string
@@ -54,6 +52,9 @@ export interface TaskControllerOptions {
     readonly storagePath: string
     readonly invite?: string
   }) => TaskAssistantFacade
+  readonly createTaskRepository?: (
+    state: object
+  ) => ReplicatedTaskRepository
   readonly hasPersistentPairing?: () => boolean
   readonly createTaskId?: () => string
 }
@@ -77,6 +78,12 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
   const stopWatches = new Set<() => void>()
   const createTaskId = options.createTaskId ?? defaultTaskId
   const createMobileAssistant = options.createAssistant ?? createAssistant
+  const createTasks =
+    options.createTaskRepository ??
+    ((state: object) =>
+      createReplicatedTaskRepository(
+        state as Pick<AssistantFacade['state'], 'openProfile'>
+      ))
   const hasPersistentPairing = options.hasPersistentPairing ?? (() => false)
 
   function snapshot() {
@@ -139,8 +146,9 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
 
   async function createTask(request: { readonly title: string; readonly input: string }) {
     const runtime = writableAssistant()
+    const tasks = taskRepository(runtime)
     const taskId = createTaskId()
-    const created = await runtime.state.createTask({
+    const created = await tasks.create({
       id: taskId,
       title: request.title,
       input: request.input
@@ -148,8 +156,8 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
     const run = executeTask(runtime, created.id, request.input)
     activeRuns.set(created.id, run)
     await run.completion
-    const latest = await runtime.state.getTask({ id: created.id })
-    return projectTaskResult((latest.task ?? created) as TaskControllerTask)
+    const latest = await tasks.get(created.id)
+    return projectTaskResult(latest ?? created)
   }
 
   async function cancelTask(taskId: string, reason = 'Task cancelled') {
@@ -162,14 +170,18 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
 
   function watchTasks(listener: (tasks: readonly TaskControllerTask[]) => void) {
     const runtime = writableAssistant()
-    const iterator = runtime.state.watchTasks()[Symbol.asyncIterator]()
+    const iterator = taskRepository(runtime).watch()[Symbol.asyncIterator]()
     let stopped = false
 
     async function consume() {
       while (!stopped) {
         const next = await iterator.next()
         if (stopped || next.done) return
-        listener(visibleTasks(projectApplicationTasks(next.value).tasks))
+        listener(
+          visibleTasks(
+            projectApplicationTasks({ tasks: [...next.value] }).tasks
+          )
+        )
       }
     }
 
@@ -209,7 +221,8 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
   ) {
     let output = ''
     let lastPersistedAt = 0
-    await runtime.state.updateTask({ id: taskId, status: 'running', result: null })
+    const tasks = taskRepository(runtime)
+    await tasks.update({ id: taskId, status: 'running', result: null })
     try {
       for await (const event of createRun(runtime, taskId, prompt, controller.signal)) {
         if (event.type === 'content') {
@@ -217,7 +230,7 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
           const now = Date.now()
           if (now - lastPersistedAt >= STREAM_PERSIST_INTERVAL_MS) {
             lastPersistedAt = now
-            await runtime.state.updateTask({
+            await tasks.update({
               id: taskId,
               status: 'running',
               result: taskResultEnvelope(output, null)
@@ -232,14 +245,14 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
           throw new Error(abortMessage(controller.signal.reason))
         }
       }
-      await runtime.state.updateTask({
+      await tasks.update({
         id: taskId,
         status: 'completed',
         result: taskResultEnvelope(output, null)
       })
     } catch (error) {
       const aborted = controller.signal.aborted
-      await runtime.state.updateTask({
+      await tasks.update({
         id: taskId,
         status: aborted ? 'cancelled' : 'failed',
         result: taskResultEnvelope(output, aborted ? abortMessage(controller.signal.reason) : errorMessage(error))
@@ -293,6 +306,10 @@ export function createTaskController(options: TaskControllerOptions): TaskContro
   function update(next: TaskControllerSnapshot) {
     current = next
     options.onState?.(next)
+  }
+
+  function taskRepository(runtime: TaskAssistantFacade) {
+    return createTasks(runtime.state)
   }
 
   return {

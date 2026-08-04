@@ -3,16 +3,14 @@
   "offset": 0,
   "schema": [
     {
-      "name": "tasks",
+      "name": "profile-operations",
       "namespace": "sync",
       "id": 0,
       "type": 1,
       "version": 1,
       "versionField": null,
-      "indexes": [
-        "@sync/tasks-by-created"
-      ],
-      "schema": "@sync/task",
+      "indexes": [],
+      "schema": "@sync/profile-operation",
       "derived": false,
       "key": [
         "id"
@@ -20,17 +18,109 @@
       "trigger": null
     },
     {
-      "name": "tasks-by-created",
+      "name": "devices",
       "namespace": "sync",
       "id": 1,
-      "type": 2,
+      "type": 1,
       "version": 1,
-      "collection": "@sync/tasks",
-      "unique": false,
-      "deprecated": false,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/device",
+      "derived": false,
       "key": [
-        "createdAt"
-      ]
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "profile-heads",
+      "namespace": "sync",
+      "id": 2,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/profile-head",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "durable-work",
+      "namespace": "sync",
+      "id": 3,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/durable-work",
+      "derived": false,
+      "key": [
+        "workId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "durable-work-journal",
+      "namespace": "sync",
+      "id": 4,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/durable-work-journal-entry",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "durable-work-checkpoints",
+      "namespace": "sync",
+      "id": 5,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/durable-work-checkpoint",
+      "derived": false,
+      "key": [
+        "workId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "durable-work-gates",
+      "namespace": "sync",
+      "id": 6,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/durable-work-gate",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "durable-work-executors",
+      "namespace": "sync",
+      "id": 7,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@sync/durable-work-executor",
+      "derived": false,
+      "key": [
+        "executorId"
+      ],
+      "trigger": null
     }
   ]
 }

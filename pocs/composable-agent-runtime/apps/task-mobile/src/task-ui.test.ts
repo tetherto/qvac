@@ -57,7 +57,7 @@ function task(
     status: 'pending',
     createdAt: 1,
     updatedAt: 1,
-    originDeviceId: Buffer.from([1]),
+    result: null,
     ...override
   }
 }

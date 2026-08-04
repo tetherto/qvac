@@ -10,30 +10,46 @@ const methods = new Map([
   [0, '@rpc/get-identity'],
   ['@rpc/describe-runtime', 1],
   [1, '@rpc/describe-runtime'],
-  ['@rpc/get-user-profile', 2],
-  [2, '@rpc/get-user-profile'],
-  ['@rpc/set-user-profile', 3],
-  [3, '@rpc/set-user-profile'],
-  ['@rpc/watch-user-profile', 4],
-  [4, '@rpc/watch-user-profile'],
-  ['@rpc/create-task', 5],
-  [5, '@rpc/create-task'],
-  ['@rpc/update-task', 6],
-  [6, '@rpc/update-task'],
-  ['@rpc/get-task', 7],
-  [7, '@rpc/get-task'],
-  ['@rpc/list-tasks', 8],
-  [8, '@rpc/list-tasks'],
-  ['@rpc/watch-tasks', 9],
-  [9, '@rpc/watch-tasks'],
-  ['@rpc/create-pairing-invite', 10],
-  [10, '@rpc/create-pairing-invite'],
-  ['@rpc/approve-pairing-request', 11],
-  [11, '@rpc/approve-pairing-request'],
-  ['@rpc/reject-pairing-request', 12],
-  [12, '@rpc/reject-pairing-request'],
-  ['@rpc/watch-pairing-requests', 13],
-  [13, '@rpc/watch-pairing-requests']
+  ['@rpc/runtime-status', 2],
+  [2, '@rpc/runtime-status'],
+  ['@rpc/runtime-diagnostics', 3],
+  [3, '@rpc/runtime-diagnostics'],
+  ['@rpc/suspend', 4],
+  [4, '@rpc/suspend'],
+  ['@rpc/resume', 5],
+  [5, '@rpc/resume'],
+  ['@rpc/mesh-status', 6],
+  [6, '@rpc/mesh-status'],
+  ['@rpc/watch-mesh-status', 7],
+  [7, '@rpc/watch-mesh-status'],
+  ['@rpc/join-mesh', 8],
+  [8, '@rpc/join-mesh'],
+  ['@rpc/cancel-mesh-join', 9],
+  [9, '@rpc/cancel-mesh-join'],
+  ['@rpc/leave-mesh', 10],
+  [10, '@rpc/leave-mesh'],
+  ['@rpc/list-devices', 11],
+  [11, '@rpc/list-devices'],
+  ['@rpc/watch-devices', 12],
+  [12, '@rpc/watch-devices'],
+  ['@rpc/rename-device', 13],
+  [13, '@rpc/rename-device'],
+  ['@rpc/remove-device', 14],
+  [14, '@rpc/remove-device'],
+  ['@rpc/create-pairing-invite', 15],
+  [15, '@rpc/create-pairing-invite'],
+  ['@rpc/approve-pairing-request', 16],
+  [16, '@rpc/approve-pairing-request'],
+  ['@rpc/reject-pairing-request', 17],
+  [17, '@rpc/reject-pairing-request'],
+  ['@rpc/watch-pairing-requests', 18],
+  [18, '@rpc/watch-pairing-requests'],
+  ['@rpc/apply-profile', 19],
+  [19, '@rpc/apply-profile'],
+  ['@rpc/query-profile', 20],
+  [20, '@rpc/query-profile'],
+  ['@rpc/watch-profile', 21],
+  [21, '@rpc/watch-profile']
 ])
 
 class HRPC {
@@ -43,34 +59,50 @@ class HRPC {
     this._requestEncodings = new Map([
       ['@rpc/get-identity', getEncoding('@rpc/empty')],
       ['@rpc/describe-runtime', getEncoding('@rpc/empty')],
-      ['@rpc/get-user-profile', getEncoding('@rpc/empty')],
-      ['@rpc/set-user-profile', getEncoding('@rpc/user-profile')],
-      ['@rpc/watch-user-profile', getEncoding('@rpc/empty')],
-      ['@rpc/create-task', getEncoding('@rpc/create-task-request')],
-      ['@rpc/update-task', getEncoding('@rpc/update-task-request')],
-      ['@rpc/get-task', getEncoding('@rpc/task-id')],
-      ['@rpc/list-tasks', getEncoding('@rpc/empty')],
-      ['@rpc/watch-tasks', getEncoding('@rpc/empty')],
+      ['@rpc/runtime-status', getEncoding('@rpc/empty')],
+      ['@rpc/runtime-diagnostics', getEncoding('@rpc/empty')],
+      ['@rpc/suspend', getEncoding('@rpc/empty')],
+      ['@rpc/resume', getEncoding('@rpc/empty')],
+      ['@rpc/mesh-status', getEncoding('@rpc/empty')],
+      ['@rpc/watch-mesh-status', getEncoding('@rpc/empty')],
+      ['@rpc/join-mesh', getEncoding('@rpc/mesh-join-request')],
+      ['@rpc/cancel-mesh-join', getEncoding('@rpc/empty')],
+      ['@rpc/leave-mesh', getEncoding('@rpc/empty')],
+      ['@rpc/list-devices', getEncoding('@rpc/empty')],
+      ['@rpc/watch-devices', getEncoding('@rpc/empty')],
+      ['@rpc/rename-device', getEncoding('@rpc/rename-device-request')],
+      ['@rpc/remove-device', getEncoding('@rpc/remove-device-request')],
       ['@rpc/create-pairing-invite', getEncoding('@rpc/create-pairing-invite-request')],
       ['@rpc/approve-pairing-request', getEncoding('@rpc/pairing-request-id')],
       ['@rpc/reject-pairing-request', getEncoding('@rpc/pairing-request-id')],
-      ['@rpc/watch-pairing-requests', getEncoding('@rpc/empty')]
+      ['@rpc/watch-pairing-requests', getEncoding('@rpc/empty')],
+      ['@rpc/apply-profile', getEncoding('@rpc/profile-apply-request')],
+      ['@rpc/query-profile', getEncoding('@rpc/profile-query-request')],
+      ['@rpc/watch-profile', getEncoding('@rpc/profile-watch-request')]
     ])
     this._responseEncodings = new Map([
       ['@rpc/get-identity', getEncoding('@rpc/identity')],
       ['@rpc/describe-runtime', getEncoding('@rpc/runtime-info')],
-      ['@rpc/get-user-profile', getEncoding('@rpc/user-profile-result')],
-      ['@rpc/set-user-profile', getEncoding('@rpc/user-profile')],
-      ['@rpc/watch-user-profile', getEncoding('@rpc/user-profile-result')],
-      ['@rpc/create-task', getEncoding('@rpc/task')],
-      ['@rpc/update-task', getEncoding('@rpc/task')],
-      ['@rpc/get-task', getEncoding('@rpc/task-result')],
-      ['@rpc/list-tasks', getEncoding('@rpc/task-list')],
-      ['@rpc/watch-tasks', getEncoding('@rpc/task-list')],
+      ['@rpc/runtime-status', getEncoding('@rpc/runtime-status')],
+      ['@rpc/runtime-diagnostics', getEncoding('@rpc/runtime-diagnostics')],
+      ['@rpc/suspend', getEncoding('@rpc/ok')],
+      ['@rpc/resume', getEncoding('@rpc/ok')],
+      ['@rpc/mesh-status', getEncoding('@rpc/mesh-status')],
+      ['@rpc/watch-mesh-status', getEncoding('@rpc/mesh-status')],
+      ['@rpc/join-mesh', getEncoding('@rpc/ok')],
+      ['@rpc/cancel-mesh-join', getEncoding('@rpc/ok')],
+      ['@rpc/leave-mesh', getEncoding('@rpc/ok')],
+      ['@rpc/list-devices', getEncoding('@rpc/device-list')],
+      ['@rpc/watch-devices', getEncoding('@rpc/device-list')],
+      ['@rpc/rename-device', getEncoding('@rpc/device')],
+      ['@rpc/remove-device', getEncoding('@rpc/ok')],
       ['@rpc/create-pairing-invite', getEncoding('@rpc/pairing-invite')],
       ['@rpc/approve-pairing-request', getEncoding('@rpc/pairing-request')],
       ['@rpc/reject-pairing-request', getEncoding('@rpc/pairing-request')],
-      ['@rpc/watch-pairing-requests', getEncoding('@rpc/pairing-request-list')]
+      ['@rpc/watch-pairing-requests', getEncoding('@rpc/pairing-request-list')],
+      ['@rpc/apply-profile', getEncoding('@rpc/profile-apply-result')],
+      ['@rpc/query-profile', getEncoding('@rpc/profile-query-result')],
+      ['@rpc/watch-profile', getEncoding('@rpc/profile-watch-frame')]
     ])
     this._rpc = new RPC(stream, async (req) => {
       const command = methods.get(req.command)
@@ -176,36 +208,56 @@ class HRPC {
     return this._call('@rpc/describe-runtime', args)
   }
 
-  async getUserProfile(args) {
-    return this._call('@rpc/get-user-profile', args)
+  async runtimeStatus(args) {
+    return this._call('@rpc/runtime-status', args)
   }
 
-  async setUserProfile(args) {
-    return this._call('@rpc/set-user-profile', args)
+  async runtimeDiagnostics(args) {
+    return this._call('@rpc/runtime-diagnostics', args)
   }
 
-  watchUserProfile(args) {
-    return this._callSync('@rpc/watch-user-profile', args)
+  async suspend(args) {
+    return this._call('@rpc/suspend', args)
   }
 
-  async createTask(args) {
-    return this._call('@rpc/create-task', args)
+  async resume(args) {
+    return this._call('@rpc/resume', args)
   }
 
-  async updateTask(args) {
-    return this._call('@rpc/update-task', args)
+  async meshStatus(args) {
+    return this._call('@rpc/mesh-status', args)
   }
 
-  async getTask(args) {
-    return this._call('@rpc/get-task', args)
+  watchMeshStatus(args) {
+    return this._callSync('@rpc/watch-mesh-status', args)
   }
 
-  async listTasks(args) {
-    return this._call('@rpc/list-tasks', args)
+  async joinMesh(args) {
+    return this._call('@rpc/join-mesh', args)
   }
 
-  watchTasks(args) {
-    return this._callSync('@rpc/watch-tasks', args)
+  async cancelMeshJoin(args) {
+    return this._call('@rpc/cancel-mesh-join', args)
+  }
+
+  async leaveMesh(args) {
+    return this._call('@rpc/leave-mesh', args)
+  }
+
+  async listDevices(args) {
+    return this._call('@rpc/list-devices', args)
+  }
+
+  watchDevices(args) {
+    return this._callSync('@rpc/watch-devices', args)
+  }
+
+  async renameDevice(args) {
+    return this._call('@rpc/rename-device', args)
+  }
+
+  async removeDevice(args) {
+    return this._call('@rpc/remove-device', args)
   }
 
   async createPairingInvite(args) {
@@ -224,6 +276,18 @@ class HRPC {
     return this._callSync('@rpc/watch-pairing-requests', args)
   }
 
+  async applyProfile(args) {
+    return this._call('@rpc/apply-profile', args)
+  }
+
+  async queryProfile(args) {
+    return this._call('@rpc/query-profile', args)
+  }
+
+  watchProfile(args) {
+    return this._callSync('@rpc/watch-profile', args)
+  }
+
   onGetIdentity(responseFn) {
     this._handlers['@rpc/get-identity'] = responseFn
   }
@@ -232,36 +296,56 @@ class HRPC {
     this._handlers['@rpc/describe-runtime'] = responseFn
   }
 
-  onGetUserProfile(responseFn) {
-    this._handlers['@rpc/get-user-profile'] = responseFn
+  onRuntimeStatus(responseFn) {
+    this._handlers['@rpc/runtime-status'] = responseFn
   }
 
-  onSetUserProfile(responseFn) {
-    this._handlers['@rpc/set-user-profile'] = responseFn
+  onRuntimeDiagnostics(responseFn) {
+    this._handlers['@rpc/runtime-diagnostics'] = responseFn
   }
 
-  onWatchUserProfile(responseFn) {
-    this._handlers['@rpc/watch-user-profile'] = responseFn
+  onSuspend(responseFn) {
+    this._handlers['@rpc/suspend'] = responseFn
   }
 
-  onCreateTask(responseFn) {
-    this._handlers['@rpc/create-task'] = responseFn
+  onResume(responseFn) {
+    this._handlers['@rpc/resume'] = responseFn
   }
 
-  onUpdateTask(responseFn) {
-    this._handlers['@rpc/update-task'] = responseFn
+  onMeshStatus(responseFn) {
+    this._handlers['@rpc/mesh-status'] = responseFn
   }
 
-  onGetTask(responseFn) {
-    this._handlers['@rpc/get-task'] = responseFn
+  onWatchMeshStatus(responseFn) {
+    this._handlers['@rpc/watch-mesh-status'] = responseFn
   }
 
-  onListTasks(responseFn) {
-    this._handlers['@rpc/list-tasks'] = responseFn
+  onJoinMesh(responseFn) {
+    this._handlers['@rpc/join-mesh'] = responseFn
   }
 
-  onWatchTasks(responseFn) {
-    this._handlers['@rpc/watch-tasks'] = responseFn
+  onCancelMeshJoin(responseFn) {
+    this._handlers['@rpc/cancel-mesh-join'] = responseFn
+  }
+
+  onLeaveMesh(responseFn) {
+    this._handlers['@rpc/leave-mesh'] = responseFn
+  }
+
+  onListDevices(responseFn) {
+    this._handlers['@rpc/list-devices'] = responseFn
+  }
+
+  onWatchDevices(responseFn) {
+    this._handlers['@rpc/watch-devices'] = responseFn
+  }
+
+  onRenameDevice(responseFn) {
+    this._handlers['@rpc/rename-device'] = responseFn
+  }
+
+  onRemoveDevice(responseFn) {
+    this._handlers['@rpc/remove-device'] = responseFn
   }
 
   onCreatePairingInvite(responseFn) {
@@ -280,6 +364,18 @@ class HRPC {
     this._handlers['@rpc/watch-pairing-requests'] = responseFn
   }
 
+  onApplyProfile(responseFn) {
+    this._handlers['@rpc/apply-profile'] = responseFn
+  }
+
+  onQueryProfile(responseFn) {
+    this._handlers['@rpc/query-profile'] = responseFn
+  }
+
+  onWatchProfile(responseFn) {
+    this._handlers['@rpc/watch-profile'] = responseFn
+  }
+
   _requestIsStream(command) {
     return [
     ].includes(command)
@@ -287,9 +383,10 @@ class HRPC {
 
   _responseIsStream(command) {
     return [
-      '@rpc/watch-user-profile',
-      '@rpc/watch-tasks',
-      '@rpc/watch-pairing-requests'
+      '@rpc/watch-mesh-status',
+      '@rpc/watch-devices',
+      '@rpc/watch-pairing-requests',
+      '@rpc/watch-profile'
     ].includes(command)
   }
 

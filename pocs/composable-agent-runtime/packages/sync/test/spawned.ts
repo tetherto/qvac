@@ -5,7 +5,8 @@ import test from 'brittle'
 import stow from 'bare-stow'
 import tmp from 'test-tmp'
 import { fileURLToPath } from 'url'
-import { spawnSync } from '../index.ts'
+import { spawnSync } from '../lib/spawn.ts'
+import { durableWorkProfile } from '../profiles/durable-work.ts'
 
 async function stowSource(entry: URL, name: string) {
   const outputDirectory = new URL('../../../.stow-sync/', import.meta.url)
@@ -39,37 +40,42 @@ test('sync: spawned Bare sidecar crosses HRPC and releases persistent storage', 
   })
   const identity = await first.getIdentity()
   t.ok(identity.deviceId.byteLength > 0, 'identity crossed the spawned boundary')
-  t.alike(await first.getUserProfile(), { profile: null })
   t.ok(
     first.diagnostics.stderr.includes('[sync]') &&
       first.diagnostics.stderr.includes('runtime ready'),
     'top-level logging configuration reached the Sync sidecar'
   )
-  t.alike(await first.setUserProfile({ name: 'Spawned user' }), {
-    name: 'Spawned user'
-  })
-
-  const created = await first.createTask({
-    id: 'spawned-task',
-    title: 'Cross HRPC',
-    input: 'persist this task'
-  })
-  t.alike(await first.getTask({ id: created.id }), { task: created })
-  t.alike((await first.listTasks()).tasks, [created])
-  const completed = await first.updateTask({
-    id: created.id,
-    status: 'completed',
-    result: 'done'
-  })
-  t.is(completed.title, created.title, 'omitted optional title remains unchanged')
+  const profile = first.openProfile(durableWorkProfile)
+  await profile.apply(
+    {
+      type: 'record-work',
+      workId: 'spawned-work',
+      payload: Buffer.from('persist this work'),
+      payloadFormat: 'text/plain',
+      payloadVersion: 1
+    },
+    { operationId: 'spawned-create' }
+  )
+  await profile.apply(
+    {
+      type: 'record-outcome',
+      workId: 'spawned-work',
+      status: 'completed',
+      result: Buffer.from('done')
+    },
+    { operationId: 'spawned-outcome' }
+  )
 
   await first.close()
   t.alike(await first.exited, { code: 0, signal: null })
 
   const second = await spawnSync({ entry, storagePath })
   t.alike(await second.getIdentity(), identity)
-  t.alike(await second.getUserProfile(), { profile: { name: 'Spawned user' } })
-  t.alike(await second.getTask({ id: created.id }), { task: completed })
+  const persisted = await second
+    .openProfile(durableWorkProfile)
+    .query({ type: 'get-work', workId: 'spawned-work' })
+  t.is(persisted.work?.outcomeStatus, 'completed')
+  t.alike(persisted.work?.outcomeResult, Buffer.from('done'))
   await second.close()
   t.alike(await second.exited, { code: 0, signal: null })
 

@@ -70,44 +70,18 @@ test('sync react-native launcher passes runtime values as argv', async (t) => {
     createClient() {
       return {
         ready: async () => {},
-        close: async () => {},
-        describeRuntime: async () => ({
-          component: 'sync',
-          runtime: 'bare',
-          instanceId: 'sync-mobile',
-          processId: 1,
-          contract: 'qvac.sync',
-          protocolVersion: 1,
-          capabilities: [],
-          buildVersion: '0.0.0-poc'
-        }),
-        getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-        getUserProfile: async () => ({ profile: null }),
-        setUserProfile: async () => ({} as never),
-        createTask: async () => {
-          throw new Error('unused in this test')
-        },
-        updateTask: async () => {
-          throw new Error('unused in this test')
-        },
-        getTask: async () => ({ task: null }),
-        listTasks: async () => ({ tasks: [] }),
-        watchTasks() {
-          throw new Error('unused in this test')
-        },
-        createPairingInvite: async () => ({ invite: Buffer.from('invite') } as never),
-        approvePairingRequest: async () => ({} as never),
-        rejectPairingRequest: async () => ({} as never),
-        watchPairingRequests() {
-          throw new Error('unused in this test')
-        }
+        close: async () => {}
       }
     }
   })
 
   await launcher.launch({
     storagePath: '/tmp/mobile-sync',
-    invite: '-_8AAQ',
+    bootstrap: [{ host: '127.0.0.1', port: 49737 }],
+    meshSeed: Buffer.alloc(32, 1),
+    meshKey: Buffer.alloc(32, 2),
+    pairingInvite: Buffer.from('fbff0001', 'hex'),
+    logging: { level: 'error' },
     onDisconnect() {}
   })
   t.is(starts.length, 1)
@@ -117,12 +91,12 @@ test('sync react-native launcher passes runtime values as argv', async (t) => {
     args: [
       'react-native-bare-kit',
       'sync.js',
-      '{"storagePath":"/tmp/mobile-sync","invite":"-_8AAQ"}'
+      `{"storagePath":"/tmp/mobile-sync","bootstrap":[{"host":"127.0.0.1","port":49737}],"meshSeed":"${'01'.repeat(32)}","meshKey":"${'02'.repeat(32)}","pairingInvite":"fbff0001","logging":{"level":"error"}}`
     ]
   })
 })
 
-test('sync react-native launcher exposes full state endpoint surface', async (t) => {
+test('sync react-native launcher owns client and worklet lifecycle', async (t) => {
   const calls: string[] = []
   const launcher = createReactNativeSyncLauncher({
     startHarness: async () => {
@@ -151,68 +125,6 @@ test('sync react-native launcher exposes full state endpoint surface', async (t)
         },
         close: async () => {
           calls.push('close')
-        },
-        describeRuntime: async () => ({
-          component: 'sync',
-          runtime: 'bare',
-          instanceId: 'sync-mobile',
-          processId: 7,
-          contract: 'qvac.sync',
-          protocolVersion: 1,
-          capabilities: ['local-profile', 'tasks', 'task-watches', 'writer-pairing'],
-          buildVersion: '0.0.0-poc'
-        }),
-        getIdentity: async () => {
-          calls.push('getIdentity')
-          return { deviceId: Buffer.from('id') }
-        },
-        getUserProfile: async () => {
-          calls.push('getUserProfile')
-          return { profile: { name: 'Ada' } }
-        },
-        setUserProfile: async (profile: { name: string }) => {
-          calls.push(`setUserProfile:${profile.name}`)
-          return profile
-        },
-        createTask: async ({ id }: { id: string }) => {
-          calls.push(`createTask:${id}`)
-          return { id } as never
-        },
-        updateTask: async ({ id }: { id: string }) => {
-          calls.push(`updateTask:${id}`)
-          return { id } as never
-        },
-        getTask: async ({ id }: { id: string }) => {
-          calls.push(`getTask:${id}`)
-          return { task: { id } } as never
-        },
-        listTasks: async () => {
-          calls.push('listTasks')
-          return { tasks: [] }
-        },
-        watchTasks() {
-          calls.push('watchTasks')
-          return (async function* () {
-            yield { tasks: [] }
-          })() as never
-        },
-        createPairingInvite: async () => {
-          calls.push('createPairingInvite')
-          return { invite: Buffer.from('invite') } as never
-        },
-        approvePairingRequest: async ({ id }: { id: Buffer }) => {
-          calls.push(`approvePairingRequest:${id.byteLength}`)
-          return { id } as never
-        },
-        rejectPairingRequest: async ({ id }: { id: Buffer }) => {
-          calls.push(`rejectPairingRequest:${id.byteLength}`)
-          return { id } as never
-        },
-        watchPairingRequests() {
-          calls.push('watchPairingRequests')
-          return (async function* () {
-            yield { requests: [] }
-          })() as never
         }
       }
     }
@@ -223,39 +135,10 @@ test('sync react-native launcher exposes full state endpoint surface', async (t)
     onDisconnect() {}
   })
   await launched.backend.ready()
-  await launched.backend.getIdentity()
-  await launched.backend.getUserProfile()
-  await launched.backend.setUserProfile({ name: 'Grace' })
-  await launched.backend.createTask({ id: 'task-1', title: 'T', input: 'I' })
-  await launched.backend.updateTask({ id: 'task-1', result: 'done' })
-  await launched.backend.getTask({ id: 'task-1' })
-  await launched.backend.listTasks()
-  const taskWatch = launched.backend.watchTasks()[Symbol.asyncIterator]()
-  await taskWatch.next()
-  await launched.backend.createPairingInvite()
-  await launched.backend.approvePairingRequest({ id: Buffer.from([1]) })
-  await launched.backend.rejectPairingRequest({ id: Buffer.from([2]) })
-  const pairingWatch = launched.backend.watchPairingRequests()[Symbol.asyncIterator]()
-  await pairingWatch.next()
   await launched.backend.close()
   launched.terminate()
 
-  t.alike(calls, [
-    'ready',
-    'getIdentity',
-    'getUserProfile',
-    'setUserProfile:Grace',
-    'createTask:task-1',
-    'updateTask:task-1',
-    'getTask:task-1',
-    'listTasks',
-    'watchTasks',
-    'createPairingInvite',
-    'approvePairingRequest:1',
-    'rejectPairingRequest:1',
-    'watchPairingRequests',
-    'close'
-  ])
+  t.alike(calls, ['ready', 'close'])
 })
 
 test('sync mobile entry reads runtime argv and returns cleanup', async (t) => {
@@ -268,7 +151,11 @@ test('sync mobile entry reads runtime argv and returns cleanup', async (t) => {
     destroy() {}
   }
   const calls: string[] = []
-  let nextArgv = ['bare', 'sync.bundle', '{"storagePath":"/tmp/sync","invite":"-_8AAQ"}']
+  let nextArgv = [
+    'bare',
+    'sync.bundle',
+    '{"storagePath":"/tmp/sync","pairingInvite":"fbff0001"}'
+  ]
   const entry = createSyncMobileEntry({
     readArgv() {
       return nextArgv

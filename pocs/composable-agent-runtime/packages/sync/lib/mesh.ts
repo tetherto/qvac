@@ -12,13 +12,20 @@ import MeshDatabase from '../spec/mesh/hyperdb/index.js'
 import { encode, Router } from '../spec/mesh/hyperdispatch/index.js'
 import type {
   SyncAddWriterOperation,
-  SyncPutTaskOperation,
-  SyncTask,
-  SyncUpdateTaskOperation
+  SyncApplyProfileOperation,
+  SyncDevice,
+  SyncProfileHead,
+  SyncProfileOperation,
+  SyncPutDeviceOperation,
+  SyncRemoveWriterOperation,
+  SyncRenameDeviceOperation
 } from '../spec/mesh/hyperschema/types.d.ts'
+import type { ProfileRegistry } from './profiles/profile-runtime.ts'
 
 const [MESH_IDENTITY, MESH_ENCRYPTION] = crypto.namespace('qvac-sync/poc/mesh', 2)
-const TASKS = '@sync/tasks'
+const PROFILE_OPERATIONS = '@sync/profile-operations'
+const PROFILE_HEADS = '@sync/profile-heads'
+const DEVICES = '@sync/devices'
 
 interface MeshView {
   readonly database: HyperDB
@@ -34,6 +41,7 @@ export interface MeshOptions {
   readonly seed: Buffer
   readonly key?: Buffer | null
   readonly writerKeyPair: { readonly publicKey: Buffer; readonly secretKey: Buffer }
+  readonly profiles: ProfileRegistry
 }
 
 export class Mesh extends ReadyResource {
@@ -44,6 +52,7 @@ export class Mesh extends ReadyResource {
     readonly publicKey: Buffer
     readonly secretKey: Buffer
   }
+  private readonly profiles: ProfileRegistry
   private readonly router: Router
   private keyPair!: { readonly publicKey: Buffer; readonly secretKey: Buffer }
   private encryptionKey!: Buffer
@@ -56,33 +65,88 @@ export class Mesh extends ReadyResource {
     this.seed = options.seed
     this.baseKey = options.key ?? null
     this.writerKeyPair = options.writerKeyPair
+    this.profiles = options.profiles
     this.router = new Router()
-    this.router.add(
-      '@sync/put-task',
-      async ({ task }: SyncPutTaskOperation, context: ApplyContext) => {
-        const existing = await context.transaction.get<SyncTask>(TASKS, { id: task.id })
-        if (existing) return
-        await context.transaction.insert<SyncTask>(TASKS, task)
-      }
-    )
-    this.router.add(
-      '@sync/update-task',
-      async (update: SyncUpdateTaskOperation, context: ApplyContext) => {
-        const existing = await context.transaction.get<SyncTask>(TASKS, { id: update.id })
-        if (!existing || update.updatedAt <= existing.updatedAt) return
-        await context.transaction.insert<SyncTask>(TASKS, {
-          ...existing,
-          ...(update.title == null ? null : { title: update.title }),
-          ...(update.status == null ? null : { status: update.status }),
-          ...(update.result == null ? null : { result: update.result }),
-          updatedAt: update.updatedAt
-        })
-      }
-    )
     this.router.add(
       '@sync/add-writer',
       ({ key }: SyncAddWriterOperation, context: ApplyContext) => {
         context.host.addWriter(key, { isIndexer: false })
+      }
+    )
+    this.router.add(
+      '@sync/put-device',
+      async ({ device }: SyncPutDeviceOperation, context: ApplyContext) => {
+        const existing = await context.transaction.get<SyncDevice>(DEVICES, {
+          id: device.id
+        })
+        if (existing?.revokedAt) return
+        await context.transaction.insert<SyncDevice>(DEVICES, existing ?? device)
+      }
+    )
+    this.router.add(
+      '@sync/rename-device',
+      async ({ id, name }: SyncRenameDeviceOperation, context: ApplyContext) => {
+        const existing = await context.transaction.get<SyncDevice>(DEVICES, { id })
+        if (!existing || existing.revokedAt) return
+        await context.transaction.insert<SyncDevice>(DEVICES, { ...existing, name })
+      }
+    )
+    this.router.add(
+      '@sync/remove-writer',
+      async (
+        { id, writerKey, revokedAt }: SyncRemoveWriterOperation,
+        context: ApplyContext
+      ) => {
+        const existing = await context.transaction.get<SyncDevice>(DEVICES, { id })
+        if (!existing || existing.revokedAt) return
+        ;(
+          context.host as AutobeeHost & {
+            removeWriter(key: Buffer): void
+          }
+        ).removeWriter(writerKey)
+        await context.transaction.insert<SyncDevice>(DEVICES, {
+          ...existing,
+          revokedAt
+        })
+      }
+    )
+    this.router.add(
+      '@sync/apply-profile',
+      async (operation: SyncApplyProfileOperation, context: ApplyContext) => {
+        const existing = await context.transaction.get<SyncProfileOperation>(
+          PROFILE_OPERATIONS,
+          { id: operation.operationId }
+        )
+        if (existing) return
+        if (operation.expectedRevision != null) {
+          const head = await context.transaction.get<SyncProfileHead>(
+            PROFILE_HEADS,
+            { id: operation.profileId }
+          )
+          if (head?.revision !== operation.expectedRevision) return
+        }
+        const profile = this.profiles.require(operation.profileId)
+        const accepted = await profile.apply(operation.command, {
+          transaction: context.transaction,
+          deviceId: operation.deviceId,
+          recordedAt: operation.recordedAt,
+          expectedRevision: operation.expectedRevision ?? undefined,
+          revision: operation.revision
+        })
+        if (!accepted) return
+        await context.transaction.insert<SyncProfileOperation>(
+          PROFILE_OPERATIONS,
+          {
+            id: operation.operationId,
+            profileId: operation.profileId,
+            revision: operation.revision,
+            command: operation.inputCommand
+          }
+        )
+        await context.transaction.insert<SyncProfileHead>(PROFILE_HEADS, {
+          id: operation.profileId,
+          revision: operation.revision
+        })
       }
     )
   }
@@ -128,28 +192,140 @@ export class Mesh extends ReadyResource {
     if (this.opened) await this.autobee.close()
   }
 
-  async createTask(task: SyncTask) {
-    if (!this.writable) throw new Error('This sync peer is read-only')
-    const encoded = encode('@sync/put-task', { task })
-    if (!encoded) throw new Error('Could not encode task operation')
-    await this.autobee.append(encoded)
-    await this.autobee.update()
-  }
-
-  async updateTask(update: SyncUpdateTaskOperation) {
-    if (!this.writable) throw new Error('This sync peer is read-only')
-    const encoded = encode('@sync/update-task', update)
-    if (!encoded) throw new Error('Could not encode task update operation')
-    await this.autobee.append(encoded)
-    await this.autobee.update()
-  }
-
   async addWriter(key: Buffer) {
     if (!this.writable) throw new Error('This sync peer is read-only')
     const encoded = encode('@sync/add-writer', { key })
     if (!encoded) throw new Error('Could not encode writer admission operation')
     await this.autobee.append(encoded)
     await this.autobee.update()
+  }
+
+  get localWriterKey() {
+    return this.writerKeyPair.publicKey
+  }
+
+  async putDevice(device: SyncDevice) {
+    const encoded = encode('@sync/put-device', { device })
+    if (!encoded) throw new Error('Could not encode device operation')
+    await this.autobee.append(encoded)
+    await this.autobee.update()
+  }
+
+  async renameDevice(id: Buffer, name: string) {
+    const encoded = encode('@sync/rename-device', { id, name })
+    if (!encoded) throw new Error('Could not encode device rename operation')
+    await this.autobee.append(encoded)
+    await this.autobee.update()
+  }
+
+  async removeDevice(id: Buffer, writerKey: Buffer) {
+    const encoded = encode('@sync/remove-writer', {
+      id,
+      writerKey,
+      revokedAt: Date.now()
+    })
+    if (!encoded) throw new Error('Could not encode device removal operation')
+    await this.autobee.append(encoded)
+    await this.autobee.update()
+  }
+
+  async listDevices() {
+    return this.view.find<SyncDevice>(DEVICES).toArray()
+  }
+
+  async applyProfile(input: {
+    readonly profileId: string
+    readonly version: number
+    readonly operationId: string
+    readonly expectedRevision?: string
+    readonly command: Buffer
+    readonly deviceId: Buffer
+    readonly recordedAt: number
+  }) {
+    const profile = this.profiles.require(input.profileId, input.version)
+    const existing = await this.view.get<SyncProfileOperation>(
+      PROFILE_OPERATIONS,
+      { id: input.operationId }
+    )
+    if (existing) {
+      if (existing.profileId !== input.profileId) {
+        throw new Error(
+          `Profile operationId ${input.operationId} belongs to ${existing.profileId}`
+        )
+      }
+      if (!sameBuffer(existing.command, input.command)) {
+        throw new Error(
+          `Profile operationId ${input.operationId} was reused with a different command`
+        )
+      }
+      return { revision: existing.revision }
+    }
+    if (input.expectedRevision != null) {
+      const head = await this.view.get<SyncProfileHead>(PROFILE_HEADS, {
+        id: input.profileId
+      })
+      if (head?.revision !== input.expectedRevision) {
+        throw new Error(
+          `Sync profile revision conflict: expected ${input.expectedRevision}, got ${head?.revision ?? 'none'}`
+        )
+      }
+    }
+    if (!this.writable) throw new Error('This sync peer is read-only')
+    const revision = input.operationId
+    const command = profile.prepare(input.command, {
+      deviceId: input.deviceId,
+      recordedAt: input.recordedAt
+    })
+    const encoded = encode('@sync/apply-profile', {
+      profileId: input.profileId,
+      operationId: input.operationId,
+      revision,
+      expectedRevision: input.expectedRevision,
+      command,
+      inputCommand: input.command,
+      deviceId: input.deviceId,
+      recordedAt: input.recordedAt
+    })
+    if (!encoded) throw new Error('Could not encode profile operation')
+    await this.autobee.append(encoded)
+    await this.autobee.update()
+    const applied = await this.view.get<SyncProfileOperation>(
+      PROFILE_OPERATIONS,
+      { id: input.operationId }
+    )
+    if (!applied) {
+      const head = await this.view.get<SyncProfileHead>(PROFILE_HEADS, {
+        id: input.profileId
+      })
+      if (
+        input.expectedRevision == null ||
+        head?.revision === input.expectedRevision
+      ) {
+        throw new Error(
+          `Invalid Sync profile transition for operation ${input.operationId}`
+        )
+      }
+      throw new Error(
+        `Sync profile revision conflict: expected ${input.expectedRevision ?? 'none'}, got ${head?.revision ?? 'none'}`
+      )
+    }
+    return { revision }
+  }
+
+  async queryProfile(input: {
+    readonly profileId: string
+    readonly version: number
+    readonly query: Buffer
+  }) {
+    const profile = this.profiles.require(input.profileId, input.version)
+    return profile.query(input.query, this.view)
+  }
+
+  async profileRevision(profileId: string) {
+    const head = await this.view.get<SyncProfileHead>(PROFILE_HEADS, {
+      id: profileId
+    })
+    return head?.revision ?? null
   }
 
   async waitForWritable(timeoutMs = 30_000) {
@@ -206,4 +382,12 @@ export class Mesh extends ReadyResource {
     }
     await transaction.flush()
   }
+}
+
+function sameBuffer(left: Buffer, right: Buffer) {
+  if (left.byteLength !== right.byteLength) return false
+  for (let index = 0; index < left.byteLength; index++) {
+    if (left[index] !== right[index]) return false
+  }
+  return true
 }

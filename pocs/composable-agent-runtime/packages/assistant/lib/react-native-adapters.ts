@@ -1,7 +1,7 @@
 import type { LoadModelOptions } from '@qvac/sdk'
 import type { Duplex } from 'streamx'
 import defaultHarnessLauncher from '@qvac/harness/react-native-launcher'
-import defaultSyncLauncher from '@qvac/sync/react-native-launcher'
+import { createSync, type SyncRuntime } from '@qvac/sync/react-native'
 import { argvForLogging } from '@qvac/harness/logger'
 import {
   connectHarness,
@@ -28,23 +28,6 @@ import {
   type RuntimeIdentity
 } from './handshakes.ts'
 import { createRunStateAdapter } from './run-state.ts'
-
-interface ReactNativeSyncLaunchResult {
-  readonly backend: AssistantSyncComponent['state'] & {
-    ready(): Promise<void>
-    close(): Promise<void>
-    describeRuntime(): Promise<RuntimeIdentity>
-  }
-  terminate(): Promise<void>
-}
-
-interface ReactNativeSyncLauncher {
-  launch(options: {
-    readonly storagePath: string
-    readonly invite?: string
-    readonly onDisconnect: () => void
-  }): Promise<ReactNativeSyncLaunchResult>
-}
 
 interface ReactNativeHarnessLaunchResult {
   readonly ipc: {
@@ -88,8 +71,12 @@ type SdkEventFrame = {
   readonly error?: { readonly message?: string }
 }
 
+function decodeInvite(invite: string) {
+  return Buffer.from(invite, 'base64url')
+}
+
 interface ReactNativeAssistantAdapterDependencies {
-  readonly syncLauncher: ReactNativeSyncLauncher
+  readonly createSyncRuntime: typeof createSync
   readonly harnessLauncher: ReactNativeHarnessLauncher
   readonly connectHarnessRuntime: typeof connectHarness
   readonly createSdkBridge: (
@@ -109,7 +96,7 @@ export function createReactNativeAssistantComponents(
   options: ReactNativeAssistantAdapterOptions,
   dependencies: Partial<ReactNativeAssistantAdapterDependencies> = {}
 ): AssistantComponents {
-  const syncLauncher = dependencies.syncLauncher ?? defaultSyncLauncher
+  const createSyncRuntime = dependencies.createSyncRuntime ?? createSync
   const harnessLauncher = dependencies.harnessLauncher ?? defaultHarnessLauncher
   const connectHarnessRuntime =
     dependencies.connectHarnessRuntime ?? connectHarness
@@ -117,42 +104,26 @@ export function createReactNativeAssistantComponents(
 
   return {
     async startSync(): Promise<AssistantSyncComponent> {
-      const monitor = createExitMonitor()
-      let started: ReactNativeSyncLaunchResult | null = null
+      let sync: SyncRuntime | null = null
       try {
-        started = await syncLauncher.launch({
+        sync = createSyncRuntime({
           storagePath: options.storagePath,
-          invite: options.invite,
-          onDisconnect: monitor.onUnexpectedExit
+          pairingInvite: options.invite ? decodeInvite(options.invite) : undefined
         })
-        await started.backend.ready()
-        const identity = await started.backend.describeRuntime()
+        await sync.ready()
+        const identity = await sync.runtime.describe()
         assertRuntimeIdentity(identity, runtimeExpectation('sync'))
-        const close = closeOnce(async () => {
-          monitor.markClosing()
-          await runCleanupSteps([
-            () => started?.backend.close() ?? Promise.resolve(),
-            () => started?.terminate() ?? Promise.resolve()
-          ])
-        })
         return {
           handshake: handshakeFrom(identity),
-          state: started.backend,
-          exited: monitor.exited,
-          close,
+          state: sync,
+          exited: sync.exited,
+          close: () => sync?.close() ?? Promise.resolve(),
+          suspend: () => sync?.lifecycle.suspend() ?? Promise.resolve(),
+          resume: () => sync?.lifecycle.resume() ?? Promise.resolve(),
           inspect: () => ({ ...identity })
         }
       } catch (error) {
-        if (started) {
-          monitor.markClosing()
-          await runCleanupSteps(
-            [
-              () => started?.backend.close() ?? Promise.resolve(),
-              () => started?.terminate() ?? Promise.resolve()
-            ],
-            { suppressError: true }
-          )
-        }
+        await sync?.close().catch(() => {})
         throw error
       }
     },
@@ -201,14 +172,16 @@ export function createReactNativeAssistantComponents(
           async *run(input: Parameters<AssistantHarnessComponent['harness']['run']>[0]) {
             const activeRemote = remote
             if (!activeRemote) throw new Error('harness runtime is not ready')
+            let completed = false
             try {
               for await (const event of activeRemote.run(input)) {
                 await stateAdapter.append(input.runId, event)
                 yield event
               }
               identity = await activeRemote.describeRuntime()
+              completed = true
             } finally {
-              await stateAdapter.finish(input.runId)
+              await stateAdapter.finish(input.runId, completed)
             }
           },
           close

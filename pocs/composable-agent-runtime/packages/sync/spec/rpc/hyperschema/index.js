@@ -25,11 +25,433 @@ const encoding0 = {
   }
 }
 
+// @rpc/ok
+const encoding1 = {
+  preencode(state, m) {
+    state.end++ // max flag is 1 so always one byte
+  },
+  encode(state, m) {
+    const flags = m.ok ? 1 : 0
+
+    c.uint.encode(state, flags)
+  },
+  decode(state) {
+    const flags = c.uint.decode(state)
+
+    return {
+      ok: (flags & 1) !== 0
+    }
+  }
+}
+
+const encoding2_enum = {
+  opening: 'opening',
+  ready: 'ready',
+  suspended: 'suspended',
+  failed: 'failed',
+  closed: 'closed'
+}
+
+// @rpc/runtime-phase enum
+const encoding2 = {
+  preencode (state, m) {
+    state.end++ // max enum is 5 so always one byte
+  },
+  encode (state, m) {
+    switch (m) {
+      case 'opening':
+        c.uint.encode(state, 1)
+        break
+      case 'ready':
+        c.uint.encode(state, 2)
+        break
+      case 'suspended':
+        c.uint.encode(state, 3)
+        break
+      case 'failed':
+        c.uint.encode(state, 4)
+        break
+      case 'closed':
+        c.uint.encode(state, 5)
+        break
+      default:
+        throw new Error('Unknown enum')
+    }
+  },
+  decode (state) {
+    switch (c.uint.decode(state)) {
+      case 1:
+        return 'opening'
+      case 2:
+        return 'ready'
+      case 3:
+        return 'suspended'
+      case 4:
+        return 'failed'
+      case 5:
+        return 'closed'
+      default: return null
+    }
+  }
+}
+
+const encoding3_enum = {
+  stopped: 'stopped',
+  starting: 'starting',
+  online: 'online',
+  offline: 'offline',
+  degraded: 'degraded'
+}
+
+// @rpc/network-state enum
+const encoding3 = {
+  preencode (state, m) {
+    state.end++ // max enum is 5 so always one byte
+  },
+  encode (state, m) {
+    switch (m) {
+      case 'stopped':
+        c.uint.encode(state, 1)
+        break
+      case 'starting':
+        c.uint.encode(state, 2)
+        break
+      case 'online':
+        c.uint.encode(state, 3)
+        break
+      case 'offline':
+        c.uint.encode(state, 4)
+        break
+      case 'degraded':
+        c.uint.encode(state, 5)
+        break
+      default:
+        throw new Error('Unknown enum')
+    }
+  },
+  decode (state) {
+    switch (c.uint.decode(state)) {
+      case 1:
+        return 'stopped'
+      case 2:
+        return 'starting'
+      case 3:
+        return 'online'
+      case 4:
+        return 'offline'
+      case 5:
+        return 'degraded'
+      default: return null
+    }
+  }
+}
+
+// @rpc/runtime-status
+const encoding4 = {
+  preencode(state, m) {
+    encoding2.preencode(state, m.phase)
+    c.string.preencode(state, m.generation)
+    encoding3.preencode(state, m.network)
+    state.end++ // max flag is 1 so always one byte
+    c.uint.preencode(state, m.peerCount)
+  },
+  encode(state, m) {
+    const flags = m.writable ? 1 : 0
+
+    encoding2.encode(state, m.phase)
+    c.string.encode(state, m.generation)
+    encoding3.encode(state, m.network)
+    c.uint.encode(state, flags)
+    c.uint.encode(state, m.peerCount)
+  },
+  decode(state) {
+    const r0 = encoding2.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = encoding3.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      phase: r0,
+      generation: r1,
+      network: r2,
+      writable: (flags & 1) !== 0,
+      peerCount: c.uint.decode(state)
+    }
+  }
+}
+
+// @rpc/runtime-child-diagnostic.deps
+const encoding5_2 = c.array(c.string)
+
+// @rpc/runtime-child-diagnostic
+const encoding5 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.name)
+    c.string.preencode(state, m.state)
+    encoding5_2.preencode(state, m.deps)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.networkInstanceId) c.string.preencode(state, m.networkInstanceId)
+  },
+  encode(state, m) {
+    const flags =
+      (m.networkInstanceId ? 1 : 0) |
+      (m.topicPresent ? 2 : 0) |
+      (m.discoveryTeardownComplete ? 4 : 0)
+
+    c.string.encode(state, m.name)
+    c.string.encode(state, m.state)
+    encoding5_2.encode(state, m.deps)
+    c.uint.encode(state, flags)
+
+    if (m.networkInstanceId) c.string.encode(state, m.networkInstanceId)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = encoding5_2.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      name: r0,
+      state: r1,
+      deps: r2,
+      networkInstanceId: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      topicPresent: (flags & 2) !== 0,
+      discoveryTeardownComplete: (flags & 4) !== 0
+    }
+  }
+}
+
+// @rpc/runtime-diagnostics.children
+const encoding6_0 = c.array(c.frame(encoding5))
+
+// @rpc/runtime-diagnostics
+const encoding6 = {
+  preencode(state, m) {
+    encoding6_0.preencode(state, m.children)
+  },
+  encode(state, m) {
+    encoding6_0.encode(state, m.children)
+  },
+  decode(state) {
+    const r0 = encoding6_0.decode(state)
+
+    return {
+      children: r0
+    }
+  }
+}
+
+const encoding7_enum = {
+  idle: 'idle',
+  joining: 'joining',
+  joined: 'joined',
+  leaving: 'leaving',
+  kicked: 'kicked',
+  error: 'error'
+}
+
+// @rpc/mesh-status-state enum
+const encoding7 = {
+  preencode (state, m) {
+    state.end++ // max enum is 6 so always one byte
+  },
+  encode (state, m) {
+    switch (m) {
+      case 'idle':
+        c.uint.encode(state, 1)
+        break
+      case 'joining':
+        c.uint.encode(state, 2)
+        break
+      case 'joined':
+        c.uint.encode(state, 3)
+        break
+      case 'leaving':
+        c.uint.encode(state, 4)
+        break
+      case 'kicked':
+        c.uint.encode(state, 5)
+        break
+      case 'error':
+        c.uint.encode(state, 6)
+        break
+      default:
+        throw new Error('Unknown enum')
+    }
+  },
+  decode (state) {
+    switch (c.uint.decode(state)) {
+      case 1:
+        return 'idle'
+      case 2:
+        return 'joining'
+      case 3:
+        return 'joined'
+      case 4:
+        return 'leaving'
+      case 5:
+        return 'kicked'
+      case 6:
+        return 'error'
+      default: return null
+    }
+  }
+}
+
+// @rpc/mesh-status
+const encoding8 = {
+  preencode(state, m) {
+    encoding7.preencode(state, m.state)
+    c.string.preencode(state, m.generation)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.meshKey) c.fixed32.preencode(state, m.meshKey)
+    if (m.discoveryKey) c.fixed32.preencode(state, m.discoveryKey)
+    c.uint.preencode(state, m.peerCount)
+    encoding3.preencode(state, m.network)
+  },
+  encode(state, m) {
+    const flags = (m.meshKey ? 1 : 0) | (m.discoveryKey ? 2 : 0) | (m.writable ? 4 : 0)
+
+    encoding7.encode(state, m.state)
+    c.string.encode(state, m.generation)
+    c.uint.encode(state, flags)
+
+    if (m.meshKey) c.fixed32.encode(state, m.meshKey)
+    if (m.discoveryKey) c.fixed32.encode(state, m.discoveryKey)
+    c.uint.encode(state, m.peerCount)
+    encoding3.encode(state, m.network)
+  },
+  decode(state) {
+    const r0 = encoding7.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      state: r0,
+      generation: r1,
+      meshKey: (flags & 1) !== 0 ? c.fixed32.decode(state) : null,
+      discoveryKey: (flags & 2) !== 0 ? c.fixed32.decode(state) : null,
+      writable: (flags & 4) !== 0,
+      peerCount: c.uint.decode(state),
+      network: encoding3.decode(state)
+    }
+  }
+}
+
+// @rpc/mesh-join-request
+const encoding9 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.invite)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.invite)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      invite: r0
+    }
+  }
+}
+
+// @rpc/device
+const encoding10 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+    state.end++ // max flag is 2 so always one byte
+    c.uint.preencode(state, m.joinedAt)
+
+    if (m.revokedAt) c.uint.preencode(state, m.revokedAt)
+  },
+  encode(state, m) {
+    const flags = (m.local ? 1 : 0) | (m.revokedAt ? 2 : 0)
+
+    c.fixed32.encode(state, m.id)
+    c.string.encode(state, m.name)
+    c.uint.encode(state, flags)
+    c.uint.encode(state, m.joinedAt)
+
+    if (m.revokedAt) c.uint.encode(state, m.revokedAt)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      name: r1,
+      local: (flags & 1) !== 0,
+      joinedAt: c.uint.decode(state),
+      revokedAt: (flags & 2) !== 0 ? c.uint.decode(state) : 0
+    }
+  }
+}
+
+// @rpc/device-list.devices
+const encoding11_0 = c.array(c.frame(encoding10))
+
+// @rpc/device-list
+const encoding11 = {
+  preencode(state, m) {
+    encoding11_0.preencode(state, m.devices)
+  },
+  encode(state, m) {
+    encoding11_0.encode(state, m.devices)
+  },
+  decode(state) {
+    const r0 = encoding11_0.decode(state)
+
+    return {
+      devices: r0
+    }
+  }
+}
+
+// @rpc/rename-device-request
+const encoding12 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.name)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.name)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+
+    return {
+      name: r0
+    }
+  }
+}
+
+// @rpc/remove-device-request
+const encoding13 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.id)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.id)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+
+    return {
+      id: r0
+    }
+  }
+}
+
 // @rpc/runtime-info.capabilities
-const encoding1_6 = c.array(c.string)
+const encoding14_6 = encoding5_2
 
 // @rpc/runtime-info
-const encoding1 = {
+const encoding14 = {
   preencode(state, m) {
     c.string.preencode(state, m.component)
     c.string.preencode(state, m.runtime)
@@ -37,7 +459,7 @@ const encoding1 = {
     c.uint.preencode(state, m.processId)
     c.string.preencode(state, m.contract)
     c.uint.preencode(state, m.protocolVersion)
-    encoding1_6.preencode(state, m.capabilities)
+    encoding14_6.preencode(state, m.capabilities)
     c.string.preencode(state, m.buildVersion)
   },
   encode(state, m) {
@@ -47,7 +469,7 @@ const encoding1 = {
     c.uint.encode(state, m.processId)
     c.string.encode(state, m.contract)
     c.uint.encode(state, m.protocolVersion)
-    encoding1_6.encode(state, m.capabilities)
+    encoding14_6.encode(state, m.capabilities)
     c.string.encode(state, m.buildVersion)
   },
   decode(state) {
@@ -57,7 +479,7 @@ const encoding1 = {
     const r3 = c.uint.decode(state)
     const r4 = c.string.decode(state)
     const r5 = c.uint.decode(state)
-    const r6 = encoding1_6.decode(state)
+    const r6 = encoding14_6.decode(state)
     const r7 = c.string.decode(state)
 
     return {
@@ -74,7 +496,7 @@ const encoding1 = {
 }
 
 // @rpc/identity
-const encoding2 = {
+const encoding15 = {
   preencode(state, m) {
     c.fixed32.preencode(state, m.deviceId)
   },
@@ -90,277 +512,14 @@ const encoding2 = {
   }
 }
 
-// @rpc/user-profile
-const encoding3 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.name)
-  },
-  encode(state, m) {
-    c.string.encode(state, m.name)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-
-    return {
-      name: r0
-    }
-  }
-}
-
-// @rpc/user-profile-result.profile
-const encoding4_0 = c.frame(encoding3)
-
-// @rpc/user-profile-result
-const encoding4 = {
-  preencode(state, m) {
-    state.end++ // max flag is 1 so always one byte
-
-    if (m.profile) encoding4_0.preencode(state, m.profile)
-  },
-  encode(state, m) {
-    const flags = m.profile ? 1 : 0
-
-    c.uint.encode(state, flags)
-
-    if (m.profile) encoding4_0.encode(state, m.profile)
-  },
-  decode(state) {
-    const flags = c.uint.decode(state)
-
-    return {
-      profile: (flags & 1) !== 0 ? encoding4_0.decode(state) : null
-    }
-  }
-}
-
-const encoding5_enum = {
-  pending: 'pending',
-  running: 'running',
-  completed: 'completed',
-  failed: 'failed',
-  cancelled: 'cancelled'
-}
-
-// @rpc/task-status enum
-const encoding5 = {
-  preencode (state, m) {
-    state.end++ // max enum is 5 so always one byte
-  },
-  encode (state, m) {
-    switch (m) {
-      case 'pending':
-        c.uint.encode(state, 1)
-        break
-      case 'running':
-        c.uint.encode(state, 2)
-        break
-      case 'completed':
-        c.uint.encode(state, 3)
-        break
-      case 'failed':
-        c.uint.encode(state, 4)
-        break
-      case 'cancelled':
-        c.uint.encode(state, 5)
-        break
-      default:
-        throw new Error('Unknown enum')
-    }
-  },
-  decode (state) {
-    switch (c.uint.decode(state)) {
-      case 1:
-        return 'pending'
-      case 2:
-        return 'running'
-      case 3:
-        return 'completed'
-      case 4:
-        return 'failed'
-      case 5:
-        return 'cancelled'
-      default: return null
-    }
-  }
-}
-
-// @rpc/task
-const encoding6 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
-    c.string.preencode(state, m.title)
-    c.string.preencode(state, m.input)
-    encoding5.preencode(state, m.status)
-    state.end++ // max flag is 1 so always one byte
-
-    if (m.result) c.string.preencode(state, m.result)
-    c.uint.preencode(state, m.createdAt)
-    c.uint.preencode(state, m.updatedAt)
-    c.fixed32.preencode(state, m.originDeviceId)
-  },
-  encode(state, m) {
-    const flags = m.result ? 1 : 0
-
-    c.string.encode(state, m.id)
-    c.string.encode(state, m.title)
-    c.string.encode(state, m.input)
-    encoding5.encode(state, m.status)
-    c.uint.encode(state, flags)
-
-    if (m.result) c.string.encode(state, m.result)
-    c.uint.encode(state, m.createdAt)
-    c.uint.encode(state, m.updatedAt)
-    c.fixed32.encode(state, m.originDeviceId)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-    const r1 = c.string.decode(state)
-    const r2 = c.string.decode(state)
-    const r3 = encoding5.decode(state)
-    const flags = c.uint.decode(state)
-
-    return {
-      id: r0,
-      title: r1,
-      input: r2,
-      status: r3,
-      result: (flags & 1) !== 0 ? c.string.decode(state) : null,
-      createdAt: c.uint.decode(state),
-      updatedAt: c.uint.decode(state),
-      originDeviceId: c.fixed32.decode(state)
-    }
-  }
-}
-
-// @rpc/create-task-request
-const encoding7 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
-    c.string.preencode(state, m.title)
-    c.string.preencode(state, m.input)
-  },
-  encode(state, m) {
-    c.string.encode(state, m.id)
-    c.string.encode(state, m.title)
-    c.string.encode(state, m.input)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-    const r1 = c.string.decode(state)
-    const r2 = c.string.decode(state)
-
-    return {
-      id: r0,
-      title: r1,
-      input: r2
-    }
-  }
-}
-
-// @rpc/update-task-request
-const encoding8 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
-    state.end++ // max flag is 4 so always one byte
-
-    if (m.title) c.string.preencode(state, m.title)
-    if (m.status) encoding5.preencode(state, m.status)
-    if (m.result) c.string.preencode(state, m.result)
-  },
-  encode(state, m) {
-    const flags = (m.title ? 1 : 0) | (m.status ? 2 : 0) | (m.result ? 4 : 0)
-
-    c.string.encode(state, m.id)
-    c.uint.encode(state, flags)
-
-    if (m.title) c.string.encode(state, m.title)
-    if (m.status) encoding5.encode(state, m.status)
-    if (m.result) c.string.encode(state, m.result)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-    const flags = c.uint.decode(state)
-
-    return {
-      id: r0,
-      title: (flags & 1) !== 0 ? c.string.decode(state) : null,
-      status: (flags & 2) !== 0 ? encoding5.decode(state) : null,
-      result: (flags & 4) !== 0 ? c.string.decode(state) : null
-    }
-  }
-}
-
-// @rpc/task-id
-const encoding9 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
-  },
-  encode(state, m) {
-    c.string.encode(state, m.id)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-
-    return {
-      id: r0
-    }
-  }
-}
-
-// @rpc/task-result.task
-const encoding10_0 = c.frame(encoding6)
-
-// @rpc/task-result
-const encoding10 = {
-  preencode(state, m) {
-    state.end++ // max flag is 1 so always one byte
-
-    if (m.task) encoding10_0.preencode(state, m.task)
-  },
-  encode(state, m) {
-    const flags = m.task ? 1 : 0
-
-    c.uint.encode(state, flags)
-
-    if (m.task) encoding10_0.encode(state, m.task)
-  },
-  decode(state) {
-    const flags = c.uint.decode(state)
-
-    return {
-      task: (flags & 1) !== 0 ? encoding10_0.decode(state) : null
-    }
-  }
-}
-
-// @rpc/task-list.tasks
-const encoding11_0 = c.array(c.frame(encoding6))
-
-// @rpc/task-list
-const encoding11 = {
-  preencode(state, m) {
-    encoding11_0.preencode(state, m.tasks)
-  },
-  encode(state, m) {
-    encoding11_0.encode(state, m.tasks)
-  },
-  decode(state) {
-    const r0 = encoding11_0.decode(state)
-
-    return {
-      tasks: r0
-    }
-  }
-}
-
-const encoding12_enum = {
+const encoding16_enum = {
   pending: 'pending',
   approved: 'approved',
   rejected: 'rejected'
 }
 
 // @rpc/pairing-status enum
-const encoding12 = {
+const encoding16 = {
   preencode (state, m) {
     state.end++ // max enum is 3 so always one byte
   },
@@ -393,7 +552,7 @@ const encoding12 = {
 }
 
 // @rpc/create-pairing-invite-request
-const encoding13 = {
+const encoding17 = {
   preencode(state, m) {
     state.end++ // max flag is 1 so always one byte
 
@@ -416,7 +575,7 @@ const encoding13 = {
 }
 
 // @rpc/pairing-invite
-const encoding14 = {
+const encoding18 = {
   preencode(state, m) {
     c.fixed32.preencode(state, m.id)
     c.buffer.preencode(state, m.invite)
@@ -441,41 +600,27 @@ const encoding14 = {
 }
 
 // @rpc/pairing-request-id
-const encoding15 = {
-  preencode(state, m) {
-    c.fixed32.preencode(state, m.id)
-  },
-  encode(state, m) {
-    c.fixed32.encode(state, m.id)
-  },
-  decode(state) {
-    const r0 = c.fixed32.decode(state)
-
-    return {
-      id: r0
-    }
-  }
-}
+const encoding19 = encoding13
 
 // @rpc/pairing-request
-const encoding16 = {
+const encoding20 = {
   preencode(state, m) {
     c.fixed32.preencode(state, m.id)
     c.fixed32.preencode(state, m.writerKey)
     c.string.preencode(state, m.fingerprint)
-    encoding12.preencode(state, m.status)
+    encoding16.preencode(state, m.status)
   },
   encode(state, m) {
     c.fixed32.encode(state, m.id)
     c.fixed32.encode(state, m.writerKey)
     c.string.encode(state, m.fingerprint)
-    encoding12.encode(state, m.status)
+    encoding16.encode(state, m.status)
   },
   decode(state) {
     const r0 = c.fixed32.decode(state)
     const r1 = c.fixed32.decode(state)
     const r2 = c.string.decode(state)
-    const r3 = encoding12.decode(state)
+    const r3 = encoding16.decode(state)
 
     return {
       id: r0,
@@ -487,21 +632,239 @@ const encoding16 = {
 }
 
 // @rpc/pairing-request-list.requests
-const encoding17_0 = c.array(c.frame(encoding16))
+const encoding21_0 = c.array(c.frame(encoding20))
 
 // @rpc/pairing-request-list
-const encoding17 = {
+const encoding21 = {
   preencode(state, m) {
-    encoding17_0.preencode(state, m.requests)
+    encoding21_0.preencode(state, m.requests)
   },
   encode(state, m) {
-    encoding17_0.encode(state, m.requests)
+    encoding21_0.encode(state, m.requests)
   },
   decode(state) {
-    const r0 = encoding17_0.decode(state)
+    const r0 = encoding21_0.decode(state)
 
     return {
       requests: r0
+    }
+  }
+}
+
+// @rpc/profile-apply-request
+const encoding22 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.profileId)
+    c.uint.preencode(state, m.version)
+    c.string.preencode(state, m.generation)
+    c.string.preencode(state, m.operationId)
+    state.end++ // max flag is 2 so always one byte
+
+    if (m.expectedRevision) c.string.preencode(state, m.expectedRevision)
+    if (m.traceId) c.string.preencode(state, m.traceId)
+    c.buffer.preencode(state, m.command)
+  },
+  encode(state, m) {
+    const flags = (m.expectedRevision ? 1 : 0) | (m.traceId ? 2 : 0)
+
+    c.string.encode(state, m.profileId)
+    c.uint.encode(state, m.version)
+    c.string.encode(state, m.generation)
+    c.string.encode(state, m.operationId)
+    c.uint.encode(state, flags)
+
+    if (m.expectedRevision) c.string.encode(state, m.expectedRevision)
+    if (m.traceId) c.string.encode(state, m.traceId)
+    c.buffer.encode(state, m.command)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.uint.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      profileId: r0,
+      version: r1,
+      generation: r2,
+      operationId: r3,
+      expectedRevision: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      traceId: (flags & 2) !== 0 ? c.string.decode(state) : null,
+      command: c.buffer.decode(state)
+    }
+  }
+}
+
+// @rpc/profile-apply-result
+const encoding23 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.revision)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.revision)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+
+    return {
+      revision: r0
+    }
+  }
+}
+
+// @rpc/profile-query-request
+const encoding24 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.profileId)
+    c.uint.preencode(state, m.version)
+    c.string.preencode(state, m.generation)
+    c.buffer.preencode(state, m.query)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.profileId)
+    c.uint.encode(state, m.version)
+    c.string.encode(state, m.generation)
+    c.buffer.encode(state, m.query)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.uint.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.buffer.decode(state)
+
+    return {
+      profileId: r0,
+      version: r1,
+      generation: r2,
+      query: r3
+    }
+  }
+}
+
+// @rpc/profile-query-result
+const encoding25 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.value)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.value)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      value: r0
+    }
+  }
+}
+
+// @rpc/profile-watch-request
+const encoding26 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.profileId)
+    c.uint.preencode(state, m.version)
+    c.string.preencode(state, m.generation)
+    c.buffer.preencode(state, m.query)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.after) c.string.preencode(state, m.after)
+  },
+  encode(state, m) {
+    const flags = m.after ? 1 : 0
+
+    c.string.encode(state, m.profileId)
+    c.uint.encode(state, m.version)
+    c.string.encode(state, m.generation)
+    c.buffer.encode(state, m.query)
+    c.uint.encode(state, flags)
+
+    if (m.after) c.string.encode(state, m.after)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.uint.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.buffer.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      profileId: r0,
+      version: r1,
+      generation: r2,
+      query: r3,
+      after: (flags & 1) !== 0 ? c.string.decode(state) : null
+    }
+  }
+}
+
+const encoding27_enum = {
+  snapshot: 'snapshot',
+  change: 'change'
+}
+
+// @rpc/profile-watch-kind enum
+const encoding27 = {
+  preencode (state, m) {
+    state.end++ // max enum is 2 so always one byte
+  },
+  encode (state, m) {
+    switch (m) {
+      case 'snapshot':
+        c.uint.encode(state, 1)
+        break
+      case 'change':
+        c.uint.encode(state, 2)
+        break
+      default:
+        throw new Error('Unknown enum')
+    }
+  },
+  decode (state) {
+    switch (c.uint.decode(state)) {
+      case 1:
+        return 'snapshot'
+      case 2:
+        return 'change'
+      default: return null
+    }
+  }
+}
+
+// @rpc/profile-watch-frame
+const encoding28 = {
+  preencode(state, m) {
+    encoding27.preencode(state, m.kind)
+    c.string.preencode(state, m.generation)
+    c.string.preencode(state, m.cursor)
+    state.end++ // max flag is 2 so always one byte
+
+    if (m.value) c.buffer.preencode(state, m.value)
+    if (m.change) c.buffer.preencode(state, m.change)
+  },
+  encode(state, m) {
+    const flags = (m.value ? 1 : 0) | (m.change ? 2 : 0)
+
+    encoding27.encode(state, m.kind)
+    c.string.encode(state, m.generation)
+    c.string.encode(state, m.cursor)
+    c.uint.encode(state, flags)
+
+    if (m.value) c.buffer.encode(state, m.value)
+    if (m.change) c.buffer.encode(state, m.change)
+  },
+  decode(state) {
+    const r0 = encoding27.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      kind: r0,
+      generation: r1,
+      cursor: r2,
+      value: (flags & 1) !== 0 ? c.buffer.decode(state) : null,
+      change: (flags & 2) !== 0 ? c.buffer.decode(state) : null
     }
   }
 }
@@ -522,10 +885,16 @@ function decode(name, buffer, v = VERSION) {
 
 function getEnum(name) {
   switch (name) {
-    case '@rpc/task-status':
-      return encoding5_enum
+    case '@rpc/runtime-phase':
+      return encoding2_enum
+    case '@rpc/network-state':
+      return encoding3_enum
+    case '@rpc/mesh-status-state':
+      return encoding7_enum
     case '@rpc/pairing-status':
-      return encoding12_enum
+      return encoding16_enum
+    case '@rpc/profile-watch-kind':
+      return encoding27_enum
     default:
       throw new Error('Enum not found ' + name)
   }
@@ -535,40 +904,62 @@ function getEncoding(name) {
   switch (name) {
     case '@rpc/empty':
       return encoding0
-    case '@rpc/runtime-info':
+    case '@rpc/ok':
       return encoding1
-    case '@rpc/identity':
+    case '@rpc/runtime-phase':
       return encoding2
-    case '@rpc/user-profile':
+    case '@rpc/network-state':
       return encoding3
-    case '@rpc/user-profile-result':
+    case '@rpc/runtime-status':
       return encoding4
-    case '@rpc/task-status':
+    case '@rpc/runtime-child-diagnostic':
       return encoding5
-    case '@rpc/task':
+    case '@rpc/runtime-diagnostics':
       return encoding6
-    case '@rpc/create-task-request':
+    case '@rpc/mesh-status-state':
       return encoding7
-    case '@rpc/update-task-request':
+    case '@rpc/mesh-status':
       return encoding8
-    case '@rpc/task-id':
+    case '@rpc/mesh-join-request':
       return encoding9
-    case '@rpc/task-result':
+    case '@rpc/device':
       return encoding10
-    case '@rpc/task-list':
+    case '@rpc/device-list':
       return encoding11
-    case '@rpc/pairing-status':
+    case '@rpc/rename-device-request':
       return encoding12
-    case '@rpc/create-pairing-invite-request':
+    case '@rpc/remove-device-request':
       return encoding13
-    case '@rpc/pairing-invite':
+    case '@rpc/runtime-info':
       return encoding14
-    case '@rpc/pairing-request-id':
+    case '@rpc/identity':
       return encoding15
-    case '@rpc/pairing-request':
+    case '@rpc/pairing-status':
       return encoding16
-    case '@rpc/pairing-request-list':
+    case '@rpc/create-pairing-invite-request':
       return encoding17
+    case '@rpc/pairing-invite':
+      return encoding18
+    case '@rpc/pairing-request-id':
+      return encoding19
+    case '@rpc/pairing-request':
+      return encoding20
+    case '@rpc/pairing-request-list':
+      return encoding21
+    case '@rpc/profile-apply-request':
+      return encoding22
+    case '@rpc/profile-apply-result':
+      return encoding23
+    case '@rpc/profile-query-request':
+      return encoding24
+    case '@rpc/profile-query-result':
+      return encoding25
+    case '@rpc/profile-watch-request':
+      return encoding26
+    case '@rpc/profile-watch-kind':
+      return encoding27
+    case '@rpc/profile-watch-frame':
+      return encoding28
     default:
       throw new Error('Encoder not found ' + name)
   }

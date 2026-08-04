@@ -25,6 +25,7 @@ describe('task controller', () => {
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
       createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository,
       createTaskId: () => 'phone-task-1',
       onState: (snapshot) => states.push(snapshot.state)
     })
@@ -63,6 +64,7 @@ describe('task controller', () => {
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
       createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository,
       createTaskId: () => 'phone-task-2'
     })
     await controller.connect()
@@ -90,6 +92,7 @@ describe('task controller', () => {
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
       createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository,
       hasPersistentPairing: () => false
     })
     await controller.reconnect()
@@ -104,6 +107,7 @@ describe('task controller', () => {
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
       createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository,
       hasPersistentPairing: () => true
     })
     await controller.reconnect()
@@ -117,7 +121,8 @@ describe('task controller', () => {
     })
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
-      createAssistant: harness.createAssistant
+      createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository
     })
     await controller.connect()
     harness.emitLifecycle({
@@ -155,7 +160,8 @@ describe('task controller', () => {
     })
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
-      createAssistant: harness.createAssistant
+      createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository
     })
     await controller.connect()
     let latest: readonly TaskControllerTask[] = []
@@ -178,6 +184,7 @@ describe('task controller', () => {
     const controller = createTaskController({
       storagePath: '/tmp/task-mobile',
       createAssistant: harness.createAssistant,
+      createTaskRepository: harness.createTaskRepository,
       createTaskId: () => 'phone-task-throttle'
     })
     await controller.connect()
@@ -212,117 +219,7 @@ function createAssistantHarness({
   function createAssistant() {
     starts += 1
     return {
-      state: {
-        async getIdentity() {
-          return { deviceId: Buffer.from('phone') }
-        },
-        async getUserProfile() {
-          return { profile: null }
-        },
-        async setUserProfile(profile: { readonly name: string }) {
-          return profile
-        },
-        async createTask(request: {
-          readonly id: string
-          readonly title: string
-          readonly input: string
-        }) {
-          const task: TaskControllerTask = {
-            id: request.id,
-            title: request.title,
-            input: request.input,
-            status: 'pending',
-            createdAt: 1,
-            updatedAt: 1,
-            originDeviceId: Buffer.from([1])
-          }
-          tasks.set(request.id, task)
-          publish()
-          return task
-        },
-        async updateTask(request: {
-          readonly id: string
-          readonly title?: string | null
-          readonly status?: TaskControllerTask['status'] | null
-          readonly result?: string | null
-        }) {
-          const current = tasks.get(request.id)
-          if (!current) throw new Error('task missing')
-          updatesByTask.set(request.id, (updatesByTask.get(request.id) ?? 0) + 1)
-          const next: TaskControllerTask = {
-            ...current,
-            ...(request.title === undefined ? {} : { title: request.title ?? current.title }),
-            ...(request.status === undefined ? {} : { status: request.status ?? current.status }),
-            ...(request.result === undefined ? {} : { result: request.result }),
-            updatedAt: current.updatedAt + 1
-          }
-          tasks.set(request.id, next)
-          publish()
-          return next
-        },
-        async getTask(request: { readonly id: string }) {
-          return { task: tasks.get(request.id) ?? null }
-        },
-        async listTasks() {
-          return { tasks: [...tasks.values()] }
-        },
-        async *watchTasks() {
-          let pendingResolve: ((value: IteratorResult<{ tasks: TaskControllerTask[] }>) => void) | null = null
-          const queue: Array<{ tasks: TaskControllerTask[] }> = [{ tasks: [...tasks.values()] }]
-          const watcher = (next: TaskControllerTask[]) => {
-            queue.push({ tasks: [...next] })
-            if (pendingResolve) {
-              const resolve = pendingResolve
-              pendingResolve = null
-              const value = queue.shift()
-              if (value) resolve({ value, done: false })
-            }
-          }
-          watchers.add(watcher)
-          try {
-            while (true) {
-              const value = queue.shift()
-              if (value) {
-                yield value
-                continue
-              }
-              const next = await new Promise<
-                IteratorResult<{ tasks: TaskControllerTask[] }>
-              >(
-                (resolve) => {
-                  pendingResolve = resolve
-                }
-              )
-              if (next.done) return
-              yield next.value
-            }
-          } finally {
-            watchers.delete(watcher)
-          }
-        },
-        async createPairingInvite() {
-          return { invite: Buffer.from('invite'), expiresAt: Date.now() + 1_000 }
-        },
-        async approvePairingRequest(request: { readonly id: Buffer }) {
-          return {
-            id: request.id,
-            requestedAt: Date.now(),
-            fingerprint: 'fingerprint',
-            status: 'approved'
-          }
-        },
-        async rejectPairingRequest(request: { readonly id: Buffer }) {
-          return {
-            id: request.id,
-            requestedAt: Date.now(),
-            fingerprint: 'fingerprint',
-            status: 'rejected'
-          }
-        },
-        async *watchPairingRequests() {
-          yield { requests: [] }
-        }
-      },
+      state: {},
       async ready() {},
       run(input: AssistantRunInput) {
         const stream = run(input)
@@ -366,7 +263,7 @@ function createAssistantHarness({
         ...input,
         createdAt: 1,
         updatedAt: 1,
-        originDeviceId: Buffer.from([1])
+        result: null
       })
       publish()
     },
@@ -376,6 +273,92 @@ function createAssistantHarness({
       }
     },
     createAssistant,
+    createTaskRepository() {
+      return {
+        async create(request: {
+          readonly id: string
+          readonly title: string | null
+          readonly input: string
+        }) {
+          const task: TaskControllerTask = {
+            id: request.id,
+            title: request.title,
+            input: request.input,
+            status: 'pending',
+            result: null,
+            createdAt: 1,
+            updatedAt: 1
+          }
+          tasks.set(request.id, task)
+          publish()
+          return task
+        },
+        async update(request: {
+          readonly id: string
+          readonly status: TaskControllerTask['status']
+          readonly result?: string | null
+        }) {
+          const current = tasks.get(request.id)
+          if (!current) throw new Error('task missing')
+          updatesByTask.set(
+            request.id,
+            (updatesByTask.get(request.id) ?? 0) + 1
+          )
+          const next = {
+            ...current,
+            status: request.status,
+            ...(request.result === undefined
+              ? {}
+              : { result: request.result }),
+            updatedAt: current.updatedAt + 1
+          }
+          tasks.set(request.id, next)
+          publish()
+          return next
+        },
+        async get(id: string) {
+          return tasks.get(id) ?? null
+        },
+        async list() {
+          return [...tasks.values()]
+        },
+        watch() {
+          return (async function* () {
+            let pending:
+              | ((value: IteratorResult<TaskControllerTask[]>) => void)
+              | null = null
+            const queue = [[...tasks.values()]]
+            const watcher = (next: TaskControllerTask[]) => {
+              queue.push([...next])
+              if (!pending) return
+              const resolve = pending
+              pending = null
+              const value = queue.shift()
+              if (value) resolve({ value, done: false })
+            }
+            watchers.add(watcher)
+            try {
+              while (true) {
+                const value = queue.shift()
+                if (value) {
+                  yield value
+                  continue
+                }
+                const next = await new Promise<
+                  IteratorResult<TaskControllerTask[]>
+                >((resolve) => {
+                  pending = resolve
+                })
+                if (next.done) return
+                yield next.value
+              }
+            } finally {
+              watchers.delete(watcher)
+            }
+          })()
+        }
+      }
+    },
     readTask(taskId: string) {
       return tasks.get(taskId)
     },

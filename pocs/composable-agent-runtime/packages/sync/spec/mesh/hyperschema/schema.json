@@ -2,18 +2,228 @@
   "version": 1,
   "schema": [
     {
-      "name": "task-status",
+      "name": "add-writer-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "device",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "writerKey",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "joinedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "revokedAt",
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "put-device-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "device",
+          "required": true,
+          "type": "@sync/device",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "rename-device-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "remove-writer-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "writerKey",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "revokedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "profileId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "command",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-head",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "apply-profile-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "profileId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "operationId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "expectedRevision",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "command",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "inputCommand",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "deviceId",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "recordedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "durable-work-outcome-status",
       "namespace": "sync",
       "offset": 1,
       "enum": [
-        {
-          "key": "pending",
-          "version": 1
-        },
-        {
-          "key": "running",
-          "version": 1
-        },
         {
           "key": "completed",
           "version": 1
@@ -30,7 +240,153 @@
       "strings": true
     },
     {
-      "name": "task",
+      "name": "durable-work",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "workId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "payload",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "payloadFormat",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "payloadVersion",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "target",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "cancelRequested",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "cancelReason",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "outcomeStatus",
+          "type": "@sync/durable-work-outcome-status",
+          "version": 1
+        },
+        {
+          "name": "outcomeResult",
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "durable-work-journal-entry",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "workId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "entryType",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "body",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "recordedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "durable-work-checkpoint",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "workId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "checkpointId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "format",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "version",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "blobRef",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "recordedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "durable-work-gate",
       "namespace": "sync",
       "compact": false,
       "flagsPosition": 4,
@@ -42,107 +398,65 @@
           "version": 1
         },
         {
-          "name": "title",
+          "name": "workId",
           "required": true,
           "type": "string",
           "version": 1
         },
         {
-          "name": "input",
+          "name": "gateId",
           "required": true,
           "type": "string",
           "version": 1
         },
         {
-          "name": "status",
+          "name": "kind",
           "required": true,
-          "type": "@sync/task-status",
-          "version": 1
-        },
-        {
-          "name": "result",
           "type": "string",
           "version": 1
         },
         {
-          "name": "createdAt",
+          "name": "decision",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "recordedAt",
           "required": true,
           "type": "uint",
-          "version": 1
-        },
-        {
-          "name": "updatedAt",
-          "required": true,
-          "type": "uint",
-          "version": 1
-        },
-        {
-          "name": "originDeviceId",
-          "required": true,
-          "type": "fixed32",
           "version": 1
         }
       ]
     },
     {
-      "name": "put-task-operation",
+      "name": "durable-work-executor",
       "namespace": "sync",
       "compact": false,
       "flagsPosition": -1,
       "fields": [
         {
-          "name": "task",
-          "required": true,
-          "type": "@sync/task",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "update-task-operation",
-      "namespace": "sync",
-      "compact": false,
-      "flagsPosition": 1,
-      "fields": [
-        {
-          "name": "id",
+          "name": "executorId",
           "required": true,
           "type": "string",
           "version": 1
         },
         {
-          "name": "title",
+          "name": "capabilities",
+          "required": true,
+          "array": true,
           "type": "string",
           "version": 1
         },
         {
-          "name": "status",
-          "type": "@sync/task-status",
-          "version": 1
-        },
-        {
-          "name": "result",
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "updatedAt",
+          "name": "expiresAt",
           "required": true,
           "type": "uint",
           "version": 1
-        }
-      ]
-    },
-    {
-      "name": "add-writer-operation",
-      "namespace": "sync",
-      "compact": false,
-      "flagsPosition": -1,
-      "fields": [
+        },
         {
-          "name": "key",
+          "name": "recordedAt",
           "required": true,
-          "type": "fixed32",
+          "type": "uint",
           "version": 1
         }
       ]

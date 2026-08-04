@@ -2,39 +2,117 @@
 // Schema version: 1
 // Do not edit manually.
 
-export type SyncTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled"
-
-export interface SyncTask {
-  id: string
-  title: string
-  input: string
-  status: SyncTaskStatus
-  result?: string | null
-  createdAt: number
-  updatedAt: number
-  originDeviceId: Buffer
-}
-
-export interface SyncPutTaskOperation {
-  task: SyncTask
-}
-
-export interface SyncUpdateTaskOperation {
-  id: string
-  title?: string | null
-  status?: SyncTaskStatus | null
-  result?: string | null
-  updatedAt: number
-}
-
 export interface SyncAddWriterOperation {
   key: Buffer
 }
 
+export interface SyncDevice {
+  id: Buffer
+  writerKey: Buffer
+  name: string
+  joinedAt: number
+  revokedAt?: number
+}
+
+export interface SyncPutDeviceOperation {
+  device: SyncDevice
+}
+
+export interface SyncRenameDeviceOperation {
+  id: Buffer
+  name: string
+}
+
+export interface SyncRemoveWriterOperation {
+  id: Buffer
+  writerKey: Buffer
+  revokedAt: number
+}
+
+export interface SyncProfileOperation {
+  id: string
+  profileId: string
+  revision: string
+  command: Buffer
+}
+
+export interface SyncProfileHead {
+  id: string
+  revision: string
+}
+
+export interface SyncApplyProfileOperation {
+  profileId: string
+  operationId: string
+  revision: string
+  expectedRevision?: string | null
+  command: Buffer
+  inputCommand: Buffer
+  deviceId: Buffer
+  recordedAt: number
+}
+
+export type SyncDurableWorkOutcomeStatus = "completed" | "failed" | "cancelled"
+
+export interface SyncDurableWork {
+  workId: string
+  payload: Buffer
+  payloadFormat: string
+  payloadVersion: number
+  target?: string | null
+  createdAt: number
+  cancelRequested?: boolean
+  cancelReason?: string | null
+  outcomeStatus?: SyncDurableWorkOutcomeStatus | null
+  outcomeResult?: Buffer | null
+}
+
+export interface SyncDurableWorkJournalEntry {
+  id: string
+  workId: string
+  entryType: string
+  body: Buffer
+  recordedAt: number
+}
+
+export interface SyncDurableWorkCheckpoint {
+  workId: string
+  checkpointId: string
+  format: string
+  version: number
+  blobRef: string
+  recordedAt: number
+}
+
+export interface SyncDurableWorkGate {
+  id: string
+  workId: string
+  gateId: string
+  kind: string
+  decision?: string | null
+  recordedAt: number
+}
+
+export interface SyncDurableWorkExecutor {
+  executorId: string
+  capabilities: string[]
+  expiresAt: number
+  recordedAt: number
+}
+
 export interface SchemaTypes {
-  "@sync/task-status": SyncTaskStatus
-  "@sync/task": SyncTask
-  "@sync/put-task-operation": SyncPutTaskOperation
-  "@sync/update-task-operation": SyncUpdateTaskOperation
   "@sync/add-writer-operation": SyncAddWriterOperation
+  "@sync/device": SyncDevice
+  "@sync/put-device-operation": SyncPutDeviceOperation
+  "@sync/rename-device-operation": SyncRenameDeviceOperation
+  "@sync/remove-writer-operation": SyncRemoveWriterOperation
+  "@sync/profile-operation": SyncProfileOperation
+  "@sync/profile-head": SyncProfileHead
+  "@sync/apply-profile-operation": SyncApplyProfileOperation
+  "@sync/durable-work-outcome-status": SyncDurableWorkOutcomeStatus
+  "@sync/durable-work": SyncDurableWork
+  "@sync/durable-work-journal-entry": SyncDurableWorkJournalEntry
+  "@sync/durable-work-checkpoint": SyncDurableWorkCheckpoint
+  "@sync/durable-work-gate": SyncDurableWorkGate
+  "@sync/durable-work-executor": SyncDurableWorkExecutor
 }

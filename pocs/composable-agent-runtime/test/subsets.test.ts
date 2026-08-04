@@ -18,7 +18,7 @@ const ALLOWED = new Map<string, readonly string[]>([
   ['@qvac/sync', ['@qvac/supervisor']],
   [
     '@qvac/harness',
-    ['@qvac/agents', '@qvac/supervisor']
+    ['@qvac/agents', '@qvac/supervisor', '@qvac/sync']
   ],
   [
     '@qvac/assistant',

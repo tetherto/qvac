@@ -11,61 +11,96 @@ const VERSION = 1
 // eslint-disable-next-line no-unused-vars
 let version = VERSION
 
-// @local/user-profile
+// @local/mesh-session
 const encoding0 = {
   preencode(state, m) {
     c.string.preencode(state, m.id)
-    c.string.preencode(state, m.name)
+    c.fixed32.preencode(state, m.seed)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.key) c.fixed32.preencode(state, m.key)
+    if (m.writerSeed) c.fixed32.preencode(state, m.writerSeed)
   },
   encode(state, m) {
+    const flags = (m.key ? 1 : 0) | (m.writerSeed ? 2 : 0) | (m.creator ? 4 : 0)
+
     c.string.encode(state, m.id)
-    c.string.encode(state, m.name)
+    c.fixed32.encode(state, m.seed)
+    c.uint.encode(state, flags)
+
+    if (m.key) c.fixed32.encode(state, m.key)
+    if (m.writerSeed) c.fixed32.encode(state, m.writerSeed)
   },
   decode(state) {
     const r0 = c.string.decode(state)
-    const r1 = c.string.decode(state)
+    const r1 = c.fixed32.decode(state)
+    const flags = c.uint.decode(state)
 
     return {
       id: r0,
-      name: r1
+      seed: r1,
+      key: (flags & 1) !== 0 ? c.fixed32.decode(state) : null,
+      writerSeed: (flags & 2) !== 0 ? c.fixed32.decode(state) : null,
+      creator: (flags & 4) !== 0
     }
   }
 }
 
-// @local/mesh-session
+// @local/device
 const encoding1 = {
   preencode(state, m) {
-    c.string.preencode(state, m.id)
-    c.fixed32.preencode(state, m.seed)
-    state.end++ // max flag is 2 so always one byte
-
-    if (m.key) c.fixed32.preencode(state, m.key)
+    c.fixed32.preencode(state, m.id)
+    c.string.preencode(state, m.name)
   },
   encode(state, m) {
-    const flags = (m.key ? 1 : 0) | (m.creator ? 2 : 0)
-
-    c.string.encode(state, m.id)
-    c.fixed32.encode(state, m.seed)
-    c.uint.encode(state, flags)
-
-    if (m.key) c.fixed32.encode(state, m.key)
+    c.fixed32.encode(state, m.id)
+    c.string.encode(state, m.name)
   },
   decode(state) {
-    const r0 = c.string.decode(state)
-    const r1 = c.fixed32.decode(state)
-    const flags = c.uint.decode(state)
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.string.decode(state)
 
     return {
       id: r0,
-      seed: r1,
-      key: (flags & 1) !== 0 ? c.fixed32.decode(state) : null,
-      creator: (flags & 2) !== 0
+      name: r1
     }
   }
 }
 
-// @local/user-profile/hyperdb#0
+// @local/mesh-session/hyperdb#0
 const encoding2 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.seed)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.key) c.fixed32.preencode(state, m.key)
+    if (m.writerSeed) c.fixed32.preencode(state, m.writerSeed)
+  },
+  encode(state, m) {
+    const flags = (m.key ? 1 : 0) | (m.writerSeed ? 2 : 0) | (m.creator ? 4 : 0)
+
+    c.fixed32.encode(state, m.seed)
+    c.uint.encode(state, flags)
+
+    if (m.key) c.fixed32.encode(state, m.key)
+    if (m.writerSeed) c.fixed32.encode(state, m.writerSeed)
+  },
+  decode(state) {
+    const r1 = c.fixed32.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      seed: r1,
+      key: (flags & 1) !== 0 ? c.fixed32.decode(state) : null,
+      writerSeed: (flags & 2) !== 0 ? c.fixed32.decode(state) : null,
+      creator: (flags & 4) !== 0
+    }
+  }
+}
+
+// @local/device/hyperdb#1
+const encoding3 = {
   preencode(state, m) {
     c.string.preencode(state, m.name)
   },
@@ -78,35 +113,6 @@ const encoding2 = {
     return {
       id: null,
       name: r1
-    }
-  }
-}
-
-// @local/mesh-session/hyperdb#1
-const encoding3 = {
-  preencode(state, m) {
-    c.fixed32.preencode(state, m.seed)
-    state.end++ // max flag is 2 so always one byte
-
-    if (m.key) c.fixed32.preencode(state, m.key)
-  },
-  encode(state, m) {
-    const flags = (m.key ? 1 : 0) | (m.creator ? 2 : 0)
-
-    c.fixed32.encode(state, m.seed)
-    c.uint.encode(state, flags)
-
-    if (m.key) c.fixed32.encode(state, m.key)
-  },
-  decode(state) {
-    const r1 = c.fixed32.decode(state)
-    const flags = c.uint.decode(state)
-
-    return {
-      id: null,
-      seed: r1,
-      key: (flags & 1) !== 0 ? c.fixed32.decode(state) : null,
-      creator: (flags & 2) !== 0
     }
   }
 }
@@ -134,13 +140,13 @@ function getEnum(name) {
 
 function getEncoding(name) {
   switch (name) {
-    case '@local/user-profile':
-      return encoding0
     case '@local/mesh-session':
+      return encoding0
+    case '@local/device':
       return encoding1
-    case '@local/user-profile/hyperdb#0':
+    case '@local/mesh-session/hyperdb#0':
       return encoding2
-    case '@local/mesh-session/hyperdb#1':
+    case '@local/device/hyperdb#1':
       return encoding3
     default:
       throw new Error('Encoder not found ' + name)

@@ -8,6 +8,11 @@
     "apps/*"
   ],
   "scripts": {
+    "android:prebuild": "bun run --cwd apps/task-mobile android:prebuild",
+    "android": "bun run --cwd apps/task-mobile android",
+    "android:build": "bun run --cwd apps/task-mobile android:build",
+    "android:release": "bun run --cwd apps/task-mobile android:release",
+    "android:release:device": "bun run --cwd apps/task-mobile android:release:device",
     "test": "bun run scripts/test.ts",
     "test:supervisor": "bun run --cwd packages/supervisor test",
     "test:agents": "bun run --cwd packages/agents test",

@@ -5,6 +5,71 @@
 export interface RpcEmpty {
 }
 
+export interface RpcOk {
+  ok?: boolean
+}
+
+export type RpcRuntimePhase = "opening" | "ready" | "suspended" | "failed" | "closed"
+
+export type RpcNetworkState = "stopped" | "starting" | "online" | "offline" | "degraded"
+
+export interface RpcRuntimeStatus {
+  phase: RpcRuntimePhase
+  generation: string
+  network: RpcNetworkState
+  writable?: boolean
+  peerCount: number
+}
+
+export interface RpcRuntimeChildDiagnostic {
+  name: string
+  state: string
+  deps: string[]
+  networkInstanceId?: string | null
+  topicPresent?: boolean
+  discoveryTeardownComplete?: boolean
+}
+
+export interface RpcRuntimeDiagnostics {
+  children: RpcRuntimeChildDiagnostic[]
+}
+
+export type RpcMeshStatusState = "idle" | "joining" | "joined" | "leaving" | "kicked" | "error"
+
+export interface RpcMeshStatus {
+  state: RpcMeshStatusState
+  generation: string
+  meshKey?: Buffer | null
+  discoveryKey?: Buffer | null
+  writable?: boolean
+  peerCount: number
+  network: RpcNetworkState
+}
+
+export interface RpcMeshJoinRequest {
+  invite: Buffer
+}
+
+export interface RpcDevice {
+  id: Buffer
+  name: string
+  local?: boolean
+  joinedAt: number
+  revokedAt?: number
+}
+
+export interface RpcDeviceList {
+  devices: RpcDevice[]
+}
+
+export interface RpcRenameDeviceRequest {
+  name: string
+}
+
+export interface RpcRemoveDeviceRequest {
+  id: Buffer
+}
+
 export interface RpcRuntimeInfo {
   component: string
   runtime: string
@@ -18,52 +83,6 @@ export interface RpcRuntimeInfo {
 
 export interface RpcIdentity {
   deviceId: Buffer
-}
-
-export interface RpcUserProfile {
-  name: string
-}
-
-export interface RpcUserProfileResult {
-  profile?: RpcUserProfile | null
-}
-
-export type RpcTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled"
-
-export interface RpcTask {
-  id: string
-  title: string
-  input: string
-  status: RpcTaskStatus
-  result?: string | null
-  createdAt: number
-  updatedAt: number
-  originDeviceId: Buffer
-}
-
-export interface RpcCreateTaskRequest {
-  id: string
-  title: string
-  input: string
-}
-
-export interface RpcUpdateTaskRequest {
-  id: string
-  title?: string | null
-  status?: RpcTaskStatus | null
-  result?: string | null
-}
-
-export interface RpcTaskId {
-  id: string
-}
-
-export interface RpcTaskResult {
-  task?: RpcTask | null
-}
-
-export interface RpcTaskList {
-  tasks: RpcTask[]
 }
 
 export type RpcPairingStatus = "pending" | "approved" | "rejected"
@@ -93,23 +112,77 @@ export interface RpcPairingRequestList {
   requests: RpcPairingRequest[]
 }
 
+export interface RpcProfileApplyRequest {
+  profileId: string
+  version: number
+  generation: string
+  operationId: string
+  expectedRevision?: string | null
+  traceId?: string | null
+  command: Buffer
+}
+
+export interface RpcProfileApplyResult {
+  revision: string
+}
+
+export interface RpcProfileQueryRequest {
+  profileId: string
+  version: number
+  generation: string
+  query: Buffer
+}
+
+export interface RpcProfileQueryResult {
+  value: Buffer
+}
+
+export interface RpcProfileWatchRequest {
+  profileId: string
+  version: number
+  generation: string
+  query: Buffer
+  after?: string | null
+}
+
+export type RpcProfileWatchKind = "snapshot" | "change"
+
+export interface RpcProfileWatchFrame {
+  kind: RpcProfileWatchKind
+  generation: string
+  cursor: string
+  value?: Buffer | null
+  change?: Buffer | null
+}
+
 export interface SchemaTypes {
   "@rpc/empty": RpcEmpty
+  "@rpc/ok": RpcOk
+  "@rpc/runtime-phase": RpcRuntimePhase
+  "@rpc/network-state": RpcNetworkState
+  "@rpc/runtime-status": RpcRuntimeStatus
+  "@rpc/runtime-child-diagnostic": RpcRuntimeChildDiagnostic
+  "@rpc/runtime-diagnostics": RpcRuntimeDiagnostics
+  "@rpc/mesh-status-state": RpcMeshStatusState
+  "@rpc/mesh-status": RpcMeshStatus
+  "@rpc/mesh-join-request": RpcMeshJoinRequest
+  "@rpc/device": RpcDevice
+  "@rpc/device-list": RpcDeviceList
+  "@rpc/rename-device-request": RpcRenameDeviceRequest
+  "@rpc/remove-device-request": RpcRemoveDeviceRequest
   "@rpc/runtime-info": RpcRuntimeInfo
   "@rpc/identity": RpcIdentity
-  "@rpc/user-profile": RpcUserProfile
-  "@rpc/user-profile-result": RpcUserProfileResult
-  "@rpc/task-status": RpcTaskStatus
-  "@rpc/task": RpcTask
-  "@rpc/create-task-request": RpcCreateTaskRequest
-  "@rpc/update-task-request": RpcUpdateTaskRequest
-  "@rpc/task-id": RpcTaskId
-  "@rpc/task-result": RpcTaskResult
-  "@rpc/task-list": RpcTaskList
   "@rpc/pairing-status": RpcPairingStatus
   "@rpc/create-pairing-invite-request": RpcCreatePairingInviteRequest
   "@rpc/pairing-invite": RpcPairingInvite
   "@rpc/pairing-request-id": RpcPairingRequestId
   "@rpc/pairing-request": RpcPairingRequest
   "@rpc/pairing-request-list": RpcPairingRequestList
+  "@rpc/profile-apply-request": RpcProfileApplyRequest
+  "@rpc/profile-apply-result": RpcProfileApplyResult
+  "@rpc/profile-query-request": RpcProfileQueryRequest
+  "@rpc/profile-query-result": RpcProfileQueryResult
+  "@rpc/profile-watch-request": RpcProfileWatchRequest
+  "@rpc/profile-watch-kind": RpcProfileWatchKind
+  "@rpc/profile-watch-frame": RpcProfileWatchFrame
 }

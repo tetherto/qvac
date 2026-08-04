@@ -4,11 +4,15 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./sync-store": "./sync-store.ts"
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit --strict --target ES2022 --module Preserve --moduleResolution Bundler --allowImportingTsExtensions --erasableSyntaxOnly --skipLibCheck index.ts task-flow.test.ts"
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module Preserve --moduleResolution Bundler --allowImportingTsExtensions --erasableSyntaxOnly --skipLibCheck index.ts sync-store.ts task-flow.test.ts"
+  },
+  "dependencies": {
+    "@qvac/sync": "0.0.0-poc"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14"

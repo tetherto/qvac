@@ -38,12 +38,21 @@ interface InviteState {
 interface PendingRequest {
   readonly value: RpcPairingRequest
   readonly request: PairingMemberRequest
+  readonly device: {
+    readonly id: Buffer
+    readonly name: string
+  }
   resolve(decision: 'approved' | 'rejected'): void
 }
 
 export interface PairingResult {
   readonly meshKey: Buffer
   readonly meshSeed: Buffer
+}
+
+export interface PairingCancellation {
+  readonly aborted: boolean
+  onAbort(listener: () => void): () => void
 }
 
 export class PairingCoordinator {
@@ -95,6 +104,19 @@ export class PairingCoordinator {
   async approve(id: Buffer) {
     const pending = this.requirePending(id)
     await this.mesh.addWriter(pending.value.writerKey)
+    try {
+      await this.mesh.putDevice({
+        id: pending.device.id,
+        writerKey: pending.value.writerKey,
+        name: pending.device.name,
+        joinedAt: Date.now()
+      })
+    } catch (error) {
+      await this.mesh
+        .removeDevice(pending.device.id, pending.value.writerKey)
+        .catch(() => {})
+      throw error
+    }
     pending.value.status = 'approved'
     pending.resolve('approved')
     this.notify()
@@ -149,14 +171,26 @@ export class PairingCoordinator {
     }
 
     invite.used = true
+    let candidate: ReturnType<typeof decodeCandidate>
+    try {
+      candidate = decodeCandidate(request.userData)
+    } catch {
+      request.deny()
+      return
+    }
     const decision = new Promise<'approved' | 'rejected'>((resolve) => {
       const value: RpcPairingRequest = {
         id: request.id,
-        writerKey: request.userData,
-        fingerprint: fingerprint(request.userData),
+        writerKey: candidate.writerKey,
+        fingerprint: fingerprint(candidate.writerKey),
         status: 'pending'
       }
-      this.requests.set(request.id.toString('hex'), { value, request, resolve })
+      this.requests.set(request.id.toString('hex'), {
+        value,
+        request,
+        device: candidate.device,
+        resolve
+      })
     })
     this.notify()
 
@@ -187,18 +221,27 @@ export class PairingCoordinator {
 export async function pairWithHost(
   swarm: Hyperswarm,
   invite: Buffer,
-  writerKey: Buffer
+  writerKey: Buffer,
+  device: { readonly id: Buffer; readonly name: string },
+  cancellation?: PairingCancellation
 ): Promise<PairingResult> {
   const decoded = decodeInvite(invite)
   if (decoded.expires !== 0 && decoded.expires <= Date.now()) {
     throw new Error('Pairing invite has expired')
   }
   const pairing = new BlindPairing(swarm)
+  let removeAbort = () => {}
   try {
     return await new Promise<PairingResult>((resolve, reject) => {
+      const abort = () => reject(new Error('Pairing request was cancelled'))
+      removeAbort = cancellation?.onAbort(abort) ?? removeAbort
+      if (cancellation?.aborted) {
+        abort()
+        return
+      }
       const candidate = pairing.addCandidate({
         invite,
-        userData: writerKey,
+        userData: encodeCandidate(writerKey, device),
         onadd: (result: { readonly key: Buffer; readonly encryptionKey: Buffer }) => {
           resolve({ meshKey: result.key, meshSeed: result.encryptionKey })
         }
@@ -206,6 +249,7 @@ export async function pairWithHost(
       candidate.request.once('rejected', (error) => reject(normalizePairingError(error)))
     })
   } finally {
+    removeAbort()
     await pairing.close()
   }
 }
@@ -228,4 +272,43 @@ function normalizePairingError(error: Error & { readonly code?: string }) {
 function fingerprint(writerKey: Buffer) {
   const hex = writerKey.toString('hex')
   return `${hex.slice(0, 12)}:${hex.slice(-12)}`
+}
+
+function encodeCandidate(
+  writerKey: Buffer,
+  device: { readonly id: Buffer; readonly name: string }
+) {
+  return Buffer.from(
+    JSON.stringify({
+      writerKey: writerKey.toString('hex'),
+      deviceId: device.id.toString('hex'),
+      deviceName: device.name
+    })
+  )
+}
+
+function decodeCandidate(value: Buffer) {
+  try {
+    const parsed: unknown = JSON.parse(value.toString())
+    if (typeof parsed !== 'object' || parsed === null) throw new Error()
+    const writerKey = Reflect.get(parsed, 'writerKey')
+    const deviceId = Reflect.get(parsed, 'deviceId')
+    const deviceName = Reflect.get(parsed, 'deviceName')
+    if (
+      typeof writerKey !== 'string' ||
+      writerKey.length !== 64 ||
+      typeof deviceId !== 'string' ||
+      deviceId.length !== 64 ||
+      typeof deviceName !== 'string' ||
+      !deviceName.trim()
+    ) {
+      throw new Error()
+    }
+    return {
+      writerKey: Buffer.from(writerKey, 'hex'),
+      device: { id: Buffer.from(deviceId, 'hex'), name: deviceName }
+    }
+  } catch {
+    throw new Error('Pairing candidate identity is invalid')
+  }
 }

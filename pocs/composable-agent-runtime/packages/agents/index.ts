@@ -419,3 +419,13 @@ export function defineAgent(definition: AgentDefinition): DefinedAgent {
     }
   }
 }
+
+export type {
+  AgentStateStore,
+  AppendEvents,
+  Revision,
+  RunState,
+  SaveCheckpoint,
+  WatchWork,
+  WorkChange
+} from './lib/agent-state-store.ts'

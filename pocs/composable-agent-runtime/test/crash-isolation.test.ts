@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import stow from 'bare-stow'
 import { afterEach, describe, expect, test } from 'vitest'
 import { spawnHarness } from '@qvac/harness'
-import { spawnSync } from '@qvac/sync'
+import { spawnSync } from '@qvac/sync/testing'
 
 const temporary: string[] = []
 const root = new URL('..', import.meta.url)

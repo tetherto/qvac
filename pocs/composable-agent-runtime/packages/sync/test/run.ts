@@ -10,7 +10,7 @@ const commands = new Map<string, readonly string[]>([
       'test/all.ts'
     ]
   ],
-  ['bare', ['bare', 'test/all.ts']],
+  ['bare', ['bare', 'test/bare.ts']],
   [
     'spawn',
     [

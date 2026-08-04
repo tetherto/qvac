@@ -192,7 +192,7 @@ async function serve(
 ) {
   const controller = new AbortController()
   const removeSignalHandlers = installShutdownHandlers(controller)
-  const invite = await assistant.state.createPairingInvite({
+  const invite = await assistant.state.mesh.createInvite({
     expiresInMs: 30 * 60_000
   })
   console.log(formatPairingUri(invite))
@@ -238,7 +238,7 @@ async function approvePairingCandidates(
   })
   const handled = new Set<string>()
   const iterator =
-    assistant.state.watchPairingRequests()[Symbol.asyncIterator]()
+    assistant.state.mesh.watchPairingRequests()[Symbol.asyncIterator]()
   try {
     while (!signal.aborted) {
       const next = await nextUntilAbort(iterator, signal)
@@ -259,9 +259,9 @@ async function approvePairingCandidates(
         )
         if (signal.aborted) return
         if (approved) {
-          await assistant.state.approvePairingRequest({ id: request.id })
+          await assistant.state.mesh.approvePairingRequest(request.id)
         } else {
-          await assistant.state.rejectPairingRequest({ id: request.id })
+          await assistant.state.mesh.rejectPairingRequest(request.id)
         }
         writeOutput({
           mode: 'service',
@@ -363,7 +363,7 @@ async function observe(
 ) {
   await writeSnapshot(store)
   if (once) return
-  for await (const _tasks of assistant.state.watchTasks()) {
+  for await (const _tasks of store.watchTasks?.() ?? []) {
     await writeSnapshot(store)
   }
 }

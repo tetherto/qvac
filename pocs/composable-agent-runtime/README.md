@@ -56,10 +56,19 @@ aligned, the application root must override `bare-process` to `4.5.0` and
 constraints are missing.
 
 ```sh
-cd apps/task-mobile
-npx expo prebuild --clean --platform android
-npx expo run:android --device
+bun run android
 ```
+
+This clean-prebuilds, builds, installs, launches, and starts Metro. Build APKs
+without installing them, or install the release variant, with:
+
+```sh
+bun run android:build
+bun run android:release
+bun run android:release:device
+```
+
+The release APK uses the demo debug signing key and does not require Metro.
 
 The Android packaging PoC passed clean prebuild, debug APK validation, and a
 physical arm64 device run on 2026-07-29. The device run covered Sync and

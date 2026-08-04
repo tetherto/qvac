@@ -1,6 +1,5 @@
-import b4a from 'b4a'
 import path from 'path'
-import { SyncCore } from './lib/core.ts'
+import { SyncCore, type SyncCoreOptions } from './lib/core.ts'
 import { createIpcDuplex, type WorkletIPC } from './lib/mobile-ipc-duplex.ts'
 import { parseSyncWorkletArgv } from './lib/react-native-argv.ts'
 
@@ -15,10 +14,9 @@ interface SyncCoreLike {
 
 interface CreateSyncMobileEntryOptions {
   readonly readArgv?: () => readonly string[] | Promise<readonly string[]>
-  readonly createCore?: (options: {
-    readonly storagePath: string
-    readonly pairingInvite?: Buffer
-  }) => SyncCoreLike
+  readonly createCore?: (
+    options: SyncCoreOptions & { readonly storagePath: string }
+  ) => SyncCoreLike
   readonly createStream?: (ipc: WorkletIPC) => ReturnType<typeof createIpcDuplex>
   readonly markerExists?: (path: string) => Promise<boolean>
   readonly ensureStorage?: (path: string) => Promise<void>
@@ -37,14 +35,15 @@ export function createSyncMobileEntry({
     const processArgv = await readArgv()
     const options = parseSyncWorkletArgv(processArgv)
     const marker = path.join(options.storagePath, PAIRED_MARKER)
-    if (!options.invite && !(await markerExists(marker))) {
+    if (
+      !options.pairingInvite &&
+      !options.meshSeed &&
+      !(await markerExists(marker))
+    ) {
       throw new Error('A pairing URI is required before mobile Sync can reconnect')
     }
 
-    const core = createCore({
-      storagePath: options.storagePath,
-      ...(options.invite ? { pairingInvite: decodeInvite(options.invite) } : {})
-    })
+    const core = createCore(options)
     await core.ready()
     if (!core.writable) {
       await core.close()
@@ -67,12 +66,6 @@ export function createSyncMobileEntry({
 }
 
 export default createSyncMobileEntry()
-
-function decodeInvite(invite: string) {
-  const base64 = invite.replace(/-/g, '+').replace(/_/g, '/')
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4)
-  return b4a.from(`${base64}${padding}`, 'base64')
-}
 
 async function markerExistsDefault(marker: string) {
   const { stat } = await import('bare-fs/promises')

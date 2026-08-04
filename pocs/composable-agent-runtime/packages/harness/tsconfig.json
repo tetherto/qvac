@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
+    "allowJs": true,
     "allowImportingTsExtensions": true,
+    "checkJs": false,
     "erasableSyntaxOnly": true,
     "module": "Preserve",
     "moduleResolution": "Bundler",
@@ -23,6 +25,8 @@
     "deterministic-sdk-entry.ts",
     "qwen-sdk-entry.ts",
     "lib/**/*.ts",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "../sync/*.d.ts",
+    "../sync/spec/**/*.d.ts"
   ]
 }

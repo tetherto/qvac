@@ -3,14 +3,14 @@
   "offset": 0,
   "schema": [
     {
-      "name": "user-profile",
+      "name": "mesh-session",
       "namespace": "local",
       "id": 0,
       "type": 1,
       "version": 1,
       "versionField": null,
       "indexes": [],
-      "schema": "@local/user-profile",
+      "schema": "@local/mesh-session",
       "derived": false,
       "key": [
         "id"
@@ -18,14 +18,14 @@
       "trigger": null
     },
     {
-      "name": "mesh-session",
+      "name": "device",
       "namespace": "local",
       "id": 1,
       "type": 1,
       "version": 1,
       "versionField": null,
       "indexes": [],
-      "schema": "@local/mesh-session",
+      "schema": "@local/device",
       "derived": false,
       "key": [
         "id"

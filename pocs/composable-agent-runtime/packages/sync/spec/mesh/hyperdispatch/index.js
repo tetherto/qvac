@@ -11,20 +11,28 @@ class Router {
     this._handler0 = null
     this._handler1 = null
     this._handler2 = null
+    this._handler3 = null
+    this._handler4 = null
 
-    this._missing = 3
+    this._missing = 5
   }
 
   add (name, handler) {
     switch (name) {
-      case '@sync/put-task':
+      case '@sync/add-writer':
         this._handler0 = handler
         break
-      case '@sync/update-task':
+      case '@sync/put-device':
         this._handler1 = handler
         break
-      case '@sync/add-writer':
+      case '@sync/rename-device':
         this._handler2 = handler
+        break
+      case '@sync/remove-writer':
+        this._handler3 = handler
+        break
+      case '@sync/apply-profile':
+        this._handler4 = handler
         break
       default:
         throw DispatchError.NONEXISTENT_ROUTE(name)
@@ -33,9 +41,11 @@ class Router {
   }
 
   _checkAll () {
-    assert(this._handler0 !== null, 'Missing handler for "@sync/put-task"')
-    assert(this._handler1 !== null, 'Missing handler for "@sync/update-task"')
-    assert(this._handler2 !== null, 'Missing handler for "@sync/add-writer"')
+    assert(this._handler0 !== null, 'Missing handler for "@sync/add-writer"')
+    assert(this._handler1 !== null, 'Missing handler for "@sync/put-device"')
+    assert(this._handler2 !== null, 'Missing handler for "@sync/rename-device"')
+    assert(this._handler3 !== null, 'Missing handler for "@sync/remove-writer"')
+    assert(this._handler4 !== null, 'Missing handler for "@sync/apply-profile"')
   }
 
   async dispatch (message, context) {
@@ -54,6 +64,10 @@ class Router {
         return this._handler1(op.value, context)
       case 2:
         return this._handler2(op.value, context)
+      case 3:
+        return this._handler3(op.value, context)
+      case 4:
+        return this._handler4(op.value, context)
       default:
         throw DispatchError.HANDLER_NOT_FOUND_BY_ID(op.id)
     }
@@ -88,31 +102,47 @@ function decode (buffer, { version = defaultVersion } = {}) {
 }
 
 const route0 = {
-  name: '@sync/put-task',
+  name: '@sync/add-writer',
   id: 0,
-  enc: getEncoding('@sync/put-task-operation')
+  enc: getEncoding('@sync/add-writer-operation')
 }
 
 const route1 = {
-  name: '@sync/update-task',
+  name: '@sync/put-device',
   id: 1,
-  enc: getEncoding('@sync/update-task-operation')
+  enc: getEncoding('@sync/put-device-operation')
 }
 
 const route2 = {
-  name: '@sync/add-writer',
+  name: '@sync/rename-device',
   id: 2,
-  enc: getEncoding('@sync/add-writer-operation')
+  enc: getEncoding('@sync/rename-device-operation')
+}
+
+const route3 = {
+  name: '@sync/remove-writer',
+  id: 3,
+  enc: getEncoding('@sync/remove-writer-operation')
+}
+
+const route4 = {
+  name: '@sync/apply-profile',
+  id: 4,
+  enc: getEncoding('@sync/apply-profile-operation')
 }
 
 function getRouteByName (name) {
   switch (name) {
-    case '@sync/put-task':
-      return route0
-    case '@sync/update-task':
-      return route1
     case '@sync/add-writer':
+      return route0
+    case '@sync/put-device':
+      return route1
+    case '@sync/rename-device':
       return route2
+    case '@sync/remove-writer':
+      return route3
+    case '@sync/apply-profile':
+      return route4
     default:
       throw DispatchError.ROUTE_NOT_FOUND_BY_NAME(name)
   }
@@ -126,6 +156,10 @@ function getRouteById (id) {
       return route1
     case 2:
       return route2
+    case 3:
+      return route3
+    case 4:
+      return route4
     default:
       throw DispatchError.HANDLER_NOT_FOUND_BY_ID(id)
   }

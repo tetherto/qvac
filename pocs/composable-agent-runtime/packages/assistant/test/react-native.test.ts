@@ -5,6 +5,7 @@ import {
   duplexPair,
   type HarnessRuntime
 } from '@qvac/harness'
+import type { SyncRuntime } from '@qvac/sync'
 import { createAssistant } from '../index.ts'
 import {
   createReactNativeAssistantComponents
@@ -14,18 +15,6 @@ describe('react-native assistant adapters', () => {
   it('starts sync and harness via package-owned launchers', async () => {
     const syncLaunches: Array<{ storagePath: string }> = []
     const harnessLaunches: Array<{ id: string; args: readonly string[] }> = []
-    const tasks = new Map<
-      string,
-      {
-        id: string
-        title: string | null
-        input: string
-        status: string
-        result: string | null
-        createdAt: number
-        updatedAt: number
-      }
-    >()
     const [assistantHarnessChannel] = duplexPair()
     const [assistantSdkChannel] = duplexPair()
     const closeOrder: string[] = []
@@ -82,102 +71,9 @@ describe('react-native assistant adapters', () => {
         logging: { level: 'debug' }
       },
       {
-        syncLauncher: {
-          async launch(options) {
-            syncLaunches.push({ storagePath: options.storagePath })
-            return {
-              backend: {
-                ready: async () => {},
-                close: async () => {},
-                describeRuntime: async () => ({
-                  component: 'sync',
-                  runtime: 'bare',
-                  instanceId: 'sync-mobile-test',
-                  processId: 9,
-                  contract: 'qvac.sync',
-                  protocolVersion: 1,
-                  capabilities: [
-                    'local-profile',
-                    'tasks',
-                    'task-watches',
-                    'passive-replication',
-                    'writer-pairing'
-                  ],
-                  buildVersion: '0.0.0-poc'
-                }),
-                getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-                getUserProfile: async () => ({ profile: null }),
-                setUserProfile: async (profile) => profile,
-                createTask: async (request) => {
-                  const task = {
-                    id: request.id,
-                    title: request.title,
-                    input: request.input,
-                    status: 'pending',
-                    result: null,
-                    createdAt: 0,
-                    updatedAt: 0
-                  }
-                  tasks.set(request.id, task)
-                  return task as never
-                },
-                updateTask: async (request) => {
-                  const existing =
-                    tasks.get(request.id) ?? {
-                      id: request.id,
-                      title: null,
-                      input: '',
-                      status: 'pending',
-                      result: null,
-                      createdAt: 0,
-                      updatedAt: 0
-                    }
-                  const next = {
-                    ...existing,
-                    ...(request.title === undefined ? {} : { title: request.title }),
-                    ...(request.status === undefined
-                      ? {}
-                      : {
-                          status:
-                            request.status === null
-                              ? existing.status
-                              : request.status
-                        }),
-                    ...(request.result === undefined
-                      ? {}
-                      : { result: request.result })
-                  }
-                  tasks.set(request.id, next)
-                  return next as never
-                },
-                getTask: async ({ id }) => ({ task: tasks.get(id) ?? null }) as never,
-                listTasks: async () => ({ tasks: [...tasks.values()] }) as never,
-                watchTasks() {
-                  return (async function* () {
-                    yield { tasks: [] }
-                  })()
-                },
-                createPairingInvite: async () =>
-                  ({ invite: Buffer.from('invite') }) as never,
-                approvePairingRequest: async ({ id }) => ({
-                  id,
-                  requestedAt: 0,
-                  status: 'approved'
-                }) as never,
-                rejectPairingRequest: async ({ id }) => ({
-                  id,
-                  requestedAt: 0,
-                  status: 'rejected'
-                }) as never,
-                watchPairingRequests() {
-                  return (async function* () {
-                    yield { requests: [] }
-                  })()
-                }
-              },
-              async terminate() {}
-            }
-          }
+        createSyncRuntime(options) {
+          syncLaunches.push({ storagePath: options.storagePath })
+          return createFakeSyncRuntime()
         },
         harnessLauncher: {
           async start(id, _options, args = []) {
@@ -240,7 +136,6 @@ describe('react-native assistant adapters', () => {
       events.push(event)
     }
     expect(events).toEqual([{ type: 'content', text: 'hello from sdk' }])
-    expect(tasks.get('@harness/run-mobile-1')?.result).toBe(JSON.stringify(events))
     expect(await assistant.readRun('run-mobile-1')).toEqual(events)
     expect(assistant.inspect().sdkStarts).toBe(1)
     expect(assistant.inspect().children[1]?.details?.sdkIdentity).toMatchObject({
@@ -258,9 +153,9 @@ describe('react-native assistant adapters', () => {
         })
       )
     ).rejects.toThrow('remote run failed')
-    expect(tasks.get('@harness/run-mobile-error')?.result).toBe(
-      JSON.stringify([{ type: 'content', text: 'hello from sdk' }])
-    )
+    expect(await assistant.readRun('run-mobile-error')).toEqual([
+      { type: 'content', text: 'hello from sdk' }
+    ])
 
     for await (const _event of assistant.run({
       runId: 'run-mobile-abort',
@@ -270,9 +165,9 @@ describe('react-native assistant adapters', () => {
     })) {
       break
     }
-    expect(tasks.get('@harness/run-mobile-abort')?.result).toBe(
-      JSON.stringify([{ type: 'content', text: 'hello from sdk' }])
-    )
+    expect(await assistant.readRun('run-mobile-abort')).toEqual([
+      { type: 'content', text: 'hello from sdk' }
+    ])
 
     const pendingRun = assistant
       .run({
@@ -285,17 +180,13 @@ describe('react-native assistant adapters', () => {
     await pendingRun.next()
     await assistant.close()
     await assistant.close()
-    expect(tasks.get('@harness/run-mobile-close')?.result).toBe(
-      JSON.stringify([{ type: 'content', text: 'hello from sdk' }])
-    )
     expect(closeOrder).toEqual(['harness-hrpc', 'sdk-bridge', 'worklet'])
   })
 
   it('fails closed on sync and harness handshake mismatches', async () => {
     const okSyncCapabilities = [
-      'local-profile',
-      'tasks',
-      'task-watches',
+      'profile-protocol',
+      'durable-work',
       'passive-replication',
       'writer-pairing'
     ] as const
@@ -303,20 +194,7 @@ describe('react-native assistant adapters', () => {
 
     const makeSync = (contract: string, protocolVersion: number, capabilities: readonly string[]) => {
       return {
-        state: {
-          getIdentity: async () => ({ deviceId: Buffer.from('x') }),
-          getUserProfile: async () => ({ profile: null }),
-          setUserProfile: async () => ({}),
-          createTask: async () => ({}),
-          updateTask: async () => ({}),
-          getTask: async () => ({ task: null }),
-          listTasks: async () => ({ tasks: [] }),
-          watchTasks: async function* () {},
-          createPairingInvite: async () => ({ invite: Buffer.from('invite') }),
-          approvePairingRequest: async ({ id }: { id: Buffer }) => ({ id }),
-          rejectPairingRequest: async ({ id }: { id: Buffer }) => ({ id }),
-          watchPairingRequests: async function* () {}
-        },
+        state: createFakeSyncRuntime(),
         handshake: {
           contract,
           protocolVersion,
@@ -380,70 +258,12 @@ describe('react-native assistant adapters', () => {
         storagePath: '/tmp/rn-assistant-disconnect'
       },
       {
-        syncLauncher: {
-          async launch(options) {
-            syncDisconnect = options.onDisconnect
-            return {
-              backend: {
-                ready: async () => {},
-                close: async () => {},
-                describeRuntime: async () => ({
-                  component: 'sync',
-                  runtime: 'bare',
-                  instanceId: 'sync-mobile',
-                  processId: 3,
-                  contract: 'qvac.sync',
-                  protocolVersion: 1,
-                  capabilities: [
-                    'local-profile',
-                    'tasks',
-                    'task-watches',
-                    'passive-replication',
-                    'writer-pairing'
-                  ],
-                  buildVersion: '0.0.0-poc'
-                }),
-                getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-                getUserProfile: async () => ({ profile: null }),
-                setUserProfile: async (profile) => profile,
-                createTask: async (request) => ({
-                  id: request.id,
-                  title: request.title,
-                  input: request.input,
-                  status: 'pending',
-                  result: null,
-                  createdAt: 0,
-                  updatedAt: 0
-                }) as never,
-                updateTask: async (request) => ({
-                  id: request.id,
-                  title: request.title ?? null,
-                  input: '',
-                  status: request.status ?? 'pending',
-                  result: request.result ?? null,
-                  createdAt: 0,
-                  updatedAt: 0
-                }) as never,
-                getTask: async () => ({ task: null }) as never,
-                listTasks: async () => ({ tasks: [] }) as never,
-                watchTasks: async function* () {},
-                createPairingInvite: async () =>
-                  ({ invite: Buffer.from('invite') }) as never,
-                approvePairingRequest: async ({ id }) => ({
-                  id,
-                  requestedAt: 0,
-                  status: 'approved'
-                }) as never,
-                rejectPairingRequest: async ({ id }) => ({
-                  id,
-                  requestedAt: 0,
-                  status: 'rejected'
-                }) as never,
-                watchPairingRequests: async function* () {}
-              },
-              async terminate() {}
+        createSyncRuntime() {
+          return createFakeSyncRuntime({
+            onExit(exit) {
+              syncDisconnect = exit
             }
-          }
+          })
         },
         harnessLauncher: {
           async start() {
@@ -459,7 +279,11 @@ describe('react-native assistant adapters', () => {
     const syncComponent = await components.startSync()
     const triggerDisconnect = syncDisconnect as (() => void) | null
     triggerDisconnect?.()
-    await expect(syncComponent.exited).resolves.toEqual({ code: null, signal: null })
+    await expect(syncComponent.exited).resolves.toEqual({
+      kind: 'crashed',
+      code: null,
+      signal: null
+    })
   })
 
   it('package exports include react-native default selection', async () => {
@@ -491,7 +315,7 @@ describe('react-native assistant adapters', () => {
       if (seen.has(path)) continue
       seen.add(path)
       const source = await readFile(path, 'utf8')
-      expect(source.includes("from 'node:")).toBe(false)
+      expect(source.includes("from 'node:"), path).toBe(false)
       const imports = [
         ...source.matchAll(/from ['"]([^'"]+)['"]/g),
         ...source.matchAll(/import\(['"]([^'"]+)['"]\)/g)
@@ -521,37 +345,17 @@ describe('react-native assistant adapters', () => {
         storagePath: '/tmp/rn-assistant-startup-fail'
       },
       {
-        syncLauncher: {
-          async launch() {
-            return {
-              backend: {
-                ready: async () => {},
-                close: async () => {
-                  closeCalled = true
-                },
-                describeRuntime: async () => {
-                  throw new Error('describe failed')
-                },
-                getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-                getUserProfile: async () => ({ profile: null }),
-                setUserProfile: async (profile) => profile,
-                createTask: async () => ({} as never),
-                updateTask: async () => ({} as never),
-                getTask: async () => ({ task: null }) as never,
-                listTasks: async () => ({ tasks: [] }) as never,
-                watchTasks: async function* () {},
-                createPairingInvite: async () =>
-                  ({ invite: Buffer.from('invite') }) as never,
-                approvePairingRequest: async () => ({} as never),
-                rejectPairingRequest: async () => ({} as never),
-                watchPairingRequests: async function* () {}
-              },
-              async terminate() {
-                await new Promise((resolve) => setTimeout(resolve, 5))
-                terminateFinished = true
-              }
+        createSyncRuntime() {
+          return createFakeSyncRuntime({
+            describe: async () => {
+              throw new Error('describe failed')
+            },
+            async close() {
+              closeCalled = true
+              await new Promise((resolve) => setTimeout(resolve, 5))
+              terminateFinished = true
             }
-          }
+          })
         },
         harnessLauncher: {
           async start() {
@@ -575,20 +379,7 @@ describe('react-native assistant adapters', () => {
     })
     await expect(
       components.startHarness({
-        state: {
-          getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-          getUserProfile: async () => ({ profile: null }),
-          setUserProfile: async () => ({} as never),
-          createTask: async () => ({} as never),
-          updateTask: async () => ({} as never),
-          getTask: async () => ({ task: null }) as never,
-          listTasks: async () => ({ tasks: [] }) as never,
-          watchTasks: async function* () {},
-          createPairingInvite: async () => ({ invite: Buffer.from('invite') }) as never,
-          approvePairingRequest: async () => ({} as never),
-          rejectPairingRequest: async () => ({} as never),
-          watchPairingRequests: async function* () {}
-        }
+        state: createFakeSyncRuntime()
       })
     ).rejects.toThrow('unsupported mobile inference')
   })
@@ -601,10 +392,8 @@ describe('react-native assistant adapters', () => {
         storagePath: '/tmp/rn-assistant-harness-startup-fail'
       },
       {
-        syncLauncher: {
-          async launch() {
-            throw new Error('unused')
-          }
+        createSyncRuntime() {
+          throw new Error('unused')
         },
         harnessLauncher: {
           async start() {
@@ -636,20 +425,7 @@ describe('react-native assistant adapters', () => {
     )
     await expect(
       components.startHarness({
-        state: {
-          getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-          getUserProfile: async () => ({ profile: null }),
-          setUserProfile: async () => ({} as never),
-          createTask: async () => ({} as never),
-          updateTask: async () => ({} as never),
-          getTask: async () => ({ task: null }) as never,
-          listTasks: async () => ({ tasks: [] }) as never,
-          watchTasks: async function* () {},
-          createPairingInvite: async () => ({ invite: Buffer.from('invite') }) as never,
-          approvePairingRequest: async () => ({} as never),
-          rejectPairingRequest: async () => ({} as never),
-          watchPairingRequests: async function* () {}
-        }
+        state: createFakeSyncRuntime()
       })
     ).rejects.toThrow('bridge startup failed')
     expect(bridgeClosed).toBe(true)
@@ -663,10 +439,8 @@ describe('react-native assistant adapters', () => {
         storagePath: '/tmp/rn-assistant-close-reject'
       },
       {
-        syncLauncher: {
-          async launch() {
-            throw new Error('unused')
-          }
+        createSyncRuntime() {
+          throw new Error('unused')
         },
         harnessLauncher: {
           async start() {
@@ -720,25 +494,146 @@ describe('react-native assistant adapters', () => {
       }
     )
     const started = await components.startHarness({
-      state: {
-        getIdentity: async () => ({ deviceId: Buffer.from('id') }),
-        getUserProfile: async () => ({ profile: null }),
-        setUserProfile: async () => ({} as never),
-        createTask: async () => ({} as never),
-        updateTask: async () => ({} as never),
-        getTask: async () => ({ task: null }) as never,
-        listTasks: async () => ({ tasks: [] }) as never,
-        watchTasks: async function* () {},
-        createPairingInvite: async () => ({ invite: Buffer.from('invite') }) as never,
-        approvePairingRequest: async () => ({} as never),
-        rejectPairingRequest: async () => ({} as never),
-        watchPairingRequests: async function* () {}
-      }
+      state: createFakeSyncRuntime()
     })
     await expect(started.close()).rejects.toThrow('remote close failed')
     expect(calls).toEqual(['remote-close', 'bridge-close', 'terminate'])
   })
 })
+
+function createFakeSyncRuntime(
+  options: {
+    readonly describe?: SyncRuntime['runtime']['describe']
+    readonly close?: () => Promise<void>
+    readonly onExit?: (exit: () => void) => void
+  } = {}
+): SyncRuntime {
+  const works = new Map<string, { entries: unknown[] }>()
+  let resolveExit!: (exit: {
+    kind: 'closed' | 'crashed'
+    code: number | null
+    signal: string | null
+  }) => void
+  const exited = new Promise<{
+    kind: 'closed' | 'crashed'
+    code: number | null
+    signal: string | null
+  }>((resolve) => {
+    resolveExit = resolve
+  })
+  options.onExit?.(() => {
+    resolveExit({ kind: 'crashed', code: null, signal: null })
+  })
+
+  const lifecycle = {
+    async suspend() {},
+    async resume() {}
+  }
+  return {
+    exited,
+    async ready() {},
+    ...lifecycle,
+    async close() {
+      await options.close?.()
+      resolveExit({ kind: 'closed', code: null, signal: null })
+    },
+    lifecycle,
+    runtime: {
+      describe:
+        options.describe ??
+        (async () => ({
+          component: 'sync',
+          runtime: 'bare',
+          instanceId: 'sync-mobile-test',
+          processId: 9,
+          contract: 'qvac.sync',
+          protocolVersion: 1,
+          capabilities: [
+            'profile-protocol',
+            'durable-work',
+            'passive-replication',
+            'writer-pairing',
+            'dynamic-membership',
+            'runtime-lifecycle',
+            'device-management'
+          ],
+          buildVersion: '0.0.0-poc'
+        })),
+      async status() {
+        return { phase: 'ready', generation: 1, networkState: 'joined' } as never
+      },
+      async diagnostics() {
+        return { children: [] } as never
+      }
+    },
+    mesh: {
+      async identity() {
+        return { deviceId: Buffer.from('id') } as never
+      },
+      async status() {
+        return { state: 'joined' } as never
+      },
+      watchStatus: async function* () {},
+      async createInvite() {
+        return {
+          id: Buffer.alloc(16),
+          invite: Buffer.from('invite'),
+          expiresAt: Date.now() + 60_000
+        }
+      },
+      watchPairingRequests: async function* () {},
+      async approvePairingRequest() {
+        return {} as never
+      },
+      async rejectPairingRequest() {
+        return {} as never
+      },
+      async join() {},
+      async cancelJoin() {},
+      async leave() {},
+      async listDevices() {
+        return []
+      },
+      watchDevices: async function* () {},
+      async renameDevice() {
+        return {} as never
+      },
+      async removeDevice() {}
+    },
+    openProfile() {
+      return {
+        async apply(command: unknown) {
+          const value = command as {
+            type: string
+            workId: string
+            entryType?: string
+            body?: unknown
+          }
+          if (value.type === 'record-work') {
+            works.set(value.workId, { entries: [] })
+          } else if (value.type === 'append-journal') {
+            const work = works.get(value.workId) ?? { entries: [] }
+            work.entries.push({
+              entryType: value.entryType,
+              body: value.body
+            })
+            works.set(value.workId, work)
+          }
+          return {} as never
+        },
+        async query(query: unknown) {
+          const value = query as { type: string; workId: string }
+          const work = works.get(value.workId)
+          if (value.type === 'get-work') {
+            return { work: work ? { workId: value.workId } : null } as never
+          }
+          return { entries: work?.entries ?? [] } as never
+        },
+        watch: async function* () {}
+      }
+    }
+  } as unknown as SyncRuntime
+}
 
 async function collect<T>(events: AsyncIterable<T>) {
   const collected: T[] = []

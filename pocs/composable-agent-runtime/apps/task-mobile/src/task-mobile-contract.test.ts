@@ -56,9 +56,27 @@ describe('task-mobile clean consumer contract', () => {
     const scripts = packageJson.scripts ?? {}
     const dependencies = packageJson.dependencies ?? {}
     const devDependencies = packageJson.devDependencies ?? {}
-    expect(scripts.start).toBe('npx expo start --dev-client')
-    expect(scripts.android).toBe('npx expo run:android --device')
-    expect(scripts.ios).toBe('npx expo run:ios --device')
+    expect(scripts.start).toBe('expo start --dev-client')
+    expect(scripts.ios).toBe('expo run:ios --device')
+    expect(scripts['android:prebuild']).toBe(
+      'expo prebuild --clean --platform android --no-install'
+    )
+    expect(scripts.preandroid).toBe('bun run android:prebuild')
+    expect(scripts.android).toBe('expo run:android --device')
+    expect(scripts['preandroid:build']).toBe('bun run android:prebuild')
+    expect(scripts['android:build']).toBe(
+      './android/gradlew -p android app:assembleDebug'
+    )
+    expect(scripts['preandroid:release']).toBe('bun run android:prebuild')
+    expect(scripts['android:release']).toBe(
+      './android/gradlew -p android app:assembleRelease'
+    )
+    expect(scripts['preandroid:release:device']).toBe(
+      'bun run android:prebuild'
+    )
+    expect(scripts['android:release:device']).toBe(
+      'expo run:android --variant release --device'
+    )
     expect(dependencies['expo-build-properties']).toBe('~1.0.10')
     expect(dependencies['bare-link']).toBeDefined()
     for (const command of Object.values(scripts)) {
@@ -84,6 +102,21 @@ describe('task-mobile clean consumer contract', () => {
     )
     expect(rootPackage.scripts?.['validate:artifacts']).toBe(
       'bun run scripts/validate-artifacts.ts'
+    )
+    expect(rootPackage.scripts?.['android:prebuild']).toBe(
+      'bun run --cwd apps/task-mobile android:prebuild'
+    )
+    expect(rootPackage.scripts?.android).toBe(
+      'bun run --cwd apps/task-mobile android'
+    )
+    expect(rootPackage.scripts?.['android:build']).toBe(
+      'bun run --cwd apps/task-mobile android:build'
+    )
+    expect(rootPackage.scripts?.['android:release']).toBe(
+      'bun run --cwd apps/task-mobile android:release'
+    )
+    expect(rootPackage.scripts?.['android:release:device']).toBe(
+      'bun run --cwd apps/task-mobile android:release:device'
     )
     expect(verifySource.includes("'test:artifacts'")).toBeTrue()
   })

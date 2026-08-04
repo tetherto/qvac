@@ -2,6 +2,7 @@ import type { WorkletIPC } from './mobile-ipc-duplex.ts'
 import { createIpcDuplex } from './mobile-ipc-duplex.ts'
 import { SyncClient } from './client.ts'
 import { createSyncWorkletArgv } from './react-native-argv.ts'
+import type { CreateSyncOptions } from './runtime/types.ts'
 
 interface StartedHarness {
   readonly ipc: WorkletIPC & {
@@ -23,66 +24,15 @@ interface LaunchHarnessFn {
 interface SyncClientLike {
   ready(): Promise<void>
   close(): Promise<void>
-  describeRuntime(): ReturnType<SyncClient['describeRuntime']>
-  getIdentity(): ReturnType<SyncClient['getIdentity']>
-  getUserProfile(): ReturnType<SyncClient['getUserProfile']>
-  setUserProfile(
-    profile: Parameters<SyncClient['setUserProfile']>[0]
-  ): ReturnType<SyncClient['setUserProfile']>
-  createTask(request: Parameters<SyncClient['createTask']>[0]): ReturnType<SyncClient['createTask']>
-  updateTask(
-    request: Parameters<SyncClient['updateTask']>[0]
-  ): ReturnType<SyncClient['updateTask']>
-  getTask(request: Parameters<SyncClient['getTask']>[0]): ReturnType<SyncClient['getTask']>
-  listTasks(): ReturnType<SyncClient['listTasks']>
-  watchTasks(): ReturnType<SyncClient['watchTasks']>
-  createPairingInvite(
-    request?: Parameters<SyncClient['createPairingInvite']>[0]
-  ): ReturnType<SyncClient['createPairingInvite']>
-  approvePairingRequest(
-    request: Parameters<SyncClient['approvePairingRequest']>[0]
-  ): ReturnType<SyncClient['approvePairingRequest']>
-  rejectPairingRequest(
-    request: Parameters<SyncClient['rejectPairingRequest']>[0]
-  ): ReturnType<SyncClient['rejectPairingRequest']>
-  watchPairingRequests(): ReturnType<SyncClient['watchPairingRequests']>
 }
 
-export interface ReactNativeSyncLaunchOptions {
-  readonly storagePath: string
-  readonly invite?: string
+export interface ReactNativeSyncLaunchOptions extends CreateSyncOptions {
   readonly onDisconnect: () => void
 }
 
 export interface ReactNativeSyncLauncher {
   launch(options: ReactNativeSyncLaunchOptions): Promise<{
-    readonly backend: {
-      ready(): Promise<void>
-      close(): Promise<void>
-      describeRuntime(): ReturnType<SyncClient['describeRuntime']>
-      getIdentity(): ReturnType<SyncClient['getIdentity']>
-      getUserProfile(): ReturnType<SyncClient['getUserProfile']>
-      setUserProfile(
-        profile: Parameters<SyncClient['setUserProfile']>[0]
-      ): ReturnType<SyncClient['setUserProfile']>
-      createTask(request: Parameters<SyncClient['createTask']>[0]): ReturnType<SyncClient['createTask']>
-      updateTask(
-        request: Parameters<SyncClient['updateTask']>[0]
-      ): ReturnType<SyncClient['updateTask']>
-      getTask(request: Parameters<SyncClient['getTask']>[0]): ReturnType<SyncClient['getTask']>
-      listTasks(): ReturnType<SyncClient['listTasks']>
-      watchTasks(): ReturnType<SyncClient['watchTasks']>
-      createPairingInvite(
-        request?: Parameters<SyncClient['createPairingInvite']>[0]
-      ): ReturnType<SyncClient['createPairingInvite']>
-      approvePairingRequest(
-        request: Parameters<SyncClient['approvePairingRequest']>[0]
-      ): ReturnType<SyncClient['approvePairingRequest']>
-      rejectPairingRequest(
-        request: Parameters<SyncClient['rejectPairingRequest']>[0]
-      ): ReturnType<SyncClient['rejectPairingRequest']>
-      watchPairingRequests(): ReturnType<SyncClient['watchPairingRequests']>
-    }
+    readonly backend: SyncClientLike
     terminate(): Promise<void>
   }>
 }
@@ -104,23 +54,7 @@ export function createReactNativeSyncLauncher({
       let terminated = false
       started.ipc.once?.('close', options.onDisconnect)
       return {
-        backend: {
-          ready: () => client.ready(),
-          close: () => client.close(),
-          describeRuntime: () => client.describeRuntime(),
-          getIdentity: () => client.getIdentity(),
-          getUserProfile: () => client.getUserProfile(),
-          setUserProfile: (profile) => client.setUserProfile(profile),
-          createTask: (request) => client.createTask(request),
-          updateTask: (request) => client.updateTask(request),
-          getTask: (request) => client.getTask(request),
-          listTasks: () => client.listTasks(),
-          watchTasks: () => client.watchTasks(),
-          createPairingInvite: (request) => client.createPairingInvite(request),
-          approvePairingRequest: (request) => client.approvePairingRequest(request),
-          rejectPairingRequest: (request) => client.rejectPairingRequest(request),
-          watchPairingRequests: () => client.watchPairingRequests()
-        },
+        backend: client,
         async terminate() {
           if (terminated) return
           terminated = true
@@ -138,7 +72,18 @@ export function createReactNativeSyncLauncher({
 
 export function createSyncRuntimeArgs({
   storagePath,
-  invite
-}: Pick<ReactNativeSyncLaunchOptions, 'storagePath' | 'invite'>) {
-  return createSyncWorkletArgv({ storagePath, invite })
+  bootstrap,
+  meshSeed,
+  meshKey,
+  pairingInvite,
+  logging
+}: Omit<ReactNativeSyncLaunchOptions, 'onDisconnect'>) {
+  return createSyncWorkletArgv({
+    storagePath,
+    bootstrap,
+    meshSeed,
+    meshKey,
+    pairingInvite,
+    logging
+  })
 }

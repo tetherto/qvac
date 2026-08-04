@@ -1,4 +1,4 @@
-const scripts = ['test:fast', 'test:bare', 'test:spawn']
+const scripts = ['test:fast', 'test:node', 'test:bare', 'test:spawn']
 const root = new URL('..', import.meta.url).pathname
 
 for (const script of scripts) {

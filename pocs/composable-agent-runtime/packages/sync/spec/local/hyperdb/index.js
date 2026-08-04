@@ -6,7 +6,7 @@ import { version, getEncoding, setVersion } from './messages.js'
 
 const versions = { schema: version, db: 1 }
 
-// '@local/user-profile' collection key
+// '@local/mesh-session' collection key
 const collection0_key = new IndexEncoder([
   IndexEncoder.STRING
 ], { prefix: 0 })
@@ -16,10 +16,10 @@ function collection0_indexify (record) {
   return a === undefined ? [] : [a]
 }
 
-// '@local/user-profile' value encoding
-const collection0_enc = getEncoding('@local/user-profile/hyperdb#0')
+// '@local/mesh-session' value encoding
+const collection0_enc = getEncoding('@local/mesh-session/hyperdb#0')
 
-// '@local/user-profile' reconstruction function
+// '@local/mesh-session' reconstruction function
 function collection0_reconstruct (schemaVersion, keyBuf, valueBuf) {
   const key = collection0_key.decode(keyBuf)
   setVersion(schemaVersion)
@@ -31,7 +31,7 @@ function collection0_reconstruct (schemaVersion, keyBuf, valueBuf) {
   record.id = key[0]
   return record
 }
-// '@local/user-profile' key reconstruction function
+// '@local/mesh-session' key reconstruction function
 function collection0_reconstruct_key (keyBuf) {
   const key = collection0_key.decode(keyBuf)
   return {
@@ -39,9 +39,9 @@ function collection0_reconstruct_key (keyBuf) {
   }
 }
 
-// '@local/user-profile'
+// '@local/mesh-session'
 const collection0 = {
-  name: '@local/user-profile',
+  name: '@local/mesh-session',
   id: 0,
   version: 1,
   encodeKey (record) {
@@ -73,9 +73,9 @@ const collection0 = {
   decodedVersion: 0
 }
 
-// '@local/mesh-session' collection key
+// '@local/device' collection key
 const collection1_key = new IndexEncoder([
-  IndexEncoder.STRING
+  IndexEncoder.BUFFER
 ], { prefix: 1 })
 
 function collection1_indexify (record) {
@@ -83,10 +83,10 @@ function collection1_indexify (record) {
   return a === undefined ? [] : [a]
 }
 
-// '@local/mesh-session' value encoding
-const collection1_enc = getEncoding('@local/mesh-session/hyperdb#1')
+// '@local/device' value encoding
+const collection1_enc = getEncoding('@local/device/hyperdb#1')
 
-// '@local/mesh-session' reconstruction function
+// '@local/device' reconstruction function
 function collection1_reconstruct (schemaVersion, keyBuf, valueBuf) {
   const key = collection1_key.decode(keyBuf)
   setVersion(schemaVersion)
@@ -98,7 +98,7 @@ function collection1_reconstruct (schemaVersion, keyBuf, valueBuf) {
   record.id = key[0]
   return record
 }
-// '@local/mesh-session' key reconstruction function
+// '@local/device' key reconstruction function
 function collection1_reconstruct_key (keyBuf) {
   const key = collection1_key.decode(keyBuf)
   return {
@@ -106,9 +106,9 @@ function collection1_reconstruct_key (keyBuf) {
   }
 }
 
-// '@local/mesh-session'
+// '@local/device'
 const collection1 = {
-  name: '@local/mesh-session',
+  name: '@local/device',
   id: 1,
   version: 1,
   encodeKey (record) {
@@ -152,8 +152,8 @@ export default { versions, collections, indexes, resolveCollection, resolveIndex
 
 function resolveCollection (name) {
   switch (name) {
-    case '@local/user-profile': return collection0
-    case '@local/mesh-session': return collection1
+    case '@local/mesh-session': return collection0
+    case '@local/device': return collection1
     default: return null
   }
 }

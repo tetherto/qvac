@@ -20,6 +20,7 @@ const subsets = new Map<string, readonly string[]>([
     [
       '@qvac/supervisor',
       '@qvac/agents',
+      '@qvac/sync',
       '@qvac/harness'
     ]
   ],
@@ -67,7 +68,12 @@ const mobileConsumers = [
     slug: 'clean-harness-consumer',
     androidPackage: 'com.qvac.poc.cleanharness',
     plugin: '@qvac/harness/expo-plugin',
-    localPackages: ['@qvac/supervisor', '@qvac/agents', '@qvac/harness'] as const,
+    localPackages: [
+      '@qvac/supervisor',
+      '@qvac/agents',
+      '@qvac/sync',
+      '@qvac/harness'
+    ] as const,
     includeSdk: true,
     includeOverrides: true,
     expectedPaths: [

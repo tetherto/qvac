@@ -1,6 +1,11 @@
 import type { HarnessEvent } from '@qvac/harness/types'
 import QvacLogger from '@qvac/logging'
 import Supervisor from '@qvac/supervisor'
+import type {
+  SyncProfileClient,
+  SyncProfileContract,
+  SyncRuntime
+} from '@qvac/sync'
 import {
   checkCompatibility,
   type CompatibilityResult,
@@ -168,6 +173,111 @@ export function createAssistantFacade(
   }
 }
 
+function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
+  async function current() {
+    await supervisor.ready()
+    return supervisor.get<AssistantSyncComponent>('sync').state
+  }
+
+  async function suspend() {
+    await (await current()).lifecycle.suspend()
+  }
+
+  async function resume() {
+    await (await current()).lifecycle.resume()
+  }
+
+  return {
+    ready: () => supervisor.ready(),
+    suspend,
+    resume,
+    lifecycle: { suspend, resume },
+    runtime: {
+      async describe() {
+        return (await current()).runtime.describe()
+      },
+      async status() {
+        return (await current()).runtime.status()
+      },
+      async diagnostics() {
+        return (await current()).runtime.diagnostics()
+      }
+    },
+    mesh: {
+      async identity() {
+        return (await current()).mesh.identity()
+      },
+      async status() {
+        return (await current()).mesh.status()
+      },
+      watchStatus(options) {
+        return supervisor
+          .get<AssistantSyncComponent>('sync')
+          .state.mesh.watchStatus(options)
+      },
+      async createInvite(options) {
+        return (await current()).mesh.createInvite(options)
+      },
+      watchPairingRequests() {
+        return supervisor
+          .get<AssistantSyncComponent>('sync')
+          .state.mesh.watchPairingRequests()
+      },
+      async approvePairingRequest(id) {
+        return (await current()).mesh.approvePairingRequest(id)
+      },
+      async rejectPairingRequest(id) {
+        return (await current()).mesh.rejectPairingRequest(id)
+      },
+      async join(invite) {
+        await (await current()).mesh.join(invite)
+      },
+      async cancelJoin() {
+        await (await current()).mesh.cancelJoin()
+      },
+      async leave() {
+        await (await current()).mesh.leave()
+      },
+      async listDevices() {
+        return (await current()).mesh.listDevices()
+      },
+      watchDevices() {
+        return supervisor
+          .get<AssistantSyncComponent>('sync')
+          .state.mesh.watchDevices()
+      },
+      async renameDevice(name) {
+        return (await current()).mesh.renameDevice(name)
+      },
+      async removeDevice(id) {
+        await (await current()).mesh.removeDevice(id)
+      }
+    },
+    openProfile(profile) {
+      return createLazyProfile(current, profile)
+    }
+  }
+}
+
+function createLazyProfile<Command, Query, Result, Change>(
+  current: () => Promise<SyncRuntime>,
+  profile: SyncProfileContract<Command, Query, Result, Change>
+): SyncProfileClient<Command, Query, Result, Change> {
+  return {
+    async apply(command, options) {
+      return (await current()).openProfile(profile).apply(command, options)
+    },
+    async query(query) {
+      return (await current()).openProfile(profile).query(query)
+    },
+    watch(query, options) {
+      return (async function* () {
+        yield* (await current()).openProfile(profile).watch(query, options)
+      })()
+    }
+  }
+}
+
 function isReactNativeRuntime() {
   const navigator = Reflect.get(globalThis, 'navigator')
   return (
@@ -175,52 +285,6 @@ function isReactNativeRuntime() {
     navigator !== null &&
     Reflect.get(navigator, 'product') === 'ReactNative'
   )
-}
-
-function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
-  async function current() {
-    await supervisor.ready()
-    return supervisor.get<AssistantSyncComponent>('sync').state
-  }
-
-  return {
-    async getIdentity() {
-      return (await current()).getIdentity()
-    },
-    async getUserProfile() {
-      return (await current()).getUserProfile()
-    },
-    async setUserProfile(profile) {
-      return (await current()).setUserProfile(profile)
-    },
-    async createTask(request) {
-      return (await current()).createTask(request)
-    },
-    async updateTask(request) {
-      return (await current()).updateTask(request)
-    },
-    async getTask(request) {
-      return (await current()).getTask(request)
-    },
-    async listTasks() {
-      return (await current()).listTasks()
-    },
-    async *watchTasks() {
-      yield* (await current()).watchTasks()
-    },
-    async createPairingInvite(request) {
-      return (await current()).createPairingInvite(request)
-    },
-    async approvePairingRequest(request) {
-      return (await current()).approvePairingRequest(request)
-    },
-    async rejectPairingRequest(request) {
-      return (await current()).rejectPairingRequest(request)
-    },
-    async *watchPairingRequests() {
-      yield* (await current()).watchPairingRequests()
-    }
-  }
 }
 
 function createLifecycleEvents(supervisor: Supervisor, logger: QvacLogger) {

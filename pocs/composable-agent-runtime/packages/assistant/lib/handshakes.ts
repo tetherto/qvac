@@ -14,11 +14,13 @@ export function syncHandshake(): ComponentHandshake {
     contract: 'qvac.sync',
     protocolVersion: 1,
     capabilities: [
-      'local-profile',
-      'tasks',
-      'task-watches',
+      'profile-protocol',
+      'durable-work',
       'passive-replication',
-      'writer-pairing'
+      'writer-pairing',
+      'dynamic-membership',
+      'runtime-lifecycle',
+      'device-management'
     ],
     requiredPeerCapabilities: [],
     buildVersion: BUILD_VERSION
@@ -38,12 +40,7 @@ export function harnessHandshake(): ComponentHandshake {
 export function expectedSyncHandshake(): ComponentHandshake {
   return {
     ...syncHandshake(),
-    requiredPeerCapabilities: [
-      'local-profile',
-      'tasks',
-      'task-watches',
-      'writer-pairing'
-    ]
+    requiredPeerCapabilities: ['profile-protocol', 'durable-work', 'writer-pairing']
   }
 }
 

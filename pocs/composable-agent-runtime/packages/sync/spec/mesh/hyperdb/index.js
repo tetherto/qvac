@@ -6,7 +6,7 @@ import { version, getEncoding, setVersion } from './messages.js'
 
 const versions = { schema: version, db: 1 }
 
-// '@sync/tasks' collection key
+// '@sync/profile-operations' collection key
 const collection0_key = new IndexEncoder([
   IndexEncoder.STRING
 ], { prefix: 0 })
@@ -16,10 +16,10 @@ function collection0_indexify (record) {
   return a === undefined ? [] : [a]
 }
 
-// '@sync/tasks' value encoding
-const collection0_enc = getEncoding('@sync/task/hyperdb#0')
+// '@sync/profile-operations' value encoding
+const collection0_enc = getEncoding('@sync/profile-operation/hyperdb#0')
 
-// '@sync/tasks' reconstruction function
+// '@sync/profile-operations' reconstruction function
 function collection0_reconstruct (schemaVersion, keyBuf, valueBuf) {
   const key = collection0_key.decode(keyBuf)
   setVersion(schemaVersion)
@@ -31,7 +31,7 @@ function collection0_reconstruct (schemaVersion, keyBuf, valueBuf) {
   record.id = key[0]
   return record
 }
-// '@sync/tasks' key reconstruction function
+// '@sync/profile-operations' key reconstruction function
 function collection0_reconstruct_key (keyBuf) {
   const key = collection0_key.decode(keyBuf)
   return {
@@ -39,9 +39,9 @@ function collection0_reconstruct_key (keyBuf) {
   }
 }
 
-// '@sync/tasks'
+// '@sync/profile-operations'
 const collection0 = {
-  name: '@sync/tasks',
+  name: '@sync/profile-operations',
   id: 0,
   version: 1,
   encodeKey (record) {
@@ -73,72 +73,507 @@ const collection0 = {
   decodedVersion: 0
 }
 
-// '@sync/tasks-by-created' collection key
-const index1_key = new IndexEncoder([
-  IndexEncoder.UINT,
-  IndexEncoder.STRING
+// '@sync/devices' collection key
+const collection1_key = new IndexEncoder([
+  IndexEncoder.BUFFER
 ], { prefix: 1 })
 
-function index1_indexify (record) {
-  const arr = []
-
-  const a0 = record.createdAt
-  if (a0 === undefined) return arr
-  arr.push(a0)
-
-  const a1 = record.id
-  if (a1 === undefined) return arr
-  arr.push(a1)
-
-  return arr
+function collection1_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
 }
 
-// '@sync/tasks-by-created'
-const index1 = {
-  name: '@sync/tasks-by-created',
-  version: 1,
+// '@sync/devices' value encoding
+const collection1_enc = getEncoding('@sync/device/hyperdb#1')
+
+// '@sync/devices' reconstruction function
+function collection1_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection1_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection1.decodedVersion = c.uint.decode(state)
+  const record = collection1_enc.decode(state)
+  record.id = key[0]
+  return record
+}
+// '@sync/devices' key reconstruction function
+function collection1_reconstruct_key (keyBuf) {
+  const key = collection1_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@sync/devices'
+const collection1 = {
+  name: '@sync/devices',
   id: 1,
+  version: 1,
   encodeKey (record) {
-    return index1_key.encode(index1_indexify(record))
+    const key = [record.id]
+    return collection1_key.encode(key)
   },
   encodeKeyRange ({ gt, lt, gte, lte } = {}) {
-    return index1_key.encodeRange({
-      gt: gt ? index1_indexify(gt) : null,
-      lt: lt ? index1_indexify(lt) : null,
-      gte: gte ? index1_indexify(gte) : null,
-      lte: lte ? index1_indexify(lte) : null
+    return collection1_key.encodeRange({
+      gt: gt ? collection1_indexify(gt) : null,
+      lt: lt ? collection1_indexify(lt) : null,
+      gte: gte ? collection1_indexify(gte) : null,
+      lte: lte ? collection1_indexify(lte) : null
     })
   },
-  encodeValue: (record) => index1.collection.encodeKey(record),
-  encodeIndexKeys (record, context) {
-    return [index1_key.encode([record.createdAt, record.id])]
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection1_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection1_enc.encode(state, record)
+    return state.buffer
   },
-  reconstruct: (keyBuf, valueBuf) => valueBuf,
-  offset: collection0.indexes.length,
-  collection: collection0
+  trigger: null,
+  reconstruct: collection1_reconstruct,
+  reconstructKey: collection1_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
 }
-collection0.indexes.push(index1)
+
+// '@sync/profile-heads' collection key
+const collection2_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 2 })
+
+function collection2_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@sync/profile-heads' value encoding
+const collection2_enc = getEncoding('@sync/profile-head/hyperdb#2')
+
+// '@sync/profile-heads' reconstruction function
+function collection2_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection2_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection2.decodedVersion = c.uint.decode(state)
+  const record = collection2_enc.decode(state)
+  record.id = key[0]
+  return record
+}
+// '@sync/profile-heads' key reconstruction function
+function collection2_reconstruct_key (keyBuf) {
+  const key = collection2_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@sync/profile-heads'
+const collection2 = {
+  name: '@sync/profile-heads',
+  id: 2,
+  version: 1,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection2_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection2_key.encodeRange({
+      gt: gt ? collection2_indexify(gt) : null,
+      lt: lt ? collection2_indexify(lt) : null,
+      gte: gte ? collection2_indexify(gte) : null,
+      lte: lte ? collection2_indexify(lte) : null
+    })
+  },
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection2_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection2_enc.encode(state, record)
+    return state.buffer
+  },
+  trigger: null,
+  reconstruct: collection2_reconstruct,
+  reconstructKey: collection2_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
+}
+
+// '@sync/durable-work' collection key
+const collection3_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 3 })
+
+function collection3_indexify (record) {
+  const a = record.workId
+  return a === undefined ? [] : [a]
+}
+
+// '@sync/durable-work' value encoding
+const collection3_enc = getEncoding('@sync/durable-work/hyperdb#3')
+
+// '@sync/durable-work' reconstruction function
+function collection3_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection3_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection3.decodedVersion = c.uint.decode(state)
+  const record = collection3_enc.decode(state)
+  record.workId = key[0]
+  return record
+}
+// '@sync/durable-work' key reconstruction function
+function collection3_reconstruct_key (keyBuf) {
+  const key = collection3_key.decode(keyBuf)
+  return {
+    workId: key[0]
+  }
+}
+
+// '@sync/durable-work'
+const collection3 = {
+  name: '@sync/durable-work',
+  id: 3,
+  version: 1,
+  encodeKey (record) {
+    const key = [record.workId]
+    return collection3_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection3_key.encodeRange({
+      gt: gt ? collection3_indexify(gt) : null,
+      lt: lt ? collection3_indexify(lt) : null,
+      gte: gte ? collection3_indexify(gte) : null,
+      lte: lte ? collection3_indexify(lte) : null
+    })
+  },
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection3_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection3_enc.encode(state, record)
+    return state.buffer
+  },
+  trigger: null,
+  reconstruct: collection3_reconstruct,
+  reconstructKey: collection3_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
+}
+
+// '@sync/durable-work-journal' collection key
+const collection4_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 4 })
+
+function collection4_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@sync/durable-work-journal' value encoding
+const collection4_enc = getEncoding('@sync/durable-work-journal-entry/hyperdb#4')
+
+// '@sync/durable-work-journal' reconstruction function
+function collection4_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection4_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection4.decodedVersion = c.uint.decode(state)
+  const record = collection4_enc.decode(state)
+  record.id = key[0]
+  return record
+}
+// '@sync/durable-work-journal' key reconstruction function
+function collection4_reconstruct_key (keyBuf) {
+  const key = collection4_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@sync/durable-work-journal'
+const collection4 = {
+  name: '@sync/durable-work-journal',
+  id: 4,
+  version: 1,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection4_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection4_key.encodeRange({
+      gt: gt ? collection4_indexify(gt) : null,
+      lt: lt ? collection4_indexify(lt) : null,
+      gte: gte ? collection4_indexify(gte) : null,
+      lte: lte ? collection4_indexify(lte) : null
+    })
+  },
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection4_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection4_enc.encode(state, record)
+    return state.buffer
+  },
+  trigger: null,
+  reconstruct: collection4_reconstruct,
+  reconstructKey: collection4_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
+}
+
+// '@sync/durable-work-checkpoints' collection key
+const collection5_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 5 })
+
+function collection5_indexify (record) {
+  const a = record.workId
+  return a === undefined ? [] : [a]
+}
+
+// '@sync/durable-work-checkpoints' value encoding
+const collection5_enc = getEncoding('@sync/durable-work-checkpoint/hyperdb#5')
+
+// '@sync/durable-work-checkpoints' reconstruction function
+function collection5_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection5_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection5.decodedVersion = c.uint.decode(state)
+  const record = collection5_enc.decode(state)
+  record.workId = key[0]
+  return record
+}
+// '@sync/durable-work-checkpoints' key reconstruction function
+function collection5_reconstruct_key (keyBuf) {
+  const key = collection5_key.decode(keyBuf)
+  return {
+    workId: key[0]
+  }
+}
+
+// '@sync/durable-work-checkpoints'
+const collection5 = {
+  name: '@sync/durable-work-checkpoints',
+  id: 5,
+  version: 1,
+  encodeKey (record) {
+    const key = [record.workId]
+    return collection5_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection5_key.encodeRange({
+      gt: gt ? collection5_indexify(gt) : null,
+      lt: lt ? collection5_indexify(lt) : null,
+      gte: gte ? collection5_indexify(gte) : null,
+      lte: lte ? collection5_indexify(lte) : null
+    })
+  },
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection5_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection5_enc.encode(state, record)
+    return state.buffer
+  },
+  trigger: null,
+  reconstruct: collection5_reconstruct,
+  reconstructKey: collection5_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
+}
+
+// '@sync/durable-work-gates' collection key
+const collection6_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 6 })
+
+function collection6_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@sync/durable-work-gates' value encoding
+const collection6_enc = getEncoding('@sync/durable-work-gate/hyperdb#6')
+
+// '@sync/durable-work-gates' reconstruction function
+function collection6_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection6_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection6.decodedVersion = c.uint.decode(state)
+  const record = collection6_enc.decode(state)
+  record.id = key[0]
+  return record
+}
+// '@sync/durable-work-gates' key reconstruction function
+function collection6_reconstruct_key (keyBuf) {
+  const key = collection6_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@sync/durable-work-gates'
+const collection6 = {
+  name: '@sync/durable-work-gates',
+  id: 6,
+  version: 1,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection6_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection6_key.encodeRange({
+      gt: gt ? collection6_indexify(gt) : null,
+      lt: lt ? collection6_indexify(lt) : null,
+      gte: gte ? collection6_indexify(gte) : null,
+      lte: lte ? collection6_indexify(lte) : null
+    })
+  },
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection6_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection6_enc.encode(state, record)
+    return state.buffer
+  },
+  trigger: null,
+  reconstruct: collection6_reconstruct,
+  reconstructKey: collection6_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
+}
+
+// '@sync/durable-work-executors' collection key
+const collection7_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 7 })
+
+function collection7_indexify (record) {
+  const a = record.executorId
+  return a === undefined ? [] : [a]
+}
+
+// '@sync/durable-work-executors' value encoding
+const collection7_enc = getEncoding('@sync/durable-work-executor/hyperdb#7')
+
+// '@sync/durable-work-executors' reconstruction function
+function collection7_reconstruct (schemaVersion, keyBuf, valueBuf) {
+  const key = collection7_key.decode(keyBuf)
+  setVersion(schemaVersion)
+  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
+  const type = c.uint.decode(state)
+  if (type !== 0) throw new Error('Unknown collection type: ' + type)
+  collection7.decodedVersion = c.uint.decode(state)
+  const record = collection7_enc.decode(state)
+  record.executorId = key[0]
+  return record
+}
+// '@sync/durable-work-executors' key reconstruction function
+function collection7_reconstruct_key (keyBuf) {
+  const key = collection7_key.decode(keyBuf)
+  return {
+    executorId: key[0]
+  }
+}
+
+// '@sync/durable-work-executors'
+const collection7 = {
+  name: '@sync/durable-work-executors',
+  id: 7,
+  version: 1,
+  encodeKey (record) {
+    const key = [record.executorId]
+    return collection7_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection7_key.encodeRange({
+      gt: gt ? collection7_indexify(gt) : null,
+      lt: lt ? collection7_indexify(lt) : null,
+      gte: gte ? collection7_indexify(gte) : null,
+      lte: lte ? collection7_indexify(lte) : null
+    })
+  },
+  encodeValue (schemaVersion, collectionVersion, record) {
+    setVersion(schemaVersion)
+    const state = { start: 0, end: 2, buffer: null }
+    collection7_enc.preencode(state, record)
+    state.buffer = b4a.allocUnsafe(state.end)
+    state.buffer[state.start++] = 0
+    state.buffer[state.start++] = collectionVersion
+    collection7_enc.encode(state, record)
+    return state.buffer
+  },
+  trigger: null,
+  reconstruct: collection7_reconstruct,
+  reconstructKey: collection7_reconstruct_key,
+  indexes: [],
+  decodedVersion: 0
+}
 
 const collections = [
-  collection0
+  collection0,
+  collection1,
+  collection2,
+  collection3,
+  collection4,
+  collection5,
+  collection6,
+  collection7
 ]
 
 const indexes = [
-  index1
 ]
 
 export default { versions, collections, indexes, resolveCollection, resolveIndex }
 
 function resolveCollection (name) {
   switch (name) {
-    case '@sync/tasks': return collection0
+    case '@sync/profile-operations': return collection0
+    case '@sync/devices': return collection1
+    case '@sync/profile-heads': return collection2
+    case '@sync/durable-work': return collection3
+    case '@sync/durable-work-journal': return collection4
+    case '@sync/durable-work-checkpoints': return collection5
+    case '@sync/durable-work-gates': return collection6
+    case '@sync/durable-work-executors': return collection7
     default: return null
   }
 }
 
 function resolveIndex (name) {
   switch (name) {
-    case '@sync/tasks-by-created': return index1
     default: return null
   }
 }

@@ -4,8 +4,8 @@ import {
   type HarnessRuntime
 } from '@qvac/harness'
 import {
-  spawnSync,
-  type SyncCoreOptions
+  createSync,
+  type CreateSyncOptions
 } from '@qvac/sync'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
@@ -22,28 +22,19 @@ import { handshakeFrom } from './handshakes.ts'
 import { createRunStateAdapter } from './run-state.ts'
 
 export async function startSyncComponent(
-  options: SyncCoreOptions
+  options: CreateSyncOptions
 ): Promise<AssistantSyncComponent> {
-  const bundles = acquireBundleLease()
-  try {
-    const entry = await bundles.entry(
-      'sync',
-      new URL('../../sync/sidecar-entry.ts', import.meta.url),
-      new URL('../../sync/', import.meta.url)
-    )
-    const client = await spawnSync({ entry, ...options })
-    const identity = await client.describeRuntime()
-    const close = closeWithRelease(() => client.close(), bundles.release)
-    return {
-      handshake: handshakeFrom(identity),
-      state: client,
-      exited: client.exited,
-      close,
-      inspect: () => ({ ...identity })
-    }
-  } catch (error) {
-    await bundles.release()
-    throw error
+  const sync = createSync(options)
+  await sync.ready()
+  const identity = await sync.runtime.describe()
+  return {
+    handshake: handshakeFrom(identity),
+    state: sync,
+    exited: sync.exited,
+    close: () => sync.close(),
+    suspend: () => sync.lifecycle.suspend(),
+    resume: () => sync.lifecycle.resume(),
+    inspect: () => ({ ...identity })
   }
 }
 
@@ -80,14 +71,16 @@ export async function startHarnessComponent(
     }, bundles.release)
     const harness: HarnessRuntime = {
       async *run(input) {
+        let completed = false
         try {
           for await (const event of remote.run(input)) {
             await stateAdapter.append(input.runId, event)
             yield event
           }
           identity = await remote.describeRuntime()
+          completed = true
         } finally {
-          await stateAdapter.finish(input.runId)
+          await stateAdapter.finish(input.runId, completed)
         }
       },
       close

@@ -1,5 +1,10 @@
 import { QvacErrorBase, addCodes } from '@qvac/error'
 
+export {
+  SyncSuspendedError,
+  type SyncErrorCategory
+} from './runtime/errors.ts'
+
 export const SYNC_ERROR_CODES = {
   COMPONENT_START_FAILED: 59001
 } as const

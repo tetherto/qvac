@@ -8,6 +8,8 @@ export { createChildEntry, type ChildEntryOptions } from './lib/child-entry.ts'
 export { createHarness, mapSdkEvent, type CreateHarnessOptions } from './lib/harness.ts'
 export { argvForLogging } from './lib/logger.ts'
 export { createMemoryStateAdapter } from './lib/memory-state.ts'
+export { createInMemoryAgentStateStore } from './lib/in-memory-agent-state-store.ts'
+export { createSyncAgentStateStore } from './lib/sync-agent-state-store.ts'
 export { createSdkDirectAdapter } from './lib/sdk-direct-adapter.ts'
 export { createSupervisedSdkPort } from './lib/supervised-sdk-port.ts'
 export {

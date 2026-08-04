@@ -4,15 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts",
+    ".": {
+      "react-native": "./react-native.ts",
+      "default": "./index.ts"
+    },
+    "./react-native": "./react-native.ts",
+    "./types": "./lib/runtime/types.ts",
     "./package": "./package.json",
-    "./core": "./lib/core.ts",
-    "./client": "./lib/client.ts",
-    "./spawn": "./lib/spawn.ts",
-    "./sidecar-entry": "./sidecar-entry.ts",
-    "./mobile-entry": "./mobile-entry.ts",
-    "./react-native-launcher": "./react-native-launcher.ts",
-    "./react-native-stow": "./react-native-stow.ts",
+    "./testing": "./testing.ts",
+    "./worker": "./worker.ts",
+    "./profiles/durable-work": "./profiles/durable-work.ts",
     "./expo-plugin": "./dist/expo-plugin.js"
   },
   "imports": {

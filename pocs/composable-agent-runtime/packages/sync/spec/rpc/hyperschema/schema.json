@@ -9,6 +9,345 @@
       "fields": []
     },
     {
+      "name": "ok",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 0,
+      "fields": [
+        {
+          "name": "ok",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "runtime-phase",
+      "namespace": "rpc",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "opening",
+          "version": 1
+        },
+        {
+          "key": "ready",
+          "version": 1
+        },
+        {
+          "key": "suspended",
+          "version": 1
+        },
+        {
+          "key": "failed",
+          "version": 1
+        },
+        {
+          "key": "closed",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "network-state",
+      "namespace": "rpc",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "stopped",
+          "version": 1
+        },
+        {
+          "key": "starting",
+          "version": 1
+        },
+        {
+          "key": "online",
+          "version": 1
+        },
+        {
+          "key": "offline",
+          "version": 1
+        },
+        {
+          "key": "degraded",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "runtime-status",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "phase",
+          "required": true,
+          "type": "@rpc/runtime-phase",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "network",
+          "required": true,
+          "type": "@rpc/network-state",
+          "version": 1
+        },
+        {
+          "name": "writable",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "peerCount",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "runtime-child-diagnostic",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "state",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "deps",
+          "required": true,
+          "array": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "networkInstanceId",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "topicPresent",
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "discoveryTeardownComplete",
+          "type": "bool",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "runtime-diagnostics",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "children",
+          "required": true,
+          "array": true,
+          "type": "@rpc/runtime-child-diagnostic",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "mesh-status-state",
+      "namespace": "rpc",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "idle",
+          "version": 1
+        },
+        {
+          "key": "joining",
+          "version": 1
+        },
+        {
+          "key": "joined",
+          "version": 1
+        },
+        {
+          "key": "leaving",
+          "version": 1
+        },
+        {
+          "key": "kicked",
+          "version": 1
+        },
+        {
+          "key": "error",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "mesh-status",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "state",
+          "required": true,
+          "type": "@rpc/mesh-status-state",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "meshKey",
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "discoveryKey",
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "writable",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "peerCount",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "network",
+          "required": true,
+          "type": "@rpc/network-state",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "mesh-join-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "invite",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "device",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "local",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "joinedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "revokedAt",
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "device-list",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "devices",
+          "required": true,
+          "array": true,
+          "type": "@rpc/device",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "rename-device-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "remove-device-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "runtime-info",
       "namespace": "rpc",
       "compact": false,
@@ -75,213 +414,6 @@
           "name": "deviceId",
           "required": true,
           "type": "fixed32",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "user-profile",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": -1,
-      "fields": [
-        {
-          "name": "name",
-          "required": true,
-          "type": "string",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "user-profile-result",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": 0,
-      "fields": [
-        {
-          "name": "profile",
-          "type": "@rpc/user-profile",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "task-status",
-      "namespace": "rpc",
-      "offset": 1,
-      "enum": [
-        {
-          "key": "pending",
-          "version": 1
-        },
-        {
-          "key": "running",
-          "version": 1
-        },
-        {
-          "key": "completed",
-          "version": 1
-        },
-        {
-          "key": "failed",
-          "version": 1
-        },
-        {
-          "key": "cancelled",
-          "version": 1
-        }
-      ],
-      "strings": true
-    },
-    {
-      "name": "task",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": 4,
-      "fields": [
-        {
-          "name": "id",
-          "required": true,
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "title",
-          "required": true,
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "input",
-          "required": true,
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "status",
-          "required": true,
-          "type": "@rpc/task-status",
-          "version": 1
-        },
-        {
-          "name": "result",
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "createdAt",
-          "required": true,
-          "type": "uint",
-          "version": 1
-        },
-        {
-          "name": "updatedAt",
-          "required": true,
-          "type": "uint",
-          "version": 1
-        },
-        {
-          "name": "originDeviceId",
-          "required": true,
-          "type": "fixed32",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "create-task-request",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": -1,
-      "fields": [
-        {
-          "name": "id",
-          "required": true,
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "title",
-          "required": true,
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "input",
-          "required": true,
-          "type": "string",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "update-task-request",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": 1,
-      "fields": [
-        {
-          "name": "id",
-          "required": true,
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "version": 1
-        },
-        {
-          "name": "status",
-          "type": "@rpc/task-status",
-          "version": 1
-        },
-        {
-          "name": "result",
-          "type": "string",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "task-id",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": -1,
-      "fields": [
-        {
-          "name": "id",
-          "required": true,
-          "type": "string",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "task-result",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": 0,
-      "fields": [
-        {
-          "name": "task",
-          "type": "@rpc/task",
-          "version": 1
-        }
-      ]
-    },
-    {
-      "name": "task-list",
-      "namespace": "rpc",
-      "compact": false,
-      "flagsPosition": -1,
-      "fields": [
-        {
-          "name": "tasks",
-          "required": true,
-          "array": true,
-          "type": "@rpc/task",
           "version": 1
         }
       ]
@@ -402,6 +534,203 @@
           "required": true,
           "array": true,
           "type": "@rpc/pairing-request",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-apply-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "profileId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "version",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "operationId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "expectedRevision",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "traceId",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "command",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-apply-result",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "revision",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-query-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "profileId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "version",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "query",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-query-result",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "value",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-watch-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "profileId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "version",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "query",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "after",
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "profile-watch-kind",
+      "namespace": "rpc",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "snapshot",
+          "version": 1
+        },
+        {
+          "key": "change",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "profile-watch-frame",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "kind",
+          "required": true,
+          "type": "@rpc/profile-watch-kind",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "cursor",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "value",
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "change",
+          "type": "buffer",
           "version": 1
         }
       ]

@@ -11,163 +11,8 @@ const VERSION = 1
 // eslint-disable-next-line no-unused-vars
 let version = VERSION
 
-const encoding0_enum = {
-  pending: 'pending',
-  running: 'running',
-  completed: 'completed',
-  failed: 'failed',
-  cancelled: 'cancelled'
-}
-
-// @sync/task-status enum
-const encoding0 = {
-  preencode (state, m) {
-    state.end++ // max enum is 5 so always one byte
-  },
-  encode (state, m) {
-    switch (m) {
-      case 'pending':
-        c.uint.encode(state, 1)
-        break
-      case 'running':
-        c.uint.encode(state, 2)
-        break
-      case 'completed':
-        c.uint.encode(state, 3)
-        break
-      case 'failed':
-        c.uint.encode(state, 4)
-        break
-      case 'cancelled':
-        c.uint.encode(state, 5)
-        break
-      default:
-        throw new Error('Unknown enum')
-    }
-  },
-  decode (state) {
-    switch (c.uint.decode(state)) {
-      case 1:
-        return 'pending'
-      case 2:
-        return 'running'
-      case 3:
-        return 'completed'
-      case 4:
-        return 'failed'
-      case 5:
-        return 'cancelled'
-      default: return null
-    }
-  }
-}
-
-// @sync/task
-const encoding1 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
-    c.string.preencode(state, m.title)
-    c.string.preencode(state, m.input)
-    encoding0.preencode(state, m.status)
-    state.end++ // max flag is 1 so always one byte
-
-    if (m.result) c.string.preencode(state, m.result)
-    c.uint.preencode(state, m.createdAt)
-    c.uint.preencode(state, m.updatedAt)
-    c.fixed32.preencode(state, m.originDeviceId)
-  },
-  encode(state, m) {
-    const flags = m.result ? 1 : 0
-
-    c.string.encode(state, m.id)
-    c.string.encode(state, m.title)
-    c.string.encode(state, m.input)
-    encoding0.encode(state, m.status)
-    c.uint.encode(state, flags)
-
-    if (m.result) c.string.encode(state, m.result)
-    c.uint.encode(state, m.createdAt)
-    c.uint.encode(state, m.updatedAt)
-    c.fixed32.encode(state, m.originDeviceId)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-    const r1 = c.string.decode(state)
-    const r2 = c.string.decode(state)
-    const r3 = encoding0.decode(state)
-    const flags = c.uint.decode(state)
-
-    return {
-      id: r0,
-      title: r1,
-      input: r2,
-      status: r3,
-      result: (flags & 1) !== 0 ? c.string.decode(state) : null,
-      createdAt: c.uint.decode(state),
-      updatedAt: c.uint.decode(state),
-      originDeviceId: c.fixed32.decode(state)
-    }
-  }
-}
-
-// @sync/put-task-operation.task
-const encoding2_0 = c.frame(encoding1)
-
-// @sync/put-task-operation
-const encoding2 = {
-  preencode(state, m) {
-    encoding2_0.preencode(state, m.task)
-  },
-  encode(state, m) {
-    encoding2_0.encode(state, m.task)
-  },
-  decode(state) {
-    const r0 = encoding2_0.decode(state)
-
-    return {
-      task: r0
-    }
-  }
-}
-
-// @sync/update-task-operation
-const encoding3 = {
-  preencode(state, m) {
-    c.string.preencode(state, m.id)
-    state.end++ // max flag is 4 so always one byte
-
-    if (m.title) c.string.preencode(state, m.title)
-    if (m.status) encoding0.preencode(state, m.status)
-    if (m.result) c.string.preencode(state, m.result)
-    c.uint.preencode(state, m.updatedAt)
-  },
-  encode(state, m) {
-    const flags = (m.title ? 1 : 0) | (m.status ? 2 : 0) | (m.result ? 4 : 0)
-
-    c.string.encode(state, m.id)
-    c.uint.encode(state, flags)
-
-    if (m.title) c.string.encode(state, m.title)
-    if (m.status) encoding0.encode(state, m.status)
-    if (m.result) c.string.encode(state, m.result)
-    c.uint.encode(state, m.updatedAt)
-  },
-  decode(state) {
-    const r0 = c.string.decode(state)
-    const flags = c.uint.decode(state)
-
-    return {
-      id: r0,
-      title: (flags & 1) !== 0 ? c.string.decode(state) : null,
-      status: (flags & 2) !== 0 ? encoding0.decode(state) : null,
-      result: (flags & 4) !== 0 ? c.string.decode(state) : null,
-      updatedAt: c.uint.decode(state)
-    }
-  }
-}
-
 // @sync/add-writer-operation
-const encoding4 = {
+const encoding0 = {
   preencode(state, m) {
     c.fixed32.preencode(state, m.key)
   },
@@ -179,6 +24,448 @@ const encoding4 = {
 
     return {
       key: r0
+    }
+  }
+}
+
+// @sync/device
+const encoding1 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.id)
+    c.fixed32.preencode(state, m.writerKey)
+    c.string.preencode(state, m.name)
+    c.uint.preencode(state, m.joinedAt)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.revokedAt) c.uint.preencode(state, m.revokedAt)
+  },
+  encode(state, m) {
+    const flags = m.revokedAt ? 1 : 0
+
+    c.fixed32.encode(state, m.id)
+    c.fixed32.encode(state, m.writerKey)
+    c.string.encode(state, m.name)
+    c.uint.encode(state, m.joinedAt)
+    c.uint.encode(state, flags)
+
+    if (m.revokedAt) c.uint.encode(state, m.revokedAt)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.fixed32.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.uint.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      writerKey: r1,
+      name: r2,
+      joinedAt: r3,
+      revokedAt: (flags & 1) !== 0 ? c.uint.decode(state) : 0
+    }
+  }
+}
+
+// @sync/put-device-operation.device
+const encoding2_0 = c.frame(encoding1)
+
+// @sync/put-device-operation
+const encoding2 = {
+  preencode(state, m) {
+    encoding2_0.preencode(state, m.device)
+  },
+  encode(state, m) {
+    encoding2_0.encode(state, m.device)
+  },
+  decode(state) {
+    const r0 = encoding2_0.decode(state)
+
+    return {
+      device: r0
+    }
+  }
+}
+
+// @sync/rename-device-operation
+const encoding3 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.id)
+    c.string.encode(state, m.name)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.string.decode(state)
+
+    return {
+      id: r0,
+      name: r1
+    }
+  }
+}
+
+// @sync/remove-writer-operation
+const encoding4 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.id)
+    c.fixed32.preencode(state, m.writerKey)
+    c.uint.preencode(state, m.revokedAt)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.id)
+    c.fixed32.encode(state, m.writerKey)
+    c.uint.encode(state, m.revokedAt)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+    const r1 = c.fixed32.decode(state)
+    const r2 = c.uint.decode(state)
+
+    return {
+      id: r0,
+      writerKey: r1,
+      revokedAt: r2
+    }
+  }
+}
+
+// @sync/profile-operation
+const encoding5 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.profileId)
+    c.string.preencode(state, m.revision)
+    c.buffer.preencode(state, m.command)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.profileId)
+    c.string.encode(state, m.revision)
+    c.buffer.encode(state, m.command)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.buffer.decode(state)
+
+    return {
+      id: r0,
+      profileId: r1,
+      revision: r2,
+      command: r3
+    }
+  }
+}
+
+// @sync/profile-head
+const encoding6 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.revision)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.revision)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+
+    return {
+      id: r0,
+      revision: r1
+    }
+  }
+}
+
+// @sync/apply-profile-operation
+const encoding7 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.profileId)
+    c.string.preencode(state, m.operationId)
+    c.string.preencode(state, m.revision)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.expectedRevision) c.string.preencode(state, m.expectedRevision)
+    c.buffer.preencode(state, m.command)
+    c.buffer.preencode(state, m.inputCommand)
+    c.fixed32.preencode(state, m.deviceId)
+    c.uint.preencode(state, m.recordedAt)
+  },
+  encode(state, m) {
+    const flags = m.expectedRevision ? 1 : 0
+
+    c.string.encode(state, m.profileId)
+    c.string.encode(state, m.operationId)
+    c.string.encode(state, m.revision)
+    c.uint.encode(state, flags)
+
+    if (m.expectedRevision) c.string.encode(state, m.expectedRevision)
+    c.buffer.encode(state, m.command)
+    c.buffer.encode(state, m.inputCommand)
+    c.fixed32.encode(state, m.deviceId)
+    c.uint.encode(state, m.recordedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      profileId: r0,
+      operationId: r1,
+      revision: r2,
+      expectedRevision: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      command: c.buffer.decode(state),
+      inputCommand: c.buffer.decode(state),
+      deviceId: c.fixed32.decode(state),
+      recordedAt: c.uint.decode(state)
+    }
+  }
+}
+
+const encoding8_enum = {
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled'
+}
+
+// @sync/durable-work-outcome-status enum
+const encoding8 = {
+  preencode (state, m) {
+    state.end++ // max enum is 3 so always one byte
+  },
+  encode (state, m) {
+    switch (m) {
+      case 'completed':
+        c.uint.encode(state, 1)
+        break
+      case 'failed':
+        c.uint.encode(state, 2)
+        break
+      case 'cancelled':
+        c.uint.encode(state, 3)
+        break
+      default:
+        throw new Error('Unknown enum')
+    }
+  },
+  decode (state) {
+    switch (c.uint.decode(state)) {
+      case 1:
+        return 'completed'
+      case 2:
+        return 'failed'
+      case 3:
+        return 'cancelled'
+      default: return null
+    }
+  }
+}
+
+// @sync/durable-work
+const encoding9 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.workId)
+    c.buffer.preencode(state, m.payload)
+    c.string.preencode(state, m.payloadFormat)
+    c.uint.preencode(state, m.payloadVersion)
+    state.end++ // max flag is 16 so always one byte
+
+    if (m.target) c.string.preencode(state, m.target)
+    c.uint.preencode(state, m.createdAt)
+    if (m.cancelReason) c.string.preencode(state, m.cancelReason)
+    if (m.outcomeStatus) encoding8.preencode(state, m.outcomeStatus)
+    if (m.outcomeResult) c.buffer.preencode(state, m.outcomeResult)
+  },
+  encode(state, m) {
+    const flags =
+      (m.target ? 1 : 0) |
+      (m.cancelRequested ? 2 : 0) |
+      (m.cancelReason ? 4 : 0) |
+      (m.outcomeStatus ? 8 : 0) |
+      (m.outcomeResult ? 16 : 0)
+
+    c.string.encode(state, m.workId)
+    c.buffer.encode(state, m.payload)
+    c.string.encode(state, m.payloadFormat)
+    c.uint.encode(state, m.payloadVersion)
+    c.uint.encode(state, flags)
+
+    if (m.target) c.string.encode(state, m.target)
+    c.uint.encode(state, m.createdAt)
+    if (m.cancelReason) c.string.encode(state, m.cancelReason)
+    if (m.outcomeStatus) encoding8.encode(state, m.outcomeStatus)
+    if (m.outcomeResult) c.buffer.encode(state, m.outcomeResult)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.uint.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      workId: r0,
+      payload: r1,
+      payloadFormat: r2,
+      payloadVersion: r3,
+      target: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      createdAt: c.uint.decode(state),
+      cancelRequested: (flags & 2) !== 0,
+      cancelReason: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      outcomeStatus: (flags & 8) !== 0 ? encoding8.decode(state) : null,
+      outcomeResult: (flags & 16) !== 0 ? c.buffer.decode(state) : null
+    }
+  }
+}
+
+// @sync/durable-work-journal-entry
+const encoding10 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.workId)
+    c.string.preencode(state, m.entryType)
+    c.buffer.preencode(state, m.body)
+    c.uint.preencode(state, m.recordedAt)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.workId)
+    c.string.encode(state, m.entryType)
+    c.buffer.encode(state, m.body)
+    c.uint.encode(state, m.recordedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.buffer.decode(state)
+    const r4 = c.uint.decode(state)
+
+    return {
+      id: r0,
+      workId: r1,
+      entryType: r2,
+      body: r3,
+      recordedAt: r4
+    }
+  }
+}
+
+// @sync/durable-work-checkpoint
+const encoding11 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.workId)
+    c.string.preencode(state, m.checkpointId)
+    c.string.preencode(state, m.format)
+    c.uint.preencode(state, m.version)
+    c.string.preencode(state, m.blobRef)
+    c.uint.preencode(state, m.recordedAt)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.workId)
+    c.string.encode(state, m.checkpointId)
+    c.string.encode(state, m.format)
+    c.uint.encode(state, m.version)
+    c.string.encode(state, m.blobRef)
+    c.uint.encode(state, m.recordedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.uint.decode(state)
+    const r4 = c.string.decode(state)
+    const r5 = c.uint.decode(state)
+
+    return {
+      workId: r0,
+      checkpointId: r1,
+      format: r2,
+      version: r3,
+      blobRef: r4,
+      recordedAt: r5
+    }
+  }
+}
+
+// @sync/durable-work-gate
+const encoding12 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.workId)
+    c.string.preencode(state, m.gateId)
+    c.string.preencode(state, m.kind)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.decision) c.string.preencode(state, m.decision)
+    c.uint.preencode(state, m.recordedAt)
+  },
+  encode(state, m) {
+    const flags = m.decision ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.workId)
+    c.string.encode(state, m.gateId)
+    c.string.encode(state, m.kind)
+    c.uint.encode(state, flags)
+
+    if (m.decision) c.string.encode(state, m.decision)
+    c.uint.encode(state, m.recordedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      workId: r1,
+      gateId: r2,
+      kind: r3,
+      decision: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      recordedAt: c.uint.decode(state)
+    }
+  }
+}
+
+// @sync/durable-work-executor.capabilities
+const encoding13_1 = c.array(c.string)
+
+// @sync/durable-work-executor
+const encoding13 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.executorId)
+    encoding13_1.preencode(state, m.capabilities)
+    c.uint.preencode(state, m.expiresAt)
+    c.uint.preencode(state, m.recordedAt)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.executorId)
+    encoding13_1.encode(state, m.capabilities)
+    c.uint.encode(state, m.expiresAt)
+    c.uint.encode(state, m.recordedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = encoding13_1.decode(state)
+    const r2 = c.uint.decode(state)
+    const r3 = c.uint.decode(state)
+
+    return {
+      executorId: r0,
+      capabilities: r1,
+      expiresAt: r2,
+      recordedAt: r3
     }
   }
 }
@@ -199,8 +486,8 @@ function decode(name, buffer, v = VERSION) {
 
 function getEnum(name) {
   switch (name) {
-    case '@sync/task-status':
-      return encoding0_enum
+    case '@sync/durable-work-outcome-status':
+      return encoding8_enum
     default:
       throw new Error('Enum not found ' + name)
   }
@@ -208,16 +495,34 @@ function getEnum(name) {
 
 function getEncoding(name) {
   switch (name) {
-    case '@sync/task-status':
-      return encoding0
-    case '@sync/task':
-      return encoding1
-    case '@sync/put-task-operation':
-      return encoding2
-    case '@sync/update-task-operation':
-      return encoding3
     case '@sync/add-writer-operation':
+      return encoding0
+    case '@sync/device':
+      return encoding1
+    case '@sync/put-device-operation':
+      return encoding2
+    case '@sync/rename-device-operation':
+      return encoding3
+    case '@sync/remove-writer-operation':
       return encoding4
+    case '@sync/profile-operation':
+      return encoding5
+    case '@sync/profile-head':
+      return encoding6
+    case '@sync/apply-profile-operation':
+      return encoding7
+    case '@sync/durable-work-outcome-status':
+      return encoding8
+    case '@sync/durable-work':
+      return encoding9
+    case '@sync/durable-work-journal-entry':
+      return encoding10
+    case '@sync/durable-work-checkpoint':
+      return encoding11
+    case '@sync/durable-work-gate':
+      return encoding12
+    case '@sync/durable-work-executor':
+      return encoding13
     default:
       throw new Error('Encoder not found ' + name)
   }

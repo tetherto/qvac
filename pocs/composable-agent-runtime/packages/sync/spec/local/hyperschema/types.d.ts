@@ -2,19 +2,20 @@
 // Schema version: 1
 // Do not edit manually.
 
-export interface LocalUserProfile {
-  id: string
-  name: string
-}
-
 export interface LocalMeshSession {
   id: string
   seed: Buffer
   key?: Buffer | null
+  writerSeed?: Buffer | null
   creator?: boolean
 }
 
+export interface LocalDevice {
+  id: Buffer
+  name: string
+}
+
 export interface SchemaTypes {
-  "@local/user-profile": LocalUserProfile
   "@local/mesh-session": LocalMeshSession
+  "@local/device": LocalDevice
 }
