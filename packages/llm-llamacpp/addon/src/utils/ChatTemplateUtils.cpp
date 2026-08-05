@@ -57,8 +57,8 @@ bool isGemma4Architecture(std::string_view architecture) {
 // the tools_compact path) but deliberately narrower than the full
 // `qwen3*` HuggingFace lineage — explicit list keeps unrelated
 // `qwen3*`-named archs from silently inheriting the wrong tags.
-inline constexpr std::array<std::string_view, 4> QWEN3_REASONING_FAMILY_ARCHES{
-    "qwen3", "qwen3moe", "qwen35", "qwen35moe"};
+inline constexpr std::array<std::string_view, 6> QWEN3_REASONING_FAMILY_ARCHES{
+    "qwen3", "qwen3moe", "qwen35", "qwen35moe", "qwen36", "qwen36moe"};
 
 std::optional<std::string>
 readMetadataString(const ::llama_model* model, const char* key) {
@@ -178,10 +178,19 @@ bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
          QWEN3_REASONING_FAMILY_ARCHES.end();
 }
 
+bool usesThinkingCompactionByDefault(std::string_view architecture) {
+  return isQwen3ReasoningFamilyArchitecture(architecture);
+}
+
+bool isDeepSeekV4Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "deepseek4";
+}
+
 std::optional<ReasoningTags> selectReasoningTagsForArchitecture(
     const std::optional<std::string>& architecture) {
   if (architecture.has_value() &&
-      isQwen3ReasoningFamilyArchitecture(architecture.value())) {
+      (isQwen3ReasoningFamilyArchitecture(architecture.value()) ||
+       isDeepSeekV4Architecture(architecture.value()))) {
     return ReasoningTags{.open = "<think>", .close = "</think>"};
   }
   return std::nullopt;

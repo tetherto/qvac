@@ -96,13 +96,41 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForNullModelReturnsNullopt) {
 }
 
 TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureQwen3Family) {
-  for (std::string_view arch : {"qwen3", "qwen3moe", "qwen35", "qwen35moe"}) {
+  for (std::string_view arch :
+       {"qwen3", "qwen3moe", "qwen35", "qwen35moe", "qwen36", "qwen36moe"}) {
     const std::optional<ReasoningTags> tags =
         selectReasoningTagsForArchitecture(std::string(arch));
     ASSERT_TRUE(tags.has_value()) << "arch=" << arch;
     EXPECT_EQ(tags->open, "<think>") << "arch=" << arch;
     EXPECT_EQ(tags->close, "</think>") << "arch=" << arch;
   }
+}
+
+TEST_F(ChatTemplateUtilsTest, DefaultsThinkingCompactionToQwen3FamilyOnly) {
+  for (std::string_view arch :
+       {"qwen3", "qwen3moe", "qwen35", "qwen35moe", "qwen36", "qwen36moe"}) {
+    EXPECT_TRUE(usesThinkingCompactionByDefault(arch)) << "arch=" << arch;
+  }
+
+  EXPECT_FALSE(usesThinkingCompactionByDefault("deepseek4"));
+  EXPECT_FALSE(usesThinkingCompactionByDefault("gemma4"));
+  EXPECT_FALSE(usesThinkingCompactionByDefault("llama"));
+}
+
+TEST_F(ChatTemplateUtilsTest, IdentifiesDeepSeekV4Architecture) {
+  EXPECT_TRUE(isDeepSeekV4Architecture("deepseek4"));
+  EXPECT_TRUE(isDeepSeekV4Architecture("DeepSeek4"));
+  EXPECT_FALSE(isDeepSeekV4Architecture("deepseek3"));
+  EXPECT_FALSE(isDeepSeekV4Architecture("qwen35"));
+}
+
+TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureDeepSeekV4) {
+  const std::optional<ReasoningTags> tags =
+      selectReasoningTagsForArchitecture(std::string("deepseek4"));
+  ASSERT_TRUE(tags.has_value());
+  EXPECT_EQ(tags->open, "<think>");
+  EXPECT_EQ(tags->close, "</think>");
+  EXPECT_FALSE(isQwen3ReasoningFamilyArchitecture("deepseek4"));
 }
 
 TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
@@ -118,7 +146,7 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
   // qwen3*-prefixed but not in the allow-list — explicit list (vs prefix
   // match) ensures these don't silently inherit `<think>` reasoning.
   EXPECT_FALSE(
-      selectReasoningTagsForArchitecture(std::string("qwen36")).has_value());
+      selectReasoningTagsForArchitecture(std::string("qwen37")).has_value());
   EXPECT_FALSE(
       selectReasoningTagsForArchitecture(std::string("qwen3vl")).has_value());
   EXPECT_FALSE(
