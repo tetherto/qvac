@@ -35,6 +35,7 @@ import { handleDiffusionStream } from '@/server/rpc/handlers/diffusion-stream'
 import { handleVideoStream } from '@/server/rpc/handlers/video-stream'
 import { handleUpscaleStream } from '@/server/rpc/handlers/upscale-stream'
 import { handleClassify } from '@/server/rpc/handlers/classify'
+import { handleAudioGenStream } from '@/server/rpc/handlers/audio-gen-stream'
 import { handlePluginInvoke, handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
 import {
   handleModelRegistryList,
@@ -129,6 +130,7 @@ export const registry: Record<string, HandlerEntry> = {
   state: { type: 'reply', handler: handleState },
 
   // Simple Stream handlers
+  audioGenStream: { type: 'stream', handler: handleAudioGenStream },
   transcribe: { type: 'stream', handler: handleTranscribe },
   transcribeStream: { type: 'duplex', handler: handleTranscribeStream },
   bciTranscribe: { type: 'stream', handler: handleBciTranscribe },
