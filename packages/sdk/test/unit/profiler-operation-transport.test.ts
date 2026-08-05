@@ -98,7 +98,11 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
           provenance: { source: 'bare-cpu-info', scope: 'system' }
         }
       },
-      gpus: []
+      gpus: {
+        status: 'supported',
+        value: [],
+        provenance: { source: 'bare-gpu-info', scope: 'system' }
+      }
     },
     tags: { modelType: 'llamacpp-completion', sourceType: 'registry', cacheHit: 'true' }
   }
@@ -126,6 +130,20 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
 test('operation profiling: resource gauges sample only when requested', async (t) => {
   let sampleCalls = 0
   destroyWorkerResourceCollector()
+
+  const withoutCollector = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {},
+      perCall: { enabled: true, includeResourceGauges: true }
+    },
+    async () => ({ ok: true })
+  )
+  const eventWithoutCollector = (withoutCollector as { [OPERATION_EVENT_KEY]?: OperationEvent })[
+    OPERATION_EVENT_KEY
+  ]
+  t.absent(eventWithoutCollector?.resources, 'an uninitialized collector produces no gauge block')
+
   initializeWorkerResourceCollector({
     cpuArchitectures: [1],
     gpuTypes: [1],
@@ -163,6 +181,20 @@ test('operation profiling: resource gauges sample only when requested', async (t
     'disabled profiling has no operation event'
   )
 
+  const profiledWithoutResources = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {},
+      perCall: { enabled: true }
+    },
+    async () => ({ ok: true })
+  )
+  const operationWithoutResources = (
+    profiledWithoutResources as { [OPERATION_EVENT_KEY]?: OperationEvent }
+  )[OPERATION_EVENT_KEY]
+  t.is(sampleCalls, 0, 'profiling without resource opt-in does not sample')
+  t.absent(operationWithoutResources?.resources)
+
   const profiled = await profileReplyHandler(
     {
       op: 'resourceTest',
@@ -175,10 +207,14 @@ test('operation profiling: resource gauges sample only when requested', async (t
     OPERATION_EVENT_KEY
   ]
   t.is(sampleCalls, 1, 'opt-in profiling samples once')
-  t.is(operationEvent?.resources?.sampledAt, 123)
-  t.is(operationEvent?.resources?.cpu?.status, 'supported')
-  t.is(operationEvent?.resources?.memory?.usedBytes.status, 'supported')
-  t.absent(operationEvent?.resources?.gpus, 'failed GPU inventory is omitted')
+  t.ok(
+    operationEvent?.resources?.sampledAt !== undefined &&
+      operationEvent.resources.sampledAt >= operationEvent.ts,
+    'resource sample uses the event monotonic clock'
+  )
+  t.is(operationEvent?.resources?.cpu.status, 'supported')
+  t.is(operationEvent?.resources?.memory.usedBytes.status, 'supported')
+  t.is(operationEvent?.resources?.gpus.status, 'failed')
 
   destroyWorkerResourceCollector()
 })

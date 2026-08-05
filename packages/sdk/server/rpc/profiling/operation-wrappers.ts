@@ -14,7 +14,7 @@ import {
 } from '@/schemas'
 import { nowMs, generateProfileId } from '@/profiling/clock'
 import { record, shouldIncludeResourceGauges, shouldProfile } from '@/profiling/controller'
-import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
+import { getWorkerResourceCollector } from '@/server/bare/resources/worker-collector'
 import { buildOperationEvent } from './operation-metrics'
 import { isTerminalChunk } from '../rpc-utils'
 
@@ -80,23 +80,27 @@ function resolvePerCallProfiling<TRequest>(
   }
 }
 
-function toProfilerResourceGauge(sample: SystemResourceSample) {
-  const gauge = {
-    sampledAt: sample.sampledAt,
-    cpu: sample.cpu,
-    memory: sample.memory
-  } satisfies ProfilerResourceGauge
-
-  if (sample.gpus.status !== 'supported') return gauge
-
+function toProfilerResourceGauge(
+  sample: SystemResourceSample,
+  sampledAt: number
+): ProfilerResourceGauge {
+  const gpus =
+    sample.gpus.status === 'supported'
+      ? {
+          ...sample.gpus,
+          value: sample.gpus.value.map((gpu) => ({
+            id: gpu.id,
+            compute: gpu.compute,
+            memoryUsedBytes: gpu.memoryUsedBytes
+          }))
+        }
+      : sample.gpus
   return {
-    ...gauge,
-    gpus: sample.gpus.value.map((gpu) => ({
-      id: gpu.id,
-      compute: gpu.compute,
-      memoryUsedBytes: gpu.memoryUsedBytes
-    }))
-  } satisfies ProfilerResourceGauge
+    sampledAt,
+    cpu: sample.cpu,
+    memory: sample.memory,
+    gpus
+  }
 }
 
 function buildAndRecordOperationEvent<TRequest, TResponse>(
@@ -124,11 +128,8 @@ function buildAndRecordOperationEvent<TRequest, TResponse>(
 
   const perCall = resolvePerCallProfiling(params.options)
   if (shouldIncludeResourceGauges(perCall)) {
-    const resources = handleGetSystemResources({
-      type: 'getSystemResources',
-      sample: true
-    }).sample
-    if (resources) event.resources = toProfilerResourceGauge(resources)
+    const resources = getWorkerResourceCollector()?.sample()
+    if (resources) event.resources = toProfilerResourceGauge(resources, nowMs())
   }
 
   record(event)

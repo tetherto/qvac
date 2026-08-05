@@ -117,9 +117,13 @@ profiler.enable({ mode: 'verbose', includeResourceGauges: true })
 const profile = profiler.exportJSON()
 ```
 
-The sample uses the same status, provenance, scope, and timestamp semantics as
-`getSystemResources({ sample: true })`. Disabling profiling or omitting
-`includeResourceGauges` performs no resource sampling.
+The sample uses the same status, provenance, and scope semantics as
+`getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
+clock as the profiling event's `ts`, so the two timestamps are comparable.
+Disabling profiling or omitting `includeResourceGauges` performs no resource
+sampling. Enabling gauges adds one CPU query and one query per GPU to each
+profiled operation's response path. If the worker resource collector is not
+initialized, the event omits the resource block.
 
 ## Examples
 

@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { gpuResourceSampleSchema, systemResourceSampleSchema } from '@/schemas/system-resources'
+import {
+  gpuResourceSampleSchema,
+  resourceMetricSchema,
+  systemResourceSampleSchema
+} from '@/schemas/system-resources'
 
 /** Internal envelope key for profiling metadata in RPC payloads */
 export const PROFILING_KEY = '__profiling'
@@ -32,9 +36,9 @@ export const profilerGPUResourceGaugeSchema = z.object({
 
 export const profilerResourceGaugeSchema = z.object({
   sampledAt: systemResourceSampleSchema.shape.sampledAt,
-  cpu: systemResourceSampleSchema.shape.cpu.optional(),
-  memory: systemResourceSampleSchema.shape.memory.optional(),
-  gpus: z.array(profilerGPUResourceGaugeSchema).optional()
+  cpu: systemResourceSampleSchema.shape.cpu,
+  memory: systemResourceSampleSchema.shape.memory,
+  gpus: resourceMetricSchema(z.array(profilerGPUResourceGaugeSchema))
 })
 
 /**
