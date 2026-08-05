@@ -10,7 +10,12 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { DEFAULT_ASAN_OPTIONS, buildRunnerEnv, resolveExitCode } = require('../run-cpp-tests')
+const {
+  DEFAULT_ASAN_OPTIONS,
+  buildRunnerEnv,
+  resolveExitCode,
+  resolveBuildDir
+} = require('../run-cpp-tests')
 
 test('resolveExitCode maps a normal gtest failure to a non-zero exit', () => {
   assert.equal(resolveExitCode({ status: 1 }), 1)
@@ -43,4 +48,34 @@ test('buildRunnerEnv replaces rather than merges explicit ASAN_OPTIONS', () => {
 test('buildRunnerEnv preserves an explicit empty ASAN_OPTIONS', () => {
   const env = buildRunnerEnv({ ASAN_OPTIONS: '' })
   assert.equal(env.ASAN_OPTIONS, '')
+})
+
+test('resolveBuildDir defaults to build', () => {
+  assert.equal(resolveBuildDir([], {}), 'build')
+})
+
+test('resolveBuildDir honours CPP_BUILD_DIR env', () => {
+  assert.equal(resolveBuildDir([], { CPP_BUILD_DIR: 'build-fuzz' }), 'build-fuzz')
+})
+
+test('resolveBuildDir --build-dir flag wins over env', () => {
+  assert.equal(
+    resolveBuildDir(['--build-dir', 'build-fuzz'], { CPP_BUILD_DIR: 'other' }),
+    'build-fuzz'
+  )
+  assert.equal(resolveBuildDir(['--build-dir=build-fuzz'], {}), 'build-fuzz')
+})
+
+test('resolveBuildDir rejects --build-dir without a value instead of using the default', () => {
+  assert.throws(
+    () => resolveBuildDir(['--build-dir'], { CPP_BUILD_DIR: 'other' }),
+    /--build-dir requires/
+  )
+})
+
+test('resolveBuildDir rejects a --build-dir that would swallow a following flag', () => {
+  assert.throws(
+    () => resolveBuildDir(['--build-dir', '--gtest_filter=Foo'], {}),
+    /--build-dir requires/
+  )
 })

@@ -84,7 +84,12 @@ export async function buildCoverageReport(
   const parseOpts: Parameters<typeof parseSpec>[0] = {}
   if (options.offline) parseOpts.offline = true
   if (options.specPath) parseOpts.specPath = options.specPath
-  const { entries: specEntries, source: specSource } = await parseSpec(parseOpts)
+  const {
+    entries: specEntries,
+    source: specSource,
+    sourceMode: specSourceMode,
+    sha256: specSha256
+  } = await parseSpec(parseOpts)
   const implementedList = parseRouter(routerPath)
   const implemented = new Set(implementedList)
 
@@ -119,6 +124,8 @@ export async function buildCoverageReport(
   return {
     fetchedAt: new Date().toISOString(),
     specSource,
+    specSourceMode,
+    specSha256,
     routerSource: routerPath,
     implementedCount: implementedList.length,
     extensions: extensions.sort(),

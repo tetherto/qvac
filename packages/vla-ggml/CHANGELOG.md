@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.17.0] - 2026-08-03
 
 ### Added
 
@@ -26,6 +26,10 @@
 - A GGUF carrying rank-3 embodiment weights but no readable `groot.embodiment.stored_cat_ids` table is now a load-time error instead of a clean load followed by a `GGML_ASSERT` process abort on the first `run()`. Relatedly, a `groot.embodiment.*` array that is present but not an int32 array is reported as corruption rather than silently treated as absent, and `groot.embodiment.count` is cross-checked against the table length instead of being written and never read.
 - The pre-transpose refill copied one matrix element per `std::memcpy` call with a runtime element size, which the compiler cannot fold into a move — about 5 million out-of-line calls per refill at `HIDDEN_SIZE` 1024. It is now a typed element copy. This ran at load before, and `setEmbodiment` puts it on a repeatable path.
 - The v1 converter path no longer stamps `num_cameras = 2` when the default embodiment's view count is unknown; it fails and names `--embodiment-cameras TAG=N`, matching what multi mode already did. A wrong count fails silently at inference, so guessing it at conversion time only moved the guess. A v1 GGUF bakes one tag, so when that tag's `cat_id` is shared by rigs that disagree, the tag's own count is used rather than the row's 0 — a `cat_id` with no single answer does not make the one tag being converted ambiguous. Multi mode is unchanged there, since its per-row count would still be 0 and rescuing only the top-level key would desync the two. `--embodiments all` also reports a checkpoint whose category bank is smaller than the expected 32 rows, instead of raising a bare `IndexError`.
+
+### Pull Requests
+
+- [#3427](https://github.com/tetherto/qvac/pull/3427) - QVAC-22492 feat[api]: GR00T multi-embodiment support in vla-ggml
 
 ## [0.16.2] - 2026-07-31
 

@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildCoverageReport, DEFAULT_ROUTER } from '../src/openai/coverage/build-report.js'
@@ -50,6 +52,10 @@ describe('openai coverage live report (fixture)', () => {
     })
 
     assert.ok(report.rows.length > 0)
+    assert.equal(
+      report.specSha256,
+      createHash('sha256').update(readFileSync(FIXTURE_SPEC)).digest('hex')
+    )
     assert.equal(report.summary.byCategory['unknown'].total, 1)
     assert.equal(report.rows.find((r) => r.tags.includes('NewlyAddedThing'))?.category, 'unknown')
 
@@ -97,6 +103,8 @@ describe('openai coverage live report (fixture)', () => {
     const report = {
       fetchedAt: '2026-01-01T00:00:00.000Z',
       specSource: 'test',
+      specSourceMode: 'file' as const,
+      specSha256: 'a'.repeat(64),
       routerSource: 'test',
       implementedCount: 1,
       extensions: [],
@@ -199,9 +207,11 @@ describe('openai coverage default router (real repo routes)', () => {
 })
 
 describe('openai coverage parse-spec', () => {
-  it('loads fixture spec without network', async () => {
-    const { entries, source } = await parseSpec({ specPath: FIXTURE_SPEC })
+  it('loads fixture spec without network and reports its exact SHA-256', async () => {
+    const { entries, source, sha256 } = await parseSpec({ specPath: FIXTURE_SPEC })
+    const expectedSha256 = createHash('sha256').update(readFileSync(FIXTURE_SPEC)).digest('hex')
     assert.equal(source, FIXTURE_SPEC)
+    assert.equal(sha256, expectedSha256)
     assert.ok(entries.some((e) => e.path === '/v1/chat/completions'))
   })
 })
