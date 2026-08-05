@@ -154,6 +154,34 @@ TEST_F(MtmdLlmContextTest, Constructor) {
   EXPECT_TRUE(model->isLoaded());
 }
 
+TEST_F(
+    MtmdLlmContextTest,
+    SequenceDriverOverrideAppliesThinkingCompactionToMtmdContext) {
+  if (!hasValidModel()) {
+    GTEST_SKIP() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  ASSERT_NE(model, nullptr) << "Model failed to load";
+
+  auto* const driver =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(driver, nullptr)
+      << "multimodal model must expose an MtmdLlmContext driver";
+
+  // Continuous batching receives only a SequenceDriver pointer. This verifies
+  // the virtual call reaches the multimodal override rather than the base
+  // class's no-op implementation, and keeps the compactor in sync.
+  SequenceDriver& batchDriver = *driver;
+  batchDriver.setRemoveThinkingFromContext(true);
+  EXPECT_TRUE(MtmdLlmContextTestPeer::removeThinkingFromContext(*driver));
+  EXPECT_TRUE(MtmdLlmContextTestPeer::compactorRemovesThinking(*driver));
+
+  batchDriver.setRemoveThinkingFromContext(false);
+  EXPECT_FALSE(MtmdLlmContextTestPeer::removeThinkingFromContext(*driver));
+  EXPECT_FALSE(MtmdLlmContextTestPeer::compactorRemovesThinking(*driver));
+}
+
 TEST_F(MtmdLlmContextTest, ProcessWithStringInput) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
