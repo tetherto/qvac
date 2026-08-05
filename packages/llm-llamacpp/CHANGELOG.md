@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.39.4] - 2026-08-04
+
+Internal refactor of how JS configuration is parsed into C++. Generation,
+finetune, and load config now use a shared, declarative handler-registry pattern
+(the same approach diffusion-cpp uses). No change to accepted config keys,
+spellings, or defaults, apart from the edge cases below.
+
+### Changed
+
+- Sending both the hyphen and underscore spelling of `image-max-tokens` or
+  `image-min-tokens` in the same load config is now accepted (the underscore
+  spelling wins) instead of failing the load. Previously the second spelling was
+  forwarded to llama.cpp and rejected.
+- In rare multi-error cases, the specific `InvalidArgument` message that surfaces
+  first may differ from before: a generation request that sets conflicting
+  `grammar`/`json_schema` alongside another invalid field, or a finetune request
+  that omits a required field and also sends a malformed optional. Accept/reject
+  behavior is unchanged in these cases.
+
+### Pull Requests
+
+- [#3491](https://github.com/tetherto/qvac/pull/3491) - chore[api]: adopt
+  handler-registry pattern for config parsing
+
+## [0.39.3] - 2026-08-04
+
+This release makes DeepSeek V4 cache recovery safe when requests are cancelled
+or generation ends before a reasoning block closes. It also adds a supported
+string-based `no_mmap` configuration and makes thinking-block compaction
+default-on only for the Qwen3 reasoning family.
+
+### Fixed
+
+- DeepSeek V4 text inference now uses full-state checkpoints for request
+  cancellation, optional thinking-block compaction, and interrupted terminal
+  stops. When `remove_thinking_from_context` is enabled, it restores the
+  checkpoint instead of attempting unsafe compressed-cache edits.
+- Multimodal continuous-batch drivers now honor the per-request
+  `remove_thinking_from_context` override and keep their compactor state in
+  sync.
+- `no_mmap: 'true'` now disables memory-mapped model loading by setting the
+  native model parameter directly, rather than forwarding an unsupported
+  command-line argument.
+
+### Changed
+
+- Thinking-block compaction now defaults to `false` for non-Qwen models.
+  Qwen3, Qwen3.5, Qwen3.6, and their MoE variants retain the default-on
+  behavior; callers can override the setting for any model per request.
+
+### Pull Requests
+
+- [#3634](https://github.com/tetherto/qvac/pull/3634) - fix: recover DeepSeek
+  V4 checkpoints
+
 ## [0.39.2] - 2026-07-30
 
 ### Changed
