@@ -1,14 +1,16 @@
 ---
 title: Python SDK
-description: The Python client for QVAC — same worker, same contract as the TypeScript SDK.
+description: The Python client for QVAC — same worker, same contract as the JS/TS SDK.
 schemaType: TechArticle
 ---
+
+## Overview
 
 The Python SDK (`tetherto-qvac-sdk` on PyPI) is a full-fidelity client for QVAC: it drives
 the same worker, over the same generated contract, as the [JS/TS SDK](/js-ts-sdk).
 Every capability — LLM completion, embeddings, transcription, text-to-speech,
 OCR, translation, diffusion, VLA, plugins — is available from Python, and
-behaves identically to the JS client because the behaviour lives in the shared
+behaves identically to the JS/TS client because the behaviour lives in the shared
 worker, not re-implemented per language.
 
 It is asyncio-native. The package version tracks the `@qvac/sdk` version it
@@ -95,7 +97,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## The public API
+## Public API
 
 Everything you normally need is imported flat from `tetherto.qvac_sdk`; model constants live
 in `tetherto.qvac_sdk.models`.

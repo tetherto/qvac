@@ -182,7 +182,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     id: 'unified',
     name: 'Unified interface',
     description:
-      'Use one TypeScript or Python SDK client to run multiple AI capabilities.',
+      'Use one JS/TS or Python SDK client to run multiple AI capabilities.',
     angle: 270,
     href: '/introduction',
   },
