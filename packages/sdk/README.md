@@ -103,6 +103,14 @@ Supported values include provenance with a source and optional scope. These
 values are diagnostics; they do not reserve memory or guarantee that a model
 can be loaded.
 
+GPU capabilities expose observed driver names, versions, and graphics APIs.
+These observations do not prove that an inference backend is compatible.
+
+Profiled inference operation events may include `event.backend` with the
+selected backend and device, graphics API, driver, fallback reason, and probe
+result. The probe contract is reserved for future addon-owned machine-readable
+checks; the SDK does not infer compatibility from driver inventory or log text.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:

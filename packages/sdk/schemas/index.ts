@@ -68,6 +68,7 @@ export {
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
   MODEL_EXECUTION_KEY,
+  BACKEND_DIAGNOSTICS_KEY,
   profilerModeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,

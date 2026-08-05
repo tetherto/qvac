@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { sourceTypeSchema, type OperationEvent } from '@/schemas'
+import { BACKEND_DIAGNOSTICS_KEY, sourceTypeSchema, type OperationEvent } from '@/schemas'
 import { buildOperationEvent } from '@/server/rpc/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
@@ -68,6 +68,31 @@ test('operation metrics: omits unavailable gauges (no fabrication)', (t) => {
   t.is('modelInitializationTime' in gauges, false, 'does not fabricate modelInitializationTime')
 })
 
+test('operation metrics: attaches backend selection diagnostics', (t) => {
+  const response = {
+    [BACKEND_DIAGNOSTICS_KEY]: {
+      selectedBackend: 'llama.cpp-metal',
+      selectedDevice: 'gpu',
+      graphicsApi: 'metal',
+      driver: { name: 'Metal', version: '3' },
+      gpuId: 'gpu-opaque-1',
+      fallback: {
+        requestedBackend: 'llama.cpp-vulkan',
+        requestedDevice: 'gpu',
+        reason: 'Vulkan backend is unavailable'
+      },
+      probe: {
+        status: 'compatible',
+        backend: 'llama.cpp-metal'
+      }
+    } as const
+  }
+
+  const event = buildOperationEvent('completionStream', 'profile-backend', 100, 50, {}, response)
+
+  t.alike(event?.backend, response[BACKEND_DIAGNOSTICS_KEY])
+})
+
 test('transport: operation event survives injection/extraction round-trip', (t) => {
   const operation: OperationEvent = {
     op: 'loadModel',
@@ -75,6 +100,19 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
     ms: 500,
     profileId: 'round-trip-test',
     gauges: { totalLoadTime: 500, downloadTime: 200 },
+    backend: {
+      selectedBackend: 'llama.cpp-cpu',
+      selectedDevice: 'cpu',
+      fallback: {
+        requestedDevice: 'gpu',
+        reason: 'No compatible GPU backend was found'
+      },
+      probe: {
+        status: 'unknown',
+        backend: 'llama.cpp-cpu',
+        reason: 'The addon does not provide a compatibility probe yet'
+      }
+    },
     tags: { modelType: 'llamacpp-completion', sourceType: 'registry', cacheHit: 'true' }
   }
 
@@ -90,6 +128,7 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
   t.is(extracted!.operation!.ms, 500)
   t.is(extracted!.operation!.profileId, 'round-trip-test')
   t.alike(extracted!.operation!.gauges, { totalLoadTime: 500, downloadTime: 200 })
+  t.alike(extracted!.operation!.backend, operation.backend)
   t.alike(extracted!.operation!.tags, {
     modelType: 'llamacpp-completion',
     sourceType: 'registry',

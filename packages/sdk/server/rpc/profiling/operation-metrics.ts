@@ -4,6 +4,7 @@
  */
 
 import {
+  BACKEND_DIAGNOSTICS_KEY,
   type CompletionStats,
   type OCRStats,
   type TranslationStats,
@@ -11,7 +12,8 @@ import {
   type EmbedStats,
   type TtsStats,
   type DiffusionStats,
-  type VideoStats
+  type VideoStats,
+  type InferenceBackendDiagnostics
 } from '@/schemas'
 import { readModelExecutionMs } from '@/profiling/model-execution'
 import type { ProfilingEvent, ProfilingEventKind } from '@/profiling/types'
@@ -46,6 +48,14 @@ interface DownloadStatsShape {
 }
 
 type ResponseWithProfilingMeta<T> = { __profilingMeta?: T }
+type ResponseWithBackendDiagnostics = {
+  [BACKEND_DIAGNOSTICS_KEY]?: InferenceBackendDiagnostics
+}
+
+function readBackendDiagnostics(response: unknown) {
+  if (!response || typeof response !== 'object') return undefined
+  return (response as ResponseWithBackendDiagnostics)[BACKEND_DIAGNOSTICS_KEY]
+}
 
 function extractDownloadStatsGauges(
   stats: DownloadStatsShape | undefined,
@@ -78,13 +88,15 @@ export function buildOperationEvent(
   ttfb?: number
 ): ProfilingEvent | undefined {
   const config = metricsRegistry.get(op)
+  const backend = readBackendDiagnostics(finalResponse)
   if (!config) {
     return {
       ts,
       op,
       kind: 'handler',
       profileId,
-      ms: executionMs
+      ms: executionMs,
+      ...(backend && { backend })
     }
   }
 
@@ -126,6 +138,9 @@ export function buildOperationEvent(
 
   if (hasGauges) {
     event.gauges = gauges
+  }
+  if (backend) {
+    event.backend = backend
   }
   if (hasTags) {
     event.tags = tags
