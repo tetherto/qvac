@@ -4,6 +4,7 @@ import { parseToolCalls, detectToolDialectFromName } from '@/server/utils/tools'
 import { parseHarmonyFormat } from '@/server/utils/tools/parsers/harmony'
 import { parseQwen35Format } from '@/server/utils/tools/parsers/qwen35'
 import { parseGemma4NativeFormat } from '@/server/utils/tools/parsers/gemma4native'
+import { parseDsmlFormat } from '@/server/utils/tools/parsers/dsml'
 const weatherTool: Tool = {
   type: 'function',
   name: 'weather',
@@ -259,7 +260,13 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     [undefined, '/cache/abc_Qwen3-60B-Instruct-Q4_K_M.gguf'],
     ['QWEN3_60B_INST', '/Users/x/.qvac/models/abc_qwen3-60b-instruct.gguf'],
     // gemma-40b contains 'gemma-4' as a substring but the trailing '0' (digit) blocks the gemma4 lookahead
-    [undefined, '/cache/abc_gemma-40b-Q4_K_M.gguf']
+    [undefined, '/cache/abc_gemma-40b-Q4_K_M.gguf'],
+    // DSML only exists from DeepSeek V3.2 onwards — older DeepSeek releases and
+    // the DeepSeek-derived OCR models must keep the hermes chain
+    [undefined, '/cache/abc_DeepSeek-V2-Lite-Chat-Q4_K_M.gguf'],
+    [undefined, '/cache/abc_DeepSeek-V3.1-Q4_K_M.gguf'],
+    ['DEEPSEEK_R1_DISTILL_Q4', '/Users/x/.qvac/models/abc_deepseek-r1-distill-qwen-7b.gguf'],
+    [undefined, '/cache/abc_deepseek-ocr-Q4_0.gguf']
   ]
 
   for (const [name, path] of cases) {
@@ -1152,4 +1159,244 @@ test('parseToolCalls(default): Qwen3.5 XML format is recovered without explicit 
   t.is(toolCalls.length, 1)
   t.is(toolCalls[0]?.name, 'get_weather')
   t.alike(toolCalls[0]?.arguments, { city: 'Berlin' })
+})
+
+// --- DeepSeek DSML (V3.2 / V4) ---
+//
+// Note: DSML tags use a fullwidth vertical line (U+FF5C), not an ASCII pipe.
+
+const searchTool: Tool = {
+  type: 'function',
+  name: 'search',
+  description: 'Search a corpus',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: { type: 'string' },
+      limit: { type: 'integer' },
+      recent: { type: 'boolean' },
+      filters: { type: 'array' }
+    },
+    required: ['query']
+  }
+}
+
+const dsmlTools: Tool[] = [getWeatherTool, getHoroscopeTool, searchTool]
+
+test('parseDsmlFormat: single invoke with a string parameter', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather">
+<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.matched, true)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 1)
+  t.is(result.toolCalls[0]?.name, 'get_weather')
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseDsmlFormat: multiple invokes in one block', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather">
+<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>
+<｜DSML｜parameter name="country" string="true">JP</｜DSML｜parameter>
+</｜DSML｜invoke>
+<｜DSML｜invoke name="get_horoscope">
+<｜DSML｜parameter name="sign" string="true">Aquarius</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 2)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo', country: 'JP' })
+  t.is(result.toolCalls[1]?.name, 'get_horoscope')
+  t.alike(result.toolCalls[1]?.arguments, { sign: 'Aquarius' })
+})
+
+test('parseDsmlFormat: multiple tool_calls blocks', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>
+then<｜DSML｜tool_calls><｜DSML｜invoke name="get_horoscope"><｜DSML｜parameter name="sign" string="true">Leo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 2)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+  t.alike(result.toolCalls[1]?.arguments, { sign: 'Leo' })
+})
+
+test('parseDsmlFormat: string="false" parameters are JSON-decoded', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="search">
+<｜DSML｜parameter name="query" string="true">tokyo weather</｜DSML｜parameter>
+<｜DSML｜parameter name="limit" string="false">5</｜DSML｜parameter>
+<｜DSML｜parameter name="recent" string="false">true</｜DSML｜parameter>
+<｜DSML｜parameter name="filters" string="false">["news", "blogs"]</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, {
+    query: 'tokyo weather',
+    limit: 5,
+    recent: true,
+    filters: ['news', 'blogs']
+  })
+})
+
+// A digit-only value labelled string="true" stays a string: the attribute is
+// the model's explicit statement of intent.
+test('parseDsmlFormat: string="true" is honoured over the declared parameter type', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query" string="true">42</｜DSML｜parameter><｜DSML｜parameter name="limit" string="true">5</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { query: '42', limit: '5' })
+})
+
+test('parseDsmlFormat: missing string attribute falls back to the declared type', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query">tokyo</｜DSML｜parameter><｜DSML｜parameter name="limit">5</｜DSML｜parameter><｜DSML｜parameter name="recent">true</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { query: 'tokyo', limit: 5, recent: true })
+})
+
+// DeepSeek V3.2 named the wrapper `function_calls`; V4 renamed it to
+// `tool_calls` but kept the same invoke/parameter grammar.
+test('parseDsmlFormat: V3.2 function_calls block name', (t) => {
+  const text = `<｜DSML｜function_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Osaka</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜function_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 1)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Osaka' })
+})
+
+test('parseDsmlFormat: multiline string parameter keeps its line breaks', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">line1
+line2</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls[0]?.arguments?.city, 'line1\nline2')
+})
+
+// The close tag never arrives when generation is cut short, but the invoke
+// itself is complete and must not be dropped.
+test('parseDsmlFormat: invoke is recovered from an unterminated block', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather">
+<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>
+</｜DSML｜invoke>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 1)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseDsmlFormat: plain text does not match', (t) => {
+  const result = parseDsmlFormat('The weather in Tokyo is sunny.', dsmlTools)
+  t.is(result.matched, false)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 0)
+})
+
+test('parseDsmlFormat: block without an invoke surfaces PARSE_ERROR', (t) => {
+  const text = `<｜DSML｜tool_calls>get_weather(Tokyo)</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.matched, true)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: invoke without a name attribute surfaces PARSE_ERROR', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: malformed string="false" payload surfaces PARSE_ERROR', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query" string="true">tokyo</｜DSML｜parameter><｜DSML｜parameter name="limit" string="false">five</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: unknown tool surfaces UNKNOWN_TOOL', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="launch_rocket"><｜DSML｜parameter name="pad" string="true">39A</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'UNKNOWN_TOOL')
+})
+
+test('parseDsmlFormat: missing required parameter surfaces VALIDATION_ERROR', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="country" string="true">JP</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'VALIDATION_ERROR')
+})
+
+// One bad invoke must not take the valid one down with it.
+test('parseDsmlFormat: valid invoke survives a malformed sibling', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke>
+<｜DSML｜invoke name="launch_rocket"><｜DSML｜parameter name="pad" string="true">39A</｜DSML｜parameter></｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 1)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'UNKNOWN_TOOL')
+})
+
+test('parseToolCalls(dialect=dsml): parses DSML tool calls', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools, 'dsml')
+  t.is(errors.length, 0)
+  t.is(toolCalls.length, 1)
+  t.is(toolCalls[0]?.name, 'get_weather')
+  t.alike(toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseToolCalls(dialect=dsml): reasoning before the block is stripped', (t) => {
+  const text = `<think>The user wants the weather, I should call get_weather.</think>
+<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools, 'dsml')
+  t.is(errors.length, 0)
+  t.is(toolCalls.length, 1)
+  t.alike(toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseToolCalls(dialect=dsml): falls back to hermes JSON', (t) => {
+  const text = `<tool_call>{"name": "get_weather", "arguments": {"city": "Seoul"}}</tool_call>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools, 'dsml')
+  t.is(errors.length, 0)
+  t.is(toolCalls.length, 1)
+  t.alike(toolCalls[0]?.arguments, { city: 'Seoul' })
+})
+
+test('parseToolCalls(default): DSML is recovered without explicit dialect', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Berlin</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools)
+  t.is(errors.length, 0)
+  t.is(toolCalls.length, 1)
+  t.is(toolCalls[0]?.name, 'get_weather')
+  t.alike(toolCalls[0]?.arguments, { city: 'Berlin' })
+})
+
+test('detectToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    [undefined, '/cache/abc_DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf'],
+    ['DEEPSEEK_V4_FLASH_UD_IQ2_M', '/Users/x/.qvac/models/abc_deepseek-v4-flash.gguf'],
+    [undefined, '/cache/abc_deepseek_v4_pro-Q4_K_M.gguf'],
+    [undefined, '/cache/abc_DeepSeek-V3.2-Exp-Q4_K_M.gguf'],
+    [undefined, '/cache/abc_deepseek-v3-2-exp.gguf']
+  ]
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), 'dsml', `name=${name} path=${path}`)
+  }
 })

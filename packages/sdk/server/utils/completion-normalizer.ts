@@ -76,6 +76,15 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
   gemma4: {
     toolFrames: [{ open: '<|tool_call>', close: '<tool_call|>' }],
     thinkingFrames: [{ open: '<|channel>thought', close: '<channel|>' }]
+  },
+  // DeepSeek DSML. `tool_calls` is the V4 block name, `function_calls` the
+  // V3.2 one; the markup token is a fullwidth vertical line (U+FF5C `｜`),
+  // not an ASCII pipe. Reasoning uses the built-in `<think>` convention.
+  dsml: {
+    toolFrames: [
+      { open: '<｜DSML｜tool_calls>', close: '</｜DSML｜tool_calls>' },
+      { open: '<｜DSML｜function_calls>', close: '</｜DSML｜function_calls>' }
+    ]
   }
 }
 
