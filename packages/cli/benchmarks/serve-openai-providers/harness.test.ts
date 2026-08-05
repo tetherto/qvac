@@ -275,9 +275,12 @@ describe('serve-openai-providers harness', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
     const originalLog = console.log
     const originalError = console.error
+    const errors: string[] = []
     try {
       console.log = ignoreError
-      console.error = ignoreError
+      console.error = (...args: unknown[]) => {
+        errors.push(args.map(String).join(' '))
+      }
       const ggufPath = join(dir, 'model.gguf')
       const bytes = Buffer.from('gguf')
       writeFileSync(ggufPath, bytes)
@@ -310,7 +313,7 @@ describe('serve-openai-providers harness', () => {
           uncovered: ['POST /v1/audio/translations']
         },
         extensions: [],
-        warnings: []
+        warnings: ['Live OpenAI coverage build failed; used offline specification cache']
       }
       const deps = {
         ...testDependencies(),
@@ -323,6 +326,9 @@ describe('serve-openai-providers harness', () => {
         openai_api_coverage?: object
       }
       assert.deepEqual(raw.openai_api_coverage, coverage)
+      assert.deepEqual(errors, [
+        'WARN OpenAI API coverage degraded: Live OpenAI coverage build failed; used offline specification cache'
+      ])
     } finally {
       console.log = originalLog
       console.error = originalError

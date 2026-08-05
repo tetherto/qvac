@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 import { mkdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { captureOpenAiApiCoverage } from './coverage'
 import { atomicWriteJson } from './persistence'
@@ -9,10 +9,12 @@ import type { OpenAiApiCoverageSnapshot } from './types'
 
 type CoverageCapture = () => Promise<OpenAiApiCoverageSnapshot>
 
-function outputDirectory(argv: string[]) {
+const BENCHMARK_DIR = dirname(fileURLToPath(import.meta.url))
+
+export function outputDirectory(argv: string[]) {
   const index = argv.indexOf('--out-dir')
   if (index === -1) {
-    return resolve('results/coverage-preview')
+    return join(BENCHMARK_DIR, 'results', 'coverage-preview')
   }
   const value = argv[index + 1]
   if (!value) {

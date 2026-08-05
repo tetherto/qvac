@@ -381,6 +381,10 @@ export async function cmdFull(
       console.error(
         `WARN OpenAI API coverage unavailable: ${raw.openai_api_coverage.errors.join('; ')}`
       )
+    } else if (raw.openai_api_coverage.warnings.length > 0) {
+      console.error(
+        `WARN OpenAI API coverage degraded: ${raw.openai_api_coverage.warnings.join('; ')}`
+      )
     }
     raw.model_parity_evidence = await verifyModelParity(config)
     deps.fs.writeJson(rawPath, raw)

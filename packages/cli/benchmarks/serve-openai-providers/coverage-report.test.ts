@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
 import { captureOpenAiApiCoverage } from './coverage'
-import { generateOpenAiCoveragePreview } from './coverage-preview'
+import { generateOpenAiCoveragePreview, outputDirectory } from './coverage-preview'
 import { writeOpenAiCoveragePreview, writeReport } from './report'
 import type { RawDocument } from './types'
 import type { CoverageReport } from '../../src/openai/coverage/types'
+
+const BENCHMARK_DIR = dirname(fileURLToPath(import.meta.url))
 
 function makeCoverageReport(): CoverageReport {
   return {
@@ -220,6 +223,10 @@ describe('OpenAI API capability coverage report', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  it('defaults preview output to the benchmark results directory', () => {
+    assert.equal(outputDirectory([]), join(BENCHMARK_DIR, 'results', 'coverage-preview'))
   })
 
   it('generates CI preview JSON and Markdown artifacts without providers', async () => {
