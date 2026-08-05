@@ -850,7 +850,6 @@ test('gemma4 thought frame: silently dropped (captureThinking=false)', (t) => {
   t.absent(contentJoined.includes('thinking here'), 'thought inner must be dropped')
 })
 
-// DSML tags use a fullwidth vertical line (U+FF5C), not an ASCII pipe.
 function dsmlConfig(overrides?: Partial<NormalizerConfig>) {
   return baseConfig({
     capabilities: TEXT_PARSE_CAPS,
@@ -933,4 +932,44 @@ test('dsml streaming: reasoning is captured and kept out of content', (t) => {
   t.alike(texts(events, 'thinkingDelta'), ['the user wants weather'])
   t.is(events.filter((e) => e.type === 'toolCall').length, 1)
   t.is(texts(events, 'contentDelta').join(''), '')
+})
+
+test('dsml streaming: wrapper-less invoke is framed and emits toolCall mid-stream', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const events = pushAll(n, [
+    '<｜DSML｜invoke name="get_weather">',
+    '<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>',
+    '</｜DSML｜invoke>'
+  ])
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'wrapper-less invoke emits toolCall before finish')
+  t.is((toolEvents[0] as { call: { name: string } }).call.name, 'get_weather')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
+  t.is(texts(events, 'contentDelta').join(''), '', 'no markup leaks into contentDelta')
+  t.is(n.getAccumulated().contentText, '', 'no markup leaks into contentText')
+})
+
+test('dsml streaming: wrapped output is framed by the wrapper, not by its invokes', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig({ tools: [GET_WEATHER_TOOL, ECHO_TOOL] }))
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke>
+<｜DSML｜invoke name="echo"><｜DSML｜parameter name="msg" string="true">hi</｜DSML｜parameter></｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  const names = events
+    .filter((e) => e.type === 'toolCall')
+    .map((e) => (e as { call: { name: string } }).call.name)
+  t.alike(names, ['get_weather', 'echo'])
+  t.is(events.filter((e) => e.type === 'toolError').length, 0, 'no error from wrapped output')
+  t.is(n.getAccumulated().contentText, '', 'wrapper tags never reach content')
+})
+
+test('dsml streaming: wrapper-less invoke pushed one character at a time', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const text = `<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Lima</｜DSML｜parameter></｜DSML｜invoke>`
+  const events = [...pushAll(n, text.split('')), ...n.finish()]
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'frame detected across single-character pushes')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Lima' })
+  t.is(n.getAccumulated().contentText, '', 'no marker leak')
 })

@@ -12,9 +12,7 @@ export function detectToolDialectFromName(name: string | undefined, path: string
   if (/qwen3[._-]?[56](?![a-z0-9])/.test(tag)) return 'qwen35'
   if (/gemma[-_]?4(?=[^a-z0-9]|$)/.test(tag)) return 'gemma4'
   if (/gpt[_-]?oss/.test(tag)) return 'harmony'
-  // DSML arrived with DeepSeek V3.2; V2 / V3.0 / V3.1 and the DeepSeek-derived
-  // OCR models use other formats and must keep the hermes chain.
-  if (/deepseek[-_. ]?v?(?:4|3[._-]?2)(?![0-9])/.test(tag)) return 'dsml'
+  if (/deepseek[-_. ]?v(?:4|3[._-]?2)(?![0-9])/.test(tag)) return 'dsml'
   if (/lfm[_-]?\d/.test(tag)) return 'pythonic'
   return 'hermes'
 }
