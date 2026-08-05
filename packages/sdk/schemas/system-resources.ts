@@ -89,7 +89,13 @@ export const inferenceBackendDiagnosticsSchema = z.object({
   selectedDevice: backendDeviceSchema,
   graphicsApi: graphicsDriverSchema.optional(),
   driver: backendDriverSchema.optional(),
-  gpuId: z.string().min(1).optional(),
+  gpuId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "GPU ID from the current worker's resource collector; stable only for that collector's lifetime."
+    ),
   fallback: backendFallbackSchema.optional(),
   probe: backendProbeResultSchema.optional()
 })
@@ -177,6 +183,7 @@ export type ResourceMetric<T> =
       reason?: string
     }
 export type GraphicsDriver = z.infer<typeof graphicsDriverSchema>
+export type GraphicsApi = GraphicsDriver
 export type GraphicsDriverCapabilities = z.infer<typeof graphicsDriverCapabilitiesSchema>
 export type BackendProbeResult = z.infer<typeof backendProbeResultSchema>
 export type BackendDevice = z.infer<typeof backendDeviceSchema>

@@ -100,4 +100,4 @@ allocation. Neither is reported as universally device-scoped memory.
 - Driver names, versions, and graphics API flags are passive observations. They
   cannot establish backend compatibility. Only a machine-readable addon probe
   may report `compatible` or `incompatible`; missing evidence remains
-  `unknown` or `unavailable`.
+  `unknown`.

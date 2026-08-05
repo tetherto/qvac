@@ -3,7 +3,7 @@ import { BACKEND_DIAGNOSTICS_KEY, sourceTypeSchema, type OperationEvent } from '
 import { buildOperationEvent } from '@/server/rpc/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
-import { extractProfilingMeta } from '@/profiling'
+import { attachBackendDiagnostics, extractProfilingMeta } from '@/profiling'
 import { clearAggregator, getAggregates, recordEvent } from '@/profiling/aggregator'
 
 test('sourceType: accepts expected values and rejects unknown', (t) => {
@@ -69,28 +69,40 @@ test('operation metrics: omits unavailable gauges (no fabrication)', (t) => {
 })
 
 test('operation metrics: attaches backend selection diagnostics', (t) => {
+  const diagnostics = {
+    selectedBackend: 'llama.cpp-metal',
+    selectedDevice: 'gpu',
+    graphicsApi: 'metal',
+    driver: { name: 'Metal', version: '3' },
+    gpuId: 'gpu-opaque-1',
+    fallback: {
+      requestedBackend: 'llama.cpp-vulkan',
+      requestedDevice: 'gpu',
+      reason: 'Vulkan backend is unavailable'
+    },
+    probe: {
+      status: 'compatible',
+      backend: 'llama.cpp-metal'
+    }
+  } as const
+  const response = attachBackendDiagnostics({}, diagnostics)
+
+  const event = buildOperationEvent('completionStream', 'profile-backend', 100, 50, {}, response)
+
+  t.alike(event?.backend, diagnostics)
+})
+
+test('operation metrics: drops malformed backend diagnostics', (t) => {
   const response = {
     [BACKEND_DIAGNOSTICS_KEY]: {
-      selectedBackend: 'llama.cpp-metal',
-      selectedDevice: 'gpu',
-      graphicsApi: 'metal',
-      driver: { name: 'Metal', version: '3' },
-      gpuId: 'gpu-opaque-1',
-      fallback: {
-        requestedBackend: 'llama.cpp-vulkan',
-        requestedDevice: 'gpu',
-        reason: 'Vulkan backend is unavailable'
-      },
-      probe: {
-        status: 'compatible',
-        backend: 'llama.cpp-metal'
-      }
-    } as const
+      selectedBackend: '',
+      selectedDevice: 'gpu'
+    }
   }
 
   const event = buildOperationEvent('completionStream', 'profile-backend', 100, 50, {}, response)
 
-  t.alike(event?.backend, response[BACKEND_DIAGNOSTICS_KEY])
+  t.absent(event?.backend)
 })
 
 test('transport: operation event survives injection/extraction round-trip', (t) => {

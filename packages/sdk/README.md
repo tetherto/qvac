@@ -108,8 +108,11 @@ These observations do not prove that an inference backend is compatible.
 
 Profiled inference operation events may include `event.backend` with the
 selected backend and device, graphics API, driver, fallback reason, and probe
-result. The probe contract is reserved for future addon-owned machine-readable
-checks; the SDK does not infer compatibility from driver inventory or log text.
+result. Addons attach backend metadata with `attachBackendDiagnostics`; the SDK
+validates it before recording the operation event. `gpuId`, when present,
+identifies a GPU from the current worker resource collector and is stable only
+for that collector's lifetime. QVAC-21926 still tracks the addon producer work;
+this SDK does not infer compatibility from driver inventory or log text.
 
 ## Examples
 
