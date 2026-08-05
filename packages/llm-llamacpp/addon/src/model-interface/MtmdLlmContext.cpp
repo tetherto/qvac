@@ -190,7 +190,12 @@ void MtmdLlmContext::initializeCommonState() {
         arch.has_value() &&
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(arch.value());
+    removeThinkingFromContext_ =
+        arch.has_value() &&
+        qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
+            arch.value());
   }
+  setRemoveThinkingFromContext(removeThinkingFromContext_);
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -1094,8 +1099,7 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   const bool savedRemoveThinking = removeThinkingFromContext_;
   bool toggled = false;
   if (overrides.remove_thinking_from_context) {
-    removeThinkingFromContext_ = *overrides.remove_thinking_from_context;
-    compactor_.setRemoveThinkingFromContext(removeThinkingFromContext_);
+    setRemoveThinkingFromContext(*overrides.remove_thinking_from_context);
     toggled = true;
   }
 
@@ -1107,14 +1111,18 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
           restoreSampler = std::move(restoreSampler),
           savedRemoveThinking]() {
     restoreSampler();
-    removeThinkingFromContext_ = savedRemoveThinking;
-    compactor_.setRemoveThinkingFromContext(savedRemoveThinking);
+    setRemoveThinkingFromContext(savedRemoveThinking);
   };
 }
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 
 llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }
+
+void MtmdLlmContext::setRemoveThinkingFromContext(bool value) {
+  removeThinkingFromContext_ = value;
+  compactor_.setRemoveThinkingFromContext(value);
+}
 
 llama_pos MtmdLlmContext::getNPast() const { return current_.pos; }
 
@@ -1927,7 +1935,7 @@ bool MtmdLlmContext::onGenerationFinished(
   }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
-  if (shouldRollbackKnownReasoningCutoff()) {
+  if (shouldRollbackInterruptedReasoning()) {
     return cancelGenerationCleanup(outputCallback);
   }
   compactThinkSpan();
@@ -1938,14 +1946,16 @@ bool MtmdLlmContext::onGenerationFinished(
   return true;
 }
 
-bool MtmdLlmContext::shouldRollbackKnownReasoningCutoff() const {
-  const bool knownTruncation =
-      generationStopReason_ == GenerationStopReason::PredictionLimit ||
-      generationStopReason_ == GenerationStopReason::SequenceLimit;
-  return knownTruncation && needsRecurrentSnapshot_ &&
-         removeThinkingFromContext_ && reasoningEnabled_ &&
-         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
-         !compactor_.hasCapturedCloseSpan();
+bool MtmdLlmContext::shouldRollbackInterruptedReasoning() const {
+  return qvac_lib_inference_addon_llama::utils::
+      shouldRollbackInterruptedReasoning(
+          generationStopReason_,
+          needsRecurrentSnapshot_,
+          removeThinkingFromContext_,
+          reasoningEnabled_,
+          reasoningState_.inside_reasoning,
+          compactor_.hasOpenSpan(),
+          compactor_.hasCapturedCloseSpan());
 }
 
 bool MtmdLlmContext::onCancel(
