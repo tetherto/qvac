@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <cinttypes>
 #include <cstddef>
 #include <filesystem>
@@ -32,6 +31,7 @@
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
+#include "handlers/LoadConfigHandlers.hpp"
 #include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -1284,6 +1284,38 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
+  // The current llama.cpp common-argument parser does not expose --no-mmap,
+  // so map this addon's string configuration directly to the native model
+  // parameter instead of forwarding it through the generic argument parser.
+  std::optional<bool> noMmap;
+  for (const std::string& key : {"no-mmap", "no_mmap"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      std::string value = it->second;
+      std::ranges::transform(value, value.begin(), ::tolower);
+      const bool enabled = value.empty() || value == "true";
+      if (!enabled && value != "false") {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "no-mmap must be true or false, got: %s", it->second.c_str()));
+      }
+      if (noMmap.has_value() && noMmap.value() != enabled) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            "no-mmap and no_mmap must have the same value");
+      }
+      noMmap = enabled;
+      configFilemap.erase(it);
+    }
+  }
+  if (noMmap.value_or(false)) {
+    params.use_mmap = false;
+  }
+
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
   // fallback path used by llama.cpp does not execute the {%- set persona -%}
   // block that injects the model's persona system prompt, so the model loses
@@ -1300,94 +1332,8 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
-  // reasoning-budget controls the size of the model's <think> reasoning
-  // channel: -1 (default) leaves it unrestricted, 0 disables thinking
-  // entirely, any positive N caps the reasoning channel at N tokens (the
-  // budget sampler forces </think> once N reasoning tokens have been
-  // emitted).
-  auto parseReasoningBudget = [](const std::string& raw) {
-    int value = 0;
-    const char* begin = raw.data();
-    const char* end = begin + raw.size();
-    const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || value < -1) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          "reasoning-budget must be -1 (unrestricted), 0 (disabled), or a "
-          "positive integer (token cap)");
-    }
-    return value;
-  };
-  for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      params.reasoning_budget = parseReasoningBudget(it->second);
-      configFilemap.erase(it);
-    }
-  }
-
-  // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
-  // manually before configVector is built)
-  for (const std::string& key : {"image-tile-mode", "image_tile_mode"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      std::string val = it->second;
-      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-      if (val == "0" || val == "batched") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
-      } else if (val == "1" || val == "sequential") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_SEQUENTIAL;
-      } else if (val == "2" || val == "disabled") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_DISABLED;
-      } else {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-tile-mode must be 0/batched, 1/sequential, or "
-                "2/disabled, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-    }
-  }
-
-  // parse image-max-tokens / image-min-tokens (override Qwen-VL default caps)
-  for (const std::string& key : {"image-max-tokens", "image_max_tokens"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        params.image_max_tokens = std::stoi(it->second);
-      } catch (...) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-max-tokens must be an integer, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-      break;
-    }
-  }
-  for (const std::string& key : {"image-min-tokens", "image_min_tokens"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        params.image_min_tokens = std::stoi(it->second);
-      } catch (...) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-min-tokens must be an integer, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-      break;
-    }
-  }
+  qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
+      params, configFilemap);
 
   // parse custom nDiscarded from config (apply only if > 0)
   if (auto iter = configFilemap.find("n_discarded");

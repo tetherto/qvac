@@ -42,6 +42,10 @@ at the folder that holds them.
 
 ## Usage
 
+> Building with `@qvac/sdk`? Use the SDK's
+> [`audioGen()` music generation guide](../../docs/website/content/docs/ai-capabilities/music-generation.mdx)
+> for registry-hosted models, progress streaming, and targeted cancellation.
+
 ### 1. Simplest case — an instrumental
 
 ```js

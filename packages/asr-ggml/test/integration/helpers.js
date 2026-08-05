@@ -324,6 +324,56 @@ async function downloadFile(url, destPath) {
   return downloadWithHttp(url, destPath)
 }
 
+// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
+// adb writes on Android 11+); we copy from here instead of downloading from
+// huggingface.co. Host side: scripts/generate-prestage-block.js.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function readPrestagedModel(modelName) {
+  if (platform !== 'android') return null
+  try {
+    const src = path.join(PRESTAGED_MODEL_DIR, modelName)
+    const sizePath = `${src}.size`
+    if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
+    const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return null
+    if (fs.statSync(src).size !== expectedSize) return null
+    return { src, expectedSize }
+  } catch (_) {}
+  return null
+}
+
+function prestagedModelPath(modelName) {
+  const staged = readPrestagedModel(modelName)
+  return staged ? staged.src : null
+}
+
+// Require the exact host-recorded byte count on both sides of the app copy so
+// truncated staged files fall through to the normal HuggingFace download.
+function copyPrestagedModel(modelName, destPath, minBytes) {
+  const staged = readPrestagedModel(modelName)
+  if (!staged || staged.expectedSize < minBytes) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(staged.src, destPath)
+    const size = fs.statSync(destPath).size
+    if (size === staged.expectedSize) {
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB)`
+      )
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+  return false
+}
+
 async function ensureWhisperModel(modelPath) {
   const modelName = path.basename(modelPath)
   const diskPath = path.dirname(modelPath)
@@ -338,6 +388,10 @@ async function ensureWhisperModel(modelPath) {
       console.log(`Using cached model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
       return { success: true, path: modelPath, isReal: true }
     }
+  }
+
+  if (copyPrestagedModel(modelName, modelPath, 1000000)) {
+    return { success: true, path: modelPath, isReal: true }
   }
 
   const url = `${HF_WHISPER_BASE}/${modelName}`
@@ -378,6 +432,10 @@ async function ensureVADModel(vadModelPath) {
 
   if (!fs.existsSync(diskPath)) {
     fs.mkdirSync(diskPath, { recursive: true })
+  }
+
+  if (copyPrestagedModel(modelName, vadModelPath, 500000)) {
+    return true
   }
 
   const url = `${HF_VAD_BASE}/${modelName}`
@@ -972,6 +1030,8 @@ module.exports = {
   detectPlatform,
   ensureWhisperModel,
   ensureVADModel,
+  copyPrestagedModel,
+  prestagedModelPath,
   waitUntilIdle,
   runTranscription,
   createAudioStream,

@@ -108,6 +108,10 @@
       "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
       "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
     },
+    "./audiogen-ggml/plugin": {
+      "types": "./dist/server/bare/plugins/audiogen-ggml/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/audiogen-ggml/plugin.js"
+    },
     "./ggml-vla/plugin": {
       "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
@@ -204,6 +208,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/audiogen-ggml": "^0.1.0",
     "@qvac/asr-ggml": "^0.1.0",
     "@qvac/bci-whispercpp": "^0.6.0",
     "@qvac/classification-ggml": "^0.15.1",
@@ -279,9 +284,10 @@
     "prettier-config-holepunch": "^2.0.0",
     "react-native-bare-kit": "^0.14.0",
     "tsc-alias": "^1.8.17",
-    "tsx": "^4.21.0",
+    "tsx": "4.23.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.39.0"
+    "typescript-eslint": "^8.39.0",
+    "@qvac/infer-base": "0.4.2"
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
