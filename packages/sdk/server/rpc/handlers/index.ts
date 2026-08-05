@@ -36,8 +36,10 @@ import {
 import { handleSuspend } from './suspend'
 import { handleResume } from './resume'
 import { handleState } from './state'
+import { handleAudioGenStream } from '@/server/rpc/handlers/audio-gen-stream'
 
 export const handlers = {
+  audioGenStream: handleAudioGenStream,
   heartbeat: handleHeartbeat,
   batchCompletionStream: handleBatchCompletionStream,
   completionStream: handleCompletionStream,
