@@ -140,6 +140,7 @@ const _vlaDl = require('./_vla-model-download.cjs')
 const _loadUrlsConfig = () => _vlaDl.loadUrlsConfig('smolvla-urls.json')
 const _downloadFile = _vlaDl.downloadFile
 const _verifyCachedModel = _vlaDl.verifyCachedModel
+const _copyPrestagedModel = _vlaDl.copyPrestagedModel
 
 async function _ensureMobileModel() {
   const modelFilename = 'smolvla-libero-vision-q8.gguf'
@@ -165,6 +166,21 @@ async function _ensureMobileModel() {
       return destPath
     }
     console.log(`[vla-model] cached GGUF rejected (${verdict.reason}) — re-downloading`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+
+  // The pre_test phase adb-pushed this shard's GGUF to /data/local/tmp; copy +
+  // verify it instead of the 1.9GB S3 download that flakes on mobile networks.
+  if (_copyPrestagedModel(modelFilename, destPath)) {
+    const staged = await _verifyCachedModel(destPath, urlConfig)
+    if (staged.ok) {
+      const mb = fs.statSync(destPath).size / (1024 * 1024)
+      console.log(`[vla-model] using pre-staged GGUF: ${destPath} (${mb.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`[vla-model] pre-staged GGUF rejected (${staged.reason}) — downloading`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
