@@ -16,13 +16,6 @@
         "vulkan-loader",
         "spirv-headers"
       ]
-    },
-    {
-      "kind": "git",
-      "reference": "7f801d91a0c6f78775b2a5c2a2519df037362bb0",
-      "baseline": "7f801d91a0c6f78775b2a5c2a2519df037362bb0",
-      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
-      "packages": ["audiogen-cpp", "ggml-speech"]
     }
   ]
 }
