@@ -1,0 +1,33 @@
+---
+description: Bare and React Native realm constraints for worker, entry, sandbox, and schema-build files
+globs:
+  - "**/worker.ts"
+  - "**/*-entry.ts"
+  - "**/skill-sandbox.ts"
+  - "**/skill-host.ts"
+  - "**/react-native*.ts"
+  - "**/schema/build.ts"
+  - "apps/task-mobile/**"
+alwaysApply: false
+---
+
+# You are editing a non-Bun realm
+
+This file is reached from a Bare runtime, a React Native bundle, or both. Node and Bun
+stdlib assumptions do not hold here, and nothing in the test suite will catch a wrong
+import — the same source still runs fine under Bun.
+
+- **No direct `node:*` imports.** Platform access goes through the owning
+  `package.json`'s `imports` map: `#fs-promises`, `#path`, `#process`, `#os`, `#crypto`,
+  `#http`, `#dns-promises`, `#abort-controller`, `#buffer`. Each resolves to a `bare-*`
+  module under the `bare` condition and to a `lib/node-*.ts` shim otherwise. If you need
+  a capability that has no subpath yet, add one to both conditions rather than importing
+  `node:*` directly.
+- **`b4a` over `Buffer`** for anything that can run under Bare.
+- **Check the `react-native` export condition.** Packages resolve a different entry for
+  React Native (`react-native.ts`, `mobile-entry.ts`). When you add or change a public
+  export, decide explicitly what the RN variant does.
+- **Bare entries are spawned, not imported.** Treat the boundary as a process boundary:
+  no shared module state with the host, and everything crossing it must be serializable.
+- When an API surface is unclear, discover it rather than guessing — the `holepunch-dev`
+  skill covers `bare-*` and the P2P stack.

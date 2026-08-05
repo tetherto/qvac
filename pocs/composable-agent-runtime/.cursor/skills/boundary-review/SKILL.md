@@ -1,32 +1,32 @@
 ---
-name: boundary-reviewer
-description: "Reviews a change in the composable-agent-runtime PoC against its package-boundary and execution-realm invariants. Use after adding an export, moving a file between packages, adding a cross-package import, or touching an Expo plugin / worker entry.\n\nExamples:\n\n- user: \"I moved the skill loader into harness, check it\" → launch boundary-reviewer\n- user: \"Does this change keep Sync and Harness independently adoptable?\" → launch boundary-reviewer\n- After a change that adds a new public export to any PoC package → launch boundary-reviewer"
-tools: Read, Grep, Glob, Bash
+name: boundary-review
+description: Review a change in the composable-agent-runtime PoC against its package-boundary and execution-realm invariants. Use after adding a package export, moving a file between packages, adding a cross-package import, or touching an Expo plugin or worker entry — and before calling such a change done.
 ---
 
-You review changes in `pocs/composable-agent-runtime` for **architectural boundary
-violations only**. Correctness, security, and performance are other reviewers' jobs —
-do not duplicate them.
+# Boundary Review
+
+Reviews a change for **architectural boundary violations only**. Correctness, security,
+and performance are separate concerns — do not fold them in here.
 
 This PoC exists to prove that a set of package boundaries holds. A change that quietly
-erodes one of them defeats the purpose of the workspace, and it will not be caught by
-tests, because everything still runs.
+erodes one defeats the purpose of the workspace, and no test will catch it, because
+everything still runs.
 
-## Gather
+## 1. Gather
 
-Read `pocs/composable-agent-runtime/AGENTS.md` first — sections "Package boundaries" and
-"Execution realms" are the invariants you are reviewing against. Then diff the change:
+Read `AGENTS.md` in the workspace root — sections "Package boundaries" and "Execution
+realms" are the invariants under review. Then get the change:
 
 ```sh
-git diff --stat $(git merge-base HEAD main)...HEAD -- pocs/composable-agent-runtime
+git diff --stat $(git merge-base HEAD main)...HEAD -- .
 ```
 
 Read the touched packages' `package.json` (`exports`, `imports`, `dependencies`) and any
 relevant `docs/arch/` record for the boundary the change claims to respect.
 
-## What a violation looks like
+## 2. Hunt the failure mode
 
-Work through each invariant in AGENTS.md and hunt for its concrete failure mode:
+For each invariant, look for its concrete violation:
 
 | Invariant | Violation looks like |
 |---|---|
@@ -40,12 +40,12 @@ Work through each invariant in AGENTS.md and hunt for its concrete failure mode:
 | Dependency direction | A new edge reversing an arrow, or any cycle |
 | Realm correctness | A new `node:*` import in shared or Bare-reachable code, `Buffer` where `b4a` belongs, a new export whose `react-native` condition was not considered |
 
-## Report
+## 3. Report
 
 For each finding: the invariant broken, the file and line, why the current tests still
 pass despite it, and the smallest change that restores the boundary. Order by severity.
 If a boundary is intact but the change made it load-bearing in a new way, say so
 explicitly rather than silently approving.
 
-If you find nothing, say so plainly and name the invariants you actually checked against
-the diff. Do not invent findings to appear thorough.
+If nothing is wrong, say so plainly and name the invariants actually checked against the
+diff. Do not invent findings to appear thorough.
