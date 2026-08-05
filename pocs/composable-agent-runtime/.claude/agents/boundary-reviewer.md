@@ -36,6 +36,7 @@ Work through each invariant in AGENTS.md and hunt for its concrete failure mode:
 | `agents` is transport-free | Any import that does I/O, storage, or networking |
 | `supervisor` is lifecycle mechanics | Product policy — or TypeScript, since it is intentionally plain JS |
 | Skills belong to applications | Skill-specific branching moved out of `apps/skill-cli` |
+| Sync and Harness are siblings | A **new** `@qvac/sync` import in `packages/harness` — including a type-only one. State must reach Harness through its `StatePort` and an injected client. The four existing sites are tracked debt (see AGENTS.md); a fifth is a blocker |
 | Sync/Harness independently adoptable | A change that makes `bun run test:pack`'s Sync-only or Harness-only consumer non-viable — a blocker even if the suite is not run |
 | Dependency direction | A new edge reversing an arrow, or any cycle |
 | Realm correctness | A new `node:*` import in shared or Bare-reachable code, `Buffer` where `b4a` belongs, a new export whose `react-native` condition was not considered |

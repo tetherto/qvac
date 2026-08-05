@@ -33,7 +33,7 @@ finding, not a detail.
 |---|---|---|
 | `@qvac/assistant` | Application facade, root lifecycle | Transport details, tool policy |
 | `@qvac/sync` | Cryptographic device identity, replicated state | Agent execution |
-| `@qvac/harness` | Ready-to-run agent execution: skills, grants, sandboxing, brokers, transports, persistence | Any concrete skill |
+| `@qvac/harness` | Ready-to-run agent execution: skills, grants, sandboxing, brokers, transports, persistence | Any concrete skill; any direct knowledge of Sync |
 | `@qvac/agents` | Transport-free primitives: tool loop, guards, approval semantics, turn budget, events, checkpoints | Transports, I/O, storage |
 | `@qvac/supervisor` | Lifecycle mechanics | Product policy |
 | `@qvac/sdk` | Inference via its public client/worker path | — |
@@ -44,15 +44,25 @@ Additional standing rules:
   image-generation skills plus their worker entries and generated bundle. Harness
   supplies only generic machinery via `@qvac/harness/skill-host` and
   `@qvac/harness/skill-sandbox`. Never move a concrete skill into `packages/harness`.
-- **Sync and Harness are siblings in the artifact hierarchy.** Harness does take a code
-  dependency on Sync, but each exposes a standalone Expo plugin that packages its own
-  worker and writes its own contribution manifest; the Assistant plugin composes them in
-  contributor mode. A consumer must be able to adopt Sync alone or Harness alone —
-  `bun run test:pack` proves it. Sync must never depend on Harness.
+- **Sync and Harness are siblings, not layers.** Neither may depend on the other.
+  Harness reaches persistent state through a `StatePort` it owns, satisfied by an
+  injected, structurally compatible client; Assistant does the wiring. Each package
+  exposes a standalone Expo plugin that packages its own worker and writes its own
+  contribution manifest, so a consumer can adopt Sync alone or Harness alone —
+  `bun run test:pack` proves it.
 - **Dependency direction.** `agents` and `supervisor` depend on nothing in the
-  workspace; `sync` → `supervisor`; `harness` → `agents`, `sync`, `supervisor`,
-  `@qvac/sdk`; `assistant` composes them all and nothing depends on `assistant`. No
-  cycles, and no new edge that reverses one of these arrows.
+  workspace; `sync` → `supervisor`; `harness` → `agents`, `supervisor`, `@qvac/sdk`;
+  `assistant` composes them all and nothing depends on `assistant`. No cycles, and no
+  new edge that reverses one of these arrows.
+- **Known debt: `harness` still imports `@qvac/sync` directly.** This violates the rule
+  above and is tracked by `docs/arch/tech-debt/TD-STRUCTURAL-COMPOSITION-PORTS.md`. It
+  survives at four sites — `lib/sync-harness-run-store.ts` (`SyncProfileClient`,
+  `SyncRuntime`, `profiles/durable-work`), `lib/runtime/create-harness.ts` and
+  `lib/runtime/create-harness-mobile.ts` (`SyncRuntime` types), and
+  `test/harness-run-store.ts` (`createSync`) — plus the `@qvac/sync` entry in
+  `packages/harness/package.json`. **Do not add a fifth.** New state access in Harness
+  goes through the port and takes an injected client; removing the existing four belongs
+  to that TD, not to unrelated changes.
 - **Every entry added to a package's `exports` is a contract** this PoC will be judged
   on. An export that exists only to let one package reach into another's internals is a
   boundary violation wearing a public name.
