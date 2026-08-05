@@ -13,6 +13,7 @@ const modelRegistryEntryAddonSchema = z.enum([
   'ocr',
   'parakeet',
   'diffusion',
+  'audiogen',
   'vla',
   'classification',
   'other'
@@ -34,6 +35,7 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.ggmlOcr,
   ModelType.parakeetTranscription,
   ModelType.sdcppGeneration,
+  ModelType.audiogenGgml,
   ModelType.ggmlVla,
   ModelType.ggmlClassification,
   'onnx-vad'

@@ -1,0 +1,182 @@
+---
+title: Music generation
+description: Generate music and other audio from text, lyrics, and musical controls using ACE-Step.
+schemaType: HowTo
+---
+
+## Overview
+
+Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), a GGML-backed ACE-Step 1.5 engine. Load the four model stages with `modelType: "audiogen"`, then call `audioGen()` with a caption and optional lyrics or musical controls.
+
+`audioGen()` returns immediately with:
+
+- `requestId` — a synchronous identifier for targeted cancellation.
+- `progressStream` — stage and step updates while generation runs.
+- `audio` — a promise resolving to interleaved PCM, its sample rate, channel count, and `bitsPerSample`.
+- `stats` — a promise resolving to timing statistics.
+
+<Callout type="info">
+  AudioGen is currently validated by the SDK end-to-end suite on desktop
+  Node.js/Bare. Its four-model pipeline has a large memory and download
+  footprint, so test your chosen model set and hardware before deploying to
+  other runtimes.
+</Callout>
+
+## Functions
+
+Use the following sequence:
+
+1. [`loadModel()`](/reference/api#loadmodel)
+2. [`audioGen()`](/reference/api#audiogen)
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For complete signatures, see the [SDK API reference](/reference/api/).
+
+## Enable the plugin
+
+When your project selects plugins explicitly, add the AudioGen plugin:
+
+```json title="qvac.config.json"
+{
+  "plugins": ["@qvac/sdk/audiogen-ggml/plugin"]
+}
+```
+
+Then rebuild the SDK bundle:
+
+```bash
+qvac bundle sdk
+```
+
+If `plugins` is omitted or empty, all built-in plugins are included. See the [plugin system](/configuration/plugins) for bundle and Bare runtime registration details.
+
+## Models
+
+ACE-Step uses four independent GGUF files:
+
+| Stage | SDK model constant | Purpose |
+| --- | --- | --- |
+| Text encoder | `AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0` | Encodes captions and lyrics |
+| Language model | `AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0` | Plans the song and musical structure |
+| DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M` | Fast, lower-memory waveform generation |
+| DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q8_0` | Higher-precision Turbo generation |
+| DiT | `AUDIOGEN_ACESTEP_V15_SFT_Q8_0` | Supervised fine-tuned generation |
+| VAE | `AUDIOGEN_VAE_BF16` | Decodes the latent into PCM audio |
+
+<Callout type="warning">
+  The first AudioGen load downloads approximately 3.3 GB across these four
+  files. The SDK downloads them sequentially to avoid splitting P2P bandwidth
+  across four registry streams. On slow or unstable links, set
+  `registryStreamTimeoutMs: 600000` and `registryDownloadMaxRetries: 10` in
+  `qvac.config.json`, then point `QVAC_CONFIG_PATH` at that file before running
+  the example.
+</Callout>
+
+Unlike single-file model families, AudioGen does not use a top-level `modelSrc`. Supply every stage in `modelConfig`:
+
+```ts
+import {
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_VAE_BF16,
+  loadModel,
+} from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    useGPU: true,
+  },
+});
+```
+
+Advanced load-time controls are `inferenceSteps`, `shift`, `nGpuLayers`, `threads`, and `backendsDir`. Turbo and SFT variants have different tuning requirements; omit `inferenceSteps` and `shift` unless you need to override the addon's defaults.
+
+For more about model constants and sources, see [SDK — Models](/introduction#models).
+
+## Generate audio
+
+`caption` is required and cannot be empty. Lyrics and musical controls are optional:
+
+```ts
+import { audioGen } from "@qvac/sdk";
+
+const run = audioGen({
+  modelId,
+  caption: "Energetic cumbia with brass stabs and live percussion",
+  lyrics: `[verse]
+The city wakes beneath the moon
+
+[chorus]
+Dance until the morning comes`,
+  vocalLanguage: "en",
+  bpm: 98,
+  keyscale: "A minor",
+  timesignature: "4/4",
+  duration: 30,
+  seed: 42,
+});
+
+for await (const progress of run.progressStream) {
+  console.log(`${progress.stage}: ${progress.step}/${progress.total}`);
+}
+
+const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all([
+  run.audio,
+  run.stats,
+]);
+```
+
+Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical controls are inferred from the caption.
+
+`duration` is approximate. ACE-Step rounds the requested length to its latent frame grid, so the generated clip can be shorter or longer than requested. Use `stats.audioDurationMs` or calculate the duration from the returned PCM frame count and `sampleRate`; those values describe the actual output.
+
+The SDK returns raw interleaved PCM rather than a WAV file. Use `bitsPerSample` when calculating sample counts or constructing a WAV header so consumers remain correct if the addon changes sample width. The complete example below includes a dependency-free WAV writer.
+
+## Cancellation
+
+The request ID is available before generation starts, so a stop button can cancel exactly that run:
+
+```ts
+import { audioGen, cancel, InferenceCancelledError } from "@qvac/sdk";
+
+const run = audioGen({ modelId, caption: "Ambient electronic music" });
+stopButton.onclick = () => cancel({ requestId: run.requestId });
+
+try {
+  await run.audio;
+} catch (error) {
+  if (!(error instanceof InferenceCancelledError)) throw error;
+}
+```
+
+AudioGen supports hard cancellation: the addon interrupts the active ACE-Step generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. You can also broad-cancel AudioGen work with `cancel({ modelId, kind: "audiogen" })`.
+
+See [Runtime — Cancellation](/runtime/cancellation) for cancellation behavior shared across the SDK.
+
+## Python
+
+The generated Python client exposes the contract-level `audio_gen_stream()` method. Unlike the TypeScript `audioGen()` wrapper, it yields progress, base64 PCM chunks, and the terminal stats frame directly; callers decode and concatenate the chunks themselves.
+
+See [`packages/sdk-python/examples/audiogen.py`](https://github.com/tetherto/qvac/tree/main/packages/sdk-python/examples/audiogen.py) for a complete example.
+
+## Example
+
+This example loads the registry-hosted ACE-Step models, reports progress, generates an instrumental, and writes the PCM output as WAV:
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music.ts title="generate-music.ts" lineNumbers
+```
+
+</WrapCode>
+
+<Callout type="success">
+  **Tip:** see the [SDK quickstart](/quickstart) for setup instructions, and
+  apply the first-run download configuration above on constrained connections.
+</Callout>

@@ -7,6 +7,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-05
+
+This release adds Google FuzzTest coverage for the image preprocessor and wires
+bounded fuzz runs into the Linux C++ CI workflow. No public addon API changes.
+
+## Features
+
+### FuzzTest coverage for `preprocessToTensor`
+
+The addon now ships Phase 0 fuzzing for `ImagePreprocessor::preprocessToTensor`,
+exercising both the encoded-image decode path (JPEG/PNG magic detection and
+`stb_image` decode) and the raw-RGB resize/normalize path. Fuzz targets compile
+the preprocessor sources directly without linking `@qvac/fabric`, so they run
+under full ASan + LeakSanitizer.
+
+New npm scripts support local fuzz workflows: `fuzz` (bounded run),
+`fuzz:continuous` (coverage-guided, time-boxed via `--fuzz_for`), and
+`test:cpp:fuzz` (combined unit-test + fuzz configure/build/run). Production
+builds pass `-D BUILD_FUZZING=OFF` explicitly so a prior fuzz configure cannot
+skip the shipped `.bare` module.
+
+Fuzz dependencies (Abseil, FuzzTest, RE2, ANTLR4, GoogleTest) resolve from
+vcpkg via a new manifest `fuzz` feature. Linux CI runs a bounded fuzz stage
+after C++ unit tests in `cpp-tests-classification.yml`.
+
+## Pull Requests
+
+- [#3527](https://github.com/tetherto/qvac/pull/3527) - QVAC-22734 infra: add FuzzTest fuzzing (Phase 0)
+
 ## [0.15.1] - 2026-07-30
 
 ### Changed
