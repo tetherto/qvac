@@ -16,11 +16,13 @@ QVAC should be plug-and-play at the top and composable underneath.
 
 An application should install `@qvac/assistant`, call one lifecycle, and get local agent execution plus durable multi-device state. Developers can still use Harness, Agents, SDK, or Sync directly. Workers, Corestores, HRPC, schemas, storage paths, and runtime versions stay behind the normal API.
 
-The PoC confirms the desktop package boundaries, generated contracts, replicated state, automatic child recovery, and real Qwen task execution between desktop and physical iOS and Android devices. It also shows why Sync, agent execution, and native inference must not share one Bare process. Android now contains SDK native abort in a private Service process and restarts the lightweight SDK probe while the host and sibling runtimes survive. Real model-loaded Android isolation remains a hard gate. iOS crash containment requires a separate PoC before selecting a process-boundary mechanism.
+The PoC confirms the desktop package boundaries, generated contracts, replicated state, automatic child recovery, and real Qwen task execution between desktop and physical iOS and Android devices. Separate Bare runtimes for Sync, Harness, and SDK are decided in [ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md). Android now contains SDK native abort in a private Service process and restarts the lightweight SDK probe while the host and sibling runtimes survive. Real model-loaded Android isolation remains a hard gate. iOS crash containment requires a separate PoC before selecting a process-boundary mechanism.
 
 ## What
 
-The target has six components and three separately supervised Bare runtimes:
+The target has six components. Runtime topology is
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md):
+three separately supervised Bare runtimes.
 
 ```mermaid
 flowchart TB
@@ -101,17 +103,14 @@ Concurrent readiness calls share one attempt, replacement runtimes create a new 
 - Typed contracts fail closed on incompatible required capabilities.
 - Logging, coded error envelopes, and one trace ID cross the demonstrated Assistant to Harness to SDK path.
 
-Separate Sync, Harness, and SDK Bare runtimes remain required on supported
-targets. Physical iOS and Android prove three concurrent Worklets and
-suspend/resume. Android additionally proves real Sync writer admission, a
-desktop-Qwen task round trip, background retention, force-stop reconnect, and
-SDK abort containment in `:qvac_sdk`. The host and Harness survive, death is
-reported, and a replacement SDK process handshakes successfully. This is a
-lightweight probe, not real inference. iOS Worklets remain in the application
-process. An Enhanced Security helper extension is the leading candidate, but a
-dedicated physical-device PoC must validate crash containment, model-loaded
-Metal inference, memory limits, signing, and distribution viability before the
-QIP selects it.
+Runtime topology follows
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md).
+Physical iOS and Android prove three concurrent Worklets and suspend/resume.
+Android additionally proves real Sync writer admission, a desktop-Qwen task
+round trip, background retention, force-stop reconnect, and SDK abort
+containment in `:qvac_sdk` for a lightweight probe (not real inference). iOS
+Worklets remain in the application process; an Enhanced Security helper
+extension is the leading candidate pending the Phase 0 containment PoC.
 
 ## State and delegation
 
@@ -133,7 +132,7 @@ Phase 0 must turn the current assumptions into evidence and approved contracts b
 
 | Gate | Required evidence/decision |
 | --- | --- |
-| Mobile topology and P9 | Validate model-loaded Android isolation; run a separate iOS containment PoC and return the mechanism choice to approvers; approve measured startup, memory, and binary-size budgets. |
+| Mobile topology and P9 | Validate model-loaded Android isolation; run a separate iOS containment PoC and return the mechanism choice to approvers ([ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md)); approve measured startup, memory, and binary-size budgets. |
 | Trust and claims | Approve selective visibility, capabilities, revocation/key epochs, lease/fencing semantics, duplicate handling, and tool idempotency. |
 | SDK and host recovery | Prove standalone SDK recovery plus offline, disconnect, background, kill, and relaunch behavior for every supported host. |
 | Contract ownership | Keep one concise RPC contract source in each owning package; generate schemas, clients, handler types, bindings, and capability metadata; keep persistence schemas separate and compatibility decisions explicit. |
@@ -145,9 +144,9 @@ After Phase 0 gates, extract Supervisor, then Sync and Agents, build Harness fro
 
 ## Consequences
 
-The upside is one easy entry point, state and identity available before inference, and independently reusable layers for agent frameworks, execution, inference, P2P state, and supervision. The cost is three runtime boundaries, a sixth package, stricter release discipline, and unresolved mobile and distributed-execution guarantees.
+The upside is one easy entry point, state and identity available before inference, and independently reusable layers for agent frameworks, execution, inference, P2P state, and supervision. Topology cost is recorded in [ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md); this QIP additionally costs a sixth package, stricter release discipline, and unresolved distributed-execution guarantees.
 
-The approval ask is to adopt the package ownership, desktop topology, developer-experience promise, and gated migration direction. Mobile crash containment remains an explicit approval gate, not a proven property.
+The approval ask is to adopt the package ownership, ADR 0004 topology, developer-experience promise, and gated migration direction. Mobile crash containment remains an explicit approval gate, not a proven property.
 
 ## Out of scope
 
