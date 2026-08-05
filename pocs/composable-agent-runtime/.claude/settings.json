@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run test:*)",
+      "Bash(bun run typecheck:*)",
+      "Bash(bun run lint:*)",
+      "Bash(bun test:*)",
+      "Bash(bun install --ignore-scripts)",
+      "Bash(bun run --cwd:*)",
+      "Bash(bun -e:*)",
+      "Bash(node --experimental-strip-types:*)",
+      "Bash(bare:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git branch:*)",
+      "Bash(gh api repos/holepunchto/:*)",
+      "Bash(ls:*)",
+      "Bash(rg:*)",
+      "Bash(jq:*)",
+      "WebFetch(domain:docs.pears.com)"
+    ]
+  }
+}
