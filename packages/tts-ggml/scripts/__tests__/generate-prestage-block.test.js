@@ -27,9 +27,12 @@ const {
   selectEntries,
   buildTsv,
   buildPrestageScript,
+  buildIosPrestageScript,
+  buildPlatformScript,
   buildPrestageBlock,
   readOptionsFromEnv,
-  PRESTAGE_DIR
+  PRESTAGE_DIR,
+  IOS_MODELS_ROOT
 } = require('../generate-prestage-block')
 
 const MANIFEST = {
@@ -166,6 +169,45 @@ test('buildPrestageScript makes the per-target subdir on host and device', () =>
     script.includes('adb shell mkdir -p "$PRESTAGE_DIR/$(dirname "$TARGET")"'),
     'creates the device-side subdir so nested lavasr/ targets push cleanly'
   )
+})
+
+test('buildIosPrestageScript stages into the Documents/models container via pymobiledevice3', () => {
+  const script = buildIosPrestageScript('QkFTRTY0', 'q4')
+  assert.ok(script.includes(`MODELS_ROOT=${IOS_MODELS_ROOT}`), 'pins the iOS models root')
+  assert.ok(script.includes('unset SUDO_UID SUDO_GID'), 'works around the chown EPERM')
+  assert.ok(
+    script.includes('pymobiledevice3 apps push "$BID" "/tmp/prestage/$TARGET" "$MODELS_ROOT/$TARGET"'),
+    'pushes each target under Documents/models via AFC'
+  )
+  assert.ok(
+    script.includes('mkdir -p "/tmp/prestage/$(dirname "$TARGET")"'),
+    'creates the host-side subdir so nested lavasr/ + whisper/ targets download cleanly'
+  )
+  assert.ok(/traceback\|afcexception\|failed with status/.test(script), 'fails hard on an AFC token')
+  assert.ok(!script.includes('adb '), 'iOS backend uses no adb')
+  assert.ok(!script.includes(PRESTAGE_DIR), 'iOS backend does not touch the Android prestage dir')
+})
+
+test('buildPlatformScript selects the backend by platform and rejects unknown ones', () => {
+  assert.ok(buildPlatformScript('QkFTRTY0', 'q4', 'android').includes('adb push'))
+  assert.ok(buildPlatformScript('QkFTRTY0', 'q4', 'ios').includes('pymobiledevice3 apps push'))
+  assert.throws(() => buildPlatformScript('QkFTRTY0', 'q4', 'windows'), /unknown platform/)
+})
+
+test('buildPrestageBlock ios backend stages the lavasr GGUF under Documents/models', () => {
+  const block = buildPrestageBlock(
+    MANIFEST,
+    { variant: 'q4', enhancer: 'lavasr', denoiser: 'none' },
+    'ios'
+  )
+  const tsv = decodeBlockTsv(block)
+  assert.ok(tsv.includes('supertonic.gguf\thttps://s3/s-q4.gguf'), 'engine model still staged')
+  assert.ok(
+    tsv.includes('lavasr/lavasr-enhancer.gguf\thttps://s3/enh.gguf'),
+    'enhancer staged into the lavasr/ subdir (resolved on-device under models/lavasr)'
+  )
+  assert.ok(block.includes('pymobiledevice3 apps push'), 'emits the iOS AFC push backend')
+  assert.ok(!block.includes('adb push'), 'no adb in the iOS block')
 })
 
 test('buildPrestageBlock for an engine-only row stages no lavasr files', () => {
