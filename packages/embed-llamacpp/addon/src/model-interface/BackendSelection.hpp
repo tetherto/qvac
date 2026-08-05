@@ -55,4 +55,9 @@ std::pair<BackendType, std::string> chooseBackend(
 /// falls back to the iGPU count. This mirrors backends like Vulkan which
 /// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
+
+/// @brief Whether any available GPU backend can provide split buffers, which
+/// row-split (LLAMA_SPLIT_MODE_ROW) requires. Callers should degrade
+// row -> none when this returns false.
+bool gpuBackendSupportsRowSplit();
 } // namespace backend_selection

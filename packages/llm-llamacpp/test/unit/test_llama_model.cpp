@@ -13,6 +13,7 @@
 #include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
+#include "utils/BackendSelection.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
@@ -1332,8 +1333,10 @@ TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
   double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
   if (backendDevice == 0.0) {
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
-  } else {
+  } else if (backend_selection::gpuBackendSupportsRowSplit()) {
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
   }
 }
 

@@ -438,3 +438,22 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
   }
   return gpuCount > 0 ? gpuCount : igpuCount;
 }
+
+bool backend_selection::gpuBackendSupportsRowSplit() {
+  const size_t totalDevices = ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    const enum ggml_backend_dev_type devType = ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    if (reg != nullptr &&
+        ggml_backend_reg_get_proc_address(
+            reg, "ggml_backend_split_buffer_type") != nullptr) {
+      return true;
+    }
+  }
+  return false;
+}
