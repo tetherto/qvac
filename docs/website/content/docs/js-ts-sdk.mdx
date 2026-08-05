@@ -14,7 +14,7 @@ It runs the worker in-process (there is no separate transport), and drives every
 QVAC capability through a unified, type-safe API.
 
 For the alternative client, see the [Python SDK](/python-sdk). Both drive the
-same worker over the same generated contract, so capabilities and behaviour are
+same worker over the same generated contract, so capabilities and behavior are
 identical.
 
 ## Requirements
@@ -119,7 +119,7 @@ npm i @qvac/sdk
 </Step>
 
 <Step>
-The SDK prints no logs by default. To watch its client and server logs while the quickstart runs, save this config in your workspace (any path works — `QVAC_CONFIG_PATH` points at it in the run step):
+Save this config in your workspace to enable client and server logs during the run:
 
 ```json file=<rootDir>/packages/sdk/examples/config/default/default.config.json title="qvac.config.json"
 ```
@@ -135,7 +135,7 @@ Create the quickstart script:
 </Step>
 
 <Step>
-Run the quickstart script with Node.js, pointing `QVAC_CONFIG_PATH` at the config you saved (omit it to run silently):
+Run the quickstart script:
 
 ```bash
 QVAC_CONFIG_PATH=./qvac.config.json node quickstart.js
@@ -157,6 +157,114 @@ Follow these instructions to run any example in this documentation:
   ```bash
   npm i -D tsx typescript
   ```
+
+## Configuration
+
+The SDK reads `qvac.config.*` from the project root, or from the path in `QVAC_CONFIG_PATH`:
+
+```bash
+QVAC_CONFIG_PATH=./qvac.config.json node app.js
+```
+
+See [Configuration](/configuration) for options and schema.
+
+### File formats
+
+The `qvac.config.*` format you can use depends on the JS environment where QVAC runs:
+
+| Format | Node.js | Bare | Expo |
+| --- | --- | --- | --- |
+| `qvac.config.json` | ✅ | ✅ | ✅ |
+| `qvac.config.js` | ✅ | ✅ | ❌ |
+| `qvac.config.ts` | ✅ | ❌ | ❌ |
+
+<Callout type="info">
+`qvac.config.ts` requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
+</Callout>
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<Callout type="warn">
+Supported on Node.js and Bare. Not supported in Expo — use JSON instead.
+</Callout>
+<WrapCode>
+```js title="qvac.config.js" lineNumbers
+module.exports = {
+  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  loggerConsoleOutput: true,
+  loggerLevel: "info",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+  registryDownloadMaxRetries: 3,
+  registryStreamTimeoutMs: 60000,
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+  bareRuntimeVersion: "<x.y.z>",
+  serve: {
+    models: {
+      "<model_alias>": {
+        model: "<SDK_MODEL_CONSTANT>",
+        default: true,
+        preload: true,
+        config: {},
+      },
+    },
+  },
+};
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<Callout type="info">
+Supported on Node.js only, and requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
+</Callout>
+<WrapCode>
+```ts title="qvac.config.ts" lineNumbers
+import type { QvacConfig } from "@qvac/sdk";
+
+const config: QvacConfig = {
+  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  loggerConsoleOutput: true,
+  loggerLevel: "info",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+  registryDownloadMaxRetries: 3,
+  registryStreamTimeoutMs: 60000,
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+  bareRuntimeVersion: "<x.y.z>",
+  serve: {
+    models: {
+      "<model_alias>": {
+        model: "<SDK_MODEL_CONSTANT>",
+        default: true,
+        preload: true,
+        config: {},
+      },
+    },
+  },
+};
+
+export default config;
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 ## Running on Bare
 

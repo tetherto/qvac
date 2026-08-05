@@ -108,6 +108,23 @@ The following script shows how to provide tool definitions to `completion()`, co
 </Tab>
 </Tabs>
 
+### Worker-orchestrated tool loop
+
+Python also exposes an advanced worker-orchestrated path, where the worker runs
+the whole multi-turn tool loop and calls back into your local handlers. Use this
+only when you need the worker to own the tool loop rather than managing each
+turn in application code:
+
+<Tabs>
+<Tab value="python" label="Python" default>
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/completion_orchestrate.py title="completion_orchestrate.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ### MCP
 
 You create and manage the MCP client, connect it to one or more MCP servers, and pass it to `completion()`. The following script shows how to attach an MCP client to `completion()` so the model can call a web search tool and then continue with the results:

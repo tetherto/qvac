@@ -159,6 +159,18 @@ for await (const char of echoStream({ modelId, message: "Streaming test!" })) {
 await unloadModel({ modelId });
 ```
 
+The Python SDK exposes plugin invocation through the same worker contract:
+
+<Tabs>
+<Tab value="python" label="Python" default>
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/plugins.py title="plugins.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ## Runtime registration on Bare
 
 The `plugins` array in `qvac.config.*` is **bundle-time** configuration — it controls which addons get packed into your worker. That is separate from **runtime registration**, which determines the plugins live in the worker process when an SDK call runs.
