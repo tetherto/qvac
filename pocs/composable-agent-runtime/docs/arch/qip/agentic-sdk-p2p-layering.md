@@ -18,28 +18,34 @@ The existing building blocks make this direction credible:
 - Assistant has a durable P2P state model for cross-device work, approvals, progress, and results.
 - The coding-agent proof of concept composes the current Assistant and Harness packages into a working cross-device coding agent. Its assessment confirms remote execution, streaming, approvals, provider-local tools, and reusable Harness/P2P surfaces. The composable-runtime proof of concept additionally demonstrates generated HRPC clients, separately spawned Sync and Harness processes on desktop, three concurrent BareKit runtimes on physical iOS and Android, and an Android SDK Service process that contains native abort and restarts independently.
 
-The proof of concept also changes the architecture decision in the earlier version of this QIP. A single Bare core is not the preferred target. Co-locating Sync, agent execution, and native inference gives one process too many responsibilities and lets an inference failure tear down P2P state. The target is a supervised set of separately restartable Bare runtimes behind one application-facing lifecycle.
-
-This QIP defines that target, separates the framework from its ready-to-run implementation, keeps state transportable, and retains one durable delegation model. It also records what the proof of concept established and what remains design or implementation work.
+Separate Bare runtimes for Sync, Harness, and SDK are decided in
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md).
+This QIP consumes that topology and defines the package split, state model,
+supervision composition, delegation path, and migration around it. It also
+records what the proof of concept established and what remains design or
+implementation work.
 
 ## Decision summary
 
 Adopt six components with strict dependency and runtime boundaries:
 
 1. **`@qvac/assistant`** is the optional highest-level application facade.
-2. **`@qvac/sync`** is the durable replicated-state engine in its own Bare runtime.
-3. **`@qvac/harness`** is the ready-to-run agent execution runtime in its own Bare runtime.
+2. **`@qvac/sync`** is the durable replicated-state engine.
+3. **`@qvac/harness`** is the ready-to-run agent execution runtime.
 4. **`@qvac/agents`** is the flexible agent framework used by Harness.
-5. **`@qvac/sdk`** is the production inference runtime, supervised separately by Harness.
+5. **`@qvac/sdk`** is the production inference runtime, supervised separately by Harness on the composed path.
 6. **`@qvac/supervisor`** is shared lifecycle infrastructure used by Assistant, Sync, and Harness.
 
 `@qvac/config` is a shared leaf utility for immutable process configuration.
 It is not a seventh component or runtime. It contains no product keys, package
 defaults, launch transports, or RPC contracts.
 
-Assistant is the normal plug-and-play entry point. It starts and connects the required clients and sidecars, applies safe defaults, propagates configuration, verifies runtime compatibility, and exposes one lifecycle. Applications may consume lower layers directly, but low-level handles are escape hatches rather than prerequisites.
+Runtime topology is
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md).
+Phase 0 still measures mobile feasibility; failure returns that ADR to
+approvers with evidence rather than silently permitting co-location.
 
-Sync, Harness, and SDK run in separate Bare runtimes on every supported target. This remains a product requirement, including mobile, not an optional desktop optimization. A Phase 0 mobile spike is a hard feasibility gate: failure returns the topology to approvers with measured evidence rather than silently permitting co-location.
+Assistant is the normal plug-and-play entry point. It starts and connects the required clients and sidecars, applies safe defaults, propagates configuration, verifies runtime compatibility, and exposes one lifecycle. Applications may consume lower layers directly, but low-level handles are escape hatches rather than prerequisites.
 
 SDK-native stateless delegation is retired. Cross-device execution is durable task routing through Sync-backed state and is coordinated by Harness.
 
@@ -174,7 +180,7 @@ State and execution readiness do not depend on DHT reachability or the presence 
 
 ### `@qvac/sync`: replicated-state engine
 
-Sync is a TypeScript, Bare-first package with a typed client usable from Node/Bun, Electron, Expo/React Native/Hermes, and Bare-compatible hosts. Its server always runs in a dedicated Bare runtime.
+Sync is a TypeScript, Bare-first package with a typed client usable from Node/Bun, Electron, Expo/React Native/Hermes, and Bare-compatible hosts. Its server is the Sync Bare runtime.
 
 Sync owns:
 
@@ -209,7 +215,7 @@ The package should adopt proven agent-framework shapes where they fit QVAC, with
 
 ### `@qvac/harness`: ready-to-run execution runtime
 
-Harness is the implementation built with Agents and SDK. Its typed client is cross-platform; its server always runs in a dedicated Bare runtime.
+Harness is the implementation built with Agents and SDK. Its typed client is cross-platform; its server is the Harness Bare runtime.
 
 Harness owns:
 
@@ -262,21 +268,14 @@ SDK-native `delegate` and `provide` are removed. The SDK has no peer identity, p
 
 Harness communicates with SDK through a typed runtime contract. In the composed path, Harness owns the SDK runtime child through its Supervisor subtree. In the standalone path, the SDK client itself owns worker startup, death detection, restart, model reload, and structured failure reporting under P8. Applications must not supply their own supervisor merely to use SDK.
 
-The standalone Node/Bun path already has a client/worker boundary. Android has
-a viable process-isolation direction through a private SDK Service, subject to
-model-loaded validation. On iOS, Worklets share the application process and
-cannot contain a fatal native SDK failure. An iOS 26 Enhanced Security helper
-extension is the leading process-boundary candidate, but it is not selected by
-this QIP. A dedicated physical-device PoC must first validate crash
-containment, SDK and Metal viability, memory limits, communication behavior,
-signing, and App Review suitability. The resulting evidence returns the iOS
-topology decision to approvers.
-
-SDK runs in a separate Bare runtime in either path. On desktop, that process
-boundary prevents a native inference crash from terminating Harness, Sync, or
-the application. Separate mobile Worklets do not provide the same guarantee.
-SDK model-download Corestores and swarms are not injected into Sync. Runtime
-isolation and clear ownership take priority over sharing those resources.
+SDK topology and resource ownership follow
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md).
+Platform containment strength still varies: Android has a private SDK Service
+direction subject to model-loaded validation; iOS Worklets share the
+application process and cannot contain a fatal native failure. An iOS 26
+Enhanced Security helper extension is the leading candidate, tracked as Phase 0
+spike S9 and
+[TD-IOS-SDK-CRASH-ISOLATION](../tech-debt/TD-IOS-SDK-CRASH-ISOLATION.md).
 
 ### `@qvac/supervisor`: shared lifecycle infrastructure
 
@@ -445,21 +444,18 @@ The proof of concept validates generated HRPC clients. Existing HRPC tests also 
 
 ## Cross-platform runtime requirements
 
+Runtime separation and Bare-only servers are decided in
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md).
+
 - Source packages are TypeScript and Bare-first, using syntax supported by the chosen Bare build pipeline.
 - `@qvac/assistant` and all typed clients support Node/Bun, Electron, Expo/React Native/Hermes, and Bare-compatible hosts.
-- Sync, Harness, and SDK servers run only in Bare runtimes.
-- Sync, Harness, and SDK run in separate Bare runtimes on desktop, mobile, Pear, and other supported targets.
-- A target is not considered supported until independent startup, restart, suspend/resume, and shutdown have been validated for all required runtimes.
 
-The current desktop proof-of-concept path uses separate Sync and Harness
-processes plus the SDK worker. On physical iOS and Android, the lifecycle probe
-starts Sync, Harness, and SDK as three named Bare runtimes, while the
-interactive task slice runs real Sync on the phone and keeps Harness and
-inference on desktop. Android additionally demonstrates SDK abort containment
-through a private Service process, but still requires model-loaded validation.
-iOS Worklets remain in the application process. A separate iOS PoC must
-evaluate the Enhanced Security helper-extension candidate before this QIP
-selects an iOS containment mechanism.
+The PoC already exercises separate Sync and Harness processes plus an SDK
+worker on desktop, three named Bare runtimes on physical iOS and Android
+lifecycle probes, and Android SDK abort containment via a private Service.
+Interactive mobile still keeps Harness and inference on desktop for the task
+slice. Remaining containment and recovery gaps stay as tech debt against ADR
+0004 rather than exceptions to it.
 
 ### P9 resource gates
 
@@ -502,16 +498,13 @@ Security is a Phase 0 extraction gate, not deferred hardening. Sync schema extra
 
 Holepunch `bare-stow` is the packaging/launch backend. The unified Tether bundler is a separate Tether-level initiative built on it, adding defaults and pre-installed targets. QVAC intends to integrate with that work; the SDK-specific port remains tracked in [Porting SDK to Bare Stow](PortingSDKToBareStow.md).
 
-This QIP requires independently packaged entries for Sync, Harness, and SDK, plus host-side supervision. The bundler must preserve:
+This QIP requires independently packaged entries for Sync, Harness, and SDK, plus host-side supervision. The bundler must preserve [ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md) boundaries and:
 
-- separate process/worklet boundaries;
 - generated HRPC clients and contract metadata;
 - addon manifests and ABI validation;
 - platform-specific shutdown behavior;
 - crash/death detection and reconnectable endpoints;
 - explicit package import composition.
-
-The bundler must not collapse the runtimes into one core as an optimization.
 
 ## What the proof of concept establishes
 
@@ -590,7 +583,7 @@ The spikes prove feasibility only. Their resulting contracts and budgets require
 | --- | --- | --- |
 | **G0 - P5 security contract** | Sync schema extraction | Approved selective-visibility classes, execution-capability format, invite revocation/key-epoch semantics, and secret-storage/process-exposure rules. |
 | **G1 - Claim guarantee** | Production durable delegation | Chosen delivery/execution guarantee plus normative acquire, lease, renew, fence, expire, reclaim, cancel, terminal, retry, and idempotency semantics. |
-| **G2 - Mobile topology and P9** | Implementation beyond the architecture spike | S1/S2 report, S9 iOS containment decision, and accepted numeric resource budgets. Failure returns the locked three-runtime decision to approvers. |
+| **G2 - Mobile topology and P9** | Implementation beyond the architecture spike | S1/S2 report, S9 iOS containment decision, and accepted numeric resource budgets. Failure returns [ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md) to approvers. |
 | **G3 - Standalone SDK recovery** | Claiming P8 coverage for direct SDK consumers | Desktop and mobile owner/recovery contract plus passing S6 evidence. |
 | **G4 - Contract ownership** | Package extraction that would create type/protocol cycles | Resolved by the PoC: package-owned HRPC schemas, generated clients, runtime information, errors, and protocol versions; compatibility logic belongs to the caller composing each boundary. |
 | **G5 - Delegation migration** | Removing SDK `delegate`/`provide` | Consumer inventory, compatibility/parity checklist, deprecation release and duration, migration guide, and approved removal version. |
@@ -608,7 +601,10 @@ The spikes prove feasibility only. Their resulting contracts and budgets require
 
 ## Alternatives considered
 
-- **Keep one Bare core for Sync, Harness, and SDK.** Rejected. It is simpler to package but lets native inference failures terminate P2P state and agent execution, conflicts with independent restart, and places mesh secrets in the inference addon's address space.
+Topology alternatives (one Bare core, partial co-location, desktop-only
+separation, per-deployment topology) are rejected in
+[ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md).
+
 - **Let applications compose clients, sidecars, storage, and schemas themselves.** Rejected for the normal path. It creates a compatibility and lifecycle integration task for every application. Lower-level clients remain available as escape hatches.
 - **Make Sync dispatch work directly to Harness.** Rejected. It couples the state engine to execution and makes Sync responsible for agent runtime policy.
 - **Let Harness spawn and own Sync.** Rejected. Local-only Harness must work without P2P, and Sync must remain independently usable and restartable.
@@ -616,7 +612,6 @@ The spikes prove feasibility only. Their resulting contracts and budgets require
 - **Duplicate restart logic in each package.** Rejected. Death disambiguation, dependency-aware restart, backoff, suspension, and escalation are cross-cutting runtime concerns and must have one reusable implementation.
 - **Put the framework and implementation in one package.** Rejected. `@qvac/agents` must be usable as flexible primitives, while `@qvac/harness` is the opinionated ready-to-run implementation.
 - **Keep SDK live delegation as a fast path.** Rejected. Durable delegation already supports live streaming as an overlay and adds async recovery and context transport. A second path would require a second authorization and failure model.
-- **Share Sync's Corestore/swarm with SDK downloads.** Rejected as the target. Separate runtime ownership provides better isolation and simpler lifecycle rules. Each runtime owns its resources.
 
 ## Migration path
 
@@ -647,14 +642,15 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 
 ## Consequences
 
-**Principle trace.** This advances P10 (Inference Platform, Not Application Framework) by keeping agent orchestration out of SDK; P4 (P2P as Infrastructure) by isolating Sync; P3 (Modular at the Interface) through typed package contracts; and P8 (Resilient at the SDK Boundary) through separate restart domains. P1 requires the offline behavior in S7. P5 compliance is conditional on G0. P9 compliance is not claimed until S1/S2 establish accepted mobile resource budgets.
+**Principle trace.** This advances P10 (Inference Platform, Not Application Framework) by keeping agent orchestration out of SDK; P4 (P2P as Infrastructure) by isolating Sync; P3 (Modular at the Interface) through typed package contracts; and P8 (Resilient at the SDK Boundary) through the restart domains in [ADR 0004](../adrs/0004-separate-bare-runtimes-for-sync-harness-and-sdk.md). P1 requires the offline behavior in S7. P5 compliance is conditional on G0. P9 compliance is not claimed until S1/S2 establish accepted mobile resource budgets.
+
+Topology consequences are recorded in ADR 0004. Package-split consequences:
 
 ### Positive impact
 
 - A developer can install Assistant, call one lifecycle, and run without assembling infrastructure.
 - Applications can use local state and stable identity without starting Harness or inference.
 - Developers can drop down to Harness, Agents, SDK, or Sync without inheriting unrelated concerns.
-- Inference crashes no longer terminate mesh state, and Harness crashes no longer terminate Sync.
 - Local-only Harness use requires no persistence setup.
 - Assistant gets durable multi-device behavior by default.
 - Runtime contract negotiation replaces user-maintained 0.x compatibility matrices.
@@ -666,8 +662,6 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 
 ### Trade-offs and risks
 
-- Three Bare runtime boundaries increase startup, memory, packaging, and test complexity.
-- Strict mobile isolation is not yet proven, and the iOS containment mechanism remains a separate PoC decision.
 - Supervision and reconnect semantics become shared infrastructure that must be maintained carefully.
 - A sixth package adds another compatibility contract, although it removes duplicated lifecycle code.
 - Immutable process configuration rejects conflicting settings for multiple
@@ -677,7 +671,6 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 - Remote work is duplicate-possible until G1 defines and validates claim, lease, fencing, and idempotency semantics.
 - Mobile backgrounding or OS termination may interrupt all process-local runtimes; recovery is limited to committed durable state.
 - Revocation prevents future authorized access but cannot erase sensitive data already replicated and decrypted by a peer.
-- Separate SDK storage gives up shared-Corestore/cache optimizations.
 - HRPC contracts, capability negotiation, and schema migrations add release discipline.
 - Moving the current execution host into Harness is a real refactor, not a package rename.
 - Existing SDK delegation consumers must migrate to durable task execution or lose the feature.
