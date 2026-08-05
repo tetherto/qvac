@@ -1,0 +1,28 @@
+---
+description: Composable Agent Runtime PoC — workspace scope, authoritative context, and commands
+alwaysApply: true
+---
+
+# Composable Agent Runtime PoC
+
+Read `@AGENTS.md` in this folder. It is the authoritative context for this workspace:
+package boundaries, execution realms, test topology, evidence policy, and CLI output
+conventions. This rule exists so that context also reaches Inline Edit and Tab, which
+do not read `AGENTS.md`.
+
+## Scope
+
+This folder is self-contained. When it is opened as the workspace root, Cursor does not
+read `.cursor/rules` from the monorepo above it — and it should not: those rules govern
+the shipping packages (SDK, native addons, registry) and their ticket, CI, and release
+flow. Do not go looking for them.
+
+## Always true here
+
+- The PoC exists to prove package boundaries. A change that blurs one is a finding, not
+  a detail — see `@AGENTS.md` "Package boundaries", and use the `boundary-review` skill.
+- Every file belongs to an execution realm (Bun / Node / Bare / React Native). Check the
+  realm before writing an import; see `@AGENTS.md` "Execution realms".
+- Never delete, skip, or weaken an existing test to make a change pass.
+- `bun run verify` is the gate before declaring a change done. Use the targeted
+  `bun run test:<package>` while iterating.
