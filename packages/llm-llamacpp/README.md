@@ -44,7 +44,7 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 
 **Dependencies:**
 - inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler)
-- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
+- qvac-fabric-llm.cpp (≥9840.1.1): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 ## Installation
@@ -335,7 +335,7 @@ The following table describes the expected behavior of `run` and `cancel` depend
 |---------------|----------------|----------------------------------------------------------------|
 | idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
 | idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves      |
-| busy, `parallel: 1` (or `rejectWhenBusy: true`) | run | **Throw** — `"Cannot set new job: a job is already set or being processed"` the moment the slot pool is full |
+| busy, `parallel: 1` (or `rejectWhenBusy: true`) | run | **Throw** — an `Error` with `code === 'RUN_BUSY'` (message `"Cannot set new job: a job is already set or being processed"`) the moment the slot pool is full. Branch on the code; the message is prose and may change |
 | busy, `parallel >= 2` (default `rejectWhenBusy: false`) | run | **Allowed** — the job is admitted concurrently (continuous batching) or queued until a slot frees; each call gets its own independent `QvacResponse` |
 | busy          | `response.cancel()` | **Allowed** — cancels only that response's job/group; Promise resolves when it has stopped |
 | busy          | `model.cancel()`    | **Allowed** — cancels all live jobs; Promise resolves when they have stopped |

@@ -120,7 +120,7 @@ Every `run()` call is admitted by the native multi-job scheduler before it resol
 
 Whether a call at capacity is rejected or queued is the `rejectWhenBusy` policy:
 
-- `true` — fail fast: throw `RUN_BUSY` the moment the slot pool is full, i.e. as soon as the requests occupying or waiting for a slot reach `parallel`.
+- `true` — fail fast: throw an `Error` with `code === 'RUN_BUSY'` the moment the slot pool is full, i.e. as soon as the requests occupying or waiting for a slot reach `parallel`.
 - `false` — queue: the job waits in the scheduler's nearly unbounded queue and starts as slots free.
 
 Capacity is measured in slots rather than jobs because a batch run of N prompts is a single job that consumes up to N slots: with `parallel: 4`, one in-flight `run([p, p, p, p])` fills the pool, so a following `run(p, { rejectWhenBusy: true })` is refused even though only one job is active. At `parallel: 1` there are no scheduler slots and the job count is the measure, which keeps the sequential fail-fast behaviour unchanged. Either way this is a fast-fail hint evaluated just before submission — the native scheduler remains the authority.

@@ -357,8 +357,9 @@ export interface RunOptions {
    */
   saveCacheToDisk?: boolean
   /**
-   * Admission policy when the worker pool is full. `true` rejects with
-   * RUN_BUSY before submitting. `false` submits to the native multi-job
+   * Admission policy when the worker pool is full. `true` rejects before
+   * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the
+   * code, not the message. `false` submits to the native multi-job
    * scheduler, which queues the job in a nearly unbounded waiting room beyond
    * the pool (queued jobs start as slots free); under any realistic backlog it
    * is queued rather than rejected. Overrides the instance-level
@@ -581,7 +582,7 @@ export default class LlmLlamacpp {
    * multiple `run()` calls may be concurrently in flight (continuous
    * batching): separate top-level calls are decoded together across slots,
    * and each call returns an independent `QvacResponse` that receives only
-   * its own output tokens and stats. A call at capacity throws `RUN_BUSY`
+   * its own output tokens and stats. A call at capacity throws an `Error` with `code === 'RUN_BUSY'`
    * when the effective `rejectWhenBusy` policy is `true` (the default for
    * `parallel: 1`), and queues until a slot frees when it is `false` (the
    * default for `parallel >= 2`). Use `response.cancel()` to cancel just

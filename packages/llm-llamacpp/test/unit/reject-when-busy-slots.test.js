@@ -175,3 +175,55 @@ test('fail-fast batch run is refused while a finetune is active', async (t) => {
   )
   t.absent(model.addon.runJob.called, 'the refused batch must never be submitted')
 })
+
+// `rejectWhenBusy` exists so callers can handle a busy refusal, and the docs
+// name that condition RUN_BUSY — so it has to be branchable without matching
+// the message, which is prose. Every construction site goes through
+// batchHandler's runBusyError(), so the code cannot drift per site.
+
+test('a busy refusal carries the RUN_BUSY code on every admission path', async (t) => {
+  const paths = [
+    {
+      label: 'single run, slots full',
+      model: () => createModel({ parallel: 4, activeJobs: 1, activeSlots: 4 }),
+      run: (m) => m.run(PROMPT, { rejectWhenBusy: true })
+    },
+    {
+      label: 'single run, finetune active',
+      model: () => {
+        const m = createModel({ parallel: 4, activeJobs: 1, activeSlots: 0 })
+        m._finetuneJob.start()
+        return m
+      },
+      run: (m) => m.run(PROMPT, { rejectWhenBusy: true })
+    },
+    {
+      label: 'batch run, slots full',
+      model: () => createModel({ parallel: 4, activeJobs: 1, activeSlots: 4 }),
+      run: (m) => m.run([{ prompt: PROMPT, runOptions: { rejectWhenBusy: true } }])
+    },
+    {
+      label: 'native refusal (accepted: false)',
+      model: () => {
+        const m = createModel({ parallel: 4, activeJobs: 0, activeSlots: 0 })
+        m.addon.runJob.callsFake(() => ({ accepted: false }))
+        return m
+      },
+      run: (m) => m.run(PROMPT, { rejectWhenBusy: false })
+    }
+  ]
+
+  for (const { label, model: make, run } of paths) {
+    let err = null
+    try {
+      await run(make())
+    } catch (caught) {
+      err = caught
+    }
+    t.is(err?.code, 'RUN_BUSY', `${label}: refusal must expose code RUN_BUSY`)
+    t.ok(
+      /already set or being processed/.test(err?.message ?? ''),
+      `${label}: the human-readable message is kept alongside the code`
+    )
+  }
+})

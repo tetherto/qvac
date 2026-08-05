@@ -7,7 +7,7 @@ const { createJobHandler, exclusiveRunQueue, QvacResponse } = require('@qvac/inf
 const { LlamaInterface, mapAddonEvent } = require('./addon')
 const BatchHandler = require('./batchHandler')
 
-const { RUN_BUSY_ERROR_MESSAGE } = BatchHandler
+const { runBusyError } = BatchHandler
 
 function normalizeRunOptions(runOptions) {
   if (runOptions === undefined) {
@@ -428,7 +428,7 @@ class LlmLlamacpp {
       (BatchHandler.groupRejectWhenBusy(batchInput) ?? this._rejectWhenBusy) &&
       this._atCapacity()
     ) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      throw runBusyError()
     }
 
     // Group state is dropped by the handler itself when the group's terminal
@@ -455,7 +455,7 @@ class LlmLlamacpp {
     // the pool is full (never queues); false falls through to the scheduler's
     // nearly unbounded queue, so it's only refused (below) under a runaway backlog.
     if ((rejectWhenBusy ?? this._rejectWhenBusy) && this._atCapacity()) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      throw runBusyError()
     }
 
     this.logger.info('Starting inference with prompt:', sanitizePromptForLog(prompt))
@@ -477,8 +477,8 @@ class LlmLlamacpp {
     // Unconditional even when rejectWhenBusy is false: a rejected job never runs
     // (pool + queue full), so there is no response to return.
     if (!admission.accepted) {
-      response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      response.failed(runBusyError())
+      throw runBusyError()
     }
     jobId = admission.id
     this._jobSinks.set(jobId, response)
@@ -511,7 +511,7 @@ class LlmLlamacpp {
       // needs the model to itself. Fast-fail hint only — the native scheduler is
       // the authority via exclusive-job admission.
       if (this.addon.activeJobs() > 0) {
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+        throw runBusyError()
       }
       if (finetuningOptions.checkpointSaveDir) {
         this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
@@ -527,8 +527,8 @@ class LlmLlamacpp {
       }
 
       if (!accepted) {
-        this._finetuneJob.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+        this._finetuneJob.fail(runBusyError())
+        throw runBusyError()
       }
 
       // Native tags finetune events with the exclusive job's id (the

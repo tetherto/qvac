@@ -3,6 +3,19 @@
 const { QvacResponse } = require('@qvac/infer-base')
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+/// Stable, machine-readable identity for the busy refusal. `rejectWhenBusy`
+/// exists so callers can handle this condition, and the docs name it
+/// `RUN_BUSY`, so it must be branchable without matching the message text
+/// (which is prose and may be reworded).
+const RUN_BUSY_ERROR_CODE = 'RUN_BUSY'
+
+/// Every busy refusal is built here so the message and code cannot drift apart
+/// across the admission sites in this file and index.js.
+function runBusyError() {
+  const err = new Error(RUN_BUSY_ERROR_MESSAGE)
+  err.code = RUN_BUSY_ERROR_CODE
+  return err
+}
 
 /**
  * Encapsulates the JS-side continuous-batching flow that sits on top of
@@ -119,7 +132,7 @@ class BatchHandler {
       throw err
     }
     if (!result.accepted) {
-      const err = new Error(RUN_BUSY_ERROR_MESSAGE)
+      const err = runBusyError()
       response.failed(err)
       throw err
     }
@@ -216,3 +229,5 @@ class BatchHandler {
 
 module.exports = BatchHandler
 module.exports.RUN_BUSY_ERROR_MESSAGE = RUN_BUSY_ERROR_MESSAGE
+module.exports.RUN_BUSY_ERROR_CODE = RUN_BUSY_ERROR_CODE
+module.exports.runBusyError = runBusyError
