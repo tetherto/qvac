@@ -202,7 +202,8 @@ function _makeGen (modelDir) {
     config: {
       inferenceSteps: TURBO_STEPS,
       shift: TURBO_SHIFT,
-      useGPU: false
+      // DO NOT MERGE (overlay branch): exercise OpenCL/Vulkan/Metal on device.
+      useGPU: true
     }
   })
 }
@@ -320,8 +321,23 @@ async function testGenerateMusic () {
       item.outputArray.byteOffset,
       item.outputArray.byteOffset + item.outputArray.byteLength)))
   }
-  await response.await()
+  const stats = await response.await()
   const elapsedMs = Date.now() - t0
+
+  // DO NOT MERGE (overlay branch): useGPU:true on its own proves nothing --
+  // the engine falls back to the CPU when no GPU backend initialises. Log which
+  // backend it actually resolved so the Device Farm artifacts can be read for it.
+  // Deliberately NOT asserting backendDevice === 1: CPU is the correct outcome on
+  // a Mali device (the Android GPU allowlist admits Adreno and Xclipse only), so a
+  // hard GPU gate would red-fail the Pixel 9 lane for behaving as designed. Only
+  // a missing field -- i.e. broken stats plumbing -- is a failure here.
+  const _bd = stats && stats.backendDevice
+  const _bi = stats && stats.backendId
+  console.log('[audiogen-mobile] resolved backendDevice=' + _bd + ' backendId=' + _bi +
+              ' (1 = GPU, 0 = CPU fallback)')
+  if (_bd == null || _bi == null) {
+    throw new Error('run stats carry no backendDevice/backendId; cannot tell which backend ran')
+  }
 
   await gen.destroy()
 

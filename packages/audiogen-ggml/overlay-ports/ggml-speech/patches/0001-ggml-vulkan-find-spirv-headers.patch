@@ -1,0 +1,24 @@
+diff --git a/src/ggml-vulkan/CMakeLists.txt b/src/ggml-vulkan/CMakeLists.txt
+index 715a263a..3d92ac5d 100644
+--- a/src/ggml-vulkan/CMakeLists.txt
++++ b/src/ggml-vulkan/CMakeLists.txt
+@@ -7,6 +7,7 @@ if (POLICY CMP0147)
+ endif()
+ 
+ find_package(Vulkan COMPONENTS glslc REQUIRED)
++find_package(SPIRV-Headers QUIET)
+ 
+ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+     # Parallel build object files
+@@ -87,6 +88,11 @@ if (Vulkan_FOUND)
+     )
+ 
+     target_link_libraries(ggml-vulkan PRIVATE Vulkan::Vulkan)
++
++    if (TARGET SPIRV-Headers::SPIRV-Headers)
++        target_link_libraries(ggml-vulkan PRIVATE SPIRV-Headers::SPIRV-Headers)
++    endif()
++
+     target_include_directories(ggml-vulkan PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+ 
+     # Workaround to the "can't dereference invalidated vector iterator" bug in clang-cl debug build

@@ -1,0 +1,81 @@
+{
+  "name": "audiogen-cpp",
+  "version-date": "2026-08-03",
+  "description": "DO NOT MERGE -- throwaway overlay pinned at the head of tetherto/qvac-ext-lib-whisper.cpp#126, so the audiogen-ggml CI can exercise it on real devices before it lands on master. Runs the whole ACE-Step pipeline on OpenCL: music-cli gains a --backends-dir, without which a GGML_BACKEND_DL build registers no backend at all; Adreno 700+ now prefers OpenCL over Vulkan, matching the tier policy engines/tts already ships, and every other platform keeps ggml's existing choice; two small auxiliary tensors -- the FSQ detokenizer's BF16 fsq_proj and its quantised special_tokens, plus the Q4_K_M-only BF16 timbre embed_tokens -- are materialised as F32 at load, which is exact and removes a BF16 mul_mat and a quantised cast from the graph; the VAE stops synchronising once per node to drive a progress bar (a CPU-path win too); and the stage allowlist is extended so the LM and FSQ detokenizer take the GPU on OpenCL. Requires the ggml-speech overlay beside it.",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/engines/audiogen",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "version>=": "2026-08-03"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "cuda"
+          ]
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration (macOS / iOS)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "metal"
+          ]
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android / Adreno)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "vulkan"
+          ]
+        }
+      ]
+    }
+  }
+}

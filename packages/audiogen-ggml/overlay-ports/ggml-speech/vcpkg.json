@@ -1,0 +1,57 @@
+{
+  "name": "ggml-speech",
+  "version-date": "2026-08-03",
+  "description": "DO NOT MERGE -- throwaway overlay pinned at the head of tetherto/qvac-ext-ggml#52, so the audiogen-ggml CI can exercise it on real devices before it lands on speech. Adds the OpenCL ops ACE-Step needs on Adreno -- SNAKE and COL2IM_1D for the Oobleck VAE, and a BF16 get_rows so the 310 MB text-encoder embedding is not widened to F32 -- each of which was previously a hard ggml_abort inside ggml_cl_compute_forward. Fixes a pre-existing silent corruption in ggml_cl_mul_mat_kq_kqv_adreno, which derives src0's channel stride internally as nb01*M and is never passed nb02, so any strided KV view made every KV head past head 0 read the wrong bytes on prefill. Optimises the quantised weight upload (tiled local-memory buffer transposes, reused Q8_0 staging buffer) and adds a swapped-operand xmem GEMM for conv1d, whose operands arrive the other way round from what the weight-stationary kernel wants. Verified against the pristine speech plugin with test-backend-ops -o MUL_MAT -b GPUOpenCL.",
+  "homepage": "https://github.com/tetherto/qvac-ext-ggml/tree/speech",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU backend"
+    },
+    "metal": {
+      "description": "Enable Metal GPU backend (macOS/iOS)"
+    },
+    "metal-fuse-mv-bias": {
+      "description": "Compile in the Q-variant mul_mv + ADD(bias) [+ ADD(residual)] fusion in ggml-metal. Off by default: empirically produces zero tokens on parakeet's EOU q8_0 joint network. Opt in only after Metal A/B-validating your model against the fused path."
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend",
+      "dependencies": [
+        "opencl"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        {
+          "name": "spirv-headers",
+          "version>=": "1.4.341.0"
+        }
+      ]
+    }
+  }
+}
