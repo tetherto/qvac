@@ -45,7 +45,8 @@
     "funcShardB": [
       "runToolsCompactTest",
       "runSlidingContextTest",
-      "runKvCacheTypeDefaultsTest"
+      "runKvCacheTypeDefaultsTest",
+      "runCacheStateMachineTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
@@ -54,8 +55,7 @@
       "runGenerationParamsTest"
     ],
     "funcShardD": [
-      "runGemma4Test",
-      "runCacheStateMachineTest"
+      "runGemma4Test"
     ],
     "funcShardE": [
       "runApiBehaviorTest",
