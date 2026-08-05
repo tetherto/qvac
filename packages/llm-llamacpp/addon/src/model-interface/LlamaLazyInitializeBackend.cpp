@@ -4,6 +4,9 @@
 #include <string>
 
 #include <llama.h>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 #include "LlamaModel.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -44,6 +47,21 @@ bool LlamaLazyInitializeBackend::initialize(
         (std::filesystem::path(openclCacheDir) / "opencl-cache").string();
     setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
   }
+#endif
+
+#if defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS
+  // The fabric defaults to a 3-command-buffer Metal pipeline on iOS
+  // (n_cb=2, fabric commit 10b7395fa) for encode/execute overlap. On
+  // A18-class iPhones that pipeline hangs the GPU in the first training
+  // step after resuming finetuning from a pause checkpoint ("command
+  // buffer 2 failed with status 5" / kIOGPUCommandBufferCallbackErrorHang);
+  // A19 survives it and macOS never runs it (n_cb=1 there, so no command
+  // buffer 2 exists). Residency sets and dispatch concurrency were ruled
+  // out empirically — both were already off when the hang reproduced.
+  // Pin the macOS-proven single-command-buffer structure on iOS until the
+  // cross-buffer scheduling bug is fixed; an explicit GGML_METAL_N_CB in
+  // the environment still wins (overwrite=0).
+  setenv("GGML_METAL_N_CB", "1", /*overwrite=*/0);
 #endif
 
   if (!backendsDir.empty()) {
