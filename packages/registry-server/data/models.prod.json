@@ -3303,6 +3303,47 @@
     "tags": ["vae", "wan"]
   },
   {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/acvlab/ABot-World-0-5B-LF",
+    "description": "ABot-World interactive world model (keyboard-driven causal walk), Wan2.2-TI2V-5B derivative",
+    "notes": "Driven via the diffusion-cpp world session API; not a batch text/image-to-video model.",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "params": "5B",
+    "tags": ["generation", "diffusion", "video", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/madebyollin/taehv",
+    "description": "taehv (taew2.2) tiny streaming video decoder for the Wan 2.2 TI2V latent space",
+    "notes": "Real-time pixel decoder for ABot-World walk sessions.",
+    "licenseId": "MIT",
+    "quantization": "F16",
+    "tags": ["vae", "taehv", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "description": "UMT5-XXL text encoder (encoder-only GGUF) for ABot-World native scene creation",
+    "notes": "GGUF conversion of the Comfy-Org umt5_xxl_fp16 repackage; walk-level validated quantization (F16 parity work uses the registry's umt5_xxl_fp16.safetensors entry).",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "tags": ["text-encoder", "wan", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    "description": "Wan 2.2 VAE (48-channel, GGUF) - ABot-World first-frame encoder",
+    "notes": "GGUF conversion of the Comfy-Org wan2.2_vae repackage.",
+    "licenseId": "Apache-2.0",
+    "quantization": "F16",
+    "tags": ["vae", "wan", "abot-world"]
+  },
+  {
     "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf",
     "engine": "@qvac/diffusion-cpp",
     "description": "LTX-2.3 distilled text/image-to-video diffusion model",
@@ -7734,25 +7775,25 @@
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
   },
   {
-    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-07-23/groot-q8_vf16.gguf",
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
     "engine": "@qvac/vla-ggml",
     "description": "NVIDIA GR00T N1.7-3B vision-language-action model, multi-embodiment. Single GGUF carrying every trained embodiment head of the base checkpoint (17 stored rows, default libero_sim); select at load or switch at runtime by tag or cat_id, no reload. Same architecture as the LIBERO model: Qwen3-VL backbone, VL fusion, 32-layer AlternateVLDiT action head, 4-step Euler flow-matching. Camera count and action dims follow the selected embodiment. Desktop multi-embodiment model of record.",
     "quantization": "q8_vf16",
     "params": "groot-n1.7-3b-multi",
     "licenseId": "nvidia-open-model-license",
     "tags": ["vla", "groot", "multi-embodiment", "robotics"],
-    "notes": "q8_vf16 profile: Q8_0 text / DiT / VL-fusion / action-head linears, F16 vision tower + embodiment bank, F32 norms. Requires @qvac/vla-ggml >= 0.17.0 (older loaders reject the rank-3 embodiment.* tensors). Per-embodiment parity vs the PyTorch oracle on selected rows: libero_sim cos 0.999995, oxe_droid cos 0.999993, real_r1_pro cos 0.999941 (see qvac PR #3427). Converted from nvidia/GR00T-N1.7-3B via convert_groot_dit_to_gguf.py multi-embodiment mode.",
+    "notes": "q8_vf16 profile: Q8_0 non-vision linears, F16 vision tower + embodiment bank, F32 norms. Requires @qvac/vla-ggml >= 0.17.0. Base-checkpoint conversion (nvidia/GR00T-N1.7-3B, 2026-08-04) — replaces the withdrawn 2026-07-23 LIBERO-post-trained build, whose finetuned trunk skewed every non-libero row (DROID cos 0.881 vs 0.999993 base-derived). Parity vs the base oracle: libero_sim cos 0.999995, oxe_droid 0.999993, real_r1_pro 0.999941 (PR #3427). For LIBERO-only use, prefer groot-n1.7-3b-libero.",
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-3B"
   },
   {
-    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-07-23/groot-q5_vf16.gguf",
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
     "engine": "@qvac/vla-ggml",
     "description": "NVIDIA GR00T N1.7-3B vision-language-action model, multi-embodiment. Mobile profile of the desktop multi-embodiment groot-q8_vf16 model: same architecture and embodiment bank (17 stored rows, default libero_sim), smaller action-head quant so the model file fits the on-device memory budget. Active embodiment selected at load or switched at runtime by tag or cat_id.",
     "quantization": "q5_vf16",
     "params": "groot-n1.7-3b-multi",
     "licenseId": "nvidia-open-model-license",
     "tags": ["vla", "groot", "multi-embodiment", "robotics", "mobile"],
-    "notes": "q5_vf16 profile: Q5_0 non-vision linears, F16 vision tower + embodiment bank, F32 norms. Q5_0 is required — legacy Q4_0 is too coarse for the DiT action head, and K-quants are not supported by the qvac-fabric gguf packer. Requires @qvac/vla-ggml >= 0.17.0. Converted from nvidia/GR00T-N1.7-3B via convert_groot_dit_to_gguf.py multi-embodiment mode.",
+    "notes": "q5_vf16 profile: Q5_0 non-vision linears, F16 vision tower + embodiment bank, F32 norms. Q5_0 is required — legacy Q4_0 is too coarse for the DiT action head, and K-quants are not supported by the qvac-fabric gguf packer. Requires @qvac/vla-ggml >= 0.17.0. Base-checkpoint conversion (nvidia/GR00T-N1.7-3B, 2026-08-04) — replaces the withdrawn 2026-07-23 LIBERO-post-trained build, whose finetuned trunk skewed every non-libero row. For LIBERO-only use, prefer the groot-n1.7-3b-libero entries.",
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-3B"
   },
   {

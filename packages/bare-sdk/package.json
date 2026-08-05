@@ -98,6 +98,10 @@
       "types": "./dist/_sdk/server/bare/plugins/sdcpp-generation/plugin.d.ts",
       "import": "./dist/_sdk/server/bare/plugins/sdcpp-generation/plugin.js"
     },
+    "./audiogen-ggml/plugin": {
+      "types": "./dist/_sdk/server/bare/plugins/audiogen-ggml/plugin.d.ts",
+      "import": "./dist/_sdk/server/bare/plugins/audiogen-ggml/plugin.js"
+    },
     "./ggml-vla/plugin": {
       "types": "./dist/_sdk/server/bare/plugins/ggml-vla/plugin.d.ts",
       "import": "./dist/_sdk/server/bare/plugins/ggml-vla/plugin.js"

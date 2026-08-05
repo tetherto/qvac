@@ -50,6 +50,7 @@ const result = await sdk.translate({
 | `@qvac/bare-sdk/tts-ggml/plugin`                 | `@qvac/tts-ggml`                 |
 | `@qvac/bare-sdk/ggml-ocr/plugin`                 | `@qvac/ocr-ggml`                 |
 | `@qvac/bare-sdk/sdcpp-generation/plugin`         | `@qvac/diffusion-cpp`            |
+| `@qvac/bare-sdk/audiogen-ggml/plugin`            | `@qvac/audiogen-ggml`            |
 | `@qvac/bare-sdk/ggml-vla/plugin`                 | `@qvac/vla-ggml`                 |
 
 

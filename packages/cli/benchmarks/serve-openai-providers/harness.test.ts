@@ -41,6 +41,18 @@ function writeConfig(path: string, config: object): void {
 
 function ignoreError(): void {}
 
+function testDependencies(): CommandDependencies {
+  return {
+    ...defaultDependencies(),
+    captureOpenAiCoverage: () =>
+      Promise.resolve({
+        status: 'unavailable',
+        captured_at: '2026-08-03T00:00:00.000Z',
+        errors: ['coverage not exercised by this test']
+      })
+  }
+}
+
 const promptsDoc: PromptsFile = {
   parity: { id: 'parity', content: 'hello' },
   prompts: [{ id: 'short', content: 'hello' }]
@@ -259,6 +271,119 @@ describe('serve-openai-providers harness', () => {
     }
   })
 
+  it('full command persists the OpenAI API coverage snapshot', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
+    const originalLog = console.log
+    const originalError = console.error
+    const errors: string[] = []
+    try {
+      console.log = ignoreError
+      console.error = (...args: unknown[]) => {
+        errors.push(args.map(String).join(' '))
+      }
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const config = makeConfig({
+        ggufPath,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      })
+      config.warmup_runs = 0
+      config.measured_runs = 0
+      config.cooldown_seconds = 0
+      const coverage = {
+        status: 'available' as const,
+        source_mode: 'live' as const,
+        captured_at: '2026-08-03T00:00:00.000Z',
+        spec_source: 'https://example.test/openai.yaml',
+        spec_sha256: 'c'.repeat(64),
+        spec_endpoint_count: 100,
+        router_source: '/repo/packages/cli/src/serve/routes',
+        router_implemented_count: 12,
+        consumer_primary: {
+          implemented: 10,
+          total: 12,
+          percent: 83.3,
+          uncovered: ['POST /v1/realtime/sessions']
+        },
+        primary_ai: {
+          implemented: 11,
+          total: 20,
+          percent: 55,
+          uncovered: ['POST /v1/audio/translations']
+        },
+        extensions: [],
+        warnings: ['Live OpenAI coverage build failed; used offline specification cache']
+      }
+      const deps = {
+        ...testDependencies(),
+        createClient: () => makeSuccessfulClient('qvac', 5),
+        captureOpenAiCoverage: () => Promise.resolve(coverage)
+      } as CommandDependencies
+
+      assert.equal(await cmdFull(config, promptsDoc, dir, deps), 0)
+      const raw = JSON.parse(readFileSync(join(dir, 'results', 'raw.json'), 'utf8')) as {
+        openai_api_coverage?: object
+      }
+      assert.deepEqual(raw.openai_api_coverage, coverage)
+      assert.deepEqual(errors, [
+        'WARN OpenAI API coverage degraded: Live OpenAI coverage build failed; used offline specification cache'
+      ])
+    } finally {
+      console.log = originalLog
+      console.error = originalError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('full command continues when the injected coverage capture rejects', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
+    const originalLog = console.log
+    const originalError = console.error
+    try {
+      console.log = ignoreError
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const config = makeConfig({
+        ggufPath,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      })
+      config.warmup_runs = 0
+      config.measured_runs = 1
+      config.cooldown_seconds = 0
+      const deps = {
+        ...testDependencies(),
+        createClient: () => makeSuccessfulClient('qvac', 5),
+        captureOpenAiCoverage: () => Promise.reject(new Error('unexpected capture failure')),
+        clock: {
+          ...defaultDependencies().clock,
+          date: () => new Date('2026-08-03T12:00:00.000Z')
+        }
+      } as CommandDependencies
+
+      assert.equal(await cmdFull(config, promptsDoc, dir, deps), 0)
+      const raw = JSON.parse(readFileSync(join(dir, 'results', 'raw.json'), 'utf8')) as {
+        openai_api_coverage?: object
+        runs: Array<{ phase: string; ok: boolean }>
+      }
+      assert.deepEqual(raw.openai_api_coverage, {
+        status: 'unavailable',
+        captured_at: '2026-08-03T12:00:00.000Z',
+        errors: ['OpenAI API coverage capture failed unexpectedly: unexpected capture failure']
+      })
+      assert.deepEqual(
+        raw.runs.map((run) => ({ phase: run.phase, ok: run.ok })),
+        [{ phase: 'measured', ok: true }]
+      )
+    } finally {
+      console.log = originalLog
+      console.error = originalError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('full command persists a measured failure and stops the provider', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
     const originalLog = console.log
@@ -288,7 +413,7 @@ describe('serve-openai-providers harness', () => {
 
       const events: string[] = []
       const deps: CommandDependencies = {
-        ...defaultDependencies(),
+        ...testDependencies(),
         createClient: () => makeMeasuredFailureClient(),
         execute: (command) => {
           events.push(command[0]!)
@@ -343,7 +468,7 @@ describe('serve-openai-providers harness', () => {
 
       const events: string[] = []
       const deps: CommandDependencies = {
-        ...defaultDependencies(),
+        ...testDependencies(),
         createClient: (baseUrl) => {
           const providerId = baseUrl.includes('11435') ? 'first' : 'second'
           return makeSuccessfulClient(providerId, 5, events)
@@ -395,7 +520,7 @@ describe('serve-openai-providers harness', () => {
         model: 'model'
       }))
       const deps: CommandDependencies = {
-        ...defaultDependencies(),
+        ...testDependencies(),
         createClient: (baseUrl) =>
           makeSuccessfulClient(
             baseUrl.includes('11435') ? 'first' : 'second',
@@ -453,7 +578,7 @@ describe('serve-openai-providers harness', () => {
       }))
       const events: string[] = []
       const deps: CommandDependencies = {
-        ...defaultDependencies(),
+        ...testDependencies(),
         createClient: (baseUrl) =>
           makeSuccessfulClient(baseUrl.includes('11435') ? 'first' : 'second', 5),
         execute: (command) => {
@@ -967,6 +1092,34 @@ describe('serve-openai-providers harness', () => {
           }
         ]
       }
+      ;(
+        raw as RawDocument & {
+          openai_api_coverage: Record<string, unknown>
+        }
+      ).openai_api_coverage = {
+        status: 'available',
+        source_mode: 'live',
+        captured_at: '2026-07-22T00:00:00.000Z',
+        spec_source: 'https://example.test/openai.yaml',
+        spec_sha256: 'a'.repeat(64),
+        spec_endpoint_count: 100,
+        router_source: '/repo/packages/cli/src/serve/routes',
+        router_implemented_count: 12,
+        consumer_primary: {
+          implemented: 10,
+          total: 12,
+          percent: 83.3,
+          uncovered: ['POST /v1/realtime/sessions', 'POST /v1/videos/edits']
+        },
+        primary_ai: {
+          implemented: 11,
+          total: 20,
+          percent: 55,
+          uncovered: ['POST /v1/audio/translations']
+        },
+        extensions: ['GET /v1/audio/models'],
+        warnings: []
+      }
       writeReport(raw, path)
       const report = readFileSync(path, 'utf8')
       const expectedCounts = 'valid=1, unavailable=1, failed=1, attempted=3'
@@ -985,6 +1138,17 @@ describe('serve-openai-providers harness', () => {
       assert.ok(
         report.includes(
           'npx tsx benchmarks/serve-openai-providers/benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"'
+        )
+      )
+      assert.ok(report.includes('## OpenAI API capability coverage'))
+      assert.ok(report.includes('Consumer-primary: 10 / 12 (83.3%)'))
+      assert.ok(report.includes('Primary-AI: 11 / 20 (55.0%)'))
+      assert.ok(report.includes(`Spec SHA-256: \`${'a'.repeat(64)}\``))
+      assert.ok(report.includes('`POST /v1/realtime/sessions`'))
+      assert.ok(report.includes('`GET /v1/audio/models`'))
+      assert.ok(
+        report.includes(
+          'Static route coverage only: route presence does not prove behavioral compatibility with OpenAI.'
         )
       )
       assert.equal(report.endsWith('\n'), true)
