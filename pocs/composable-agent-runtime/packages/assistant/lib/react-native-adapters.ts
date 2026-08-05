@@ -40,7 +40,7 @@ export function createReactNativeAssistantComponents(
       const sync: SyncRuntime = createSyncRuntime({
         storagePath: options.storagePath,
         pairingInvite: options.invite
-          ? Buffer.from(options.invite, 'base64url')
+          ? decodeBase64Url(options.invite)
           : undefined
       })
       try {
@@ -87,4 +87,18 @@ export function createReactNativeAssistantComponents(
       }
     }
   }
+}
+
+/**
+ * Hermes has no global Buffer, and the shim applications polyfill it with does
+ * not implement the 'base64url' encoding Node added in v15. Translate to plain
+ * base64 first so an invite decodes the same on every host.
+ */
+function decodeBase64Url(value: string) {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/')
+  const remainder = padded.length % 4
+  return Buffer.from(
+    remainder === 0 ? padded : padded.padEnd(padded.length + (4 - remainder), '='),
+    'base64'
+  )
 }

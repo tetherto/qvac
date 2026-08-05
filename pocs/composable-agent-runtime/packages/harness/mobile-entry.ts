@@ -1,5 +1,6 @@
 import type { Duplex } from 'streamx'
 import { createChildEntry } from './lib/child-entry.ts'
+import { harnessCompatibility } from './lib/runtime/compatibility.ts'
 import { createWorkerSdkRuntimePort } from './lib/mobile-sdk-transport.ts'
 import { createBinaryChannelMultiplexer } from './lib/mobile-multiplex.ts'
 import {
@@ -32,22 +33,18 @@ export function createMobileHarnessEntry({
     const sdkChannel = mux.openChannel(2)
     const startChild = createChild({
       createSdk: async () => createWorkerSdkPort(sdkChannel),
+      // Read from the compatibility contract rather than restated here, which
+      // is how this list silently went stale when the contract gained a
+      // capability.
       describeRuntime: () => ({
-        component: 'harness',
+        component: harnessCompatibility.component,
         runtime: 'bare',
         instanceId: `harness-mobile-${processId}`,
         processId,
-        contract: 'qvac.harness',
-        protocolVersion: 2,
-        capabilities: [
-          'agent.register',
-          'agent.run',
-          'agent.cancel',
-          'run.read',
-          'work.watch',
-          'state.port'
-        ],
-        buildVersion: '0.0.0-poc'
+        contract: harnessCompatibility.contract,
+        protocolVersion: harnessCompatibility.protocolVersion,
+        capabilities: [...harnessCompatibility.capabilities],
+        buildVersion: harnessCompatibility.buildVersion
       })
     })
     const stop = await startChild(harnessChannel)

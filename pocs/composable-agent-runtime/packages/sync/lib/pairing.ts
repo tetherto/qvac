@@ -287,9 +287,23 @@ function encodeCandidate(
   )
 }
 
+/**
+ * Stored values come back as a Buffer on some hosts and a plain Uint8Array on
+ * others, and Uint8Array.toString() yields comma-joined byte values rather than
+ * text. Decode explicitly so a candidate parses the same everywhere.
+ */
+function decodeCandidateText(value: Buffer | Uint8Array | string) {
+  if (typeof value === 'string') return value
+  // Buffer.from normalises a plain Uint8Array into a Buffer whose toString
+  // decodes text. TextDecoder is not available on Hermes.
+  return Buffer.from(
+    value instanceof Uint8Array ? value : new Uint8Array(value)
+  ).toString('utf8')
+}
+
 function decodeCandidate(value: Buffer) {
   try {
-    const parsed: unknown = JSON.parse(value.toString())
+    const parsed: unknown = JSON.parse(decodeCandidateText(value))
     if (typeof parsed !== 'object' || parsed === null) throw new Error()
     const writerKey = Reflect.get(parsed, 'writerKey')
     const deviceId = Reflect.get(parsed, 'deviceId')

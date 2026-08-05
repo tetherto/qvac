@@ -8,13 +8,22 @@ import { argvForLogging } from '../logger.ts'
 import { spawnHarness, type SpawnedHarness } from '../spawn.ts'
 import type { HarnessRunStore } from '../run-store.ts'
 import type { HarnessLoggingConfig } from '../types.ts'
-import type { HarnessDesktopConfig } from './desktop-config.ts'
+import type { HarnessHostConfig, WireHostConfig } from './host-config.ts'
 
 export interface LaunchDesktopHarnessOptions {
   readonly inference: 'deterministic' | 'qwen'
   readonly logging?: HarnessLoggingConfig
   readonly runStore: HarnessRunStore
-  readonly desktop?: HarnessDesktopConfig
+  readonly host?: HarnessHostConfig
+  /**
+   * Entry sources for the worker bundles. Applications that own skills own
+   * these entries, since the bundler follows static imports and cannot discover
+   * providers at runtime. Harness still performs the bundling.
+   */
+  readonly workers?: {
+    readonly harnessChildEntry?: string
+    readonly toolSandboxChildEntry?: string
+  }
 }
 
 export interface DesktopHarnessWorker {
@@ -26,7 +35,8 @@ export async function launchDesktopHarness({
   inference,
   logging,
   runStore,
-  desktop
+  host,
+  workers
 }: LaunchDesktopHarnessOptions): Promise<DesktopHarnessWorker> {
   const directory = await mkdtemp(
     fileURLToPath(
@@ -38,7 +48,8 @@ export async function launchDesktopHarness({
       buildBundle(
         directory,
         'harness',
-        new URL('../../child-entry.ts', import.meta.url).href
+        workers?.harnessChildEntry ??
+          new URL('../../child-entry.ts', import.meta.url).href
       ),
       buildBundle(
         directory,
@@ -50,23 +61,26 @@ export async function launchDesktopHarness({
           import.meta.url
         ).href
       ),
-      desktop
-        ? buildBundle(
-            directory,
-            'tool-sandbox',
-            new URL('../../tool-sandbox-child-entry.ts', import.meta.url).href
-          )
+      workers?.toolSandboxChildEntry
+        ? buildBundle(directory, 'tool-sandbox', workers.toolSandboxChildEntry)
         : Promise.resolve(undefined)
     ])
+    const wireConfig: WireHostConfig | undefined = host
+      ? {
+          ...host,
+          // Only the launcher knows the built bundle path.
+          ...(sandboxEntry ? { sandboxChildEntry: sandboxEntry } : {})
+        }
+      : undefined
     const client = spawnHarness({
       entry: harnessEntry,
       args: [
         `--sdk-entry=${sdkEntry}`,
-        ...(desktop && sandboxEntry
+        ...(wireConfig
           ? [
-              `--desktop-config=${Buffer.from(
-                JSON.stringify({ ...desktop, childEntry: sandboxEntry })
-              ).toString('base64')}`
+              `--host-config=${Buffer.from(JSON.stringify(wireConfig)).toString(
+                'base64'
+              )}`
             ]
           : []),
         ...argvForLogging(logging)
@@ -97,6 +111,8 @@ export async function launchDesktopHarness({
 async function buildBundle(directory: string, name: string, entry: string) {
   const output = pathToFileURL(join(directory, `${name}.js`))
   const artifacts = stow(entry, 'bare-sidecar', output.href, {
+    // The workspace root, so an application-supplied entry inside it resolves.
+    // A published package would have to accept this as an option.
     base: new URL('../../../../', import.meta.url).href,
     hosts: [`${os.platform()}-${os.arch()}`]
   })

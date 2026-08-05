@@ -493,6 +493,35 @@ export interface DesktopRunnerResult {
   readonly shutdownMs: number
 }
 
+/**
+ * This runner is non-interactive, so it answers every approval the same way.
+ * A real application would surface the request to a user here.
+ */
+async function answerApprovals(
+  harness: Pick<HarnessRuntime, 'watchApprovals' | 'resolveApproval'>,
+  approved: boolean
+) {
+  try {
+    for await (const request of harness.watchApprovals()) {
+      await harness.resolveApproval({ approvalId: request.approvalId, approved })
+    }
+  } catch (error) {
+    // The stream ends with the harness and pending approvals fail closed there,
+    // but anything else is a real failure and must not be swallowed silently.
+    if (!isClosedStream(error)) {
+      process.stderr.write(`approval loop failed: ${describeError(error)}\n`)
+    }
+  }
+}
+
+function isClosedStream(error: unknown) {
+  return /closed|unavailable|destroyed/i.test(describeError(error))
+}
+
+function describeError(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export function createProductionRunnerDependencies(
   factories: ProductionRunnerFactories = {
     createHarness
@@ -506,33 +535,49 @@ export function createProductionRunnerDependencies(
       }
       const harness = factories.createHarness({
         inference: 'qwen',
-        desktop: {
+        // This application owns its skills, so it also owns the worker entries
+        // that statically import them.
+        workers: {
+          harnessChildEntry: new URL('./harness-child-entry.ts', import.meta.url)
+            .href,
+          toolSandboxChildEntry: new URL(
+            './tool-sandbox-child-entry.ts',
+            import.meta.url
+          ).href
+        },
+        host: {
+          platform: 'darwin',
           bareExecutable,
-          obsidianApproval: config.obsidianApproval,
-          ...(config.obsidian
-            ? {
-                obsidian: {
-                  ...config.obsidian,
-                  access: RUNNER_OBSIDIAN_ACCESS,
-                  allowedOperations: RUNNER_OBSIDIAN_OPERATIONS
+          skills: {
+            weather: {},
+            ...(config.obsidian
+              ? {
+                  obsidian: {
+                    ...config.obsidian,
+                    access: RUNNER_OBSIDIAN_ACCESS,
+                    allowedOperations: [...RUNNER_OBSIDIAN_OPERATIONS]
+                  }
                 }
-              }
-            : {}),
-          ...(config.attachmentBase && config.diffusion
-            ? {
-                image: {
-                  attachmentRoot: config.attachmentBase,
-                  model: config.diffusion.model,
-                  ...(config.diffusion.prediction
-                    ? { prediction: config.diffusion.prediction }
-                    : {})
+              : {}),
+            ...(config.attachmentBase && config.diffusion
+              ? {
+                  'image-generation': {
+                    attachmentRoot: config.attachmentBase,
+                    model: config.diffusion.model,
+                    ...(config.diffusion.prediction
+                      ? { prediction: config.diffusion.prediction }
+                      : {})
+                  }
                 }
-              }
-            : {}),
-          weather: {}
+              : {})
+          }
         }
       })
+      // Approval used to be a static flag in the launch payload. It is now an
+      // application decision answered over the harness approvals stream.
+      const answering = answerApprovals(harness, config.obsidianApproval ?? false)
       await harness.ready()
+      void answering
       return harness
     }
   }
@@ -869,10 +914,10 @@ function registrationsFor(
     return {
       id: `${skill}-agent`,
       model,
-      instructions: [
-        selectedSkillInstructions(skill),
-        'Use the selected tool when required, then answer concisely from its result.'
-      ].join('\n\n'),
+      // The skill's own SKILL.md body is supplied by Harness as system prompt
+      // blocks, so this only adds what the skill file does not say.
+      instructions:
+        'Use the selected tool when required, then answer concisely from its result.',
       skills: [skill],
       toolPolicy: {
         allow: [toolName],
@@ -1009,12 +1054,6 @@ async function runRegisteredAgent(input: {
     message: status
   })
   return { skill: input.skill, status }
-}
-
-function selectedSkillInstructions(
-  skill: 'weather' | 'obsidian' | 'image-generation'
-) {
-  return `Follow the selected ${skill} skill instructions exactly.`
 }
 
 function promptForSkill(

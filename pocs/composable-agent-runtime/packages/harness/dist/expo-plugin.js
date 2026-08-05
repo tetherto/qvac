@@ -123,7 +123,7 @@ function readBundlePackages(bundle) {
 async function patchGeneratedHarness(harnessPath) {
   const original = await readFile(harnessPath, "utf8");
   const withStartSignature = original.replace("async start(opts = {}) {", "async start(opts = {}, args = []) {");
-  const patched = withStartSignature.replace("worklet.start('/core.bundle', bundle)", "worklet.start('/core.bundle', bundle, args)");
+  const patched = withStartSignature.replace("worklet.start('/core.bundle', bundle)", "worklet.start('/core.bundle', new TextEncoder().encode(bundle), args)");
   if (patched === original || withStartSignature === original) {
     throw new Error(`Unable to patch generated harness argv support: ${harnessPath}`);
   }

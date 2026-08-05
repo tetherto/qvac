@@ -8,6 +8,7 @@ import type { HarnessStream } from './transport.ts'
 import { createSupervisedSdkPort } from './supervised-sdk-port.ts'
 import type { HarnessRuntimeInfo } from './connect.ts'
 import { createRemoteHarnessRunStore } from './state-port.ts'
+import { createRemoteToolApprovalPort } from './approval-port.ts'
 import type { HarnessLoggingConfig } from './types.ts'
 
 export interface ChildEntryOptions {
@@ -34,15 +35,26 @@ export function createChildEntry({
   return async function start(stream: HarnessStream) {
     const sdk = createSupervisedSdkPort(createSdk)
     const statePort = createRemoteHarnessRunStore()
+    const approvalPort = createRemoteToolApprovalPort()
     const configured = await configure?.(sdk)
     const harness = createHarnessService({
       sdk,
       logging,
       runStore: statePort.store,
-      ...configured
+      ...configured,
+      // A host that answers wins outright. The configured port is consulted
+      // only when nobody could answer -- falling back on a denial would let a
+      // second authority overturn the host's decision.
+      toolApproval: {
+        approve: async (invocation) => {
+          const outcome = await approvalPort.ask(invocation)
+          if (outcome !== 'unavailable') return outcome === 'approved'
+          return configured?.toolApproval?.approve(invocation) ?? false
+        }
+      }
     })
     if (serve === serveHarness) {
-      serveHarness(stream, harness, describeRuntime, statePort.attach)
+      serveHarness(stream, harness, describeRuntime, statePort.attach, approvalPort.attach)
     } else {
       serve(stream, harness, describeRuntime)
     }

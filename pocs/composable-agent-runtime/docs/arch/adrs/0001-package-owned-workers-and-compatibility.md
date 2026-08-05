@@ -45,6 +45,15 @@ consumers start Sync and Harness through `createSync` and `createHarness`, or
 let Assistant compose those lifecycle APIs. They do not import worker entries,
 spawners, generated transport plumbing, sandbox internals, or test helpers.
 
+One exception follows from skills belonging to applications. A bundler resolves
+a worker's contents from its static imports, so an application shipping a skill
+must author the entry that imports it. Harness exports authoring kits for that
+purpose under named subpaths, and each kit provides an entry factory that keeps
+argv parsing, the generation handshake, and runtime identity inside Harness. An
+application supplies a provider list; it does not restate the contract. The
+launcher still performs the bundling, so applications do not reimplement
+temporary-directory lifecycle or cleanup.
+
 The
 [interactive deployment and package composition map](https://packages-deployment-options-demo.netlify.app/)
 shows how this ownership rule applies to Assistant-managed and direct package

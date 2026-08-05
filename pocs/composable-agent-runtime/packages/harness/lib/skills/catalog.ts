@@ -1,4 +1,3 @@
-import { buildCliValidatorFromBundle, type CliValidator } from './cli-schema.ts'
 import { assertRequiredManifest, parseSkillFrontMatter } from './frontmatter-parser.ts'
 import type { SkillRequires, SkillSetup } from './manifest.ts'
 import { verifyBundledSkillsHash } from './bundled-hash.ts'
@@ -6,12 +5,13 @@ import { verifyBundledSkillsHash } from './bundled-hash.ts'
 export interface SkillCatalogEntry {
   name: string
   description: string
+  /** SKILL.md body: the prose the model is meant to follow. */
+  instructions: string
   tools: string[]
   allowList: string[]
   platform: string[]
   requires?: SkillRequires
   setup?: SkillSetup
-  cliValidator?: CliValidator
 }
 
 export interface SkillBundleArtifact {
@@ -21,6 +21,25 @@ export interface SkillBundleArtifact {
 
 export interface LoadCatalogOptions {
   platform?: string
+}
+
+/**
+ * Where a harness gets its skills. Applications own skill bundles; the harness
+ * only knows how to verify, parse, and materialize them.
+ */
+export type SkillCatalogSource =
+  | { readonly bundle: SkillBundleArtifact; readonly platform?: string }
+  | { readonly catalog: readonly SkillCatalogEntry[] }
+
+export async function resolveSkillCatalog(
+  source: SkillCatalogSource | undefined
+): Promise<readonly SkillCatalogEntry[]> {
+  if (!source) return []
+  if ('catalog' in source) return source.catalog
+  return createSkillCatalogFromBundle(
+    source.bundle,
+    source.platform === undefined ? {} : { platform: source.platform }
+  )
 }
 
 export async function createSkillCatalogFromBundle(
@@ -47,7 +66,7 @@ function collectSkillNames(files: Readonly<Record<string, string>>): string[] {
 function loadEntry(files: Readonly<Record<string, string>>, skillName: string): SkillCatalogEntry {
   const raw = files[`${skillName}/SKILL.md`]
   if (!raw) throw new Error(`missing SKILL.md for ${skillName}`)
-  const { meta, rawBlock } = parseSkillFrontMatter(raw)
+  const { meta, rawBlock, body } = parseSkillFrontMatter(raw)
   assertRequiredManifest(meta)
   if (meta.name !== skillName) {
     throw new Error(
@@ -62,14 +81,13 @@ function loadEntry(files: Readonly<Record<string, string>>, skillName: string): 
   const entry: SkillCatalogEntry = {
     name: skillName,
     description: meta.description ?? '',
+    instructions: body.trim(),
     tools,
     allowList: [...(meta.allowList ?? [])],
     platform: [...(meta.platform ?? [])],
     ...(meta.requires ? { requires: meta.requires } : {}),
     ...(meta.setup ? { setup: meta.setup } : {})
   }
-  const validator = buildCliValidatorFromBundle(skillName, tools, files)
-  if (validator) entry.cliValidator = validator
   return entry
 }
 

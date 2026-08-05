@@ -1,6 +1,10 @@
 import type { HarnessAgentRegistration } from '../agent-registration.ts'
 import type { SyncRuntime } from '@qvac/sync'
 import type { HarnessRuntimeInfo } from '../connect.ts'
+import type {
+  HarnessApprovalDecision,
+  HarnessApprovalRequest
+} from '../approval-port.ts'
 import { createInMemoryHarnessRunStore } from '../in-memory-harness-run-store.ts'
 import { createSyncHarnessRunStore } from '../sync-harness-run-store.ts'
 import type {
@@ -16,21 +20,29 @@ import type {
   HarnessLoggingConfig,
   HarnessSkillInfo
 } from '../types.ts'
-import {
-  assertCompatibleHarness,
-  harnessCompatibility
-} from './compatibility.ts'
+import { assertCompatibleHarness } from './compatibility.ts'
+// Re-exported so the desktop surface is unchanged; it is defined in
+// compatibility.ts so the React Native entry can reach it without this module.
+export { HARNESS_HANDSHAKE } from './compatibility.ts'
 import {
   launchDesktopHarness,
   type DesktopHarnessWorker
 } from './desktop-launcher.ts'
-import type { HarnessDesktopConfig } from './desktop-config.ts'
+import type { HarnessHostConfig, WireHostConfig } from './host-config.ts'
 
 export interface CreateHarnessOptions {
   readonly inference?: 'deterministic' | 'qwen'
   readonly logging?: HarnessLoggingConfig
   readonly state?: SyncRuntime
-  readonly desktop?: HarnessDesktopConfig
+  readonly host?: HarnessHostConfig
+  /**
+   * Worker entry sources. An application that supplies its own skills also
+   * supplies the entries that statically import them.
+   */
+  readonly workers?: {
+    readonly harnessChildEntry?: string
+    readonly toolSandboxChildEntry?: string
+  }
 }
 
 export interface HarnessRuntimeExit {
@@ -55,6 +67,8 @@ export interface HarnessRuntime {
   cancelAgentRun(input: HarnessAgentRunKey): Promise<void>
   readRun(input: HarnessAgentRunKey): Promise<HarnessRunRecord | null>
   watchWork(input?: WatchHarnessWork): AsyncIterable<HarnessWorkChange>
+  watchApprovals(): AsyncIterable<HarnessApprovalRequest>
+  resolveApproval(decision: HarnessApprovalDecision): Promise<void>
   close(): Promise<void>
 }
 
@@ -62,7 +76,8 @@ export function createHarness({
   inference = 'qwen',
   logging,
   state,
-  desktop
+  host,
+  workers
 }: CreateHarnessOptions = {}): HarnessRuntime {
   const runStore: HarnessRunStore = state
     ? createSyncHarnessRunStore(state)
@@ -91,7 +106,8 @@ export function createHarness({
       inference,
       logging,
       runStore,
-      ...(desktop ? { desktop } : {})
+      ...(host ? { host } : {}),
+      ...(workers ? { workers } : {})
     })
     try {
       const info = await next.client.describeRuntime()
@@ -177,8 +193,14 @@ export function createHarness({
       await ready()
       yield* requireClient().watchWork(input)
     },
+    async *watchApprovals() {
+      await ready()
+      yield* requireClient().watchApprovals()
+    },
+    async resolveApproval(decision) {
+      await ready()
+      await requireClient().resolveApproval(decision)
+    },
     close
   }
 }
-
-export const HARNESS_HANDSHAKE = harnessCompatibility

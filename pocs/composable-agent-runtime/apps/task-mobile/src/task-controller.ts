@@ -381,5 +381,15 @@ function taskResultEnvelope(result: string, error: string | null) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+  if (!(error instanceof Error)) return String(error)
+  // A component start failure wraps the reason it failed. Showing only the
+  // outer message leaves "sync failed to start" with no way to find out why.
+  const causes: string[] = []
+  let cause: unknown = error.cause
+  while (cause instanceof Error && causes.length < 4) {
+    causes.push(cause.message)
+    cause = cause.cause
+  }
+  if (causes.length > 0) console.error('[task-mobile]', error.message, causes)
+  return causes.length > 0 ? `${error.message}: ${causes.join(': ')}` : error.message
 }

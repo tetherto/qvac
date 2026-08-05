@@ -234,7 +234,12 @@ test('binary multiplexer reassembles fragmented BareKit IPC frames', async (t) =
   }
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  t.alike(received, [payload])
+  // Compare bytes, not the concrete view: frames are handed on as a Buffer
+  // where one exists so downstream codecs can call toString(encoding, ...).
+  t.alike(
+    received.map((chunk) => [...chunk]),
+    [[...payload]]
+  )
 })
 
 test('harness build patches generated launcher for argv', async (t) => {
@@ -252,7 +257,13 @@ test('harness build patches generated launcher for argv', async (t) => {
     ? ((bundle as unknown as { addons: unknown[] }).addons.filter((item): item is string => typeof item === 'string').sort())
     : []
   t.ok(harnessSource.includes('args = []'))
-  t.ok(harnessSource.includes("worklet.start('/core.bundle', bundle, args)"))
+  // Bytes, not the bundle string: BareKit sizes its copy from the value it is
+  // given, and a string makes that size disagree with the bytes written.
+  t.ok(
+    harnessSource.includes(
+      "worklet.start('/core.bundle', new TextEncoder().encode(bundle), args)"
+    )
+  )
   t.ok(declarationSource.includes('args?: readonly string[]'))
   t.alike(output.metadata.nativeAddons, bundleAddons)
 })
@@ -561,8 +572,13 @@ test('harness cleanup runs after carrier close', async (t) => {
   t.is(cleanupRuns, 1)
 })
 
+// The argv and sidecar wiring moved into the shared entry factory so that
+// application-authored entries cannot drift from it.
 test('desktop child entry still requires sdk sidecar argv', async (t) => {
-  const source = await readFile(new URL('../child-entry.ts', import.meta.url), 'utf8')
+  const source = await readFile(
+    new URL('../lib/skills/host-entry.ts', import.meta.url),
+    'utf8'
+  )
   t.ok(source.includes('--sdk-entry='), 'desktop entry still reads --sdk-entry argument')
   t.ok(
     source.includes('createSdkSidecarAdapter'),

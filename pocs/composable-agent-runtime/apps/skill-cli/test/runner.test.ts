@@ -932,28 +932,33 @@ test('production dependency composition passes high-level desktop config to Harn
     timeoutMs: 120_000
   }
   await dependencies.createHarness(config)
+  // Skills are named by this application, not by Harness: the config is a map
+  // of opaque per-skill slices keyed by the skill's catalog name.
   expect(received).toMatchObject({
     inference: 'qwen',
-    desktop: {
+    host: {
       bareExecutable: '/runtime/bare',
-      obsidianApproval: false,
-      obsidian: {
-        access: 'read-only',
-        allowedOperations: [
-          'files',
-          'search',
-          'read',
-          'daily:read',
-          'version'
-        ]
-      },
-      image: {
-        attachmentRoot: '/outputs',
-        model: '/models/sd.gguf',
-        prediction: 'v'
+      skills: {
+        weather: {},
+        obsidian: {
+          access: 'read-only',
+          allowedOperations: [
+            'files',
+            'search',
+            'read',
+            'daily:read',
+            'version'
+          ]
+        },
+        'image-generation': {
+          attachmentRoot: '/outputs',
+          model: '/models/sd.gguf',
+          prediction: 'v'
+        }
       }
     }
   })
+  expect(received?.workers?.harnessChildEntry).toContain('harness-child-entry.ts')
 })
 
 test('production runner delegates read-only Obsidian enforcement to Harness', async () => {
@@ -976,10 +981,16 @@ test('production runner delegates read-only Obsidian enforcement to Harness', as
     obsidianApproval: true,
     timeoutMs: 1_000
   })
-  expect(received?.desktop?.obsidian).toMatchObject({
+  // Skill configuration is an opaque per-skill slice now; Harness never reads
+  // inside it, so the runner's read-only policy has to arrive here.
+  expect(received?.host?.skills?.obsidian).toMatchObject({
     access: 'read-only',
     allowedOperations: ['files', 'search', 'read', 'daily:read', 'version']
   })
+  expect(received?.workers?.harnessChildEntry).toContain('harness-child-entry.ts')
+  expect(received?.workers?.toolSandboxChildEntry).toContain(
+    'tool-sandbox-child-entry.ts'
+  )
 })
 
 test('approval denial fails closed and still closes every resource', async () => {
@@ -1271,6 +1282,8 @@ function fakePackageHarness(): ReturnType<typeof createHarness> {
     cancelAgentRun: async () => {},
     readRun: async () => null,
     watchWork: async function* () {},
+    watchApprovals: async function* () {},
+    resolveApproval: async () => {},
     close: async () => {}
   }
 }

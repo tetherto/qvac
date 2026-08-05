@@ -7,7 +7,7 @@ import { createSyncHarnessRunStore } from '../lib/sync-harness-run-store.ts'
 import { verifyAvailabilityLifecycle } from './harness-run-store-conformance.ts'
 
 const checkpoint = {
-  version: 1 as const,
+  version: 2 as const,
   agentId: 'agent-1',
   runId: 'run-1',
   nextOperationIndex: 1,

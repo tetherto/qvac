@@ -162,9 +162,13 @@ async function patchGeneratedHarness(harnessPath: string) {
     'async start(opts = {}) {',
     'async start(opts = {}, args = []) {'
   )
+  // The generated module carries the bundle as a JS string. Handing that
+  // straight to BareKit makes it size a copy from UTF-16 length while writing
+  // UTF-8 bytes, so any character above U+00FF overruns the buffer by the
+  // difference. Encode once, here, so the worklet receives exact bytes.
   const patched = withStartSignature.replace(
     "worklet.start('/core.bundle', bundle)",
-    "worklet.start('/core.bundle', bundle, args)"
+    "worklet.start('/core.bundle', new TextEncoder().encode(bundle), args)"
   )
   if (patched === original || withStartSignature === original) {
     throw new Error(`Unable to patch generated harness argv support: ${harnessPath}`)

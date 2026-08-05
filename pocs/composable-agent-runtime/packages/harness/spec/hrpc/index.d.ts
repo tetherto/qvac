@@ -46,4 +46,6 @@ export default class HarnessRPC {
   onWatchWork(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
   statePort(input?: Record<string, WireValue>): GeneratedHarnessStream
   onStatePort(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
+  approvals(input?: Record<string, WireValue>): GeneratedHarnessStream
+  onApprovals(handler: (stream: GeneratedHarnessStream) => Promise<void> | void): void
 }

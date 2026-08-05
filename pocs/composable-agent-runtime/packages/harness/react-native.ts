@@ -2,12 +2,14 @@ export {
   createMobileHarness as createHarness,
   type CreateMobileHarnessOptions as CreateHarnessOptions
 } from './lib/runtime/create-harness-mobile.ts'
-export {
-  HARNESS_HANDSHAKE,
-  type HarnessRuntime,
-  type HarnessRuntimeExit
+// Types only: the value side of create-harness.ts is the desktop launcher,
+// which uses import.meta and cannot enter a Hermes bundle.
+export type {
+  HarnessRuntime,
+  HarnessRuntimeExit
 } from './lib/runtime/create-harness.ts'
 export {
+  HARNESS_HANDSHAKE,
   assertCompatibleHarness,
   harnessCompatibility,
   type HarnessRuntimeHandshake
@@ -17,6 +19,10 @@ export type {
   HarnessAgentWorkflowOperation,
   HarnessToolPolicy
 } from './lib/agent-registration.ts'
+export type {
+  HarnessApprovalDecision,
+  HarnessApprovalRequest
+} from './lib/approval-port.ts'
 export type {
   HarnessRunIdentity,
   HarnessRunOutcome,

@@ -27,7 +27,9 @@ const methods = new Map([
   ['@harness/suspend', 9],
   [9, '@harness/suspend'],
   ['@harness/resume', 10],
-  [10, '@harness/resume']
+  [10, '@harness/resume'],
+  ['@harness/approvals', 11],
+  [11, '@harness/approvals']
 ])
 
 class HRPC {
@@ -45,7 +47,8 @@ class HRPC {
       ['@harness/watch-work', getEncoding('@harness/wire-frame')],
       ['@harness/state-port', getEncoding('@harness/wire-frame')],
       ['@harness/suspend', getEncoding('@harness/wire-frame')],
-      ['@harness/resume', getEncoding('@harness/wire-frame')]
+      ['@harness/resume', getEncoding('@harness/wire-frame')],
+      ['@harness/approvals', getEncoding('@harness/wire-frame')]
     ])
     this._responseEncodings = new Map([
       ['@harness/run', getEncoding('@harness/wire-frame')],
@@ -58,7 +61,8 @@ class HRPC {
       ['@harness/watch-work', getEncoding('@harness/wire-frame')],
       ['@harness/state-port', getEncoding('@harness/wire-frame')],
       ['@harness/suspend', getEncoding('@harness/wire-frame')],
-      ['@harness/resume', getEncoding('@harness/wire-frame')]
+      ['@harness/resume', getEncoding('@harness/wire-frame')],
+      ['@harness/approvals', getEncoding('@harness/wire-frame')]
     ])
     this._rpc = new RPC(stream, async (req) => {
       const command = methods.get(req.command)
@@ -200,6 +204,10 @@ class HRPC {
     return this._call('@harness/resume', args)
   }
 
+  approvals(args) {
+    return this._callSync('@harness/approvals', args)
+  }
+
   onRun(responseFn) {
     this._handlers['@harness/run'] = responseFn
   }
@@ -244,12 +252,17 @@ class HRPC {
     this._handlers['@harness/resume'] = responseFn
   }
 
+  onApprovals(responseFn) {
+    this._handlers['@harness/approvals'] = responseFn
+  }
+
   _requestIsStream(command) {
     return [
       '@harness/run',
       '@harness/run-agent',
       '@harness/watch-work',
-      '@harness/state-port'
+      '@harness/state-port',
+      '@harness/approvals'
     ].includes(command)
   }
 
@@ -258,7 +271,8 @@ class HRPC {
       '@harness/run',
       '@harness/run-agent',
       '@harness/watch-work',
-      '@harness/state-port'
+      '@harness/state-port',
+      '@harness/approvals'
     ].includes(command)
   }
 

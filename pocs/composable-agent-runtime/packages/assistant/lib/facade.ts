@@ -1,5 +1,7 @@
 import type {
   HarnessAgentRegistration,
+  HarnessApprovalDecision,
+  HarnessApprovalRequest,
   HarnessEvent,
   HarnessRunRecord
 } from '@qvac/harness'
@@ -46,6 +48,10 @@ export interface AssistantFacade {
   run(input: AssistantRunInput): AssistantRun
   cancelRun(input: { readonly agentId: string; readonly runId: string; readonly reason?: string }): Promise<void>
   readRun(input: { readonly agentId: string; readonly runId: string }): Promise<HarnessRunRecord | null>
+  readonly approvals: {
+    pending(): AsyncIterable<HarnessApprovalRequest>
+    resolve(decision: HarnessApprovalDecision): Promise<void>
+  }
   suspend(): Promise<void>
   resume(): Promise<void>
   close(): Promise<void>
@@ -159,6 +165,25 @@ export function createAssistantFacade(
       return supervisor
         .get<AssistantHarnessComponent>('harness')
         .harness.readRun(input)
+    },
+    approvals: {
+      pending() {
+        // Terminates rather than silently reconnecting across a harness
+        // replacement: in-flight approvals are denied by the child when its
+        // stream closes, so a resubscription is a caller decision.
+        return (async function* () {
+          await supervisor.ready()
+          yield* supervisor
+            .get<AssistantHarnessComponent>('harness')
+            .harness.watchApprovals()
+        })()
+      },
+      async resolve(decision) {
+        await supervisor.ready()
+        await supervisor
+          .get<AssistantHarnessComponent>('harness')
+          .harness.resolveApproval(decision)
+      }
     },
     suspend: () => supervisor.suspend(),
     resume: () => supervisor.resume(),

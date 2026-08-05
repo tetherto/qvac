@@ -15,7 +15,10 @@ export {
   harnessCompatibility,
   type HarnessRuntimeHandshake
 } from './lib/runtime/compatibility.ts'
-export type { HarnessDesktopConfig } from './lib/runtime/desktop-config.ts'
+export type {
+  HarnessApprovalDecision,
+  HarnessApprovalRequest
+} from './lib/approval-port.ts'
 export type {
   HarnessRunIdentity,
   HarnessRunOutcome,

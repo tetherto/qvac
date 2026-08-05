@@ -1,4 +1,4 @@
-import { defineAgent } from '@qvac/agents'
+import { defineAgent, type AgentEvent } from '@qvac/agents'
 import {
   agentDefinitionFromRegistration,
   copyAgentRegistration,
@@ -17,9 +17,12 @@ import { encodeRunIdentity } from './run-identity.ts'
 import { createRunRegistry } from './run-registry.ts'
 import type { HarnessRunStore } from './run-store.ts'
 import type { SdkRuntimeEvent, SdkRuntimePort } from './sdk-runtime-port.ts'
-import type { SkillCatalogEntry } from './skills/catalog.ts'
+import type {
+  SkillCatalogEntry,
+  SkillCatalogSource
+} from './skills/catalog.ts'
 import {
-  createToolGate,
+  grantsFor,
   validateSelectedSkills,
   type HarnessTool,
   type HarnessToolApprovalPort,
@@ -40,9 +43,15 @@ export interface CreateHarnessServiceOptions {
   readonly state?: HarnessStateAdapter
   readonly runStore?: HarnessRunStore
   readonly logging?: HarnessLoggingConfig
+  readonly skills?: SkillCatalogSource
   readonly tools?: readonly HarnessTool[]
   readonly toolBroker?: HarnessToolBrokerPort
   readonly toolApproval?: HarnessToolApprovalPort
+  /**
+   * Tools that always require approval, whatever an agent's own policy says.
+   * A remotely-submitted registration must not be able to opt itself out.
+   */
+  readonly mandatoryApproval?: readonly string[]
   readonly onRegistration?: (registration: HarnessAgentRegistration) => void
 }
 
@@ -51,9 +60,11 @@ export function createHarnessService({
   state = createMemoryStateAdapter(),
   runStore = createInMemoryHarnessRunStore(),
   logging,
+  skills,
   tools = [],
   toolBroker = unavailableToolBroker(),
   toolApproval,
+  mandatoryApproval,
   onRegistration
 }: CreateHarnessServiceOptions): LocalHarnessRuntime {
   let closed = false
@@ -64,18 +75,12 @@ export function createHarnessService({
   const registrations = new Map<string, HarnessAgentRegistration>()
   const runs = createRunRegistry()
 
+  // Skills are supplied by the application. A harness with no configured
+  // source has an empty catalog, so validateSelectedSkills rejects every named
+  // skill rather than silently exposing skills it cannot execute.
   function loadCatalog() {
-    catalogPromise ??= Promise.all([
-      import('./skills/catalog.ts'),
-      import('./skills/bundled-skills.ts')
-    ]).then(([catalogModule, bundle]) =>
-      catalogModule.createSkillCatalogFromBundle(
-        {
-          files: bundle.BUNDLED_SKILLS,
-          hash: bundle.BUNDLED_SKILLS_HASH
-        },
-        { platform: 'darwin' }
-      )
+    catalogPromise ??= import('./skills/catalog.ts').then((catalogModule) =>
+      catalogModule.resolveSkillCatalog(skills)
     )
     return catalogPromise
   }
@@ -179,8 +184,9 @@ export function createHarnessService({
     if (registrations.has(registration.id)) {
       throw new Error(`agent is already registered: ${registration.id}`)
     }
-    validateSelectedSkills(registration, await loadCatalog())
-    defineAgent(agentDefinitionFromRegistration(registration))
+    const registrationCatalog = await loadCatalog()
+    validateSelectedSkills(registration, registrationCatalog)
+    defineAgent(agentDefinitionFromRegistration(registration, registrationCatalog))
     registrations.set(registration.id, copyAgentRegistration(registration))
     onRegistration?.(registration)
   }
@@ -209,31 +215,22 @@ export function createHarnessService({
     }
     let eventIndex = previous?.events.length ?? 0
     const queue = createAsyncQueue<HarnessEvent>()
-    const gate = createToolGate({
-      registration,
-      catalog: await loadCatalog(),
-      tools,
-      broker: toolBroker,
-      ...(toolApproval ? { approval: toolApproval } : {})
-    })
-    const adapter = createBrokeredModelAdapter({
-      registration,
-      sdk,
-      tools: gate,
-      async onEvent(event) {
-        await runStore.appendEvents({
-          ...key,
-          operationId: `${stateKey}:event:${++eventIndex}`,
-          events: [{ kind: 'execution', event }]
-        })
-        queue.push(event)
-      }
-    })
-    const agent = defineAgent(agentDefinitionFromRegistration(registration))
+    const catalog = await loadCatalog()
+    const adapter = createBrokeredModelAdapter({ registration, sdk })
+    const agent = defineAgent(agentDefinitionFromRegistration(registration, catalog))
     const agentRun = agent.run({
       runId: input.runId,
       input: input.input,
       adapter,
+      tooling: {
+        tools,
+        grants: grantsFor(registration.skills, catalog),
+        broker: toolBroker,
+        ...(toolApproval ? { approval: toolApproval } : {}),
+        ...(mandatoryApproval?.length
+          ? { mandatoryApproval: new Set(mandatoryApproval) }
+          : {})
+      },
       ...(previous?.checkpoint ? { checkpoint: previous.checkpoint } : {})
     })
     runs.add(key, agentRun)
@@ -259,13 +256,8 @@ export function createHarnessService({
               checkpoint: event.checkpoint
             })
           }
-          if (event.type === 'content') {
-            const content: HarnessEvent = { type: 'content', text: event.text }
-            queue.push(content)
-          } else if (event.type === 'run-canceled') {
-            const aborted: HarnessEvent = { type: 'aborted' }
-            queue.push(aborted)
-          }
+          const projected = harnessEventFor(event)
+          if (projected) queue.push(projected)
           if (event.type === 'run-completed') {
             await runStore.finish({
               ...key,
@@ -356,19 +348,49 @@ export function createHarnessService({
   }
 }
 
+/**
+ * Projects an agent event onto the application-facing harness event stream.
+ * Returns null for events that are run bookkeeping rather than output.
+ */
+function harnessEventFor(event: AgentEvent): HarnessEvent | null {
+  switch (event.type) {
+    case 'content':
+      return { type: 'content', text: event.text }
+    case 'tool-call':
+      return { type: 'tool-call', name: event.call.name, args: event.call.arguments }
+    case 'tool-result':
+      return { type: 'tool-result', name: event.name, result: event.result }
+    case 'tool-progress':
+      return { type: 'tool-progress', name: event.name, progress: event.progress }
+    case 'run-canceled':
+      return { type: 'aborted' }
+    default:
+      return null
+  }
+}
+
+/**
+ * A tool call with no matching result may or may not have taken effect. The
+ * tool loop now lives in @qvac/agents, so these arrive as agent events.
+ */
 function hasIndeterminateToolCall(
   events: readonly import('./run-store.ts').HarnessStoredRunEvent[]
 ) {
   const pending = new Map<string, number>()
+  const started = (name: string) => pending.set(name, (pending.get(name) ?? 0) + 1)
+  const settled = (name: string) => {
+    const count = pending.get(name) ?? 0
+    if (count <= 1) pending.delete(name)
+    else pending.set(name, count - 1)
+  }
   for (const entry of events) {
-    if (entry.kind !== 'execution') continue
-    if (entry.event.type === 'tool-call') {
-      pending.set(entry.event.name, (pending.get(entry.event.name) ?? 0) + 1)
-    } else if (entry.event.type === 'tool-result') {
-      const count = pending.get(entry.event.name) ?? 0
-      if (count <= 1) pending.delete(entry.event.name)
-      else pending.set(entry.event.name, count - 1)
+    if (entry.kind === 'agent') {
+      if (entry.event.type === 'tool-call') started(entry.event.call.name)
+      else if (entry.event.type === 'tool-result') settled(entry.event.name)
+      continue
     }
+    if (entry.event.type === 'tool-call') started(entry.event.name)
+    else if (entry.event.type === 'tool-result') settled(entry.event.name)
   }
   return pending.size > 0
 }

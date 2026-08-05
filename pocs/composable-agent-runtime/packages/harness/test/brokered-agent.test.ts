@@ -2,8 +2,10 @@ import test from 'brittle'
 import AbortController from 'bare-abort-controller'
 import type { HarnessAgentRegistration } from '../lib/agent-registration.ts'
 import {
-  createHarnessService as createHarness
+  createHarnessService,
+  type CreateHarnessServiceOptions
 } from '../lib/harness.ts'
+import { fixtureSkills } from './skill-fixtures.ts'
 import { createInMemoryHarnessRunStore } from '../lib/in-memory-harness-run-store.ts'
 import type { HarnessRunStore } from '../lib/run-store.ts'
 import type { HarnessStateAdapter } from '../lib/types.ts'
@@ -16,6 +18,12 @@ import {
 } from '../lib/tool-broker.ts'
 import type { HarnessEvent } from '../lib/types.ts'
 import { createRunRegistry } from '../lib/run-registry.ts'
+
+// Skills are application-supplied, so every harness under test declares its
+// own catalog. Individual tests may override `skills` to assert catalog rules.
+function createHarness(options: CreateHarnessServiceOptions) {
+  return createHarnessService({ skills: fixtureSkills(), ...options })
+}
 
 const HTTP_TOOL: HarnessTool = {
   schema: {
@@ -144,6 +152,42 @@ test('selected skills expose exactly their granted tool schemas', async (t) => {
   }))
 
   t.alike(exposedTools, [['http_request']])
+  await harness.close()
+})
+
+test('selected skill instructions reach the model as system prompt blocks', async (t) => {
+  const systemMessages: string[][] = []
+  const sdk = createSdk(({ requestId, messages }) => ({
+    requestId,
+    events: (async function* () {
+      systemMessages.push(
+        messages
+          .filter((message) => message.role === 'system')
+          .map((message) => message.content)
+      )
+      yield { type: 'content-delta' as const, text: 'sunny' }
+    })()
+  }))
+  const { harness } = await registerWeatherAgent(sdk)
+
+  await collect(harness.runAgent({
+    agentId: WEATHER_AGENT.id,
+    runId: 'skill-prompt',
+    input: 'Weather?'
+  }))
+
+  const system = systemMessages[0] ?? []
+  t.is(system[0], WEATHER_AGENT.instructions, 'agent instructions come first')
+  // Every skill is listed so the model can say when it lacks one.
+  t.ok(system[1]?.includes('Available skills:') === true)
+  t.ok(system[1]?.includes('image-generation') === true)
+  // Only the selected skill contributes its body.
+  t.ok(system.some((text) => text.includes('Fixture instructions for the weather skill')))
+  t.is(
+    system.some((text) => text.includes('Fixture instructions for the notes skill')),
+    false,
+    'an unselected skill contributes no instructions'
+  )
   await harness.close()
 })
 
@@ -363,6 +407,91 @@ test('approval denial prevents broker execution', async (t) => {
   await harness.close()
 })
 
+// Regression: the desktop configuration never supplied a toolApproval port, so
+// the gate denied every approval-required call and a granted exec could not run
+// in production. Only the mocked app tests covered that path.
+test('an approval-required tool runs when the configured port approves it', async (t) => {
+  let round = 0
+  const sdk = createSdk(({ requestId }) => ({
+    requestId,
+    events: (async function* () {
+      round++
+      if (round > 1) {
+        yield { type: 'content-delta' as const, text: 'London: 22 C' }
+        return
+      }
+      yield {
+        type: 'tool-call' as const,
+        id: 'weather-approved',
+        name: 'http_request',
+        arguments: { url: 'https://wttr.in/London?format=3' }
+      }
+    })()
+  }))
+  const broker = createBroker()
+  const harness = createHarness({
+    sdk,
+    tools: [HTTP_TOOL],
+    toolBroker: broker,
+    toolApproval: { approve: async () => true }
+  })
+  await harness.registerAgent({
+    ...WEATHER_AGENT,
+    toolPolicy: { allow: ['http_request'], requireApproval: ['http_request'] }
+  })
+
+  const events = await collect(harness.runAgent({
+    agentId: WEATHER_AGENT.id,
+    runId: 'approval-granted',
+    input: 'Weather?'
+  }))
+
+  t.alike(broker.calls, ['http_request'])
+  t.is(events.some((event) => event.type === 'error'), false)
+  await harness.close()
+})
+
+test('mandatory approval applies to a policy that does not require it', async (t) => {
+  const sdk = createSdk(({ requestId }) => ({
+    requestId,
+    events: (async function* () {
+      yield {
+        type: 'tool-call' as const,
+        id: 'weather-mandatory',
+        name: 'http_request',
+        arguments: { url: 'https://wttr.in/London?format=3' }
+      }
+    })()
+  }))
+  const broker = createBroker()
+  let prompts = 0
+  const harness = createHarness({
+    sdk,
+    tools: [HTTP_TOOL],
+    toolBroker: broker,
+    mandatoryApproval: ['http_request'],
+    toolApproval: {
+      approve: async () => {
+        prompts++
+        return false
+      }
+    }
+  })
+  // The agent's own policy asks for no approval; the host still requires it.
+  await harness.registerAgent(WEATHER_AGENT)
+
+  const events = await collect(harness.runAgent({
+    agentId: WEATHER_AGENT.id,
+    runId: 'mandatory-approval',
+    input: 'Weather?'
+  }))
+
+  t.is(prompts, 1)
+  t.alike(broker.calls, [])
+  t.is(events.at(-1)?.type, 'error')
+  await harness.close()
+})
+
 test('tool validation rejects before approval and broker execution', async (t) => {
   const sdk = createSdk(({ requestId }) => ({
     requestId,
@@ -445,9 +574,11 @@ test('one tool call emits call and result before final agent content', async (t)
   }))
 
   t.alike(events.map((event) => event.type), ['tool-call', 'tool-result', 'content'])
+  // Three system messages: agent instructions, the skills index, and the
+  // selected skill's own instructions.
   t.alike(histories, [
-    ['system', 'user'],
-    ['system', 'user', 'assistant', 'tool']
+    ['system', 'system', 'system', 'user'],
+    ['system', 'system', 'system', 'user', 'assistant', 'tool']
   ])
   await harness.close()
 })
@@ -743,7 +874,9 @@ test('Harness isolates persisted and SDK identities for slash-colliding run pair
   await harness.close()
 })
 
-test('cancel reaches SDK and broker and fences late tool output', async (t) => {
+// A tool that completed is reported even though the run is cancelling. The
+// alternative -- discarding its result -- makes a resume re-run a side effect.
+test('cancel reaches SDK and broker and keeps a completed tool result', async (t) => {
   const sdkCancellations: string[] = []
   let releaseBroker: (() => void) | undefined
   const sdk = createSdk(({ requestId }) => ({
@@ -785,7 +918,7 @@ test('cancel reaches SDK and broker and fences late tool output', async (t) => {
 
   t.is(sdkCancellations.length, 1)
   t.alike(broker.cancellations, ['weather-agent/cancel-tool'])
-  t.alike(events.map((event) => event.type), ['tool-call', 'aborted'])
+  t.alike(events.map((event) => event.type), ['tool-call', 'tool-result', 'aborted'])
   await harness.close()
 })
 
