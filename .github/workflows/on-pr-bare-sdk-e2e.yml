@@ -153,7 +153,7 @@ jobs:
       # committed manifest addon-free (enforced by check-no-addon-deps).
       - name: Install addon prebuilds
         working-directory: packages/bare-sdk
-        run: npm install --no-save @qvac/llm-llamacpp @qvac/embed-llamacpp @qvac/translation-nmtcpp @qvac/transcription-whispercpp
+        run: npm install --no-save @qvac/llm-llamacpp @qvac/embed-llamacpp @qvac/translation-nmtcpp @qvac/asr-ggml
 
       - name: Run bare-sdk inference e2e
         working-directory: packages/bare-sdk
