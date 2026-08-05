@@ -26,6 +26,7 @@ import {
   type LlmConfigInput
 } from '@/schemas'
 import { createStreamLogger, registerAddonLogger } from '@/logging'
+import { expandGGUFIntoShards } from '@/server/utils'
 import { completion } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stream'
 import { batchCompletion } from '@/server/bare/plugins/llamacpp-completion/ops/batch-completion-stream'
 import { finetune } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
@@ -66,11 +67,7 @@ function createLlmModel(
     }
   }
 
-  // TEMPORARY: hand the addon only the first shard path instead of the full
-  // shard list, so the native loader reads the weights straight from disk
-  // instead of them being streamed across the boundary. Revert to
-  // `expandGGUFIntoShards(modelPath)` once the addon loads shard lists lazily.
-  const modelFiles = [modelPath]
+  const modelFiles = expandGGUFIntoShards(modelPath)
 
   const model = new LlmLlamacpp({
     files: {
