@@ -19,8 +19,8 @@
     },
     {
       "kind": "git",
-      "reference": "a9e1c1347352a960029e98cb5b1084ad5185a3f0",
-      "baseline": "a9e1c1347352a960029e98cb5b1084ad5185a3f0",
+      "reference": "7f801d91a0c6f78775b2a5c2a2519df037362bb0",
+      "baseline": "7f801d91a0c6f78775b2a5c2a2519df037362bb0",
       "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
       "packages": ["audiogen-cpp", "ggml-speech"]
     }
