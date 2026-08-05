@@ -183,8 +183,21 @@ function requireTask(task: ReplicatedTask | null, id: string) {
   return task
 }
 
+/**
+ * Bytes reach this code as a Buffer on Bare and Node, but as a plain
+ * Uint8Array across the mobile worklet boundary, and Uint8Array.toString()
+ * yields comma-joined byte values rather than text. Decode explicitly so the
+ * result does not depend on which prototype survived the transport.
+ */
+function decodeUtf8(bytes: Buffer | Uint8Array | string) {
+  if (typeof bytes === 'string') return bytes
+  return new TextDecoder().decode(
+    bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  )
+}
+
 function decodePayload(payload: Buffer) {
-  const value: unknown = JSON.parse(payload.toString())
+  const value: unknown = JSON.parse(decodeUtf8(payload))
   if (typeof value !== 'object' || value === null) {
     throw new Error('Invalid replicated task payload')
   }
@@ -200,7 +213,7 @@ function decodePayload(payload: Buffer) {
 }
 
 function decodeProgress(body: Buffer) {
-  const value: unknown = JSON.parse(body.toString())
+  const value: unknown = JSON.parse(decodeUtf8(body))
   if (typeof value !== 'object' || value === null) {
     throw new Error('Invalid replicated task progress')
   }
@@ -223,7 +236,7 @@ function encodeResult(result: string | null) {
 }
 
 function decodeResult(result: Buffer) {
-  const value: unknown = JSON.parse(result.toString())
+  const value: unknown = JSON.parse(decodeUtf8(result))
   if (typeof value !== 'object' || value === null) {
     throw new Error('Invalid replicated task outcome')
   }
