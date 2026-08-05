@@ -1,0 +1,1132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Visual walkthrough of the composable QVAC agent runtime package split, runtime topology, and API surface.">
+  <title>Composable Agent Runtime Walkthrough</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f2ea;
+      --surface: #fffaf0;
+      --surface-strong: #171512;
+      --surface-soft: #efe6d6;
+      --line: #d8cab7;
+      --line-strong: #a08868;
+      --text: #181511;
+      --muted: #6e6253;
+      --accent: #af4b2d;
+      --accent-2: #246b61;
+      --accent-3: #5d4da8;
+      --gold: #b0822d;
+      --code-bg: #1e1a16;
+      --code-text: #fff1dc;
+      --shadow: 0 20px 60px rgb(74 51 25 / 14%);
+      --radius: 24px;
+      --mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11100e;
+        --surface: #1b1814;
+        --surface-strong: #f5ead8;
+        --surface-soft: #29231c;
+        --line: #3c342b;
+        --line-strong: #7d6a53;
+        --text: #f4eadc;
+        --muted: #b7a994;
+        --accent: #f0714e;
+        --accent-2: #57b3a4;
+        --accent-3: #a392ff;
+        --gold: #e3b556;
+        --code-bg: #0b0908;
+        --code-text: #f8ead3;
+        --shadow: 0 24px 70px rgb(0 0 0 / 42%);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 8% 6%, rgb(175 75 45 / 22%), transparent 30rem),
+        radial-gradient(circle at 92% 14%, rgb(36 107 97 / 18%), transparent 28rem),
+        linear-gradient(135deg, rgb(176 130 45 / 7%) 0 1px, transparent 1px 22px),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    a {
+      color: inherit;
+    }
+
+    code {
+      font-family: var(--mono);
+    }
+
+    p code,
+    li code,
+    .callout code {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      padding: 1px 5px;
+      color: var(--text);
+      font-size: 0.92em;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 28px;
+      width: min(1480px, 100%);
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .rail {
+      position: sticky;
+      top: 28px;
+      align-self: start;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+
+    .rail-head {
+      padding: 22px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), transparent 58%),
+        var(--surface);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .rail h1 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1;
+      letter-spacing: -0.035em;
+    }
+
+    .rail p {
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+    }
+
+    .nav-item {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      background: transparent;
+      color: var(--muted);
+      padding: 10px;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .nav-item:hover,
+    .nav-item:focus-visible {
+      background: var(--surface-soft);
+      color: var(--text);
+      outline: 0;
+    }
+
+    .nav-item.active {
+      background: var(--surface-strong);
+      color: var(--bg);
+    }
+
+    .nav-index {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .rail-links {
+      display: grid;
+      gap: 8px;
+      padding: 16px 22px 22px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .rail-links a {
+      color: var(--accent);
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    .hero {
+      min-height: 260px;
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 10px);
+      background:
+        linear-gradient(120deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface-soft) 70%, transparent)),
+        var(--surface);
+      box-shadow: var(--shadow);
+      padding: clamp(24px, 4vw, 48px);
+      overflow: hidden;
+    }
+
+    .hero.hidden {
+      display: none;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+      gap: 24px;
+      align-items: center;
+    }
+
+    .hero h2 {
+      margin: 0;
+      max-width: 880px;
+      font-family: var(--serif);
+      font-size: clamp(34px, 5vw, 64px);
+      line-height: 0.98;
+      letter-spacing: -0.055em;
+    }
+
+    .hero-lede {
+      max-width: 760px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: clamp(16px, 1.6vw, 20px);
+      line-height: 1.38;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: color-mix(in srgb, var(--surface) 78%, transparent);
+      padding: 18px;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--surface-strong);
+      font-family: var(--serif);
+      font-size: 32px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .section {
+      display: none;
+      margin-top: 28px;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    .section-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--surface) 94%, transparent);
+      box-shadow: var(--shadow);
+      padding: clamp(22px, 4vw, 42px);
+    }
+
+    .section + .section-card,
+    .stack > * + * {
+      margin-top: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: end;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .section-title h3 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(26px, 3.6vw, 42px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .section-title p {
+      max-width: 680px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--surface);
+      padding: 20px;
+    }
+
+    .card h4 {
+      margin: 0 0 8px;
+      color: var(--surface-strong);
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .badge.accent {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      color: var(--accent);
+    }
+
+    .badge.green {
+      border-color: color-mix(in srgb, var(--accent-2) 50%, var(--line));
+      color: var(--accent-2);
+    }
+
+    .diagram {
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--surface-soft) 72%, transparent), transparent),
+        var(--surface);
+      overflow: visible;
+    }
+
+    .svg-defs {
+      position: absolute;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+
+    .svg-box {
+      fill: var(--surface);
+      stroke: var(--line-strong);
+      stroke-width: 1.5;
+    }
+
+    .svg-box.dark {
+      fill: var(--surface-strong);
+      stroke: var(--surface-strong);
+    }
+
+    .svg-box.soft {
+      fill: var(--surface-soft);
+    }
+
+    .svg-line {
+      fill: none;
+      stroke: var(--line-strong);
+      stroke-width: 1.8;
+      marker-end: url(#arrow);
+    }
+
+    .svg-line.dashed {
+      stroke-dasharray: 7 6;
+    }
+
+    .svg-title {
+      fill: var(--text);
+      font-family: var(--sans);
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .svg-label {
+      fill: var(--muted);
+      font-family: var(--sans);
+      font-size: 13px;
+    }
+
+    .svg-label.dark {
+      fill: var(--bg);
+    }
+
+    .svg-small {
+      fill: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .timeline-step {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      padding: 16px;
+    }
+
+    .timeline-step .number {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: var(--surface-strong);
+      color: var(--bg);
+      font-weight: 900;
+    }
+
+    .timeline-step h4 {
+      margin: 0 0 4px;
+      font-size: 17px;
+    }
+
+    .timeline-step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .code-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--code-bg);
+    }
+
+    .code-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgb(255 255 255 / 12%);
+      padding: 12px 16px;
+      color: rgb(255 241 220 / 72%);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 18px;
+      color: var(--code-text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.55;
+      tab-size: 2;
+    }
+
+    .callout {
+      border: 1px solid color-mix(in srgb, var(--gold) 50%, var(--line));
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--gold) 12%, var(--surface));
+      padding: 18px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .callout strong {
+      color: var(--text);
+    }
+
+    @media (max-width: 1050px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        position: static;
+      }
+
+      .nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .hero-grid,
+      .cols-2,
+      .cols-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        padding: 14px;
+      }
+
+      .nav {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true" focusable="false">
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L9,3 z" fill="currentColor"></path>
+      </marker>
+    </defs>
+  </svg>
+  <div class="page">
+    <aside class="rail" aria-label="Walkthrough navigation">
+      <div class="rail-head">
+        <p class="eyebrow">QVAC PoC</p>
+        <h1>Composable Agent Runtime</h1>
+        <p>A visual walkthrough of the package split, runtime topology, and public API surfaces proposed by the agentic SDK QIP.</p>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" type="button" data-section="story"><span class="nav-index">01</span><span>Story</span></button>
+        <button class="nav-item" type="button" data-section="packages"><span class="nav-index">02</span><span>Packages</span></button>
+        <button class="nav-item" type="button" data-section="runtime"><span class="nav-index">03</span><span>Runtime</span></button>
+        <button class="nav-item" type="button" data-section="api"><span class="nav-index">04</span><span>API Surface</span></button>
+        <button class="nav-item" type="button" data-section="delegation"><span class="nav-index">05</span><span>Delegation</span></button>
+        <button class="nav-item" type="button" data-section="failure"><span class="nav-index">06</span><span>Failure Model</span></button>
+      </nav>
+      <div class="rail-links">
+        <span>Companion map: <a href="https://packages-deployment-options-demo.netlify.app/">deployed composition selector</a></span>
+        <span>QIP reference: <a href="https://github.com/tetherto/qvac/blob/feature-composable-agent-runtime-poc/pocs/composable-agent-runtime/docs/arch/qip/agentic-sdk-p2p-layering.md">agentic SDK P2P layering</a></span>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">Architecture Walkthrough</p>
+            <h2 id="hero-title">Plug-and-play at the top. Strict boundaries underneath.</h2>
+            <p class="hero-lede">Assistant gives applications one obvious entry point. Sync, Harness, Agents, SDK, Supervisor, and Config remain separately understandable and independently adoptable.</p>
+            <div class="badge-row">
+              <span class="badge accent">Application facade</span>
+              <span class="badge green">P2P durable state</span>
+              <span class="badge">Bare runtime isolation</span>
+              <span class="badge">Transport-free agents</span>
+            </div>
+          </div>
+          <div class="hero-metrics" aria-label="Architecture summary">
+            <div class="metric"><strong>6</strong><span>target components with strict ownership boundaries</span></div>
+            <div class="metric"><strong>3</strong><span>restartable Bare runtimes: Sync, Harness, SDK</span></div>
+            <div class="metric"><strong>1</strong><span>normal Assistant entry point for applications</span></div>
+            <div class="metric"><strong>0</strong><span>shared runtime-contract packages or hidden dependency cycles</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section active" id="story">
+        <div class="section-card stack">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">01 Story</p>
+              <h3>Why the split exists</h3>
+            </div>
+            <p>The QIP pushes infrastructure out of the normal app path. Developers can start from Assistant, then intentionally drop to lower layers when they need state, execution, framework primitives, or inference directly.</p>
+          </div>
+
+          <div class="grid cols-3">
+            <article class="card">
+              <h4>Normal path</h4>
+              <p><code>@qvac/assistant</code> starts and connects Sync and Harness, applies defaults, propagates config, and exposes one lifecycle.</p>
+            </article>
+            <article class="card">
+              <h4>Escape hatches</h4>
+              <p>Applications can consume Sync, Harness, Agents, or SDK directly. These paths are supported choices, not prerequisites for basic use.</p>
+            </article>
+            <article class="card">
+              <h4>Package proof</h4>
+              <p>The PoC exists to validate package and runtime boundaries. A blurred boundary is a finding, not a local implementation detail.</p>
+            </article>
+          </div>
+
+          <svg class="diagram" viewBox="0 0 1040 420" role="img" aria-label="Layer ladder from application facade to lower-level packages">
+            <rect class="svg-box dark" x="70" y="48" width="900" height="62" rx="20"></rect>
+            <text class="svg-title svg-label dark" x="520" y="84" text-anchor="middle">Application chooses the level it wants</text>
+            <rect class="svg-box" x="150" y="145" width="740" height="58" rx="18"></rect>
+            <text class="svg-title" x="520" y="179" text-anchor="middle">@qvac/assistant - facade and root lifecycle</text>
+            <rect class="svg-box soft" x="105" y="250" width="210" height="76" rx="18"></rect>
+            <text class="svg-title" x="210" y="282" text-anchor="middle">@qvac/sync</text>
+            <text class="svg-label" x="210" y="306" text-anchor="middle">replicated state</text>
+            <rect class="svg-box soft" x="335" y="250" width="210" height="76" rx="18"></rect>
+            <text class="svg-title" x="440" y="282" text-anchor="middle">@qvac/harness</text>
+            <text class="svg-label" x="440" y="306" text-anchor="middle">agent execution</text>
+            <rect class="svg-box soft" x="565" y="250" width="170" height="76" rx="18"></rect>
+            <text class="svg-title" x="650" y="282" text-anchor="middle">@qvac/agents</text>
+            <text class="svg-label" x="650" y="306" text-anchor="middle">primitives</text>
+            <rect class="svg-box soft" x="755" y="250" width="180" height="76" rx="18"></rect>
+            <text class="svg-title" x="845" y="282" text-anchor="middle">@qvac/sdk</text>
+            <text class="svg-label" x="845" y="306" text-anchor="middle">inference</text>
+            <rect class="svg-box" x="230" y="350" width="260" height="46" rx="16"></rect>
+            <text class="svg-label" x="360" y="378" text-anchor="middle">@qvac/supervisor: lifecycle library</text>
+            <rect class="svg-box" x="550" y="350" width="260" height="46" rx="16"></rect>
+            <text class="svg-label" x="680" y="378" text-anchor="middle">@qvac/config: leaf utility</text>
+            <line class="svg-line" x1="520" y1="110" x2="520" y2="143"></line>
+            <line class="svg-line" x1="520" y1="203" x2="210" y2="248"></line>
+            <line class="svg-line" x1="520" y1="203" x2="440" y2="248"></line>
+            <line class="svg-line" x1="520" y1="203" x2="650" y2="248"></line>
+            <line class="svg-line" x1="520" y1="203" x2="845" y2="248"></line>
+          </svg>
+        </div>
+      </section>
+
+      <section class="section" id="packages">
+        <div class="section-card stack">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">02 Packages</p>
+              <h3>Ownership stays narrow</h3>
+            </div>
+            <p>Each package owns a crisp responsibility. The boundaries keep Sync and Harness as siblings, keep SDK focused on inference, and keep reusable mechanisms out of product policy.</p>
+          </div>
+
+          <div class="grid cols-2">
+            <article class="card">
+              <h4>@qvac/assistant</h4>
+              <p>Application facade, root lifecycle, typed client creation, default storage, pairing and device-management flow.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/sync</h4>
+              <p>Cryptographic device identity, mesh membership, replicated state, durable work, watches, and migrations.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/harness</h4>
+              <p>Ready-to-run execution: agent scheduling, model/tool loop, approvals, state backend selection, sandboxing, and SDK child supervision.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/agents</h4>
+              <p>Transport-free primitives: agents, tools, guards, approvals, turn budgets, events, and checkpoints.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/sdk</h4>
+              <p>Inference via its public client/worker path, model lifecycle, plugins, downloads, and cache ownership.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/supervisor and @qvac/config</h4>
+              <p>Lifecycle mechanics and immutable config snapshot mechanics. Neither owns product policy or concrete runtime keys.</p>
+            </article>
+          </div>
+
+          <div class="callout"><strong>Application-owned skills:</strong> concrete weather, Obsidian, image, coding, OAuth, git, or terminal behavior belongs in applications. Harness exposes worker authoring kits under <code>@qvac/harness/skill-host</code> and <code>@qvac/harness/skill-sandbox</code> only.</div>
+        </div>
+      </section>
+
+      <section class="section" id="runtime">
+        <div class="section-card stack">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">03 Runtime</p>
+              <h3>Separate restart domains</h3>
+            </div>
+            <p>Sync, Harness, and SDK each own their worker artifacts and runtime compatibility. Assistant composes the normal path; direct consumers become the root lifecycle owner for the package they use.</p>
+          </div>
+
+          <svg class="diagram" viewBox="0 0 1120 540" role="img" aria-label="Runtime topology with app process and three Bare runtimes">
+            <rect class="svg-box" x="40" y="40" width="1040" height="460" rx="28"></rect>
+            <text class="svg-title" x="70" y="80">Host application process</text>
+            <rect class="svg-box dark" x="90" y="125" width="230" height="86" rx="18"></rect>
+            <text class="svg-title svg-label dark" x="205" y="160" text-anchor="middle">@qvac/assistant</text>
+            <text class="svg-label dark" x="205" y="184" text-anchor="middle">facade and root supervisor</text>
+            <rect class="svg-box soft" x="405" y="92" width="240" height="88" rx="18"></rect>
+            <text class="svg-title" x="525" y="128" text-anchor="middle">Typed Sync client</text>
+            <text class="svg-label" x="525" y="152" text-anchor="middle">cross-host API</text>
+            <rect class="svg-box soft" x="405" y="215" width="240" height="88" rx="18"></rect>
+            <text class="svg-title" x="525" y="251" text-anchor="middle">Typed Harness client</text>
+            <text class="svg-label" x="525" y="275" text-anchor="middle">execution API</text>
+            <rect class="svg-box" x="740" y="82" width="250" height="108" rx="20"></rect>
+            <text class="svg-title" x="865" y="121" text-anchor="middle">Sync Bare runtime</text>
+            <text class="svg-label" x="865" y="147" text-anchor="middle">storage, mesh, profiles</text>
+            <text class="svg-small" x="865" y="170" text-anchor="middle">owns P2P state</text>
+            <rect class="svg-box" x="740" y="215" width="250" height="108" rx="20"></rect>
+            <text class="svg-title" x="865" y="254" text-anchor="middle">Harness Bare runtime</text>
+            <text class="svg-label" x="865" y="280" text-anchor="middle">agent loop, approvals</text>
+            <text class="svg-small" x="865" y="303" text-anchor="middle">owns execution</text>
+            <rect class="svg-box" x="740" y="348" width="250" height="108" rx="20"></rect>
+            <text class="svg-title" x="865" y="387" text-anchor="middle">SDK Bare runtime</text>
+            <text class="svg-label" x="865" y="413" text-anchor="middle">model load, inference</text>
+            <text class="svg-small" x="865" y="436" text-anchor="middle">owned by Harness here</text>
+            <line class="svg-line" x1="320" y1="160" x2="403" y2="136"></line>
+            <line class="svg-line" x1="320" y1="176" x2="403" y2="248"></line>
+            <line class="svg-line" x1="645" y1="136" x2="738" y2="136"></line>
+            <line class="svg-line" x1="645" y1="260" x2="738" y2="268"></line>
+            <line class="svg-line dashed" x1="865" y1="323" x2="865" y2="346"></line>
+            <line class="svg-line dashed" x1="865" y1="190" x2="865" y2="213"></line>
+            <text class="svg-small" x="696" y="124" text-anchor="middle">HRPC</text>
+            <text class="svg-small" x="696" y="248" text-anchor="middle">HRPC</text>
+            <text class="svg-small" x="918" y="206" text-anchor="middle">DurableStateInput</text>
+            <text class="svg-small" x="916" y="340" text-anchor="middle">supervises</text>
+          </svg>
+
+          <div class="grid cols-2">
+            <div class="timeline">
+              <div class="timeline-step"><span class="number">1</span><div><h4>State ready</h4><p>Local Sync storage and stable device identity are available. Peers and DHT reachability do not block this gate.</p></div></div>
+              <div class="timeline-step"><span class="number">2</span><div><h4>Execution ready</h4><p><code>assistant.ready()</code> means Harness is compatible and connected to the injected durable state input.</p></div></div>
+              <div class="timeline-step"><span class="number">3</span><div><h4>Model ready</h4><p>Model preparation is lazy and keyed by model. SDK or model failure does not make local state unavailable.</p></div></div>
+            </div>
+            <div class="card">
+              <h4>Dependency direction</h4>
+              <p>Assistant composes Sync and Harness. Harness uses Agents and SDK. Sync never depends on Harness, Agents, or SDK. Harness receives durable state as injected structure, not as a package dependency. SDK never depends on Sync, Harness, or Agents. Supervisor and Config depend on no product package.</p>
+              <div class="badge-row">
+                <span class="badge green">No cycles</span>
+                <span class="badge green">No Harness to Sync package edge</span>
+                <span class="badge">Package-owned contracts</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout"><strong>Containment note:</strong> the page presents the target three-runtime architecture. Platform containment strength still depends on host capabilities, especially for mobile and iOS inference failure isolation.</div>
+        </div>
+      </section>
+
+      <section class="section" id="api">
+        <div class="section-card stack">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">04 API Surface</p>
+              <h3>What developers touch</h3>
+            </div>
+            <p>The public surface keeps the common Assistant path small while preserving direct package entry points for lower-level consumers.</p>
+          </div>
+
+          <div class="grid cols-3">
+            <article class="card">
+              <h4>@qvac/assistant</h4>
+              <p><code>createAssistant</code>, <code>AssistantFacade</code>, state and work endpoints, run types, lifecycle inspection, and safe defaults.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/sync</h4>
+              <p><code>createSync</code>, mesh status and devices, runtime diagnostics, profile clients, compatibility checks, and generation errors.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/harness</h4>
+              <p><code>createHarness</code>, run records, approvals, work watches, structural durable state input, and worker authoring subpaths.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/agents</h4>
+              <p><code>defineAgent</code>, tool gates, memoized approvals, checkpoint versioning, model adapter types, and run event types.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/supervisor</h4>
+              <p><code>Supervisor</code>, declarative child specs, dependency ordering, suspend/resume, reload, inspection, and lifecycle events.</p>
+            </article>
+            <article class="card">
+              <h4>@qvac/config</h4>
+              <p><code>defineConfigKey</code>, immutable snapshot resolution, serialization, install, and process-local reads.</p>
+            </article>
+          </div>
+
+          <div class="grid cols-2">
+            <div class="code-card">
+              <div class="code-head"><span>packages/assistant/examples/assistant-inbox.ts</span><span>facade setup</span></div>
+              <pre><code>const assistant = createAssistant({
+  storagePath: command.paths.hostStoragePath,
+  inference: command.inference
+})
+
+try {
+  await assistant.ready()
+  await assistant.registerAgent({
+    id: DEFAULT_AGENT_ID,
+    model: command.model,
+    instructions: 'Complete inbox tasks directly and concisely.',
+    skills: [],
+    toolPolicy: { allow: [], requireApproval: [] }
+  })
+  const invite = await assistant.state.mesh.createInvite({
+    expiresInMs: INVITE_EXPIRES_IN_MS
+  })
+  await Promise.all([
+    approvePairingRequests(assistant, controller.signal),
+    processInbox(assistant, controller.signal)
+  ])
+} finally {
+  await assistant.close()
+}</code></pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head"><span>packages/assistant/examples/assistant-inbox.ts</span><span>run stream</span></div>
+              <pre><code>async function runTask(
+  assistant: AssistantFacade,
+  inbox: ReturnType&lt;typeof createInboxRepository&gt;,
+  task: InboxTask,
+  signal: AbortSignal
+) {
+  let output = ''
+  await inbox.update({ id: task.id, status: 'running', result: null })
+
+  for await (const event of assistant.run({
+    agentId: DEFAULT_AGENT_ID,
+    runId: runIdFor(task.id),
+    input: task.input,
+    signal
+  })) {
+    if (event.type === 'content') {
+      output += event.text ?? ''
+      await inbox.update({ id: task.id, status: 'running', result: output })
+    } else if (event.type === 'error') {
+      throw new Error(event.message)
+    }
+  }
+}</code></pre>
+            </div>
+          </div>
+
+          <div class="grid cols-2">
+            <div class="code-card">
+              <div class="code-head"><span>AssistantFacade</span><span>application lifecycle</span></div>
+              <pre><code>export interface AssistantFacade {
+  readonly state: AssistantStateEndpoint
+  ready(): Promise&lt;void&gt;
+  registerAgent(registration: HarnessAgentRegistration): Promise&lt;void&gt;
+  run(input: AssistantRunInput): AssistantRun
+  cancelRun(input: {
+    readonly agentId: string
+    readonly runId: string
+    readonly reason?: string
+  }): Promise&lt;void&gt;
+  readonly approvals: {
+    pending(): AsyncIterable&lt;HarnessApprovalRequest&gt;
+    resolve(decision: HarnessApprovalDecision): Promise&lt;void&gt;
+  }
+  suspend(): Promise&lt;void&gt;
+  resume(): Promise&lt;void&gt;
+  close(): Promise&lt;void&gt;
+}</code></pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head"><span>packages/harness/lib/runtime/create-harness.ts</span><span>direct Harness</span></div>
+              <pre><code>export function createHarness({
+  inference = 'qwen',
+  logging,
+  state,
+  host,
+  workers
+}: CreateHarnessOptions = {}): HarnessRuntime {
+  const config = configForHarnessRuntime(logging)
+  const runStore: HarnessRunStore = state
+    ? createDurableHarnessRunStore(state)
+    : createInMemoryHarnessRunStore()
+  // launchDesktopHarness owns the worker boundary
+}</code></pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head"><span>packages/harness/lib/durable-state-port.ts</span><span>structural state bridge</span></div>
+              <pre><code>export interface DurableStatePort {
+  openDurableWorkProfile(): DurableWorkProfileClient
+}
+
+export type DurableStateInput =
+  | DurableStatePort
+  | DurableProfileRegistrySupplier
+
+export function openDurableWorkProfile(
+  state: DurableStateInput
+): DurableWorkProfileClient {
+  const client = hasDurableProfileOpener(state)
+    ? state.openDurableWorkProfile()
+    : state.openProfile(durableWorkProfile)
+  assertDurableWorkProfileClient(client)
+  return client
+}</code></pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head"><span>packages/sync/lib/runtime/types.ts</span><span>Sync runtime</span></div>
+              <pre><code>export interface SyncRuntime {
+  ready(): Promise&lt;void&gt;
+  suspend(): Promise&lt;void&gt;
+  resume(): Promise&lt;void&gt;
+  close(): Promise&lt;void&gt;
+  readonly mesh: {
+    identity(): Promise&lt;{ deviceId: Buffer }&gt;
+    status(): Promise&lt;SyncMeshStatus&gt;
+    createInvite(options?: {
+      readonly expiresInMs?: number
+    }): Promise&lt;T.RpcPairingInvite&gt;
+  }
+  openProfile&lt;Command, Query, Result, Change = Result&gt;(
+    profile: SyncProfileContract&lt;Command, Query, Result, Change&gt;
+  ): SyncProfileClient&lt;Command, Query, Result, Change&gt;
+}</code></pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head"><span>packages/agents/index.ts</span><span>transport-free framework</span></div>
+              <pre><code>export {
+  DEFAULT_TURN_BUDGET,
+  TURN_BUDGET_FALLBACK,
+  defineAgent
+} from './lib/agent.ts'
+export { createToolGate, memoizeToolApproval } from './lib/tools.ts'
+export { CHECKPOINT_VERSION } from './lib/types.ts'</code></pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head"><span>packages/config/index.ts</span><span>leaf utility</span></div>
+              <pre><code>export {
+  CONFIG_SNAPSHOT_VERSION,
+  deserializeConfig,
+  serializeConfig
+} from './lib/snapshot.ts'
+export { defineConfigKey, resolveConfig } from './lib/resolve.ts'
+export {
+  getConfigSnapshot,
+  getConfigValue,
+  installConfig
+} from './lib/store.ts'</code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="delegation">
+        <div class="section-card stack">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">05 Delegation</p>
+              <h3>Durable task routing, not inference proxying</h3>
+            </div>
+            <p>SDK-native <code>delegate</code> and <code>provide</code> are retired by the target architecture. Cross-device work moves through Sync-backed durable state and is executed by a target Harness through its own SDK runtime.</p>
+          </div>
+
+          <svg class="diagram" viewBox="0 0 1120 390" role="img" aria-label="Delegation sequence through Sync-backed durable state">
+            <rect class="svg-box dark" x="45" y="64" width="180" height="78" rx="18"></rect>
+            <text class="svg-title svg-label dark" x="135" y="98" text-anchor="middle">Local Harness</text>
+            <text class="svg-label dark" x="135" y="122" text-anchor="middle">writes request</text>
+            <rect class="svg-box" x="310" y="64" width="190" height="78" rx="18"></rect>
+            <text class="svg-title" x="405" y="98" text-anchor="middle">Sync state</text>
+            <text class="svg-label" x="405" y="122" text-anchor="middle">source of truth</text>
+            <rect class="svg-box" x="585" y="64" width="190" height="78" rx="18"></rect>
+            <text class="svg-title" x="680" y="98" text-anchor="middle">Paired device</text>
+            <text class="svg-label" x="680" y="122" text-anchor="middle">replicated work</text>
+            <rect class="svg-box dark" x="860" y="64" width="210" height="78" rx="18"></rect>
+            <text class="svg-title svg-label dark" x="965" y="98" text-anchor="middle">Target Harness</text>
+            <text class="svg-label dark" x="965" y="122" text-anchor="middle">claims and executes</text>
+            <rect class="svg-box soft" x="860" y="238" width="210" height="78" rx="18"></rect>
+            <text class="svg-title" x="965" y="272" text-anchor="middle">Target SDK</text>
+            <text class="svg-label" x="965" y="296" text-anchor="middle">local inference</text>
+            <line class="svg-line" x1="225" y1="103" x2="308" y2="103"></line>
+            <line class="svg-line" x1="500" y1="103" x2="583" y2="103"></line>
+            <line class="svg-line" x1="775" y1="103" x2="858" y2="103"></line>
+            <line class="svg-line" x1="965" y1="142" x2="965" y2="236"></line>
+            <path class="svg-line dashed" d="M965 316 C965 356 405 356 405 144"></path>
+            <text class="svg-small" x="266" y="89" text-anchor="middle">request</text>
+            <text class="svg-small" x="543" y="89" text-anchor="middle">replicate</text>
+            <text class="svg-small" x="818" y="89" text-anchor="middle">claim</text>
+            <text class="svg-small" x="1008" y="194" text-anchor="middle">infer</text>
+            <text class="svg-small" x="680" y="346" text-anchor="middle">progress, approvals, checkpoints, result commit back to Sync</text>
+          </svg>
+
+          <div class="grid cols-3">
+            <article class="card">
+              <h4>Context-carrying</h4>
+              <p>The run request includes the transportable context needed by the target Harness. The SDK only sees inference work.</p>
+            </article>
+            <article class="card">
+              <h4>Disconnect-tolerant</h4>
+              <p>Live streams can overlay durable state, but the durable record is the source of truth for progress and terminal results.</p>
+            </article>
+            <article class="card">
+              <h4>Explicit policy</h4>
+              <p>Paired identity is not blanket authorization. Harness applies execution policy for models, tools, capabilities, and expiry.</p>
+            </article>
+          </div>
+
+          <div class="callout"><strong>Guarantee note:</strong> this is the architecture for durable routing, not a promise of exactly-once tool effects. Duplicate handling, fencing, and idempotency remain explicit execution-policy concerns.</div>
+        </div>
+      </section>
+
+      <section class="section" id="failure">
+        <div class="section-card stack">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">06 Failure Model</p>
+              <h3>Supervision without hidden replay</h3>
+            </div>
+            <p>Supervisor restarts and reconnects runtime components. It does not decide whether interrupted work is safe to replay. That policy remains in Harness, Agents, and Sync.</p>
+          </div>
+
+          <svg class="diagram" viewBox="0 0 1120 430" role="img" aria-label="Supervisor tree with Assistant, Sync, Harness, and SDK">
+            <rect class="svg-box dark" x="430" y="44" width="260" height="70" rx="18"></rect>
+            <text class="svg-title svg-label dark" x="560" y="84" text-anchor="middle">Assistant root tree</text>
+            <rect class="svg-box" x="150" y="172" width="250" height="84" rx="18"></rect>
+            <text class="svg-title" x="275" y="208" text-anchor="middle">Sync subtree</text>
+            <text class="svg-label" x="275" y="232" text-anchor="middle">storage and networking</text>
+            <rect class="svg-box" x="720" y="172" width="250" height="84" rx="18"></rect>
+            <text class="svg-title" x="845" y="208" text-anchor="middle">Harness subtree</text>
+            <text class="svg-label" x="845" y="232" text-anchor="middle">run loop and SDK child</text>
+            <rect class="svg-box soft" x="720" y="314" width="250" height="70" rx="18"></rect>
+            <text class="svg-title" x="845" y="354" text-anchor="middle">SDK runtime child</text>
+            <line class="svg-line" x1="500" y1="114" x2="320" y2="170"></line>
+            <line class="svg-line" x1="620" y1="114" x2="800" y2="170"></line>
+            <line class="svg-line" x1="845" y1="256" x2="845" y2="312"></line>
+            <text class="svg-small" x="400" y="145" text-anchor="middle">dependency ordered</text>
+            <text class="svg-small" x="714" y="145" text-anchor="middle">terminal gave-up escalates</text>
+            <text class="svg-small" x="902" y="291" text-anchor="middle">lazy model path</text>
+          </svg>
+
+          <div class="grid cols-2">
+            <article class="card">
+              <h4>SDK runtime crashes</h4>
+              <p>Harness reports an inference failure, restarts SDK under policy, and preserves its own process plus Sync state.</p>
+            </article>
+            <article class="card">
+              <h4>Harness crashes</h4>
+              <p>Assistant keeps Sync alive, restarts Harness, reconnects its client, and recovers only from committed checkpoints.</p>
+            </article>
+            <article class="card">
+              <h4>Sync crashes</h4>
+              <p>Assistant restarts Sync. Harness must pause durable commits and must not silently downgrade a durable run to memory.</p>
+            </article>
+            <article class="card">
+              <h4>Repeated crash loop</h4>
+              <p>Supervisor stops retrying, marks the component failed, and returns a human-readable error with diagnostic context.</p>
+            </article>
+          </div>
+
+          <div class="callout"><strong>Important boundary note:</strong> side-effecting tools are not automatically replayed. Stable operation IDs, checkpoints, claim rules, and idempotency policy must decide whether recovery marks work interrupted or attempts a retry.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const buttons = document.querySelectorAll('.nav-item')
+    const sections = document.querySelectorAll('.section')
+    const hero = document.querySelector('.hero')
+
+    function showSection(id) {
+      if (hero) {
+        hero.classList.toggle('hidden', id !== 'story')
+      }
+      for (const section of sections) {
+        section.classList.toggle('active', section.id === id)
+      }
+      for (const button of buttons) {
+        const active = button.dataset.section === id
+        button.classList.toggle('active', active)
+        button.setAttribute('aria-current', active ? 'page' : 'false')
+      }
+    }
+
+    for (const button of buttons) {
+      button.addEventListener('click', function () {
+        const id = button.dataset.section
+        if (!id) return
+        showSection(id)
+        history.replaceState(null, '', '#' + id)
+      })
+    }
+
+    const initial = window.location.hash.slice(1)
+    if (initial && document.getElementById(initial)) {
+      showSection(initial)
+    }
+  </script>
+</body>
+</html>
