@@ -27,6 +27,10 @@ function wrapWhisperBlock(block) {
   return `set -e\nPRESTAGE_DIR=/data/local/tmp/prestaged-models\nmkdir -p /tmp/prestage\n${block}\n`
 }
 
+function wrapIosWhisperBlock(block) {
+  return `set -e\nBID=io.tether.test.qvac\nPRESTAGE_READY=1\nmkdir -p /tmp/prestage\n${block}\n`
+}
+
 function runWithStubs(script, { adbExit = 0, curlExit = 0 }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'asr-prestage-shell-'))
   const binDir = path.join(dir, 'bin')
@@ -69,6 +73,7 @@ test('buildWhisperStageBlock stages every model with a .size sidecar and degrade
   assert.match(block, /stage "a\.bin" "https:\/\/example\.com\/a\.bin"/)
   assert.match(block, /stage "b\.bin" "https:\/\/example\.com\/b\.bin"/)
   assert.match(block, /adb push/)
+  assert.doesNotMatch(block, /pymobiledevice3/)
   assert.match(block, /wc -c/)
   assert.match(block, /\.size/)
   assert.match(block, /device will use network fallback/)
@@ -84,13 +89,42 @@ test('buildWhisperStageBlock stages every model with a .size sidecar and degrade
   assert.match(failedDownload.stdout, /device will use network fallback/)
 })
 
-test('buildScript emits the parakeet manifest block and the whisper block together', () => {
+test('buildWhisperStageBlock ios backend pushes sidecars into Documents and degrades gracefully', () => {
+  const block = buildWhisperStageBlock(
+    [
+      { name: 'a.bin', url: 'https://example.com/a.bin' },
+      { name: 'b.bin', url: 'https://example.com/b.bin' }
+    ],
+    'ios'
+  )
+  assert.match(block, /stage "a\.bin" "https:\/\/example\.com\/a\.bin"/)
+  assert.match(block, /stage "b\.bin" "https:\/\/example\.com\/b\.bin"/)
+  assert.match(block, /pymobiledevice3 apps push/)
+  assert.match(block, /Documents\/\$NAME/)
+  assert.match(block, /Documents\/\$NAME\.size/)
+  assert.match(block, /wc -c/)
+  assert.match(block, /\.size/)
+  assert.match(block, /device will use network fallback/)
+  assert.doesNotMatch(block, /adb push/)
+  assert.doesNotMatch(block, /FATAL/)
+
+  const script = wrapIosWhisperBlock(block)
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildWhisperStageBlock rejects unknown platforms', () => {
+  assert.throws(() => buildWhisperStageBlock([], 'windows'), /unknown platform/)
+})
+
+test('buildScript emits the Android parakeet manifest block and the whisper block together', () => {
   const script = buildScript('QkFTRTY0')
   // Parakeet (fail-hard, manifest-driven).
   assert.match(script, /PRESTAGE_DIR=\/data\/local\/tmp\/prestaged-models/)
   assert.match(script, /base64 -d > \/tmp\/model-manifest\.json/)
   assert.match(script, /adb shell test -s/)
   assert.match(script, /FATAL/)
+  assert.doesNotMatch(script, /pymobiledevice3/)
   // Whisper (graceful).
   assert.match(script, /stage "ggml-tiny\.bin"/)
   assert.match(script, /stage "ggml-silero-v5\.1\.2\.bin"/)
@@ -102,4 +136,31 @@ test('buildScript emits the parakeet manifest block and the whisper block togeth
 
   const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
   assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildScript ios backend pushes parakeet into Documents and keeps whisper graceful', () => {
+  const script = buildScript('QkFTRTY0', 'ios')
+  // Parakeet (fail-hard, manifest-driven).
+  assert.match(script, /base64 -d > \/tmp\/model-manifest\.json/)
+  assert.match(script, /pymobiledevice3 apps push/)
+  assert.match(script, /Documents\/\$NAME/)
+  assert.match(script, /FATAL: push of \$NAME failed/)
+  assert.match(script, /FATAL: pymobiledevice3 unavailable for parakeet pre-stage/)
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /traceback\|afcexception\|failed with status/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
+  // Whisper (graceful).
+  assert.match(script, /stage "ggml-tiny\.bin"/)
+  assert.match(script, /stage "ggml-silero-v5\.1\.2\.bin"/)
+  assert.match(script, /Documents\/\$NAME\.size/)
+  assert.match(script, /device will use network fallback/)
+  assert.match(script, /\[prestage\] done/)
+
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildScript rejects unknown platforms', () => {
+  assert.throws(() => buildScript('QkFTRTY0', 'windows'), /unknown platform/)
 })
