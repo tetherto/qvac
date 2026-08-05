@@ -20,10 +20,10 @@ import type {
   HarnessLoggingConfig,
   HarnessSkillInfo
 } from '../types.ts'
-import {
-  assertCompatibleHarness,
-  harnessCompatibility
-} from './compatibility.ts'
+import { assertCompatibleHarness } from './compatibility.ts'
+// Re-exported so the desktop surface is unchanged; it is defined in
+// compatibility.ts so the React Native entry can reach it without this module.
+export { HARNESS_HANDSHAKE } from './compatibility.ts'
 import {
   launchDesktopHarness,
   type DesktopHarnessWorker
@@ -204,5 +204,3 @@ export function createHarness({
     close
   }
 }
-
-export const HARNESS_HANDSHAKE = harnessCompatibility

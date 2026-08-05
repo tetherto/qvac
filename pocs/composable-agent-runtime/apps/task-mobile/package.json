@@ -24,6 +24,7 @@
     "@qvac/assistant": "0.0.0-poc",
     "@qvac/sdk": "^0.15.0",
     "bare-link": "^3.3.0",
+    "events": "^3.3.0",
     "expo": "^54.0.33",
     "expo-build-properties": "~1.0.10",
     "expo-file-system": "^19.0.21",

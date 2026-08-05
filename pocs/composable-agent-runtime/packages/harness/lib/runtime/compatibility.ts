@@ -8,6 +8,11 @@ export interface HarnessRuntimeHandshake {
   readonly capabilities: readonly string[]
 }
 
+/**
+ * Lives here rather than beside `createHarness` so the React Native entry can
+ * export it without pulling the desktop launcher — and its `import.meta` — into
+ * a Hermes bundle.
+ */
 export const harnessCompatibility: HarnessRuntimeHandshake = {
   component: 'harness',
   contract: 'qvac.harness',
@@ -36,3 +41,5 @@ export function assertCompatibleHarness(info: HarnessRuntimeInfo) {
     )
   }
 }
+
+export const HARNESS_HANDSHAKE = harnessCompatibility
