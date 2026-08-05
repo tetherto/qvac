@@ -262,4 +262,10 @@ export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
 export { profiler } from './profiling'
-export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'
+export type {
+  ProfilerRuntimeOptions,
+  ProfilerExport,
+  ProfilingEvent,
+  ProfilerGPUResourceGauge,
+  ProfilerResourceGauge
+} from './profiling'

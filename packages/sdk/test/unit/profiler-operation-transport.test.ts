@@ -1,10 +1,14 @@
 import test from 'brittle'
-import { sourceTypeSchema, type OperationEvent } from '@/schemas'
-import { buildOperationEvent } from '@/server/rpc/profiling'
+import { OPERATION_EVENT_KEY, sourceTypeSchema, type OperationEvent } from '@/schemas'
+import { buildOperationEvent, profileReplyHandler } from '@/server/rpc/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
 import { extractProfilingMeta } from '@/profiling'
 import { clearAggregator, getAggregates, recordEvent } from '@/profiling/aggregator'
+import {
+  destroyWorkerResourceCollector,
+  initializeWorkerResourceCollector
+} from '@/server/bare/resources/worker-collector'
 
 test('sourceType: accepts expected values and rejects unknown', (t) => {
   const expected = ['hyperdrive', 'http', 'registry', 'filesystem']
@@ -75,6 +79,27 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
     ms: 500,
     profileId: 'round-trip-test',
     gauges: { totalLoadTime: 500, downloadTime: 200 },
+    resources: {
+      sampledAt: 123,
+      cpu: {
+        status: 'supported',
+        value: 0.25,
+        provenance: { source: 'bare-cpu-info', scope: 'system' }
+      },
+      memory: {
+        usedBytes: {
+          status: 'supported',
+          value: 1024,
+          provenance: { source: 'bare-cpu-info', scope: 'system' }
+        },
+        totalBytes: {
+          status: 'supported',
+          value: 4096,
+          provenance: { source: 'bare-cpu-info', scope: 'system' }
+        }
+      },
+      gpus: []
+    },
     tags: { modelType: 'llamacpp-completion', sourceType: 'registry', cacheHit: 'true' }
   }
 
@@ -90,11 +115,72 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
   t.is(extracted!.operation!.ms, 500)
   t.is(extracted!.operation!.profileId, 'round-trip-test')
   t.alike(extracted!.operation!.gauges, { totalLoadTime: 500, downloadTime: 200 })
+  t.alike(extracted!.operation!.resources, operation.resources)
   t.alike(extracted!.operation!.tags, {
     modelType: 'llamacpp-completion',
     sourceType: 'registry',
     cacheHit: 'true'
   })
+})
+
+test('operation profiling: resource gauges sample only when requested', async (t) => {
+  let sampleCalls = 0
+  destroyWorkerResourceCollector()
+  initializeWorkerResourceCollector({
+    cpuArchitectures: [1],
+    gpuTypes: [1],
+    createCPUInfo: () => ({
+      query: () => ({
+        name: 'CPU',
+        vendor: 'Vendor',
+        arch: 1,
+        physicalCores: 4,
+        logicalCores: 8,
+        performanceCores: 4,
+        efficiencyCores: 0,
+        frequency: 1,
+        cacheLine: 64,
+        memory: 4096
+      }),
+      sample: () => {
+        sampleCalls++
+        return { compute: 0.25, memoryUsed: 1024, memoryTotal: 4096 }
+      },
+      destroy: () => {}
+    }),
+    createGPUInfo: () => undefined,
+    createGPUId: () => 'gpu-1',
+    now: () => 123
+  })
+
+  const unprofiled = await profileReplyHandler(
+    { op: 'resourceTest', request: {}, perCall: { enabled: false } },
+    async () => ({ ok: true })
+  )
+  t.is(sampleCalls, 0, 'disabled profiling does not sample')
+  t.absent(
+    (unprofiled as { [OPERATION_EVENT_KEY]?: OperationEvent })[OPERATION_EVENT_KEY],
+    'disabled profiling has no operation event'
+  )
+
+  const profiled = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {},
+      perCall: { enabled: true, includeResourceGauges: true }
+    },
+    async () => ({ ok: true })
+  )
+  const operationEvent = (profiled as { [OPERATION_EVENT_KEY]?: OperationEvent })[
+    OPERATION_EVENT_KEY
+  ]
+  t.is(sampleCalls, 1, 'opt-in profiling samples once')
+  t.is(operationEvent?.resources?.sampledAt, 123)
+  t.is(operationEvent?.resources?.cpu?.status, 'supported')
+  t.is(operationEvent?.resources?.memory?.usedBytes.status, 'supported')
+  t.absent(operationEvent?.resources?.gpus, 'failed GPU inventory is omitted')
+
+  destroyWorkerResourceCollector()
 })
 
 test('cacheHit: cache-hit path omits download metrics', (t) => {

@@ -8,10 +8,13 @@ import {
   OPERATION_EVENT_KEY,
   type PerCallProfiling,
   type ProfilingRequestMeta,
-  type OperationEvent
+  type OperationEvent,
+  type ProfilerResourceGauge,
+  type SystemResourceSample
 } from '@/schemas'
 import { nowMs, generateProfileId } from '@/profiling/clock'
-import { record, shouldProfile } from '@/profiling/controller'
+import { record, shouldIncludeResourceGauges, shouldProfile } from '@/profiling/controller'
+import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
 import { buildOperationEvent } from './operation-metrics'
 import { isTerminalChunk } from '../rpc-utils'
 
@@ -72,8 +75,28 @@ function resolvePerCallProfiling<TRequest>(
   return {
     enabled: true,
     includeServerBreakdown: meta.includeServer,
+    includeResourceGauges: meta.includeResources,
     mode: meta.mode
   }
+}
+
+function toProfilerResourceGauge(sample: SystemResourceSample) {
+  const gauge = {
+    sampledAt: sample.sampledAt,
+    cpu: sample.cpu,
+    memory: sample.memory
+  } satisfies ProfilerResourceGauge
+
+  if (sample.gpus.status !== 'supported') return gauge
+
+  return {
+    ...gauge,
+    gpus: sample.gpus.value.map((gpu) => ({
+      id: gpu.id,
+      compute: gpu.compute,
+      memoryUsedBytes: gpu.memoryUsedBytes
+    }))
+  } satisfies ProfilerResourceGauge
 }
 
 function buildAndRecordOperationEvent<TRequest, TResponse>(
@@ -97,6 +120,15 @@ function buildAndRecordOperationEvent<TRequest, TResponse>(
 
   if (params.count !== undefined && params.count > 0) {
     event.count = params.count
+  }
+
+  const perCall = resolvePerCallProfiling(params.options)
+  if (shouldIncludeResourceGauges(perCall)) {
+    const resources = handleGetSystemResources({
+      type: 'getSystemResources',
+      sample: true
+    }).sample
+    if (resources) event.resources = toProfilerResourceGauge(resources)
   }
 
   record(event)

@@ -103,6 +103,24 @@ Supported values include provenance with a source and optional scope. These
 values are diagnostics; they do not reserve memory or guarantee that a model
 can be loaded.
 
+### Profiler resource gauges
+
+Resource gauges are disabled by default. Enable them explicitly to attach one
+local resource sample to each profiled operation:
+
+```ts
+import { profiler } from '@qvac/sdk'
+
+profiler.enable({ mode: 'verbose', includeResourceGauges: true })
+
+// Run SDK operations, then inspect recentEvents[].resources.
+const profile = profiler.exportJSON()
+```
+
+The sample uses the same status, provenance, scope, and timestamp semantics as
+`getSystemResources({ sample: true })`. Disabling profiling or omitting
+`includeResourceGauges` performs no resource sampling.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:

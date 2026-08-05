@@ -6,12 +6,14 @@ import { PROFILING_KEY, type ProfilingRequestMeta, type ProfilingResponseMeta } 
 
 export function createProfilingMeta(
   profileId: string,
-  includeServerBreakdown: boolean
+  includeServerBreakdown: boolean,
+  includeResourceGauges: boolean
 ): ProfilingRequestMeta {
   return {
     enabled: true,
     id: profileId,
-    includeServer: includeServerBreakdown
+    includeServer: includeServerBreakdown,
+    includeResources: includeResourceGauges
   }
 }
 

@@ -1710,6 +1710,11 @@ function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, 
 
 QVAC SDK Profiler
 
+`ProfilerRuntimeOptions.includeResourceGauges` opts into one timestamped local
+CPU, memory, and GPU sample per profiled operation. Samples are available on
+verbose `recentEvents[].resources` and preserve `ResourceMetric<T>` status,
+source, and scope semantics.
+
 **Shape**:
 
 ```ts
@@ -1744,9 +1749,9 @@ const profiler: {
 ```ts
 import { profiler } from "@qvac/sdk";
 
-profiler.enable({ mode: "summary" });
+profiler.enable({ mode: "verbose", includeResourceGauges: true });
 // ... run SDK operations ...
-console.log(profiler.exportTable());
+console.log(profiler.exportJSON().recentEvents);
 profiler.disable();
 ```
 
