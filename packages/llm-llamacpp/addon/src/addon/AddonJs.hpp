@@ -1,11 +1,8 @@
 #pragma once
 #include <any>
-#include <cmath>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -18,6 +15,8 @@
 
 #include "addon/JsBatchIds.hpp"
 #include "addon/PayloadHandler.hpp"
+#include "handlers/FinetuneParamHandlers.hpp"
+#include "handlers/GenerationParamHandlers.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 
@@ -238,161 +237,20 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.outputParametersDir =
       jsObj.getProperty<js::String>(env, "outputParametersDir")
           .as<std::string>(env);
-  params.numberOfEpochs = static_cast<int>(
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "numberOfEpochs")
-          .value_or(1));
-  params.learningRate =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "learningRate")
-          .value_or(1e-4);
   params.trainDatasetDir = jsObj.getProperty<js::String>(env, "trainDatasetDir")
                                .as<std::string>(env);
-  const std::string evalDatasetPath =
-      jsObj
-          .getOptionalPropertyAs<js::String, std::string>(
-              env, "evalDatasetPath")
-          .value_or("");
-  params.evalDatasetPath = evalDatasetPath;
-  params.contextLength =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
-          .value_or(128);
-  params.microBatchSize =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize")
-          .value_or(128);
-  params.assistantLossOnly =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
-          .value_or(false);
-  params.checkpointSaveDir =
-      jsObj
-          .getOptionalPropertyAs<js::String, std::string>(
-              env, "checkpointSaveDir")
-          .value_or("");
-  params.loraModules =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "loraModules")
-          .value_or("");
-  params.loraRank =
-      jsObj.getOptionalPropertyAs<js::Number, int32_t>(env, "loraRank")
-          .value_or(8);
-  params.loraAlpha =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraAlpha")
-          .value_or(16.0);
-  params.loraInitStd =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
-          .value_or(0.02);
-  params.loraSeed = static_cast<uint32_t>(
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "loraSeed")
-          .value_or(42));
-  params.chatTemplatePath = jsObj
-                                .getOptionalPropertyAs<js::String, std::string>(
-                                    env, "chatTemplatePath")
-                                .value_or("");
-  params.checkpointSaveSteps = jsObj
-                                   .getOptionalPropertyAs<js::Number, int64_t>(
-                                       env, "checkpointSaveSteps")
-                                   .value_or(0);
-  params.lrMin = jsObj.getOptionalPropertyAs<js::Number, double>(env, "lrMin")
-                     .value_or(0.0);
-  params.lrScheduler =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "lrScheduler")
-          .value_or("cosine");
-  params.warmupRatio =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "warmupRatio")
-          .value_or(0.1);
-  params.batchSize =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "batchSize")
-          .value_or(128);
-  params.weightDecay =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay")
-          .value_or(0.01);
-  params.warmupStepsSet =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet")
-          .value_or(false);
-  params.warmupSteps =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "warmupSteps")
-          .value_or(0);
-  params.warmupRatioSet =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet")
-          .value_or(false);
-  params.validationSplit =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit")
-          .value_or(0.05);
-  params.useEvalDatasetForValidation =
-      jsObj
-          .getOptionalPropertyAs<js::Boolean, bool>(
-              env, "useEvalDatasetForValidation")
-          .value_or(false);
+  applyFinetuneParamHandlers(env, jsObj, params);
   return params;
 }
 
 inline void parseGenerationParams(
     js_env_t* env, js::Object& inputObj, LlamaModel::Prompt& prompt) {
-  using namespace qvac_lib_inference_addon_cpp;
-
   auto configObj =
       inputObj.getOptionalProperty<js::Object>(env, "generationParams");
   if (!configObj.has_value()) {
     return;
   }
-
-  auto readNum = [&](const char* key, auto& out) {
-    auto value = configObj->getOptionalPropertyAs<js::Number, double>(env, key);
-    if (value.has_value()) {
-      out =
-          static_cast<typename std::decay_t<decltype(out)>::value_type>(*value);
-    }
-  };
-  GenerationParams& overrides = prompt.generationParams;
-  readNum("temp", overrides.temp);
-  readNum("top_p", overrides.top_p);
-  readNum("top_k", overrides.top_k);
-  readNum("predict", overrides.n_predict);
-  readNum("seed", overrides.seed);
-  readNum("frequency_penalty", overrides.frequency_penalty);
-  readNum("presence_penalty", overrides.presence_penalty);
-  readNum("repeat_penalty", overrides.repeat_penalty);
-
-  auto grammarStr =
-      configObj->getOptionalPropertyAs<js::String, std::string>(env, "grammar");
-  if (grammarStr.has_value() && !grammarStr->empty()) {
-    overrides.grammar = std::move(*grammarStr);
-  }
-
-  auto jsonSchemaStr =
-      configObj->getOptionalPropertyAs<js::String, std::string>(
-          env, "json_schema");
-  if (jsonSchemaStr.has_value() && !jsonSchemaStr->empty()) {
-    overrides.json_schema = std::move(*jsonSchemaStr);
-  }
-
-  if (overrides.grammar && overrides.json_schema) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "generationParams.grammar and generationParams.json_schema are "
-        "mutually exclusive");
-  }
-
-  auto reasoningBudget = configObj->getOptionalPropertyAs<js::Number, double>(
-      env, "reasoning_budget");
-  if (reasoningBudget.has_value()) {
-    // Reject fractional inputs (0.5, -1.1, 32.7) by requiring the value to
-    // round-trip through int. -1 = unrestricted, 0 = disabled, N>0 caps the
-    // reasoning channel at N tokens via the budget sampler.
-    const double value = *reasoningBudget;
-    if (value < -1 || value != std::floor(value) ||
-        value > static_cast<double>(std::numeric_limits<int>::max())) {
-      throw StatusError(
-          general_error::InvalidArgument,
-          "generationParams.reasoning_budget must be -1 (unrestricted), "
-          "0 (disabled), or a positive integer (token cap)");
-    }
-    overrides.reasoning_budget = static_cast<int>(value);
-  }
-
-  auto removeThinkingFromContext =
-      configObj->getOptionalPropertyAs<js::Boolean, bool>(
-          env, "remove_thinking_from_context");
-  if (removeThinkingFromContext.has_value()) {
-    overrides.remove_thinking_from_context = *removeThinkingFromContext;
-  }
+  applyGenerationParamHandlers(env, *configObj, prompt.generationParams);
 }
 
 inline std::vector<std::pair<std::string, js::Object>>
