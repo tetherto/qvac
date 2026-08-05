@@ -355,7 +355,7 @@ A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model 
 - **In-flight prompts** (already decoding in a slot) are cancelled gracefully: they keep whatever they generated so far and the call resolves normally — no error.
 - **Queued prompts** (still waiting, never admitted to a slot) had no chance to run and produced nothing. These are surfaced as an error rather than silent empty results: the batch call rejects with a `Cancelled` `StatusError`.
 
-So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts. A single (non-batch) run is unaffected by this rule — cancelling one always resolves with an empty string, never rejects.
+So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts. A single (non-batch) run resolves with an empty string once it has started, but rejects with `Cancelled` if it was still waiting in the scheduler's queue and so never ran at all — see [Cancellation semantics](./docs/continuous-batching.md#cancellation-semantics). Either way the error carries the `Cancelled` code, so branch on that rather than on the message.
 
 Cancelling a queued job resolves immediately, whether or not the slots it was waiting for are held by an unrelated run — you never wait out someone else's generation to cancel your own queued work.
 

@@ -362,7 +362,16 @@ Within a cancelled job/group, the effect depends on where each prompt is when th
 
 If a batch had overflow prompts still in `pending_`, the batch call rejects with `Cancelled`. Callers should handle that rejection rather than expecting empty strings for the prompts that never ran.
 
-A single (non-batch) run is the exception: cancelling it resolves with an empty string instead of rejecting, whether it was queued or already prefilling. That is the single-job contract — a caller cannot distinguish those two cases, and a cancel during prefill must not throw — so the queued case matches it rather than the batch rule above.
+A single (non-batch) run resolves with an empty string rather than rejecting **once it has reached the batch scheduler** — whether it is waiting in `pending_` or already prefilling. That is the single-job contract: a caller cannot distinguish those two cases, and a cancel during prefill must not throw, so the queued case matches it rather than the batch rule above.
+
+There is one earlier state that does reject, and it is worth knowing because it is not the scheduler's doing. Admission happens in two stages: the outer `MultiJobScheduler` queue, then the batch scheduler's slots. A run cancelled while it is still in the **outer** queue is dropped before it ever starts, and its terminal is an error, not an empty success:
+
+| Where the run is when cancelled | Terminal |
+|---|---|
+| Queued in `MultiJobScheduler` (never started) | **Rejects** `Cancelled` — the job never reached the model |
+| Queued in the batch scheduler's `pending_`, or prefilling, or generating | Resolves with whatever was produced (empty string if nothing was) |
+
+Both stages report the `Cancelled` code rather than a bare message, so a consumer can branch on the code instead of matching text. The distinction is observable, so treat a cancelled single run as "either an empty result or a `Cancelled` rejection" unless you know the job had already started.
 
 Natively the two halves of a targeted cancel are separate, because a queued request has no slot to stop. Slot teardown is keyed by admission id, so it can only reach requests that were admitted. For the rest, the job's cancel action is armed *before* submission and calls `cancelGroupQueued(tag)`, which settles the group the moment the cancel is applied — and critically without waiting for a slot. That matters when an unrelated job holds the whole pool: the group's queued requests cannot be admitted until that foreign work finishes, so a cancel that relied on admission would resolve only then, hanging the caller's `cancel()` promise for the length of someone else's generation.
 

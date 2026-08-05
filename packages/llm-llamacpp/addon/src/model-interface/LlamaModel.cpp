@@ -1066,9 +1066,16 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   // entirely queued must reach the drain above, not sit parked until the group
   // is finally admitted. The arming registration also hands back a cancel
   // parked between the scheduler dequeue and here (jobStarting -> parkAll),
-  // which is refused with the same terminal the scheduler gives a queued drop.
+  // which is refused as Cancelled — the structured code consumers already
+  // match on for every other cancellation terminal, rather than a bare
+  // runtime_error whose message they would have to string-match.
   if (liveJobs_.add(id, cancelGroup)) {
-    throw std::runtime_error("Job cancelled");
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "LlamaModel: batch cancelled before it could run (cancelled between "
+        "the scheduler dequeue and admission)");
   }
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
@@ -1162,9 +1169,15 @@ std::string LlamaModel::processConcurrent(
   // admission there is no slot to cancel, and a parked cancel would otherwise
   // only be consumed once a slot frees. Arming here also surfaces a cancel
   // parked between the scheduler dequeue and this call (jobStarting ->
-  // parkAll), refused with the same terminal the batch path gives it.
+  // parkAll), refused as Cancelled — the same structured terminal the batch
+  // path gives it, so consumers never string-match a message.
   if (liveJobs_.add(id, cancelSingle)) {
-    throw std::runtime_error("Job cancelled");
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "LlamaModel: request cancelled before it could run (cancelled between "
+        "the scheduler dequeue and admission)");
   }
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
