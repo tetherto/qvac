@@ -9,8 +9,10 @@ import {
   assertCompatibleRuntime,
   syncCompatibility
 } from './compatibility.ts'
+import { configForSyncRuntime } from '../config.ts'
 
 export function createMobileSync(options: CreateSyncOptions): SyncRuntime {
+  const config = configForSyncRuntime(options.logging)
   let client: SyncClient | null = null
   let terminate: (() => Promise<void>) | null = null
   let readyPromise: Promise<void> | null = null
@@ -50,6 +52,7 @@ export function createMobileSync(options: CreateSyncOptions): SyncRuntime {
   async function open(epoch: number) {
     const started = await launcher.launch({
       ...options,
+      config,
       onDisconnect: () => {
         client = null
         if (!closePromise) {

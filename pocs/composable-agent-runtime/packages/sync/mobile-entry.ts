@@ -2,6 +2,7 @@ import path from 'path'
 import { SyncCore, type SyncCoreOptions } from './lib/core.ts'
 import { createIpcDuplex, type WorkletIPC } from './lib/mobile-ipc-duplex.ts'
 import { parseSyncWorkletArgv } from './lib/react-native-argv.ts'
+import { installSyncConfig } from './lib/config.ts'
 
 const PAIRED_MARKER = '.paired'
 
@@ -34,6 +35,7 @@ export function createSyncMobileEntry({
   return async function start(ipc: WorkletIPC, ready?: () => void) {
     const processArgv = await readArgv()
     const options = parseSyncWorkletArgv(processArgv)
+    installSyncConfig(options.config)
     const marker = path.join(options.storagePath, PAIRED_MARKER)
     if (
       !options.pairingInvite &&
@@ -43,7 +45,8 @@ export function createSyncMobileEntry({
       throw new Error('A pairing URI is required before mobile Sync can reconnect')
     }
 
-    const core = createCore(options)
+    const { config: _config, ...coreOptions } = options
+    const core = createCore(coreOptions)
     await core.ready()
     if (!core.writable) {
       await core.close()

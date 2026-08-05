@@ -16,6 +16,10 @@ import type {
   HarnessRuntime,
   HarnessRuntimeExit
 } from './create-harness.ts'
+import {
+  configArgvForHarness,
+  configForHarnessRuntime
+} from '../config.ts'
 
 export interface CreateMobileHarnessOptions {
   readonly inference?: 'qwen'
@@ -25,6 +29,7 @@ export interface CreateMobileHarnessOptions {
 
 export function createMobileHarness({
   inference = 'qwen',
+  logging,
   state
 }: CreateMobileHarnessOptions = {}): HarnessRuntime {
   if (inference !== 'qwen') {
@@ -33,6 +38,7 @@ export function createMobileHarness({
   const runStore: HarnessRunStore = state
     ? createSyncHarnessRunStore(state)
     : createInMemoryHarnessRunStore()
+  const config = configForHarnessRuntime(logging)
   let started: Awaited<ReturnType<typeof defaultLauncher.start>> | null = null
   let client: HarnessClient | null = null
   let sdkBridge: { close(): Promise<void> } | null = null
@@ -53,7 +59,11 @@ export function createMobileHarness({
   }
 
   async function open() {
-    const next = await defaultLauncher.start('Harness')
+    const next = await defaultLauncher.start(
+      'Harness',
+      {},
+      configArgvForHarness(config)
+    )
     started = next
     const onExit = () => {
       const deliberate = closePromise !== null

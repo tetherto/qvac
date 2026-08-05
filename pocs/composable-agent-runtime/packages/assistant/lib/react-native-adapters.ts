@@ -10,8 +10,7 @@ import type {
   AssistantComponents,
   AssistantHarnessComponent,
   AssistantInference,
-  AssistantSyncComponent,
-  CreateAssistantOptions
+  AssistantSyncComponent
 } from './contracts.ts'
 import { handshakeFrom } from './handshakes.ts'
 
@@ -24,7 +23,6 @@ export interface ReactNativeAssistantAdapterOptions {
   readonly storagePath: string
   readonly invite?: string
   readonly inference?: AssistantInference
-  readonly logging?: CreateAssistantOptions['logging']
 }
 
 export function createReactNativeAssistantComponents(
@@ -66,8 +64,7 @@ export function createReactNativeAssistantComponents(
       }
       const harness: HarnessRuntime = createHarnessRuntime({
         state,
-        inference: 'qwen',
-        logging: options.logging
+        inference: 'qwen'
       })
       try {
         await harness.ready()

@@ -40,6 +40,11 @@ import type {
   AssistantSyncComponent,
   CreateAssistantOptions
 } from './contracts.ts'
+import { getOptionalConfigSnapshot } from '@qvac/config'
+import {
+  assistantLogLevel,
+  resolveAssistantConfig
+} from './config.ts'
 
 export interface AssistantFacade {
   readonly state: AssistantStateEndpoint
@@ -75,7 +80,9 @@ export function createAssistantFacade(
     info: writeInfo,
     debug: writeInfo
   })
-  logger.setLevel(options.logging?.level ?? 'info')
+  const config =
+    getOptionalConfigSnapshot() ?? resolveAssistantConfig(options.logging)
+  logger.setLevel(assistantLogLevel(config))
   const lifecycle = createLifecycleEvents(supervisor, logger)
 
   supervisor.add<AssistantSyncComponent>('sync', {

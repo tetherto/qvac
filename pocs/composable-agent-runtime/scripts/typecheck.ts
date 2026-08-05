@@ -1,4 +1,5 @@
 const workspaces = [
+  'packages/config',
   'packages/agents',
   'packages/sync',
   'packages/harness',

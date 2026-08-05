@@ -1,6 +1,7 @@
 import crypto from '#crypto'
 import dns from '#dns-promises'
 import http from '#http'
+import Buffer from '#buffer'
 import AbortController from '#abort-controller'
 import type { HarnessJsonValue } from '@qvac/harness/skill-sandbox'
 import {

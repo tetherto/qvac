@@ -1,0 +1,36 @@
+{
+  "name": "@qvac/config",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./package": "./package.json"
+  },
+  "imports": {
+    "#env": {
+      "bare": "bare-env",
+      "default": "./lib/env.ts"
+    }
+  },
+  "files": [
+    "package.json",
+    "index.ts",
+    "lib/**/*.ts"
+  ],
+  "scripts": {
+    "test": "bun test/run.ts",
+    "test:node": "node --experimental-strip-types ../../node_modules/brittle/brittle-node.js test/all.ts",
+    "test:bun": "bun test/all.ts",
+    "test:bare": "brittle-bare test/all.ts",
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module Preserve --moduleResolution Bundler --erasableSyntaxOnly --allowImportingTsExtensions test/brittle.d.ts test/all.ts index.ts"
+  },
+  "dependencies": {
+    "bare-env": "^3.0.0"
+  },
+  "devDependencies": {
+    "brittle": "^4.0.2",
+    "typescript": "^5.9.3"
+  }
+}

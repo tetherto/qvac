@@ -18,6 +18,7 @@ import type {
   SyncRuntime,
   SyncRuntimeExit
 } from './types.ts'
+import { configForSyncRuntime } from '../config.ts'
 
 export type {
   CreateSyncOptions,
@@ -32,6 +33,7 @@ export function createSync(options: CreateSyncOptions): SyncRuntime {
 }
 
 function createDesktopSyncRuntime(options: CreateSyncOptions): SyncRuntime {
+  const config = configForSyncRuntime(options.logging)
   let worker: DesktopSyncWorker | null = null
   let client: SyncClient | null = null
   let readyPromise: Promise<void> | null = null
@@ -76,7 +78,7 @@ function createDesktopSyncRuntime(options: CreateSyncOptions): SyncRuntime {
       meshSeed: options.meshSeed,
       meshKey: options.meshKey,
       pairingInvite: options.pairingInvite,
-      logging: options.logging
+      config
     })
     const nextClient = nextWorker.client
     void nextClient.exited.then(({ code, signal }) => {

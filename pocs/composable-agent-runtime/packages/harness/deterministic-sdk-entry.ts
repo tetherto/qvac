@@ -1,14 +1,13 @@
 import process from 'bare-process'
 import { createHarnessService } from './lib/harness.ts'
-import { loggingFromArgv } from './lib/logger.ts'
+import { installHarnessConfigFromArgv } from './lib/config.ts'
 import { serveHarness } from './lib/serve.ts'
 import type { HarnessStream } from './lib/transport.ts'
 
-const logging = loggingFromArgv(process.argv)
+installHarnessConfigFromArgv(process.argv)
 
 export default async function start(stream: HarnessStream, ready?: () => void) {
   const harness = createHarnessService({
-    logging,
     sdk: {
       async loadModel({ model }) {
         return { modelId: model }

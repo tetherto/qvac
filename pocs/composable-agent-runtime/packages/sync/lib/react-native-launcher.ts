@@ -2,7 +2,7 @@ import type { WorkletIPC } from './mobile-ipc-duplex.ts'
 import { createIpcDuplex } from './mobile-ipc-duplex.ts'
 import { SyncClient } from './client.ts'
 import { createSyncWorkletArgv } from './react-native-argv.ts'
-import type { CreateSyncOptions } from './runtime/types.ts'
+import type { SyncWorkletOptions } from './react-native-argv.ts'
 
 interface StartedHarness {
   readonly ipc: WorkletIPC & {
@@ -26,7 +26,7 @@ interface SyncClientLike {
   close(): Promise<void>
 }
 
-export interface ReactNativeSyncLaunchOptions extends CreateSyncOptions {
+export interface ReactNativeSyncLaunchOptions extends SyncWorkletOptions {
   readonly onDisconnect: () => void
 }
 
@@ -76,7 +76,7 @@ export function createSyncRuntimeArgs({
   meshSeed,
   meshKey,
   pairingInvite,
-  logging
+  config
 }: Omit<ReactNativeSyncLaunchOptions, 'onDisconnect'>) {
   return createSyncWorkletArgv({
     storagePath,
@@ -84,6 +84,6 @@ export function createSyncRuntimeArgs({
     meshSeed,
     meshKey,
     pairingInvite,
-    logging
+    config
   })
 }

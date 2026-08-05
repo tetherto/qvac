@@ -1,16 +1,17 @@
 import process from 'bare-process'
 import Buffer from 'bare-buffer'
 import { createHarnessService } from './lib/harness.ts'
-import { createHarnessLogger, loggingFromArgv } from './lib/logger.ts'
+import { createHarnessLogger } from './lib/logger.ts'
+import { installHarnessConfigFromArgv } from './lib/config.ts'
 import { createSdkDirectAdapter } from './lib/sdk-direct-adapter.ts'
 import { serveHarness } from './lib/serve.ts'
 import type { HarnessStream } from './lib/transport.ts'
 
-const logging = loggingFromArgv(process.argv)
+installHarnessConfigFromArgv(process.argv)
 const diffusion = parseDiffusionConfig(argument('--diffusion-config='))
 
 export default async function start(stream: HarnessStream, ready?: () => void) {
-  const logger = createHarnessLogger(logging)
+  const logger = createHarnessLogger()
   const harness = createHarnessService({
     sdk: await createSdkDirectAdapter({
       logger,
@@ -24,8 +25,7 @@ export default async function start(stream: HarnessStream, ready?: () => void) {
             }
           }
         : {})
-    }),
-    logging
+    })
   })
   serveHarness(stream, harness, () => ({
     component: 'sdk',

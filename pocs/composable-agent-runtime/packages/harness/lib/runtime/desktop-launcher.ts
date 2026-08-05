@@ -4,15 +4,15 @@ import os from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import stow from 'bare-stow'
-import { argvForLogging } from '../logger.ts'
+import type { ConfigSnapshot } from '@qvac/config'
+import { configArgvForHarness } from '../config.ts'
 import { spawnHarness, type SpawnedHarness } from '../spawn.ts'
 import type { HarnessRunStore } from '../run-store.ts'
-import type { HarnessLoggingConfig } from '../types.ts'
 import type { HarnessHostConfig, WireHostConfig } from './host-config.ts'
 
 export interface LaunchDesktopHarnessOptions {
   readonly inference: 'deterministic' | 'qwen'
-  readonly logging?: HarnessLoggingConfig
+  readonly config: ConfigSnapshot
   readonly runStore: HarnessRunStore
   readonly host?: HarnessHostConfig
   /**
@@ -33,7 +33,7 @@ export interface DesktopHarnessWorker {
 
 export async function launchDesktopHarness({
   inference,
-  logging,
+  config,
   runStore,
   host,
   workers
@@ -83,7 +83,7 @@ export async function launchDesktopHarness({
               )}`
             ]
           : []),
-        ...argvForLogging(logging)
+        ...configArgvForHarness(config)
       ],
       runStore
     })

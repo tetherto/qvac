@@ -3,6 +3,7 @@ import os from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import stow from 'bare-stow'
+import type { ConfigSnapshot } from '@qvac/config'
 import type { SyncCoreOptions } from '../core.ts'
 import { spawnSync, type SpawnedSyncClient } from '../spawn.ts'
 
@@ -11,7 +12,13 @@ export interface DesktopSyncWorker {
   close(): Promise<void>
 }
 
-export async function launchDesktopSync(options: SyncCoreOptions): Promise<DesktopSyncWorker> {
+interface LaunchDesktopSyncOptions extends Omit<SyncCoreOptions, 'logging'> {
+  readonly config: ConfigSnapshot
+}
+
+export async function launchDesktopSync(
+  options: LaunchDesktopSyncOptions
+): Promise<DesktopSyncWorker> {
   const directory = await mkdtemp(
     fileURLToPath(new URL('../../../../.stow-sync-', import.meta.url))
   )

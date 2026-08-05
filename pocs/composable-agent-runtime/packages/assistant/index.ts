@@ -9,6 +9,7 @@ import {
   type AssistantFacade
 } from './lib/facade.ts'
 import type { AssistantComponents, CreateAssistantOptions } from './lib/contracts.ts'
+import { installAssistantConfig } from './lib/config.ts'
 
 export type {
   AssistantAgentRegistration,
@@ -33,6 +34,7 @@ export {
 export function createAssistant(
   options: CreateAssistantOptions = {}
 ): AssistantFacade {
+  installAssistantConfig(options.logging)
   return createAssistantFacade(options, createDesktopComponents(options))
 }
 
@@ -45,10 +47,9 @@ function createDesktopComponents(
     startSync: () =>
       startSyncComponent({
         ...options.sync,
-        storagePath,
-        logging: options.logging
+        storagePath
       }),
     startHarness: ({ state }) =>
-      startHarnessComponent(state, inference, options.logging)
+      startHarnessComponent(state, inference)
   }
 }

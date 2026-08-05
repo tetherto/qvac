@@ -37,7 +37,7 @@ describe('react-native entry', () => {
 
   it('maps default options to react-native adapters', async () => {
     const { createAssistant } = await import('../react-native.ts')
-    createAssistant()
+    createAssistant({ logging: { level: 'debug' } })
     expect(captured.adapterOptions).toMatchObject({
       storagePath: '.assistant',
       inference: { kind: 'qwen' }
@@ -52,11 +52,11 @@ describe('react-native entry', () => {
       inference: { kind: 'qwen' },
       logging: { level: 'debug' }
     })
+    expect(captured.adapterOptions).not.toHaveProperty('logging')
     expect(captured.adapterOptions).toMatchObject({
       storagePath: '/tmp/mobile-assistant',
       invite: 'invite-token',
-      inference: { kind: 'qwen' },
-      logging: { level: 'debug' }
+      inference: { kind: 'qwen' }
     })
     expect(captured.facadeOptions).toMatchObject({
       storagePath: '/tmp/mobile-assistant',

@@ -29,6 +29,7 @@ import {
   type DesktopHarnessWorker
 } from './desktop-launcher.ts'
 import type { HarnessHostConfig, WireHostConfig } from './host-config.ts'
+import { configForHarnessRuntime } from '../config.ts'
 
 export interface CreateHarnessOptions {
   readonly inference?: 'deterministic' | 'qwen'
@@ -79,6 +80,7 @@ export function createHarness({
   host,
   workers
 }: CreateHarnessOptions = {}): HarnessRuntime {
+  const config = configForHarnessRuntime(logging)
   const runStore: HarnessRunStore = state
     ? createSyncHarnessRunStore(state)
     : createInMemoryHarnessRunStore()
@@ -104,7 +106,7 @@ export function createHarness({
   async function open() {
     const next = await launchDesktopHarness({
       inference,
-      logging,
+      config,
       runStore,
       ...(host ? { host } : {}),
       ...(workers ? { workers } : {})

@@ -11,6 +11,7 @@ import Supervisor, {
   type ChildSpec,
   type StartContext
 } from '@qvac/supervisor'
+import { getOptionalConfigSnapshot } from '@qvac/config'
 import QvacLogger, { type LogLevel } from '@qvac/logging'
 import { bindApi } from '../spec/rpc/bind.js'
 import HRPC from '../spec/rpc/hrpc/index.js'
@@ -21,6 +22,7 @@ import { PairingCoordinator, pairWithHost } from './pairing.ts'
 import { createProfileRegistry } from './profiles/registry.ts'
 import { toRuntimeDiagnostics } from './runtime/diagnostics.ts'
 import { SyncSuspendedError } from './runtime/errors.ts'
+import { resolveSyncConfig, syncLogLevel } from './config.ts'
 import type {
   SyncNetworkState,
   SyncRuntimePhase,
@@ -103,7 +105,9 @@ export class SyncCore extends ReadyResource {
       info: write,
       debug: write
     })
-    this.logger.setLevel(options.logging?.level ?? 'info')
+    const config =
+      getOptionalConfigSnapshot() ?? resolveSyncConfig(options.logging)
+    this.logger.setLevel(syncLogLevel(config))
   }
 
   get deviceId() {

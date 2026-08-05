@@ -6,6 +6,7 @@ import stow from 'bare-stow'
 import tmp from 'test-tmp'
 import { fileURLToPath } from 'url'
 import { spawnSync } from '../lib/spawn.ts'
+import { resolveSyncConfig } from '../lib/config.ts'
 import { durableWorkProfile } from '../profiles/durable-work.ts'
 
 async function stowSource(entry: URL, name: string) {
@@ -32,11 +33,12 @@ test('sync: spawned Bare sidecar crosses HRPC and releases persistent storage', 
   fs.rmSync(fileURLToPath(outputDirectory), { recursive: true, force: true })
   t.teardown(() => fs.rmSync(fileURLToPath(outputDirectory), { recursive: true, force: true }))
   const entry = await stowSource(new URL('../sidecar-entry.ts', import.meta.url), 'sync-sidecar')
+  const config = resolveSyncConfig({ level: 'info' }, {})
 
   const first = await spawnSync({
     entry,
     storagePath,
-    logging: { level: 'info' }
+    config
   })
   const identity = await first.getIdentity()
   t.ok(identity.deviceId.byteLength > 0, 'identity crossed the spawned boundary')
@@ -69,7 +71,7 @@ test('sync: spawned Bare sidecar crosses HRPC and releases persistent storage', 
   await first.close()
   t.alike(await first.exited, { code: 0, signal: null })
 
-  const second = await spawnSync({ entry, storagePath })
+  const second = await spawnSync({ entry, storagePath, config })
   t.alike(await second.getIdentity(), identity)
   const persisted = await second
     .openProfile(durableWorkProfile)
@@ -80,7 +82,7 @@ test('sync: spawned Bare sidecar crosses HRPC and releases persistent storage', 
   t.alike(await second.exited, { code: 0, signal: null })
 
   const forcedStorage = path.join(dir, 'forced-storage')
-  const forced = await spawnSync({ entry, storagePath: forcedStorage })
+  const forced = await spawnSync({ entry, storagePath: forcedStorage, config })
   await forced.getIdentity()
   const forcedExit = await forced.forceTerminate()
   t.ok(
@@ -107,9 +109,10 @@ test('sync: spawned Bare startup failure preserves diagnostics off the public me
     new URL('./fixtures/failing-sidecar.ts', import.meta.url),
     'failing-sidecar'
   )
+  const config = resolveSyncConfig(undefined, {})
 
   try {
-    await spawnSync({ entry, storagePath: path.join(dir, 'unused') })
+    await spawnSync({ entry, storagePath: path.join(dir, 'unused'), config })
     t.ok(false, 'spawnSync should reject')
   } catch (error) {
     t.is(Reflect.get(error as object, 'name'), 'SYNC_COMPONENT_START_FAILED')

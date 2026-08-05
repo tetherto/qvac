@@ -17,6 +17,14 @@ import { createHarnessReactNativeLauncher } from '../lib/react-native-launcher.t
 import { createWorkerSdkRuntimePort } from '../lib/mobile-sdk-transport.ts'
 import { createHostSdkTransportServer } from '../lib/mobile-sdk-transport.ts'
 import { duplexPair } from '../lib/transport.ts'
+import {
+  configArgvForHarness,
+  resolveHarnessConfig
+} from '../lib/config.ts'
+
+const mobileConfigArgv = configArgvForHarness(
+  resolveHarnessConfig(undefined, {})
+)
 
 test('harness react-native descriptor uses package-owned generated paths', async (t) => {
   const descriptor = createHarnessReactNativeDescriptor()
@@ -58,6 +66,7 @@ test('mobile harness entry wires host-backed SDK transport', async (t) => {
   const sdkChannel = { label: 'sdk', on() { return this } }
   const fakePort = { close: async () => {} }
   const entry = createMobileHarnessEntry({
+    readArgv: () => mobileConfigArgv,
     createStream(ipc) {
       calls.push('stream')
       return ipc as never
@@ -95,6 +104,7 @@ test('mobile harness entry separates harness and sdk channels', async (t) => {
   const harnessChannel = { label: 'harness', on() { return this } }
   const sdkChannel = { label: 'sdk', on() { return this } }
   const entry = createMobileHarnessEntry({
+    readArgv: () => mobileConfigArgv,
     createMultiplexer(stream) {
       return {
         openChannel(channelId: number) {
@@ -540,6 +550,7 @@ test('unknown logical channel frames do not throw', async (t) => {
 test('harness cleanup runs after carrier close', async (t) => {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>()
   const entry = createMobileHarnessEntry({
+    readArgv: () => mobileConfigArgv,
     createStream() {
       return {
         on(event: 'data' | 'close' | 'error', listener: (...args: unknown[]) => void) {

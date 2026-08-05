@@ -33,6 +33,10 @@ Adopt six components with strict dependency and runtime boundaries:
 5. **`@qvac/sdk`** is the production inference runtime, supervised separately by Harness.
 6. **`@qvac/supervisor`** is shared lifecycle infrastructure used by Assistant, Sync, and Harness.
 
+`@qvac/config` is a shared leaf utility for immutable process configuration.
+It is not a seventh component or runtime. It contains no product keys, package
+defaults, launch transports, or RPC contracts.
+
 Assistant is the normal plug-and-play entry point. It starts and connects the required clients and sidecars, applies safe defaults, propagates configuration, verifies runtime compatibility, and exposes one lifecycle. Applications may consume lower layers directly, but low-level handles are escape hatches rather than prerequisites.
 
 Sync, Harness, and SDK run in separate Bare runtimes on every supported target. This remains a product requirement, including mobile, not an optional desktop optimization. A Phase 0 mobile spike is a hard feasibility gate: failure returns the topology to approvers with measured evidence rather than silently permitting co-location.
@@ -55,6 +59,7 @@ flowchart TB
   sdkClient["Typed SDK client"]
   sdkRuntime["@qvac/sdk: separate Bare runtime"]
   supervisor["@qvac/supervisor: lifecycle library, no runtime"]
+  config["@qvac/config: immutable config utility, no runtime"]
   peers["Paired devices"]
 
   app --> assistant
@@ -72,6 +77,10 @@ flowchart TB
   assistant -.->|"uses"| supervisor
   syncSidecar -.->|"uses"| supervisor
   harnessSidecar -.->|"uses"| supervisor
+  assistant -.->|"resolves and installs"| config
+  syncSidecar -.->|"reads installed snapshot"| config
+  harnessSidecar -.->|"reads installed snapshot"| config
+  sdkRuntime -.->|"reads installed snapshot"| config
 ```
 
 The two SDK paths are alternatives. Harness owns the SDK runtime in the composed agent path; the SDK client owns it when an application consumes SDK directly.
@@ -96,9 +105,13 @@ application
 @qvac/assistant -> @qvac/supervisor
 @qvac/sync      -> @qvac/supervisor
 @qvac/harness   -> @qvac/supervisor
+
+@qvac/assistant -> @qvac/config
+@qvac/sync      -> @qvac/config
+@qvac/harness   -> @qvac/config
 ```
 
-There is no dependency from Sync to Harness, Agents, or SDK. There is no dependency from SDK to Sync, Harness, or Agents. Harness does not depend on Assistant. Supervisor has no dependency on any product package. Sync, Harness, and SDK each own one concise declarative source for their wire contract, plus their runtime information, protocol version, errors, and compatibility tests. Generated codecs, clients, handler types, bindings, and capability metadata derive from that source. Assistant owns compatibility logic for the package contracts it composes, while Harness owns compatibility with SDK. Small structural types may be duplicated where that preserves these boundaries; there is no shared runtime-contract package.
+There is no dependency from Sync to Harness, Agents, or SDK. There is no dependency from SDK to Sync, Harness, or Agents. Harness does not depend on Assistant. Supervisor and Config have no dependency on any product package. Sync, Harness, and SDK each own one concise declarative source for their wire contract, plus their runtime information, protocol version, errors, and compatibility tests. Generated codecs, clients, handler types, bindings, and capability metadata derive from that source. Assistant owns compatibility logic for the package contracts it composes, while Harness owns compatibility with SDK. Small structural types may be duplicated where that preserves these boundaries; there is no shared runtime-contract package. Config standardizes immutable snapshot mechanics, but each runtime-owning package retains its own launch payload and wire contract.
 
 ## Component ownership
 
@@ -395,17 +408,40 @@ Each connection starts with a handshake containing at least:
 
 Assistant checks Sync compatibility for state readiness and Harness compatibility for execution readiness. Harness checks SDK compatibility when model readiness is requested. Incompatible required contracts fail closed with a human-readable error. Optional capabilities may degrade explicitly. Users do not maintain a compatibility matrix by hand.
 
+### Immutable runtime configuration
+
+`@qvac/config` resolves a versioned, JSON-safe snapshot once and installs it
+into a process-local immutable store. Explicit API values take precedence over
+caller-declared environment aliases, which take precedence over caller-owned
+defaults. An identical reinstall is idempotent; a conflicting reinstall fails.
+
+The utility owns no QVAC-specific key, environment variable, default, argv
+name, HRPC method, worker launcher, file discovery, live reload, secret
+transport, or SDK configuration semantics. Assistant owns composed application
+resolution. Sync and Harness resolve their own snapshot when consumed
+standalone. Each runtime-owning package serializes the snapshot through its
+existing package-owned launch path and installs it before constructing runtime
+services. Restarts reuse the original snapshot rather than reading the
+environment again.
+
+Configuration snapshots are not a secrets channel. Mesh keys, credentials,
+tokens, and other sensitive values remain in package-owned least-privilege
+transports. The detailed boundary is defined in
+[`2026-08-05-config-package-design.md`](../2026-08-05-config-package-design.md).
+
 ### Logging, errors, and tracing
 
 All six target components use the existing `@qvac/logging` and `@qvac/error` infrastructure.
 
-- A logging configuration supplied to Assistant propagates explicitly through both HRPC clients, sidecars, Agents, and SDK.
+- A logging configuration supplied to Assistant resolves into the immutable
+  runtime snapshot and propagates explicitly through package-owned sidecar
+  launch paths to Agents and SDK.
 - Each process retains its boundary label so records can be attributed to Assistant, Sync, Harness, Agents, or SDK.
 - Errors crossing HRPC use standardized, sanitized, serializable envelopes. Public and CLI surfaces render human-readable messages.
 - A stable operation/trace identifier follows an operation across Assistant -> Sync/Harness -> SDK and returns on events and errors.
 - Profiling is added only after logging, error propagation, and tracing are reliable.
 
-The proof of concept validates generated HRPC clients. Existing HRPC tests also cover stream-close and error propagation. Top-down logging, cross-process tracing, and runtime negotiation remain to be implemented.
+The proof of concept validates generated HRPC clients. Existing HRPC tests also cover stream-close and error propagation. Immutable top-down runtime configuration now carries logging level through desktop and mobile package-owned launch paths and reapplies it after restart. Cross-process tracing and runtime negotiation remain to be implemented.
 
 ## Cross-platform runtime requirements
 
@@ -489,6 +525,8 @@ The coding-agent assessment confirms:
 Current implementation tests additionally demonstrate:
 
 - generated typed HRPC clients;
+- a generic immutable configuration snapshot propagated through desktop and
+  mobile runtime launch paths;
 - a Core/Sync-style sidecar;
 - a separately spawned Harness process on desktop;
 - in-process and remote Harness contracts;
@@ -586,7 +624,7 @@ Each phase must leave Assistant and SDK shippable and keep existing proof-of-con
 
 | Phase | Deliverable | Primary owner |
 | --- | --- | --- |
-| 0 | Complete S1-S9 and approve G0-G6: mobile topology/footprint, iOS containment selection, P5 trust contracts, claim semantics, standalone SDK recovery, package-owned contract policies, delegation migration policy, offline readiness, and per-host lifecycle behavior. Also lock package dependencies, HRPC handshake, log/error/trace envelope, transportable state/checkpoints, and the default Assistant state profile. | Joint |
+| 0 | Complete S1-S9 and approve G0-G6: mobile topology/footprint, iOS containment selection, P5 trust contracts, claim semantics, standalone SDK recovery, package-owned contract policies, delegation migration policy, offline readiness, and per-host lifecycle behavior. Also lock package dependencies, immutable runtime configuration, HRPC handshake, log/error/trace envelope, transportable state/checkpoints, and the default Assistant state profile. | Joint |
 | 1 | Extract and stabilize `@qvac/supervisor` from the existing draft, including generic lifecycle semantics and component-adapter conventions. Keep package-specific HRPC/process logic outside it. | Runtime + Joint |
 | 2 | After G0/G1/G4 pass, extract the current replicated `Core`, generated client, mesh, watches, blobs, and durable operation model into `@qvac/sync`. Hide storage/schema defaults behind its normal client and adopt a Sync-owned Supervisor subtree. | Assistant |
 | 3 | Extract portable framework contracts and loop primitives into `@qvac/agents`: tools, guards, approval semantics, events, checkpoint interfaces, and stable IDs. | Assistant |
@@ -602,6 +640,8 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 - **Assistant team** owns `@qvac/assistant`, `@qvac/sync`, `@qvac/harness`, and the initial `@qvac/agents` extraction.
 - **SDK team** owns `@qvac/sdk`, its standalone API, runtime contract, inference supervision hooks, model lifecycle, and download/cache ownership.
 - **Runtime/bundler owners** own or co-own `@qvac/supervisor` and target packaging.
+- **Runtime/bundler owners** co-own the generic `@qvac/config` snapshot mechanics;
+  each product package owns its keys, defaults, and launch transport.
 - **Joint ownership** applies to HRPC contract conventions, logging/error/trace propagation, version negotiation, and cross-platform lifecycle tests.
 - **Security review** gates invite/capability design, selective visibility, execution policy, and local-secret handling.
 
@@ -619,6 +659,8 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 - Assistant gets durable multi-device behavior by default.
 - Runtime contract negotiation replaces user-maintained 0.x compatibility matrices.
 - Assistant, Sync, and Harness share one lifecycle model while retaining ownership of their own subtrees.
+- Process-wide settings resolve once and survive sidecar replacement without
+  property-specific option plumbing.
 - One durable delegation model replaces the SDK's stateless delegate.
 - The framework/implementation split lets agent builders reuse Agents without adopting the whole Assistant product.
 
@@ -628,6 +670,9 @@ Phase 0 is the feasibility and contract gate. The architecture remains strict, b
 - Strict mobile isolation is not yet proven, and the iOS containment mechanism remains a separate PoC decision.
 - Supervision and reconnect semantics become shared infrastructure that must be maintained carefully.
 - A sixth package adds another compatibility contract, although it removes duplicated lifecycle code.
+- Immutable process configuration rejects conflicting settings for multiple
+  component instances in one host; per-instance settings must remain explicit
+  factory options.
 - Portable checkpoints, stable IDs, and idempotency rules are prerequisites for safe automatic recovery.
 - Remote work is duplicate-possible until G1 defines and validates claim, lease, fencing, and idempotency semantics.
 - Mobile backgrounding or OS termination may interrupt all process-local runtimes; recovery is limited to committed durable state.

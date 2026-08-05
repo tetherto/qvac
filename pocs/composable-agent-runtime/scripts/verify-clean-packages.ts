@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 const root = new URL('..', import.meta.url).pathname
 const packageDirectories = new Map([
+  ['@qvac/config', join(root, 'packages', 'config')],
   ['@qvac/supervisor', join(root, 'packages', 'supervisor')],
   ['@qvac/agents', join(root, 'packages', 'agents')],
   ['@qvac/sync', join(root, 'packages', 'sync')],
@@ -16,14 +17,16 @@ const libraryPackageNames = packageNames.filter(
   (name) => name !== '@qvac-poc/skill-cli'
 )
 const subsets = new Map<string, readonly string[]>([
+  ['config', ['@qvac/config']],
   ['supervisor', ['@qvac/supervisor']],
   ['agents', ['@qvac/agents']],
-  ['sync', ['@qvac/supervisor', '@qvac/sync']],
+  ['sync', ['@qvac/config', '@qvac/supervisor', '@qvac/sync']],
   [
     'harness',
     [
       '@qvac/supervisor',
       '@qvac/agents',
+      '@qvac/config',
       '@qvac/sync',
       '@qvac/harness'
     ]
@@ -34,6 +37,7 @@ const subsets = new Map<string, readonly string[]>([
     [
       '@qvac/supervisor',
       '@qvac/agents',
+      '@qvac/config',
       '@qvac/sync',
       '@qvac/harness',
       '@qvac-poc/skill-cli'
@@ -61,7 +65,7 @@ const mobileConsumers = [
     slug: 'clean-sync-consumer',
     androidPackage: 'com.qvac.poc.cleansync',
     plugin: '@qvac/sync/expo-plugin',
-    localPackages: ['@qvac/supervisor', '@qvac/sync'] as const,
+    localPackages: ['@qvac/config', '@qvac/supervisor', '@qvac/sync'] as const,
     includeSdk: false,
     includeOverrides: true,
     expectedPaths: [
@@ -85,6 +89,7 @@ const mobileConsumers = [
     localPackages: [
       '@qvac/supervisor',
       '@qvac/agents',
+      '@qvac/config',
       '@qvac/sync',
       '@qvac/harness'
     ] as const,

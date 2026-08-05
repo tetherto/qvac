@@ -1,11 +1,14 @@
 import Sidecar from 'bare-sidecar'
 import { wrap, type IPC } from 'bare-stow/host'
+import type { ConfigSnapshot } from '@qvac/config'
 import type { SyncCoreOptions } from './core.ts'
+import { encodeSyncConfig } from './config.ts'
 import { SyncClient } from './client.ts'
 import { SyncComponentStartError } from './errors.ts'
 
-export interface SpawnSyncOptions extends SyncCoreOptions {
+export interface SpawnSyncOptions extends Omit<SyncCoreOptions, 'logging'> {
   readonly entry: string
+  readonly config: ConfigSnapshot
 }
 
 export interface SyncSidecarExit {
@@ -73,7 +76,7 @@ export async function spawnSync({
   meshSeed,
   meshKey,
   pairingInvite,
-  logging
+  config
 }: SpawnSyncOptions): Promise<SpawnedSyncClient> {
   if (!storagePath) throw new Error('spawnSync storagePath is required')
 
@@ -83,7 +86,7 @@ export async function spawnSync({
     meshSeed: meshSeed?.toString('hex'),
     meshKey: meshKey?.toString('hex'),
     pairingInvite: pairingInvite?.toString('hex'),
-    logging
+    config: encodeSyncConfig(config)
   })
   const child = new Sidecar(entry, [`--sync-options=${options}`])
   const diagnostics = captureDiagnostics(child)

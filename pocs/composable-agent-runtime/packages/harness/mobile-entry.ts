@@ -7,6 +7,7 @@ import {
   createIpcDuplex,
   type WorkletIPC
 } from './lib/mobile-ipc-duplex.ts'
+import { installHarnessConfigFromArgv } from './lib/config.ts'
 
 interface MobileHarnessEntryOptions {
   readonly createStream?: (ipc: WorkletIPC) => ReturnType<typeof createIpcDuplex>
@@ -16,6 +17,7 @@ interface MobileHarnessEntryOptions {
   ) => ReturnType<typeof createWorkerSdkRuntimePort>
   readonly createChild?: typeof createChildEntry
   readonly readProcessId?: () => Promise<number> | number
+  readonly readArgv?: () => readonly string[] | Promise<readonly string[]>
 }
 
 export function createMobileHarnessEntry({
@@ -23,9 +25,11 @@ export function createMobileHarnessEntry({
   createMultiplexer = (stream) => createBinaryChannelMultiplexer(stream),
   createWorkerSdkPort = (stream) => createWorkerSdkRuntimePort(stream),
   createChild = createChildEntry,
-  readProcessId = defaultProcessId
+  readProcessId = defaultProcessId,
+  readArgv = defaultArgv
 }: MobileHarnessEntryOptions = {}) {
   return async function start(ipc: WorkletIPC, ready?: () => void) {
+    installHarnessConfigFromArgv(await readArgv())
     const processId = await readProcessId()
     const stream = createStream(ipc)
     const mux = createMultiplexer(stream)
@@ -57,6 +61,20 @@ export function createMobileHarnessEntry({
 }
 
 export default createMobileHarnessEntry()
+
+async function defaultArgv() {
+  if (typeof Reflect.get(globalThis, 'Bare') !== 'undefined') {
+    const module = await import('bare-process')
+    return module.default.argv
+  }
+  const runtimeProcess = Reflect.get(globalThis, 'process') as
+    | { readonly argv?: unknown }
+    | undefined
+  if (!Array.isArray(runtimeProcess?.argv)) return []
+  return runtimeProcess.argv.filter(
+    (value): value is string => typeof value === 'string'
+  )
+}
 
 async function defaultProcessId() {
   if (typeof Reflect.get(globalThis, 'Bare') !== 'undefined') {

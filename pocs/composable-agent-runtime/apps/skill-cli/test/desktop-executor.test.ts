@@ -110,6 +110,10 @@ test('Obsidian validates operations, options, and vault-relative paths', () => {
     ok: false,
     error: expect.stringMatching(/traversal/i)
   })
+  expect(parse('obsidian search', EXECUTABLE, VAULT_IDENTITY)).toEqual({
+    ok: false,
+    error: expect.stringMatching(/required.*query/i)
+  })
   expect(parse('obsidian create name=../../secret', EXECUTABLE, VAULT_IDENTITY)).toEqual({
     ok: false,
     error: expect.stringMatching(/traversal/i)

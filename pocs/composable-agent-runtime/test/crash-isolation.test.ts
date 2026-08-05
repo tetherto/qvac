@@ -6,6 +6,7 @@ import stow from 'bare-stow'
 import { afterEach, describe, expect, test } from 'vitest'
 import { spawnHarness } from '../packages/harness/lib/spawn.ts'
 import { spawnSync } from '../packages/sync/lib/spawn.ts'
+import { resolveSyncConfig } from '../packages/sync/lib/config.ts'
 
 const temporary: string[] = []
 const root = new URL('..', import.meta.url)
@@ -38,7 +39,8 @@ describe('desktop runtime crash isolation', function () {
     )
     const sync = await spawnSync({
       entry: syncEntry,
-      storagePath: join(directory, 'sync-storage')
+      storagePath: join(directory, 'sync-storage'),
+      config: resolveSyncConfig(undefined, {})
     })
     const harness = spawnHarness({ entry: harnessEntry })
 

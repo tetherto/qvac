@@ -156,7 +156,10 @@ function validateObject(value: unknown, schema: JsonSchema, location = ''): stri
   const properties = schema.properties ?? {}
   const required = schema.required ?? []
   for (const key of required) {
-    if (!(key in value)) return key
+    if (!(key in value)) {
+      const property = location ? `${location}.${key}` : key
+      return `required property "${property}" is missing`
+    }
   }
   if (schema.additionalProperties === false) {
     for (const key of Object.keys(value)) {

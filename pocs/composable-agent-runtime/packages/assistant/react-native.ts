@@ -6,6 +6,7 @@ import {
 } from './lib/facade.ts'
 import { createReactNativeAssistantComponents } from './lib/react-native-adapters.ts'
 import type { AssistantInference, CreateAssistantOptions } from './lib/contracts.ts'
+import { installAssistantConfig } from './lib/config.ts'
 
 export type {
   AssistantAgentRegistration,
@@ -36,13 +37,13 @@ export interface CreateReactNativeAssistantOptions
 export function createAssistant(
   options: CreateReactNativeAssistantOptions = {}
 ): AssistantFacade {
+  installAssistantConfig(options.logging)
   const storagePath = options.storagePath ?? DEFAULT_ASSISTANT_STORAGE_PATH
   const inference = options.inference ?? DEFAULT_ASSISTANT_INFERENCE
   const components = createReactNativeAssistantComponents({
     storagePath,
     invite: options.invite,
-    inference,
-    logging: options.logging
+    inference
   })
   return createAssistantFacade(options, components)
 }

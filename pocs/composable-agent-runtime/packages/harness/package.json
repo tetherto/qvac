@@ -90,6 +90,7 @@
   ],
   "dependencies": {
     "@qvac/agents": "0.0.0-poc",
+    "@qvac/config": "0.0.0-poc",
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.0",
     "@qvac/sdk": "0.15.0",

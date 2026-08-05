@@ -1,4 +1,5 @@
 const scripts = [
+  'test:config',
   'test:supervisor',
   'test:agents',
   'test:sync',

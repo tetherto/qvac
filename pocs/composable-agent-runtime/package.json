@@ -14,6 +14,7 @@
     "android:release": "bun run --cwd apps/task-mobile android:release",
     "android:release:device": "bun run --cwd apps/task-mobile android:release:device",
     "test": "bun run scripts/test.ts",
+    "test:config": "bun run --cwd packages/config test",
     "test:supervisor": "bun run --cwd packages/supervisor test",
     "test:agents": "bun run --cwd packages/agents test",
     "test:sync": "bun run --cwd packages/sync test",

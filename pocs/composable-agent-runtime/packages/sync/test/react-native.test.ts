@@ -11,6 +11,7 @@ import {
 } from '../lib/react-native-stow.ts'
 import { createReactNativeSyncLauncher } from '../lib/react-native-launcher.ts'
 import { createSyncMobileEntry } from '../mobile-entry.ts'
+import { encodeSyncConfig, resolveSyncConfig } from '../lib/config.ts'
 
 test('sync react-native descriptor uses package-owned generated paths', async (t) => {
   const descriptor = createSyncReactNativeDescriptor()
@@ -81,7 +82,7 @@ test('sync react-native launcher passes runtime values as argv', async (t) => {
     meshSeed: Buffer.alloc(32, 1),
     meshKey: Buffer.alloc(32, 2),
     pairingInvite: Buffer.from('fbff0001', 'hex'),
-    logging: { level: 'error' },
+    config: resolveSyncConfig({ level: 'error' }, {}),
     onDisconnect() {}
   })
   t.is(starts.length, 1)
@@ -91,7 +92,7 @@ test('sync react-native launcher passes runtime values as argv', async (t) => {
     args: [
       'react-native-bare-kit',
       'sync.js',
-      `{"storagePath":"/tmp/mobile-sync","bootstrap":[{"host":"127.0.0.1","port":49737}],"meshSeed":"${'01'.repeat(32)}","meshKey":"${'02'.repeat(32)}","pairingInvite":"fbff0001","logging":{"level":"error"}}`
+      `{"storagePath":"/tmp/mobile-sync","bootstrap":[{"host":"127.0.0.1","port":49737}],"meshSeed":"${'01'.repeat(32)}","meshKey":"${'02'.repeat(32)}","pairingInvite":"fbff0001","config":"{\\"version\\":1,\\"values\\":{\\"logging.level\\":\\"error\\"}}"}`
     ]
   })
 })
@@ -132,6 +133,7 @@ test('sync react-native launcher owns client and worklet lifecycle', async (t) =
 
   const launched = await launcher.launch({
     storagePath: '/tmp/mobile-sync',
+    config: resolveSyncConfig(undefined, {}),
     onDisconnect() {}
   })
   await launched.backend.ready()
@@ -154,7 +156,11 @@ test('sync mobile entry reads runtime argv and returns cleanup', async (t) => {
   let nextArgv = [
     'bare',
     'sync.bundle',
-    '{"storagePath":"/tmp/sync","pairingInvite":"fbff0001"}'
+    JSON.stringify({
+      storagePath: '/tmp/sync',
+      pairingInvite: 'fbff0001',
+      config: encodeSyncConfig(resolveSyncConfig(undefined, {}))
+    })
   ]
   const entry = createSyncMobileEntry({
     readArgv() {
@@ -195,7 +201,14 @@ test('sync mobile entry reads runtime argv and returns cleanup', async (t) => {
   t.is(typeof stop, 'function')
   await stop()
   t.alike(calls, ['core:/tmp/sync', 'ready', 'mkdir', 'marker', 'stream', 'connect', 'close'])
-  nextArgv = ['bare', 'sync.bundle', '{"storagePath":"/tmp/sync-next"}']
+  nextArgv = [
+    'bare',
+    'sync.bundle',
+    JSON.stringify({
+      storagePath: '/tmp/sync-next',
+      config: encodeSyncConfig(resolveSyncConfig(undefined, {}))
+    })
+  ]
   await entry({} as never, () => {})
   t.alike(calls.slice(7, 10), ['core:/tmp/sync-next', 'ready', 'mkdir'])
 })

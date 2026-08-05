@@ -2,7 +2,7 @@ import Buffer from '#buffer'
 import process from '#process'
 import { createChildEntry } from '../child-entry.ts'
 import { createSdkSidecarAdapter } from '../sdk-sidecar-adapter.ts'
-import { loggingFromArgv } from '../logger.ts'
+import { installHarnessConfigFromArgv } from '../config.ts'
 import type { HarnessRuntimeInfo } from '../connect.ts'
 import type { HarnessStream } from '../transport.ts'
 import { harnessCompatibility } from '../runtime/compatibility.ts'
@@ -37,11 +37,10 @@ export function createHarnessChildEntry({
 }: CreateHarnessChildEntryOptions) {
   const sdkEntry = argument('--sdk-entry=')
   const hostConfig = parseHostConfig(argument('--host-config='))
-  const logging = loggingFromArgv(process.argv)
+  installHarnessConfigFromArgv(process.argv)
   let sdkIdentity: HarnessRuntimeInfo | undefined
 
   const startChild = createChildEntry({
-    logging,
     async configure(sdk) {
       const platform = hostConfig?.platform
       const bundle: SkillBundleArtifact = skillBundle ?? EMPTY_BUNDLE
@@ -86,7 +85,6 @@ export function createHarnessChildEntry({
       const extra = hostConfig && sdkArgs ? sdkArgs(hostConfig) : []
       return createSdkSidecarAdapter({
         entry: sdkEntry,
-        logging,
         ...(extra.length > 0 ? { args: [...extra] } : {}),
         onIdentity(identity) {
           sdkIdentity = identity

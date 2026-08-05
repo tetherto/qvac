@@ -5,9 +5,17 @@ import {
   createSyncWorkletArgv,
   parseSyncWorkletArgv
 } from '../lib/react-native-argv.ts'
+import { encodeSyncConfig, resolveSyncConfig } from '../lib/config.ts'
+
+const config = resolveSyncConfig(undefined, {})
+const encodedConfig = encodeSyncConfig(config)
 
 test('sync mobile entry resolves argv at start time', async (t) => {
-  let argv = ['bare', 'sync.bundle', '{"storagePath":"/tmp/start-a"}']
+  let argv = [
+    'bare',
+    'sync.bundle',
+    JSON.stringify({ storagePath: '/tmp/start-a', config: encodedConfig })
+  ]
   const storages: string[] = []
   const entry = createSyncMobileEntry({
     readArgv() {
@@ -38,7 +46,11 @@ test('sync mobile entry resolves argv at start time', async (t) => {
   })
 
   await entry({} as never)
-  argv = ['bare', 'sync.bundle', '{"storagePath":"/tmp/start-b"}']
+  argv = [
+    'bare',
+    'sync.bundle',
+    JSON.stringify({ storagePath: '/tmp/start-b', config: encodedConfig })
+  ]
   await entry({} as never)
 
   t.alike(storages, ['/tmp/start-a', '/tmp/start-b'])
@@ -47,7 +59,8 @@ test('sync mobile entry resolves argv at start time', async (t) => {
 test('sync worklet argv layout round-trips launcher to entry parser', async (t) => {
   const argv = createSyncWorkletArgv({
     storagePath: '/tmp/roundtrip',
-    pairingInvite: Buffer.from('fbff0001', 'hex')
+    pairingInvite: Buffer.from('fbff0001', 'hex'),
+    config
   })
   t.is(argv[WORKLET_ARGV_LAYOUT.runtime], 'react-native-bare-kit')
   t.is(argv[WORKLET_ARGV_LAYOUT.entry], 'sync.js')
@@ -58,6 +71,6 @@ test('sync worklet argv layout round-trips launcher to entry parser', async (t) 
     meshSeed: undefined,
     meshKey: undefined,
     pairingInvite: Buffer.from('fbff0001', 'hex'),
-    logging: undefined
+    config: encodedConfig
   })
 })

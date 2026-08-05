@@ -7,6 +7,7 @@ import './worker-rpc.ts'
 import './automatic-runtime.ts'
 import './durable-work.ts'
 import './mesh-control.ts'
+import './config.test.ts'
 import './argv-start-time.test.ts'
 
 if (typeof Reflect.get(globalThis, 'Bare') === 'undefined') {

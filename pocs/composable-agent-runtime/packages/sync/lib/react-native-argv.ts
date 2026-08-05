@@ -5,6 +5,13 @@ export const WORKLET_ARGV_LAYOUT = {
 } as const
 
 import type { CreateSyncOptions } from './runtime/types.ts'
+import type { ConfigSnapshot } from '@qvac/config'
+import { encodeSyncConfig } from './config.ts'
+
+export interface SyncWorkletOptions
+  extends Omit<CreateSyncOptions, 'logging'> {
+  readonly config: ConfigSnapshot
+}
 
 interface EncodedSyncWorkletOptions {
   readonly storagePath: string
@@ -12,10 +19,10 @@ interface EncodedSyncWorkletOptions {
   readonly meshSeed?: string
   readonly meshKey?: string
   readonly pairingInvite?: string
-  readonly logging?: CreateSyncOptions['logging']
+  readonly config: string
 }
 
-export function createSyncWorkletArgv(options: CreateSyncOptions) {
+export function createSyncWorkletArgv(options: SyncWorkletOptions) {
   return [
     'react-native-bare-kit',
     'sync.js',
@@ -25,14 +32,17 @@ export function createSyncWorkletArgv(options: CreateSyncOptions) {
       meshSeed: options.meshSeed?.toString('hex'),
       meshKey: options.meshKey?.toString('hex'),
       pairingInvite: options.pairingInvite?.toString('hex'),
-      logging: options.logging
+      config: encodeSyncConfig(options.config)
     } satisfies EncodedSyncWorkletOptions)
   ]
 }
 
 export function parseSyncWorkletArgv(
   argv: readonly string[]
-): CreateSyncOptions & { readonly storagePath: string } {
+): Omit<CreateSyncOptions, 'logging'> & {
+  readonly storagePath: string
+  readonly config: string
+} {
   const encoded = argv[WORKLET_ARGV_LAYOUT.optionsJson]
   if (!encoded) throw new Error('Mobile Sync Worklet options are required')
   const parsed: unknown = JSON.parse(encoded)
@@ -52,9 +62,10 @@ export function parseSyncWorkletArgv(
   if (bootstrap !== undefined && !isBootstrap(bootstrap)) {
     throw new Error('Mobile Sync Worklet bootstrap nodes are invalid')
   }
-  const logging = Reflect.get(parsed, 'logging')
-  if (logging !== undefined && !isLogging(logging)) {
-    throw new Error('Mobile Sync Worklet logging options are invalid')
+  assertOptionalString(parsed, 'config')
+  const config = Reflect.get(parsed, 'config')
+  if (typeof config !== 'string' || config.length === 0) {
+    throw new Error('Mobile Sync Worklet configuration is required')
   }
   return {
     storagePath: parsed.storagePath,
@@ -62,7 +73,7 @@ export function parseSyncWorkletArgv(
     meshSeed: decodeBuffer(parsed, 'meshSeed'),
     meshKey: decodeBuffer(parsed, 'meshKey'),
     pairingInvite: decodeBuffer(parsed, 'pairingInvite'),
-    logging
+    config
   }
 }
 
@@ -76,21 +87,6 @@ function isBootstrap(value: unknown): value is CreateSyncOptions['bootstrap'] {
         typeof Reflect.get(node, 'host') === 'string' &&
         Number.isSafeInteger(Reflect.get(node, 'port'))
     )
-  )
-}
-
-function isLogging(value: unknown): value is CreateSyncOptions['logging'] {
-  if (typeof value !== 'object' || value === null) return false
-  const level = Reflect.get(value, 'level')
-  return (
-    level === undefined ||
-    level === 'trace' ||
-    level === 'debug' ||
-    level === 'info' ||
-    level === 'warn' ||
-    level === 'error' ||
-    level === 'fatal' ||
-    level === 'silent'
   )
 }
 

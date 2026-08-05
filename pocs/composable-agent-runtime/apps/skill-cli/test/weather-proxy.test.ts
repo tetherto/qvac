@@ -92,6 +92,36 @@ test('Weather proxy authenticates callers and revalidates every redirect', async
   }
 })
 
+test('Weather proxy does not depend on a global Buffer polyfill', async () => {
+  const createProxy = Reflect.get(Harness, 'createWeatherProxy')
+  expect(typeof createProxy).toBe('function')
+  if (typeof createProxy !== 'function') return
+
+  const originalBuffer = Reflect.get(globalThis, 'Buffer')
+  Reflect.set(globalThis, 'Buffer', undefined)
+  const proxy = await createProxy({
+    token: 'no-global-buffer-token',
+    async resolve() {
+      return [{ address: '1.1.1.1', family: 4 }]
+    },
+    async fetch() {
+      return { status: 200, headers: {}, body: 'ok' }
+    }
+  })
+  try {
+    const response = await proxyRequest(
+      proxy.port,
+      ALLOWED_URL,
+      'no-global-buffer-token'
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ status: 200, body: 'ok' })
+  } finally {
+    Reflect.set(globalThis, 'Buffer', originalBuffer)
+    await proxy.close()
+  }
+})
+
 test('Weather proxy issues stable distinct credentials per agent', async () => {
   const createProxy = Reflect.get(Harness, 'createWeatherProxy')
   expect(typeof createProxy).toBe('function')

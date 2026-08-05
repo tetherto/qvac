@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@qvac/config": "0.0.0-poc",
     "@qvac/error": "^0.1.1",
     "@qvac/harness": "0.0.0-poc",
     "@qvac/logging": "^0.1.0",

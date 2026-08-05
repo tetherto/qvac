@@ -29,7 +29,7 @@ describe('assistant composition', () => {
     expect(DEFAULT_ASSISTANT_INFERENCE).toEqual({ kind: 'qwen' })
   })
 
-  it('starts package-owned Sync and Harness before executing agents', async () => {
+  it('starts and restarts package-owned runtimes with installed config', async () => {
     const storagePath = await mkdtemp(join(tmpdir(), 'qvac-assistant-'))
     temporaryPaths.push(storagePath)
     const assistant = createAssistant({
