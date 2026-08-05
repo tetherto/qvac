@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive local deployment and package composition map for the composable QVAC agent runtime.">
+  <title>Composable Agent Runtime Map</title>
+  <style>
+  :root {
+    color-scheme: light dark;
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e5e5e7;
+    --border: #d1d1d6;
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --accent: #0071e3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #1d1d1f;
+      --bg-secondary: #2d2d2f;
+      --bg-tertiary: #3d3d3f;
+      --border: #505054;
+      --text-primary: #f5f5f7;
+      --text-secondary: #a1a1a6;
+      --accent: #0a84ff;
+    }
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    min-width: 320px;
+    background: var(--bg-primary);
+  }
+  body {
+    margin: 0;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main {
+    width: min(1500px, 100%);
+    margin: 0 auto;
+    padding: 28px;
+  }
+  h2 {
+    margin: 0;
+    font-size: clamp(22px, 3vw, 32px);
+    letter-spacing: -0.025em;
+  }
+  .subtitle {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  @media (max-width: 700px) {
+    main {
+      padding: 18px 12px;
+    }
+  }
+</style>
+</head>
+<body>
+  <main>
+<h2>Composable agent runtime map</h2>
+<p class="subtitle">
+  Select a consumer entry point to highlight the packages, local runtimes, and
+  contracts required by that composition.
+</p>
+
+<style>
+  .entry-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px 0 14px;
+  }
+  .entry-btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: 7px 12px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+  }
+  .entry-btn:hover {
+    border-color: var(--entry-color);
+  }
+  .entry-btn.active {
+    border-color: var(--entry-color);
+    background: color-mix(in srgb, var(--entry-color) 13%, var(--bg-secondary));
+    color: var(--entry-color);
+    font-weight: 650;
+  }
+  .map-shell {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+  }
+  .architecture {
+    display: block;
+    width: 100%;
+    height: auto;
+    color: var(--text-primary);
+  }
+  .boundary {
+    fill: var(--bg-primary);
+    stroke: var(--border);
+    stroke-width: 1.5;
+  }
+  .boundary-label {
+    fill: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+  .binding-lane {
+    fill: var(--bg-secondary);
+    stroke: var(--border);
+    stroke-width: 1;
+  }
+  .binding-pill {
+    fill: var(--bg-tertiary);
+    stroke: var(--border);
+  }
+  .binding-text {
+    fill: var(--text-secondary);
+    font-size: 12px;
+    text-anchor: middle;
+  }
+  .graph-node,
+  .graph-edge {
+    transition: opacity 180ms ease, filter 180ms ease;
+  }
+  .graph-node.inactive,
+  .graph-edge.inactive {
+    opacity: 0.13;
+  }
+  .graph-node.active {
+    opacity: 1;
+    filter: saturate(1.12);
+  }
+  .graph-node .node-shape {
+    fill: var(--bg-secondary);
+    stroke: var(--border);
+    stroke-width: 1.5;
+    transition: stroke 180ms ease, fill 180ms ease, stroke-width 180ms ease;
+  }
+  .graph-node.active .node-shape {
+    stroke: var(--active-color);
+    stroke-width: 3;
+    fill: color-mix(in srgb, var(--active-color) 9%, var(--bg-secondary));
+  }
+  .graph-node.port .node-shape {
+    stroke-dasharray: 7 5;
+  }
+  .node-title {
+    fill: var(--text-primary);
+    font-size: 14px;
+    font-weight: 650;
+    text-anchor: middle;
+  }
+  .node-subtitle {
+    fill: var(--text-secondary);
+    font-size: 11px;
+    text-anchor: middle;
+  }
+  .graph-edge {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 2;
+    marker-end: url(#arrow);
+    transition: stroke 180ms ease, stroke-width 180ms ease, opacity 180ms ease;
+  }
+  .graph-edge.active {
+    opacity: 1;
+    stroke: var(--active-color);
+    stroke-width: 3.2;
+  }
+  .graph-edge.structural {
+    stroke-dasharray: 8 6;
+  }
+  .graph-edge.replication {
+    stroke-width: 3;
+    marker-start: url(#arrow-reverse);
+  }
+  .edge-label {
+    fill: var(--text-secondary);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+  .detail-strip {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1fr;
+    gap: 1px;
+    border-bottom: 1px solid var(--border);
+    background: var(--border);
+  }
+  .detail-cell {
+    background: var(--bg-secondary);
+    padding: 13px 15px;
+    min-height: 68px;
+  }
+  .detail-label {
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .detail-value {
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 10px;
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+  .legend-line {
+    display: inline-block;
+    width: 25px;
+    border-top: 2px solid currentColor;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .legend-line.dashed {
+    border-top-style: dashed;
+  }
+  .legend-line.double {
+    border-top: 4px double currentColor;
+  }
+  @media (max-width: 900px) {
+    .detail-strip {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="entry-toolbar" id="entry-toolbar">
+  <button class="entry-btn" style="--entry-color:#64748b" data-entry="all" data-choice="all">All elements</button>
+  <button class="entry-btn active" style="--entry-color:#2563eb" data-entry="assistant" data-choice="assistant">Assistant</button>
+  <button class="entry-btn" style="--entry-color:#d97706" data-entry="harness" data-choice="harness">Harness</button>
+  <button class="entry-btn" style="--entry-color:#059669" data-entry="sync" data-choice="sync">Sync</button>
+  <button class="entry-btn" style="--entry-color:#db2777" data-entry="sdk" data-choice="sdk">SDK</button>
+  <button class="entry-btn" style="--entry-color:#7c3aed" data-entry="agents-sdk" data-choice="agents-sdk">Agents + SDK</button>
+  <button class="entry-btn" style="--entry-color:#0891b2" data-entry="sync-sdk" data-choice="sync-sdk">Sync + SDK</button>
+  <button class="entry-btn" style="--entry-color:#0f766e" data-entry="sync-harness" data-choice="sync-harness">Sync + Harness</button>
+  <button class="entry-btn" style="--entry-color:#9333ea" data-entry="agents-provider" data-choice="agents-provider">Agents + provider</button>
+</div>
+
+<div class="map-shell">
+  <div class="detail-strip">
+    <div class="detail-cell">
+      <div class="detail-label">Selected path</div>
+      <div class="detail-value" id="detail-path"></div>
+    </div>
+    <div class="detail-cell">
+      <div class="detail-label">Required agreement</div>
+      <div class="detail-value" id="detail-contracts"></div>
+    </div>
+    <div class="detail-cell">
+      <div class="detail-label">Local runtimes started</div>
+      <div class="detail-value" id="detail-runtimes"></div>
+    </div>
+  </div>
+
+  <svg class="architecture" id="architecture-map" viewBox="0 0 1400 850" role="img" aria-label="Interactive package composition and runtime deployment map">
+    <defs>
+      <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L9,4.5 L0,9 Z" fill="context-stroke"></path>
+      </marker>
+      <marker id="arrow-reverse" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth">
+        <path d="M9,0 L0,4.5 L9,9 Z" fill="context-stroke"></path>
+      </marker>
+    </defs>
+
+    <rect class="boundary" x="30" y="30" width="1340" height="330" rx="12"></rect>
+    <text class="boundary-label" x="52" y="58">Application host</text>
+
+    <rect class="binding-lane" x="55" y="76" width="1290" height="62" rx="8"></rect>
+    <text class="boundary-label" x="75" y="101">Client bindings</text>
+    <g>
+      <rect class="binding-pill" x="210" y="91" width="250" height="32" rx="16"></rect>
+      <text class="binding-text" x="335" y="112">TypeScript: Node, Bun, Hermes</text>
+      <rect class="binding-pill" x="478" y="91" width="170" height="32" rx="16"></rect>
+      <text class="binding-text" x="563" y="112">Python: desktop</text>
+      <rect class="binding-pill" x="666" y="91" width="170" height="32" rx="16"></rect>
+      <text class="binding-text" x="751" y="112">Swift: iOS</text>
+      <rect class="binding-pill" x="854" y="91" width="185" height="32" rx="16"></rect>
+      <text class="binding-text" x="946" y="112">Kotlin: Android</text>
+      <text class="binding-text" x="1185" y="112">Bindings select local clients, not deployment hosts</text>
+    </g>
+
+    <path class="graph-edge" data-groups="assistant" d="M185 226 L238 226"></path>
+    <path class="graph-edge" data-groups="assistant" d="M388 205 C425 185 430 183 465 183"></path>
+    <path class="graph-edge" data-groups="assistant" d="M388 242 C470 242 500 242 605 242"></path>
+    <path class="graph-edge structural" data-groups="assistant" d="M320 269 C390 315 510 316 575 300"></path>
+    <path class="graph-edge" data-groups="sync sync-sdk sync-harness" d="M185 215 C275 170 360 176 465 183"></path>
+    <path class="graph-edge" data-groups="harness sync-harness" d="M185 230 C340 230 460 242 605 242"></path>
+    <path class="graph-edge" data-groups="sdk sync-sdk" d="M185 244 C400 280 650 192 795 183"></path>
+    <path class="graph-edge" data-groups="agents-sdk agents-provider" d="M185 256 C500 330 790 250 995 242"></path>
+    <path class="graph-edge structural" data-groups="assistant sync-harness" d="M690 300 C650 286 635 276 625 267"></path>
+    <path class="graph-edge structural" data-groups="assistant sync-harness" d="M575 300 C530 270 515 230 515 208"></path>
+    <path class="graph-edge structural" data-groups="agents-sdk agents-provider" d="M1065 267 L1065 282"></path>
+    <path class="graph-edge structural" data-groups="agents-sdk" d="M1000 312 C925 312 890 270 850 208"></path>
+    <path class="graph-edge structural" data-groups="agents-provider" d="M1130 312 L1190 312"></path>
+
+    <path class="graph-edge" data-groups="assistant sync sync-sdk sync-harness" d="M515 208 L215 478"></path>
+    <path class="graph-edge" data-groups="assistant harness sync-harness" d="M655 267 L555 478"></path>
+    <path class="graph-edge" data-groups="sdk agents-sdk sync-sdk" d="M850 208 C920 290 1050 360 1070 478"></path>
+    <path class="graph-edge" data-groups="assistant harness sync-harness" d="M645 528 L715 528"></path>
+    <path class="graph-edge" data-groups="assistant harness sync-harness" d="M600 553 C625 592 675 600 715 596"></path>
+    <path class="graph-edge" data-groups="assistant harness sync-harness" d="M865 596 C960 596 980 570 1040 540"></path>
+    <path class="graph-edge" data-groups="assistant harness sdk agents-sdk sync-sdk sync-harness" d="M1160 528 L1215 528"></path>
+    <path class="graph-edge" data-groups="assistant sync sync-sdk sync-harness" d="M285 528 L315 528"></path>
+    <path class="graph-edge replication" data-groups="assistant sync sync-sdk sync-harness" d="M200 578 L200 727"></path>
+
+    <text class="edge-label" x="213" y="216">in-process API</text>
+    <text class="edge-label" x="432" y="170">public package API</text>
+    <text class="edge-label" x="516" y="232">public package API</text>
+    <text class="edge-label" x="351" y="389">local HRPC</text>
+    <text class="edge-label" x="605" y="389">local HRPC</text>
+    <text class="edge-label" x="954" y="389">local SDK RPC</text>
+
+    <g class="graph-node" data-node="app" data-domain="host" data-groups="assistant harness sync sdk agents-sdk sync-sdk sync-harness agents-provider">
+      <rect class="node-shape" x="65" y="200" width="120" height="62" rx="8"></rect>
+      <text class="node-title" x="125" y="227">Application</text>
+      <text class="node-subtitle" x="125" y="246">consumer code</text>
+    </g>
+    <g class="graph-node" data-node="assistant" data-domain="assistant" data-groups="assistant">
+      <rect class="node-shape" x="238" y="190" width="150" height="78" rx="8"></rect>
+      <text class="node-title" x="313" y="220">Assistant</text>
+      <text class="node-subtitle" x="313" y="241">facade + root lifecycle</text>
+    </g>
+    <g class="graph-node" data-node="sync-client" data-domain="sync" data-groups="assistant sync sync-sdk sync-harness">
+      <rect class="node-shape" x="465" y="158" width="100" height="50" rx="7"></rect>
+      <text class="node-title" x="515" y="188">Sync client</text>
+    </g>
+    <g class="graph-node" data-node="harness-client" data-domain="harness" data-groups="assistant harness sync-harness">
+      <rect class="node-shape" x="605" y="217" width="100" height="50" rx="7"></rect>
+      <text class="node-title" x="655" y="247">Harness client</text>
+    </g>
+    <g class="graph-node" data-node="sdk-client" data-domain="sdk" data-groups="sdk agents-sdk sync-sdk">
+      <rect class="node-shape" x="795" y="158" width="110" height="50" rx="7"></rect>
+      <text class="node-title" x="850" y="188">SDK client</text>
+    </g>
+    <g class="graph-node" data-node="agents-host" data-domain="agents" data-groups="agents-sdk agents-provider">
+      <rect class="node-shape" x="995" y="217" width="140" height="50" rx="7"></rect>
+      <text class="node-title" x="1065" y="239">Agents library</text>
+      <text class="node-subtitle" x="1065" y="255">direct use</text>
+    </g>
+    <g class="graph-node port" data-node="state-port" data-domain="port" data-groups="assistant sync-harness">
+      <rect class="node-shape" x="575" y="282" width="115" height="52" rx="7"></rect>
+      <text class="node-title" x="632" y="304">StatePort</text>
+      <text class="node-subtitle" x="632" y="320">structural adapter</text>
+    </g>
+    <g class="graph-node port" data-node="model-port" data-domain="port" data-groups="agents-sdk agents-provider">
+      <rect class="node-shape" x="1000" y="282" width="130" height="52" rx="7"></rect>
+      <text class="node-title" x="1065" y="304">ModelPort</text>
+      <text class="node-subtitle" x="1065" y="320">structural adapter</text>
+    </g>
+    <g class="graph-node" data-node="other-provider" data-domain="provider" data-groups="agents-provider">
+      <rect class="node-shape" x="1190" y="282" width="145" height="52" rx="7"></rect>
+      <text class="node-title" x="1262" y="304">Other provider</text>
+      <text class="node-subtitle" x="1262" y="320">local model API</text>
+    </g>
+
+    <rect class="boundary" x="30" y="400" width="370" height="250" rx="12"></rect>
+    <text class="boundary-label" x="52" y="428">Sync Bare runtime · Sync-owned bare-stow</text>
+    <rect class="boundary" x="425" y="400" width="525" height="250" rx="12"></rect>
+    <text class="boundary-label" x="447" y="428">Harness Bare runtime · Harness-owned bare-stow</text>
+    <rect class="boundary" x="975" y="400" width="395" height="250" rx="12"></rect>
+    <text class="boundary-label" x="997" y="428">Inference Bare runtime · SDK-owned bare-stow</text>
+
+    <g class="graph-node" data-node="sync-worker" data-domain="sync" data-groups="assistant sync sync-sdk sync-harness">
+      <rect class="node-shape" x="125" y="478" width="160" height="100" rx="8"></rect>
+      <text class="node-title" x="205" y="520">Sync server</text>
+      <text class="node-subtitle" x="205" y="541">HRPC contract owner</text>
+      <text class="node-subtitle" x="205" y="558">identity + records</text>
+    </g>
+    <g class="graph-node" data-node="sync-storage" data-domain="sync" data-groups="assistant sync sync-sdk sync-harness">
+      <rect class="node-shape" x="315" y="478" width="65" height="100" rx="8"></rect>
+      <text class="node-title" x="347" y="517">Store</text>
+      <text class="node-subtitle" x="347" y="538">+</text>
+      <text class="node-title" x="347" y="558">P2P</text>
+    </g>
+
+    <g class="graph-node" data-node="harness-worker" data-domain="harness" data-groups="assistant harness sync-harness">
+      <rect class="node-shape" x="465" y="478" width="180" height="100" rx="8"></rect>
+      <text class="node-title" x="555" y="520">Harness server</text>
+      <text class="node-subtitle" x="555" y="541">HRPC contract owner</text>
+      <text class="node-subtitle" x="555" y="558">execution + tools</text>
+    </g>
+    <g class="graph-node" data-node="agents-runtime" data-domain="agents" data-groups="assistant harness sync-harness">
+      <rect class="node-shape" x="715" y="478" width="150" height="72" rx="8"></rect>
+      <text class="node-title" x="790" y="509">Agents library</text>
+      <text class="node-subtitle" x="790" y="528">in Harness process</text>
+    </g>
+    <g class="graph-node" data-node="sdk-nested-client" data-domain="sdk" data-groups="assistant harness sync-harness">
+      <rect class="node-shape" x="715" y="570" width="150" height="55" rx="8"></rect>
+      <text class="node-title" x="790" y="594">SDK client</text>
+      <text class="node-subtitle" x="790" y="611">owned by Harness</text>
+    </g>
+
+    <g class="graph-node" data-node="sdk-worker" data-domain="sdk" data-groups="assistant harness sdk agents-sdk sync-sdk sync-harness">
+      <rect class="node-shape" x="1040" y="478" width="120" height="100" rx="8"></rect>
+      <text class="node-title" x="1100" y="520">@qvac/inference</text>
+      <text class="node-subtitle" x="1100" y="541">in-process engine</text>
+      <text class="node-subtitle" x="1100" y="558">model lifecycle</text>
+    </g>
+    <g class="graph-node" data-node="native-addon" data-domain="sdk" data-groups="assistant harness sdk agents-sdk sync-sdk sync-harness">
+      <rect class="node-shape" x="1215" y="490" width="125" height="76" rx="8"></rect>
+      <text class="node-title" x="1277" y="521">Inference addon</text>
+      <text class="node-subtitle" x="1277" y="541">native backend</text>
+    </g>
+
+    <rect class="boundary" x="30" y="690" width="370" height="130" rx="12"></rect>
+    <text class="boundary-label" x="52" y="718">Peer device</text>
+    <g class="graph-node" data-node="peer-sync" data-domain="sync" data-groups="assistant sync sync-sdk sync-harness">
+      <rect class="node-shape" x="125" y="727" width="150" height="62" rx="8"></rect>
+      <text class="node-title" x="200" y="753">Sync runtime</text>
+      <text class="node-subtitle" x="200" y="772">different app release</text>
+    </g>
+  </svg>
+
+</div>
+
+<div class="legend">
+  <span><span class="legend-line"></span>local/public call</span>
+  <span><span class="legend-line dashed"></span>structural port</span>
+  <span><span class="legend-line double"></span>Sync replication</span>
+  <span>Outlined regions are runtime boundaries</span>
+  <span>Language bindings remain in the application host</span>
+</div>
+
+<script>
+  const entries = {
+    all: {
+      color: '#64748b',
+      path: 'All supported elements and relationships.',
+      runtimes: 'Depends on the selected entry point.',
+      contracts: 'Package APIs, private local RPC, structural ports, and Sync peer compatibility.'
+    },
+    assistant: {
+      color: '#2563eb',
+      path: 'Application → Assistant → Sync + Harness → Agents + SDK → Inference.',
+      runtimes: 'Sync, Harness, and Inference.',
+      contracts: 'Assistant uses public Sync/Harness capabilities. Each package validates its own bare-stow runtime. Sync negotiates with peers.'
+    },
+    harness: {
+      color: '#d97706',
+      path: 'Application → Harness → Agents + SDK → Inference.',
+      runtimes: 'Harness and Inference.',
+      contracts: 'Harness public API plus package-owned Harness and Inference runtime validation.'
+    },
+    sync: {
+      color: '#059669',
+      path: 'Application → Sync client → Sync runtime ↔ peer Sync.',
+      runtimes: 'Sync.',
+      contracts: 'Sync public API, private client/worker RPC, peer protocol, and persisted-data compatibility.'
+    },
+    sdk: {
+      color: '#db2777',
+      path: 'Application → language SDK client → Inference runtime.',
+      runtimes: 'Inference.',
+      contracts: 'Language SDK API and SDK-owned Inference runtime validation.'
+    },
+    'agents-sdk': {
+      color: '#7c3aed',
+      path: 'Application → Agents → ModelPort → SDK client → Inference runtime.',
+      runtimes: 'Inference. Agents remains in the application host.',
+      contracts: 'Agents ModelPort plus SDK public API and package-owned Inference validation.'
+    },
+    'sync-sdk': {
+      color: '#0891b2',
+      path: 'Application independently coordinates Sync and SDK clients.',
+      runtimes: 'Sync and Inference.',
+      contracts: 'No Sync-to-SDK contract. Each package validates itself; Sync alone negotiates with peers.'
+    },
+    'sync-harness': {
+      color: '#0f766e',
+      path: 'Application composes Sync and Harness through StatePort; Harness brings SDK and Inference.',
+      runtimes: 'Sync, Harness, and Inference.',
+      contracts: 'Harness StatePort, public package APIs, and package-owned bare-stow runtime validation.'
+    },
+    'agents-provider': {
+      color: '#9333ea',
+      path: 'Application → Agents → ModelPort → another local model provider.',
+      runtimes: 'Provider-defined. No QVAC Bare runtime is required.',
+      contracts: 'Agents ModelPort only.'
+    }
+  }
+
+  const domainColors = {
+    host: '#64748b',
+    assistant: '#2563eb',
+    harness: '#d97706',
+    sync: '#059669',
+    sdk: '#db2777',
+    agents: '#7c3aed',
+    port: '#0891b2',
+    provider: '#9333ea'
+  }
+
+  function groupsFor(element) {
+    return (element.dataset.groups || '').split(/\s+/).filter(Boolean)
+  }
+
+  function selectEntry(entry) {
+    const config = entries[entry]
+    document.querySelectorAll('.entry-btn').forEach((button) => {
+      button.classList.toggle('active', button.dataset.entry === entry)
+    })
+
+    document.querySelectorAll('.graph-node').forEach((node) => {
+      const active = entry === 'all' || groupsFor(node).includes(entry)
+      node.classList.toggle('active', active)
+      node.classList.toggle('inactive', !active)
+      const color = entry === 'all'
+        ? domainColors[node.dataset.domain] || config.color
+        : config.color
+      node.style.setProperty('--active-color', color)
+    })
+
+    document.querySelectorAll('.graph-edge').forEach((edge) => {
+      const active = entry === 'all' || groupsFor(edge).includes(entry)
+      edge.classList.toggle('active', active)
+      edge.classList.toggle('inactive', !active)
+      edge.style.setProperty('--active-color', config.color)
+    })
+
+    document.getElementById('detail-path').textContent = config.path
+    document.getElementById('detail-runtimes').textContent = config.runtimes
+    document.getElementById('detail-contracts').textContent = config.contracts
+  }
+
+  document.querySelectorAll('.entry-btn').forEach((button) => {
+    button.addEventListener('click', () => selectEntry(button.dataset.entry))
+  })
+
+  selectEntry('assistant')
+</script>
+  </main>
+</body>
+</html>
