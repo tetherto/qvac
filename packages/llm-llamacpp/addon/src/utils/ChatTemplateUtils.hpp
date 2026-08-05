@@ -31,8 +31,8 @@ selectReasoningTagsForModel(const ::llama_model* model);
 
 // Architecture-only variant. Covers families identifiable from
 // `general.architecture` alone (Qwen3-family: `qwen3`, `qwen35`,
-// `qwen35moe`, ...). Gemma 4 needs basename and is resolved in
-// `selectReasoningTagsForModel`.
+// `qwen35moe`, and DeepSeek V4: `deepseek4`). Gemma 4 needs basename
+// and is resolved in `selectReasoningTagsForModel`.
 std::optional<ReasoningTags> selectReasoningTagsForArchitecture(
     const std::optional<std::string>& architecture);
 
@@ -65,6 +65,23 @@ std::optional<ReasoningTags> selectReasoningTagSource(
  * (e.g. Gemma 4). Empty / unknown architectures return false.
  */
 bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture);
+
+/**
+ * @brief Returns whether thinking-block compaction defaults on for an
+ * architecture.
+ *
+ * Only the Qwen3 reasoning family defaults on. Other architectures,
+ * including DeepSeek V4, require an explicit per-request override.
+ */
+bool usesThinkingCompactionByDefault(std::string_view architecture);
+
+/**
+ * @brief Returns true when `architecture` is DeepSeek V4 (`deepseek4`).
+ *
+ * DeepSeek V4 uses the same full-state checkpoint/replay lifecycle as hybrid
+ * Qwen3.5 for cancellation and reasoning compaction.
+ */
+bool isDeepSeekV4Architecture(std::string_view architecture);
 
 /**
  * @brief Returns true when the GGUF metadata basename identifies a MedPsy

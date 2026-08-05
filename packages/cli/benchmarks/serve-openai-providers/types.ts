@@ -1,4 +1,5 @@
 import type OpenAI from 'openai'
+import type { CoverageSpecSourceMode } from '../../src/openai/coverage/types'
 
 export type StreamTimings = {
   requestStartS: number
@@ -71,6 +72,34 @@ export type RawRunRecord = {
   metrics: Record<string, number | null>
 }
 
+export type OpenAiCoverageMetric = {
+  implemented: number
+  total: number
+  percent: number
+  uncovered: string[]
+}
+
+export type OpenAiApiCoverageSnapshot =
+  | {
+      status: 'available'
+      source_mode: CoverageSpecSourceMode
+      captured_at: string
+      spec_source: string
+      spec_sha256: string
+      spec_endpoint_count: number
+      router_source: string
+      router_implemented_count: number
+      consumer_primary: OpenAiCoverageMetric
+      primary_ai: OpenAiCoverageMetric
+      extensions: string[]
+      warnings: string[]
+    }
+  | {
+      status: 'unavailable'
+      captured_at: string
+      errors: string[]
+    }
+
 export type RawDocument = {
   session_id: string
   created_at: string
@@ -78,6 +107,7 @@ export type RawDocument = {
   invalid_reasons?: string[]
   orchestration_errors?: Array<{ provider: string; message: string }>
   model_parity_evidence?: Record<string, unknown>
+  openai_api_coverage?: OpenAiApiCoverageSnapshot
   config_snapshot: {
     generation: GenerationConfig
     cooldown_seconds?: number
