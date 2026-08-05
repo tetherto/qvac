@@ -19,7 +19,7 @@ import — the same source still runs fine under Bun.
 
 - **No direct `node:*` imports.** Platform access goes through the owning
   `package.json`'s `imports` map: `#fs-promises`, `#path`, `#process`, `#os`, `#crypto`,
-  `#http`, `#dns-promises`, `#abort-controller`, `#buffer`. Each resolves to a `bare-*`
+  `#http`, `#dns-promises`, `#abort-controller`, `#buffer`, `#env`. Each resolves to a `bare-*`
   module under the `bare` condition and to a `lib/node-*.ts` shim otherwise. If you need
   a capability that has no subpath yet, add one to both conditions rather than importing
   `node:*` directly.

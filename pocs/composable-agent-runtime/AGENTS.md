@@ -36,6 +36,7 @@ finding, not a detail.
 | `@qvac/harness` | Ready-to-run agent execution: skills, grants, sandboxing, brokers, transports, persistence | Any concrete skill; any direct knowledge of Sync |
 | `@qvac/agents` | Transport-free primitives: tool loop, guards, approval semantics, turn budget, events, checkpoints | Transports, I/O, storage |
 | `@qvac/supervisor` | Lifecycle mechanics | Product policy |
+| `@qvac/config` | Resolving and propagating one immutable process config snapshot | Any specific key, its aliases, defaults, or allowed values; secrets; live mutation |
 | `@qvac/sdk` | Inference via its public client/worker path | — |
 
 Additional standing rules:
@@ -50,10 +51,18 @@ Additional standing rules:
   exposes a standalone Expo plugin that packages its own worker and writes its own
   contribution manifest, so a consumer can adopt Sync alone or Harness alone —
   `bun run test:pack` proves it.
-- **Dependency direction.** `agents` and `supervisor` depend on nothing in the
-  workspace; `sync` → `supervisor`; `harness` → `agents`, `supervisor`, `@qvac/sdk`;
-  `assistant` composes them all and nothing depends on `assistant`. No cycles, and no
-  new edge that reverses one of these arrows.
+- **Config is a leaf utility, not a seventh runtime component.** `@qvac/config` sits
+  alongside `@qvac/logging` and `@qvac/error`: it resolves a versioned, JSON-safe
+  snapshot and carries it across launch boundaries, and it knows nothing about any
+  individual key. A key's name, env aliases, defaults, parsing, and allowed values are
+  declared with `defineConfigKey` **by the package that owns the key** — adding one to
+  `packages/config` is a boundary violation. Install the snapshot before constructing
+  runtime services or loggers, and let standalone Sync and Harness resolve their own
+  when the host process has none.
+- **Dependency direction.** `agents`, `supervisor`, and `config` depend on nothing in
+  the workspace; `sync` → `supervisor`, `config`; `harness` → `agents`, `supervisor`,
+  `config`, `@qvac/sdk`; `assistant` composes them all and nothing depends on
+  `assistant`. No cycles, and no new edge that reverses one of these arrows.
 - **Known debt: `harness` still imports `@qvac/sync` directly.** This violates the rule
   above and is tracked by `docs/arch/tech-debt/TD-STRUCTURAL-COMPOSITION-PORTS.md`. It
   survives at four sites — `lib/sync-harness-run-store.ts` (`SyncProfileClient`,
@@ -83,9 +92,9 @@ you write an import.
 | React Native / Expo | `react-native.ts`, `mobile-entry.ts`, `apps/task-mobile` | RN + bare-kit |
 
 - Code shared with a Bare realm reaches platform APIs through the `imports` map in the
-  owning `package.json` (`#fs-promises`, `#path`, `#process`, …), which resolves to
-  `bare-*` under the `bare` condition and to a `lib/node-*.ts` shim otherwise. Add a new
-  subpath there rather than importing `node:*` directly.
+  owning `package.json` (`#fs-promises`, `#path`, `#process`, `#env`, …), which resolves
+  to a `bare-*` module under the `bare` condition and to a `lib/node-*.ts` shim
+  otherwise. Add a new subpath there rather than importing `node:*` directly.
 - Prefer `b4a` over `Buffer` in anything that can run under Bare.
 - The `react-native` export condition selects a different entry per package — when you
   add a public export, decide what the RN variant does.
@@ -95,8 +104,9 @@ you write an import.
 ```sh
 bun install --ignore-scripts   # from this directory
 bun run test                   # every package suite in sequence
-bun run test:harness           # one package (also :sync :agents :assistant :supervisor
-                               # :task-shared :task-cli :skill-cli :task-mobile)
+bun run test:harness           # one package (also :sync :agents :config :assistant
+                               # :supervisor :task-shared :task-cli :skill-cli
+                               # :task-mobile)
 bun run typecheck
 bun run verify                 # typecheck, lint, all tests, artifact + subset + pack checks
 ```
@@ -110,8 +120,9 @@ device or a full prebuild; only run it when the change actually touches packagin
 ## Testing
 
 - Three frameworks coexist by realm: **brittle** for anything that must also run on Bare
-  (`supervisor`, `agents`, `sync`), **vitest** for `assistant` and `task-cli`, and
-  **`bun test`** for `task-shared` and `skill-cli`. Match the package you are in.
+  (`supervisor`, `agents`, `sync`, `config` — each with `test:node` / `test:bun` /
+  `test:bare` variants), **vitest** for `assistant` and `task-cli`, and **`bun test`**
+  for `task-shared` and `skill-cli`. Match the package you are in.
 - **Evidence policy:** fast tests may use deterministic adapters, but *a stub may not
   replace a boundary the PoC claims to validate*. Real HRPC sessions, HyperDHT testnet
   replication, spawned Bare runtimes, and real model completions belong in the
