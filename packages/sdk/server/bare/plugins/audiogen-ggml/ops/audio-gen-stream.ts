@@ -30,6 +30,7 @@ export async function* audioGenStream(
       []
     )
   }
+  const model: AudioGen = candidate
 
   // A queued request can resume from begin() already aborted. It never owned
   // the model slot, so calling the model-scoped cancel here would interrupt
@@ -45,7 +46,7 @@ export async function* audioGenStream(
 
   let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
-    cancelPromise ??= candidate.cancel().catch((error: unknown) => {
+    cancelPromise ??= model.cancel().catch((error: unknown) => {
       logger.warn(
         `[cancel] model.cancel() rejected during abort for modelId=${request.modelId}: ${
           error instanceof Error ? error.message : String(error)
@@ -63,7 +64,7 @@ export async function* audioGenStream(
   let response!: Awaited<ReturnType<AudioGen['run']>>
   try {
     if (!ctx.signal.aborted) {
-      response = await candidate.run(request.caption, {
+      response = await model.run(request.caption, {
         ...(request.lyrics !== undefined && { lyrics: request.lyrics }),
         ...(request.seed !== undefined && { seed: request.seed }),
         ...(request.vocalLanguage !== undefined && { vocalLanguage: request.vocalLanguage }),
