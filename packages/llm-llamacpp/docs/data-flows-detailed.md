@@ -19,7 +19,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 - JS builds inputs array (media items + text), calls `addon.runJob(inputs)` once; resolves an AdmissionResult (`accepted` plus the scheduler-minted job id used to route output and targeted cancels)
 - A C++ scheduler worker takes the job, calls `model.process(std::any, jobId)` → generates tokens; with `parallel >= 2` several jobs decode together (continuous batching)
 - Queues output events (tagged by job id) → triggers JS callback asynchronously
-- Emits: Output (streaming), JobStarted, JobEnded, Error
+- Emits: Output (streaming), JobEnded, Error — there is no start event; admission is signalled by `runJob` resolving its `AdmissionResult`
 
 **Weight Loading:**
 - Caller passes every file (primary model + every shard + `.tensors.txt` companion) as an array of absolute paths in `files.model`
@@ -79,10 +79,7 @@ flowchart TD
     WaitWork -->|Yes| LockProc[Lock mutex]
     LockProc --> TakeJob[Take job input]
     TakeJob --> UnlockProc[Unlock mutex]
-    UnlockProc --> EmitStart[Queue JobStarted event]
-    EmitStart --> SendAsync1[uv_async_send]
-    
-    SendAsync1 --> GetInput[Get next input piece]
+    UnlockProc --> GetInput[Get next input piece]
     GetInput --> CheckType{Input type?}
     
     CheckType -->|Text| ParseChat[Parse JSON to chat_msg]

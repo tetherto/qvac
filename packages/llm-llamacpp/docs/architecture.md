@@ -505,7 +505,6 @@ sequenceDiagram
     
     Note over Model: Worker thread (continuous batching)
     Model->>Model: admit pending into free slots
-    Model->>Addon: uv_async_send (JobStarted)
     
     loop For each token
         Addon->>Model: process(std::any)

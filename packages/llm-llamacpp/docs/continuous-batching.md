@@ -224,7 +224,7 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 perSeqMaxTokens_ = ctxTotalTokens / batchSize
 ```
 
-This is enforced at admission: prompts larger than the cap, or with `prompt + n_predict` exceeding the cap, throw `InvalidArgument` before any state is mutated.
+This is enforced at admission: prompts larger than the cap, or with `prompt + n_predict` exceeding the cap, throw `InvalidArgument` before any state is mutated. The `prompt + n_predict` half applies **only when `n_predict` is positive** — with `predict: -1` (no caller cap) there is no budget to check, so the request is admitted and, absent EOS or sliding, runs to the slot ceiling and stops with `sequenceLimit` instead of throwing.
 
 ### MultiRequestBatcher
 
@@ -265,7 +265,7 @@ Lifecycle methods in call order:
 | `onGenerationFinished` | Natural EOG | Runs `onGenerationCompletePolicy` (tools_compact trim), flushes UTF-8 buffer |
 | `onCancel` | User cancel or decode error | Same policy as above; called before KV clear |
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
-| `saveCache` | After KV clear | Persists KV cache to disk if `saveCacheToDisk` is set |
+| `saveCache` | Before KV clear | Persists KV cache to disk if `saveCacheToDisk` is set. `drainFinishedLocked` calls `saveCacheForSlot` and only then `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
 
 `TextLlmContext` carries `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill sliding and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`. `n_discarded` is clamped to the per-slot window at construction.
 
@@ -302,7 +302,7 @@ slot freed, BatchGroup updated
 With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affects:
 
 - **Admission** — prompts larger than `C / N` are rejected with `InvalidArgument` before any tokens are staged.
-- **Budget check** — `prompt_tokens + n_predict` must fit within `C / N`. Requests that exceed this are also rejected at admission rather than truncated silently.
+- **Budget check** — when `n_predict > 0`, `prompt_tokens + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `sequenceLimit`.
 - **Context sliding** — when `n_discarded > 0`, the slide triggers against `C / N`, not the full context. A value of `n_discarded >= C / N` is clamped and logs a warning.
 - **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
 
