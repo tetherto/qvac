@@ -1,10 +1,10 @@
 name: Benchmark CLI — OpenAI serve provider compare
 
 # Harness unit tests on PRs that touch the benchmark or this workflow.
-# Live smoke/full sweeps are dispatch-only and require an immutable full commit
-# SHA. The SHA is validated and its harness is typechecked/tested on
-# GitHub-hosted infra first, then a protected `benchmark-live` environment gates
-# the self-hosted macOS GPU runner (LM Studio, Ollama, and qvac serve must
+# A dispatch-only coverage-report mode produces a provider-free Markdown
+# preview on GitHub-hosted infrastructure. Live smoke/full sweeps require an
+# immutable full commit SHA and a protected `benchmark-live` environment before
+# using the self-hosted macOS GPU runner (LM Studio, Ollama, and qvac serve must
 # already be configured there). Runtime config and the environment manifest are
 # supplied by the runner via protected environment variables pointing outside
 # GITHUB_WORKSPACE — nothing sensitive is read from the checked-out tree.
@@ -28,11 +28,12 @@ on:
         required: true
         type: string
       mode:
-        description: "harness-unit (tsx tests only) | smoke | full"
+        description: "harness-unit | coverage-report (hosted preview) | smoke | full"
         required: true
         type: choice
         options:
           - harness-unit
+          - coverage-report
           - smoke
           - full
         default: harness-unit
@@ -103,6 +104,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ steps.resolve.outputs.target_sha }}
+          persist-credentials: false
 
       - name: Verify checked out target SHA
         env:
@@ -133,6 +135,50 @@ jobs:
         working-directory: ${{ env.CLI_DIR }}
         run: npm run test:bench-serve-openai-providers
 
+  coverage-report:
+    name: OpenAI coverage report preview
+    needs: validate-target
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'coverage-report'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit npm, raw GitHub spec fetches, and artifact-service egress
+          # before promoting this provider-free preview path to block mode.
+          egress-policy: audit
+
+      - name: Checkout validated SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.validate-target.outputs.target_sha }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "22"
+          # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
+
+      - name: Install CLI deps
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm install --include=dev --no-fund --no-audit
+
+      - name: Generate provider-free coverage report
+        working-directory: ${{ env.CLI_DIR }}
+        run: >-
+          npx tsx benchmarks/serve-openai-providers/coverage-preview.ts
+          --out-dir benchmarks/serve-openai-providers/results/coverage-preview
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: openai-coverage-report-${{ github.run_id }}
+          path: ${{ env.BENCH_DIR }}/results/coverage-preview/
+          if-no-files-found: warn
+
   live:
     name: Live provider ${{ inputs.mode }}
     needs: validate-target
@@ -154,6 +200,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ needs.validate-target.outputs.target_sha }}
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0

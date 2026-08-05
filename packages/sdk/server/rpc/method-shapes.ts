@@ -8,6 +8,7 @@
  * diverges from it fails to compile.
  */
 export const methodShapes = {
+  audioGenStream: 'stream',
   batchCompletionStream: 'stream',
   bciTranscribe: 'stream',
   bciTranscribeStream: 'duplex',
