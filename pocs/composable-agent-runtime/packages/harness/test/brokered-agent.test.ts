@@ -875,7 +875,7 @@ test('Harness isolates persisted and SDK identities for slash-colliding run pair
 })
 
 // A tool that completed is reported even though the run is cancelling. The
-// alternative — discarding its result — makes a resume re-run a side effect.
+// alternative -- discarding its result -- makes a resume re-run a side effect.
 test('cancel reaches SDK and broker and keeps a completed tool result', async (t) => {
   const sdkCancellations: string[] = []
   let releaseBroker: (() => void) | undefined

@@ -367,7 +367,7 @@ function createRun(
           })
           // Every announced call must end up with a recorded outcome. A history
           // where a tool call has no result is rejected by providers, and a
-          // lenient one re-issues the call — running a side effect twice.
+          // lenient one re-issues the call -- running a side effect twice.
           let aborted = false
           for (const [index, call] of calls.entries()) {
             if (source.signal.aborted) {

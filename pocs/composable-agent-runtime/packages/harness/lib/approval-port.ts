@@ -23,7 +23,7 @@ export interface HarnessApprovalDecision {
 }
 
 /**
- * `unavailable` means nobody could answer — no listener, a closed stream, or an
+ * `unavailable` means nobody could answer -- no listener, a closed stream, or an
  * aborted call. It is not a denial, and must never be treated as one by a
  * caller that would then consult a different authority.
  */

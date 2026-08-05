@@ -43,7 +43,7 @@ export function createChildEntry({
       runStore: statePort.store,
       ...configured,
       // A host that answers wins outright. The configured port is consulted
-      // only when nobody could answer — falling back on a denial would let a
+      // only when nobody could answer -- falling back on a denial would let a
       // second authority overturn the host's decision.
       toolApproval: {
         approve: async (invocation) => {

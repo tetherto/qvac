@@ -709,7 +709,7 @@ test('system prompt blocks are appended after instructions', async function (t) 
     model: 'small',
     instructions: 'Base instructions.',
     systemPrompt: [
-      { id: 'skills-index', text: 'weather — forecasts' },
+      { id: 'skills-index', text: 'weather -- forecasts' },
       { id: 'skill:weather', text: 'Use wttr.in.' }
     ]
   })
@@ -717,7 +717,7 @@ test('system prompt blocks are appended after instructions', async function (t) 
 
   t.alike(adapter.requests[0]?.messages, [
     { role: 'system', content: 'Base instructions.' },
-    { role: 'system', content: 'weather — forecasts' },
+    { role: 'system', content: 'weather -- forecasts' },
     { role: 'system', content: 'Use wttr.in.' },
     { role: 'user', content: 'Ask' }
   ])

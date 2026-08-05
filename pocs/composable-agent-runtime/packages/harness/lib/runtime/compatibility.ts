@@ -10,7 +10,7 @@ export interface HarnessRuntimeHandshake {
 
 /**
  * Lives here rather than beside `createHarness` so the React Native entry can
- * export it without pulling the desktop launcher — and its `import.meta` — into
+ * export it without pulling the desktop launcher -- and its `import.meta` -- into
  * a Hermes bundle.
  */
 export const harnessCompatibility: HarnessRuntimeHandshake = {
