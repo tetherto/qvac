@@ -106,11 +106,29 @@ jobs:
     permissions:
       contents: read
     steps:
+      # CALLEE-SIDE SHA PIN — the same three-term coalesce is used at EVERY fork
+      # checkout in this workflow (host-test, both prebuild jobs, build). Keep the
+      # order; it is the whole point.
+      #
+      # `github.event.pull_request.head.sha` FIRST: a reusable workflow inherits the
+      # caller's event context, so on a pull_request_target run this resolves to the
+      # immutable approved commit and takes precedence over whatever `ref` the caller
+      # passed. That makes the immutability a property of THIS workflow instead of
+      # trusting every caller to pin correctly — defence in depth on top of the
+      # caller's own pin and the two ci-trust-policy.test.mjs rules that forbid
+      # resolving the mutable `head.ref`. head.repo.full_name is pinned alongside it
+      # so the repo and the SHA can never come from different sources.
+      #
+      # `inputs.ref` / `github.ref` remain as fallbacks so the workflow_dispatch path
+      # still works: with no PR payload the first term is empty and dispatch resolves
+      # to the selected branch. That path is how this pipeline is verified manually.
+      #
+      # Flagged by CodeQL actions/untrusted-checkout-toctou.
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
           persist-credentials: false
       # `package-manager-cache: false` on EVERY setup-node in this workflow (here and
       # in both prebuild jobs and device-farm) — do not drop it.
@@ -179,8 +197,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
           persist-credentials: false
 
       # Selects the NDK (ANDROID_NDK_HOME from ANDROID_NDK_LATEST_HOME), exports
@@ -240,8 +258,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -343,8 +361,8 @@ jobs:
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
           persist-credentials: false
           path: addon
           fetch-depth: 0
