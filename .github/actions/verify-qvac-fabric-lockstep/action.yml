@@ -14,6 +14,17 @@ runs:
       run: |
         set -euo pipefail
 
+        mapfile -t mentions < <(
+          for file in packages/*/vcpkg.json; do
+            if jq -e '
+              [.. | strings, (objects | .name?) | select(. == "qvac-fabric")]
+              | length > 0
+            ' "${file}" >/dev/null 2>&1; then
+              echo "${file}"
+            fi
+          done | sort
+        )
+
         mapfile -t files < <(
           for file in packages/*/vcpkg.json; do
             if jq -e '
@@ -30,6 +41,24 @@ runs:
 
         if [ "${#files[@]}" -eq 0 ]; then
           echo "No packages/*/vcpkg.json manifests declare qvac-fabric with version>="
+          exit 1
+        fi
+
+        declare -A verified=()
+        for file in "${files[@]}"; do
+          verified["${file}"]=1
+        done
+
+        unverified=()
+        for file in "${mentions[@]}"; do
+          if [ -z "${verified[${file}]+x}" ]; then
+            unverified+=("${file}")
+          fi
+        done
+
+        if [ "${#unverified[@]}" -gt 0 ]; then
+          echo "qvac-fabric is referenced but not lockstep-verified (missing top-level dependency with version>=):"
+          printf '  %s\n' "${unverified[@]}"
           exit 1
         fi
 
