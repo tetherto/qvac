@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.39.4] - 2026-08-04
+
+Internal refactor of how JS configuration is parsed into C++. Generation,
+finetune, and load config now use a shared, declarative handler-registry pattern
+(the same approach diffusion-cpp uses). No change to accepted config keys,
+spellings, or defaults, apart from the edge cases below.
+
+### Changed
+
+- Sending both the hyphen and underscore spelling of `image-max-tokens` or
+  `image-min-tokens` in the same load config is now accepted (the underscore
+  spelling wins) instead of failing the load. Previously the second spelling was
+  forwarded to llama.cpp and rejected.
+- In rare multi-error cases, the specific `InvalidArgument` message that surfaces
+  first may differ from before: a generation request that sets conflicting
+  `grammar`/`json_schema` alongside another invalid field, or a finetune request
+  that omits a required field and also sends a malformed optional. Accept/reject
+  behavior is unchanged in these cases.
+
+### Pull Requests
+
+- [#3491](https://github.com/tetherto/qvac/pull/3491) - chore[api]: adopt
+  handler-registry pattern for config parsing
+
 ## [0.39.3] - 2026-08-04
 
 This release makes DeepSeek V4 cache recovery safe when requests are cancelled
