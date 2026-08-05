@@ -1173,7 +1173,9 @@ const searchTool: Tool = {
       query: { type: 'string' },
       limit: { type: 'integer' },
       recent: { type: 'boolean' },
-      filters: { type: 'array' }
+      filters: { type: 'array' },
+      score: { type: 'number' },
+      meta: { type: 'object' }
     },
     required: ['query']
   }
@@ -1243,17 +1245,145 @@ test('parseDsmlFormat: string="false" parameters are JSON-decoded', (t) => {
 })
 
 test('parseDsmlFormat: string="true" is honoured over the declared parameter type', (t) => {
-  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query" string="true">42</｜DSML｜parameter><｜DSML｜parameter name="limit" string="true">5</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query" string="true">tokyo</｜DSML｜parameter><｜DSML｜parameter name="limit" string="true">5</｜DSML｜parameter><｜DSML｜parameter name="recent" string="true">true</｜DSML｜parameter><｜DSML｜parameter name="score" string="true">1.5</｜DSML｜parameter><｜DSML｜parameter name="filters" string="true">["news"]</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
   const result = parseDsmlFormat(text, dsmlTools)
   t.is(result.errors.length, 0)
-  t.alike(result.toolCalls[0]?.arguments, { query: '42', limit: '5' })
+  t.alike(result.toolCalls[0]?.arguments, {
+    query: 'tokyo',
+    limit: '5',
+    recent: 'true',
+    score: '1.5',
+    filters: '["news"]'
+  })
 })
 
 test('parseDsmlFormat: missing string attribute falls back to the declared type', (t) => {
-  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query">tokyo</｜DSML｜parameter><｜DSML｜parameter name="limit">5</｜DSML｜parameter><｜DSML｜parameter name="recent">true</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query">tokyo</｜DSML｜parameter><｜DSML｜parameter name="limit">5</｜DSML｜parameter><｜DSML｜parameter name="recent">true</｜DSML｜parameter><｜DSML｜parameter name="score">1.5</｜DSML｜parameter><｜DSML｜parameter name="filters">["news"]</｜DSML｜parameter><｜DSML｜parameter name="meta">{"lang":"en"}</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
   const result = parseDsmlFormat(text, dsmlTools)
   t.is(result.errors.length, 0)
-  t.alike(result.toolCalls[0]?.arguments, { query: 'tokyo', limit: 5, recent: true })
+  t.alike(result.toolCalls[0]?.arguments, {
+    query: 'tokyo',
+    limit: 5,
+    recent: true,
+    score: 1.5,
+    filters: ['news'],
+    meta: { lang: 'en' }
+  })
+})
+
+test('parseDsmlFormat: string="false" on a declared-string parameter hard-fails the call', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="search"><｜DSML｜parameter name="query" string="false">tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: a repeated parameter name keeps the last value', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter><｜DSML｜parameter name="city" string="true">Osaka</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Osaka' })
+})
+
+test('parseDsmlFormat: an empty string parameter value is kept as an empty string', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true"></｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { city: '' })
+})
+
+test('parseDsmlFormat: an empty name attribute is treated as missing', (t) => {
+  const invoke = `<｜DSML｜tool_calls><｜DSML｜invoke name=""><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const invokeResult = parseDsmlFormat(invoke, dsmlTools)
+  t.is(invokeResult.toolCalls.length, 0)
+  t.is(invokeResult.errors[0]?.code, 'PARSE_ERROR')
+
+  const param = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const paramResult = parseDsmlFormat(param, dsmlTools)
+  t.is(paramResult.toolCalls.length, 0)
+  t.is(paramResult.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: parameters and close tags outside an invoke are ignored', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜parameter name="city" string="true">Osaka</｜DSML｜parameter><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 1)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseDsmlFormat: a mismatched wrapper close tag does not affect the invokes', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜function_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 1)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseDsmlFormat: a nested invoke yields the inner call and reports the outer as unclosed', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather">
+<｜DSML｜invoke name="get_horoscope">
+<｜DSML｜parameter name="sign" string="true">Leo</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 1)
+  t.is(result.toolCalls[0]?.name, 'get_horoscope')
+  t.alike(result.toolCalls[0]?.arguments, { sign: 'Leo' })
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: interleaved invokes attribute each parameter to the opener above it', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter><｜DSML｜invoke name="get_horoscope"><｜DSML｜parameter name="sign" string="true">Leo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 1)
+  t.is(result.toolCalls[0]?.name, 'get_horoscope')
+  t.alike(
+    result.toolCalls[0]?.arguments,
+    { sign: 'Leo' },
+    'the city parameter stays with the outer'
+  )
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: a tab or a carriage return separates a tag from its attributes', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke\tname="get_weather"><｜DSML｜parameter\rname="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.errors.length, 0)
+  t.is(result.toolCalls.length, 1)
+  t.alike(result.toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseDsmlFormat: an invoke tag without a separator before its attributes is not an invoke', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invokename="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
+
+test('parseDsmlFormat: a parameter tag without a separator before its attributes is not a parameter', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parametername="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, dsmlTools)
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, 1)
+  t.is(result.errors[0]?.code, 'VALIDATION_ERROR')
+})
+
+test('parseDsmlFormat: a run of unclosed invokes is reported without a quadratic scan', (t) => {
+  const count = 20000
+  const text = `<｜DSML｜tool_calls>${'<｜DSML｜invoke name="get_weather">x'.repeat(count)}`
+  const started = Date.now()
+  const result = parseDsmlFormat(text, dsmlTools)
+  const elapsed = Date.now() - started
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors.length, count)
+  t.ok(elapsed < 1000, `parsed ${count} unclosed invokes in ${elapsed}ms`)
 })
 
 test('parseDsmlFormat: a value that does not fit the declared type surfaces PARSE_ERROR', (t) => {
@@ -1426,6 +1556,34 @@ test('parseToolCalls(dialect=dsml): DSML opener without an invoke falls through 
   t.is(toolCalls.length, 1)
   t.is(toolCalls[0]?.name, 'get_weather')
   t.alike(toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseToolCalls(dialect=dsml): an unusable DSML invoke still lets the hermes fallback run', (t) => {
+  const text = `<｜DSML｜invoke>
+<tool_call>{"name":"get_weather","arguments":{"city":"Tokyo"}}</tool_call>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools, 'dsml')
+  t.is(errors.length, 0)
+  t.is(toolCalls.length, 1)
+  t.is(toolCalls[0]?.name, 'get_weather')
+  t.alike(toolCalls[0]?.arguments, { city: 'Tokyo' })
+})
+
+test('parseToolCalls(dialect=dsml): a truncated DSML invoke does not swallow a following JSON call', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather">
+<tool_call>{"name":"get_weather","arguments":{"city":"Osaka"}}</tool_call>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools, 'dsml')
+  t.is(errors.length, 0)
+  t.is(toolCalls.length, 1)
+  t.alike(toolCalls[0]?.arguments, { city: 'Osaka' })
+})
+
+test('parseToolCalls(dialect=dsml): a JSON parameter value does not trigger the fallback', (t) => {
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="launch_rocket"><｜DSML｜parameter name="meta" string="false">{"name": "falcon"}</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const { toolCalls, errors } = parseToolCalls(text, dsmlTools, 'dsml')
+  t.is(toolCalls.length, 0)
+  t.is(errors.length, 1)
+  t.is(errors[0]?.code, 'UNKNOWN_TOOL')
 })
 
 test('parseToolCalls(dialect=dsml): malformed DSML still surfaces PARSE_ERROR', (t) => {

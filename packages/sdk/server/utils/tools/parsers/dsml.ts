@@ -11,9 +11,9 @@ import {
 // `tool_calls`; V3.2 used `function_calls`. Both carry the same invoke/
 // parameter grammar, so only the wrapper name differs.
 const OPENER_REGEX = /<｜DSML｜(?:tool_calls|function_calls|invoke)/
-const INVOKE_OPEN_REGEX = /<｜DSML｜invoke([^>]*)>/g
+const INVOKE_OPEN_REGEX = /<｜DSML｜invoke([ \t\r\n][^>]*)?>/g
 const INVOKE_CLOSE_TAG = '</｜DSML｜invoke>'
-const PARAMETER_REGEX = /<｜DSML｜parameter([^>]*)>([\s\S]*?)<\/｜DSML｜parameter>/g
+const PARAMETER_REGEX = /<｜DSML｜parameter([ \t\r\n][^>]*)?>([\s\S]*?)<\/｜DSML｜parameter>/g
 const NAME_ATTR_REGEX = /(?:^|\s)name="([^"]*)"/
 const STRING_ATTR_REGEX = /(?:^|\s)string="(true|false)"/i
 const FALLBACK_DIALECT_REGEX = /<tool_call>|"name"\s*:/
@@ -64,15 +64,30 @@ function collectInvokes(text: string) {
     const start = opener.index
     const bodyStart = start + opener[0].length
     const limit = openers[i + 1]?.index ?? text.length
-    const closeAt = text.indexOf(INVOKE_CLOSE_TAG, bodyStart)
-    const closed = closeAt !== -1 && closeAt < limit
+    const rel = text.slice(bodyStart, limit).indexOf(INVOKE_CLOSE_TAG)
+    const closed = rel !== -1
+    const closeAt = bodyStart + rel
+    const end = closed ? closeAt + INVOKE_CLOSE_TAG.length : limit
     return {
-      attrs: opener[1]!,
+      attrs: opener[1] ?? '',
       body: closed ? text.slice(bodyStart, closeAt) : '',
       closed,
-      raw: text.slice(start, closed ? closeAt + INVOKE_CLOSE_TAG.length : limit).trim()
+      start,
+      consumedEnd: closed ? end : bodyStart,
+      raw: text.slice(start, end).trim()
     }
   })
+}
+
+function textOutsideInvokes(text: string, invokes: ReturnType<typeof collectInvokes>) {
+  const parts: string[] = []
+  let cursor = 0
+  for (const invoke of invokes) {
+    parts.push(text.slice(cursor, invoke.start))
+    cursor = invoke.consumedEnd
+  }
+  parts.push(text.slice(cursor))
+  return parts.join('\n')
 }
 
 // Parses DeepSeek's DSML tool-call dialect (V3.2 / V4):
@@ -137,7 +152,7 @@ export function parseDsmlFormat(text: string, tools: Tool[]): ParserResult {
     const args: Record<string, unknown> = {}
     let parseError: string | undefined
     for (const param of invoke.body.matchAll(PARAMETER_REGEX)) {
-      const attrs = param[1]!
+      const attrs = param[1] ?? ''
       const key = NAME_ATTR_REGEX.exec(attrs)?.[1]?.trim()
       if (!key) {
         parseError = 'DSML parameter is missing a name attribute'
@@ -168,6 +183,10 @@ export function parseDsmlFormat(text: string, tools: Tool[]): ParserResult {
       arguments: args,
       raw
     })
+  }
+
+  if (toolCalls.length === 0 && FALLBACK_DIALECT_REGEX.test(textOutsideInvokes(text, invokes))) {
+    return { matched: false, toolCalls: [], errors: [] }
   }
 
   return { matched: true, toolCalls, errors }
