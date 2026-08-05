@@ -1,5 +1,5 @@
 name: Verify qvac-fabric lockstep
-description: Ensures qvac-fabric dependency version is identical across selected vcpkg manifests.
+description: Ensures qvac-fabric dependency version is identical across all package vcpkg manifests that declare it.
 
 outputs:
   version:
@@ -14,19 +14,27 @@ runs:
       run: |
         set -euo pipefail
 
-        files=(
-          "packages/llm-llamacpp/vcpkg.json"
-          "packages/embed-llamacpp/vcpkg.json"
-          "packages/translation-nmtcpp/vcpkg.json"
+        mapfile -t files < <(
+          for file in packages/*/vcpkg.json; do
+            if jq -e '
+              [
+                .dependencies[]?
+                | objects
+                | select(.name == "qvac-fabric" and (.["version>="] != null))
+              ] | length > 0
+            ' "${file}" >/dev/null; then
+              echo "${file}"
+            fi
+          done | sort
         )
+
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "No packages/*/vcpkg.json manifests declare qvac-fabric with version>="
+          exit 1
+        fi
 
         versions=()
         for file in "${files[@]}"; do
-          if [ ! -f "${file}" ]; then
-            echo "Missing file: ${file}"
-            exit 1
-          fi
-
           version="$(jq -r '
             [
               .dependencies[]
@@ -55,5 +63,5 @@ runs:
           fi
         done
 
-        echo "qvac-fabric lockstep verified: ${baseline}"
+        echo "qvac-fabric lockstep verified across ${#files[@]} manifests: ${baseline}"
         echo "version=${baseline}" >> "${GITHUB_OUTPUT}"
