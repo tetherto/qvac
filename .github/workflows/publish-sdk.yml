@@ -335,12 +335,21 @@ jobs:
       run:
         working-directory: packages/sdk-python
     steps:
+      # pull_request_target: keep working tree on base.sha (do not execute PR head
+      # under this job's secrets). Contract/build smoke the base tree; PR contract
+      # coverage is pr-checks-sdk-python.yml. Lockstep reads head.sha like `build`.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Fetch PR head commits
+        if: github.event_name == 'pull_request_target'
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch origin ${{ github.event.pull_request.head.sha }}
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
@@ -360,14 +369,23 @@ jobs:
         run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
 
       - name: Verify version lockstep with @qvac/sdk
+        working-directory: ${{ github.workspace }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          SDK_VER=$(node -p "require('../sdk/package.json').version")
-          PY_VER=$(.venv/bin/python3 -c "from tetherto.qvac_sdk._generated.sdk_version import SDK_VERSION; print(SDK_VERSION)")
-          if [ "$PY_VER" != "$SDK_VER" ]; then
-            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER. Run /qv-sdk-lockstep-sync before release."
+          set -euo pipefail
+          REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
+          PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
+          if [ -z "$PY_VER" ]; then
+            echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
             exit 1
           fi
-          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER"
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER (verified at ${REF})"
 
       - name: Check metadata
         run: .venv/bin/twine check dist/*
