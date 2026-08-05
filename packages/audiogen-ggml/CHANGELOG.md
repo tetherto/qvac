@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
   `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
   produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
-  Pixel 9 instead of silently accepting a CPU fallback.
+  Pixel 9a instead of silently accepting a CPU fallback.
 
 ## [0.1.1] - 2026-08-03
 
