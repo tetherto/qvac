@@ -12,6 +12,7 @@ import {
   stopLogBufferingWithTimeout
 } from '@/server/bare/registry/logging-stream-registry'
 import {
+  checkAllShardsExist,
   detectShardedModel,
   generateShardFilenames,
   validateShardedModelCache
@@ -65,14 +66,20 @@ export async function loadModel(
     throw new PluginNotFoundError(modelType)
   }
   if (isShardedModel) {
-    // For sharded models, validate all shards and tensors.txt exist
+    // Temporary DS4 test path: native llama.cpp loading needs the numbered
+    // shards, but not the SDK-generated tensors.txt streaming manifest.
     const shardDir = path.dirname(modelPath)
-    const isValid = await validateShardedModelCache(shardDir, modelFileName)
+    const useNativeLlamacppShards = modelType === 'llamacpp-completion'
+    const isValid = useNativeLlamacppShards
+      ? await checkAllShardsExist(shardDir, modelFileName)
+      : await validateShardedModelCache(shardDir, modelFileName)
 
     if (!isValid) {
       const numberedShards = generateShardFilenames(modelFileName)
       throw new ModelFileNotFoundError(
-        `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`
+        useNativeLlamacppShards
+          ? `Missing shards. Expected ${numberedShards.length} shard files in ${shardDir}`
+          : `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`
       )
     }
   } else if (!plugin.skipPrimaryModelPathValidation) {
