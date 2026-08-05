@@ -1,4 +1,13 @@
-# ggml vcpkg overlay port
+# ggml vcpkg overlay port — LOCAL ONE-FLAG PATCH over the registry port.
+#
+# Byte-identical to qvac-registry-vcpkg's ggml 2026-07-03#2 (same REF/SHA512,
+# same build logic) except for a single addition:
+# -DCMAKE_POSITION_INDEPENDENT_CODE=ON, so nvcc-compiled host objects link
+# into the shared .bare addon module on Linux (`npm run build:cuda` on dev
+# hosts). The triplet's -fPIC covers C++ objects but never reaches CUDA
+# compiles, and CI never builds the addon with the cuda feature, so this
+# stays a package-local patch rather than a registry change. Drop it if the
+# registry port ever gains the flag.
 #
 # Builds the ggml tensor library from tetherto/qvac-ext-ggml.
 # Fork of leejet/ggml (v0.12.0) carrying the reviewed Metal/video kernels
@@ -54,15 +63,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    # TEMPORARY overlay repin (RTX 5090 validation): the registry REF
-    # (50cf5630, 2026-06-04 tip) crashes the ABot CUDA walk on the first block
-    # (ggml_cuda_compute_forward: SOFT_MAX failed, "invalid argument") -
-    # reproduced with the standalone engine against the same ggml, so it is a
-    # ggml regression, not addon code. Pinned to the engine PR #22 submodule
-    # revision the walk was validated with. Drop this overlay once the registry
-    # ggml port is bumped/fixed.
-    REF 805e8e1b0329c9a6a11968bb31a81b03362a9f35
-    SHA512 bc66b383f81ed92ac8097292ec806f232517efca536a16d95f0cf59887438840d46e1e218074c2be393dc81217ced36691555c0ed999180d7030d3d4e2ae5d0d
+    REF 50cf5630ac66c2d8584cd1299b1c89c684fc82d9
+    SHA512 a98bb4042f858652aecf0fec7682d456e503140e2e9d92a0b7ba84ac7204cb9287066a73dabb0da5b950c3a0a80886476f6670734e0921e3fed620d555cbbe90
 )
 
 # --- GPU feature flags ---
@@ -145,15 +147,6 @@ if(VCPKG_TARGET_IS_ANDROID)
         -DGGML_VULKAN_DISABLE_COOPMAT=ON
         -DGGML_VULKAN_DISABLE_COOPMAT2=ON
     )
-    # This ggml revision's ggml-vulkan.cpp includes spirv/unified1/spirv.hpp
-    # and relies on the Vulkan SDK's include tree to provide it; the Android
-    # NDK's Vulkan headers do not. The spirv-headers feature dependency is
-    # installed by vcpkg but ggml's CMake never adds the installed include
-    # dir, so inject it after project() without disturbing toolchain flags.
-    file(WRITE "${CURRENT_BUILDTREES_DIR}/android-spirv-include.cmake"
-        "include_directories(SYSTEM \"${CURRENT_INSTALLED_DIR}/include\")\n")
-    list(APPEND PLATFORM_OPTIONS
-        "-DCMAKE_PROJECT_INCLUDE=${CURRENT_BUILDTREES_DIR}/android-spirv-include.cmake")
 endif()
 
 # --- Configure & build ---
@@ -164,8 +157,8 @@ set(VCPKG_BUILD_TYPE release)
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
-        # nvcc host objects need -fPIC to link into the shared .bare module;
-        # the triplet's VCPKG_CXX_FLAGS -fPIC does not reach CUDA compiles.
+        # local patch (see header): nvcc host objects need -fPIC to link into
+        # the shared .bare module; the triplet's flag does not reach CUDA TUs
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         -DBUILD_SHARED_LIBS=OFF
         -DGGML_NATIVE=OFF

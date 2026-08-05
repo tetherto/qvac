@@ -28,6 +28,7 @@ The package exposes three JS entry points:
   - [Video Files](#video-files)
   - [Video Parameters](#video-parameters)
 - [LTX-2 Text-to-Video With Audio](#ltx-2-text-to-video-with-audio)
+- [ABot-World Interactive Walk](#abot-world-interactive-walk)
 - [ESRGAN Upscaler](#esrgan-upscaler)
 - [Response Streams and Stats](#response-streams-and-stats)
 - [Cancellation and Unload](#cancellation-and-unload)
@@ -47,6 +48,7 @@ The package exposes three JS entry points:
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
 | Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
+| ABot-World                   | interactive world walk                 | Causal block-by-block generation under keyboard input; see [ABot-World guide](docs/abot-world.md) |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
 ## Supported Platforms
@@ -465,6 +467,26 @@ const response = await model.run({
 
 LTX distilled variants are designed for low step counts and low CFG values.
 For full dev weights, use higher steps and a larger CFG.
+
+## ABot-World Interactive Walk
+
+ABot-World is a causal world model: it generates video **block-by-block under
+live keyboard input** instead of one batch call, exposed via
+`@qvac/diffusion-cpp/world` (`WorldStableDiffusion`). Worlds are created
+natively from a prompt + first-frame image (`createScene()`), then walked with
+WASD/IJKL (`step()`), streaming decoded PNG/JPEG frames. The four model files
+ship in the QVAC P2P registry.
+
+```bash
+# models (P2P registry, no credentials) + browser demo
+npm install -g @qvac/registry-client   # then see docs/abot-world.md for the 4 downloads
+export ABOT_MODELS_DIR=~/abot-models ABOT_KV_CACHE=1
+bare examples/world-walk-server.js     # open http://127.0.0.1:8787
+```
+
+Full guide — building, the demo server (local and over-SSH playback), the world
+API for app developers, resolutions and performance knobs:
+**[docs/abot-world.md](docs/abot-world.md)**.
 
 ## ESRGAN Upscaler
 
