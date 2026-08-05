@@ -252,7 +252,13 @@ test('harness build patches generated launcher for argv', async (t) => {
     ? ((bundle as unknown as { addons: unknown[] }).addons.filter((item): item is string => typeof item === 'string').sort())
     : []
   t.ok(harnessSource.includes('args = []'))
-  t.ok(harnessSource.includes("worklet.start('/core.bundle', bundle, args)"))
+  // Bytes, not the bundle string: BareKit sizes its copy from the value it is
+  // given, and a string makes that size disagree with the bytes written.
+  t.ok(
+    harnessSource.includes(
+      "worklet.start('/core.bundle', new TextEncoder().encode(bundle), args)"
+    )
+  )
   t.ok(declarationSource.includes('args?: readonly string[]'))
   t.alike(output.metadata.nativeAddons, bundleAddons)
 })
