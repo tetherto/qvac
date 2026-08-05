@@ -13,15 +13,15 @@
 
 - **Local-first:** load AI models and perform inference on your own machine. No third-party APIs, SaaS, or cloud involved.
 - **P2P:** build unstoppable internet systems — like BitTorrent, IPFS, and blockchain networks, but for AI.
-- **Cross-platform:** consistent developer experience across hardware, operating systems, and JS runtime environments — write code once, run it everywhere.
+- **Cross-platform:** run across Linux, macOS, Windows, Android, and iOS, with client SDKs in JavaScript/TypeScript and Python — write code once, run it everywhere.
 - **OpenAI-compatible API:** integrate with the broader AI ecosystem.
 - **Open source:** 100% free to use and modify — build on top, contribute back, be part of our community.
 
 ## Usage
 
-QVAC is composed of JavaScript libraries and tools that converge in the JS SDK. _The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+QVAC ships client SDKs for building AI apps: **JavaScript/TypeScript** (`@qvac/sdk` on npm) and **Python** (`tetherto-qvac-sdk` on PyPI). _Both drive the same worker, so capabilities and behavior are identical across languages_. The JS/TS client runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev); the Python client is asyncio-native.
 
-Additionally, QVAC also provides an HTTP server, _allowing you to use it as a **local model provider** for your favorite AI tools_, such as OpenCode, OpenClaw, and any other application compatible with the [OpenAI API](https://platform.openai.com/docs/api-reference).
+Additionally, QVAC also provides an HTTP server, _allowing you to use it as a **local model provider** for your favorite AI tools_, such as OpenCode, OpenClaw, and any other harness compatible with the [OpenAI API](https://platform.openai.com/docs/api-reference).
 
 Whether you're building applications with the SDK or using QVAC as a local model provider, the principle is the same: load models and run inference locally, or delegate inference to peers using the built-in P2P capabilities.
 
@@ -36,6 +36,7 @@ Whether you're building applications with the SDK or using QVAC as a local model
 | **Multimodal** | LLM inference over text, images, and other media within a single conversation context. |
 | **Image generation** | Text-to-image and image-to-image generation via a customized Diffusion backend. |
 | **Video generation** | Text-to-video and image-to-video generation via a customized Diffusion backend. |
+| **Music generation** | Generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5). |
 | **Transcription** | Automatic speech recognition (ASR) via a customized Whisper backend or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3). |
 | **Text-to-Speech** | Speech synthesis (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 engines. |
 | **Translation** | Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt). |
@@ -73,7 +74,7 @@ keet://chat/nfo61f4e6zc5t1ifncyh9yp7s5eynbruz5bs95oc5ufn3e79entmhix74miigc8iz9ia
 
 ## Quickstart
 
-Want to get hands-on right away? Here's a simple example you can use to test QVAC.
+Want to get hands-on right away? Here's a simple example you can use to test QVAC. Below is a JavaScript quickstart — for the Python client, see the [Python SDK docs](https://docs.qvac.tether.io/python-sdk).
 
 1. Create the examples workspace:
 
