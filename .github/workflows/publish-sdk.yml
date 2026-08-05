@@ -127,22 +127,32 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify @qvac/sdk and @qvac/bare-sdk version lockstep
+      - name: Verify sdk / bare-sdk / python version lockstep
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          # pull_request_target pins the working tree to base.sha; read both
-          # manifests from the PR head SHA so a missed bare-sdk bump fails pre-merge.
+          # pull_request_target pins the working tree to base.sha; read manifests
+          # from the PR head SHA so a missed bare-sdk or python bump fails pre-merge
+          # (pr-checks-sdk-python.yml may not run on an sdk-only version bump).
           set -euo pipefail
           REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
           SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
           BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
+          PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ "$SDK_VER" != "$BARE_VER" ]; then
             echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER at ${REF}. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
             exit 1
           fi
-          echo "OK: @qvac/sdk and @qvac/bare-sdk both at $SDK_VER (verified at ${REF})"
+          if [ -z "$PY_VER" ]; then
+            echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
+            exit 1
+          fi
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          echo "OK: @qvac/sdk, @qvac/bare-sdk, and tetherto-qvac-sdk all at $SDK_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
