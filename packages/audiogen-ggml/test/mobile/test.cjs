@@ -300,6 +300,9 @@ async function testLoadModels () {
 }
 
 function _pcmEnergy (pcm) {
+  if (pcm.length % 2 !== 0) {
+    throw new Error('PCM buffer length must be a multiple of 2 bytes (Int16), got ' + pcm.length)
+  }
   let peak = 0
   let sumSquares = 0
   const samples = pcm.length / 2
