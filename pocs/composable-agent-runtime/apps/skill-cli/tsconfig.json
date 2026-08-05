@@ -11,6 +11,7 @@
     "bare-probe.ts",
     "runner.ts",
     "scripts/**/*.ts",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "../../packages/sync/vendor.d.ts"
   ]
 }

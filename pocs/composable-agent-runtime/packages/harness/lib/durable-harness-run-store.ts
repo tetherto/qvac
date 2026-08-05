@@ -1,12 +1,12 @@
 import type { AgentCheckpoint } from '@qvac/agents'
-import type { SyncProfileClient, SyncRuntime } from '@qvac/sync'
-import {
-  durableWorkProfile,
-  type DurableWorkCommand,
-  type DurableWorkQuery,
-  type DurableWorkResult
-} from '@qvac/sync/profiles/durable-work'
+import b4aModule from 'b4a'
 import AbortController from '#abort-controller'
+import { openDurableWorkProfile, type DurableStateInput } from './durable-state-port.ts'
+import type {
+  DurableWorkProfileClient,
+  DurableStateWatchFrame
+} from './durable-state-port.ts'
+import type { DurableWorkBytes } from './durable-work-profile.ts'
 import { encodeRunIdentity } from './run-identity.ts'
 import type {
   HarnessRunIdentity,
@@ -18,9 +18,15 @@ import type {
 } from './run-store.ts'
 
 const INLINE_CHECKPOINT = 'inline-json:'
+const b4a = b4aModule as {
+  from(input: string, encoding?: 'base64' | 'utf8'): Buffer
+  toString(input: Uint8Array, encoding?: 'base64' | 'utf8'): string
+}
 
-export function createSyncHarnessRunStore(sync: SyncRuntime): HarnessRunStore {
-  const profile = sync.openProfile(durableWorkProfile)
+export function createDurableHarnessRunStore(
+  state: DurableStateInput
+): HarnessRunStore {
+  const profile = openDurableWorkProfile(state)
 
   async function ensureWork(identity: HarnessRunIdentity) {
     const workId = encodeRunIdentity(identity)
@@ -30,7 +36,7 @@ export function createSyncHarnessRunStore(sync: SyncRuntime): HarnessRunStore {
       {
         type: 'record-work',
         workId,
-        payload: Buffer.from(JSON.stringify(identity)),
+        payload: b4a.from(JSON.stringify(identity)),
         payloadFormat: 'application/vnd.qvac.harness-run+json',
         payloadVersion: 1
       },
@@ -70,7 +76,7 @@ export function createSyncHarnessRunStore(sync: SyncRuntime): HarnessRunStore {
             type: 'append-journal',
             workId,
             entryType: 'harness-run-events',
-            body: Buffer.from(
+            body: b4a.from(
               JSON.stringify(
                 events.map((entry, index) => ({
                   ...entry,
@@ -109,7 +115,7 @@ export function createSyncHarnessRunStore(sync: SyncRuntime): HarnessRunStore {
             type: 'record-outcome',
             workId: encodeRunIdentity(identity),
             status: durableOutcomeStatus(outcome),
-            result: Buffer.from(JSON.stringify(outcome))
+            result: b4a.from(JSON.stringify(outcome))
           },
           { operationId }
         )
@@ -119,17 +125,13 @@ export function createSyncHarnessRunStore(sync: SyncRuntime): HarnessRunStore {
       return watchWork(profile, input)
     },
     async close() {
-      // The supplied Sync runtime owns the profile lifecycle.
+      // The supplied durable state owns the profile lifecycle.
     }
   }
 }
 
 async function* watchWork(
-  profile: SyncProfileClient<
-    DurableWorkCommand,
-    DurableWorkQuery,
-    DurableWorkResult
-  >,
+  profile: DurableWorkProfileClient,
   { after, signal }: WatchHarnessWork
 ): AsyncIterable<HarnessWorkChange> {
   const controller = new AbortController()
@@ -141,7 +143,7 @@ async function* watchWork(
       { type: 'list-available-work' },
       { after, signal: controller.signal }
     )) {
-      const result = frame.kind === 'snapshot' ? frame.value : frame.change
+      const result = durableWorkResult(frame)
       const current = workIds(result)
       if (frame.kind === 'snapshot') {
         previous = current
@@ -170,27 +172,31 @@ async function* watchWork(
   }
 }
 
-function workIds(result: DurableWorkResult) {
+function durableWorkResult(frame: DurableStateWatchFrame) {
+  return frame.kind === 'snapshot' ? frame.value : frame.change
+}
+
+function workIds(result: ReturnType<typeof durableWorkResult>) {
   return new Set(result.works.map(({ workId }) => workId))
 }
 
-function decodeEvents(encoded: Buffer) {
-  return JSON.parse(encoded.toString()) as HarnessStoredRunEvent[]
+function decodeEvents(encoded: DurableWorkBytes) {
+  return JSON.parse(b4a.toString(encoded)) as HarnessStoredRunEvent[]
 }
 
 function encodeCheckpoint(checkpoint: AgentCheckpoint) {
-  return `${INLINE_CHECKPOINT}${Buffer.from(JSON.stringify(checkpoint)).toString('base64')}`
+  return `${INLINE_CHECKPOINT}${b4a.toString(b4a.from(JSON.stringify(checkpoint)), 'base64')}`
 }
 
 function decodeCheckpoint(encoded: string | null | undefined) {
   if (!encoded?.startsWith(INLINE_CHECKPOINT)) return null
   return JSON.parse(
-    Buffer.from(encoded.slice(INLINE_CHECKPOINT.length), 'base64').toString()
+    b4a.toString(b4a.from(encoded.slice(INLINE_CHECKPOINT.length), 'base64'))
   ) as AgentCheckpoint
 }
 
-function decodeOutcome(encoded: Buffer | null | undefined) {
-  return encoded ? JSON.parse(encoded.toString()) as HarnessRunOutcome : null
+function decodeOutcome(encoded: DurableWorkBytes | null | undefined) {
+  return encoded ? JSON.parse(b4a.toString(encoded)) as HarnessRunOutcome : null
 }
 
 function durableOutcomeStatus(outcome: HarnessRunOutcome) {

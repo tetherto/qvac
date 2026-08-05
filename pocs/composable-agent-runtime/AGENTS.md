@@ -46,11 +46,14 @@ Additional standing rules:
   supplies only generic machinery via `@qvac/harness/skill-host` and
   `@qvac/harness/skill-sandbox`. Never move a concrete skill into `packages/harness`.
 - **Sync and Harness are siblings, not layers.** Neither may depend on the other.
-  Harness reaches persistent state through a `StatePort` it owns, satisfied by an
-  injected, structurally compatible client; Assistant does the wiring. Each package
-  exposes a standalone Expo plugin that packages its own worker and writes its own
-  contribution manifest, so a consumer can adopt Sync alone or Harness alone —
-  `bun run test:pack` proves it.
+  Harness reaches persistent state through `DurableStatePort`, a narrow
+  in-process durable-work boundary it owns, satisfied by an injected,
+  structurally compatible client; Assistant does the wiring. The existing
+  `packages/harness/lib/state-port.ts` is a separate HRPC bridge for
+  `HarnessRunStore` and must not be confused with this in-process port. Each
+  package exposes a standalone Expo plugin that packages its own worker and
+  writes its own contribution manifest, so a consumer can adopt Sync alone or
+  Harness alone; `bun run test:pack` proves it.
 - **Config is a leaf utility, not a seventh runtime component.** `@qvac/config` sits
   alongside `@qvac/logging` and `@qvac/error`: it resolves a versioned, JSON-safe
   snapshot and carries it across launch boundaries, and it knows nothing about any
@@ -63,15 +66,11 @@ Additional standing rules:
   the workspace; `sync` → `supervisor`, `config`; `harness` → `agents`, `supervisor`,
   `config`, `@qvac/sdk`; `assistant` composes them all and nothing depends on
   `assistant`. No cycles, and no new edge that reverses one of these arrows.
-- **Known debt: `harness` still imports `@qvac/sync` directly.** This violates the rule
-  above and is tracked by `docs/arch/tech-debt/TD-STRUCTURAL-COMPOSITION-PORTS.md`. It
-  survives at four sites — `lib/sync-harness-run-store.ts` (`SyncProfileClient`,
-  `SyncRuntime`, `profiles/durable-work`), `lib/runtime/create-harness.ts` and
-  `lib/runtime/create-harness-mobile.ts` (`SyncRuntime` types), and
-  `test/harness-run-store.ts` (`createSync`) — plus the `@qvac/sync` entry in
-  `packages/harness/package.json`. **Do not add a fifth.** New state access in Harness
-  goes through the port and takes an injected client; removing the existing four belongs
-  to that TD, not to unrelated changes.
+- **No Harness-to-Sync package edge.** `packages/harness` must not import
+  `@qvac/sync`, including type-only imports, and must not depend on it in
+  `package.json`. Sync-backed state access in Harness goes through
+  `DurableStatePort` and a structurally compatible injected client. Tests that
+  need real Sync composition live outside `packages/harness`.
 - **Every entry added to a package's `exports` is a contract** this PoC will be judged
   on. An export that exists only to let one package reach into another's internals is a
   boundary violation wearing a public name.

@@ -56,8 +56,27 @@ test('harness descriptor tracks required dependencies', async (t) => {
   }
   t.is(packageJson.dependencies['bare-stow'], '0.1.5')
   t.is(packageJson.dependencies['bare-stow-target-react-native'], '0.1.1')
+  t.is(packageJson.dependencies.b4a, '^1.8.1')
   t.is(packageJson.dependencies['react-native-bare-kit'], undefined)
   t.is(packageJson.peerDependencies['react-native-bare-kit'], '^0.14.0')
+})
+
+test('react-native durable state path avoids the Node buffer shim', async (t) => {
+  const [manifest, durableStore, durableProfile] = await Promise.all([
+    readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    readFile(new URL('../lib/durable-harness-run-store.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../lib/durable-work-profile.ts', import.meta.url), 'utf8')
+  ])
+  const packageJson = JSON.parse(manifest) as {
+    readonly imports: Record<string, Record<string, string>>
+  }
+  t.absent(
+    packageJson.imports['#buffer']?.['react-native'],
+    '#buffer is not part of the React Native durable state path'
+  )
+  t.is(durableStore.includes("from '#buffer'"), false)
+  t.is(durableProfile.includes("from '#buffer'"), false)
+  t.ok(durableStore.includes("from 'b4a'"))
 })
 
 test('mobile harness entry wires host-backed SDK transport', async (t) => {

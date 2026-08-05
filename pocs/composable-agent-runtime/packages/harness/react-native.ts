@@ -15,6 +15,11 @@ export {
   type HarnessRuntimeHandshake
 } from './lib/runtime/compatibility.ts'
 export type {
+  DurableStatePort,
+  DurableStateInput,
+  DurableWorkProfileClient
+} from './lib/durable-state-port.ts'
+export type {
   HarnessAgentRegistration,
   HarnessAgentWorkflowOperation,
   HarnessToolPolicy

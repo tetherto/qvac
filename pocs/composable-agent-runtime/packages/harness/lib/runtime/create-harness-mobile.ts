@@ -1,14 +1,14 @@
 import type { LoadModelOptions } from '@qvac/sdk'
-import type { SyncRuntime } from '@qvac/sync'
 import defaultLauncher from '../../react-native-launcher.ts'
 import { connectHarness, type HarnessClient } from '../connect.ts'
+import { createDurableHarnessRunStore } from '../durable-harness-run-store.ts'
+import type { DurableStateInput } from '../durable-state-port.ts'
 import { createInMemoryHarnessRunStore } from '../in-memory-harness-run-store.ts'
 import {
   createHostSdkTransportServer,
   type PublicSdkCompletionEvent,
   type PublicSdkLike
 } from '../mobile-sdk-transport.ts'
-import { createSyncHarnessRunStore } from '../sync-harness-run-store.ts'
 import type { HarnessRunStore } from '../run-store.ts'
 import type { HarnessLoggingConfig } from '../types.ts'
 import { assertCompatibleHarness } from './compatibility.ts'
@@ -24,7 +24,7 @@ import {
 export interface CreateMobileHarnessOptions {
   readonly inference?: 'qwen'
   readonly logging?: HarnessLoggingConfig
-  readonly state?: SyncRuntime
+  readonly state?: DurableStateInput
 }
 
 export function createMobileHarness({
@@ -36,7 +36,7 @@ export function createMobileHarness({
     throw new Error(`unsupported mobile Harness inference: ${String(inference)}`)
   }
   const runStore: HarnessRunStore = state
-    ? createSyncHarnessRunStore(state)
+    ? createDurableHarnessRunStore(state)
     : createInMemoryHarnessRunStore()
   const config = configForHarnessRuntime(logging)
   let started: Awaited<ReturnType<typeof defaultLauncher.start>> | null = null

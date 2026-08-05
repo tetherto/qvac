@@ -1,12 +1,12 @@
 import type { HarnessAgentRegistration } from '../agent-registration.ts'
-import type { SyncRuntime } from '@qvac/sync'
 import type { HarnessRuntimeInfo } from '../connect.ts'
 import type {
   HarnessApprovalDecision,
   HarnessApprovalRequest
 } from '../approval-port.ts'
 import { createInMemoryHarnessRunStore } from '../in-memory-harness-run-store.ts'
-import { createSyncHarnessRunStore } from '../sync-harness-run-store.ts'
+import { createDurableHarnessRunStore } from '../durable-harness-run-store.ts'
+import type { DurableStateInput } from '../durable-state-port.ts'
 import type {
   HarnessRunRecord,
   HarnessRunStore,
@@ -34,7 +34,7 @@ import { configForHarnessRuntime } from '../config.ts'
 export interface CreateHarnessOptions {
   readonly inference?: 'deterministic' | 'qwen'
   readonly logging?: HarnessLoggingConfig
-  readonly state?: SyncRuntime
+  readonly state?: DurableStateInput
   readonly host?: HarnessHostConfig
   /**
    * Worker entry sources. An application that supplies its own skills also
@@ -82,7 +82,7 @@ export function createHarness({
 }: CreateHarnessOptions = {}): HarnessRuntime {
   const config = configForHarnessRuntime(logging)
   const runStore: HarnessRunStore = state
-    ? createSyncHarnessRunStore(state)
+    ? createDurableHarnessRunStore(state)
     : createInMemoryHarnessRunStore()
   let worker: DesktopHarnessWorker | null = null
   let readyPromise: Promise<void> | null = null

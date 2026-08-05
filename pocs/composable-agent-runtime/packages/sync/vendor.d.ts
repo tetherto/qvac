@@ -64,6 +64,14 @@ declare module 'hypercore' {
   }
 }
 
+declare module 'b4a' {
+  const b4a: {
+    from(input: string, encoding?: 'base64' | 'utf8'): Buffer
+    toString(input: Uint8Array, encoding?: 'base64' | 'utf8'): string
+  }
+  export default b4a
+}
+
 declare module 'hyperswarm' {
   import type { Duplex } from 'streamx'
   export type BootstrapNode = { readonly host: string; readonly port: number }

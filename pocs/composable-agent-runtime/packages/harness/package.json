@@ -94,7 +94,6 @@
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.0",
     "@qvac/sdk": "0.15.0",
-    "@qvac/sync": "0.0.0-poc",
     "@qvac/supervisor": "0.0.0-poc",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.1",
@@ -114,6 +113,7 @@
     "bare-stream": "^2.13.3",
     "bare-subprocess": "^6.0.0",
     "bare-url": "^2.4.5",
+    "b4a": "^1.8.1",
     "compact-encoding": "^3.3.0",
     "hrpc": "^4.3.0",
     "hyperschema": "^1.21.0",
@@ -135,8 +135,6 @@
     "bare-pipe": "^4.2.3",
     "bare-tcp": "^2.5.3",
     "brittle": "^4.0.2",
-    "hyperdht": "^6.32.0",
-    "test-tmp": "^1.4.0",
     "typescript": "^5.9.3"
   }
 }
