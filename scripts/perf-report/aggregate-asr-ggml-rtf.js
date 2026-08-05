@@ -157,14 +157,35 @@ function numberOrNaN (value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : NaN
 }
 
-function normalizeBackend (platformName, useGPU, backendHint) {
+// Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
+// (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
+// row from an Adreno device whose backend was guessed (or hinted with the same
+// platform guess) must resolve to opencl. Observed backend ids are never
+// overridden.
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /galaxy[\s_-]*s25/i
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
+  // An android "vulkan" hint is itself a platform-family guess (labels stamp
+  // it without probing the device), so Adreno devices correct it like the
+  // fallback guess below.
+  if (adreno && useGPU && platform === 'android' &&
+      (!hint || hint === 'vulkan' || hint === 'mobile-accelerated' || hint === 'gpu')) {
+    return 'opencl'
+  }
   // 'mobile-accelerated'/'gpu' are placeholders, not ggml backends — fall
   // through to the platform cascade so the row names a real backend.
   if (hint && hint !== 'mobile-accelerated' && hint !== 'gpu') return hint
   if (!useGPU) return 'cpu'
 
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'android':
       return 'vulkan'
     case 'ios':
@@ -182,11 +203,11 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 // platform-family guess. Falls back to normalizeBackend when the addon did not
 // report an id (older prebuilds, a snapshot without stats, or the parakeet
 // mobile path which never stamped one).
-function resolveMobileBackend (backendId, platformName, useGPU) {
+function resolveMobileBackend (backendId, platformName, useGPU, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
   }
-  return normalizeBackend(platformName, useGPU)
+  return normalizeBackend(platformName, useGPU, '', adreno)
 }
 
 function humanizeSourceFile (sourceFile) {
@@ -261,6 +282,7 @@ function normalizeReport (report, sourceFile, source) {
   const backendHint = (report.labels && report.labels.backend) ||
     (report.requested && report.requested.backendHint)
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
 
   return {
     source,
@@ -271,13 +293,11 @@ function normalizeReport (report, sourceFile, source) {
     model: reportModelName(report, engine),
     quant: reportQuant(report, sourceFile),
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, backendHint),
+    backend: normalizeBackend(platformName, useGPU, backendHint, isAdrenoDevice(gpuModel, label)),
     // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
     // to them — the probe stamps the GPU name onto every report regardless of
     // whether that run used it.
-    gpuModel: useGPU
-      ? ((report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null)
-      : null,
+    gpuModel: useGPU ? gpuModel : null,
     version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
     stddevRtf: Number(rtf.stddev),
@@ -315,7 +335,8 @@ function normalizeManualRecord (record, sourceFile) {
     model: record.model || record.modelType || 'unknown',
     quant: record.quant || quantFromName(record.dirName) || quantFromName(record.model) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    backend: normalizeBackend(platformFamily, useGPU, record.backend,
+      isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)),
     gpuModel: useGPU ? (record.gpuModel || record.gpu_model || null) : null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),
@@ -458,7 +479,8 @@ function normalizeMobileRecords (report, sourceFile) {
       model: values.modelTag,
       quant: values.quant || '',
       gpu: values.provider,
-      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU,
+        isAdrenoDevice(device.gpu, device.name)),
       gpuModel: useGPU ? (device.gpu || null) : null,
       version: report.addonVersion || '',
       meanRtf: mean(values.rtf),

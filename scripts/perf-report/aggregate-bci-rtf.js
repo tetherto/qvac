@@ -105,11 +105,31 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-function normalizeBackend (platformName, useGPU, backendHint) {
+// Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
+// (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
+// row from an Adreno device whose backend was guessed (or hinted with the same
+// platform guess) must resolve to opencl. Observed backend ids are never
+// overridden.
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /galaxy[\s_-]*s25/i
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
+  // An android "vulkan" hint is itself a platform-family guess (labels stamp
+  // it without probing the device), so Adreno devices correct it like the
+  // fallback guess below.
+  if (adreno && useGPU && platform === 'android' && (!hint || hint === 'vulkan')) {
+    return 'opencl'
+  }
   if (hint) return hint
   if (!useGPU) return 'cpu'
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'darwin':
     case 'ios':
       return 'metal'
@@ -124,11 +144,11 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 
 // Prefer the observed ggml backend id (per-device ground truth) over the
 // platform-family guess. Falls back to normalizeBackend when no id was reported.
-function resolveMobileBackend (backendId, platformName, useGPU) {
+function resolveMobileBackend (backendId, platformName, useGPU, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
   }
-  return normalizeBackend(platformName, useGPU)
+  return normalizeBackend(platformName, useGPU, '', adreno)
 }
 
 function num (value) {
@@ -143,15 +163,17 @@ function normalizeReport (report, sourceFile, source) {
   const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
+  const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
 
   return {
     source,
-    device: (report.labels && (report.labels.device || report.labels.runner)) || report.platform || 'unknown',
+    device: deviceLabel || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
     model: report.model && report.model.name ? report.model.name.replace(/\.bin$/, '') : 'unknown',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || (report.requested && report.requested.backendHint)),
+    backend: normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || (report.requested && report.requested.backendHint), isAdrenoDevice(gpuModel, deviceLabel)),
     meanTps: num(tps.mean),
     stddevTps: num(tps.stddev),
     p50Tps: num(tps.p50),
@@ -242,7 +264,8 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU,
+        isAdrenoDevice(device.gpu, device.name)),
       meanTps: mean(values.tps),
       stddevTps: stddev(values.tps),
       p50Tps: percentile(values.tps, 50),

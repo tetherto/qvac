@@ -217,6 +217,59 @@ test('whisper mobile backend comes from the reported ggml backend id, not the pl
   assert.equal(row.gpuModel, 'Adreno 830')
 })
 
+test('android GPU rows on Adreno devices fall back to opencl when no backend id is reported', () => {
+  // The Galaxy S25 family is Adreno, and ggml's Adreno path is OpenCL — the
+  // plain android platform guess said vulkan for these rows.
+  const gpuResult = {
+    test: '[ggml-tiny] [GPU] mobile-perf run 1',
+    execution_provider: 'gpu',
+    metrics: { real_time_factor: 0.3, wall_time_ms: 900 }
+  }
+  const probed = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Samsung Galaxy S25 Ultra', platform: 'android', gpu: 'Adreno (TM) 830' },
+    results: [gpuResult]
+  }
+  assert.equal(normalizeMobileRecords(probed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')[0].backend, 'opencl')
+
+  // Device-name match covers reports whose GPU probe came back empty.
+  const unprobed = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Samsung Galaxy S25', platform: 'android' },
+    results: [gpuResult]
+  }
+  assert.equal(normalizeMobileRecords(unprobed, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'opencl')
+})
+
+test('android GPU fallback stays vulkan off Adreno, and a reported backend id beats the Adreno correction', () => {
+  const mali = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Pixel 9', platform: 'android', gpu: 'Mali-G715' },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900 }
+    }]
+  }
+  assert.equal(normalizeMobileRecords(mali, '/x/Pixel_9/performance-report.json')[0].backend, 'vulkan')
+
+  const adrenoWithVulkanId = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Samsung Galaxy S25', platform: 'android', gpu: 'Adreno (TM) 830' },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      // 3 == vulkan: observed ground truth, kept even on an Adreno device.
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900, backend_id: 3 }
+    }]
+  }
+  assert.equal(normalizeMobileRecords(adrenoWithVulkanId, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'vulkan')
+})
+
 test('mobile [sortformer-streaming] label maps to model sortformer-streaming, not sortformer', () => {
   // Guards the alternation ordering: `sortformer-streaming` (v2.1) must be
   // matched before `sortformer` (v1). If the order regresses, the v2.1 label

@@ -7,8 +7,8 @@
  *
  * GGML backend notes:
  *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl, supertonic3
- *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
- *     opencl (Adreno android, manual / off the default cascade)
+ *   - GPU backends: vulkan (linux/win32/Mali android), metal (darwin/ios),
+ *     opencl (Adreno android, e.g. Samsung Galaxy S25)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
  *
  * Usage:
@@ -89,16 +89,33 @@ function formatMaybeInteger (value) {
   return String(Math.round(Number(value)))
 }
 
-// tts-cpp's GPU backend cascade: Vulkan on linux/win32/android, Metal on
-// darwin/ios. OpenCL (Adreno android) only appears when an explicit hint
-// carries it (manual drops / dedicated runners), so it passes through the
-// hint branch. CUDA is not supported on any platform.
-function normalizeBackend (platformName, useGPU, backendHint) {
+// Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
+// (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
+// row from an Adreno device whose backend was guessed must resolve to opencl.
+// The mobile test labels carry a "vulkan" token derived from the same platform
+// guess (the harness does not probe the active backend), so that hint is
+// corrected too.
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /galaxy[\s_-]*s25/i
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+// tts-cpp's GPU backend cascade: Vulkan on linux/win32/android (OpenCL on
+// Adreno android), Metal on darwin/ios. CUDA is not supported on any platform.
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
+  if (adreno && useGPU && platform === 'android' &&
+      (!hint || hint === 'vulkan' || hint === 'gpu' || hint === 'mobile-accelerated')) {
+    return 'opencl'
+  }
   if (hint && hint !== 'gpu' && hint !== 'mobile-accelerated') return hint
   if (!useGPU) return 'cpu'
 
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'android': return 'vulkan'
     case 'ios':
     case 'darwin': return 'metal'
@@ -331,8 +348,9 @@ function normalizeDesktopRecord (report, sourceFile) {
   const memory = memoryFromSummary(summary)
   const platformName = report.platformName || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
-  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '')
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
+  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '', isAdrenoDevice(gpuModel, deviceLabel))
   const numThreads = report.requested && report.requested.numThreads !== undefined
     ? report.requested.numThreads
     : (report.config && report.config.numThreads !== undefined ? report.config.numThreads : null)
@@ -385,7 +403,8 @@ function normalizeMobileRecord (record, sourceFile) {
   const memory = memoryFromSummary(summary)
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
-  const backend = normalizeBackend(platformFamily, useGPU, record.backendHint)
+  const backend = normalizeBackend(platformFamily, useGPU, record.backendHint,
+    isAdrenoDevice(record.gpuModel, record.deviceLabel))
 
   return {
     source: 'mobile-ci',
@@ -449,7 +468,8 @@ function normalizeManualRecord (record, sourceFile) {
       DEFAULT_ENHANCER_VARIANT,
     denoiser: (record.model && record.model.denoiser) || record.denoiser || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    backend: normalizeBackend(platformFamily, useGPU, record.backend,
+      isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)),
     gpuModel: record.gpuModel || record.gpu_model || null,
     label: String(record.label || ''),
     numThreads: record.numThreads !== undefined ? record.numThreads : null,
@@ -483,8 +503,9 @@ function normalizeStreamingRecord (report, sourceFile, source) {
   const chunkCount = summary.chunkCount || {}
   const platformName = report.platformName || ''
   const useGPU = Boolean((report.requested && report.requested.useGPU) || report.useGPU)
-  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || report.backendHint || '')
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || report.deviceLabel || ''
+  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || report.backendHint || '',
+    isAdrenoDevice((report.labels && report.labels.gpuModel) || report.gpuModel, deviceLabel))
 
   return {
     source: source || 'desktop-ci',

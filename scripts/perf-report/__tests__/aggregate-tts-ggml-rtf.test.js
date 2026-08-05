@@ -198,6 +198,39 @@ test('mobile smoke rows infer backend from platform and remain visibly marked', 
   assert.ok(markdown.includes('GPU backends still missing: opencl'))
 })
 
+test('android GPU rows on Adreno devices resolve to opencl, correcting the guessed vulkan label token', () => {
+  // The mobile harness stamps a platform-guessed "vulkan" token into the test
+  // label, but the Galaxy S25 family is Adreno and ggml's Adreno path is
+  // OpenCL.
+  const adreno = mobileCanonicalReport()
+  adreno.device = { name: 'Samsung Galaxy S25', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Adreno (TM) 830' }
+  adreno.results[0].test = '[GPU] supertonic q4 vulkan'
+  const [adrenoRecord] = expandCanonicalReport(adreno, '/x/Samsung_Galaxy_S25/performance-report.json').records
+  assert.equal(adrenoRecord.backend, 'opencl')
+
+  // Device-name match covers reports whose GPU probe came back empty.
+  const unprobed = mobileCanonicalReport()
+  unprobed.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: null }
+  unprobed.results[0].test = '[GPU] supertonic q4 vulkan'
+  const [unprobedRecord] = expandCanonicalReport(unprobed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json').records
+  assert.equal(unprobedRecord.backend, 'opencl')
+
+  // Non-Adreno android devices keep their vulkan rows.
+  const mali = mobileCanonicalReport()
+  mali.device = { name: 'Pixel 9', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Mali-G715' }
+  mali.results[0].test = '[GPU] supertonic q4 vulkan'
+  const [maliRecord] = expandCanonicalReport(mali, '/x/Pixel_9/performance-report.json').records
+  assert.equal(maliRecord.backend, 'vulkan')
+
+  // An explicit non-vulkan hint (e.g. a manual metal drop) is never rewritten,
+  // and Adreno CPU rows stay cpu.
+  const cpu = mobileCanonicalReport()
+  cpu.device = { name: 'Samsung Galaxy S25', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Adreno (TM) 830' }
+  cpu.results[0].test = '[CPU] supertonic q4 cpu'
+  const [cpuRecord] = expandCanonicalReport(cpu, '/x/Samsung_Galaxy_S25/performance-report.json').records
+  assert.equal(cpuRecord.backend, 'cpu')
+})
+
 test('mobile multilingual rows keep language separate from variant and backend', () => {
   const report = mobileCanonicalReport()
   report.results[0].test = '[CPU] chatterbox mtl es'
