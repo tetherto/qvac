@@ -45,7 +45,7 @@ export function createBinaryChannelMultiplexer(
       const payloadLength = readLength(buffered)
       const frameLength = HEADER_BYTES + payloadLength
       if (buffered.byteLength < frameLength) break
-      const payload = buffered.slice(HEADER_BYTES, frameLength)
+      const payload = asPlatformBytes(buffered.slice(HEADER_BYTES, frameLength))
       buffered = buffered.slice(frameLength)
       if (channelId === 0) continue
       pushChannel(channelId, payload)
@@ -184,4 +184,18 @@ function concatBytes(left: Uint8Array, right: Uint8Array) {
   merged.set(left, 0)
   merged.set(right, left.byteLength)
   return merged
+}
+
+/**
+ * Frame payloads are consumed by codecs that call Node-style
+ * `toString(encoding, start, end)`. A plain Uint8Array ignores those arguments
+ * and returns comma-joined byte values, so hand on a Buffer wherever one
+ * exists.
+ */
+function asPlatformBytes(bytes: Uint8Array): Uint8Array {
+  const platformBuffer = Reflect.get(globalThis, 'Buffer') as
+    | { from(input: Uint8Array): Uint8Array }
+    | undefined
+  if (!platformBuffer?.from) return bytes
+  return platformBuffer.from(bytes)
 }

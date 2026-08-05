@@ -191,9 +191,11 @@ function requireTask(task: ReplicatedTask | null, id: string) {
  */
 function decodeUtf8(bytes: Buffer | Uint8Array | string) {
   if (typeof bytes === 'string') return bytes
-  return new TextDecoder().decode(
+  // Buffer.from normalises a plain Uint8Array into a Buffer whose toString
+  // decodes text. TextDecoder is not available on Hermes.
+  return Buffer.from(
     bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  )
+  ).toString('utf8')
 }
 
 function decodePayload(payload: Buffer) {

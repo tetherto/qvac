@@ -234,7 +234,12 @@ test('binary multiplexer reassembles fragmented BareKit IPC frames', async (t) =
   }
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  t.alike(received, [payload])
+  // Compare bytes, not the concrete view: frames are handed on as a Buffer
+  // where one exists so downstream codecs can call toString(encoding, ...).
+  t.alike(
+    received.map((chunk) => [...chunk]),
+    [[...payload]]
+  )
 })
 
 test('harness build patches generated launcher for argv', async (t) => {
