@@ -18,10 +18,12 @@
     "react-native.ts",
     "expo-plugin.ts",
     "dist/expo-plugin.js",
-    "lib/**/*.ts"
+    "lib/**/*.ts",
+    "examples/**/*.ts"
   ],
   "scripts": {
     "build:expo-plugin": "bun build expo-plugin.ts --target=node --format=esm --outfile=dist/expo-plugin.js --external=@expo/config-plugins --external=@expo/config-types --external=@qvac/sdk --external=@qvac/sync --external=@qvac/harness --external=bare-bundle --external=react-native-bare-kit",
+    "inbox": "bun examples/assistant-inbox.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

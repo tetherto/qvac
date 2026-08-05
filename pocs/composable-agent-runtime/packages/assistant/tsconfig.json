@@ -11,6 +11,7 @@
     "react-native.ts",
     "expo-plugin.ts",
     "lib/**/*.ts",
+    "examples/**/*.ts",
     "test/**/*.ts",
     "../sync/vendor.d.ts",
     "../sync/spec/**/*.d.ts"
