@@ -198,6 +198,15 @@ jobs:
           path: addon
           fetch-depth: 0
 
+      # node/npm is job-managed on the self-hosted runners (installed per runner
+      # user via setup-node, not globally), so npm is only on PATH after this
+      # step runs. The validate step below invokes npm, so it must be set up
+      # first — matches the lts/* used by the setup composite action.
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
       # Hard-fails on purpose. This covers both the generated mobile test list
       # and test/mobile/model-manifest.json — an incomplete pre-stage map does
       # not fail loudly on-device, it silently sends the phone to

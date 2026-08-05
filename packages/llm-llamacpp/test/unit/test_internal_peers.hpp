@@ -5,6 +5,7 @@
 
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/MtmdLlmContext.hpp"
 
 // Friend test peers grant unit tests direct access to internals that are not
 // part of the production public API. The production classes befriend these
@@ -50,5 +51,16 @@ public:
   static void
   setEvalMediaFunc(Scheduler& scheduler, Scheduler::EvalMediaFunc fn) {
     scheduler.evalMediaFunc_ = std::move(fn);
+  }
+};
+
+class MtmdLlmContextTestPeer {
+public:
+  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
+    return context.removeThinkingFromContext_;
+  }
+
+  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
+    return context.compactor_.removeThinkingFromContext();
   }
 };
