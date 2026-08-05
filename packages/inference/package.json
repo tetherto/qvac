@@ -178,7 +178,7 @@
   },
   "peerDependencies": {
     "@qvac/asr-ggml": "^0.1.0",
-    "@qvac/bci-whispercpp": "^0.5.0",
+    "@qvac/bci-whispercpp": "^0.6.0",
     "@qvac/classification-ggml": "^0.15.1",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.17.0",
@@ -230,7 +230,7 @@
   },
   "devDependencies": {
     "@qvac/asr-ggml": "^0.1.0",
-    "@qvac/bci-whispercpp": "^0.5.0",
+    "@qvac/bci-whispercpp": "^0.6.0",
     "@qvac/classification-ggml": "^0.15.1",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.17.0",
