@@ -284,7 +284,7 @@
     "prettier-config-holepunch": "^2.0.0",
     "react-native-bare-kit": "^0.14.0",
     "tsc-alias": "^1.8.17",
-    "tsx": "^4.21.0",
+    "tsx": "4.23.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.39.0",
     "@qvac/infer-base": "0.4.2"
