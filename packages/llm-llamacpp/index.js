@@ -475,7 +475,8 @@ class LlmLlamacpp {
       throw error
     }
     // Unconditional even when rejectWhenBusy is false: a rejected job never runs
-    // (pool + queue full), so there is no response to return.
+    // — the pool and queue are full, or an exclusive finetune holds the model —
+    // so there is no response to return.
     if (!admission.accepted) {
       response.failed(runBusyError())
       throw runBusyError()

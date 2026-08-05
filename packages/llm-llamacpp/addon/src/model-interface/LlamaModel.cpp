@@ -873,8 +873,9 @@ std::any LlamaModel::process(const std::any& input) {
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
     // Release the shared lock before finetune() because reload() inside it
-    // acquires an exclusive lock on stateMtx_; safe since JobRunner serialises
-    // all jobs onto a single worker thread.
+    // acquires an exclusive lock on stateMtx_; safe because finetuning is
+    // admitted through MultiJobScheduler::runExclusiveJob, so no inference job
+    // holds stateMtx_ while this one runs.
     lock.unlock();
     std::string status = finetuner_.finetune(
         *prompt.finetuningParams, &stats, prompt.progressCallback);

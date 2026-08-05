@@ -446,13 +446,13 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
                            .getOptionalProperty<js::Array>(env, "messages")
                            .has_value();
   if (isBatch) {
-    // Reject before admission: otherwise processPromptBatch throws the same
-    // error on the worker thread, surfaced as an async rejection.
+    // Reject before admission: otherwise processPromptBatchImpl throws the
+    // same error on a scheduler worker, surfaced as an async rejection.
     if (!getLlamaModel(instance)->supportsBatching()) {
       throw StatusError(
           general_error::InvalidArgument,
           "Batch run() requires the model loaded with parallel >= 2 "
-          "(continuous batching, text-only model with n_seq_max > 1)");
+          "(continuous batching, n_seq_max > 1)");
     }
     // Local: several batch admissions may now overlap, each with its own ids.
     JsBatchIds batchIds;
@@ -525,7 +525,8 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   // stay alive until the async cancelJob() / pause-wait completes.
   // Previously we captured raw pointers (`auto* addonCpp = ... .get();`),
   // which let the test framework's teardown free the addon out from under
-  // an in-flight cancel and trip a destroyed-mutex UAF in JobRunner.
+  // an in-flight cancel and trip a destroyed-mutex UAF inside the job
+  // scheduler.
   auto addonCppRef = instance.addonCpp;
   // Snapshot the live job ids here, on the JS thread — where admissions also
   // run — so a job started after this call is never touched by the deferred

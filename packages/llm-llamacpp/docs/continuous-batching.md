@@ -20,6 +20,7 @@
 - [Per-sequence context caps](#per-sequence-context-caps)
 - [Sequence ids and streaming](#sequence-ids-and-streaming)
 - [Cache per slot](#cache-per-slot)
+- [KV reuse: single-prompt vs batch](#kv-reuse-single-prompt-vs-batch)
 - [Cancellation semantics](#cancellation-semantics)
 - [Stats and output aggregation](#stats-and-output-aggregation)
 - [Runtime stats: JSON shapes per request mode](#runtime-stats-json-shapes-per-request-mode)
@@ -70,7 +71,7 @@ Continuous batching works on both text and multimodal (vision) models. A batch p
 
 ### Input shapes
 
-`run()` accepts three shapes:
+`run()` accepts two shapes:
 
 ```ts
 // Single prompt — unchanged
@@ -123,6 +124,12 @@ Whether a call at capacity is rejected or queued is the `rejectWhenBusy` policy:
 - `true` — fail fast: throw an `Error` with `code === 'RUN_BUSY'` the moment the slot pool is full, i.e. as soon as the requests occupying or waiting for a slot reach `parallel`.
 - `false` — queue: the job waits in the scheduler's nearly unbounded queue and starts as slots free.
 
+A running finetune is outside that choice: finetuning is an *exclusive* job, so
+neither policy queues behind it. With `rejectWhenBusy: true` the JS gate refuses
+the call; with `false` the native scheduler refuses admission outright and the
+rejection surfaces as the same `RUN_BUSY` error. Either way, wait for the
+finetune to finish rather than expecting a queued run to start after it.
+
 Capacity is measured in slots rather than jobs because a batch run of N prompts is a single job that consumes up to N slots: with `parallel: 4`, one in-flight `run([p, p, p, p])` fills the pool, so a following `run(p, { rejectWhenBusy: true })` is refused even though only one job is active. At `parallel: 1` there are no scheduler slots and the job count is the measure, which keeps the sequential fail-fast behaviour unchanged. Either way this is a fast-fail hint evaluated just before submission — the native scheduler remains the authority.
 
 The instance default follows `parallel` (`true` at `1`, `false` at `>= 2`); `opts.rejectWhenBusy` overrides it per instance and `runOptions.rejectWhenBusy` per call. A batch run derives ONE group policy from its items' `runOptions` — a batch is one native job, so items that disagree are refused with a `TypeError` before admission.
@@ -164,13 +171,21 @@ AddonJs.hpp: runJob() [C++ binding]
   getLlamaModel(instance)->supportsBatching() check
   parseBatchInputs(items) -> vector<Prompt>, per-item ids
   addonCpp->runJob(prompts) -> optional<JobId>   // scheduler mints the group id
-  returns { accepted, ids, id }
+  returns { accepted, ids, id }                  // returns HERE, at admission
+        |
+        | ---- thread boundary: the call above is done; everything below
+        |      runs later on a MultiJobScheduler worker thread ----
+        v
+MultiJobScheduler:
+  hand the job to a free pool worker, or hold it in the outer queue until one
+  frees (native back-pressure; the JS rejectWhenBusy gate ran before this)
         |
         v
-LlamaModel::processPromptBatch() / processPromptBatchImpl():
-  validateBitnetQuantization()
-  check duplicate saveCacheToDisk keys (throws InvalidArgument)
-  ContinuousBatchScheduler::processBatch(requests)
+LlamaModel::process(input, JobId) -> processConcurrentBatch():
+  arm the job's cancel action, then processPromptBatchImpl():
+    validateBitnetQuantization()
+    reserve saveCacheToDisk keys in inflightSaveKeys_ (InvalidArgument on clash)
+    ContinuousBatchScheduler::processBatch(requests)
         |
         v
 ContinuousBatchScheduler::processBatch():
@@ -203,20 +218,28 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 
 **Worker thread lifecycle:**
 
-1. The thread starts on the first `processBatch` call.
-2. It waits on `workCv_` when there is no work.
-3. On wake, it calls `admitPendingIntoFreeSlotsLocked()` to move requests from `pending_` into free slots.
-4. It runs `stepLocked()` in a loop until no active sequences remain.
-5. Each step: fill batch, decode, sample, advance, finalize finished sequences, refill slots.
+1. The thread starts on the first `processBatch` call (`ensureWorkerStartedLocked`).
+2. It waits on `workCv_` until there is something to do — queued requests, active sequences, a recorded cancel (`hasPendingCancels()`), a cancel-all, a clear request, or shutdown.
+3. On wake it first applies any deferred cancel teardown (`applyDeferredTeardownLocked`), since cancels recorded from a streaming callback are only *recorded* there and applied here.
+4. Then it calls `admitPendingIntoFreeSlotsLocked()` to move requests from `pending_` into free slots.
+5. It runs `stepLocked()` in a loop until no active sequences remain.
+6. Each step: fill batch, decode, sample, advance, drain finished sequences (`drainFinishedLocked`), refill slots.
+7. A cancel-all raised while slots were active is consumed *after* the step — `stepLocked` finished the active slots, and this loop then drains `pending_` instead of admitting from it, so active and queued prompts are covered atomically. With nothing active it is drained at the top of the loop instead. A throw mid-step is unrecoverable for slot state, so the catch-all fails every live group, drains `pending_`, and clears.
 
 **SlotState** holds, per slot:
-- `driver` — a `TextLlmContext` instance implementing `SequenceDriver`
+- `driver` — a `SequenceDriver`: `TextLlmContext`, or `MtmdLlmContext` when the model loaded an mmproj (the model layer's `buildDriverFactory` picks per slot, so the scheduler stays driver-agnostic)
 - `group` + `outputIndex` — back-pointer to the `BatchGroup` this slot belongs to
 - `streams` — per-sequence `onToken` / `onDone` callbacks wired to the JS streaming path
 - `cacheKey`, `saveCacheToDisk`, `prefillOnly`
 - `tools` — `ToolsCompactController` instance (when tools support is enabled)
 
-**BatchGroup** is shared by all sequences admitted in one `processBatch` call. It tracks completion count and accumulates outputs and stats. When `completedCount == totalCount` the group is marked done and `processBatch` returns.
+**BatchGroup** is shared by all sequences admitted in one `processBatch` call. It accumulates outputs and stats, and carries three fields the rest of the machinery keys off:
+
+- `completedCount` — reaching `totalCount` marks the group done and `processBatch` returns.
+- `admittedCount` — how many of the group's requests have been given a slot. While it is below `totalCount` part of the group is still queued, which is what lets a cancel settle the group without waiting for a slot (see [Cancellation semantics](#cancellation-semantics)).
+- `tag` — the native job id of the `run()` call that created the group, so `cancelGroupQueued(tag)` can find it.
+
+Completion is not the only terminal: `failGroupLocked` also settles a group, with an error instead of outputs. Its callers include a cancel of a partly-queued group, a cancel-all draining the queue, an admission failure, a decode failure, a drain-time cache-save failure, and an unexpected mid-step throw.
 
 **Per-sequence context cap:**
 
@@ -224,7 +247,12 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 perSeqMaxTokens_ = ctxTotalTokens / batchSize
 ```
 
-This is enforced at admission: prompts larger than the cap, or with `prompt + n_predict` exceeding the cap, throw `InvalidArgument` before any state is mutated. The `prompt + n_predict` half applies **only when `n_predict` is positive** — with `predict: -1` (no caller cap) there is no budget to check, so the request is admitted and, absent EOS or sliding, runs to the slot ceiling and stops with `sequenceLimit` instead of throwing.
+This is enforced at admission — every check throws `InvalidArgument` before any state is mutated — and there are four of them, not one:
+
+- **KV cells** — `getKvCellsUsed() + plan.totalKvTokens()` must not exceed the cap. Cells, not positions: M-RoPE media occupies more KV cells than it advances positions, so a multimodal prompt can trip this while its token count still fits.
+- **A generating request** is refused at `promptSize >= cap`, where `promptSize` is `getNPast() + plan.totalPositions()` — exactly filling the window leaves no room for even one generated token.
+- **A prefill-only request** is refused only at `promptSize > cap`; it never generates, so filling the window exactly is legitimate.
+- **The budget check** adds `n_predict` to whichever of the two prompt measures is larger, and applies **only when `n_predict` is positive** — with `predict: -1` (no caller cap) there is no budget to check, so the request is admitted and, absent EOS or sliding, runs to the slot ceiling and stops with `sequenceLimit` instead of throwing.
 
 ### MultiRequestBatcher
 
@@ -251,7 +279,7 @@ The batcher keeps a fixed-size `vector<optional<Request>>` indexed by `seqId`. A
 
 **Files:** `addon/src/model-interface/SequenceDriver.hpp`, `TextLlmContext.{hpp,cpp}`
 
-`SequenceDriver` is the interface the scheduler calls for per-sequence decisions. `TextLlmContext` implements it (as well as the older `LlmContext` interface used by the single-prompt path).
+`SequenceDriver` is the interface the scheduler calls for per-sequence decisions. `TextLlmContext` implements it, as does `MtmdLlmContext` for vision — each independently, since neither derives from the other; both also implement the older `LlmContext` interface used by the single-prompt path.
 
 Lifecycle methods in call order:
 
@@ -267,19 +295,26 @@ Lifecycle methods in call order:
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
 | `saveCache` | Before KV clear | Persists KV cache to disk if `saveCacheToDisk` is set. `drainFinishedLocked` calls `saveCacheForSlot` and only then `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
 
-`TextLlmContext` carries `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill sliding and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`. `n_discarded` is clamped to the per-slot window at construction.
+Each driver carries its own `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill sliding and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`. `n_discarded` is clamped to the per-slot window when the scheduler is constructed, before any driver sees it.
 
 ---
 
 ## Queued vs active requests
 
-When a batch has more prompts than `parallel` slots, the scheduler pushes all requests into `pending_` (a `moodycamel::ConcurrentQueue`) and admits them into free slots as generation completes.
+Every request goes through `pending_` (a `moodycamel::ConcurrentQueue`) — `processBatch` pushes the whole batch there unconditionally and the worker admits from it into free slots. Overflow is not a special case: when a batch has more prompts than there are free slots, the surplus simply stays queued and is admitted as generation completes.
 
 `pending_` is lock-free for writes (push path from `processBatch`) and drained under `mutex_` (pop path from `admitPendingIntoFreeSlotsLocked`). This keeps admission off the hot decode path.
 
-State diagram for one sequence:
+State diagram for one sequence. Note the two queues: a run waits first in the
+outer `MultiJobScheduler` queue (as a whole job, if no pool worker is free),
+and only once a worker picks it up do its requests reach the scheduler's
+`pending_`. Which of the two a cancel finds it in decides the terminal the
+caller sees — see [Cancellation semantics](#cancellation-semantics).
 
 ```
+MultiJobScheduler queue      (the whole run waits here for a pool worker)
+    |
+    v  (a worker picks the job up; processBatch pushes its requests)
 pending_ queue
     |
     v  (slot frees up)
@@ -289,7 +324,7 @@ active slot (prefill phase)
 active slot (generation phase)
     |
     v  (EOG / budget / cancel)
-finalizeFinishedSequences()
+drainFinishedLocked()
     |
     v
 slot freed, BatchGroup updated
@@ -301,8 +336,9 @@ slot freed, BatchGroup updated
 
 With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affects:
 
-- **Admission** — prompts larger than `C / N` are rejected with `InvalidArgument` before any tokens are staged.
-- **Budget check** — when `n_predict > 0`, `prompt_tokens + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `sequenceLimit`.
+- **Admission** — a generating prompt must leave room to generate, so it is rejected once it *reaches* `C / N`; a prefill-only prompt may fill it exactly and is rejected only above it. Either way the rejection is `InvalidArgument` before any tokens are staged.
+- **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
+- **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `sequenceLimit`.
 - **Context sliding** — when `n_discarded > 0`, the slide triggers against `C / N`, not the full context. A value of `n_discarded >= C / N` is clamped and logs a warning.
 - **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
 
@@ -318,31 +354,47 @@ present, or an auto-minted id such as `batch-1` when the prompt is passed as a
 plain `Message[]` or omits `id`. `AddonBatchRunResult.ids` returns those
 JS-facing ids in input order.
 
+Caller-supplied ids must be unique across everything currently in flight, not
+just within one batch: chunks are routed by JS-facing id, so reusing an id that
+another live group already holds would deliver its tokens to the wrong response.
+Three rules protect that, and all three reject before admission:
+
+- `BatchHandler.run` refuses an id another live group already holds, throwing
+  `Batch prompt id already in flight: <id>`. The id frees up as soon as the
+  group holding it settles.
+- natively, `JsBatchIds` reserves the `batch-` prefix for its own mints — a
+  caller id starting with it is `InvalidArgument`, because it could otherwise
+  collide with an auto-minted id in a group the JS layer cannot see.
+- also natively, an id repeated *within* one batch is `InvalidArgument`
+  (`Duplicate batch prompt id`), as is an empty one.
+
 Streaming works as follows:
 
 1. The batch `runJob` binding returns `{accepted: true, id, ids: ["batch-1","batch-2","batch-3"]}` for plain `Message[]` inputs, or caller-provided ids such as `["fruit","country"]` for `BatchPrompt` inputs. `id` is the native group id minted at admission; `ids` are the JS-facing per-prompt ids.
 2. `BatchHandler` stores these as `response.ids` on the `BatchResponse`.
-3. Each token from the native side fires a `BatchOutput` event carrying `{id, output}`, where `id` is the JS-facing id rather than the native slot index.
-4. `index.js` routes this to `batchHandler.onOutput(data)`, which calls `job.output({ id: data.id, chunk: data.output })`.
+3. Each token from the native side delivers `{type: 'batch_output', id, output}`, where `id` is the JS-facing id rather than the native slot index; `mapAddonEvent` recognizes that `type` discriminator and normalizes it to the `BatchOutput` event name used below. The payload object is allocated once per sequence with `type`/`id` baked in and only its `output` is rewritten per token (`PayloadHandler`), which is why the routing step copies the fields out rather than handing that object to the consumer.
+4. `index.js` routes this to `batchHandler.onOutput(data)`, which looks the JS-facing id up in `_chunkRoutes` to find the owning group and calls that group's `response.updateOutput({ id: data.id, chunk: data.output })`. The lookup is what keeps concurrent groups' chunks apart — there is no single "current job" to emit on.
 5. The response emits an `output` event with a `BatchOutputChunk`.
-6. When all sequences finish, the scheduler fires a `BatchResult` event with the full ordered output array; `buildFinalResultIfActive()` maps it back to `{id, output}` pairs in input order.
+6. Terminating a group takes two native events. The first is a bare array of the group's outputs in input order — there is no native event *name* for it; `mapAddonEvent` classifies any array payload as `BatchResult` — which `onResult` stashes as the group's `pendingResult`; the group's `JobEnded` then lands and `onJobEnded` maps `group.ids` onto that array to build the `{id, output}` pairs in input order, attaches the group's stats, and settles the response. Stats and outputs therefore reach the caller together.
 
 ---
 
 ## Cache per slot
 
-Each `BatchPrompt` may carry its own `cacheKey` and `saveCacheToDisk`. The scheduler creates one `TextLlmContext` per slot, so KV caches are isolated by slot index.
+Each `BatchPrompt` may carry its own `cacheKey` and `saveCacheToDisk`. The scheduler creates one driver per slot, so KV caches are isolated by slot index.
 
 Two restrictions apply in batch mode:
 
 1. **Read sharing is allowed.** Multiple prompts in the same batch may use the same `cacheKey` without `saveCacheToDisk`. This is a valid cache-warming pattern.
 2. **Write sharing is rejected.** Two prompts with the same `cacheKey` and `saveCacheToDisk: true` would clobber each other (last writer wins, no ordering guarantee). `processPromptBatchImpl` detects this before any admission and throws `InvalidArgument`.
 
+The write-sharing rule spans jobs, not just one batch. Each saving item reserves its `cacheKey` in a model-wide `inflightSaveKeys_` set for the length of the run, so a concurrent `run()` that tries to save a key another in-flight job already reserved is refused the same way — the error reads "already being saved by an in-flight request". This matters for cache-warming loops: give each save a distinct key, or await the previous run before reusing one. The reservation is released on every exit path, including cancellation and failure.
+
 ---
 
 ## KV reuse: single-prompt vs batch
 
-The single-prompt path keeps one `TextLlmContext` for the model's lifetime, so its KV survives across `run()` calls and a follow-up only evaluates the new tokens. The batch path is the reverse: each `submit` gets a fresh `SequenceDriver` on a recycled slot (`nPast_ = 0`, empty KV) because slots serve unrelated requests, so a cache miss costs a full prefill. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
+The single-prompt path keeps one long-lived context (`TextLlmContext`, or `MtmdLlmContext` for a multimodal model) for the model's lifetime, so its KV survives across `run()` calls and a follow-up only evaluates the new tokens. The batch path is the reverse: each `submit` gets a fresh `SequenceDriver` on a recycled slot (`nPast_ = 0`, empty KV) because slots serve unrelated requests, so a cache miss costs a full prefill. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
 
 ---
 
@@ -360,7 +412,7 @@ Within a cancelled job/group, the effect depends on where each prompt is when th
 | In a slot (decoding) | Cancelled gracefully. The slot runs `onCancel`, flushes its UTF-8 buffer, and the batch call resolves normally with whatever was generated so far. |
 | In `pending_` (never admitted) | Never runs. The associated `BatchGroup` is failed with a `Cancelled` `StatusError` as soon as the cancel is applied. |
 
-If a batch had overflow prompts still in `pending_`, the batch call rejects with `Cancelled`. Callers should handle that rejection rather than expecting empty strings for the prompts that never ran.
+If a batch had overflow prompts still in `pending_`, the batch call rejects rather than resolving. Callers should handle that rejection rather than expecting empty strings for the prompts that never ran — see [what the caller actually receives](#what-a-cancellation-rejection-looks-like) for the error's shape.
 
 A single (non-batch) run resolves with an empty string rather than rejecting **once it has reached the batch scheduler** — whether it is waiting in `pending_` or already prefilling. That is the single-job contract: a caller cannot distinguish those two cases, and a cancel during prefill must not throw, so the queued case matches it rather than the batch rule above.
 
@@ -368,10 +420,14 @@ There is one earlier state that does reject, and it is worth knowing because it 
 
 | Where the run is when cancelled | Terminal |
 |---|---|
-| Queued in `MultiJobScheduler` (never started) | **Rejects** `Cancelled` — the job never reached the model |
+| Queued in `MultiJobScheduler` (never started) | **Rejects** — the job never reached the model |
 | Queued in the batch scheduler's `pending_`, or prefilling, or generating | Resolves with whatever was produced (empty string if nothing was) |
 
-Both stages report the `Cancelled` code rather than a bare message, so a consumer can branch on the code instead of matching text. The distinction is observable, so treat a cancelled single run as "either an empty result or a `Cancelled` rejection" unless you know the job had already started.
+### What a cancellation rejection looks like
+
+The caller gets an `Error` whose `message` is the native text and which has **no `code` property** (`QvacResponse.failed` wraps the incoming string, so `err.message` is reliable — `err.code` is simply absent). The batch scheduler does build a structured `Cancelled` `StatusError`, but a job's asynchronous terminal travels through addon-cpp's `Output::Error`, which is constructed from `what()` alone — the descriptive text — so the code is dropped before JS sees it. The outer-queue drop does not build a structured error at all: it publishes `std::runtime_error("Job cancelled")` (the scheduler-destroyed path appends a reason). Only *synchronous* binding throws — admission-time validation — carry a code, because that path goes through `js_throw_error(env, codeString(), what())`.
+
+So treat a cancelled single run as "either an empty result or a rejection whose text says it was cancelled" unless you know the job had already started, and do not branch on `err.code` for it. (`RUN_BUSY` is different: that error is constructed in JS, so it does carry a code.) Delivering the code on the async path needs an addon-cpp change — `Output::Error` would have to carry it — so it is a framework-level follow-up, not a knob in this package.
 
 Natively the two halves of a targeted cancel are separate, because a queued request has no slot to stop. Slot teardown is keyed by admission id, so it can only reach requests that were admitted. For the rest, the job's cancel action is armed *before* submission and calls `cancelGroupQueued(tag)`, which settles the group the moment the cancel is applied — and critically without waiting for a slot. That matters when an unrelated job holds the whole pool: the group's queued requests cannot be admitted until that foreign work finishes, so a cancel that relied on admission would resolve only then, hanging the caller's `cancel()` promise for the length of someone else's generation.
 
@@ -387,7 +443,7 @@ Both targeted forms honour the same threading rule as `cancel(seqId, admissionId
 
 Stats are collected in two places and merged at the end:
 
-- **Per-step** — `RuntimeStatsSnapshot::recordDecodeStep` accumulates decode vs prefill tokens and their wall-clock duration. A step that carries any generation token is charged wholly to the decode bucket; only pure-prefill steps feed the prefill bucket.
+- **Per-step** — `RuntimeStatsSnapshot::recordDecodeStep` accumulates prefill vs decode tokens and their wall-clock duration. A pure step lands wholly in its own bucket. A **mixed** step — a newcomer's prompt tokens riding along with other sequences' generation, which is the normal case under continuous batching — is split **proportionally by token count**: 1 prefill token beside 3 decode tokens sends a quarter of the step's elapsed time to the prefill bucket and three quarters to the decode bucket, with the tokens counted in their own buckets. That split is what keeps `ppTPS` and batch `TTFT` (which reads `prefillTimeMs()`) honest; charging a mixed step wholly to decode would silently drop the piggybacked prompt tokens and their time, under-reporting both. Compactor replay decode is excluded because `onGenerationFinished` runs outside the timed block, not by any special case here.
 - **Per-slot** — `accumulateSlotRuntimeStats` folds `nPast`, context slides, and cache tokens for each completed slot into the scheduler's `RuntimeStatsSnapshot`.
 
 `avgConcurrentSeq` is computed as:
@@ -407,9 +463,21 @@ Additionally, `BatchResult.requestStats` carries each request's observed end-to-
 ## Runtime stats: JSON shapes per request mode
 
 Every completed job emits one `JobEnded` event whose payload is the stats
-JSON below. The keys are the same across modes with two documented exceptions —
-`stopReason`, which is present only when it can be attributed to a single
-request, and the `visionEncode*` counters, which only multimodal models report.
+JSON below — reaching the caller as `response.stats` only when the instance was
+constructed with `opts.stats` enabled; otherwise the event still fires and the
+payload is dropped. The keys are the same across modes with two documented
+exceptions:
+
+- `stopReason` — present only when it can be attributed to a single request:
+  always on the single-prompt path, and for a concurrent job whose requests
+  agree (a one-prompt job trivially does). A group whose prompts stopped for
+  different reasons drops it.
+- the `visionEncode*` counters — the single-prompt path always includes them,
+  a text model included (its base implementation returns zero); every batch or
+  concurrent job omits them deliberately, because concurrent prompts share one
+  per-context accumulator and a per-job value would be misattributed. So they
+  mark the *mode*, not the model: non-zero means a multimodal single-prompt run.
+
 What otherwise changes per mode is where the values come from:
 
 Every job is tagged — the model is always driven through the multi-job
@@ -420,6 +488,13 @@ whether a per-job stats source exists for that id:
   in flight, including `avgConcurrentSeq`. This is what a job's `JobEnded`
   carries when nothing recorded per-job figures for it — the single-prompt
   path (`parallel: 1`) never does.
+
+  The aggregate covers an **epoch**, the unit the sections below refer to: it
+  starts when a job is submitted to a fully idle scheduler (`processBatch`
+  resets the snapshot only when `pending_` is empty and no slot is active) and
+  runs until the scheduler drains again. Every job that overlaps that window
+  contributes to the same aggregate, which is why a job's own figures can
+  differ from it while the sum over the epoch's jobs matches.
 - Per-job override (the job ran through the batch engine): the job's terminal
   snapshot starts from that same aggregate, then `TTFT`, `TPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
@@ -463,10 +538,16 @@ no separate per-job source, nothing is overridden.
   "promptTokens": 30,
   "contextSlides": 0,
   "thinkingBlockDiscards": 0,
+  "stopReason": "eos",
+  "visionEncodeMs": 0,
+  "visionEncodeTiles": 0,
   "avgConcurrentSeq": 1.0,
   "backendDevice": "gpu"
 }
 ```
+
+(A text model on this path still reports the two `visionEncode*` keys as zero;
+a multimodal one fills them in.)
 
 ### 2. Multiple async single requests that get batched (`parallel >= 2`)
 
@@ -485,6 +566,7 @@ job's observed figures:
   "promptTokens": 28,
   "contextSlides": 0,
   "thinkingBlockDiscards": 0,
+  "stopReason": "eos",
   "avgConcurrentSeq": 2.9,
   "backendDevice": "gpu"
 }
@@ -518,6 +600,9 @@ the group collapses its OWN prompts into one figure set:
   average answers "what did one of my prompts typically experience".
 - `generatedTokens`, `promptTokens` — summed over the group (tokens are
   additive).
+- `stopReason` — kept only if every prompt of the group stopped for the same
+  reason; otherwise the key is absent rather than guessed. The sample below
+  shows the mixed case (A hit EOS, B hit its prediction limit).
 
 So `JobEnded(11)` reports only {A, B}; `JobEnded(12)` only {C, D} — two
 concurrent groups never read each other's token counts, which the old
@@ -549,11 +634,15 @@ happen to equal the generic aggregate snapshot.
 ### 4. One batched run of exactly `parallel` prompts (full width)
 
 Same engine code as the legacy bundled batch — a batch run is admitted
-through the same `processPromptBatch` machinery down to native
+through the same `processPromptBatchImpl` machinery down to native
 `llama_decode` / `common_sampler_*` regardless of size, and a full-width
-group occupies every slot so nothing else can interleave. The group IS the
-epoch: its summed counts equal the generic aggregate exactly, and its
-averaged `TTFT`/`TPS` are the per-request view of the same run.
+group occupies every slot so nothing else can interleave once it is admitted.
+Submitted to an idle model, the group IS the epoch: its summed counts equal
+the generic aggregate exactly, and its averaged `TTFT`/`TPS` are the
+per-request view of the same run. Submitted while peers are still decoding, it
+joins their epoch instead — its prompts trickle in as slots free, and the
+aggregate covers that other traffic too, so only the per-job figures stay
+its own.
 
 ### avgConcurrentSeq
 

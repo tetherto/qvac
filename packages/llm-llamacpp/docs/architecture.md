@@ -490,28 +490,32 @@ sequenceDiagram
     participant IF as LlamaInterface
     participant Bind as Native Binding
     participant Addon as AddonCpp/AddonJs
+    participant Sched as MultiJobScheduler
     participant Model as LlamaModel
     participant Llama as llama.cpp
     
     JS->>IF: run(messages) / run(batchItems)
     IF->>Bind: runJob(handle, inputsArray)
     Bind->>Addon: runJob(inputs) [parse inputs, assign per-item ids]
-    Addon->>Model: processPromptBatch(requests)
-    Model->>Model: scheduler mints job id, push into pending queue [lock-free], wake worker
-    Model-->>Addon: admission { accepted, id, ids? }
+    Addon->>Sched: runJob(input) / runExclusiveJob(finetune)
+    Sched->>Sched: mint job id, queue for a free pool worker
+    Sched-->>Addon: admission { accepted, id, ids? }
     Addon-->>Bind: { accepted, id, ids? }
     Bind-->>IF: { accepted, id, ids? }
     IF-->>JS: QvacResponse (routed by job id)
     
-    Note over Model: Worker thread (continuous batching)
+    Note over Sched,Model: Later, on a scheduler pool worker
+    Sched->>Model: process(input, jobId)
+    Model->>Model: processConcurrent / processConcurrentBatch — arm cancel, push into pending_ [lock-free], wake batch worker
+    
+    Note over Model: Batch worker thread (continuous batching)
     Model->>Model: admit pending into free slots
     
-    loop For each token
-        Addon->>Model: process(std::any)
-        Model->>Llama: llama_decode()
-        Llama-->>Model: tokens
-        Model->>Model: Sample token
-        Model->>Addon: outputCallback(token)
+    loop Per decode step, until every slot finishes
+        Model->>Llama: llama_decode() [one batch, all active slots]
+        Llama-->>Model: logits
+        Model->>Model: sample one token per slot
+        Model->>Addon: outputCallback(token) per slot
         Addon->>Addon: Queue output [lock]
         Addon->>Addon: uv_async_send()
     end
@@ -530,22 +534,25 @@ sequenceDiagram
 | Thread | Runs | Blocks On | Can Call |
 |--------|------|-----------|----------|
 | JavaScript | App code, callbacks | Nothing (event loop) | All JS, addon methods |
-| Processing | Inference | model.process() | model.*, uv_async_send() |
+| Scheduler pool worker (`parallel` of them, spawned at construction) | One admitted job each | `model.process(input, id)` | model.*, uv_async_send() |
+| Batch worker (one, only at `parallel >= 2`) | The shared decode loop over all active slots | `workCv_` when idle | model-internal state under the scheduler mutex |
 
 **Synchronization Primitives:**
 
 | Primitive | Purpose | Held Duration | Risk |
 |-----------|---------|---------------|------|
-| std::mutex | Protect single job state | <1ms | Low (brief) |
-| std::condition_variable | Wake processing thread | N/A | None |
+| std::mutex | Guard scheduler admission (job ids, queue) and the batch scheduler's slot state | <1ms | Low (brief) |
+| std::shared_mutex | `stateMtx_`: many jobs read model state concurrently, reload takes it exclusively | <1ms, reload longer | Low |
+| std::condition_variable | Wake a scheduler pool worker, or the batch worker on new/cancelled work | N/A | None |
 | uv_async_t | Wake JS thread | N/A | None |
 
 **Thread Safety Rules:**
 
 1. ✅ Call addon methods from any thread (runJob, cancel, activate, loadWeights, destroyInstance)
-2. ✅ Processing thread calls model methods
-3. ❌ Don't call JS functions from C++ thread (use uv_async_send)
-4. ❌ Don't call model methods from JS thread
+2. ✅ Scheduler pool workers call the model's inference entry points
+3. ✅ The JS thread may make the admission-time queries and cancels: `activeJobs()` reads the scheduler's admitted count under the scheduler's own mutex, while `activeSlots()`, `supportsBatching()` and `cancelById()` take the model's `stateMtx_` shared — all return promptly
+4. ❌ Don't call JS functions from C++ thread (use uv_async_send)
+5. ❌ Don't run inference from the JS thread — `process()` belongs to a scheduler worker
 
 </details>
 
@@ -827,10 +834,12 @@ Without coordination, a `run()` could interleave with `load()`/`unload()` transi
 
 ### Decision
 
-Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)`. The queue serializes the *admission* section only: `run()`'s wrapped body resolves once the native scheduler has admitted the job and returned its id, so with `parallel >= 2` many admitted jobs generate concurrently while the next admission proceeds. When the effective `rejectWhenBusy` policy is `true` and the pool is full — always the case at `parallel: 1`, the backward-compatible default — the admission fails fast with the consistent busy error:
-- `"Cannot set new job: a job is already set or being processed"`
+Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)`. The queue serializes the *admission* section only: `run()`'s wrapped body resolves once the native scheduler has admitted the job and returned its id, so with `parallel >= 2` many admitted jobs generate concurrently while the next admission proceeds. When the effective `rejectWhenBusy` policy is `true` and the pool is full — always the case at `parallel: 1`, the backward-compatible default — the admission fails fast with the consistent busy error, an `Error` carrying `code === 'RUN_BUSY'`:
+- `"Cannot set new job: a job is already set or being processed"` (branch on the code; the message is prose and may change)
 
 "Full" is measured in scheduler slots (`activeSlots()`), not admitted jobs, because one batch job of N prompts occupies up to N slots; the job count is still used where slots are not the currency (`parallel: 1`, which has no scheduler, and exclusive finetune), so the check takes the max of the two.
+
+A `rejectWhenBusy: false` caller is queued by the native scheduler rather than refused — except against an exclusive finetune, which the scheduler refuses outright, so that call surfaces the same `RUN_BUSY` error instead of waiting for training to finish.
 
 **Note:** C++ level thread safety (multi-job scheduler with per-slot admission ids, whole-model IModelCancel plus per-job IModelCancelById) is handled by the addon-cpp 1.3.x framework; see addon-cpp docs for architecture and decisions.
 
