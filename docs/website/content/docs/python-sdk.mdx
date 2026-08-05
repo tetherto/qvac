@@ -5,11 +5,11 @@ schemaType: TechArticle
 ---
 
 The Python SDK (`tetherto-qvac-sdk` on PyPI) is a full-fidelity client for QVAC: it drives
-the same worker, over the same generated contract, as the TypeScript
-`@qvac/sdk`. Every capability — LLM completion, embeddings, transcription,
-text-to-speech, OCR, translation, diffusion, VLA, plugins — is available from
-Python, and behaves identically to the JS client because the behaviour lives in
-the shared worker, not re-implemented per language.
+the same worker, over the same generated contract, as the [JS/TS SDK](/js-ts-sdk).
+Every capability — LLM completion, embeddings, transcription, text-to-speech,
+OCR, translation, diffusion, VLA, plugins — is available from Python, and
+behaves identically to the JS client because the behaviour lives in the shared
+worker, not re-implemented per language.
 
 It is asyncio-native. The package version tracks the `@qvac/sdk` version it
 speaks (for example `0.15.0`), so a given Python release makes clear exactly
@@ -50,12 +50,12 @@ npm install -g @qvac/sdk@0.15.0
 
 The Python route is recommended for a first run: it pins the worker to the exact
 version this package was generated against, so you never track the version
-yourself. After this, `Client()` finds the worker automatically — no
-configuration.
+yourself.
 
 ### Worker resolution order
 
-`Client()` locates a worker by trying, in order:
+After the worker is installed, `Client()` finds it automatically — no
+configuration. It locates one by trying, in order:
 
 1. Explicit `worker_path` / `bare_path` arguments, or `QVAC_WORKER_PATH` /
    `QVAC_BARE_PATH` environment variables.

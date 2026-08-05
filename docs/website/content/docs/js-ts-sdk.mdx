@@ -1,18 +1,100 @@
 ---
-title: Quickstart
-description: Run your first example using the JS/TS SDK. At the end, you'll find instructions to run any example in this documentation.
-ogImage: /og-sdk-quickstart.png
+title: JS/TS SDK
+description: Install and use the JavaScript/TypeScript client for QVAC.
+ogImage: /og-sdk-installation.png
 schemaType: HowTo
 ---
 
 import { TrackCopy } from '@/components/track-copy'
 
+The JS/TS SDK (`@qvac/sdk` on npm) is the JavaScript/TypeScript client for QVAC.
+It runs the worker in-process (there is no separate transport), and drives every
+QVAC capability through a unified, type-safe API.
+
+For the alternative client, see the [Python SDK](/python-sdk). Both drive the
+same worker over the same generated contract, so capabilities and behaviour are
+identical.
+
 ## Requirements
 
 - Node.js `>= v22.17`
 - npm `>= v10.9`
+- [Bare](https://bare.pears.com) `>= v1.24` (if targeting Bare)
+- [Expo](https://expo.dev) `>= v54` (if targeting mobile)
 
-## Step-by-step
+For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/system-requirements).
+
+## Install
+
+<TrackCopy name="npm_install">
+```bash
+npm i @qvac/sdk
+```
+</TrackCopy>
+
+### Expo
+
+<Steps>
+<Step>
+Install peer dependencies:
+
+```bash
+npm i 'react-native-bare-kit@^0.11.5'
+npm i -D 'bare-pack@^1.5.1'
+npx expo install expo-file-system expo-build-properties expo-device
+```
+
+<Callout type="success">
+**Tip:** use `npx expo install` for all `expo-*` packages to ensure compatibility with your project's Expo SDK version.
+</Callout>
+
+</Step>
+
+<Step>
+Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      ["expo-build-properties", { // [!code ++]
+        "android": { "minSdkVersion": 29 } // [!code ++]
+      }], // [!code ++]
+      "@qvac/sdk/expo-plugin" // [!code ++]
+    ]
+  }
+}
+```
+
+</Step>
+
+<Step>
+Prebuild your project to generate the native files:
+
+```bash
+npx expo prebuild
+```
+</Step>
+
+<Step>
+Build and run it on a **physical device**:
+
+```bash
+npx expo run:ios --device
+# or
+npx expo run:android --device
+```
+</Step>
+</Steps>
+
+<Callout type="info">
+  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
+  You **must** use a physical device.
+</Callout>
+
+## Quickstart
+
+Run your first example using the JS/TS SDK.
 
 <Steps>
 
@@ -91,3 +173,9 @@ Here is the quickstart adapted for Bare:
 ```
 
 For running QVAC on Bare in production, we recommend **[@qvac/bare-sdk](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk)** — a slim, Bare-only assembly where you select addons and register plugins explicitly. It also sets up the bare module shims that examples using `fs` and similar modules rely on.
+
+## API reference
+
+<Card href="/reference/api" title="API reference">
+  `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+</Card>
