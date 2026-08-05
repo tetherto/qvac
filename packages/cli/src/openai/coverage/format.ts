@@ -57,6 +57,8 @@ export function formatCoverageReportHuman(report: CoverageReport, rows: Coverage
   appendUnknownNotice(lines, report)
   appendExtensionsNotice(lines, report)
   lines.push(`Spec: ${report.specSource} (${report.rows.length} endpoints)`)
+  lines.push(`Spec source mode: ${report.specSourceMode}`)
+  lines.push(`Spec SHA-256: ${report.specSha256}`)
   lines.push(`Router: ${report.routerSource} (${report.implementedCount} implemented)`)
   lines.push('')
   lines.push('Coverage by category:')

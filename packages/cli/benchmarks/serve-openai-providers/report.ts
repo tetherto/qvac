@@ -1,6 +1,11 @@
 import { writeFileSync } from 'node:fs'
 import { aggregateMetric } from './metrics'
-import type { AggregateStats, MetricObservation, RawDocument } from './types'
+import type {
+  AggregateStats,
+  MetricObservation,
+  OpenAiApiCoverageSnapshot,
+  RawDocument
+} from './types'
 
 function fmt(value: number | null, digits = 2): string {
   if (value === null) {
@@ -11,6 +16,98 @@ function fmt(value: number | null, digits = 2): string {
 
 function fmtAggregateCounts(stats: AggregateStats): string {
   return `valid=${stats.nValid}, unavailable=${stats.nUnavailable}, failed=${stats.nFailed}, attempted=${stats.nAttempted}`
+}
+
+function fmtCoveragePercent(value: number): string {
+  return value.toFixed(1)
+}
+
+function appendEndpointList(lines: string[], endpoints: string[]): void {
+  if (endpoints.length === 0) {
+    lines.push('- None')
+    return
+  }
+  for (const endpoint of endpoints) {
+    lines.push(`- \`${endpoint}\``)
+  }
+}
+
+function appendOpenAiCoverage(
+  lines: string[],
+  coverage: OpenAiApiCoverageSnapshot | undefined
+): void {
+  lines.push('## OpenAI API capability coverage')
+  lines.push('')
+  lines.push(
+    'Static route coverage only: route presence does not prove behavioral compatibility with OpenAI.'
+  )
+  lines.push('')
+
+  if (coverage === undefined) {
+    lines.push('Coverage snapshot: unavailable (not captured in this benchmark artifact).')
+    lines.push('')
+    return
+  }
+
+  if (coverage.status === 'unavailable') {
+    lines.push('Coverage snapshot: unavailable.')
+    for (const error of coverage.errors) {
+      lines.push(`- ${error}`)
+    }
+    lines.push('')
+    return
+  }
+
+  lines.push(`Source mode: ${coverage.source_mode}`)
+  lines.push(`Captured: \`${coverage.captured_at}\``)
+  lines.push(`Spec source: ${coverage.spec_source}`)
+  lines.push(`Spec SHA-256: \`${coverage.spec_sha256}\``)
+  lines.push(`OpenAI specification endpoints: ${coverage.spec_endpoint_count}`)
+  lines.push(
+    `QVAC router: ${coverage.router_source} (${coverage.router_implemented_count} implemented routes)`
+  )
+  lines.push('')
+  lines.push(
+    `Consumer-primary: ${coverage.consumer_primary.implemented} / ${coverage.consumer_primary.total} (${fmtCoveragePercent(coverage.consumer_primary.percent)}%)`
+  )
+  lines.push(
+    `Primary-AI: ${coverage.primary_ai.implemented} / ${coverage.primary_ai.total} (${fmtCoveragePercent(coverage.primary_ai.percent)}%)`
+  )
+  lines.push('')
+  lines.push('### Consumer-primary gaps')
+  lines.push('')
+  appendEndpointList(lines, coverage.consumer_primary.uncovered)
+  lines.push('')
+  lines.push('### Primary-AI gaps')
+  lines.push('')
+  appendEndpointList(lines, coverage.primary_ai.uncovered)
+  lines.push('')
+  lines.push('### QVAC-specific extensions')
+  lines.push('')
+  appendEndpointList(lines, coverage.extensions)
+  lines.push('')
+  if (coverage.warnings.length > 0) {
+    lines.push('### Coverage warnings')
+    lines.push('')
+    for (const warning of coverage.warnings) {
+      lines.push(`- ${warning}`)
+    }
+    lines.push('')
+  }
+}
+
+export function writeOpenAiCoveragePreview(
+  coverage: OpenAiApiCoverageSnapshot,
+  path: string
+): void {
+  const lines = [
+    '# OpenAI API capability coverage preview',
+    '',
+    'Preview only: no model, provider, performance benchmark, deployment, or publishing step ran.',
+    ''
+  ]
+  appendOpenAiCoverage(lines, coverage)
+  writeFileSync(path, `${lines.join('\n')}\n`, 'utf8')
 }
 
 export function writeReport(raw: RawDocument, path: string): void {
@@ -33,6 +130,11 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push(
     'Client-side comparison of OpenAI-compatible `/v1/chat/completions` across qvac serve, Ollama, and LM Studio using one shared GGUF and one shared SDK path.'
   )
+  if (raw.openai_api_coverage?.status === 'available') {
+    lines.push(
+      `Static QVAC route coverage: consumer-primary ${raw.openai_api_coverage.consumer_primary.implemented}/${raw.openai_api_coverage.consumer_primary.total} (${fmtCoveragePercent(raw.openai_api_coverage.consumer_primary.percent)}%); primary-AI ${raw.openai_api_coverage.primary_ai.implemented}/${raw.openai_api_coverage.primary_ai.total} (${fmtCoveragePercent(raw.openai_api_coverage.primary_ai.percent)}%).`
+    )
+  }
   lines.push('')
   lines.push('## Environment and exact revisions')
   lines.push('')
@@ -52,6 +154,7 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push(JSON.stringify(raw.parity ?? {}, null, 2))
   lines.push('```')
   lines.push('')
+  appendOpenAiCoverage(lines, raw.openai_api_coverage)
   lines.push('## Methodology and metric definitions')
   lines.push('')
   lines.push('- TTFT: request start → first non-empty `delta.content`')
