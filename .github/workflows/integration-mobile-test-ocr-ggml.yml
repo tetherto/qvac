@@ -153,6 +153,23 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Runs after the presigned URLs were written (ocr-ggml-model-urls.json), so
+      # we bake them into a host script that downloads the 4 GGUF OCR models and
+      # adb-pushes them to /data/local/tmp; the phone copies them instead of
+      # fetching from the time-limited presigned S3. ocr-ggml is sharded but the
+      # model set is small, so all 4 are staged onto every shard's device.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # Sharded mode is wired automatically: the composite reads test-groups.json
       # under <addon-workdir>/test/mobile/ and creates one test spec per group.
       - name: Upload to Device Farm
@@ -168,6 +185,8 @@ jobs:
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
           enables-perf: 'true'
           mocha-timeout-ms: '1800000'
+          # Android host pre-stages the 4 GGUF OCR models; empty on iOS.
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
