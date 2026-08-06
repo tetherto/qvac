@@ -3,8 +3,9 @@
 Text-to-speech Bare addon backed by the [`qvac-tts.cpp`][qvac-tts-cpp]
 GGML library.  Wraps multiple engines under one package: **Chatterbox**
 (Turbo English + multilingual), **Supertonic** (v1 English, v2, and
-v3 31-language), and **Parler** (mini/large English + indic 21-language,
-description-conditioned with voice/emotion templates), plus optional
+v3 31-language), **Parler** (mini/large English + indic 21-language,
+description-conditioned with voice/emotion templates), and **CosyVoice3**
+(Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
@@ -55,7 +56,8 @@ platform has no prebuild the package falls back to a local build via
 
 ## Model files
 
-Two engines are wrapped, each with its own GGUF layout under `models/`:
+Four engine families are wrapped (Chatterbox, Supertonic, Parler,
+CosyVoice3), each with its own GGUF layout under `models/`:
 
 ```
 # Chatterbox turbo (English)
@@ -81,6 +83,16 @@ supertonic3-f16.gguf       (also -q8_0 / -q4_0 / -f32)
 parler-mini-v1-q8_0.gguf   (~1.2 GB; also -q6_k)
 parler-large-v1-q8_0.gguf  (~2.8 GB; also -q6_k)
 parler-indic-q8_0.gguf     (~1.3 GB; also -f16 / -f32; 21 Indic languages)
+
+# CosyVoice3 (FunAudioLLM/CosyVoice; Qwen2 speech LM + DiT flow + CausalHiFT;
+# 24 kHz, CPU) — a model DIRECTORY (default models/cosyvoice3/), auto-detected
+# from the cosyvoice3-llm-*.gguf file
+cosyvoice3/
+  cosyvoice3-llm-*.gguf    (~973 MB q8_0 — Qwen2.5 speech LM)
+  cosyvoice3-flow-*.gguf   (~1.3 GB f32 — DiT conditional-flow-matching)
+  cosyvoice3-hift-*.gguf   (~83 MB f32 — CausalHiFT vocoder)
+  voice.gguf               (baked default voice: timbre + prompt tensors)
+  vocab.json  merges.txt   (Qwen2 BPE tokenizer)
 ```
 
 The package converts these from upstream Resemble Chatterbox / Supertone
@@ -100,7 +112,9 @@ npm run convert-models
 Point the addon at a custom location via `files.modelDir` (engine
 auto-detected from the gguf filenames present), or pass explicit
 `files.t3Model` + `files.s3genModel` (Chatterbox) /
-`files.supertonicModel` (Supertonic) / `files.parlerModel` (Parler).
+`files.supertonicModel` (Supertonic) / `files.parlerModel` (Parler) /
+`files.cosyvoiceModelDir` (CosyVoice3 — a directory, see
+[CosyVoice3 instruct](#cosyvoice3-instruct)).
 
 ## Quick start
 
@@ -384,20 +398,46 @@ Parler supports Metal GPU offload on Apple (`useGPU: true` / `nGpuLayers`,
 ~2.25× vs CPU on indic q8_0); other backends fall back to CPU.  It emits
 native 44.1 kHz.
 
+## CosyVoice3 instruct
+
+CosyVoice3 is **instruct-conditioned**: an optional natural-language
+instruction steers dialect / emotion / speed / volume / style on top of a
+baked default voice.  Point the addon at the model directory (auto-detected
+from `cosyvoice3-llm-*.gguf`) and set `instruct` — either a raw instruction
+string, or a structured object with up to one control, resolved by precedence
+`dialect > emotion > speed > volume > style`:
+
+```js
+const model = new TTSGgml({
+  files: { cosyvoiceModelDir: './models/cosyvoice3' },
+  instruct: { emotion: 'happy' } // or { dialect: ... } / { speed: ... } / a raw string
+})
+await model.load()
+await model.run({ input: 'Hello from an on-device C++ pipeline.' })
+```
+
+An unknown `instruct` key or an invalid value throws at construction, listing
+the valid set; with no `instruct` the model runs zero-shot on the baked voice.
+Other CosyVoice3-only options: `promptText` (reference transcript for the baked
+voice) and `streamLeftContextTokens` (native chunk-streaming left context).
+CosyVoice3 runs on **CPU** and emits native **24 kHz**.
+
 ## API overview
 
 ### Constructor — `new TTSGgml(options)`
 
 | Option                    | Type       | Default    | Notes |
 |---------------------------|------------|------------|-------|
-| `files.modelDir`          | string     | —          | Dir containing the two GGUFs |
+| `files.modelDir`          | string     | —          | Dir containing the engine GGUFs (engine auto-detected from the filenames present) |
 | `files.t3Model`           | string     | —          | Overrides `modelDir` for T3 |
 | `files.s3genModel`        | string     | —          | Overrides `modelDir` for S3Gen |
 | `files.supertonicModel`   | string     | —          | Supertonic GGUF (overrides `modelDir`) |
 | `files.parlerModel`       | string     | —          | Parler GGUF — mini/large/indic variant (overrides `modelDir`) |
+| `files.cosyvoiceModelDir` | string     | —          | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + `vocab.json` + `merges.txt`); routes to CosyVoice3 |
+| `files.cosyvoiceLlmModelPath` / `cosyvoiceFlowModelPath` / `cosyvoiceHiftModelPath` | string | — | Per-component overrides for the CosyVoice3 model dir |
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
 | `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
-| `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'` or `'parler'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_PARLER`); auto-detected from the GGUFs present otherwise |
+| `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'parler'` or `'cosyvoice3'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_PARLER` / `ENGINE_COSYVOICE3`); auto-detected from the GGUFs present otherwise |
 | `referenceAudio`          | string     | —          | Mono wav ≥ 5 s for voice cloning |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
@@ -418,6 +458,9 @@ native 44.1 kHz.
 | `maxFrames`               | number     | GGUF max (~30 s) | Parler-only generation cap in decoder steps (~86/s of audio); `0` = model default, 1–9 rejected |
 | `minNewTokens`            | number     | GGUF default | Parler-only minimum tokens before EOS (`-1` = model default) |
 | `normalizeNumbers`        | boolean    | `true`     | Parler-only: expand digits before tokenization (English words; script-native digits on indic) — parler voices raw digits badly |
+| `instruct`                | object \| string | —    | CosyVoice3-only: instruction controls (`dialect` / `emotion` / `speed` / `volume` / `style`, resolved by precedence in that order) or a raw instruction string; an unknown key or invalid value throws (see [CosyVoice3 instruct](#cosyvoice3-instruct)) |
+| `promptText`              | string     | —          | CosyVoice3-only: reference transcript for the baked voice |
+| `streamLeftContextTokens` | number     | —          | CosyVoice3 / Chatterbox: native chunk-streaming left-context tokens |
 | `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
 | `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
@@ -425,7 +468,7 @@ native 44.1 kHz.
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler's validated GPU backend is Apple/Metal (other backends fall back to CPU).  See [Backends & GPU acceleration](#backends--gpu-acceleration) |
-| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, enhancer 48 kHz) |
+| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz) |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
@@ -500,6 +543,7 @@ Runnable demos under `examples/`:
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
+| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz, CPU). `bare examples/cosyvoice-tts.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
@@ -517,7 +561,7 @@ npm run test               # both
 
 Integration tests scan a few candidate `models/` directories for the
 required GGUFs (see `test/utils/downloadModel.js`) and skip cleanly when
-files are absent.  They cover, across both engines:
+files are absent.  They cover, across the engines:
 
 * batch synthesis with full RuntimeStats,
 * sentence-level streaming (`runStream` / `run({ streamOutput: true })`

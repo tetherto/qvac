@@ -13,7 +13,6 @@ import pytest
 from _worker_env import BARE_BIN, WORKER_AVAILABLE
 
 from tetherto.qvac_sdk._generated.sdk_version import SDK_VERSION
-from tetherto.qvac_sdk.bare_rpc_transport import BARE_RPC_AVAILABLE
 from tetherto.qvac_sdk.client import (
     Client,
     WorkerNotFoundError,
@@ -158,10 +157,6 @@ def test_client_raises_when_resolved_paths_do_not_exist(monkeypatch) -> None:
         Client(sdk_dir="/no/such/sdk")
 
 
-@pytest.mark.skipif(
-    not BARE_RPC_AVAILABLE,
-    reason="Client() constructs a BareRpcTransport -- needs the 'bare-rpc' extra",
-)
 def test_client_transport_property_requires_connect() -> None:
     # __init__ only checks these paths exist, not that they're a real worker --
     # any real file will do for this not-yet-connected check.
@@ -170,11 +165,6 @@ def test_client_transport_property_requires_connect() -> None:
         client.transport
 
 
-@pytest.mark.skipif(
-    not BARE_RPC_AVAILABLE,
-    reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-    "(`pip install -e '.[bare-rpc]'`) to run these tests",
-)
 @pytest.mark.skipif(
     not WORKER_AVAILABLE,
     reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",

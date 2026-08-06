@@ -503,6 +503,56 @@ function loadConfigFromAssets(filename) {
 // Model Availability Helpers
 // ============================================================================
 
+// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
+// adb writes on Android 11+); we copy from here instead of downloading over the
+// flaky network. Host side: scripts/generate-prestage-block.js.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function readPrestagedModel(modelName) {
+  if (platform !== 'android') return null
+  try {
+    const src = path.join(PRESTAGED_MODEL_DIR, modelName)
+    const sizePath = `${src}.size`
+    if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
+    const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return null
+    if (fs.statSync(src).size !== expectedSize) return null
+    return { src, expectedSize }
+  } catch (_) {}
+  return null
+}
+
+function prestagedModelPath(modelName) {
+  const staged = readPrestagedModel(modelName)
+  return staged ? staged.src : null
+}
+
+// Require the exact host-recorded byte count on both sides of the app copy so
+// truncated staged files fall through to the normal presigned-S3 download.
+function copyPrestagedModel(modelName, destPath, minBytes) {
+  const staged = readPrestagedModel(modelName)
+  if (!staged || staged.expectedSize < minBytes) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(staged.src, destPath)
+    const size = fs.statSync(destPath).size
+    if (size === staged.expectedSize) {
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${(size / 1024 / 1024).toFixed(1)}MB)`
+      )
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+  return false
+}
+
 /**
  * Ensures IndicTrans model is available
  * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
@@ -533,14 +583,8 @@ async function ensureIndicTransModel() {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned URL
-  const configFilename = 'indictrans-model-urls.json'
-  const urlConfig = loadConfigFromAssets(configFilename)
-
-  if (!urlConfig || !urlConfig.modelUrl) {
-    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
-  }
-
+  // Mobile: resolve the writable cache path first, then prefer a cached or
+  // pre-staged model before touching the (flaky) presigned-S3 network.
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'translation-models', 'indictrans')
   fs.mkdirSync(modelsDir, { recursive: true })
@@ -559,6 +603,20 @@ async function ensureIndicTransModel() {
       return destPath
     }
     console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
+  }
+
+  // The pre_test phase adb-pushes the model to /data/local/tmp; copy it into the
+  // cache and skip the S3 download.
+  if (copyPrestagedModel(modelFilename, destPath, 100 * 1024 * 1024)) {
+    return destPath
+  }
+
+  // Mobile: Download from presigned URL
+  const configFilename = 'indictrans-model-urls.json'
+  const urlConfig = loadConfigFromAssets(configFilename)
+
+  if (!urlConfig || !urlConfig.modelUrl) {
+    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
   }
 
   await downloadFile(urlConfig.modelUrl, destPath)
@@ -1175,6 +1233,8 @@ module.exports = {
   // Model helpers
   ensureIndicTransModel,
   ensureBergamotModel,
+  copyPrestagedModel,
+  prestagedModelPath,
 
   // Utilities
   createLogger,

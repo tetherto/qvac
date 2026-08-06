@@ -147,6 +147,18 @@ public:
 
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
 
+  /// Why this sequence's generation stopped, once the scheduler has finalized
+  /// the driver (`None` before that, for a prefill-only slot, or on a
+  /// cancel/decode-error leg, which skips `onGenerationFinished`). Per
+  /// sequence, so unlike the shared per-context vision counters it can be
+  /// reported for one request without misattribution. Declared on both bases
+  /// with the same signature as `LlmContext::getGenerationStopReason`, like
+  /// `getNPast`/`getNSlides` — the concrete contexts' single `override`
+  /// satisfies both.
+  [[nodiscard]] virtual GenerationStopReason getGenerationStopReason() const {
+    return GenerationStopReason::None;
+  }
+
   // Apply the per-request `remove_thinking_from_context` toggle to the
   // driver. The single-prompt path goes through `applyGenerationParams`
   // (which restores on scope exit); the batch path uses this setter

@@ -1719,6 +1719,8 @@ TextLlmContext::applyGenerationParams(const GenerationParams& overrides) {
 
 void TextLlmContext::stop() { stopGeneration_.store(true); }
 
+void TextLlmContext::resetStopFlag() { stopGeneration_.store(false); }
+
 void TextLlmContext::resetState(bool resetStats) {
   // Reset the n_past
 

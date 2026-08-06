@@ -82,7 +82,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.6.0",
+    "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-ffmpeg": "^1.4.0",
     "bare-fs": "^4.5.6",
