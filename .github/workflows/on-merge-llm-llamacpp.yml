@@ -122,6 +122,16 @@ jobs:
           name: prebuilds
           path: packages/llm-llamacpp/prebuilds
 
+      # Rebuild the TypeScript wrapper before publishing so the generated
+      # JavaScript and declaration files are present in the published tarball.
+      - name: Install dependencies
+        working-directory: packages/llm-llamacpp
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/llm-llamacpp
+        run: npm run build:ts
+
       - name: Scope package as @tetherto for GPR
         shell: bash
         run: |
@@ -180,6 +190,16 @@ jobs:
         with:
           name: prebuilds
           path: packages/llm-llamacpp/prebuilds
+
+      # Rebuild the TypeScript wrapper before publishing so the generated
+      # JavaScript and declaration files are present in the published tarball.
+      - name: Install dependencies
+        working-directory: packages/llm-llamacpp
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/llm-llamacpp
+        run: npm run build:ts
 
       - name: Scope package as @qvac for npm
         working-directory: packages/llm-llamacpp
