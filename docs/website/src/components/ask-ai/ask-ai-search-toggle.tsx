@@ -66,18 +66,35 @@ function SmallSearchTrigger({ className }: { className?: string }) {
   );
 }
 
+type SearchToggleSlotProps = {
+  className?: string;
+  /** Passed by the layout; the inner triggers already handle it. */
+  hideIfDisabled?: boolean;
+};
+
 /**
- * Drop-in replacement for the Fumadocs `searchToggle.components.lg`
- * slot. Renders the Search pill alongside a compact "Ask AI" button
- * inside a `w-full` flex row so they share the notebook top-nav slot:
- * the Search pill takes the remaining space (via `flex-1`) and
- * shrinks just enough to make room for the Ask AI button on its
- * right. The button uses the default `header` variant weight
- * (`font-medium` from the shared base classes).
+ * Fills the Fumadocs `slots.searchTrigger.full` slot. Renders the
+ * Search pill alongside a compact "Ask AI" button inside a `w-full`
+ * flex row so they share the notebook top-nav slot: the Search pill
+ * takes the remaining space (via `flex-1`) and shrinks just enough to
+ * make room for the Ask AI button on its right. The button uses the
+ * default `header` variant weight (`font-medium` from the shared base
+ * classes).
+ *
+ * Applying the layout's `className` is required, not cosmetic: it
+ * carries the `max-w-*` cap for the slot. Without it this `w-full` row
+ * consumes the whole header and collapses the nav title's `flex-1`
+ * container (basis 0) to zero width, hiding the logo.
+ *
+ * `ps-0` is re-applied last on purpose. Fumadocs renders the slot as the
+ * search *button* itself, so the `ps-2.5` it puts in `className` is meant
+ * to override that button's own `ps-2`. Here the slot is a row wrapper,
+ * so the same class would instead indent the row and shave ~10px off the
+ * Search pill. Dropping it keeps the pill at its `ps-2`.
  */
-export function AskAISearchToggleLarge() {
+export function AskAISearchToggleLarge({ className }: SearchToggleSlotProps) {
   return (
-    <div className="flex w-full items-center gap-2">
+    <div className={cn('flex w-full items-center gap-2', className, 'ps-0')}>
       <LargeSearchTrigger />
       <AskAIButton variant="header" className="font-normal" />
     </div>
@@ -85,14 +102,14 @@ export function AskAISearchToggleLarge() {
 }
 
 /**
- * Drop-in replacement for the Fumadocs `searchToggle.components.sm`
- * slot used on the mobile top bar. Pairs the icon-only search button
- * with an icon-only "Ask AI" button so the user has a tap target for
- * either flow without sacrificing horizontal space.
+ * Fills the Fumadocs `slots.searchTrigger.sm` slot used on the mobile
+ * top bar. Pairs the icon-only search button with an icon-only
+ * "Ask AI" button so the user has a tap target for either flow
+ * without sacrificing horizontal space.
  */
-export function AskAISearchToggleSmall() {
+export function AskAISearchToggleSmall({ className }: SearchToggleSlotProps) {
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center gap-1', className)}>
       <SmallSearchTrigger />
       <AskAIButton variant="mobile-header" ariaLabel="Ask the AI assistant" />
     </div>

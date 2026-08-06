@@ -1,0 +1,174 @@
+name: On Merge Trigger (Model Fit)
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/model-fit/**"
+      - ".github/workflows/*model-fit*.yml"
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: false
+        default: "dev"
+        type: choice
+        options:
+          - latest
+          - dev
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+jobs:
+  publish-logic:
+    runs-on: ubuntu-latest
+    environment: release
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        uses: tetherto/qvac-actions/npm-publish-logic@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: model-fit
+          package-json-path: packages/model-fit/package.json
+          changelog-path: packages/model-fit/CHANGELOG.md
+
+  # Build prebuilds (build + merge only, no publishing)
+  build:
+    needs:
+      - publish-logic
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_release == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-model-fit.yml
+    secrets: inherit
+    with:
+      workdir: "packages/model-fit"
+
+  # Publish to GitHub Package Registry (GPR) for non-release branches
+  publish-gpr:
+    needs:
+      - build
+      - publish-logic
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    environment: release
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: packages/model-fit/prebuilds
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+          name-suffix: "-mono"
+          workdir: packages/model-fit
+
+  # Publish to NPM for release branches
+  publish-npm:
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+    if: >-
+      !cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: npm
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: packages/model-fit/prebuilds
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+        with:
+          workdir: packages/model-fit
+          tag: ${{ inputs.npm_tag }}
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-actions/publish-library-to-npm@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+        with:
+          tag: ${{ steps.dist-tag.outputs.tag }}
+          workdir: packages/model-fit
+
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
+    needs: [publish-npm]
+    if: >-
+      !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "model-fit"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}

@@ -58,10 +58,8 @@ jobs:
           .venv/bin/python3 -m mypy scripts
           .venv/bin/python3 -m mypy tests
 
-      # Fast leg: mocked unit tests only. The real-worker tests (transport, poc,
-      # conformance corpus, orchestrate tool loop, disconnect) skip themselves
-      # here — no worker is built and bare-rpc isn't installed — and run in the
-      # test-e2e-smoke-gated on-pr-sdk-python-e2e.yml instead, which is long (it
-      # downloads models).
+      # Fast leg: mocked unit tests + transport unit tests that do not need a
+      # worker. Real-worker tests skip themselves here (no worker built) and run
+      # in the test-e2e-smoke-gated on-pr-sdk-python-e2e.yml instead.
       - name: Test (unit)
         run: .venv/bin/python3 -m pytest tests/ -v

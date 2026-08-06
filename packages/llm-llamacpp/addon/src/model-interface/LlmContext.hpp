@@ -257,6 +257,14 @@ public:
   virtual void stop() = 0;
 
   /**
+   * Clears a pending stop request no run consumed. stop() only sets a flag
+   * read at fixed points of the eval loop, so a cancel landing after a run's
+   * last check (its completion tail) survives it; the next run must start
+   * unpoisoned.
+   */
+  virtual void resetStopFlag() = 0;
+
+  /**
    * The get context method. It returns the context.
    *
    * @return - the context.

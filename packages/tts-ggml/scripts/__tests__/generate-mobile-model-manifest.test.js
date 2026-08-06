@@ -21,6 +21,7 @@ const {
   Q4_MODELS,
   Q8_MODELS,
   LAVASR_MODELS,
+  COSYVOICE_MODELS,
   QUALITY_MODELS
 } = require('../generate-mobile-model-manifest')
 
@@ -30,12 +31,39 @@ function fakePresign(entry) {
   return { name: entry.name, targetName: entry.targetName, url: `signed:${entry.s3Key}` }
 }
 
-test('the manifest exposes q4, q8, lavasr and quality sections', () => {
+test('the manifest exposes q4, q8, lavasr, cosyvoice and quality sections', () => {
   const { manifest } = buildManifest(fakePresign)
   assert.ok(Array.isArray(manifest.q4) && manifest.q4.length > 0, 'q4 section is populated')
   assert.ok(Array.isArray(manifest.q8) && manifest.q8.length > 0, 'q8 section is populated')
   assert.equal(manifest.lavasr.length, 2, 'lavasr section has the enhancer + denoiser')
+  assert.equal(manifest.cosyvoice.length, 6, 'cosyvoice section has the 6 model-dir files')
   assert.equal(manifest.quality.length, 1, 'quality section has the mobile Whisper model')
+})
+
+test('the cosyvoice section targets the on-device cosyvoice3/ subdir the resolver scans', () => {
+  const { manifest } = buildManifest(fakePresign)
+  assert.deepEqual(
+    manifest.cosyvoice.map((e) => e.targetName),
+    [
+      'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+      'cosyvoice3/cosyvoice3-flow-f32.gguf',
+      'cosyvoice3/cosyvoice3-hift-f32.gguf',
+      'cosyvoice3/voice.gguf',
+      'cosyvoice3/vocab.json',
+      'cosyvoice3/merges.txt'
+    ]
+  )
+})
+
+test('the cosyvoice entries are signed from the published cosy_voice registry paths', () => {
+  const { manifest } = buildManifest(fakePresign)
+  for (const entry of manifest.cosyvoice) {
+    assert.match(entry.url, /ggml\/cosy_voice\/2026-07-23\//)
+  }
+  // The registry publishes the voice as `voice-en.gguf` but it is staged as
+  // `voice.gguf` (the name the engine's model_dir resolves).
+  const voice = manifest.cosyvoice.find((e) => e.targetName === 'cosyvoice3/voice.gguf')
+  assert.match(voice.url, /voice-en\.gguf$/)
 })
 
 test('the quality model uses a pinned public URL and the on-device whisper directory', () => {
@@ -76,7 +104,7 @@ test('LAVASR_MODELS keeps the fp16 registry key / on-disk target split', () => {
 test('signedCount counts each distinct GGUF once across all sections', () => {
   const { signedCount } = buildManifest(fakePresign)
   const distinct = new Set(
-    [...Q4_MODELS, ...Q8_MODELS, ...LAVASR_MODELS].map((entry) => entry.name)
+    [...Q4_MODELS, ...Q8_MODELS, ...LAVASR_MODELS, ...COSYVOICE_MODELS].map((entry) => entry.name)
   )
   assert.equal(signedCount, distinct.size)
 })
