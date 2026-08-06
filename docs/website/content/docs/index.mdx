@@ -108,7 +108,7 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   System overview diagram
 </object>
 
-_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Two clients drive the same worker — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)) and Python (`tetherto-qvac-sdk`, asyncio-native) — so capabilities and behaviour are identical either way.
+_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Two clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)) and Python (`tetherto-qvac-sdk`, asyncio-native) — and both call into the same underlying runtime, so capabilities and behavior are identical either way.
 
 Additionally, QVAC provides a CLI with development tools and an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). _You can use the HTTP server as a local model provider to connect any AI tool, harness, or system._
 

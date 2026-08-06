@@ -10,10 +10,6 @@ The Python SDK (`tetherto-qvac-sdk` on PyPI) is the Python client for QVAC.
 It is asyncio-native, drives the worker over `bare-rpc`, and exposes every
 QVAC capability through a typed API.
 
-For the alternative client, see the [JS/TS SDK](/js-ts-sdk). Both drive the
-same worker over the same generated contract, so capabilities and behavior are
-identical.
-
 ## Requirements
 
 - Python `>= 3.10`
@@ -28,7 +24,7 @@ For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [Sys
 Install the package:
 
 ```bash
-pip install "tetherto-qvac-sdk[bare-rpc]"
+pip install "tetherto-qvac-sdk"
 ```
 
 The `bare-rpc` extra is required — it is the wire transport the client uses to reach the worker. Optional extras: `vla`, `notebook`.

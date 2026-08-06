@@ -141,6 +141,10 @@ These checks are informational. They never cause `qvac doctor` to exit non-zero,
 
 ## Optional tools
 
+<Callout type="info">
+  This section applies to the JS/TS client — the tools listed here are checked by `qvac doctor`, which today only covers the JS/TS stack. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
+
 Only required if you use the corresponding feature. The checker warns when they are missing but does not fail.
 
 | Tool | Required for |
@@ -150,6 +154,10 @@ Only required if you use the corresponding feature. The checker warns when they 
 | [Bun](https://bun.sh) | Building the SDK from source or running the monorepo development workflow. |
 
 ## Project
+
+<Callout type="info">
+  This section applies to the JS/TS client — the check below runs against `@qvac/sdk` in a Node.js/Bun project layout. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
 
 | Check | Notes |
 | --- | --- |
