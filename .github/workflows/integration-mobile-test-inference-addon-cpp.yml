@@ -212,13 +212,11 @@ jobs:
       - name: Install Bare tooling
         run: npm install -g --force bare bare-make
 
-      - name: Setup CMake on macOS
-        run: |
-          cd ..
-          curl -L https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz -o cmake-3.31.6-macos-universal.tar.gz
-          tar -xzf cmake-3.31.6-macos-universal.tar.gz
-          echo "$PWD/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
-
+      # No CMake install step on purpose: bare-make spawns its OWN bundled CMake
+      # (lib/generate.js -> require('cmake-runtime/spawn') -> cmake-runtime-darwin-universal)
+      # and never consults PATH, so a system CMake is unnecessary here. Verified by
+      # running `bare-make generate` with no cmake resolvable on PATH. The desktop
+      # workflows do need one because they invoke `cmake --preset` directly.
       - name: Build iOS prebuild
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |

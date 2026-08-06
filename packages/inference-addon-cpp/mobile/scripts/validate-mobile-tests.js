@@ -1,25 +1,37 @@
 #!/usr/bin/env node
 'use strict'
 
-// Staleness check: re-derives the expected output (tests, workers,
-// integration.auto.cjs and the ported native sources) from the DESKTOP suites and
-// fails if what is on disk differs — a desktop source changed without
-// regenerating, a suite added/removed, or a hand-edit. CI always regenerates, so
-// this mainly protects local builds. Fix with `npm run test:mobile:generate`.
+// Staleness check: re-derives EVERY generated artefact from the DESKTOP suites —
+// tests and workers, integration.auto.cjs, test-groups.json, the ported native
+// sources, binding.cpp and sources.cmake — and fails if what is on disk differs (a
+// desktop source changed without regenerating, a suite added/removed, or a
+// hand-edit). CI always regenerates, so this mainly protects local builds. Fix with
+// `npm run test:mobile:generate`.
 
 const fs = require('fs')
 
 const {
   autoFile,
+  groupsFile,
   nativeBindingFile,
+  nativeSourcesCmake,
   expectedIntegrationFiles,
   expectedEntries,
   expectedAutoCjs,
+  expectedTestGroups,
   expectedNativeFiles,
   expectedNativeBinding,
+  expectedNativeSourcesCmake,
   listOnDiskIntegrationFiles,
   listOnDiskNativeFiles
 } = require('./lib/desktop-suites.js')
+
+// Compare one generated file against what the generator would emit now.
+function checkGenerated(problems, file, label, expected) {
+  const actual = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null
+  if (actual === null) problems.push(['Missing', [label]])
+  else if (actual !== expected) problems.push(['Stale', [label]])
+}
 
 function main() {
   const expected = expectedIntegrationFiles()
@@ -36,13 +48,14 @@ function main() {
   if (extra.length) problems.push(['Unexpected (no desktop source — mobile-only?)', extra])
   if (differing.length) problems.push(['Drifted from desktop source', differing])
 
-  const expectedAuto = expectedAutoCjs(expectedEntries())
-  const actualAuto = fs.existsSync(autoFile) ? fs.readFileSync(autoFile, 'utf8') : null
-  if (actualAuto === null) {
-    problems.push(['Missing', ['test/mobile/integration.auto.cjs']])
-  } else if (actualAuto !== expectedAuto) {
-    problems.push(['Stale', ['test/mobile/integration.auto.cjs']])
-  }
+  const entries = expectedEntries()
+
+  checkGenerated(problems, autoFile, 'test/mobile/integration.auto.cjs', expectedAutoCjs(entries))
+
+  // test-groups.json decides which runners execute: sharded mode never runs an entry
+  // that is absent from every group, so a stale map silently DROPS tests rather than
+  // failing. Worth validating for exactly that reason.
+  checkGenerated(problems, groupsFile, 'test/mobile/test-groups.json', expectedTestGroups(entries))
 
   // Native side: the ported desktop bindings and the generated unified module.
   const expectedNative = expectedNativeFiles()
@@ -56,14 +69,21 @@ function main() {
   if (nativeExtra.length) problems.push(['Unexpected native file (no desktop source)', nativeExtra])
   if (nativeDrift.length) problems.push(['Native port drifted from desktop', nativeDrift])
 
-  const actualBinding = fs.existsSync(nativeBindingFile)
-    ? fs.readFileSync(nativeBindingFile, 'utf8')
-    : null
-  if (actualBinding === null) {
-    problems.push(['Missing', ['generated/native/binding.cpp']])
-  } else if (actualBinding !== expectedNativeBinding()) {
-    problems.push(['Stale', ['generated/native/binding.cpp']])
-  }
+  checkGenerated(
+    problems,
+    nativeBindingFile,
+    'generated/native/binding.cpp',
+    expectedNativeBinding()
+  )
+
+  // sources.cmake is the build's source list (CMake can't glob files that may not
+  // exist at configure time), so a stale list silently omits a ported binding.
+  checkGenerated(
+    problems,
+    nativeSourcesCmake,
+    'generated/native/sources.cmake',
+    expectedNativeSourcesCmake()
+  )
 
   if (problems.length) {
     console.error('❌ Mobile tests are out of sync with the desktop suite\n')
@@ -77,7 +97,7 @@ function main() {
 
   console.log(
     `✅ Mobile tests match the desktop suite (${expected.size} file(s), ` +
-      `${expectedEntries().length} on-device runner(s))`
+      `${entries.length} on-device runner(s))`
   )
 }
 
