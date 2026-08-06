@@ -61,6 +61,17 @@
         }
       }
     },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-ocr-ggml-rtf.js",
+          "manualDir": "packages/ocr-ggml/benchmarks/manual-results"
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
