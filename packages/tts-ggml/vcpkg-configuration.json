@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "4dbe15d8c3a181d691289739c9531a09d46eae27",
+    "baseline": "8d7bbc5e3dc27ddcac7c5f881676f83ca7320f71",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -19,9 +19,9 @@
     },
     {
       "kind": "git",
-      "reference": "53a22b98e6ea4d90d7532c8540db7d3300ba70ae",
-      "baseline": "53a22b98e6ea4d90d7532c8540db7d3300ba70ae",
-      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
+      "reference": "fed8ffb4449bcc7d22c59bf5ba1a2fc27e11dfad",
+      "baseline": "fed8ffb4449bcc7d22c59bf5ba1a2fc27e11dfad",
+      "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
       "packages": ["tts-cpp"]
     }
   ]

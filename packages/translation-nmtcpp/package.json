@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "8.3.1",
+  "version": "9.0.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "npm run build:ts && git diff --exit-code -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js && npm run test:prestage",
+    "test:prestage": "node --test scripts/__tests__/generate-prestage-block.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js",
     "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
@@ -95,7 +96,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-path": "^3.0.0"
   },
