@@ -70,8 +70,9 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    # Slow Pixel devices can use about 107 minutes of the total job budget.
-    timeout-minutes: 150
+    # Functional shards can spend up to 120 minutes in Device Farm plus queue
+    # time; retain enough budget for build, scheduling, and log collection.
+    timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 180 || 150 }}
     continue-on-error: true
     permissions:
       contents: read
@@ -301,6 +302,9 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # Functional multi-spec runs need headroom beyond Device Farm's
+          # 120-minute execution ceiling for normal queue variance.
+          max-wait-time-seconds: ${{ !inputs.run_rtf_benchmarks && '9000' || '7200' }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'

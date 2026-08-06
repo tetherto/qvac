@@ -1428,4 +1428,12 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
     workflow,
     /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
   )
+  assert.match(
+    workflow,
+    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
+  )
+  assert.match(
+    workflow,
+    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
+  )
 })
