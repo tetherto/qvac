@@ -102,6 +102,7 @@ export type {
 } from '@/profiling/types'
 export type { ProfilerMode } from '@/schemas/index'
 export { nowMs } from '@/profiling/clock'
+export { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 export {
   enable,
   disable,
