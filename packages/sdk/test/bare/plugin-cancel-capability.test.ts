@@ -1,5 +1,9 @@
 import test from 'brittle'
-import { pluginHandlerDefinitionRuntimeSchema, type PluginHandlerCancel } from '@/schemas/plugin'
+import {
+  ADDON_ASR,
+  pluginHandlerDefinitionRuntimeSchema,
+  type PluginHandlerCancel
+} from '@/schemas/plugin'
 
 // -----------------------------------------------------------------------------
 // Built-in plugin cancel-capability truth table — Bare runtime tests.
@@ -25,6 +29,7 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     { ttsPlugin },
     { ocrPlugin },
     { diffusionPlugin },
+    { audioGenPlugin },
     { vlaPlugin },
     { classificationPlugin }
   ] = await Promise.all([
@@ -36,9 +41,15 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     import('@/server/bare/plugins/tts-ggml/plugin'),
     import('@/server/bare/plugins/ggml-ocr/plugin'),
     import('@/server/bare/plugins/sdcpp-generation/plugin'),
+    import('@/server/bare/plugins/audiogen-ggml/plugin'),
     import('@/server/bare/plugins/ggml-vla/plugin'),
     import('@/server/bare/plugins/ggml-classification/plugin')
   ])
+
+  t.is(whisperPlugin.addonPackage, ADDON_ASR, 'whisper uses the unified ASR addon')
+  t.is(parakeetPlugin.addonPackage, ADDON_ASR, 'parakeet uses the unified ASR addon')
+  t.is(whisperPlugin.logging?.namespace, ADDON_ASR, 'whisper uses shared ASR log routing')
+  t.is(parakeetPlugin.logging?.namespace, ADDON_ASR, 'parakeet uses shared ASR log routing')
 
   const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
     [llmPlugin.modelType]: {
@@ -73,6 +84,9 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
       videoStream: { scope: 'model', hard: true },
       upscaleStream: { scope: 'none' }
     },
+    [audioGenPlugin.modelType]: {
+      audioGenStream: { scope: 'model', hard: true }
+    },
     [vlaPlugin.modelType]: {
       vlaRun: { scope: 'model', hard: true },
       vlaHparams: { scope: 'none' }
@@ -96,6 +110,7 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     ttsPlugin as unknown as BuiltinPlugin,
     ocrPlugin as unknown as BuiltinPlugin,
     diffusionPlugin as unknown as BuiltinPlugin,
+    audioGenPlugin as unknown as BuiltinPlugin,
     vlaPlugin as unknown as BuiltinPlugin,
     classificationPlugin as unknown as BuiltinPlugin
   ]

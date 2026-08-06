@@ -24,6 +24,7 @@ import {
   nowMs,
   shouldProfile,
   shouldIncludeServerBreakdown,
+  shouldIncludeResourceGauges,
   generateId as createProfileId,
   createProfilingMeta,
   createProfilingDisabledMeta,
@@ -321,6 +322,7 @@ async function sendProfiled<T extends Request>(
   const requestType = request.type
   const profileId = createProfileId()
   const includeServer = shouldIncludeServerBreakdown(options?.profiling)
+  const includeResources = shouldIncludeResourceGauges(options?.profiling)
   const timings = createClientTimings(profileId, requestType)
 
   try {
@@ -331,7 +333,7 @@ async function sendProfiled<T extends Request>(
     const req = rpc.request(getNextCommandId())
     logger.debug('RPC Client sending:', summarizeRequest(request))
 
-    const profilingMeta = createProfilingMeta(profileId, includeServer)
+    const profilingMeta = createProfilingMeta(profileId, includeServer, includeResources)
     const requestWithMeta = injectProfilingMetaIntoObject(parsedRequest, profilingMeta)
 
     const stringifyStart = nowMs()
@@ -443,6 +445,7 @@ async function* streamProfiled<T extends Request>(
   const requestType = request.type
   const profileId = createProfileId()
   const includeServer = shouldIncludeServerBreakdown(options?.profiling)
+  const includeResources = shouldIncludeResourceGauges(options?.profiling)
   const timings = createClientStreamTimings(profileId, requestType)
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined
 
@@ -454,7 +457,7 @@ async function* streamProfiled<T extends Request>(
     const req = rpc.request(getNextCommandId())
     logger.debug('RPC Client streaming:', summarizeRequest(request))
 
-    const requestMeta = createProfilingMeta(profileId, includeServer)
+    const requestMeta = createProfilingMeta(profileId, includeServer, includeResources)
     const requestWithMeta = injectProfilingMetaIntoObject(parsedRequest, requestMeta)
 
     const stringifyStart = nowMs()
@@ -601,6 +604,7 @@ async function duplexProfiled<T extends Request>(
   const requestType = request.type
   const profileId = createProfileId()
   const includeServer = shouldIncludeServerBreakdown(options?.profiling)
+  const includeResources = shouldIncludeResourceGauges(options?.profiling)
   const timings = createClientStreamTimings(profileId, requestType)
 
   let session: Awaited<ReturnType<typeof createDuplexSession>>
@@ -612,7 +616,7 @@ async function duplexProfiled<T extends Request>(
 
     logger.debug('RPC Client duplex:', summarizeRequest(request))
 
-    const requestMeta = createProfilingMeta(profileId, includeServer)
+    const requestMeta = createProfilingMeta(profileId, includeServer, includeResources)
     const requestWithMeta = injectProfilingMetaIntoObject(parsedRequest, requestMeta)
 
     const stringifyStart = nowMs()

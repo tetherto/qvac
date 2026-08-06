@@ -16,9 +16,11 @@
 // `SelfAttentionTransformer` — new graph work, no upstream reference. Tensor
 // names `dit.*`/`vlfusion.*`/`embodiment.*` (this package's own convention).
 //
-// Embodiment conditioning (`CategorySpecificLinear`/`CategorySpecificMLP`) is
-// sliced to ONE embodiment at conversion time — the `embodiment.*` tensors are
-// plain dense weights, no runtime embodiment-ID input.
+// Embodiment conditioning (`CategorySpecificLinear`/`CategorySpecificMLP`):
+// multi-embodiment GGUFs store one weight row per shipped cat_id (rank-3/2
+// `embodiment.*` tensors) plus a tag table; the load-time-selected row is
+// sliced to plain 2-D/1-D weights at load (grootSliceEmbodiment). v1 GGUFs bake
+// a single embodiment at conversion time (plain 2-D `embodiment.*`, no table).
 
 #include <memory>
 #include <string>
@@ -27,6 +29,12 @@
 #include <ggml.h>
 
 #include "model-interface/vla_model.hpp"
+
+// Declared at GLOBAL scope on purpose: gguf.h is not pulled into this header,
+// and declaring it inside the namespace below would introduce a DISTINCT
+// qvac_lib_infer_vla_ggml::gguf_context that shadows the real one wherever
+// gguf.h is also included.
+struct gguf_context;
 
 namespace qvac_lib_infer_vla_ggml {
 
@@ -185,8 +193,10 @@ struct GrootDitWeights {
 };
 
 // ── Embodiment-conditioned encode/decode, sliced to one embodiment ──────
-// Each is a plain 2-layer MLP now (category dim already indexed out at
-// conversion time) — no runtime embodiment-ID branching.
+// After load these are plain 2-layer MLPs (the category/row dim has been
+// indexed out — at conversion time for v1 GGUFs, or at load by
+// grootSliceEmbodiment for multi-embodiment GGUFs) — no runtime embodiment-ID
+// branching in the graph.
 
 struct GrootLinearWeights {
   struct ggml_tensor* weight; // [in, out] layout (CategorySpecificLinear does x
@@ -428,6 +438,121 @@ void grootDeriveMRopePositions(
     const int32_t* tokens, int nTokens, int imageTokenId, int gh, int gw,
     int32_t* out);
 
+// ── Multi-embodiment load-time selection (pure, test-hooked) ────────────
+// Resolves a requested embodiment tag against a multi-embodiment GGUF's table
+// into the concrete row to slice + the camera count to use. Pulled out of
+// grootLoadModel so the selection + all its error paths can be unit-tested
+// without a full (multi-GB) model load (test_groot_embodiment_resolve.cpp).
+struct GrootEmbodimentSelection {
+  std::string tag;
+  int cat_id;
+  int row; // stored-row index to slice; -1 = single-embodiment (no slice)
+  int num_cameras; // resolved per-embodiment camera count
+};
+
+// `tags`/`catIds` are the full tag -> cat_id map (may be empty). `storedCatIds`
+// lists the cat_ids actually shipped in this GGUF (empty => v1 single-
+// embodiment). `storedNumCameras` is the per-stored-row camera count (0 =
+// unknown). `bakedTag`/`bakedCatId` are the v1 groot.embodiment_tag/_cat_id
+// (also the fallback when the full map is absent). `defaultTag` is the GGUF's
+// groot.embodiment.default; an unset `request` => use `defaultTag`.
+// `defaultNumCameras` is the top-level groot.num_cameras fallback.
+//
+// `request.cat_id` selects by the checkpoint's numeric embodiment id instead of
+// a tag; `request.num_cameras` overrides the stored count for the selected row,
+// which is the only way to run a row whose count was unknown at conversion
+// time.
+//
+// Throws std::runtime_error on: a request carrying both a tag and a cat_id; a
+// single-embodiment GGUF asked for a non-baked tag/id; an unknown tag; a cat_id
+// not in the ship set; or a resolved num_cameras that is unknown/invalid (0 or
+// > 64) with no override supplied.
+//
+// PUBLIC ERROR-CODE CONTRACT: every throw here is prefixed
+// "grootResolveEmbodiment:" and the JS wrapper matches that prefix to report
+// INVALID_CONFIG (see NATIVE_ERR_MARKERS in src/index.ts). Rejections from this
+// function are request errors by construction — it runs before any weight I/O,
+// so a failure past it is an I/O/allocation fault and must NOT wear this
+// prefix.
+GrootEmbodimentSelection grootResolveEmbodiment(
+    const std::vector<std::string>& tags, const std::vector<int>& catIds,
+    const std::vector<int>& storedCatIds,
+    const std::vector<int>& storedNumCameras, const std::string& bakedTag,
+    int bakedCatId, const std::string& defaultTag,
+    const VlaEmbodimentRequest& request, int defaultNumCameras);
+
+// Validates one CategorySpecificLinear layer's stored-row dimensions against
+// the embodiment table before its selected row is sliced out. `weightRowDim` is
+// the weight's outermost extent (ne[2]) and `biasRowDim` the bias's (ne[1]);
+// `nStored` is the length of groot.embodiment.stored_cat_ids and `rowIndex` the
+// row the resolver picked.
+//
+// The row count MUST come from the table rather than from ggml_n_dims: a
+// one-row ship set (`--embodiments <one tag>`) stores ne=[out,in,1], and
+// ggml_n_dims collapses that trailing singleton, so a rank test cannot tell it
+// apart from a v1 already-sliced 2-D weight. Requiring both row dimensions to
+// equal `nStored` is therefore both the multi/v1 discriminator and the
+// metadata-vs-tensor integrity check.
+//
+// Throws std::runtime_error if `nStored` is not a sane row count (<= 0 or >
+// 64), `rowIndex` is out of range for it, or either row dimension disagrees
+// with it. Kept pure (no ggml types) so every case is unit-testable without a
+// fixture.
+void grootCheckEmbodimentSliceShape(
+    int64_t weightRowDim, int64_t biasRowDim, int64_t nStored, int rowIndex);
+
+// The opposite integrity check to the one above, for the case where the
+// resolver found NO usable ship-set table and the load is therefore taking the
+// v1 single-embodiment path. `weightRowDim` is the weight's outermost extent
+// (ne[2]).
+//
+// A v1 weight has one row. More than one means the file carries a stored bank
+// whose table could not be read, and nothing downstream would notice: the
+// pre-transpose step bails on the rank, and the fallback graph then hands a
+// rank-3 tensor to ggml_mul_mat, where `1 % nStored != 0` trips
+// GGML_ASSERT(ggml_can_mul_mat) and aborts the process on the FIRST infer, long
+// after a load that looked successful. A GGUF is untrusted input, so this has
+// to be a catchable load error instead.
+//
+// Throws std::runtime_error if `weightRowDim` > 1. Pure, so the abort case is
+// unit-testable without building a corrupt multi-GB fixture.
+void grootCheckV1EmbodimentRank(int64_t weightRowDim);
+
+// Cross-checks the redundant groot.embodiment.count key against the real row
+// count, which is always derived from groot.embodiment.stored_cat_ids. Pass
+// `declaredCount` == `tableRows` when the key is absent, which makes an older
+// file that omits it a no-op.
+//
+// Throws std::runtime_error when the two disagree, so a file that advertises a
+// row count it does not have is a named load error rather than something that
+// loads and misreports itself.
+void grootCheckEmbodimentCount(size_t declaredCount, size_t tableRows);
+
+// Byte offset of one embodiment row inside the GGUF: `fileOffset` is the
+// tensor's absolute data offset, `rowBytes` the size of a single row,
+// `rowIndex` the row wanted. Row is the OUTERMOST ggml axis, so each row's
+// block is contiguous and the offset is a plain multiply-add.
+//
+// `rowBytes` derives from GGUF-declared dimensions, so the arithmetic is
+// bounded rather than trusted. Defence in depth only: the read at the resulting
+// offset is itself bounded to `rowBytes`, so a wrapped offset could at worst
+// produce a short read or wrong-but-in-file bytes, never an out-of-bounds
+// write.
+//
+// Throws std::runtime_error if the multiply or the add would wrap.
+size_t
+grootEmbodimentRowOffset(size_t fileOffset, int rowIndex, size_t rowBytes);
+
+// Reads an int32 array out of GGUF metadata, returning `dflt` when the key is
+// ABSENT. Exposed for tests.
+//
+// A key that is present but not an int32 array is corruption, not an older
+// file, and throws std::runtime_error: silently falling back to the default
+// would discard a ship-set table the tensors are still shaped for, and the
+// mismatch then surfaces only much later (see grootCheckV1EmbodimentRank).
+std::vector<int>
+ggufGetI32ArrOr(struct gguf_context* g, const char* key, std::vector<int> dflt);
+
 // Forward-declared PIMPL (defined in groot.cpp) so the public header doesn't
 // drag in backend handles / ggml contexts. Out-of-line dtor, as in Pi05Model.
 struct GrootModelInternal;
@@ -438,9 +563,17 @@ public:
   // architecture key isn't `groot`, or hparams fail validation. `forceCpu`
   // skips GPU device selection; `backendsDir` is the absolute path to the
   // prebuild directory containing the ggml backend plugin shared libs.
+  // `embodiment` (multi-embodiment GGUFs only) selects which embodiment to
+  // load, by tag or by numeric cat_id; unset = the GGUF's default, and
+  // `num_cameras` overrides the stored camera count for that row. Throws (see
+  // grootResolveEmbodiment) if: the GGUF is single-embodiment and a non-baked
+  // embodiment is requested; the tag is unknown to the full tag->cat_id map;
+  // the resolved cat_id is not in this GGUF's ship set; or the resolved
+  // num_cameras is unknown/invalid and no override was supplied.
   GrootModel(
       const std::string& ggufPath, bool forceCpu,
-      const std::string& backendsDir);
+      const std::string& backendsDir,
+      const VlaEmbodimentRequest& embodiment = {});
 
   ~GrootModel() override;
 
@@ -450,6 +583,30 @@ public:
   const VlaHparamsGeneric& hparams() const override { return hparams_; }
   std::string backendName() const override;
   bool hasGpu() const override;
+
+  // Switch the active embodiment without reloading the model: re-reads the
+  // wanted row of the seven CategorySpecificLinear weight/bias pairs from the
+  // GGUF into the already-allocated slice buffer, rebuilds their pre-transposed
+  // copies, and updates hparams().num_cameras /
+  // hparams().selected_embodiment_tag. Everything else (vision tower, backbone,
+  // VL fusion, DiT) is embodiment-independent and untouched — on the 17-row
+  // ship set that is ~20MB of I/O instead of a ~4GB reload. An unset `request`
+  // = the GGUF's default embodiment; it takes the same tag / cat_id /
+  // num_cameras selection as the ctor.
+  //
+  // Throws (see grootResolveEmbodiment, same rules as the ctor) if the tag/id
+  // is unknown, its cat_id is not in this GGUF's ship set, its num_cameras is
+  // unknown/invalid with no override, or the GGUF stores a single embodiment
+  // row; the currently selected embodiment is left intact in every throwing
+  // case. A v1 GGUF is rejected UNCONDITIONALLY — including a request naming
+  // the very tag it bakes in, which would otherwise look like a successful
+  // no-op and let a num_cameras override rewrite hparams() on a model that
+  // cannot honour it. Serialized against infer() internally, so a caller may
+  // not observe a half-switched model; serialization alone is not sufficient
+  // though, so the call is also refused while a job is in flight (see
+  // VlaModel::setEmbodiment). Note that a switch changes the expected camera
+  // count: the next infer() must supply hparams().num_cameras images.
+  void setEmbodiment(const VlaEmbodimentRequest& request) override;
 
   bool infer(
       const float** images, int nImages, int imgWidth, int imgHeight,

@@ -6,6 +6,7 @@ import {
 } from '@/schemas'
 import type { LoadTimingStats } from '@/profiling/types'
 import { nowMs } from '@/profiling/clock'
+import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { isModelLoaded, registerModel, type AnyModel } from '@/server/bare/registry/model-registry'
 import {
   startLogBuffering,
@@ -123,7 +124,9 @@ export async function loadModel(
       name: modelName
     })
 
-    return modelInitializationTimeMs !== undefined ? { timing: { modelInitializationTimeMs } } : {}
+    const loadResult: LoadModelResult =
+      modelInitializationTimeMs !== undefined ? { timing: { modelInitializationTimeMs } } : {}
+    return forwardBackendDiagnostics(loadResult, result)
   } finally {
     stopLogBufferingWithTimeout(modelId)
   }

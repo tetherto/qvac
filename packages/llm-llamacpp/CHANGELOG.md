@@ -1,5 +1,120 @@
 # Changelog
 
+## [0.40.0] - 2026-08-06
+
+One model instance can now serve several requests at once. Every `run()` call is
+admitted as its own job by a native multi-job scheduler and decodes alongside
+whatever else is in flight, so concurrent callers share the batch engine instead
+of queueing behind each other. Terminal stats become per-job, cancellation
+becomes per-job, and a new admission policy lets a caller choose between failing
+fast and being queued.
+
+### Added
+
+- Concurrent top-level `run()` calls on one instance at `parallel >= 2`. Each
+  call streams to its own response, routed by the job id minted at admission; a
+  batch `run([...])` is admitted as one job whose prompts occupy up to N slots.
+- `rejectWhenBusy`, the admission policy, as `opts.rejectWhenBusy` per instance
+  and `runOptions.rejectWhenBusy` per call. A refusal throws an `Error` carrying
+  `code === 'RUN_BUSY'`, so callers branch on the code rather than matching the
+  message. The default follows `parallel`: `true` at `1`, preserving the
+  sequential fail-fast behaviour, `false` at `>= 2`. A batch derives ONE group
+  policy from its items — items that disagree are refused with a `TypeError`.
+- `activeSlots()` on the addon surface, reporting the requests occupying or
+  waiting for a continuous-batching slot. Slots, not jobs, are the currency
+  admission is measured in: one batch job of N prompts consumes up to N of them,
+  so a job count alone under-reports a full pool.
+- Per-job terminal stats. A job's `JobEnded` now overrides `TTFT`, `TPS`,
+  `generatedTokens` and `promptTokens` with that job's own observed figures,
+  while `ppTPS`, `CacheTokens`, `contextSlides`, `thinkingBlockDiscards`,
+  `avgConcurrentSeq` and `backendDevice` stay model-level.
+- `stopReason` for a single prompt that runs through the batch engine, which
+  previously omitted the key that the sequential path always reported.
+- Targeted cancellation: `response.cancel()` stops only that call's job or
+  group and leaves concurrent jobs decoding. A cancel that arrives while the
+  group's prompts are still queued settles it immediately instead of waiting for
+  an unrelated job to free a slot.
+
+### Changed
+
+- `parallel` now accepts `1..256` instead of `1..1024`. 256 is the engine's own
+  `LLAMA_MAX_SEQ`; a larger value used to spawn the whole eager thread pool and
+  only then fail the model load, where llama.cpp swallows the real reason into a
+  log line.
+- `parallel` also sizes the scheduler's worker pool one-to-one, and those OS
+  threads are created eagerly at load and held for the model's lifetime. A large
+  `parallel` is a standing resource commitment even while idle.
+- A `parallel` too large for `ctx_size` to leave room per slot — or a
+  `batch_size` smaller than `parallel` — is now refused as an `InvalidArgument`
+  naming the knobs involved, instead of escaping the load as an unmapped
+  `std::invalid_argument`.
+- A prefill-only request without `saveCacheToDisk` and a `cacheKey` is rejected
+  with `InvalidArgument` on a parallel model: its warmed state lives in a
+  context concurrent jobs cannot reach. Load with `parallel: 1` for live-only
+  cache warming.
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.4` -> `1.3.3` for
+  the multi-job scheduler.
+
+### Pull Requests
+
+- [#3445](https://github.com/tetherto/qvac/pull/3445) - Multi-job queue at
+  addon-cpp and LLM (Needed for LLM Continuous Batching Optimizations)
+
+## [0.39.4] - 2026-08-04
+
+Internal refactor of how JS configuration is parsed into C++. Generation,
+finetune, and load config now use a shared, declarative handler-registry pattern
+(the same approach diffusion-cpp uses). No change to accepted config keys,
+spellings, or defaults, apart from the edge cases below.
+
+### Changed
+
+- Sending both the hyphen and underscore spelling of `image-max-tokens` or
+  `image-min-tokens` in the same load config is now accepted (the underscore
+  spelling wins) instead of failing the load. Previously the second spelling was
+  forwarded to llama.cpp and rejected.
+- In rare multi-error cases, the specific `InvalidArgument` message that surfaces
+  first may differ from before: a generation request that sets conflicting
+  `grammar`/`json_schema` alongside another invalid field, or a finetune request
+  that omits a required field and also sends a malformed optional. Accept/reject
+  behavior is unchanged in these cases.
+
+### Pull Requests
+
+- [#3491](https://github.com/tetherto/qvac/pull/3491) - chore[api]: adopt
+  handler-registry pattern for config parsing
+
+## [0.39.3] - 2026-08-04
+
+This release makes DeepSeek V4 cache recovery safe when requests are cancelled
+or generation ends before a reasoning block closes. It also adds a supported
+string-based `no_mmap` configuration and makes thinking-block compaction
+default-on only for the Qwen3 reasoning family.
+
+### Fixed
+
+- DeepSeek V4 text inference now uses full-state checkpoints for request
+  cancellation, optional thinking-block compaction, and interrupted terminal
+  stops. When `remove_thinking_from_context` is enabled, it restores the
+  checkpoint instead of attempting unsafe compressed-cache edits.
+- Multimodal continuous-batch drivers now honor the per-request
+  `remove_thinking_from_context` override and keep their compactor state in
+  sync.
+- `no_mmap: 'true'` now disables memory-mapped model loading by setting the
+  native model parameter directly, rather than forwarding an unsupported
+  command-line argument.
+
+### Changed
+
+- Thinking-block compaction now defaults to `false` for non-Qwen models.
+  Qwen3, Qwen3.5, Qwen3.6, and their MoE variants retain the default-on
+  behavior; callers can override the setting for any model per request.
+
+### Pull Requests
+
+- [#3634](https://github.com/tetherto/qvac/pull/3634) - fix: recover DeepSeek
+  V4 checkpoints
+
 ## [0.39.2] - 2026-07-30
 
 ### Changed

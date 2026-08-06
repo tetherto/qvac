@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <cinttypes>
 #include <cstddef>
 #include <filesystem>
@@ -12,7 +11,9 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <common/arg.h>
@@ -32,6 +33,7 @@
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
+#include "handlers/LoadConfigHandlers.hpp"
 #include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -448,7 +450,7 @@ void LlamaModel::reload(
 void LlamaModel::setInitLoader(
     std::optional<InitLoader::LOADER_TYPE> loaderType,
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
-  cancel();
+  cancelInference();
   std::unique_lock lock(stateMtx_);
   // Unconditionally stop the old contexts before destroying them, regardless
   // of job counters. cancel() above only routes to active engines (counters >
@@ -642,16 +644,32 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .lctx = ctx,
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
   };
-  return std::make_unique<batching::ContinuousBatchScheduler>(
-      shared,
-      maxChunkSize,
-      ctxTotalTokens,
-      batchSize,
-      batchCapacity,
-      cparams,
-      state.configuredNDiscarded_,
-      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
-      buildDriverFactory(shared, state.llmContext_->visionContext()));
+  // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
+  // batchCapacity >= batchSize) with std::invalid_argument, which would escape
+  // load unmapped. Both traps are really a `parallel` misconfiguration, so
+  // they are reported as InvalidArgument naming the knobs the caller sets.
+  try {
+    return std::make_unique<batching::ContinuousBatchScheduler>(
+        shared,
+        maxChunkSize,
+        ctxTotalTokens,
+        batchSize,
+        batchCapacity,
+        cparams,
+        state.configuredNDiscarded_,
+        state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
+        buildDriverFactory(shared, state.llmContext_->visionContext()));
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "[LlamaModel] parallel=%zu is too large for this context "
+            "(ctx_size=%u, batch_size=%d): %s",
+            batchSize,
+            ctxTotalTokens,
+            batchCapacity,
+            e.what()));
+  }
 }
 
 void LlamaModel::setWeightsForFile(
@@ -724,6 +742,10 @@ void LlamaModel::llamaLogCallback(
 }
 
 void LlamaModel::cancel() const {
+  const auto finetuneId = currentFinetuneJobId_.load();
+  if (finetuneId != qvac_lib_inference_addon_cpp::kNoJobId) {
+    requestFinetuneCancel(finetuneId);
+  }
   std::shared_lock lock(stateMtx_, std::try_to_lock);
   if (!lock.owns_lock()) {
     // If lock could not be acquired, it means reload
@@ -733,6 +755,13 @@ void LlamaModel::cancel() const {
     return;
   }
   cancelImpl();
+}
+
+void LlamaModel::cancelInference() const {
+  std::shared_lock lock(stateMtx_, std::try_to_lock);
+  if (lock.owns_lock()) {
+    cancelImpl();
+  }
 }
 
 void LlamaModel::cancelImpl() const {
@@ -750,6 +779,79 @@ void LlamaModel::cancelImpl() const {
   if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
     state_->llmContext_->stop();
   }
+  // Park a cancel on every registered job. The engine stops above only reach
+  // work the run counters already see; a job the scheduler dequeued but that
+  // has not armed its cancel action yet (jobStarting ran, the engine slot has
+  // not) is invisible to them — it consumes the parked cancel when it arms
+  // and stops before its first decode. Park-only: running armed actions here
+  // could take engine locks, and this cancel may be issued from a streaming
+  // callback on the engine's own worker thread (see above).
+  liveJobs_.parkAll();
+}
+
+void LlamaModel::setFinetuneCancelSavesCheckpoint(
+    const bool save,
+    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  // Keyed by the snapshot itself, never by currentFinetuneJobId_: the
+  // canceller can arm while its snapshotted finetune still sits between the
+  // scheduler queue and beginFinetuneJob(), and the mode must still be
+  // waiting when that job's per-id cancel dispatches after bind. Scheduler
+  // ids are never reused, so an entry can only ever reach the job it names.
+  for (const auto id : cancelledJobs) {
+    finetuneCancelSaveModes_[id] = save;
+  }
+}
+
+void LlamaModel::discardFinetuneCancelSaveModes(
+    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  for (const auto id : cancelledJobs) {
+    finetuneCancelSaveModes_.erase(id);
+  }
+}
+
+void LlamaModel::requestFinetuneCancel(
+    const qvac_lib_inference_addon_cpp::JobId id) const {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  if (currentFinetuneJobId_.load() != id) {
+    return;
+  }
+  // One-shot take of exactly this job's mode; absent means the canceller
+  // never chose one (whole-model teardown, internal paths) — no checkpoint.
+  bool save = false;
+  if (const auto found = finetuneCancelSaveModes_.find(id);
+      found != finetuneCancelSaveModes_.end()) {
+    save = found->second;
+    finetuneCancelSaveModes_.erase(found);
+  }
+  finetuneCancelRequests_.fetch_add(1);
+#ifndef STANDALONE_TEST_BUILD
+  finetuner_.requestPause(save);
+#else
+  static_cast<void>(save);
+#endif
+}
+
+void LlamaModel::beginFinetuneJob(
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  currentFinetuneJobId_.store(id);
+}
+
+void LlamaModel::closeFinetuneCancellationWindow() {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  // Defensive teardown: the job is gone and its id is never reissued, so a
+  // mode its cancel never consumed is dead weight from here on.
+  finetuneCancelSaveModes_.erase(currentFinetuneJobId_.load());
+  currentFinetuneJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
+}
+
+void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
+  // Runs under the scheduler's admission lock (see IModelJobLifecycle), so
+  // it must stay quick and must not call back into the scheduler. Registering
+  // unarmed here makes every later cancel park instead of no-op.
+  liveJobs_.add(id);
 }
 
 std::any LlamaModel::process(const std::any& input) {
@@ -763,7 +865,7 @@ std::any LlamaModel::process(const std::any& input) {
   }
   if (input.type() == typeid(std::vector<Prompt>)) {
     const auto& prompts = std::any_cast<const std::vector<Prompt>&>(input);
-    return {processPromptBatchImpl(prompts)};
+    return {processPromptBatchImpl(prompts).outputs};
   }
   validateBitnetQuantization();
   const auto& prompt = std::any_cast<const Prompt&>(input);
@@ -771,8 +873,9 @@ std::any LlamaModel::process(const std::any& input) {
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
     // Release the shared lock before finetune() because reload() inside it
-    // acquires an exclusive lock on stateMtx_; safe since JobRunner serialises
-    // all jobs onto a single worker thread.
+    // acquires an exclusive lock on stateMtx_; safe because finetuning is
+    // admitted through MultiJobScheduler::runExclusiveJob, so no inference job
+    // holds stateMtx_ while this one runs.
     lock.unlock();
     std::string status = finetuner_.finetune(
         *prompt.finetuningParams, &stats, prompt.progressCallback);
@@ -791,6 +894,397 @@ std::any LlamaModel::process(const std::any& input) {
   }
 #endif
   return {processPromptImpl(prompt)};
+}
+
+bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
+  if (prompt.finetuningParams.has_value()) {
+    return false;
+  }
+  // A prefill earns a lane exactly when its product survives the slot
+  // teardown: the cache file persisted under its key. A live-only prefill's
+  // product is warm state in the shared single context, which a lane wipes.
+  return !prompt.prefill ||
+         (prompt.saveCacheToDisk && !prompt.cacheKey.empty());
+}
+
+std::any LlamaModel::process(
+    const std::any& input, qvac_lib_inference_addon_cpp::JobId id) {
+  const bool isSingle = input.type() == typeid(Prompt);
+  const bool isBatch = input.type() == typeid(std::vector<Prompt>);
+  // The scheduler registered this id at dequeue (jobStarting); make sure no
+  // path out of here — bad input type, finetune, batch, or an early throw —
+  // leaves that entry behind. Inner guards removing the same id first are
+  // fine: remove is idempotent, unknown ids (kNoJobId) are a no-op.
+  ScopeGuard lifecycleGuard([this, id] { liveJobs_.remove(id); });
+  if (id == qvac_lib_inference_addon_cpp::kNoJobId || (!isSingle && !isBatch)) {
+    return process(input);
+  }
+  // A tagged single-path prompt owns no scheduler slot: its cancel action
+  // stops the single-prompt context. The run-counter gate keeps a late
+  // cancel from leaving a stale stop flag on an idle engine, and the
+  // ownership check keeps a cancel that outlived its job — the registry
+  // entry is still live through the run's completion tail, and cancel()
+  // executes an action copy outside the registry lock — from stopping a
+  // successor; the action runs under the canceller's shared stateMtx_ (see
+  // cancelById), so state_ stays valid.
+  const auto processSinglePath = [this, &input, id] {
+    // An escaped cancel for a previous job may have set the context's stop
+    // flag after that run's last check. Cleared before the run counter is
+    // visible and before the parked-cancel re-issue below, so every stop
+    // aimed at THIS job — counter-gated or re-issued — lands after the
+    // clear.
+    {
+      std::shared_lock stateLock(stateMtx_);
+      if (state_ && state_->llmContext_) {
+        state_->llmContext_->resetStopFlag();
+      }
+    }
+    // Counted before arming: both the armed action and the whole-model
+    // cancelImpl gate their context stop on this counter, so a cancel landing
+    // any time from arming onwards can stop the eval loop; the loop consumes
+    // the flag at its first check, before any decode.
+    activeSingleJobs_.fetch_add(1);
+    currentSingleJobId_.store(id);
+    ScopeGuard countGuard([this] {
+      currentSingleJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
+      activeSingleJobs_.fetch_sub(1);
+    });
+    const bool parkedCancel = liveJobs_.add(id, [this, id] {
+      if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0 &&
+          currentSingleJobId_.load() == id) {
+        state_->llmContext_->stop();
+      }
+    });
+    ScopeGuard registrationGuard([this, id] { liveJobs_.remove(id); });
+    if (parkedCancel) {
+      // A cancel landed while the job sat between the scheduler queue and
+      // this slot (jobStarting parked it). Re-issue it through the armed
+      // action: the counter above is already visible, so the context stop
+      // lands and the request cancels with the usual rollback.
+      cancelById(id);
+    }
+    return process(input);
+  };
+  if (isSingle) {
+    const auto& prompt = std::any_cast<const Prompt&>(input);
+    if (prompt.finetuningParams.has_value()) {
+      beginFinetuneJob(id);
+      ScopeGuard finetuneGuard([this] {
+        // Window first: once currentFinetuneJobId_ is cleared no cancel can
+        // latch a new pause (requestFinetuneCancel serializes on the same
+        // mutex), so the discard leaves nothing behind for the next finetune.
+        // Covers the exits finetune() never sees: the parked-cancel PAUSED
+        // return below and setup throws before the finetuner's own catch.
+        closeFinetuneCancellationWindow();
+        finetuner_.discardPendingPauseRequest();
+      });
+      // Arm the finetune cancel so cancelById(id) reaches the finetuner; a
+      // cancel parked before this point aborts the job before training starts.
+      if (liveJobs_.bind(id, [this, id] { requestFinetuneCancel(id); })) {
+        return std::any(FinetuneTerminalResult{"finetune", "PAUSED"});
+      }
+      return process(input);
+    }
+    if (!isConcurrentEligible(prompt)) {
+      // Live-only prefill: its warmed single-context state is unreachable by
+      // lane-based followups, and running it beside admitted peers would race
+      // on the shared context. Reject on a parallel model; without a
+      // scheduler the single path is the only worker and stays safe.
+      {
+        std::shared_lock rejectLock(stateMtx_);
+        if (state_ && state_->batchScheduler_) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              toString(qvac_errors::general_error::InvalidArgument),
+              "prefill without saveCacheToDisk and a cacheKey cannot run on "
+              "a parallel model: its warmed context is unreachable by "
+              "concurrent jobs; persist the cache or load with parallel=1");
+        }
+      }
+      return processSinglePath();
+    }
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    lock.unlock();
+    return isSingle ? processSinglePath() : process(input);
+  }
+  if (isBatch) {
+    return {processConcurrentBatch(
+        std::any_cast<const std::vector<Prompt>&>(input), id)};
+  }
+  return {processConcurrent(std::any_cast<const Prompt&>(input), id)};
+}
+
+std::vector<std::string> LlamaModel::processConcurrentBatch(
+    const std::vector<Prompt>& prompts,
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  // Tag the scheduler group with the job id so a cancel can target it before
+  // any admission. Job ids are minted monotonically and never reused, so a tag
+  // cannot be confused with a later group's.
+  const auto groupTag = static_cast<uint64_t>(id);
+  // The group's live slots, shared with its cancel action: every admission's
+  // (seqId -> admissionId) ownership pair. A slot joins at admission and
+  // leaves the moment it ends — the scheduler may recycle the seqId to a
+  // peer job, so a late group cancel must never see it; and because a
+  // snapshot taken before that removal can still race the recycle, each
+  // cancel also carries the admissionId so the scheduler itself rejects a
+  // stale target. `cancelled` marks the whole group: requests admitted after
+  // the cancel are torn down at admission instead of outliving their group.
+  struct GroupSlots {
+    std::mutex mtx;
+    std::unordered_map<uint32_t, uint64_t> seqs;
+    bool cancelled = false;
+  };
+  auto slots = std::make_shared<GroupSlots>();
+
+  // The group's cancel action: tear down every slot it currently holds, and
+  // settle the group when some of its requests are still queued — those have
+  // no slot to tear down, and waiting for them to be admitted means waiting on
+  // whichever unrelated group currently holds the pool. Runs under the
+  // canceller's shared stateMtx_ (see cancelById), so state_ stays valid; it
+  // releases slots->mtx before touching the scheduler, so it never holds both
+  // locks at once.
+  const auto cancelGroup = [this, slots, groupTag] {
+    std::vector<std::pair<uint32_t, uint64_t>> seqs;
+    {
+      std::lock_guard<std::mutex> seqsLock(slots->mtx);
+      slots->cancelled = true;
+      seqs.assign(slots->seqs.begin(), slots->seqs.end());
+      slots->seqs.clear();
+    }
+    if (state_ && state_->batchScheduler_) {
+      for (const auto& [seqId, admissionId] : seqs) {
+        state_->batchScheduler_->cancel(seqId, admissionId);
+      }
+      // No-op once every request of the group holds a slot: the loop above
+      // already covers it, and the scheduler keeps the graceful in-slot cancel.
+      state_->batchScheduler_->cancelGroupQueued(groupTag);
+    }
+  };
+
+  // Armed BEFORE submission: a cancel that arrives while the group is still
+  // entirely queued must reach the drain above, not sit parked until the group
+  // is finally admitted. The arming registration also hands back a cancel
+  // parked between the scheduler dequeue and here (jobStarting -> parkAll),
+  // which is refused as Cancelled — the structured code consumers already
+  // match on for every other cancellation terminal, rather than a bare
+  // runtime_error whose message they would have to string-match.
+  if (liveJobs_.add(id, cancelGroup)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "LlamaModel: batch cancelled before it could run (cancelled between "
+        "the scheduler dequeue and admission)");
+  }
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
+
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id, slots, cancelGroup](
+          size_t, uint32_t seqId, uint64_t admissionId) {
+        {
+          std::lock_guard<std::mutex> seqsLock(slots->mtx);
+          if (slots->cancelled) {
+            return true;
+          }
+          slots->seqs[seqId] = admissionId;
+        }
+        // Re-arming per admission is idempotent — the action reads the live
+        // set. A true return means a cancel parked before the group had any
+        // slot: mark the group so later admissions die too, and let the
+        // scheduler kill this one before it decodes.
+        if (liveJobs_.bind(id, cancelGroup)) {
+          std::lock_guard<std::mutex> seqsLock(slots->mtx);
+          slots->cancelled = true;
+          slots->seqs.erase(seqId);
+          return true;
+        }
+        return false;
+      };
+  const SeqObserver onSeqDone = [slots](size_t, uint32_t seqId) {
+    std::lock_guard<std::mutex> seqsLock(slots->mtx);
+    slots->seqs.erase(seqId);
+  };
+
+  batching::BatchResult result =
+      processPromptBatchImpl(prompts, onSeqAssigned, onSeqDone, groupTag);
+  // Leave the group's complete terminal snapshot behind for the tagged
+  // jobEnded event: model-level figures from the run's own stats snapshot,
+  // TTFT/TPS averaged over the group's requests that produced them, token
+  // counts summed (see aggregateObservedStats).
+  if (!result.requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal = jobTerminalStats(
+        result.stats, batching::aggregateObservedStats(result.requestStats));
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    jobStats_[id] = std::move(terminal);
+  }
+  return std::move(result.outputs);
+}
+
+std::string LlamaModel::processConcurrent(
+    const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id) {
+  // Tagged like the batch path, so a cancel arriving while this request is
+  // still queued behind a wider group settles it now instead of waiting for
+  // that group to release a slot.
+  const auto groupTag = static_cast<uint64_t>(id);
+  // The job's slot identity, shared with its ONE cancel action — the same
+  // shape the batch path uses (GroupSlots), for the same reason: the action is
+  // installed once and re-reads live state, so ordering against admission
+  // cannot matter. Replacing the action at admission instead (the previous
+  // design) lost exactly that race: JobCancelRegistry::cancel copies the
+  // action out and runs it outside the registry lock, so a copy of the
+  // queued-only action could run after admission had already made
+  // cancelGroupQueued a no-op (admittedCount == totalCount) — the freshly
+  // bound slot action was never invoked, the cancel evaporated, and the
+  // caller's promise waited out the whole generation.
+  struct SlotIdentity {
+    std::mutex mtx;
+    std::optional<std::pair<uint32_t, uint64_t>> admission;
+    bool cancelled = false;
+  };
+  auto slot = std::make_shared<SlotIdentity>();
+
+  // The cancel action: tear down the slot when one is held (the scheduler
+  // validates the admission id, so a stale pair can never hit the seqId's
+  // next occupant), and settle the request through cancelGroupQueued while it
+  // is still queued (a no-op once admitted). Whichever side of admission the
+  // cancel lands on, exactly one mechanism acts. Runs under the canceller's
+  // shared stateMtx_ (see cancelById), so state_ stays valid; slot->mtx is
+  // released before touching the scheduler, so it never holds both locks.
+  const auto cancelSingle = [this, slot, groupTag] {
+    std::optional<std::pair<uint32_t, uint64_t>> admission;
+    {
+      std::lock_guard<std::mutex> slotLock(slot->mtx);
+      slot->cancelled = true;
+      admission = slot->admission;
+    }
+    if (state_ && state_->batchScheduler_) {
+      if (admission.has_value()) {
+        state_->batchScheduler_->cancel(admission->first, admission->second);
+      }
+      state_->batchScheduler_->cancelGroupQueued(groupTag);
+    }
+  };
+  // Armed BEFORE submission, for the same reason the batch path is: until
+  // admission there is no slot to cancel, and a parked cancel would otherwise
+  // only be consumed once a slot frees. Arming here also surfaces a cancel
+  // parked between the scheduler dequeue and this call (jobStarting ->
+  // parkAll), refused as Cancelled — the same structured terminal the batch
+  // path gives it, so consumers never string-match a message.
+  if (liveJobs_.add(id, cancelSingle)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "LlamaModel: request cancelled before it could run (cancelled between "
+        "the scheduler dequeue and admission)");
+  }
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
+
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id, slot, cancelSingle](
+          size_t, uint32_t seqId, uint64_t admissionId) {
+        {
+          std::lock_guard<std::mutex> slotLock(slot->mtx);
+          if (slot->cancelled) {
+            return true;
+          }
+          slot->admission = {seqId, admissionId};
+        }
+        // Idempotent re-arm of the SAME action, exactly like the batch path:
+        // a true return means a whole-model cancel parked between add() and
+        // this admission — mark the job cancelled and let the scheduler kill
+        // the slot before it decodes.
+        if (liveJobs_.bind(id, cancelSingle)) {
+          std::lock_guard<std::mutex> slotLock(slot->mtx);
+          slot->cancelled = true;
+          slot->admission.reset();
+          return true;
+        }
+        return false;
+      };
+  // Drop the job the moment the slot ends. The scheduler frees the seqId
+  // here and may hand it to a peer job before this call returns and mapGuard
+  // runs; removing now stops the stale action from making cancelById target
+  // that peer's slot.
+  const SeqObserver onSeqDone = [this, id](size_t, uint32_t) {
+    liveJobs_.remove(id);
+  };
+
+  const std::vector<Prompt> singleBatch{prompt};
+  batching::BatchResult result =
+      processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone, groupTag);
+  // Leave the job's complete terminal snapshot behind for the tagged
+  // jobEnded event (consumeJobStats), queued right after this returns. A
+  // throwing job never gets a jobEnded, so nothing is stored on that path.
+  if (!result.requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal =
+        jobTerminalStats(result.stats, result.requestStats.front());
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    jobStats_[id] = std::move(terminal);
+  }
+  return result.outputs.empty() ? std::string{}
+                                : std::move(result.outputs.front());
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
+    const batching::RuntimeStatsSnapshot& stats,
+    const batching::ObservedRequestStats& observed) const {
+  // batchRuntimeStatsLocked's key set with the job's own observed figures in
+  // place of the aggregate values. Composed purely from the run's returned
+  // snapshot — no live scheduler read, no llama_perf_context_reset: a peer
+  // job may be mid-decode on the shared context, and the reset belongs only
+  // to the explicitly requested whole-model runtimeStats().
+  qvac_lib_inference_addon_cpp::RuntimeStats terminal = {
+      {"TTFT", observed.ttftMs},
+      {"TPS", observed.genTps},
+      {"ppTPS", stats.prefillTokensPerSecond()},
+      {"CacheTokens", stats.cacheTokens},
+      {"generatedTokens", observed.generatedTokens},
+      {"promptTokens", observed.promptTokens},
+      {"contextSlides", stats.contextSlides},
+      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      // visionEncodeMs/Tiles intentionally omitted, matching
+      // batchRuntimeStatsLocked: concurrent prompts share the one
+      // per-context accumulator, so a per-job value would be misattributed.
+      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"backendDevice", runtimeBackendDevice_}};
+  // Unlike the vision counters, the stop reason IS per-sequence, so a job can
+  // report its own without misattribution — a single concurrent prompt would
+  // otherwise silently lose the stat the sequential path emits. Present only
+  // when it is honest: absent for a group whose requests disagree (see
+  // aggregateObservedStats), which addon.js tolerates by mapping only a
+  // numeric value.
+  if (observed.stopReason.has_value()) {
+    terminal.emplace_back(
+        "stopReason", static_cast<int64_t>(*observed.stopReason));
+  }
+  return terminal;
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::consumeJobStats(
+    const qvac_lib_inference_addon_cpp::JobId id) const {
+  // Pure take of the snapshot built when the job finished (see
+  // jobTerminalStats): the jobEnded path must not touch live model state.
+  std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+  const auto found = jobStats_.find(id);
+  if (found == jobStats_.end()) {
+    return {};
+  }
+  qvac_lib_inference_addon_cpp::RuntimeStats stats = std::move(found->second);
+  jobStats_.erase(found);
+  return stats;
+}
+
+void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
+  // The shared lock keeps state_ alive for whatever cancel action runs —
+  // each job registered the action that stops its own engine.
+  std::shared_lock lock(stateMtx_);
+  if (!state_) {
+    return;
+  }
+  liveJobs_.cancel(id);
 }
 
 LlamaModel::ResolvedPrompt
@@ -849,8 +1343,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   activeSingleJobs_.fetch_add(1);
   ScopeGuard jobGuard([this] { activeSingleJobs_.fetch_sub(1); });
-  state_->lastRun_ = {};
-  state_->lastRun_.wasPrefill = prompt.prefill;
+  state_->lastRun_.store(
+      ReloadableState::LastRunInfo{.wasPrefill = prompt.prefill},
+      std::memory_order_relaxed);
   if (state_->batchScheduler_) {
     state_->batchScheduler_->resetRuntimeStats();
   }
@@ -990,7 +1485,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 std::vector<std::string>
 LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
   std::shared_lock lock(stateMtx_);
-  return processPromptBatchImpl(prompts);
+  return processPromptBatchImpl(prompts).outputs;
 }
 
 bool LlamaModel::supportsBatching() const {
@@ -998,24 +1493,35 @@ bool LlamaModel::supportsBatching() const {
   return state_ && isMultiBatchActivated(*state_);
 }
 
-std::vector<std::string>
-LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
-  // Serialize the entry section (prior-count check, cache invalidation, KV
-  // wipe) under batchEntryMutex_. Without it a second caller can see
-  // activeBatchJobs_ == 0 before the first caller increments it, skip the wipe,
-  // and reach scheduler.processBatch() while the first caller is still clearing
+unsigned LlamaModel::activeSlots() const {
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    return 0;
+  }
+  return state_->batchScheduler_->occupancy();
+}
+
+batching::BatchResult LlamaModel::processPromptBatchImpl(
+    const std::vector<Prompt>& prompts,
+    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone,
+    const uint64_t groupTag) {
+  // `onSeqAssigned` (optional) fires once per request when the scheduler
+  // assigns its seqId. Serialize the entry section (prior-count check, cache
+  // invalidation, KV wipe) under batchEntryMutex_: without it a second caller
+  // can see activeBatchJobs_ == 0 before the first increments it, skip the
+  // wipe, and reach scheduler.processBatch() while the first is still clearing
   // KV — wiping the second caller's sequences. The lock is released before
-  // scheduler.processBatch() so concurrent batch calls still overlap during
-  // generation; jobGuard outlives the lock so its decrement spans the whole
-  // job.
+  // processBatch() so concurrent batch calls still overlap; jobGuard outlives
+  // it so its decrement spans the whole job.
   std::optional<batching::BatchEntryGuard> jobGuard;
   {
     std::lock_guard<std::mutex> entryLock(state_->batchEntryMutex_);
     jobGuard.emplace(
         activeBatchJobs_, [this] { validateBitnetQuantization(); });
     const unsigned priorBatchJobs = jobGuard->prior();
-    state_->lastRun_ = {};
-    state_->lastRun_.wasBatch = true;
+    state_->lastRun_.store(
+        ReloadableState::LastRunInfo{.wasBatch = true},
+        std::memory_order_relaxed);
 
     // Invalidate single-prompt cache state and clear any stale KV left by
     // single-prompt runs so the batch scheduler starts on clean KV. Only the
@@ -1033,6 +1539,13 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
             llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
           }
         }
+        // Clear stale llama perf counters (single-prompt leftovers or a
+        // previous batch epoch) here, at the only point that is exclusive
+        // with respect to the scheduler: no batch job is in flight, so the
+        // worker is idle — the same reasoning that makes the KV wipe above
+        // safe. batchRuntimeStatsLocked() deliberately never resets them:
+        // it runs under a shared stateMtx_ while peers may be mid-decode.
+        llama_perf_context_reset(lctx);
       }
     }
   }
@@ -1052,17 +1565,34 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
 
   std::vector<batching::SubmitRequest> requests;
   requests.reserve(prompts.size());
+  // This call's cacheKey reservations, released when the run returns (any
+  // path). Reserving in the shared inflightSaveKeys_ set refuses both a
+  // duplicate inside this batch and a concurrent caller saving the same key —
+  // either would race two writers on one file.
   std::unordered_set<std::string> saveCacheKeys;
+  ScopeGuard keysGuard([this, &saveCacheKeys] {
+    if (saveCacheKeys.empty()) {
+      return;
+    }
+    std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
+    for (const auto& key : saveCacheKeys) {
+      inflightSaveKeys_.erase(key);
+    }
+  });
   for (size_t i = 0; i < prompts.size(); i++) {
     const Prompt& prompt = prompts[i];
-    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty() &&
-        !saveCacheKeys.insert(prompt.cacheKey).second) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
-          "processPromptBatch: duplicate cacheKey '" + prompt.cacheKey +
-              "' with saveCacheToDisk in the same batch would overwrite "
-              "itself; each saved cache must use a distinct key");
+    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty()) {
+      std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
+      if (!inflightSaveKeys_.insert(prompt.cacheKey).second) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(qvac_errors::general_error::InvalidArgument),
+            "processPromptBatch: cacheKey '" + prompt.cacheKey +
+                "' is already being saved by an in-flight request; "
+                "concurrent saves would overwrite each other — use a "
+                "distinct key per save");
+      }
+      saveCacheKeys.insert(prompt.cacheKey);
     }
     if (!prompt.media.empty() && state_->isTextLlm_) {
       throw qvac_errors::StatusError(
@@ -1075,6 +1605,18 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: finetuning is not a batch processing operation");
+    }
+    // Same live-only prefill policy as the single-prompt path: batch items
+    // always run in scheduler lanes, and a lane wipes its warmed KV at
+    // teardown, so a prefill without persistence produces nothing reachable.
+    if (!isConcurrentEligible(prompt)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: prefill without saveCacheToDisk and a "
+          "cacheKey cannot run on a parallel model: its warmed context is "
+          "unreachable by concurrent jobs; persist the cache or load with "
+          "parallel=1");
     }
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
@@ -1099,25 +1641,47 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
-    sr.streams.onToken = [userCb = prompt.outputCallback](
-                             [[maybe_unused]] uint32_t seqId,
-                             const std::string& piece) {
+    // `seen` fires the seq observer exactly once per slot: at admission
+    // (onAdmitted), with onToken/onDone as a fallback latch. Only the
+    // admission carries the slot's real ownership token; the fallback
+    // latches pass the never-matching sentinel, so a cancel action armed
+    // through them could never target a slot — acceptable because the
+    // scheduler always fires onAdmitted first and the latches only close a
+    // theoretical gap.
+    auto seen = std::make_shared<std::atomic<bool>>(false);
+    auto notifySeq = [onSeqAssigned, seen, requestIndex = i](
+                         uint32_t seqId, uint64_t admissionId) {
+      if (onSeqAssigned && !seen->exchange(true)) {
+        return onSeqAssigned(requestIndex, seqId, admissionId);
+      }
+      return false;
+    };
+    sr.streams.onAdmitted = notifySeq;
+    sr.streams.onToken = [userCb = prompt.outputCallback,
+                          notifySeq](uint32_t seqId, const std::string& piece) {
+      notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
       if (userCb) {
         userCb(piece);
       }
     };
+    sr.streams.onDone =
+        [notifySeq, onSeqDone, requestIndex = i](uint32_t seqId) {
+          notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
+          if (onSeqDone) {
+            onSeqDone(requestIndex, seqId);
+          }
+        };
 
     requests.push_back(std::move(sr));
   }
 
-  batching::BatchResult result = scheduler.processBatch(std::move(requests));
-
-  return result.outputs;
+  return scheduler.processBatch(std::move(requests), groupTag);
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->lastRun_.wasBatch && state_->batchScheduler_) {
+  const auto lastRun = state_->lastRun_.load(std::memory_order_relaxed);
+  if (lastRun.wasBatch && state_->batchScheduler_) {
     return batchRuntimeStatsLocked();
   }
   return singleRuntimeStatsLocked();
@@ -1135,9 +1699,13 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // TTFT comes from the scheduler's prefill-step timer rather than
   // `llama_perf_context().t_p_eval_ms`, which would include the
   // recurrent replay decode run by `compactThinkSpan` in
-  // `onGenerationFinished`. We still reset the live counters so they
-  // can't leak into the next single-prompt run.
-  llama_perf_context_reset(state_->llmContext_->getCtx());
+  // `onGenerationFinished`. No `llama_perf_context_reset` here: this
+  // runs under a shared stateMtx_ concurrently with in-flight batch
+  // jobs, and the scheduler releases its own mutex around llama_decode,
+  // so writing the context's non-atomic perf counters from this path
+  // races a mid-decode peer. The counters are cleared instead at the
+  // batch-entry epoch boundary (processPromptBatchImpl), which is
+  // exclusive with respect to the scheduler.
   return {
       {"TTFT", stats.prefillTimeMs()},
       {"TPS", stats.decodeTokensPerSecond()},
@@ -1167,7 +1735,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
   auto perfData =
       snapshot.value_or(llama_perf_context(state_->llmContext_->getCtx()));
   constexpr double kMillisInSecond = 1000.0;
-  const bool wasPrefill = state_->lastRun_.wasPrefill;
+  const bool wasPrefill =
+      state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
   const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
   const int64_t generatedTokens =
       static_cast<int64_t>(wasPrefill ? 0 : perfData.n_eval);
@@ -1284,6 +1853,38 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
+  // The current llama.cpp common-argument parser does not expose --no-mmap,
+  // so map this addon's string configuration directly to the native model
+  // parameter instead of forwarding it through the generic argument parser.
+  std::optional<bool> noMmap;
+  for (const std::string& key : {"no-mmap", "no_mmap"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      std::string value = it->second;
+      std::ranges::transform(value, value.begin(), ::tolower);
+      const bool enabled = value.empty() || value == "true";
+      if (!enabled && value != "false") {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "no-mmap must be true or false, got: %s", it->second.c_str()));
+      }
+      if (noMmap.has_value() && noMmap.value() != enabled) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            "no-mmap and no_mmap must have the same value");
+      }
+      noMmap = enabled;
+      configFilemap.erase(it);
+    }
+  }
+  if (noMmap.value_or(false)) {
+    params.use_mmap = false;
+  }
+
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
   // fallback path used by llama.cpp does not execute the {%- set persona -%}
   // block that injects the model's persona system prompt, so the model loses
@@ -1300,94 +1901,8 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
-  // reasoning-budget controls the size of the model's <think> reasoning
-  // channel: -1 (default) leaves it unrestricted, 0 disables thinking
-  // entirely, any positive N caps the reasoning channel at N tokens (the
-  // budget sampler forces </think> once N reasoning tokens have been
-  // emitted).
-  auto parseReasoningBudget = [](const std::string& raw) {
-    int value = 0;
-    const char* begin = raw.data();
-    const char* end = begin + raw.size();
-    const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || value < -1) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          "reasoning-budget must be -1 (unrestricted), 0 (disabled), or a "
-          "positive integer (token cap)");
-    }
-    return value;
-  };
-  for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      params.reasoning_budget = parseReasoningBudget(it->second);
-      configFilemap.erase(it);
-    }
-  }
-
-  // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
-  // manually before configVector is built)
-  for (const std::string& key : {"image-tile-mode", "image_tile_mode"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      std::string val = it->second;
-      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-      if (val == "0" || val == "batched") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
-      } else if (val == "1" || val == "sequential") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_SEQUENTIAL;
-      } else if (val == "2" || val == "disabled") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_DISABLED;
-      } else {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-tile-mode must be 0/batched, 1/sequential, or "
-                "2/disabled, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-    }
-  }
-
-  // parse image-max-tokens / image-min-tokens (override Qwen-VL default caps)
-  for (const std::string& key : {"image-max-tokens", "image_max_tokens"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        params.image_max_tokens = std::stoi(it->second);
-      } catch (...) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-max-tokens must be an integer, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-      break;
-    }
-  }
-  for (const std::string& key : {"image-min-tokens", "image_min_tokens"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        params.image_min_tokens = std::stoi(it->second);
-      } catch (...) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-min-tokens must be an integer, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-      break;
-    }
-  }
+  qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
+      params, configFilemap);
 
   // parse custom nDiscarded from config (apply only if > 0)
   if (auto iter = configFilemap.find("n_discarded");

@@ -5,7 +5,7 @@
  * explicitly) and pear/pre.js (Pear apps author their own entry).
  *
  * NOTICE is generated and committed at release time via
- * `/qv-sdk-bare-sdk-sync` (which invokes `qv-notice-generate bare-sdk`).
+ * `/qv-sdk-lockstep-sync` (which invokes `qv-notice-generate bare-sdk`).
  * LICENSE is committed and verified against sdk via a fail-fast diff.
  */
 import fs from "node:fs";

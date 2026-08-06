@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
+  to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
+  vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
+  volume / style) via the `instruct` option.
+
+### Fixed
+
+- **iOS model loading.** CosyVoice3 and Parler-TTS now load their models within
+  the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
+  loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
+  so they no longer OOM on non-entitled devices. Output is byte-identical.
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3446](https://github.com/tetherto/qvac/pull/3446) - QVAC-22652 feat[api]:
+  add CosyVoice3 engine to @qvac/tts-ggml
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
+## [0.6.2] - 2026-08-03
+
+### Changed
+- Optimize OpenCL GPU backend implementation (Android) for Parler-TTS model
+- Update `ggml-speech` dependency version to align with other packages that also depend on it.
+
 ## [0.6.1] - 2026-07-30
 
 ### Fixed
