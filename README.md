@@ -74,7 +74,9 @@ keet://chat/nfo61f4e6zc5t1ifncyh9yp7s5eynbruz5bs95oc5ufn3e79entmhix74miigc8iz9ia
 
 ## Quickstart
 
-Want to get hands-on right away? Here's a simple example you can use to test QVAC. Below is a JavaScript quickstart — for the Python client, see the [Python SDK docs](https://docs.qvac.tether.io/python-sdk).
+Want to get hands-on right away? Here's a simple example you can use to test QVAC, in either supported client.
+
+### JavaScript
 
 1. Create the examples workspace:
 
@@ -130,6 +132,77 @@ node quickstart.js
 ```
 
 You'll see the model download first. Then, QVAC will stream the response tokens and print them to the terminal.
+
+### Python
+
+<details>
+<summary>Show Python quickstart</summary>
+
+1. Create the examples workspace:
+
+```bash
+mkdir qvac-examples-py
+cd qvac-examples-py
+python -m venv .venv
+source .venv/bin/activate
+```
+
+2. Install the package:
+
+```bash
+pip install "tetherto-qvac-sdk"
+```
+
+3. Install the worker:
+
+```bash
+python -m tetherto.qvac_sdk install-worker
+```
+
+4. Create the quickstart script:
+
+```python
+import asyncio
+import sys
+
+from tetherto.qvac_sdk import Client, completion, load_model, unload_model
+from tetherto.qvac_sdk.models import LLAMA_3_2_1B_INST_Q4_0
+
+
+async def main():
+    async with Client() as client:
+        t = client.transport
+        # Load a model into memory
+        model_id = await load_model(
+            t,
+            model_src=LLAMA_3_2_1B_INST_Q4_0,
+            on_progress=lambda p: print(p),
+        )
+        # You can use the loaded model multiple times
+        history = [
+            {"role": "user", "content": "Explain quantum computing in one sentence"},
+        ]
+        run = completion(t, model_id=model_id, history=history)
+        async for event in run.events:
+            if event.type == "contentDelta":
+                sys.stdout.write(event.text)
+                sys.stdout.flush()
+        # Unload model to free up system resources
+        await unload_model(t, model_id)
+
+
+asyncio.run(main())
+```
+
+5. Run the quickstart script:
+
+```bash
+python quickstart.py
+```
+
+You'll see the model download first. Then, QVAC will stream the response tokens and print them to the terminal.
+
+</details>
 
 ## Contributing
 
