@@ -36,6 +36,23 @@
         "cwd": "packages/asr-ggml"
       }
     },
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:mobile:validate || true",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "npmName": "@qvac/asr-ggml",
+          "prebuildArtifactPrefix": "asr-ggml-",
+          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML",
+          "deviceFarmProjectArnFallback": "AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET",
+          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_ASR_GGML",
+          "iosDevicePoolArnFallback": "IOS_DEVICE_POOL_ARN_PARAKEET",
+          "enablesPerf": true,
+          "extraPreBuildCommand": "npm run test:mobile:generate"
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

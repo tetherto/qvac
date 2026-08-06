@@ -11,6 +11,14 @@
 # one actually invoked from CI). Bespoke workflow_dispatch-only extras some
 # packages have (e.g. asr-ggml's run_rtf_benchmarks perf-matrix narrowing) are
 # NOT replicated here - out of scope for this migration.
+#
+# Package-level rows come from each package's own project.json
+# (targets["test:integration-mobile"].options.ci), not a hand-typed table -
+# see .github/actions/nx-project-matrix. The Android/iOS platform fan-out
+# below is a separate, static, second matrix dimension - not per-package
+# data, so options.ci carries no platforms[] (nx-project-matrix's existing
+# `.platforms // [{}]` fallback already returns one unflattened row per
+# package, matching what `strategy.matrix.package` needs here unchanged).
 name: "Mobile Integration Tests (nx)"
 
 on:
@@ -47,109 +55,18 @@ permissions:
 
 jobs:
   matrix:
-    name: Determine affected packages + build matrix (nx affected, transitive)
+    name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
     steps:
       - id: compute
-        uses: ./.github/actions/nx-affected
+        uses: ./.github/actions/nx-project-matrix
         with:
+          target: test:integration-mobile
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
-          config: |
-            - package: asr-ggml
-              workdir: packages/asr-ggml
-              npmName: '@qvac/asr-ggml'
-              prebuildArtifactPrefix: asr-ggml-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML
-              deviceFarmProjectArnFallback: AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_ASR_GGML
-              iosDevicePoolArnFallback: IOS_DEVICE_POOL_ARN_PARAKEET
-              enablesPerf: true
-              extraPreBuildCommand: npm run test:mobile:generate
-            - package: audiogen-ggml
-              workdir: packages/audiogen-ggml
-              npmName: '@qvac/audiogen-ggml'
-              prebuildArtifactPrefix: audiogen-ggml-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML
-              deviceFarmProjectArnFallback: AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_AUDIOGEN_GGML
-              iosDevicePoolArnFallback: IOS_DEVICE_POOL_ARN_ONNX_TTS
-              enablesPerf: false
-            - package: bci-whispercpp
-              workdir: packages/bci-whispercpp
-              npmName: '@qvac/bci-whispercpp'
-              prebuildArtifactPrefix: bci-whispercpp-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_WHISPERCPP
-              enablesPerf: true
-              extraPreBuildCommand: npm run test:mobile:generate
-            - package: classification-ggml
-              workdir: packages/classification-ggml
-              npmName: '@qvac/classification-ggml'
-              prebuildArtifactPrefix: classification-ggml-
-              deviceFarmProjectArnPrimary: LLM_AWS_DEVICE_FARM_PROJECT_ARN
-              androidDevicePoolArnPrimary: LLM_ANDROID_DEVICE_POOL_ARN
-              iosDevicePoolArnPrimary: LLM_IOS_DEVICE_POOL_ARN
-              enablesPerf: false
-              extraPreBuildCommand: npm run mobile:copy-prebuilds
-            - package: decoder-audio
-              workdir: packages/decoder-audio
-              npmName: '@qvac/decoder-audio'
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO
-              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_DECODER_AUDIO
-              enablesPerf: false
-            - package: diffusion-cpp
-              workdir: packages/diffusion-cpp
-              npmName: '@qvac/diffusion-cpp'
-              prebuildArtifactPrefix: sd-cpp-
-              deviceFarmProjectArnPrimary: LLM_AWS_DEVICE_FARM_PROJECT_ARN
-              androidDevicePoolArnPrimary: LLM_ANDROID_DEVICE_POOL_ARN
-              iosDevicePoolArnPrimary: LLM_IOS_DEVICE_POOL_ARN
-              enablesPerf: true
-            - package: embed-llamacpp
-              workdir: packages/embed-llamacpp
-              npmName: '@qvac/embed-llamacpp'
-              prebuildArtifactPrefix: llama-cpp-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED
-              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED
-              enablesPerf: false
-              extraPreBuildCommand: npm run generate:benchmark-shards
-            - package: ocr-ggml
-              workdir: packages/ocr-ggml
-              npmName: '@qvac/ocr-ggml'
-              prebuildArtifactPrefix: ggml-ocr-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT
-              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_OCR_FASTTEXT
-              enablesPerf: true
-            - package: translation-nmtcpp
-              workdir: packages/translation-nmtcpp
-              npmName: '@qvac/translation-nmtcpp'
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_NMTCPP
-              enablesPerf: true
-            - package: tts-ggml
-              workdir: packages/tts-ggml
-              npmName: '@qvac/tts-ggml'
-              prebuildArtifactPrefix: tts-ggml-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML
-              deviceFarmProjectArnFallback: AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_TTS_GGML
-              iosDevicePoolArnFallback: IOS_DEVICE_POOL_ARN_ONNX_TTS
-              enablesPerf: false
-            - package: vla-ggml
-              workdir: packages/vla-ggml
-              npmName: '@qvac/vla-ggml'
-              prebuildArtifactPrefix: vla-
-              deviceFarmProjectArnPrimary: AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED
-              androidDevicePoolArnPrimary: ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED
-              iosDevicePoolArnPrimary: IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED
-              enablesPerf: true
 
   build-and-test:
     name: Build ${{ matrix.platform.platform }} and Run E2E Tests (${{ matrix.package.package }})
