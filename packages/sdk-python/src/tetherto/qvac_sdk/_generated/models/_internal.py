@@ -358,6 +358,7 @@ class BatchCompletionStreamRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class BatchCompletionStreamRequest(GeneratedBaseModel):
@@ -1135,6 +1136,7 @@ class CompletionOrchestrateRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class CompletionOrchestrateRequestResponseFormatText(GeneratedBaseModel):
@@ -1669,6 +1671,7 @@ class CompletionStreamRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class CompletionStreamRequestResponseFormatText(GeneratedBaseModel):
@@ -2867,6 +2870,7 @@ class LocalLoadedModelInfoToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class LocalLoadedModelInfo(GeneratedBaseModel):
