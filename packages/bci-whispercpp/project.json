@@ -41,7 +41,16 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/bci-whispercpp"
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "mode": "coverage",
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+          ],
+          "hasCcache": false,
+          "buildOutputDir": "build/addon/tests",
+          "testEnvVars": []
+        }
       }
     }
   },
