@@ -22,6 +22,10 @@ async function runChatterboxSpeedTest (options = {}) { // eslint-disable-line no
   return runIntegrationModule('../integration/chatterbox-speed.test.js', options)
 }
 
+async function runCosyvoice3Test (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/cosyvoice3.test.js', options)
+}
+
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
@@ -36,6 +40,10 @@ async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-un
 
 async function runOutputSampleRateTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/output-sample-rate.test.js', options)
+}
+
+async function runParlerWerTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parler-wer.test.js', options)
 }
 
 async function runParlerTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -67,10 +75,12 @@ module.exports = {
   runChatterboxKvCacheGpuTest,
   runChatterboxMtlTest,
   runChatterboxSpeedTest,
+  runCosyvoice3Test,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
+  runParlerWerTest,
   runParlerTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,

@@ -667,10 +667,11 @@ function parseToolCalls(output, t) {
     try {
       calls.push(JSON.parse(raw))
     } catch (err) {
-      if (t)
+      if (t) {
         t.fail(
           `tool_call block contains malformed JSON: ${err.message}\n  raw: ${raw.slice(0, 200)}`
         )
+      }
     }
   }
   return calls
@@ -1154,10 +1155,11 @@ safeTest(
       )
       const chunks = []
       let capturedErr = null
-      if (typeof response.onError === 'function')
+      if (typeof response.onError === 'function') {
         response.onError((err) => {
           capturedErr = err
         })
+      }
       response.onUpdate((data) => {
         chunks.push(data)
       })

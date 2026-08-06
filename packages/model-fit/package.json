@@ -1,0 +1,87 @@
+{
+  "name": "@qvac/model-fit",
+  "version": "0.1.0",
+  "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
+  "addon": true,
+  "scripts": {
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js index.d.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:js": "standard --ignore \"addon/**\"",
+    "lint:js:fix": "standard --ignore \"addon/**\" --fix",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/fit/FitParams.cpp",
+    "test": "npm run test:integration",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
+    "test:types:consumer": "tsc -p tsconfig.dts.json",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy model-fit prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy model-fit prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy model-fit prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "test:dts": "npm run test:types"
+  },
+  "standard": {
+    "ignore": [
+      "addon/**",
+      "prebuilds/**",
+      "build/**",
+      "src/**",
+      "index.js",
+      "eslint.config.mjs"
+    ]
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "index.d.ts",
+    "prebuilds",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/model-fit"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/model-fit#readme",
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "brittle": "^3.16.5",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "standard": "^17.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
+  },
+  "dependencies": {
+    "bare-fs": "^4.5.1",
+    "bare-https": "^3.0.0",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.5.1"
+  },
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./binding.js": "./binding.js"
+  },
+  "types": "index.d.ts"
+}

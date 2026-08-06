@@ -290,19 +290,18 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   //   * `start >= pos`: the whole reasoning span was already dropped
   //     by the tail-eraser; nothing resident, genuine NoOp.
   //   * `start <  pos`: the tail-eraser stopped inside the span, so
-  //     `[start, pos)` is still resident. Under the default-on
-  //     `remove_thinking_from_context` contract we must not silently
-  //     leave reasoning tokens in cache, so clamp the effective end
-  //     to `pos` and let the compaction paths drop exactly the
-  //     resident remainder.
+  //     `[start, pos)` is still resident. When
+  //     `remove_thinking_from_context` is enabled we must not silently leave
+  //     reasoning tokens in cache, so clamp the effective end to `pos` and let
+  //     the compaction paths drop exactly the resident remainder.
   //
   // Recurrent / hybrid path cannot compact the partial-resident
   // sub-case: replay is anchored at `snapshotPos` with a captured
   // post-reasoning tail; if the live cache is shorter than that
   // captured tail, the replay buffer and live cache no longer describe
   // the same suffix. Returning `NoOp` here would complete the request
-  // with `[start, pos)` reasoning tokens still resident, violating the
-  // default-on strict cleanup contract. The compactor does not own the
+  // with `[start, pos)` reasoning tokens still resident, violating the strict
+  // cleanup contract. The compactor does not own the
   // driver's pre-request rollback anchor, so the only self-contained
   // recovery is to wipe the sequence and force the caller through the
   // existing `FailedKvWiped` hard-fail path.

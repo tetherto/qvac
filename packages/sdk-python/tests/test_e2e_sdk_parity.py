@@ -4,7 +4,7 @@ same prompts, same models, same output expectations as the JS smoke suite,
 so the Python client is held to the JS client's output bar, not a loose
 "non-empty" check.
 
-Gated exactly like test_bare_rpc_transport.py: needs the bare-rpc extra and a
+Gated exactly like test_bare_rpc_transport.py: needs bare_rpc and a
 built SDK worker (`bun run build` in packages/sdk). Models are the SDK e2e's
 own smoke resources; all are commonly cached, and fetch over P2P otherwise.
 """
@@ -19,7 +19,7 @@ import pytest_asyncio
 from _worker_env import BARE_BIN, WORKER_AVAILABLE
 
 from tetherto.qvac_sdk import translate
-from tetherto.qvac_sdk.bare_rpc_transport import BARE_RPC_AVAILABLE, BareRpcTransport
+from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 from tetherto.qvac_sdk.errors import TranslationFailedError
 from tetherto.qvac_sdk.methods import embed, load_model, ocr_stream
 from tetherto.qvac_sdk.models import (
@@ -38,7 +38,6 @@ WORKER_PATH = os.path.join(SDK_DIR, "dist", "server", "worker.js")
 IMAGES = os.path.join(SDK_DIR, "e2e", "assets", "images")
 
 pytestmark = [
-    pytest.mark.skipif(not BARE_RPC_AVAILABLE, reason="bare-rpc extra not installed"),
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
         reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",
