@@ -1,6 +1,7 @@
 import QvacLogger = require("@qvac/logging");
 import { QvacResponse } from "@qvac/infer-base";
 import type * as AddonModule from "./addon";
+type BareEventMap = Record<string | symbol, unknown[]>;
 /** Aliases: inside the namespace, `QvacResponse` resolves to its own member. */
 type InferQvacResponse = QvacResponse;
 type InferQvacResponseOf<Output> = QvacResponse<Output>;
@@ -59,6 +60,7 @@ interface LlmLlamacpp {
 }
 interface LlmLlamacppConstructor {
     new (args: LlmLlamacppArgs): LlmLlamacpp;
+    readonly prototype: LlmLlamacpp;
     /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
     readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
 }
@@ -419,7 +421,8 @@ declare namespace LlmLlamacpp {
     interface BatchResponse extends InferQvacResponse {
         ids: string[];
         /** Streamed chunks arrive on the `"output"` event. */
-        on(event: PropertyKey, cb: (chunk: BatchOutputChunk) => void): this;
+        on(event: "output", cb: (chunk: BatchOutputChunk) => void): this;
+        on<E extends keyof BareEventMap, R>(name: E, fn: (...args: BareEventMap[E]) => R): this;
         onUpdate(cb: (chunk: BatchOutputChunk) => void): this;
         await(): Promise<BatchResult[]>;
     }

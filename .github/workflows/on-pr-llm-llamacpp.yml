@@ -154,32 +154,27 @@ jobs:
     needs: [fork-approval, authorize]
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
+    # Executes PR-controlled code; every dependency resolves from public npm.
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
-      - name: Install dependencies
-        working-directory: packages/llm-llamacpp
-        run: npm install
-
-      - name: Type declaration check
-        working-directory: packages/llm-llamacpp
-        run: npm run test:dts
-
       - name: Run lint and unit tests
         id: run_lint_and_unit_tests
         uses: ./.github/actions/run-lint-and-unit-tests
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
           workdir: packages/llm-llamacpp
 
