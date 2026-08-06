@@ -133,7 +133,8 @@
   },
   "files": [
     "dist/**/*",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "lint": "lunte",
