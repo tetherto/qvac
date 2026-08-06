@@ -49,11 +49,22 @@ add_executable(
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
+  test_concurrent_process_by_id.cpp
+  test_single_path_cancel_ownership.cpp
+  test_concurrent_prefill.cpp
+  test_batch_group_cancel.cpp
+  test_save_failure_containment.cpp
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
   test_reasoning_budget.cpp
   test_cancel_rollback.cpp
+  test_job_cancel_registry.cpp
   test_reasoning_block_compactor.cpp
+  test_parse_unsigned.cpp
+  test_parallel_ceiling.cpp
+  test_finetune_cancel_action.cpp
+  test_finetune_pending_pause.cpp
+  test_whole_model_cancel_finetune.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
@@ -62,6 +73,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp

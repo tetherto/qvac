@@ -18,14 +18,11 @@ anything to run**.
 **1. Install the package**
 
 ```bash
-pip install "tetherto-qvac-sdk[bare-rpc]"
+pip install tetherto-qvac-sdk
 ```
 
-The `bare-rpc` extra is **required** — it's the wire transport (`bare-rpc-python`)
-the client speaks to the worker. It's an extra only because its dependencies are
-git-only for now; it folds into the base install once they're on PyPI. Genuinely
-optional extras: `vla` (numpy), `notebook` (numpy + pandas). (`langdetect` is no
-longer needed — source-language detection moved into the worker.)
+That pulls the wire transport (`bare-rpc`, `compact-encoding`) from PyPI.
+Optional extras: `vla` (numpy), `notebook` (numpy + pandas).
 
 **2. Install the worker** (one time) — either route works; both need Node.js:
 
@@ -119,7 +116,7 @@ the progress and base64 PCM frames, and assemble the output audio. See
 For notebooks and REPLs, `tetherto.qvac_sdk.notebook.SyncClient` runs the async
 client on a background thread so every call is plain and blocking (no `await`),
 with numpy/pandas returns and live in-cell streaming. Needs the `notebook`
-extra (`pip install "tetherto-qvac-sdk[notebook,bare-rpc]"`):
+extra (`pip install "tetherto-qvac-sdk[notebook]"`):
 
 ```python
 from tetherto.qvac_sdk.notebook import SyncClient
@@ -193,7 +190,7 @@ than trusted to match.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[gen,dev,bare-rpc]"
+.venv/bin/pip install -e ".[gen,dev]"
 .venv/bin/python3 scripts/generate.py          # regenerate from ../sdk/contract
 .venv/bin/python3 -m pytest                     # unit + (with a built worker) real-model e2e
 ```

@@ -680,7 +680,7 @@
         "toolDialect": {
           "description": "Override auto-detected tool-call dialect for all prompts.",
           "type": "string",
-          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "BatchCompletionStreamRequestToolDialect"
         },
         "requestId": {
@@ -1692,7 +1692,7 @@
         "toolDialect": {
           "description": "Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
           "type": "string",
-          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionOrchestrateRequestToolDialect"
         },
         "responseFormat": {
@@ -2300,7 +2300,7 @@
         "toolDialect": {
           "description": "Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
           "type": "string",
-          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionStreamRequestToolDialect"
         },
         "responseFormat": {
@@ -3941,7 +3941,7 @@
                 },
                 "toolDialect": {
                   "type": "string",
-                  "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+                  "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
                   "title": "LocalLoadedModelInfoToolDialect"
                 }
               },
