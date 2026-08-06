@@ -1,7 +1,7 @@
 {
-  "_comment": "Mobile test sharding for @qvac/tts-ggml. The mobile CI action auto-detects this file and runs ONLY the tests listed here (Mocha --grep per group). The perf benchmarks (runRtfBenchmarkTest, runStreamingBenchmarkTest) are intentionally NOT listed: they must not run on normal mobile runs, so they can never produce a 0/0 result. The benchmark list lives in perf-tests.json; a benchmark run (run_rtf_benchmarks=true, e.g. via benchmark-rtf-tts-ggml.yml) builds its test-groups from that file and runs only those. To add/remove a benchmark, edit perf-tests.json — no workflow or this-file changes needed. Only the 'ios' and 'android' keys are consumed by the action; this _comment is ignored.",
+  "_comment": "Mobile test sharding for @qvac/tts-ggml, keyed by platform then by the matrix engine. The mobile workflow (integration-mobile-test-tts-ggml.yml) resolves ONE group per build row via its 'Resolve functional test-groups by engine' step: the row's matrix.engine picks the list here (any non-cosyvoice engine uses the 'chatterbox' catch-all group; the 'cosyvoice' row runs only cosyvoice). This keeps CosyVoice3 — whose ~2.4 GB model directory is adb-pre-staged only on the dedicated cosyvoice row and is too large to fetch reliably on-device elsewhere — off the chatterbox row, while the chatterbox row keeps full Chatterbox/Supertonic/Parler/LavaSR coverage (their smaller GGUFs fetch on-device). The perf benchmarks (runRtfBenchmarkTest, runStreamingBenchmarkTest) are intentionally NOT listed: they live in perf-tests.json and a benchmark run (run_rtf_benchmarks=true) builds its test-groups from that file instead. Only the 'ios' and 'android' keys are consumed; this _comment is ignored.",
   "ios": {
-    "functional": [
+    "chatterbox": [
       "runAddonTest",
       "runChatterboxKvCacheGpuTest",
       "runChatterboxMtlTest",
@@ -14,10 +14,13 @@
       "runSupertonicMtlTest",
       "runSupertonicTest",
       "runSupertonic3QuantTest"
+    ],
+    "cosyvoice": [
+      "runCosyvoice3Test"
     ]
   },
   "android": {
-    "functional": [
+    "chatterbox": [
       "runAddonTest",
       "runChatterboxKvCacheGpuTest",
       "runChatterboxMtlTest",
@@ -30,6 +33,9 @@
       "runSupertonicMtlTest",
       "runSupertonicTest",
       "runSupertonic3QuantTest"
+    ],
+    "cosyvoice": [
+      "runCosyvoice3Test"
     ]
   }
 }

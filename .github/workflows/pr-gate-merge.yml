@@ -96,6 +96,9 @@ jobs:
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
               - ".github/workflows/prebuilds-llm-llamacpp.yml"
+            model-fit:
+              - "packages/model-fit/**"
+              - ".github/workflows/prebuilds-model-fit.yml"
             ocr-ggml:
               - "packages/ocr-ggml/**"
               - ".github/workflows/prebuilds-ocr-ggml.yml"
