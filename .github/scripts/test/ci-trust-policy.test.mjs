@@ -1364,6 +1364,10 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
     generateTestspec,
     /base64 -d > \/tmp\/qvacShardGrep\.txt/,
   )
+  assert.match(
+    generateTestspec,
+    /DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH:-/,
+  )
   assert.match(collectLogs, /\*Test\*spec\*output\*/)
   assert.match(collectLogs, /\*Standard\*Output\*/)
   assert.match(collectLogs, /Host phase log:/)

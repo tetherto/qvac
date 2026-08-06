@@ -128,7 +128,7 @@ cat <<EOF
           \"appium:platformVersion\": \"\$DEVICEFARM_DEVICE_OS_VERSION\", \\
           \"appium:chromedriverExecutableDir\": \"\$DEVICEFARM_CHROMEDRIVER_EXECUTABLE_DIR\", \\
           \"appium:wdaLocalPort\": 8100, \\
-          \"appium:derivedDataPath\": \"\$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\", \\
+          \"appium:derivedDataPath\": \"\${DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH:-}\", \\
           \"appium:usePrebuiltWDA\": true, \\
           \"appium:automationName\": \"${AUTOMATION_NAME}\"}" \\
           >> \$DEVICEFARM_LOG_DIR/appium.log 2>&1 &
