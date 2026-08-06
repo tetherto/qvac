@@ -4,9 +4,10 @@ description: >
   set for a given target (same base/head resolution as ./nx-affected), then for each affected
   project reads that target's `options.ci` block directly from each package's own project.json —
   read from the BASE branch's committed content, never the PR head — and flattens
-  `options.ci.platforms[]` into one matrix row per (package, platform). Emits the same
-  `matrix`/`any` output shape ./nx-affected already does, so a consuming workflow's `matrix` job
-  is a drop-in swap.
+  `options.ci.platforms[]` into one matrix row per (package, platform), adding `workdir` from the
+  project's own top-level `root` (never hand-authored in `options.ci` — it's already known to nx).
+  Emits the same `matrix`/`any` output shape ./nx-affected already does, so a consuming workflow's
+  `matrix` job is a drop-in swap.
 
   SECURITY: project.json is a file a PR author fully controls. Reading options.ci from the PR head
   would let a PR redirect its OWN run onto a different runner/matrix in the same PR — this action
@@ -90,11 +91,12 @@ runs:
           if [ -z "$CI" ] || [ "$CI" = "null" ]; then
             continue
           fi
-          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" '
+          ROOT=$(echo "$PROJECT_JSON" | jq -r '.root')
+          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" '
             (.platforms // [{}]) as $platforms
             | (del(.platforms)) as $rest
             | $platforms
-            | map({package: $pkg} + $rest + .)
+            | map({package: $pkg, workdir: $workdir} + $rest + .)
           ')
           ROWS=$(jq -c --argjson new "$PKG_ROWS" '. + $new' <<< "$ROWS")
         done
