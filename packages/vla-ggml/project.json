@@ -33,7 +33,20 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/vla-ggml"
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "testCommandSuffix": true,
+          "useTeeLogging": true,
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-22.04-arm" },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "runner": "ubuntu-24.04-arm" },
+            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64", "runner": "macos-15-large" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
       }
     },
     "lint": {
