@@ -1,41 +1,69 @@
 {
-  "_comment": "Mobile test sharding for @qvac/tts-ggml, keyed by platform then by the matrix engine. The mobile workflow (integration-mobile-test-tts-ggml.yml) resolves ONE group per build row via its 'Resolve functional test-groups by engine' step: the row's matrix.engine picks the list here (any non-cosyvoice engine uses the 'chatterbox' catch-all group; the 'cosyvoice' row runs only cosyvoice). This keeps CosyVoice3 — whose ~2.4 GB model directory is adb-pre-staged only on the dedicated cosyvoice row and is too large to fetch reliably on-device elsewhere — off the chatterbox row, while the chatterbox row keeps full Chatterbox/Supertonic/Parler/LavaSR coverage (their smaller GGUFs fetch on-device). The perf benchmarks (runRtfBenchmarkTest, runStreamingBenchmarkTest) are intentionally NOT listed: they live in perf-tests.json and a benchmark run (run_rtf_benchmarks=true) builds its test-groups from that file instead. Only the 'ios' and 'android' keys are consumed; this _comment is ignored.",
+  "_comment": "Functional mobile shards for @qvac/tts-ggml. Each intended runner appears exactly once per platform. Performance runners remain in perf-tests.json, and runParlerWerTest remains excluded.",
   "ios": {
     "chatterbox": [
       "runAddonTest",
       "runChatterboxKvCacheGpuTest",
-      "runChatterboxMtlTest",
-      "runChatterboxSpeedTest",
-      "runGpuSmokeTest",
-      "runLavasrEnhancerTest",
-      "runMultipleRunsTest",
-      "runOutputSampleRateTest",
-      "runParlerTest",
-      "runSupertonicMtlTest",
-      "runSupertonicTest",
+      "runChatterboxSpeedTest"
+    ],
+    "chatterbox-mtl": [
+      "runChatterboxMtlTest"
+    ],
+    "supertonic": [
+      "runSupertonicTest"
+    ],
+    "supertonic-mtl": [
+      "runSupertonicMtlTest"
+    ],
+    "supertonic3": [
       "runSupertonic3QuantTest"
     ],
-    "cosyvoice": [
+    "parler": [
+      "runParlerTest"
+    ],
+    "lavasr": [
+      "runLavasrEnhancerTest"
+    ],
+    "cosyvoice3": [
       "runCosyvoice3Test"
+    ],
+    "cross-model-compatibility": [
+      "runMultipleRunsTest",
+      "runGpuSmokeTest",
+      "runOutputSampleRateTest"
     ]
   },
   "android": {
     "chatterbox": [
       "runAddonTest",
       "runChatterboxKvCacheGpuTest",
-      "runChatterboxMtlTest",
-      "runChatterboxSpeedTest",
-      "runGpuSmokeTest",
-      "runLavasrEnhancerTest",
-      "runMultipleRunsTest",
-      "runOutputSampleRateTest",
-      "runParlerTest",
-      "runSupertonicMtlTest",
-      "runSupertonicTest",
+      "runChatterboxSpeedTest"
+    ],
+    "chatterbox-mtl": [
+      "runChatterboxMtlTest"
+    ],
+    "supertonic": [
+      "runSupertonicTest"
+    ],
+    "supertonic-mtl": [
+      "runSupertonicMtlTest"
+    ],
+    "supertonic3": [
       "runSupertonic3QuantTest"
     ],
-    "cosyvoice": [
+    "parler": [
+      "runParlerTest"
+    ],
+    "lavasr": [
+      "runLavasrEnhancerTest"
+    ],
+    "cosyvoice3": [
       "runCosyvoice3Test"
+    ],
+    "cross-model-compatibility": [
+      "runMultipleRunsTest",
+      "runGpuSmokeTest",
+      "runOutputSampleRateTest"
     ]
   }
 }
