@@ -13,8 +13,8 @@
 #include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
-#include "utils/BackendSelection.hpp"
 #include "test_common.hpp"
+#include "utils/BackendSelection.hpp"
 
 namespace fs = std::filesystem;
 

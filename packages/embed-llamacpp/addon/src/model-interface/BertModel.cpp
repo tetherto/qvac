@@ -423,8 +423,8 @@ BertModelSetup setupParams(
       result.resolvedBackendDevice = 1;
 
       // Row-split needs a backend that provides split buffers, llama.cpp now
-      // rejects the load outright on backends without it. Degrade row -> layer to
-      // keep the model loadable.
+      // rejects the load outright on backends without it. Degrade row -> layer
+      // to keep the model loadable.
       if (splitMode == LLAMA_SPLIT_MODE_ROW &&
           !backend_selection::gpuBackendSupportsRowSplit()) {
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
