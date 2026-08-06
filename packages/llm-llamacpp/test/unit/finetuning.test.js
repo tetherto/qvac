@@ -49,10 +49,11 @@ function baseFinetuneOpts(overrides = {}) {
 }
 
 async function assertInferenceSucceeds(t, model, token) {
-  model.addon.runJob.callsFake(() => true)
+  model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
   const response = await model._runInternal([{ role: 'user', content: 'test' }])
-  model._addonOutputCallback(null, 'Output', token, null)
-  model._addonOutputCallback(null, 'Output', { TPS: 1, tokens: 1 }, null)
+  // Inference events are always tagged with the admitted jobId.
+  model._addonOutputCallback(null, 'Output', token, null, 1)
+  model._addonOutputCallback(null, 'Output', { TPS: 1, tokens: 1 }, null, 1)
   const output = await response.await()
   t.ok(Array.isArray(output), 'inference should resolve with output array')
   t.ok(output.includes(token), 'output should contain the generated token')
@@ -67,6 +68,11 @@ const createModelWithMockAddon = (opts = {}) => {
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
   })
   model.addon = createMockAddon()
+  /// Stand in for the native scheduler's activeJobs(): an active finetune
+  /// (exclusive job) or any registered inference sink counts as outstanding.
+  /// Lets the model's activeJobs-based admission gate work without a JS-side
+  /// counter.
+  model.addon.activeJobs = () => (model._finetuneJob.active ? 1 : 0) + model._jobSinks.size
   return model
 }
 
@@ -178,7 +184,8 @@ test('finetune() runs inside exclusive queue wrapper', async (t) => {
 test('finetune() rejects when another active job exists', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
-  model._hasActiveResponse = true
+  /// Simulate an already-active job by reporting a full scheduler.
+  model.addon.activeJobs = () => 1
 
   await t.exception(() => model.finetune(opts), /already set or being processed/)
   t.ok(!model.addon.finetune.called, 'addon.finetune is not called when busy')
@@ -253,9 +260,9 @@ test('inference succeeds after a failed finetune on the same model instance', as
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => {
     setImmediate(() => {
-      model._addonOutputCallback(null, 'SomeError', null, 'Training failed: OOM')
+      model._addonOutputCallback(null, 'SomeError', null, 'Training failed: OOM', 41)
     })
-    return true
+    return 41
   })
 
   const finetuneHandle = await model.finetune(opts)
@@ -273,9 +280,9 @@ test('finetune() clears busy state on error and allows next finetune', async (t)
     calls++
     if (calls === 1) {
       setImmediate(() => {
-        model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory')
+        model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory', 41)
       })
-      return true
+      return 41
     }
     return completeFinetuneWith(model)()
   })
@@ -369,93 +376,74 @@ test('finetune() rejects handle.await() on runtime error (like inference)', asyn
   const model = createModelWithMockAddon()
   model.addon.finetune.callsFake(() => {
     setImmediate(() => {
-      model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory')
+      model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory', 41)
     })
-    return true
+    return 41
   })
 
   const handle = await model.finetune(opts)
   await t.exception(() => handle.await(), /out of memory/)
 })
 
-test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal result', async (t) => {
+test('the tagged TPS trailer after a finetune terminal is consumed by its sink', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
-  model.addon.finetune.callsFake(() => true)
+  model.addon.finetune.callsFake(() => 41)
 
   const handle = await model.finetune(opts)
-  t.is(
-    model._addonEventState.skipNextRuntimeStats,
-    false,
-    'flag starts false before finetune terminal arrives'
-  )
 
-  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null)
-  t.is(
-    model._addonEventState.skipNextRuntimeStats,
-    true,
-    'flag must be set after finetune terminal result'
-  )
-
+  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null, 41)
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'COMPLETED' })
+  t.ok(model._jobSinks.has(41), 'the sink must stay registered for the scheduler terminal')
 
-  model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0, time_ms: 100 }, null)
-  t.is(
-    model._addonEventState.skipNextRuntimeStats,
-    false,
-    'flag must reset after TPS stats are consumed'
-  )
+  model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0, time_ms: 100 }, null, 41)
+  t.absent(model._jobSinks.has(41), 'the trailer must deregister the finetune sink')
+  t.is(model._hasActiveResponse, false, 'the trailer must not resurrect busy state')
 })
 
 test('TPS stats without prior finetune are forwarded as normal JobEnded', async (t) => {
   const model = createModelWithMockAddon()
-  model.addon.runJob.callsFake(() => true)
+  model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
 
   const response = await model._runInternal([{ role: 'user', content: 'Hello' }])
-  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should be false without finetune')
 
-  model._addonOutputCallback(null, 'Output', 'world', null)
-  model._addonOutputCallback(null, 'Output', { TPS: 42.5, tokens: 10, time_ms: 235 }, null)
+  model._addonOutputCallback(null, 'Output', 'world', null, 1)
+  model._addonOutputCallback(null, 'Output', { TPS: 42.5, tokens: 10, time_ms: 235 }, null, 1)
 
   const output = await response.await()
   t.ok(Array.isArray(output), 'inference response should resolve with output array')
   t.ok(output.includes('world'), 'output should contain the emitted token')
-  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should remain false')
   t.is(model._hasActiveResponse, false, 'busy state should be cleared')
 })
 
-test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent inference job', async (t) => {
+test('a late finetune TPS trailer never ends a subsequent inference job', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
-  model.addon.finetune.callsFake(() => true)
+  model.addon.finetune.callsFake(() => 41)
 
   const finetuneHandle = await model.finetune(opts)
-  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null)
+  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null, 41)
   await finetuneHandle.await()
-  t.is(
-    model._addonEventState.skipNextRuntimeStats,
-    true,
-    'skip flag should be armed after finetune'
-  )
 
-  model.addon.runJob.callsFake(() => true)
+  // The finetune sink still awaits its trailer; the mock activeJobs would
+  // count it, but natively the exclusive job's slot is already released
+  // before its terminal events are delivered.
+  model.addon.activeJobs = () => 0
+  model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
   const inferResponse = await model._runInternal([{ role: 'user', content: 'Hello' }])
 
-  model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null)
+  // The late trailer carries the finetune's own id: it routes to the
+  // finetune sink, not to the freshly admitted inference job.
+  model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null, 41)
   t.is(
-    model._addonEventState.skipNextRuntimeStats,
-    false,
-    'flag should reset after consuming stale TPS'
-  )
-  t.is(
-    inferResponse.getStatus(),
+    inferResponse._status,
     'running',
-    'inference must still be running after stale TPS was swallowed'
+    'inference must still be running after the finetune trailer landed'
   )
 
-  model._addonOutputCallback(null, 'Output', 'answer', null)
-  model._addonOutputCallback(null, 'Output', { TPS: 50.0, tokens: 5 }, null)
+  model._addonOutputCallback(null, 'Output', 'answer', null, 1)
+  model._addonOutputCallback(null, 'Output', { TPS: 50.0, tokens: 5 }, null, 1)
 
   const output = await inferResponse.await()
   t.ok(Array.isArray(output), 'inference should resolve with output array')

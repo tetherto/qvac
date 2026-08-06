@@ -1,8 +1,9 @@
 # tetherto-qvac-sdk — Python SDK
 
 The Python client for QVAC: local-first, P2P AI inference (LLM completion,
-embeddings, transcription, TTS, OCR, translation, diffusion, VLA, …) through the
-same worker and the same contract as the TypeScript `@qvac/sdk`. Asyncio-native.
+embeddings, transcription, TTS, OCR, translation, diffusion, audio generation,
+VLA, …) through the same worker and the same contract as the TypeScript
+`@qvac/sdk`. Asyncio-native.
 
 The package version tracks the `@qvac/sdk` version it speaks (e.g. `0.15.0`), so
 a given python-sdk release makes clear exactly which SDK it targets.
@@ -17,14 +18,11 @@ anything to run**.
 **1. Install the package**
 
 ```bash
-pip install "tetherto-qvac-sdk[bare-rpc]"
+pip install tetherto-qvac-sdk
 ```
 
-The `bare-rpc` extra is **required** — it's the wire transport (`bare-rpc-python`)
-the client speaks to the worker. It's an extra only because its dependencies are
-git-only for now; it folds into the base install once they're on PyPI. Genuinely
-optional extras: `vla` (numpy), `notebook` (numpy + pandas). (`langdetect` is no
-longer needed — source-language detection moved into the worker.)
+That pulls the wire transport (`bare-rpc`, `compact-encoding`) from PyPI.
+Optional extras: `vla` (numpy), `notebook` (numpy + pandas).
 
 **2. Install the worker** (one time) — either route works; both need Node.js:
 
@@ -74,8 +72,8 @@ asyncio.run(main())
 
 More in [`examples/`](./examples) — one runnable example per major capability
 (completion events / tools / worker-orchestrated tools, cancel, embeddings,
-translation, transcription, TTS, OCR, registry queries, model info, logging,
-VLA, plugins), mirroring `packages/sdk/examples`.
+translation, transcription, TTS, OCR, audio generation, registry queries, model
+info, logging, VLA, plugins), mirroring `packages/sdk/examples`.
 
 ## The public API (`tetherto.qvac_sdk`)
 
@@ -92,8 +90,9 @@ live in `tetherto.qvac_sdk.models`.
 - **Result types**: `CompletionRun` (`.events`, `.final`), `CompletionFinal`,
   `ToolCall`, `TranslateRun`.
 - **Generated method stubs** for every other contract method (`embed`,
-  `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`,
-  `get_model_info`, `download_asset`, …), each taking a typed request model.
+  `transcribe`, `text_to_speech`, `ocr_stream`, `audio_gen_stream`,
+  `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, …), each
+  taking a typed request model.
 - **Request/response models + enums** (`LoadModelRequest`, `ModelType`, …),
   also available in full from `tetherto.qvac_sdk.schemas`.
 - **Errors** (`QvacError`, `RPCError`, `InferenceCancelledError`,
@@ -107,12 +106,17 @@ live in `tetherto.qvac_sdk.models`.
 The raw generated method stubs are also in `tetherto.qvac_sdk.methods`, and the pydantic
 models in `tetherto.qvac_sdk.schemas`, if you prefer the explicit modules.
 
+Audio generation currently uses the raw `audio_gen_stream` stub rather than an
+ergonomic Python `audio_gen()` wrapper. Build an `AudioGenStreamRequest`, iterate
+the progress and base64 PCM frames, and assemble the output audio. See
+[`examples/audiogen.py`](./examples/audiogen.py).
+
 ## Notebook / data science
 
 For notebooks and REPLs, `tetherto.qvac_sdk.notebook.SyncClient` runs the async
 client on a background thread so every call is plain and blocking (no `await`),
 with numpy/pandas returns and live in-cell streaming. Needs the `notebook`
-extra (`pip install "tetherto-qvac-sdk[notebook,bare-rpc]"`):
+extra (`pip install "tetherto-qvac-sdk[notebook]"`):
 
 ```python
 from tetherto.qvac_sdk.notebook import SyncClient
@@ -186,7 +190,7 @@ than trusted to match.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[gen,dev,bare-rpc]"
+.venv/bin/pip install -e ".[gen,dev]"
 .venv/bin/python3 scripts/generate.py          # regenerate from ../sdk/contract
 .venv/bin/python3 -m pytest                     # unit + (with a built worker) real-model e2e
 ```

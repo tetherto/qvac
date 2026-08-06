@@ -621,6 +621,42 @@ function keyStateProbe(r: ReturnType<typeof createRequestRegistry>): {
   return r as unknown as { __keyStateSize: () => number }
 }
 
+test('policy: a second same-model AudioGen request waits FIFO', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({
+    kind: 'audiogen',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue'
+  })
+  const first = await r.begin({
+    requestId: 'audiogen-policy-r-1',
+    kind: 'audiogen',
+    modelId: 'audiogen-policy-m-1'
+  })
+
+  let secondResolved = false
+  const secondPromise = r
+    .begin({
+      requestId: 'audiogen-policy-r-2',
+      kind: 'audiogen',
+      modelId: 'audiogen-policy-m-1'
+    })
+    .then((ctx) => {
+      secondResolved = true
+      return ctx
+    })
+
+  await settle()
+  t.is(secondResolved, false, 'second AudioGen request waits for the model slot')
+
+  await first[Symbol.asyncDispose]()
+  const second = await secondPromise
+  t.is(secondResolved, true, 'second AudioGen request is admitted after the first ends')
+  t.is(second.requestId, 'audiogen-policy-r-2')
+
+  await second[Symbol.asyncDispose]()
+})
+
 test('queue: a second same-model begin waits FIFO until the first disposes', async (t) => {
   const r = createRequestRegistry()
   r.policy({

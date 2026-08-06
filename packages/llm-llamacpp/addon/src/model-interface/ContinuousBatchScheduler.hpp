@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <common/sampling.h>
@@ -64,11 +65,58 @@ namespace qvac_lib_inference_addon_llama::batching {
     unsigned promptSize, unsigned promptKvSize, int nPredict,
     unsigned perSeqMaxTokens);
 
-/// Per-request streaming sinks. Both are optional; missing callbacks
+/// Observed end-to-end figures for one finished request, computed from its
+/// wall-clock stamps at drain. This is what the submitting caller experienced
+/// (queue wait + shared-GPU decode) — NOT the request's isolated compute
+/// speed, which is unmeasurable under fused batch decode.
+struct ObservedRequestStats {
+  /// Enqueue -> first sampled token, ms. 0 when no token was ever sampled.
+  double ttftMs = 0.0;
+  /// Observed generation rate: (generatedTokens - 1) inter-token gaps over
+  /// firstTokenAt -> lastTokenAt, tok/s. 0 with fewer than two tokens.
+  double genTps = 0.0;
+  int64_t generatedTokens = 0;
+  int64_t promptTokens = 0;
+  /// Why this request's generation stopped. Per-sequence, so it is honest for
+  /// a single request; `nullopt` when unknown (never finalized) or when a
+  /// group's requests disagree, since one reason cannot describe many.
+  std::optional<GenerationStopReason> stopReason;
+};
+
+/// Compute a request's observed stats from its stamps. @p enqueuedAt is when
+/// the caller handed the request to the scheduler (queue wait included).
+/// @p stopReason is the finalized driver's reason, when it is known.
+[[nodiscard]] ObservedRequestStats computeObservedStats(
+    std::chrono::steady_clock::time_point enqueuedAt, const Request& req,
+    std::optional<GenerationStopReason> stopReason = std::nullopt);
+
+/// Group-level view of one submitted batch: TTFT and rate average across the
+/// requests that actually produced them (a request that never sampled a token
+/// does not drag the averages down), token counts sum over all. `stopReason`
+/// survives only when every request agrees (so a one-item group keeps its
+/// reason); a mixed group reports none rather than picking a winner.
+[[nodiscard]] ObservedRequestStats
+aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
+
+/// The never-matching admission id: no slot is ever stamped with it, so a
+/// cancel carrying it is always a no-op. Real admission ids start at 1.
+inline constexpr uint64_t K_UNKNOWN_ADMISSION_ID = 0;
+
+/// Per-request streaming sinks. All are optional; missing callbacks
 /// are no-ops.
 struct StreamCallbacks {
   std::function<void(uint32_t seqId, const std::string& text)> onToken;
   std::function<void(uint32_t seqId)> onDone;
+  /// Fired once when the request is admitted into a slot, before that slot
+  /// decodes anything. Runs with the scheduler lock held (on the worker
+  /// thread once it is driving), so it must not call back into the
+  /// scheduler. `admissionId` is the slot's ownership token for this
+  /// admission — the only handle `cancel()` accepts, because the seqId
+  /// alone is a recyclable slot index that may already name a successor by
+  /// the time a cancel fires. Returning true means the caller already holds
+  /// a cancel for this request — the scheduler tears the slot down before
+  /// it ever decodes.
+  std::function<bool(uint32_t seqId, uint64_t admissionId)> onAdmitted;
 };
 
 struct SubmitRequest {
@@ -98,6 +146,10 @@ struct SubmitRequest {
   /// are rejected at admission rather than silently truncated.
   GenerationParams overrides;
   StreamCallbacks streams;
+  /// When the caller built this request — the start of the observed timeline
+  /// (ObservedRequestStats.ttftMs counts queue wait from here).
+  std::chrono::steady_clock::time_point enqueuedAt =
+      std::chrono::steady_clock::now();
 };
 
 using SchedulerDecodeFunc = std::function<int(llama_context*, llama_batch&)>;
@@ -140,6 +192,17 @@ struct RuntimeStatsSnapshot {
       int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
       const Request& req);
 
+  /// How busy the shared backend was, NOT a property of any one request: the
+  /// mean number of sequences decoded together, averaged over every
+  /// `llama_decode` step of the epoch (`concurrentSeqSum_ / decodeStepCount_`).
+  /// A request contributes at most 1; the rest is other traffic on the same
+  /// backend, capped by its configuration (`parallel`). 1.0 = the model was
+  /// effectively yours alone; ~N = your tokens shared compute with N-1 others,
+  /// so a request's observed `TPS` is roughly the aggregate rate divided by N
+  /// (`observed TPS * avgConcurrentSeq ~= aggregate TPS`). Useful even on a
+  /// single request: it tells apart "slow model" from "busy backend". Always
+  /// reported model-level, never overridden per job. See
+  /// docs/continuous-batching.md ("Stats").
   [[nodiscard]] double avgConcurrentSeq() const;
   [[nodiscard]] double elapsedMs() const;
 
@@ -171,6 +234,8 @@ private:
 struct BatchResult {
   std::vector<std::string> outputs;
   RuntimeStatsSnapshot stats;
+  /// Per-request observed figures, in input order (parallel to `outputs`).
+  std::vector<ObservedRequestStats> requestStats;
 };
 
 /// Builds the per-slot `SequenceDriver` at admission time. The model layer
@@ -223,7 +288,12 @@ public:
 
   /// Queue a group of requests and block until every request in the group has
   /// completed, failed, or been cancelled. Outputs are returned in input order.
-  [[nodiscard]] BatchResult processBatch(std::vector<SubmitRequest>&& requests);
+  /// @p groupTag (non-zero) lets the submitter target this group through
+  /// `cancelGroupQueued` for as long as this call is on the stack; the tag must
+  /// be unique among live groups and is forgotten when the call returns. Pass 0
+  /// for an untargetable group.
+  [[nodiscard]] BatchResult
+  processBatch(std::vector<SubmitRequest>&& requests, uint64_t groupTag = 0);
 
   /// Admit one request and return the assigned slot id (`seqId`).
   ///
@@ -241,31 +311,70 @@ public:
   /// `clear()`) when admitting a batch and any one request fails.
   [[nodiscard]] uint32_t submit(SubmitRequest&& request);
 
-  /// Drives one fillBatch + decode + advance + sample iteration.
-  /// Returns `true` on a successful decode *or* a no-op (no slot had
-  /// tokens to feed). Returns `false` if `llama_decode` reported a
-  /// non-zero rc; in that case every still-active slot has already
-  /// been finalised with `StopReason::DecodeError`, KV-cleared, and
-  /// drained, so the caller's only obligation is to break out of its
-  /// driving loop.
-  [[nodiscard]] bool step();
-
   [[nodiscard]] bool hasWork() const;
 
   [[nodiscard]] unsigned numActive() const;
 
+  /// Requests occupying or waiting for a slot: active slots plus the pending
+  /// backlog. This is the resource that actually runs out, so it — not a job
+  /// count — is what an at-capacity admission check must compare against
+  /// `parallel` (one batch job of N prompts consumes up to N of these).
+  /// The pending part is `size_approx()`, so the total may momentarily be off
+  /// by a request in either direction; callers use it as a fast-fail hint,
+  /// never as an invariant.
+  [[nodiscard]] unsigned occupancy() const;
+
   void resetRuntimeStats();
   [[nodiscard]] RuntimeStatsSnapshot runtimeStats() const;
 
-  /// Cancel one slot: frees the per-slot sampler and KV-cache entries
-  /// and fires onDone with `Cancelled`. While the worker thread is
-  /// running, the cancellation is only recorded and applied by the
-  /// worker between decode steps -- the worker releases `mutex_` across
-  /// `llama_decode`, so mutating the shared `llama_context` from the
-  /// calling thread would race the in-flight decode. Applied
-  /// synchronously when no worker has been started.
-  /// @return whether the slot was occupied when the cancel was issued.
-  bool cancel(uint32_t seqId);
+  /// Cancel the admission identified by (`seqId`, `admissionId`): frees the
+  /// per-slot sampler and KV-cache entries and fires onDone with
+  /// `Cancelled`. `admissionId` is the ownership token onAdmitted handed
+  /// out for this admission; a slot whose current admission id differs
+  /// (the targeted request already finished and the seqId was recycled)
+  /// is left untouched -- the cancel quietly no-ops. Ownership is checked
+  /// when the cancel is requested (cross-thread calls) and re-checked when
+  /// a deferred cancel is applied, so a stale cancel can never land on the
+  /// slot's next occupant. While the worker thread is running, the
+  /// cancellation is only recorded and applied by the worker between
+  /// decode steps -- the worker releases `mutex_` across `llama_decode`,
+  /// so mutating the shared `llama_context` from the calling thread would
+  /// race the in-flight decode. Applied synchronously when no worker has
+  /// been started.
+  ///
+  /// Safe to call from the scheduler's own streaming callbacks
+  /// (onToken/onAdmitted/onDone run on the worker thread with `mutex_`
+  /// held): a call on the worker thread never takes `mutex_`, it only
+  /// records the cancel for the worker's next teardown reconciliation.
+  /// @return whether the targeted admission was still live when the cancel
+  /// was issued; a worker-thread call cannot check that (no lock) and
+  /// always returns true -- the recorded cancel no-ops later if the
+  /// admission is already gone.
+  bool cancel(uint32_t seqId, uint64_t admissionId);
+
+  /// Settle the group tagged @p groupTag when it still has requests waiting in
+  /// `pending_`, so cancelling it does not have to wait for a *foreign* group
+  /// to release the slots those requests need. `cancel(seqId, admissionId)`
+  /// only reaches admitted requests, and `pending_` is FIFO across groups with
+  /// no selective removal, so without this a fully-queued group is settled only
+  /// when it is eventually admitted and refused — arbitrarily far in the
+  /// future, with its caller's cancel blocked for the whole wait.
+  ///
+  /// A group whose every request already holds a slot is left alone: slot
+  /// teardown reaches all of it, and that path keeps the documented graceful
+  /// partial-output cancel. Stale `pending_` entries are not removed; the
+  /// group is marked done and `admitPendingIntoFreeSlotsLocked` discards them
+  /// when it next dequeues, so no request can run after this.
+  ///
+  /// Same threading contract as `cancel(seqId, admissionId)`: safe from the
+  /// worker's own streaming callbacks (records only, no lock), applied by the
+  /// worker between decode steps otherwise, synchronous when no worker runs.
+  /// @return whether the tag named a live group when the cancel was issued; a
+  /// worker-thread call cannot check that (no lock) and always returns true --
+  /// the recorded cancel no-ops later if the group is already gone. Always
+  /// false for tag 0, which is the untagged sentinel.
+  bool cancelGroupQueued(uint64_t groupTag);
+
   void requestCancelAll();
 
   /// Cancel every active request. Deferred to the worker thread when it
@@ -322,12 +431,21 @@ private:
   };
 
   struct BatchGroup {
-    explicit BatchGroup(size_t requestCount) : outputs(requestCount) {}
+    explicit BatchGroup(size_t requestCount)
+        : outputs(requestCount), requestStats(requestCount) {}
 
     std::vector<std::string> outputs;
+    std::vector<ObservedRequestStats> requestStats;
     RuntimeStatsSnapshot stats;
     size_t completedCount = 0;
     size_t totalCount = 0;
+    /// Requests of this group that have reached a slot. `< totalCount` means
+    /// some are still queued in `pending_`, i.e. a targeted cancel cannot
+    /// reach them through slot teardown alone (see cancelGroupQueued).
+    size_t admittedCount = 0;
+    /// The submitter's opaque handle for this group, used to target it while
+    /// it may still be entirely queued. 0 when untagged.
+    uint64_t tag = 0;
     bool done = false;
     std::exception_ptr error;
   };
@@ -348,12 +466,27 @@ private:
     bool saveCacheToDisk = false;
     bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
+    /// Carried from SubmitRequest so the drain can compute observed stats.
+    std::chrono::steady_clock::time_point enqueuedAt{};
+    /// Ownership token for this admission, strictly incrementing across the
+    /// scheduler's lifetime and never `K_UNKNOWN_ADMISSION_ID`. `cancel()`
+    /// only tears the slot down when the caller presents this exact id, so
+    /// a cancel aimed at a finished request cannot hit the recycled seqId's
+    /// next occupant.
+    uint64_t admissionId = K_UNKNOWN_ADMISSION_ID;
   };
 
   void ensureWorkerStartedLocked();
   void workerLoop();
   void admitPendingIntoFreeSlotsLocked();
   [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
+  /// Drives one fillBatch + decode + advance + sample iteration.
+  /// Returns `true` on a successful decode *or* a no-op (no slot had
+  /// tokens to feed). Returns `false` if `llama_decode` reported a
+  /// non-zero rc; in that case every still-active slot has already
+  /// been finalised with `StopReason::DecodeError`, KV-cleared, and
+  /// drained, so the caller's only obligation is to break out of its
+  /// driving loop.
   [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
   /// Evaluate the head media barrier of one awaiting slot (lowest seqId)
   /// via its driver, unlocking around the embedded `llama_decode`. A
@@ -363,10 +496,39 @@ private:
   void failSlotLocked(uint32_t seqId, std::exception_ptr error);
   [[nodiscard]] MultiRequestBatcher::PrefillCompleteFn prefillCompleteFn();
   /// Extract finished requests and run the full per-slot drain (terminal
-  /// driver hook with output flushing, stats, cache save, KV clear).
+  /// driver hook with output flushing, stats, cache save, KV clear). A
+  /// cache-save throw is contained per slot: it fails only that slot's
+  /// group (via failSlotLocked), never the sibling slots decoding for
+  /// other groups.
   void drainFinishedLocked();
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
+  /// One deferred targeted cancel, kept as the full (seqId, admissionId)
+  /// identity so the apply side can re-validate ownership: the slot may
+  /// have drained and been re-admitted between record and apply.
+  struct PendingSlotCancel {
+    uint32_t seqId = 0;
+    uint64_t admissionId = K_UNKNOWN_ADMISSION_ID;
+  };
+
+  /// Append one deferred per-slot cancel under `pendingCancelsMtx_` only.
+  /// The single mutation path shared by worker-thread callers (which must
+  /// not touch `mutex_`) and cross-thread callers (which already hold it).
+  void recordPendingSlotCancel(uint32_t seqId, uint64_t admissionId);
+  /// Same, for a deferred group cancel (see cancelGroupQueued).
+  void recordPendingGroupCancel(uint64_t groupTag);
+  /// Whether any deferred cancel (per-slot or per-group) is waiting to be
+  /// applied by the worker.
+  [[nodiscard]] bool hasPendingCancels() const;
+  /// Settle a tagged group that still has queued requests. The apply half of
+  /// `cancelGroupQueued`, re-resolving the tag because the group may have
+  /// finished, or become fully admitted, between record and apply.
+  void applyGroupQueuedCancelLocked(uint64_t groupTag) noexcept;
+  /// Whether `seqId` currently holds the admission identified by
+  /// `admissionId`. False for free slots, out-of-range ids, and slots whose
+  /// admission id differs (the seqId was recycled to a newer request).
+  [[nodiscard]] bool
+  slotOwnedByLocked(uint32_t seqId, uint64_t admissionId) const noexcept;
   void
   completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
@@ -447,8 +609,30 @@ private:
   std::thread worker_;
   bool workerStarted_ = false;
   bool stopping_ = false;
-  std::vector<uint32_t> pendingSlotCancels_;
+  /// The worker's thread id, set once when it starts (under `mutex_`, so it
+  /// is visible to every streaming callback the worker later runs). Lets
+  /// cancel() detect a call from the worker's own callbacks -- which hold
+  /// `mutex_` -- and record instead of self-deadlocking on it.
+  std::atomic<std::thread::id> workerThreadId_{};
+  /// Guarded by `pendingCancelsMtx_`, NOT `mutex_`: worker-thread callers
+  /// of cancel() (streaming callbacks fired with `mutex_` held) must be able
+  /// to record a cancel without touching the scheduler lock. Lock order is
+  /// always `mutex_` -> `pendingCancelsMtx_`, never the reverse.
+  mutable std::mutex pendingCancelsMtx_;
+  std::vector<PendingSlotCancel> pendingSlotCancels_;
+  /// Deferred group cancels, same threading rationale as pendingSlotCancels_.
+  std::vector<uint64_t> pendingGroupCancels_;
   bool clearRequested_ = false;
+  /// Live tagged groups, so a cancel can find a group that holds no slot yet.
+  /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`
+  /// call. Weak, so a group settled and abandoned by its submitter cannot be
+  /// kept alive here. Tags come from the submitter (never reused while live),
+  /// so an entry can never be mistaken for a later group.
+  std::unordered_map<uint64_t, std::weak_ptr<BatchGroup>> taggedGroups_;
+  /// Source of the strictly-incrementing per-admission ownership tokens.
+  /// Guarded by `mutex_` (minted inside submitLocked). Starts past
+  /// `K_UNKNOWN_ADMISSION_ID` so the sentinel never matches a live slot.
+  uint64_t nextAdmissionId_ = K_UNKNOWN_ADMISSION_ID + 1;
   RuntimeStatsSnapshot stats_;
 
   /// Decode function used in stepLocked(). Defaults to llama_decode; a test

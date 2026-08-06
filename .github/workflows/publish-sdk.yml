@@ -10,6 +10,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
+      - "packages/sdk-python/**"
   pull_request_target:
     types:
       - opened
@@ -25,6 +26,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
+      - "packages/sdk-python/**"
 
   workflow_dispatch:
     inputs:
@@ -37,6 +39,11 @@ on:
         required: false
         default: ""
         type: string
+      publish_pypi_only:
+        description: "Republish tetherto-qvac-sdk to PyPI only (lockstep version; skip npm)"
+        required: false
+        default: false
+        type: boolean
 
 env:
   WORKDIR: packages/sdk
@@ -120,22 +127,32 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify @qvac/sdk and @qvac/bare-sdk version lockstep
+      - name: Verify sdk / bare-sdk / python version lockstep
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          # pull_request_target pins the working tree to base.sha; read both
-          # manifests from the PR head SHA so a missed bare-sdk bump fails pre-merge.
+          # pull_request_target pins the working tree to base.sha; read manifests
+          # from the PR head SHA so a missed bare-sdk or python bump fails pre-merge
+          # (pr-checks-sdk-python.yml may not run on an sdk-only version bump).
           set -euo pipefail
           REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
           SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
           BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
+          PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ "$SDK_VER" != "$BARE_VER" ]; then
             echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER at ${REF}. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
             exit 1
           fi
-          echo "OK: @qvac/sdk and @qvac/bare-sdk both at $SDK_VER (verified at ${REF})"
+          if [ -z "$PY_VER" ]; then
+            echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
+            exit 1
+          fi
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          echo "OK: @qvac/sdk, @qvac/bare-sdk, and tetherto-qvac-sdk all at $SDK_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -314,6 +331,81 @@ jobs:
         with:
           name: dist-bare-sdk
           path: ${{ env.WORKDIR_BARE }}/dist/
+          retention-days: 30
+
+  build-sdk-python:
+    name: Build tetherto-qvac-sdk (Python)
+    needs:
+      - fork-approval
+      - authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      # pull_request_target: keep working tree on base.sha (do not execute PR head
+      # under this job's secrets). Contract/build smoke the base tree; PR contract
+      # coverage is pr-checks-sdk-python.yml. Lockstep reads head.sha like `build`.
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Fetch PR head commits
+        if: github.event_name == 'pull_request_target'
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch origin ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+
+      - name: Install build tooling
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -U pip
+          .venv/bin/pip install --quiet build twine
+          .venv/bin/pip install --quiet -e ".[gen]"
+
+      - name: Contract check
+        run: .venv/bin/python3 scripts/generate.py --check
+
+      - name: Build
+        run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
+
+      - name: Verify version lockstep with @qvac/sdk
+        working-directory: ${{ github.workspace }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
+          PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
+          if [ -z "$PY_VER" ]; then
+            echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
+            exit 1
+          fi
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER (verified at ${REF})"
+
+      - name: Check metadata
+        run: .venv/bin/twine check dist/*
+
+      - name: Upload python dist artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: dist-sdk-python
+          path: packages/sdk-python/dist/*
+          if-no-files-found: error
           retention-days: 30
 
   publish-logic:
@@ -498,7 +590,9 @@ jobs:
       - publish-logic
       - release-merge-guard
     if: >-
-      (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -557,7 +651,9 @@ jobs:
       - publish-logic
       - release-merge-guard
     if: >-
-      (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -602,9 +698,57 @@ jobs:
           tag: ${{ steps.dist-tag-2.outputs.tag }}
           workdir: ${{ env.WORKDIR_BARE }}
 
+  publish-pypi:
+    name: Publish tetherto-qvac-sdk to PyPI
+    needs:
+      - fork-approval
+      - authorize
+      - build-sdk-python
+      - publish-logic
+      - release-merge-guard
+      - publish-npm
+      - publish-npm-bare-sdk
+    # Lockstep release: after both npm packages publish. Escape hatch:
+    # workflow_dispatch with publish_pypi_only=true (npm already shipped).
+    if: >-
+      always() &&
+      github.repository == 'tetherto/qvac' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.build-sdk-python.result == 'success' &&
+      (
+        (
+          needs.publish-logic.outputs.publish_release == 'true' &&
+          (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+          needs.publish-npm.result == 'success' &&
+          needs.publish-npm-bare-sdk.result == 'success'
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          inputs.publish_pypi_only == true
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tetherto-qvac-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: dist-sdk-python
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+
   # Create GitHub release only for actual releases (after NPM publish).
   # Gated on BOTH publish-npm jobs succeeding so we never tag a release
-  # where @qvac/sdk shipped but @qvac/bare-sdk failed (or vice versa)
+  # where @qvac/sdk shipped but @qvac/bare-sdk failed (or vice versa).
+  # PyPI is separate; recover with workflow_dispatch publish_pypi_only.
   publish-release:
     needs: [publish-npm, publish-npm-bare-sdk]
     if: >-
