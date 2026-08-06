@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Optimize OpenCL GPU backend implementation (Android) for Parler-TTS model
 - Update `ggml-speech` dependency version to align with other packages that also depend on it.
+- Enable Parler-TTS Vulkan execution on ARM Mali Android devices when
+  `config.useGPU: true` is requested, while preserving CPU fallback elsewhere.
+- Add strict Parler GPU backend assertions on Apple and Android CI, including
+  the Android Device Farm Mali run.
 
 ## [0.6.1] - 2026-07-30
 
