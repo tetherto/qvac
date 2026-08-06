@@ -1,28 +1,18 @@
 name: On PR Trigger (inference-addon-cpp)
 
-# Gated entrypoint for the inference-addon-cpp mobile integration tests.
-# Mirrors on-pr-embed-llamacpp.yml's gating (fork-approval + authorize + ci-router),
-# trimmed to just the mobile stage. The desktop C++/JS suites keep their own
-# dedicated `pull_request` workflows (pr-test-inference-addon-cpp*.yml) — this file
-# only adds the privileged, secret-bearing mobile-on-Device-Farm path.
+# Gated entrypoint for the inference-addon-cpp mobile tests, mirroring
+# on-pr-embed-llamacpp.yml's gating trimmed to just the mobile stage. The desktop
+# suites keep their own `pull_request` workflows; this file only adds the privileged,
+# secret-bearing Device Farm path. Mobile runs only when the shared trust gate
+# authorises the PR AND the `run-mobile-addon-tests` label is present.
 #
-# Mobile runs only when BOTH hold:
-#   - the PR is authorised by the shared trust gate (see below)
-#   - the `run-mobile-addon-tests` label selects the mobile stage (ci-router)
-#
-# TRUST MODEL (QVAC-22799): label-gate was retired; `fork-ci` is the sole fork
-# trust gate. Two jobs cooperate, and both come from the DEFAULT branch so a fork
-# cannot modify its own gate:
-#   fork-approval — calls reusable-fork-approval.yml, which requires the `fork-ci`
-#                   environment's reviewers to approve an external-fork run and
-#                   then records `qvac/fork-verified` on the PR head SHA.
-#   authorize     — runs the shared authorize-pr composite, which resolves that
-#                   SHA-bound status into a single `allowed` output. Approval is
-#                   bound to the exact commit, so a stale approval for an earlier
-#                   commit cannot authorise a new one (this is what closes the
-#                   draft->ready and close->reopen replay bypasses, which is why
-#                   `reopened` and `ready_for_review` are safe to keep here).
-# Enforced by .github/scripts/test/ci-trust-policy.test.mjs.
+# TRUST MODEL (QVAC-22799): label-gate was retired, `fork-ci` is the sole fork gate.
+# fork-approval calls reusable-fork-approval.yml (fork-ci reviewers approve, then it
+# records `qvac/fork-verified` on the head SHA); authorize runs the shared authorize-pr
+# composite, which resolves that SHA-bound status into one `allowed` output. Both come
+# from the DEFAULT branch, so a fork cannot modify its own gate. Because approval binds
+# to the exact commit, a stale approval can't authorise a new one — which is why
+# `reopened` and `ready_for_review` are safe to keep. Enforced by ci-trust-policy.test.mjs.
 
 on:
   pull_request_target:
@@ -114,12 +104,10 @@ jobs:
       - fork-approval
       - authorize
       - ci-router
-    # Gates on authorize's OUTPUT, not merely on the job being listed in `needs:`.
-    # always() overrides GitHub's needs-success rule, so a failed, rejected,
-    # timed-out or skipped gate would otherwise fall through into this
-    # secret-bearing workflow (fail-open). An unset/false `allowed` fails closed,
-    # and because authorize itself needs fork-approval, a rejected fork-ci
-    # approval can never produce allowed == 'true'.
+    # Gates on authorize's OUTPUT, not merely on `needs:`: always() overrides GitHub's
+    # needs-success rule, so a failed or rejected gate would otherwise fall through into
+    # this secret-bearing workflow. An unset/false `allowed` fails closed, and since
+    # authorize needs fork-approval, a rejected fork-ci approval can never yield 'true'.
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_mobile == 'true'
     permissions:
       contents: read

@@ -14,14 +14,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_bare_module(inference_addon_cpp_mobile_tests EXPORTS)
 
-# All C++ is GENERATED from the desktop bindings (tests/integration_js/*), so it
-# cannot drift; the generator also emits the source list. The tree is gitignored,
-# so it does not exist in a fresh checkout.
+# All C++ is GENERATED from the desktop bindings (tests/integration_js/*) and
+# gitignored, so it does not exist in a fresh checkout.
 #
-# INVARIANT: every context that runs bare-make MUST run `npm run test:mobile:generate`
-# first. Locally that means before configuring; in CI it means EVERY job that builds
-# (host-test, prebuild-android, prebuild-ios) — jobs do not share workspaces, so
-# generating in one does not help another.
+# INVARIANT: every context that runs bare-make must run `npm run test:mobile:generate`
+# first — in CI that means EVERY building job, since jobs don't share workspaces.
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/native/sources.cmake")
   message(FATAL_ERROR
     "Generated native sources are missing.\n"
@@ -44,16 +41,16 @@ target_include_directories(
   ../src
 )
 
-# Routes QLOG to the JS logger, as the desktop logger sub-package does
-# (ENABLE_JS_LOGGER=ON). Must stay TARGET-WIDE: JS_LOGGER switches the QLOG macro,
-# and QLOG is called from inline bodies in shared headers (MultiJobScheduler.hpp,
-# OutputCallbackJs.hpp, AddonJs.hpp, OutputQueue.hpp, ...), so per-source scoping
-# would compile the same inline functions differently per TU — an ODR violation.
+# Routes QLOG to the JS logger, as the desktop logger sub-package does.
 #
-# Accepted consequence: output-callback-lifetime's internal QLOG also routes
-# through JsLogger (desktop leaves it on stdout). With no logger installed those
-# calls take the no-owner path, and test-groups.json isolates each suite in its
-# own app process, so logger state can't leak in.
+# MUST stay TARGET-WIDE — do not scope per source file. JS_LOGGER switches the QLOG
+# macro, and QLOG is called from inline bodies in shared headers (MultiJobScheduler.hpp,
+# OutputCallbackJs.hpp, AddonJs.hpp, OutputQueue.hpp, ...), so per-source scoping would
+# compile the same inline functions differently per TU: an ODR violation.
+#
+# Accepted consequence: output-callback-lifetime's QLOG also routes through JsLogger
+# (desktop leaves it on stdout). With no logger installed those calls take the no-owner
+# path, and test-groups.json isolates each suite in its own process.
 target_compile_definitions(${inference_addon_cpp_mobile_tests} PUBLIC JS_LOGGER)
 
 if(WIN32)

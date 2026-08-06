@@ -3,26 +3,15 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # Runs the inference-addon-cpp integration suite on real iOS + Android devices
 # (AWS Device Farm), mirroring integration-mobile-test-embed-llamacpp.yml.
 #
-# inference-addon-cpp is a header-only library with no published npm package and
-# no prebuild pipeline, so — unlike the llamacpp addons — this workflow BUILDS
-# the mobile test addon's `.bare` prebuilds itself in the prebuild-android /
-# prebuild-ios jobs and hands them to the shared
-# run-mobile-integration-tests/setup action via per-matrix artifacts
-# (`infer-cpp-<platform>-arm64`). Everything downstream (app build, Device Farm
-# upload/schedule/monitor) is the shared composite action, unchanged — but the
-# build and Device-Farm phases run in SEPARATE jobs so no fork code executes in a
-# job that holds AWS/OIDC access (see the build/device-farm split below).
+# Unlike the llamacpp addons this package has no published npm package and no
+# prebuild pipeline, so prebuild-android/-ios build the `.bare` files here and hand
+# them to the shared setup action as `infer-cpp-<platform>-arm64` artifacts.
 #
-# Test scope: EVERY desktop integration test (tests/integration_js/*) runs on
-# device — no mobile-only tests exist. The suite is GENERATED from the desktop
-# sources (and deliberately not committed), so it cannot drift; generation happens
-# in host-test and again in build, before the app is packed.
+# EVERY desktop test (tests/integration_js/*) runs on device. The suite is generated
+# from those sources and deliberately not committed, so it cannot drift.
 #
-# Blocking vs advisory: host-test and build FAIL the run (deterministic
-# breakage), while device-farm stays continue-on-error until on-device flake is
-# characterised. See packages/inference-addon-cpp/mobile/README.md for the two
-# coverage caveats (output-callback-lifetime needs ASan; bare-thread device
-# behaviour unverified).
+# host-test and build block the run; device-farm stays advisory until on-device flake
+# is characterised. Coverage caveats: mobile/README.md.
 
 on:
   workflow_call:
@@ -57,26 +46,10 @@ env:
   PREBUILD_PREFIX: infer-cpp-
 
 jobs:
-  # Cheap host gate: generate the suite from the desktop tests, BUILD the unified
-  # addon, and run every test on a linux host. Without this, a broken
-  # mobile/binding.cpp, index.js or generator would only surface at Device Farm,
-  # after two macOS builds and real device minutes have been spent.
-  #
-  # NOT continue-on-error, and it gates the whole chain (prebuilds -> build ->
-  # device-farm), so a genuine breakage stops the run immediately. Runs untrusted
-  # fork code but holds NO secrets, so that is safe.
-  # Resolve the framework revision ONCE, here, in a job that runs NO fork code.
-  #
-  # Both phases need the SAME immutable revision: setup checks the framework out
-  # during `build`, and device-farm checks it out again to get a clean copy. If
-  # each resolved a mutable ref independently they could differ, and the app.test.js
-  # generated in build would be overlaid onto a different runtime.
-  #
-  # It must NOT be derived inside `build`: that job runs fork-controlled code (the
-  # addon's generate script, npm install, expo/gradle) with write access to
-  # test-framework/.git, so a PR could repoint HEAD and choose which framework
-  # revision the AWS/OIDC job checks out and installs — a downgrade / code-selector
-  # vector. Resolving before any PR code runs keeps the pin trusted.
+  # Resolve the framework revision ONCE, before any fork code runs. `setup` (inside
+  # build) and device-farm both check the framework out and must get the identical
+  # revision. Deriving it inside `build` would let a PR repoint test-framework/.git/HEAD
+  # and choose which revision the AWS/OIDC job installs.
   resolve-framework:
     name: Resolve framework revision
     runs-on: ubuntu-latest
@@ -99,6 +72,9 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "Framework pinned at $SHA"
 
+  # Cheap gate: generate, build and run every test on a linux host, so a broken
+  # binding/index.js/generator surfaces before two macOS builds and real device minutes
+  # are spent. Blocks the whole chain. Runs fork code but holds no secrets.
   host-test:
     name: Host build + tests (linux)
     runs-on: ubuntu-latest
@@ -106,43 +82,21 @@ jobs:
     permissions:
       contents: read
     steps:
-      # CALLEE-SIDE SHA PIN — the same three-term coalesce is used at EVERY fork
-      # checkout in this workflow (host-test, both prebuild jobs, build). Keep the
-      # order; it is the whole point.
-      #
-      # `github.event.pull_request.head.sha` FIRST: a reusable workflow inherits the
-      # caller's event context, so on a pull_request_target run this resolves to the
-      # immutable approved commit and takes precedence over whatever `ref` the caller
-      # passed. That makes the immutability a property of THIS workflow instead of
-      # trusting every caller to pin correctly — defence in depth on top of the
-      # caller's own pin and the two ci-trust-policy.test.mjs rules that forbid
-      # resolving the mutable `head.ref`. head.repo.full_name is pinned alongside it
-      # so the repo and the SHA can never come from different sources.
-      #
-      # `inputs.ref` / `github.ref` remain as fallbacks so the workflow_dispatch path
-      # still works: with no PR payload the first term is empty and dispatch resolves
-      # to the selected branch. That path is how this pipeline is verified manually.
-      #
-      # Flagged by CodeQL actions/untrusted-checkout-toctou.
+      # SHA PIN, repeated verbatim at every fork checkout here — keep the term order.
+      # head.sha first: a reusable workflow inherits the caller's event, so a
+      # pull_request_target run pins the immutable approved commit whatever the caller
+      # passed. head.repo.full_name alongside it so repo and SHA can't diverge.
+      # inputs/github.ref remain so workflow_dispatch (manual verification) still works.
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
           persist-credentials: false
-      # `package-manager-cache: false` on EVERY setup-node in this workflow (here and
-      # in both prebuild jobs and device-farm) — do not drop it.
-      #
-      # setup-node caching is opt-OUT, not opt-in: the input defaults to true and
-      # activates automatically when a package.json declares `packageManager` or
-      # `devEngines.packageManager`. Nothing declares that today, so no cache is
-      # written — but this workflow is reached via pull_request_target and runs fork
-      # code here and in the prebuild jobs, so an unrelated future edit adding
-      # `packageManager` to a manifest would silently start writing the DEFAULT-BRANCH
-      # cache scope from an untrusted job, and device-farm would restore it. Setting
-      # this explicitly makes "no Actions cache" a property of the workflow rather
-      # than a side effect of manifest contents.
-      # Flagged by CodeQL actions/cache-poisoning/poisonable-step.
+      # `package-manager-cache: false` on every setup-node here — do not drop it. The
+      # input defaults to TRUE and auto-enables once any package.json declares
+      # `packageManager`, so without it an unrelated manifest edit would start writing
+      # the default-branch cache scope from a job that runs fork code.
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -163,29 +117,21 @@ jobs:
           npm test
 
   # ---------------------------------------------------------------------------
-  # Build the mobile test addon's native prebuilds. The header-only library +
-  # cmake-bare build has no vcpkg / private-registry dependency, so this is a
-  # plain cross-compile. Android needs `-D ANDROID_STL=c++_shared` for libc++
-  # (same flag the C++ unit-test workflow uses); iOS builds for device (arm64),
-  # and setup/ derives the simulator variant.
+  # Build the addon's `.bare` prebuilds — a plain cross-compile, no vcpkg or private
+  # registry. Android needs `-D ANDROID_STL=c++_shared`; iOS builds for device and
+  # setup/ derives the simulator variant.
   #
-  # cost: with no prebuild pipeline, prebuild-ios runs on macos-14 ON TOP OF the
-  # macos-14 `build` job below — two GitHub-hosted macOS jobs per run (vs one for
-  # the llamacpp addons) — and with no reuse gate every `synchronize` rebuilds both
-  # from scratch. Acceptable at label-gated frequency. FOLLOW-UP before any
-  # higher-frequency trigger: add a native-hash reuse gate mirroring
-  # .github/actions/prebuild-artifact-reuse + detect-native-changes. (The prebuild
-  # jobs stay separate from `build` on purpose — they hold no secrets — so folding
-  # them in to save a runner is not an option.)
+  # cost: prebuild-ios runs on macos-14 on top of the macos-14 `build` job, and with no
+  # reuse gate every `synchronize` rebuilds both. Acceptable at label-gated frequency.
+  # FOLLOW-UP before any higher-frequency trigger: a native-hash reuse gate mirroring
+  # prebuild-artifact-reuse + detect-native-changes. These jobs stay separate from
+  # `build` on purpose — they hold no secrets.
+  #
+  # prebuild-android must stay GITHUB-HOSTED: bare-make's android toolchain
+  # (cmake-toolchains/android/find-ndk.cmake) hard-fails without ANDROID_HOME, which only
+  # the hosted images ship. reusable-prebuilds.yml does the same — its android matrix
+  # entry omits `runner:` while linux-x64/win32 pin self-hosted ones.
   # ---------------------------------------------------------------------------
-  # Runs GITHUB-HOSTED, not on a self-hosted qvac-* runner, and that is load-bearing:
-  # bare-make's android toolchain (cmake-toolchains/android/find-ndk.cmake) HARD-FAILS
-  # unless ANDROID_HOME is set, and only the hosted ubuntu images ship an Android SDK.
-  # This mirrors reusable-prebuilds.yml — the only other workflow that builds android
-  # with bare-make — whose android matrix entry deliberately omits `runner:` while its
-  # linux-x64 and win32 entries pin self-hosted ones. (The C++ unit-test workflow does
-  # cross-compile android on a self-hosted runner, but via plain `cmake --preset`, which
-  # never loads bare-make's toolchain and so never needs ANDROID_HOME.)
   prebuild-android:
     name: Prebuild (Android arm64)
     needs: host-test
@@ -201,15 +147,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
           persist-credentials: false
 
-      # Selects the NDK (ANDROID_NDK_HOME from ANDROID_NDK_LATEST_HOME), exports
-      # ANDROID_TOOLCHAIN_ROOT + ANDROID_NATIVE_API_LEVEL, installs the ubuntu cross
-      # toolchain, and — critically — preserves /usr/local/lib/android while freeing
-      # disk, which its "Maximize build space" step otherwise deletes.
-      #
-      # Referenced by pinned SHA rather than `./.github/actions/...` on purpose: this
-      # job checks out UNTRUSTED PR code at $GITHUB_WORKSPACE, so a relative path
-      # would execute the fork's copy of the composite. Same pin as
-      # reusable-prebuilds.yml.
+      # Selects the NDK, exports ANDROID_TOOLCHAIN_ROOT + API level, installs the cross
+      # toolchain, and preserves /usr/local/lib/android while freeing disk. Pinned by SHA
+      # rather than `./.github/actions/...` because this job checks out untrusted PR code
+      # at $GITHUB_WORKSPACE, where a relative path would run the fork's copy.
       - name: Setup build host (Android NDK + toolchain env)
         uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
         with:
@@ -299,21 +240,16 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # SECURITY SPLIT (QVAC review): the build and the Device-Farm phases run in
-  # SEPARATE jobs so that no fork-controlled code ever executes in a job that
-  # holds AWS/OIDC access.
+  # SECURITY SPLIT (QVAC review): no fork-controlled code may run in a job holding
+  # AWS/OIDC, so build and Device Farm are separate jobs.
   #
-  #   build       — runs untrusted PR code (npm run validate, npm install of the
-  #                 fork, expo/gradle/xcode). Has the Apple signing secrets and
-  #                 PAT, but NO `id-token: write` and NO AWS. Produces the app +
-  #                 the trusted test-framework e2e bundle as an artifact.
-  #   device-farm — has `id-token: write` + AWS, runs ONLY trusted code
-  #                 (test-framework e2e packaging + AWS API calls). Never checks
-  #                 out or executes fork code; it only consumes the artifact.
+  #   build       — runs untrusted PR code (npm install, expo/gradle/xcode). Holds the
+  #                 Apple cert + PAT but NO id-token and NO AWS. Emits the app artifact.
+  #   device-farm — holds id-token + AWS, runs ONLY trusted code, never checks out fork
+  #                 code; it only consumes the artifact.
   #
-  # This removes the job-wide OIDC/AWS-role-assumption capability from the
-  # fork-code job. The Apple cert necessarily stays in `build` because iOS
-  # signing needs the built (fork) code and the cert together.
+  # The Apple cert must stay in `build`: iOS signing needs the built fork code and the
+  # cert together.
   # ---------------------------------------------------------------------------
   build:
     name: Build ${{ matrix.platform }} app
@@ -323,14 +259,10 @@ jobs:
       - prebuild-ios
     runs-on: ${{ matrix.runner }}
     environment: release
-    # Exceeds the 30m default: builds the mobile app (npm install + expo prebuild
-    # + Gradle/xcodebuild). No device execution here — that's the device-farm job.
+    # Exceeds the 30m default: npm install + expo prebuild + Gradle/xcodebuild.
     timeout-minutes: 90
-    # NOT continue-on-error: an app build failure is deterministic (bad binding,
-    # bad Gradle/Xcode config), not device flake, so it must block the run. Flake
-    # tolerance belongs on device-farm below, where the flake actually lives.
-    # No id-token / AWS here: this job runs untrusted fork code and must not be
-    # able to mint an OIDC token or assume the AWS role.
+    # Deliberately NOT continue-on-error (build failures are deterministic, not device
+    # flake) and deliberately no id-token/AWS (this job runs untrusted fork code).
     permissions:
       contents: read
       packages: read
@@ -353,11 +285,9 @@ jobs:
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
-      # No token: fetch the (untrusted) PR ref with the default GITHUB_TOKEN and
-      # persist-credentials:false so no credential is written into
-      # addon/.git/config, which the fork-controlled steps below could read.
-      # Matches the prebuild-android/ios checkouts. If a private fork ever 404s
-      # here, re-add token to ALL checkouts WITH persist-credentials:false.
+      # No token, plus persist-credentials:false: keeps any credential out of
+      # addon/.git/config, which the fork-controlled steps below could read. If a private
+      # fork ever 404s here, re-add token to ALL checkouts, keeping that flag.
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -379,12 +309,10 @@ jobs:
           # ref and device-farm gets the identical revision.
           test-framework-ref: ${{ needs.resolve-framework.outputs.sha }}
 
-      # The on-device suite is generated from tests/integration_js/ and is NOT
-      # committed (see mobile/.gitignore), so it must be produced before
-      # build-mobile-app packs the addon into the app — otherwise the app would
-      # ship with no tests. Runs after `setup` because that provisions Node.
-      # Also emits test/mobile/test-groups.json, which upload-to-devicefarm
-      # auto-detects to shard one Device Farm run per suite (process isolation).
+      # The suite is generated and not committed, so it must exist before
+      # build-mobile-app packs the addon — otherwise the app ships with no tests. Runs
+      # after `setup` (which provisions Node). Also emits test-groups.json, which
+      # upload-to-devicefarm auto-detects to shard one run per suite.
       - name: Generate mobile integration tests from the desktop suite
         working-directory: addon/${{ env.ADDON_WORKDIR }}
         run: |
@@ -405,20 +333,14 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Stage ONLY non-executable DATA for the device-farm job — never the
-      # ./test-framework workspace itself. This build job runs fork code, so
-      # anything it leaves in ./test-framework (e.g. e2e/package.json) could be
-      # tampered; the device-farm job therefore re-fetches a CLEAN framework and
-      # overlays only these artifacts, none of which it executes:
-      #   - app binary        → uploaded to Device Farm, runs on-device only
-      #   - e2e/app.test.js    → the generated WDIO driver; packed and run on the
-      #                          Device Farm host, never in the device-farm job
-      #   - addon test/mobile  → read-only, for the monitor legend
+      # Stage ONLY non-executable data — never the ./test-framework workspace, which this
+      # fork-code job could have tampered with. device-farm re-fetches a clean framework
+      # and overlays just these, none of which it executes: the app binary (runs on-device
+      # only), e2e/app.test.js (the generated WDIO driver, run on the Device Farm host),
+      # and addon test/mobile (read-only, for the monitor legend).
       #
-      # Deliberately carries NO framework revision: this job runs fork code, so a
-      # SHA derived here could be steered by a PR (e.g. by repointing
-      # test-framework/.git/HEAD) to select which revision the AWS/OIDC job
-      # installs. The pin comes from the trusted resolve-framework job instead.
+      # Deliberately carries NO framework revision — a SHA derived in this job could be
+      # steered by a PR. The pin comes from resolve-framework instead.
       - name: Stage Device Farm handoff data
         shell: bash
         env:
@@ -488,17 +410,11 @@ jobs:
           name: mobile-bundle-${{ matrix.platform }}
           path: df-handoff
 
-      # Fetch a CLEAN copy of the trusted test framework directly from its repo —
-      # NOT from the build artifact. The build job ran fork code and could have
-      # tampered with the framework's e2e/package.json; installing that here
-      # (where AWS creds are configured) would let an injected script run against
-      # the assumed role. This job runs ONLY this trusted code, so having the PAT
-      # here is safe; persist-credentials:false keeps it off disk regardless.
-      #
-      # Pinned to the revision resolved by the trusted resolve-framework job — the
-      # same one setup used in build — so a framework advance mid-run can't overlay
-      # the generated app.test.js onto a different runtime, and the pin itself is
-      # never influenced by fork code.
+      # A CLEAN copy from source, NOT from the build artifact: build ran fork code and
+      # could have tampered with e2e/package.json, and installing that here — where AWS
+      # creds are configured — would run an injected script against the assumed role.
+      # Pinned to resolve-framework's revision (the same one setup used in build) so a
+      # mid-run framework advance can't overlay app.test.js onto a different runtime.
       - name: Checkout trusted mobile test framework
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -556,12 +472,9 @@ jobs:
           # ARNs above) and this hint is ignored — it only applies to single-spec
           # runs. Kept so a future single-group config still schedules sanely.
           scheduling-mode: 'single-pool'
-          # Cost cap (default is 120 device-min). The full suite is only seconds of
-          # compute on desktop; 25 min leaves ample margin for app launch plus the
-          # logger bare-thread teardown rounds and the output-callback churn on a
-          # slow device, while still bounding a launch-hang — which would NOT trip
-          # integration-runtime.cjs's crash-to-failure handlers, since it never
-          # throws. Revisit if the device legs come back near the ceiling.
+          # Cost cap (default 120 device-min). The suite is seconds of compute on desktop,
+          # so 25 min leaves margin on a slow device while still bounding a launch-hang —
+          # which never throws, so integration-runtime.cjs's crash handlers won't catch it.
           job-timeout-minutes: '25'
 
       - name: Monitor Device Farm test run
@@ -572,15 +485,10 @@ jobs:
           run-count: ${{ steps.schedule.outputs.run-count }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
 
-      # Stop billing on cancellation AND on failure: a monitor/upload error would
-      # otherwise leave scheduled runs executing on real devices.
-      #
-      # Complements the scheduler's own rollback (QVAC-22948): schedule-test-run
-      # publishes run-arns only after its whole loop, so a PARTIAL scheduling
-      # failure or a cancellation mid-loop is cleaned up inside that composite
-      # (including a by-name sweep for runs whose ARN never came back). This step
-      # covers the other window — once the ARNs are published, anything that fails
-      # or is cancelled downstream (upload, monitor) is ours to stop.
+      # On failure as well as cancellation: a monitor/upload error would otherwise leave
+      # runs billing on real devices. Covers the window AFTER run-arns are published;
+      # partial scheduling failures are rolled back inside schedule-test-run itself
+      # (QVAC-22948), which also sweeps by name for runs whose ARN never came back.
       - name: Cancel Device Farm runs on cancellation or failure
         if: (cancelled() || failure()) && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
         uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
