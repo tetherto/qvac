@@ -122,6 +122,76 @@ function expectedIntegrationFiles() {
   return files
 }
 
+// The files a desktop suite actually RUNS, taken from its `scripts.test` — the same
+// source of truth desktop itself uses. Parsed rather than trusted blindly: see
+// assertEntriesMatchDesktopScripts.
+function suiteScriptFiles(suite) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(desktopRoot, suite, 'package.json'), 'utf8'))
+  const script = (pkg.scripts || {}).test || ''
+  const files = new Set()
+  for (const match of script.matchAll(/\bbare\s+([^\s&|;]+)/g)) files.add(match[1])
+  return { script, files }
+}
+
+// Entries are discovered by FILENAME (test.js / *.test.js), but what desktop runs is
+// each suite's `scripts.test`. Those are two different rules, and the validator
+// re-derives entries with the discovery rule — so it agrees with the generator by
+// construction and cannot notice the two drifting apart.
+//
+// Concretely: add `bare cancel-flow.js` to a suite's test script and desktop runs it,
+// mobile never ports it, validate passes, and the device run is green while covering
+// less than it appears to. Assert the two sets are equal instead, so that becomes a
+// hard failure at generate time rather than silent lost coverage.
+//
+// Deliberately NOT re-sourced from scripts.test: the sets agree today, and making a
+// `bare <file>` parser authoritative would risk changing the entry set over edge cases
+// (flags, non-bare commands, npm indirection) for no gain. This only ever fails.
+function assertEntriesMatchDesktopScripts(entries) {
+  const bySuite = new Map()
+  for (const entry of entries) {
+    if (!bySuite.has(entry.suite)) bySuite.set(entry.suite, new Set())
+    bySuite.get(entry.suite).add(entry.file)
+  }
+
+  for (const suite of listSuites()) {
+    const { script, files: ran } = suiteScriptFiles(suite)
+    const discovered = bySuite.get(suite) || new Set()
+
+    // No `bare <file>` at all means the suite is driven some other way, so the
+    // filename rule has stopped tracking it. Fail rather than skip the suite, which
+    // would recreate the same blind spot one level up.
+    if (ran.size === 0) {
+      throw new Error(
+        `Desktop suite '${suite}' has no \`bare <file>\` invocations in its ` +
+          `scripts.test (${JSON.stringify(script)}), so there is nothing to check the ` +
+          'ported entries against. Update this assertion to understand how that suite ' +
+          'is run before relying on the mobile port of it.'
+      )
+    }
+
+    const notPorted = [...ran].filter((file) => !discovered.has(file)).sort()
+    const notRun = [...discovered].filter((file) => !ran.has(file)).sort()
+
+    if (notPorted.length) {
+      throw new Error(
+        `Desktop suite '${suite}' runs ${notPorted.join(', ')} in scripts.test, but ` +
+          'the mobile port does not treat them as entries (they do not match ' +
+          'test.js / *.test.js). They would run on desktop and NOT on device, with ' +
+          'nothing reporting the gap. Rename them to the *.test.js convention, or ' +
+          'extend isTestEntry.'
+      )
+    }
+    if (notRun.length) {
+      throw new Error(
+        `Mobile would run ${notRun.join(', ')} from desktop suite '${suite}' as ` +
+          'on-device entries, but its scripts.test does not run them. Either add them ' +
+          'to the desktop test script or rename them so they are not picked up as ' +
+          'entries.'
+      )
+    }
+  }
+}
+
 function expectedEntries() {
   const entries = []
   // Two different sources can slugify to the same runner name (e.g. a future
@@ -147,6 +217,10 @@ function expectedEntries() {
       entries.push({ suite, file, relPath, fnName })
     }
   }
+  // Both the generator and the validator call expectedEntries(), so asserting here
+  // means the generator itself refuses to emit a drifted set — rather than emitting it
+  // and hoping a separate check notices.
+  assertEntriesMatchDesktopScripts(entries)
   return entries
 }
 
