@@ -477,6 +477,48 @@ function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number
 
 ---
 
+### `getSystemResources`
+
+Returns locally observed CPU, system-memory, GPU, driver, and graphics API
+capabilities. Pass `sample: true` to include one fresh CPU, memory, and GPU
+usage sample.
+
+Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
+Supported values include their source and optional scope. Driver names,
+versions, and graphics API flags are diagnostics only; they do not prove that
+an inference backend is compatible and never block model loading.
+
+**Signature**:
+
+```ts
+function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;
+```
+
+**Example**:
+
+```ts
+const resources = await getSystemResources({ sample: true });
+
+if (resources.capabilities.gpus.status === "supported") {
+  for (const gpu of resources.capabilities.gpus.value) {
+    const name = gpu.name.status === "supported" ? gpu.name.value : "unknown";
+    const driver =
+      gpu.driverName.status === "supported" ? gpu.driverName.value : "unknown";
+    const version =
+      gpu.driverVersion.status === "supported"
+        ? gpu.driverVersion.value
+        : "unknown";
+
+    console.log(name, driver, version);
+  }
+}
+```
+
+Backend selection diagnostics are exposed on profiled operation events; see
+[`profiler`](#profiler).
+
+---
+
 ### `heartbeat`
 
 Checks if a delegated provider is online by sending a heartbeat round-trip.
@@ -1709,6 +1751,14 @@ function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, 
 ### `profiler`
 
 QVAC SDK Profiler
+
+Profiled inference operation events may expose `event.backend` with the backend
+and device actually selected, graphics API, driver details, and a structured
+fallback reason. Addons attach this metadata with `attachBackendDiagnostics`.
+For streaming operations, metadata must be attached to the terminal chunk.
+`gpuId`, when present, comes from the current worker resource collector and is
+stable only for that collector's lifetime. The SDK validates attached metadata
+and does not infer compatibility from inventory or logs.
 
 **Shape**:
 

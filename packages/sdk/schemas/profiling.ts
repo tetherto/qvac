@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { inferenceBackendDiagnosticsSchema } from '@/schemas/system-resources'
 
 /** Internal envelope key for profiling metadata in RPC payloads */
 export const PROFILING_KEY = '__profiling'
@@ -20,6 +21,8 @@ export const OPERATION_EVENT_KEY = Symbol.for('@qvac/sdk:operation-event')
  * Symbol key for attaching model execution timing.
  */
 export const MODEL_EXECUTION_KEY = Symbol.for('@qvac/sdk:model-execution')
+
+export const BACKEND_DIAGNOSTICS_KEY = Symbol.for('@qvac/sdk:backend-diagnostics')
 
 export const profilerModeSchema = z.enum(['summary', 'verbose'])
 
@@ -57,6 +60,7 @@ export const operationEventSchema = z.object({
   ms: z.number(),
   profileId: z.string().optional(),
   gauges: z.record(z.string(), z.number()).optional(),
+  backend: inferenceBackendDiagnosticsSchema.optional(),
   tags: z.record(z.string(), z.string()).optional(),
   count: z.number().optional()
 })

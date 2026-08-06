@@ -157,6 +157,7 @@ function recordOperationEvent(op: NonNullable<ProfilingResponseMeta['operation']
   }
   if (op.profileId !== undefined) event.profileId = op.profileId
   if (op.gauges !== undefined) event.gauges = op.gauges
+  if (op.backend !== undefined) event.backend = op.backend
   if (op.tags !== undefined) event.tags = op.tags
   if (op.count !== undefined) event.count = op.count
   record(event)
