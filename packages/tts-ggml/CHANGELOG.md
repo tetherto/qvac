@@ -35,13 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `enhancerBackendDevice` / `enhancerBackendId` are reported in runtime stats,
   matching Chatterbox and Supertonic.
 
-### Changed
-
-- **`outputSampleRate` with CosyVoice3 streaming.** Previously rejected for any
-  non-native rate; it is now accepted while streaming when the LavaSR enhancer
-  is active, because the enhancer resamples inside its overlap-reprocess window
-  without introducing chunk seams.
-
 ### Fixed
 
 - **iOS model loading.** CosyVoice3 and Parler-TTS now load their models within
@@ -63,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still rejected, with the error naming the enhancer as an option.
 - Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
   with the shared addon runtime validated across the live addon consumer set.
+- **`outputSampleRate` with CosyVoice3 streaming.** Previously rejected for any
+  non-native rate; it is now accepted while streaming when the LavaSR enhancer
+  is active, because the enhancer resamples inside its overlap-reprocess window
+  without introducing chunk seams.
 
 ### Pull Requests
 
