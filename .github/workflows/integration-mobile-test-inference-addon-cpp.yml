@@ -98,16 +98,21 @@ jobs:
         with:
           egress-policy: audit
 
-      # SHA PIN, repeated verbatim at every fork checkout here — keep the term order.
-      # head.sha first: a reusable workflow inherits the caller's event, so a
-      # pull_request_target run pins the immutable approved commit whatever the caller
-      # passed. head.repo.full_name alongside it so repo and SHA can't diverge.
-      # inputs/github.ref remain so workflow_dispatch (manual verification) still works.
+      # SHA PIN, repeated verbatim at every fork checkout here — keep it in sync.
+      #
+      # Every option for `ref` is IMMUTABLE, deliberately. head.sha first: a reusable
+      # workflow inherits the caller's event, so a pull_request_target run pins the
+      # approved commit whatever the caller passed. head.repo.full_name alongside it so
+      # repo and SHA can't diverge. `github.ref` is deliberately NOT a fallback — it is a
+      # branch name, so a push mid-run could move it and leave two jobs on different
+      # commits. On workflow_dispatch both terms are empty and actions/checkout then
+      # defaults to the event's SHA, which is immutable and is the same commit.
+      # Flagged by CodeQL actions/untrusted-checkout-toctou.
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           persist-credentials: false
       # `package-manager-cache: false` on every setup-node here — do not drop it. The
       # input defaults to TRUE and auto-enables once any package.json declares
@@ -168,7 +173,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           persist-credentials: false
 
       # Selects the NDK, exports ANDROID_TOOLCHAIN_ROOT + API level, installs the cross
@@ -224,7 +229,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -314,7 +319,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           persist-credentials: false
           path: addon
           fetch-depth: 0
