@@ -23,13 +23,11 @@ Getting started is two steps: install the Python package, then make the QVAC
 ### 1. Install the package
 
 ```bash
-pip install "tetherto-qvac-sdk[bare-rpc]"
+pip install tetherto-qvac-sdk
 ```
 
-The `bare-rpc` extra is **required** — it is the wire transport the client uses
-to reach the worker. (It is packaged as an extra only because its dependencies
-are git-only for now; it folds into the base install once they are on PyPI.)
-Genuinely optional extras: `vla` (numpy), `notebook` (numpy + pandas).
+That pulls the wire transport (`bare-rpc`, `compact-encoding`) from PyPI.
+Optional extras: `vla` (numpy), `notebook` (numpy + pandas).
 
 ### 2. Install the worker (required)
 
@@ -154,7 +152,7 @@ For notebooks and REPLs there's a synchronous facade,
 `tetherto.qvac_sdk.notebook.SyncClient`, that runs the async client on a
 background thread — so every call is a plain blocking call (no `await`), returns
 numpy/pandas-native data, and streams completions live into the cell. Install
-the `notebook` extra (`pip install "tetherto-qvac-sdk[notebook,bare-rpc]"`):
+the `notebook` extra (`pip install "tetherto-qvac-sdk[notebook]"`):
 
 ```python
 from tetherto.qvac_sdk.notebook import SyncClient

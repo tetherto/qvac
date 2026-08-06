@@ -1,16 +1,17 @@
 #include "LlamaFinetuner.hpp"
 
+#include <chrono>
+#include <memory>
+#include <mutex>
+
 #ifndef STANDALONE_TEST_BUILD
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
-#include <memory>
-#include <mutex>
 #include <numeric>
 #include <shared_mutex>
 #include <sstream>
@@ -402,6 +403,12 @@ std::string LlamaFinetuner::finetune(
       }
       clearCurrentCheckpointStateShared();
     }
+    // The job is over: a pause latched after the state was cleared (a cancel
+    // racing completion) has nothing left to stop and must not bleed into a
+    // later finetune. Only publication may consume the latch; only this job
+    // teardown may discard it.
+    model_.closeFinetuneCancellationWindow();
+    discardPendingPauseRequest();
 
     if (!wasPaused) {
       saveLoraAdapter(adapter, params);
@@ -428,6 +435,8 @@ std::string LlamaFinetuner::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
+    model_.closeFinetuneCancellationWindow();
+    discardPendingPauseRequest();
     try {
       model_.reload(FinetuneConfigOverrides{});
     } catch (...) {
@@ -946,6 +955,13 @@ void LlamaFinetuner::saveLoraAdapter(
   }
 }
 
+#endif // STANDALONE_TEST_BUILD
+
+// The checkpoint-state/pause machinery below is compiled in standalone test
+// builds too: it is pure synchronization state (mutex + shared_ptr + atomics)
+// with no llama runtime dependency, and unit tests drive the setup-window ->
+// publication seam through it.
+
 std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
 LlamaFinetuner::getCurrentCheckpointStateShared() const {
   std::scoped_lock lock(checkpointStateMutex_);
@@ -955,6 +971,13 @@ LlamaFinetuner::getCurrentCheckpointStateShared() const {
 void LlamaFinetuner::setCurrentCheckpointStateShared(
     std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state) {
   std::scoped_lock lock(checkpointStateMutex_);
+  if (state != nullptr && pendingPauseSaveCheckpoint_.has_value()) {
+    // Deliver a pause/cancel that landed during setup: publication is the
+    // happens-before point after which the training loop can see the request.
+    state->savePauseCheckpoint.store(*pendingPauseSaveCheckpoint_);
+    state->pauseRequested.store(true);
+    pendingPauseSaveCheckpoint_.reset();
+  }
   currentCheckpointState_ = std::move(state);
 }
 
@@ -980,6 +1003,11 @@ void LlamaFinetuner::clearPausedCheckpointStateShared() {
   pausedCheckpointState_.reset();
 }
 
+void LlamaFinetuner::discardPendingPauseRequest() {
+  std::scoped_lock lock(checkpointStateMutex_);
+  pendingPauseSaveCheckpoint_.reset();
+}
+
 bool LlamaFinetuner::isFinetuneRunning() const {
   auto state = getCurrentCheckpointStateShared();
   return state != nullptr &&
@@ -987,12 +1015,18 @@ bool LlamaFinetuner::isFinetuneRunning() const {
 }
 
 bool LlamaFinetuner::requestPause(bool savePauseCheckpoint) {
-  auto state = getCurrentCheckpointStateShared();
-  if (state == nullptr) {
-    return false;
+  std::scoped_lock lock(checkpointStateMutex_);
+  if (currentCheckpointState_ == nullptr) {
+    // Setup window: the state is not published yet, but the cancel registry
+    // runs the armed action one-shot and will never replay this request.
+    // Latch it under the same mutex that publishes the state;
+    // setCurrentCheckpointStateShared transfers it so the training loop
+    // pauses at its first batch check instead of running to completion.
+    pendingPauseSaveCheckpoint_ = savePauseCheckpoint;
+    return true;
   }
-  state->savePauseCheckpoint.store(savePauseCheckpoint);
-  state->pauseRequested.store(true);
+  currentCheckpointState_->savePauseCheckpoint.store(savePauseCheckpoint);
+  currentCheckpointState_->pauseRequested.store(true);
   return true;
 }
 
@@ -1009,6 +1043,8 @@ void LlamaFinetuner::waitUntilFinetuningPauseComplete() {
            state->isIdle.load(std::memory_order_acquire);
   });
 }
+
+#ifndef STANDALONE_TEST_BUILD
 
 void LlamaFinetuner::clearPauseRequest() {
   clearPausedCheckpointStateShared();
