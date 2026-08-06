@@ -30,7 +30,6 @@ type UserMediaMessage = LlmLlamacpp.UserMediaMessage;
 /** `exclusiveRunQueue()` is published as `Promise<any>`; keep it generic here. */
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
-/** Normalized `RunOptions`, with every optional resolved to its effective value. */
 interface NormalizedRunOptions {
   prefill: boolean;
   generationParams: GenerationParams | undefined;
@@ -39,7 +38,6 @@ interface NormalizedRunOptions {
   rejectWhenBusy: boolean | undefined;
 }
 
-/** Finetune parameters as the binding receives them, with `validation` flattened. */
 type FinetuneParamsPayload = Omit<FinetuneOptions, "validation"> & {
   validation?: LlmLlamacpp.FinetuneValidation;
   validationSplit?: number;
@@ -325,7 +323,6 @@ interface LlmLlamacpp {
   getState(): { configLoaded: boolean };
 }
 
-// Static/constructor surface — what `module.exports` itself provides.
 interface LlmLlamacppConstructor {
   new (args: LlmLlamacppArgs): LlmLlamacpp;
   /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
@@ -335,9 +332,7 @@ interface LlmLlamacppConstructor {
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   static readonly pickPrimaryGgufPath = pickPrimaryGgufPath;
-  // Attached for tests: a direct `require('@qvac/infer-base')` from a bundled
-  // mobile test file does not yield the class. Left off the constructor
-  // interface because `typeof QvacResponse` is not nameable by consumers.
+  // Attached for tests; untyped because `typeof QvacResponse` is not nameable by consumers.
   static readonly QvacResponse = QvacResponse;
 
   addon: LlamaInterface | null;
@@ -909,7 +904,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   }
 };
 
-// Public types, merged with the value above. Types-only, so tsc emits no runtime code.
+// Types-only: a value member here would stop the namespace merging with the const above.
 // eslint-disable-next-line @typescript-eslint/no-namespace -- the only way to type a constructor-first CommonJS export.
 namespace LlmLlamacpp {
   export type NumericLike = number | `${number}`;
@@ -1447,7 +1442,6 @@ namespace LlmLlamacpp {
     stats?: FinetuneStats;
   }
 
-  /** Re-exported from `@qvac/infer-base`. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors `QvacResponse<Output = any>` in @qvac/infer-base.
   export type QvacResponse<Output = any> = InferQvacResponseOf<Output>;
 }

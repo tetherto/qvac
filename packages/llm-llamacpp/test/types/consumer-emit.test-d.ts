@@ -1,8 +1,5 @@
-// Declaration-emit consumer test: every exported binding here is UNANNOTATED,
-// so its type must be nameable through this package alone. A type that can
-// only be named via `@qvac/infer-base` fails with TS2742 (and an unexported
-// interface behind `export =` fails with TS4023). Compiled with
-// `declaration: true` — `noEmit` fixtures cannot catch either.
+// Every export here is unannotated, so its type must be nameable through this
+// package alone: otherwise declaration emit fails with TS2742 or TS4023.
 
 import LlmLlamacpp from "@qvac/llm-llamacpp";
 import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";

@@ -65,7 +65,6 @@ export interface AddonConfigurationParams {
     config: Record<string, unknown>;
 }
 export type AddonOutputCallback = (addon: unknown, event: unknown, data: unknown, error: unknown, jobId: unknown) => void;
-/** The native binding surface consumed by `LlamaInterface`. */
 export interface LlamaBinding {
     createInstance(owner: LlamaInterface, configurationParams: AddonConfigurationParams, outputCallback: AddonOutputCallback, reserved: null): object;
     loadWeights(handle: unknown, data: LoadWeightsData): Promise<void> | void;

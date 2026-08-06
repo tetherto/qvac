@@ -92,7 +92,6 @@ export type AddonOutputCallback = (
   jobId: unknown,
 ) => void;
 
-/** The native binding surface consumed by `LlamaInterface`. */
 export interface LlamaBinding {
   createInstance(
     owner: LlamaInterface,

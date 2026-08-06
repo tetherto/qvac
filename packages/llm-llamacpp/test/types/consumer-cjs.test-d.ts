@@ -3,17 +3,14 @@
 
 import LlmLlamacpp = require("../../index");
 
-// The package's export IS the constructor.
 const model = new LlmLlamacpp({
   files: { model: ["/abs/model.gguf"] },
   config: { device: "gpu", ctx_size: "4096" },
 });
 
-// The class name is usable as a type as well as a value.
 const asType: LlmLlamacpp = model;
 void asType;
 
-// `args` is required — `new LlmLlamacpp()` throws at runtime.
 // @ts-expect-error - LlmLlamacppArgs is a required constructor argument
 const missingArgs = new LlmLlamacpp();
 void missingArgs;
@@ -22,20 +19,16 @@ void missingArgs;
 const missingFiles = new LlmLlamacpp({});
 void missingFiles;
 
-// Statics attached to `module.exports` are typed.
 const primary: string = LlmLlamacpp.pickPrimaryGgufPath([
   "/abs/model-00001-of-00002.gguf",
   "/abs/model-00002-of-00002.gguf",
 ]);
 void primary;
 
-// `QvacResponse` is attached at runtime for bundled mobile tests but is
-// deliberately absent from the type surface — `typeof QvacResponse` cannot be
-// named by a consumer that does not depend on `@qvac/infer-base` directly.
+// Attached at runtime, deliberately absent from the type surface.
 // @ts-expect-error - not part of the published constructor surface
 void LlmLlamacpp.QvacResponse;
 
-// Public instance surface.
 const addon: LlmLlamacpp.Addon | null = model.addon;
 void addon;
 const logger = model.logger;
@@ -43,7 +36,6 @@ void logger;
 const state: { configLoaded: boolean } = model.getState();
 void state;
 
-// Public types are reachable through the namespace.
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
   parallel: 4,
@@ -91,7 +83,6 @@ const validations: LlmLlamacpp.FinetuneValidation[] = [
 ];
 void validations;
 
-// Overload resolution: a single prompt yields QvacResponse, a batch yields BatchResponse.
 async function overloads() {
   const single: LlmLlamacpp.QvacResponse = await model.run(messages, runOptions);
   void single;
@@ -117,7 +108,6 @@ async function overloads() {
 }
 void overloads;
 
-// Addon-boundary types stay reachable from the package root.
 const runJobMessages: LlmLlamacpp.AddonRunJobMessage[] = [
   { type: "text", input: "{}", prefill: false },
   { type: "media", content: new Uint8Array() },

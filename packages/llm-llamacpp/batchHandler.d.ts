@@ -3,7 +3,6 @@ import type { AddonBatchRunItem, AddonBatchRunResult, AddonRunJobMessage } from 
 import type { BatchOutputChunk, BatchPrompt, Message, RunOptions } from "./index";
 declare function runBusyError(): Error;
 type BatchInput = (Message[] | BatchPrompt)[];
-/** A group's response, carrying the per-prompt ids assigned at admission. */
 type BatchGroupResponse = QvacResponse<BatchOutputChunk> & {
     ids: string[];
 };

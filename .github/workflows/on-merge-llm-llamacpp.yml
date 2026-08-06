@@ -122,7 +122,6 @@ jobs:
           name: prebuilds
           path: packages/llm-llamacpp/prebuilds
 
-      # Rebuilds the wrapper and fails if the result differs from the commit.
       - name: Install dependencies
         working-directory: packages/llm-llamacpp
         run: npm install --ignore-scripts --package-lock=false
@@ -190,7 +189,6 @@ jobs:
           name: prebuilds
           path: packages/llm-llamacpp/prebuilds
 
-      # Rebuilds the wrapper and fails if the result differs from the commit.
       - name: Install dependencies
         working-directory: packages/llm-llamacpp
         run: npm install --ignore-scripts --package-lock=false

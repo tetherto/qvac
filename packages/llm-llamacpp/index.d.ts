@@ -569,7 +569,6 @@ declare namespace LlmLlamacpp {
         status: "COMPLETED" | "PAUSED";
         stats?: FinetuneStats;
     }
-    /** Re-exported from `@qvac/infer-base`. */
     type QvacResponse<Output = any> = InferQvacResponseOf<Output>;
 }
 export = LlmLlamacpp;

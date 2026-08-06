@@ -1,8 +1,7 @@
 'use strict'
 
-// ESM named exports of a CommonJS module are discovered statically by
-// cjs-module-lexer, which only detects top-level `exports.X =` assignments.
-// Attaching members any other way links with zero named exports.
+// cjs-module-lexer discovers a CommonJS module's named exports statically and
+// only detects top-level `exports.X =`; any other form links with none.
 
 const test = require('brittle')
 const fs = require('bare-fs')
@@ -26,8 +25,7 @@ test('ESM named bindings link and match the statics', async (t) => {
   t.is(ns.QvacResponse, ns.default.QvacResponse, 'named === static')
 })
 
-// addonLogging.js requires the native binding at load, which the unit tier
-// does not have, so its lexer visibility is asserted on the emitted file.
+// addonLogging.js needs the native binding at load, so assert on the emitted file.
 test('addonLogging emits the top-level assignments the lexer needs', (t) => {
   const emitted = fs.readFileSync(path.join(__dirname, '..', '..', 'addonLogging.js'), 'utf8')
 

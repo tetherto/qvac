@@ -20,7 +20,6 @@ function runBusyError(): Error {
 
 type BatchInput = (Message[] | BatchPrompt)[];
 
-/** A group's response, carrying the per-prompt ids assigned at admission. */
 type BatchGroupResponse = QvacResponse<BatchOutputChunk> & { ids: string[] };
 
 interface BatchHandlerDeps {

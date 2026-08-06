@@ -1,9 +1,6 @@
-// Type-checks the PACKED package from outside, with declaration emit on.
-// In-package fixtures cannot catch this class of bug: from inside, transitive
-// dependencies are reachable, so a type that is only nameable via
-// `@qvac/infer-base` still emits fine. A consumer that does not hoist that
-// dependency gets TS2742 instead. Installed with a nested layout to reproduce
-// the strict case.
+// Type-checks the packed package from outside, with declaration emit on.
+// A fixture inside the package cannot catch this: transitive dependencies are
+// reachable from there, so declarations emit cleanly whatever the types say.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

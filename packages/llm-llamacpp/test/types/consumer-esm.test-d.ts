@@ -34,17 +34,14 @@ async function sdkShapes() {
     void chunk.chunk;
   });
 
-  // The plugin reads `model.addon` for hard-cancel wiring.
   await model.addon?.cancelJob(1);
   await model.unload();
 }
 void sdkShapes;
 
-// Named runtime export from the root.
 const primary: string = pickPrimaryGgufPath(["/abs/model.gguf"]);
 void primary;
 
-// `./addonLogging`: default object plus named bindings.
 const logging: AddonLogging = llmAddonLogging;
 logging.setLogger((priority: number, message: string) => {
   void priority;
@@ -57,7 +54,6 @@ setLogger((priority: number, message: string) => {
 });
 releaseLogger();
 
-// The model satisfies the SDK's structural plugin-model contract.
 interface PluginModel {
   load(force?: boolean): Promise<void>;
   unload?(): void | Promise<void>;
@@ -65,7 +61,6 @@ interface PluginModel {
 const pluginModel: PluginModel = model;
 void pluginModel;
 
-// ...and the registry's looser model contract, including the public `addon`.
 // `| null` is spelled out because this fixture sets `exactOptionalPropertyTypes`.
 interface AddonInterface {
   cancel(jobId?: string): Promise<void>;
