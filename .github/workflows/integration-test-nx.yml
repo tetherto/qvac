@@ -1,26 +1,4 @@
-# Consolidates 10 of the 12 integration-test-<pkg>.yml files. Shared skeleton
-# (checkout -> setup-bare-tooling -> npm install -> download prebuilds bundle
-# (bash/powershell OS split) -> run tests -> upload perf report) is real and
-# identical across all 10; genuine per-package divergence is: platform matrix
-# rows (each package has its own real row set - flattened below, one entry
-# per (package, platform) pair), whether the test command needs a
-# `${platform}-${arch}` suffix, whether output is tee'd to a log file
-# (bash `tee`/PIPESTATUS on Unix, PowerShell `Tee-Object` on Windows), and an
-# optional manual-dispatch-only `pin-model-manifest` job (diffusion-cpp).
-#
-# Matrix rows come from each package's own project.json
-# (targets["test:integration"].options.ci), not a hand-typed table - see
-# .github/actions/nx-project-matrix. Add a package by editing its
-# project.json, not this file.
-#
-# Carve-outs, both stay untouched and separate:
-#   - llm-llamacpp: own `label` field disambiguating multiple same-platform
-#     rows, a `test:integration:generate` pre-step, tee-based logging, and a
-#     genuinely different (7-row, GPU-labelled) platform matrix.
-#   - asr-ggml: three distinct test-command variants gated on GPU runner
-#     (test:integration / test:integration:gpu / test:stand-alone:gpu) plus
-#     its own pin-model-manifest job - real complexity beyond a simple
-#     command-suffix/tee toggle.
+# Consolidates 10 of the 12 integration-test-<pkg>.yml files.
 name: "Integration Tests (nx)"
 
 on:
@@ -90,11 +68,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Only one row per opted-in package needs to actually run this - every
-      # step below is gated on a single fixed os per package, so this runs
-      # (or shows as skipped) exactly once per package, not once per platform
-      # row. `matrix` isn't available in a job-level `if:`, so this has to be
-      # per-step.
+      # matrix isn't available in a job-level if:, so gating is per-step.
       - name: Manual Workspace Cleanup
         if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
