@@ -1,24 +1,4 @@
-# Consolidates 11 of the 12 integration-mobile-test-<pkg>.yml files (already
-# ~90% consolidated via the shared .github/actions/run-mobile-integration-tests
-# composite - QVAC-18168 - so the remaining per-package differences are just
-# data: workdir, npm package name, prebuild artifact prefix, Device Farm
-# project/pool ARNs (several fall back secrets.X || secrets.Y when a package
-# shares another's Device Farm project), and whether perf collection is on.
-# Carve-out: llm-llamacpp has a bespoke 8+15 shard fan-out (test-groups.json
-# driven), not a fit for this matrix - left untouched.
-#
-# Scope note: this consolidates each package's real workflow_call path (the
-# one actually invoked from CI). Bespoke workflow_dispatch-only extras some
-# packages have (e.g. asr-ggml's run_rtf_benchmarks perf-matrix narrowing) are
-# NOT replicated here - out of scope for this migration.
-#
-# Package-level rows come from each package's own project.json
-# (targets["test:integration-mobile"].options.ci), not a hand-typed table -
-# see .github/actions/nx-project-matrix. The Android/iOS platform fan-out
-# below is a separate, static, second matrix dimension - not per-package
-# data, so options.ci carries no platforms[] (nx-project-matrix's existing
-# `.platforms // [{}]` fallback already returns one unflattened row per
-# package, matching what `strategy.matrix.package` needs here unchanged).
+# Consolidates 11 of the 12 integration-mobile-test-<pkg>.yml files.
 name: "Mobile Integration Tests (nx)"
 
 on:
