@@ -6,7 +6,11 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/classification-ggml"
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "artifactNamePrefix": "classification-ggml-",
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",

@@ -6,7 +6,11 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/embed-llamacpp"
+        "cwd": "packages/embed-llamacpp",
+        "ci": {
+          "artifactNamePrefix": "llama-cpp-",
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",

@@ -6,7 +6,10 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/translation-nmtcpp"
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",

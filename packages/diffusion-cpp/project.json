@@ -6,7 +6,11 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/diffusion-cpp"
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "artifactNamePrefix": "sd-cpp-",
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",
