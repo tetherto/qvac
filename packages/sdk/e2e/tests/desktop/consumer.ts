@@ -1,4 +1,4 @@
-import { createExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -9,6 +9,7 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -17,6 +18,8 @@ import {
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -27,6 +30,7 @@ import {
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
+  GROOT_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -35,8 +39,13 @@ import {
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  BCI_WINDOWED
+  BCI_WINDOWED,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_VAE_BF16
 } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -73,8 +82,10 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-inference-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
+import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
@@ -105,6 +116,12 @@ resources.define('tools-batch', {
 
 resources.define('finetune-llm', {
   constant: QWEN3_1_7B_INST_Q4,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('finetune-llm-qwen35', {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
 })
@@ -172,6 +189,16 @@ resources.define('ocr', {
   config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
 })
 
+// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
+// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
+// the DBNet detector from the recognizer src. Referencing the detector here
+// would bypass the derivation path under test, so it downloads at loadModel
+// time instead of being pre-cached (both DocTR GGUFs are small).
+resources.define('doctr', {
+  constant: OCR_DOCTR,
+  type: 'ggml-ocr'
+})
+
 resources.define('vla', {
   constant: SMOLVLA_LIBERO_VISION_Q8,
   type: 'ggml-vla',
@@ -180,6 +207,15 @@ resources.define('vla', {
 
 resources.define('vla-pi05', {
   constant: PI05_BASE_Q_AGGRESSIVE,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
+// Desktop-only resource. Uses the smaller q5 profile (~2.74 GB) to keep load
+// time down. Not smoke-tagged (too heavy for the quick smoke path), and mobile
+// does not define this resource, so the mobile suite skips the groot tests.
+resources.define('vla-groot', {
+  constant: GROOT_Q5_VF16,
   type: 'ggml-vla',
   config: { backend: 'cpu' }
 })
@@ -269,6 +305,33 @@ resources.define('tts-chatterbox', {
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
     referenceAudioSrc: path.resolve(process.cwd(), 'assets/audio', 'transcription-short-wav.wav')
+  }
+})
+
+resources.define('tts-parler', {
+  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
+  }
+})
+
+resources.define('tts-parler-indic', {
+  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    normalizeNumbers: true
   }
 })
 
@@ -364,7 +427,7 @@ resources.define('vision', {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
+    ctx_size: 4096,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })
@@ -388,6 +451,18 @@ resources.define('diffusion', {
     prediction: 'flux2_flow',
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE
+  }
+})
+
+resources.define('audiogen-turbo', {
+  type: 'audiogen-ggml',
+  config: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    useGPU: true,
+    inferenceSteps: 8
   }
 })
 
@@ -471,9 +546,16 @@ function ensureDesktopE2EConfig() {
     ...fixtureConfig,
     ...existingConfig
   }
+  const configuredPlugins = Array.isArray(mergedConfig['plugins'])
+    ? mergedConfig['plugins'].filter((plugin): plugin is string => typeof plugin === 'string')
+    : []
+  const desktopConfig = {
+    ...mergedConfig,
+    plugins: Array.from(new Set([...configuredPlugins, '@qvac/sdk/audiogen-ggml/plugin']))
+  }
   const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
 
-  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
+  fs.writeFileSync(generatedPath, `${JSON.stringify(desktopConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
 
   if (existingPath) {
@@ -502,6 +584,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    ),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
@@ -539,8 +625,10 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
+    new AudioGenExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),

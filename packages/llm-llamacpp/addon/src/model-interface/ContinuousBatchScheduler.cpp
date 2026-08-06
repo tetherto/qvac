@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
@@ -218,10 +219,11 @@ ContinuousBatchScheduler::~ContinuousBatchScheduler() {
   clearLocked();
 }
 
-BatchResult
-ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest>&& requests) {
+BatchResult ContinuousBatchScheduler::processBatch(
+    std::vector<SubmitRequest>&& requests, const uint64_t groupTag) {
   auto group = std::make_shared<BatchGroup>(requests.size());
   group->totalCount = requests.size();
+  group->tag = groupTag;
   if (requests.empty()) {
     return {.outputs = {}, .stats = runtimeStats()};
   }
@@ -230,6 +232,26 @@ ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest>&& requests) {
   if (pending_.size_approx() == 0 && !hasWorkLocked()) {
     stats_.reset();
   }
+  // Discoverable by tag only while this call is on the stack, so a cancel that
+  // arrives before any admission can still settle the group.
+  if (groupTag != 0) {
+    taggedGroups_[groupTag] = group;
+  }
+  // Lock-aware so it is correct on every exit: the normal path releases the
+  // lock below before unwinding, while a throw from submission (e.g. enqueue
+  // running out of memory) unwinds with it still held — re-locking there would
+  // self-deadlock.
+  ScopeGuard tagGuard([this, groupTag, &lock] {
+    if (groupTag == 0) {
+      return;
+    }
+    if (lock.owns_lock()) {
+      taggedGroups_.erase(groupTag);
+      return;
+    }
+    std::scoped_lock tagLock(mutex_);
+    taggedGroups_.erase(groupTag);
+  });
   ensureWorkerStartedLocked();
   for (size_t i = 0; i < requests.size(); i++) {
     pending_.enqueue(
@@ -240,10 +262,15 @@ ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest>&& requests) {
   }
   workCv_.notify_all();
   workCv_.wait(lock, [&group] { return group->done; });
+  // Released before the guard re-locks it to erase the tag.
+  lock.unlock();
   if (group->error) {
     std::rethrow_exception(group->error);
   }
-  return {.outputs = std::move(group->outputs), .stats = group->stats};
+  return {
+      .outputs = std::move(group->outputs),
+      .stats = group->stats,
+      .requestStats = std::move(group->requestStats)};
 }
 
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
@@ -256,6 +283,9 @@ void ContinuousBatchScheduler::ensureWorkerStartedLocked() {
   if (!workerStarted_) {
     workerStarted_ = true;
     worker_ = std::thread([this] { workerLoop(); });
+    // Published while still holding mutex_: the worker's first action is to
+    // acquire that mutex, so every callback it later runs observes the id.
+    workerThreadId_.store(worker_.get_id());
   }
 }
 
@@ -263,9 +293,8 @@ void ContinuousBatchScheduler::workerLoop() {
   std::unique_lock lock(mutex_);
   while (true) {
     workCv_.wait(lock, [this] {
-      return stopping_ || cancelRequested_.load() ||
-             !pendingSlotCancels_.empty() || clearRequested_ ||
-             pending_.size_approx() > 0 || hasWorkLocked();
+      return stopping_ || cancelRequested_.load() || hasPendingCancels() ||
+             clearRequested_ || pending_.size_approx() > 0 || hasWorkLocked();
     });
     if (stopping_) {
       break;
@@ -495,6 +524,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         "(MultiRequestBatcher::AddStatus=" +
             std::to_string(static_cast<int>(status)) + ")");
   }
+  const uint64_t admissionId = nextAdmissionId_++;
+  // Counted before the slot is installed so a group is never briefly seen as
+  // "has queued requests" once its last one has a slot — that is the gate
+  // cancelGroupQueued uses to decide between settling the group and leaving it
+  // to graceful slot teardown.
+  if (queued.group) {
+    queued.group->admittedCount++;
+  }
   slots_[seqId].emplace(
       SlotState{
           .streams = std::move(streamsLocal),
@@ -505,14 +542,40 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
           .activeCacheSavedToDisk = isCacheLoaded,
-          .prefillOnly = request.prefill});
+          .prefillOnly = request.prefill,
+          .enqueuedAt = request.enqueuedAt,
+          .admissionId = admissionId});
   cacheGuard.dismiss();
+  // A true return means the caller already holds a cancel for this request:
+  // tear the slot down before it ever decodes.
+  if (slots_[seqId]->streams.onAdmitted &&
+      slots_[seqId]->streams.onAdmitted(seqId, admissionId)) {
+    // The request was cancelled while still queued, so it never produced
+    // anything. A multi-prompt group settles as Cancelled — the terminal
+    // cancelPendingLocked gives a queued drop, and what the README documents
+    // for cancelling a batch that contained queued prompts — instead of
+    // quietly completing the group as a success with empty outputs. A lone
+    // request keeps the graceful empty-output cancel the single-job contract
+    // pins: its caller cannot tell a refusal here from a cancel that landed
+    // during prefill, and the latter must not throw.
+    if (slots_[seqId]->group && slots_[seqId]->group->totalCount > 1) {
+      failGroupLocked(
+          slots_[seqId]->group,
+          std::make_exception_ptr(
+              qvac_errors::StatusError(
+                  ADDON_ID,
+                  qvac_lib_inference_addon_llama::errors::toString(
+                      qvac_lib_inference_addon_llama::errors::Cancelled),
+                  "ContinuousBatchScheduler: request cancelled before it "
+                  "could run (queued behind the parallel limit when its "
+                  "group was cancelled)")));
+    }
+    // Not covered by failGroupLocked when the group was already settled by
+    // an earlier refusal (its early-out skips the teardown loop), so tear
+    // this slot down explicitly; a double teardown is a no-op (slot freed).
+    cancelSlotLocked(seqId);
+  }
   return seqId;
-}
-
-bool ContinuousBatchScheduler::step() {
-  std::unique_lock lock(mutex_);
-  return stepLocked(&lock);
 }
 
 std::function<bool(const Request&)>
@@ -762,8 +825,22 @@ void ContinuousBatchScheduler::drainFinishedLocked() {
     // cancelled request into the on-disk cache. The last known-good
     // cache from a prior turn is preserved. The subsequent
     // `clearSeqKv` still wipes the sequence in memory.
+    //
+    // A failed disk save (e.g. unwritable cacheKey) is the finishing
+    // request's own error, not the scheduler's: nothing shared is corrupted
+    // by a failed file write, so it must fail only this slot's group.
+    // Letting it escape to workerLoop's catch would tear down every
+    // in-flight slot and drain the whole queue with an error naming this
+    // request's cacheKey. failSlotLocked routes a grouped slot through
+    // failGroupLocked (settling the whole group -- one job -- with this
+    // error, `SaveCachePolicy::Skip` on its remaining slots) and frees the
+    // slot either way; the loop below still clears this seqId's KV.
     if (rollbackOk) {
-      saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+      try {
+        saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+      } catch (...) {
+        failSlotLocked(req.seqId, std::current_exception());
+      }
     }
   }
   for (const auto& req : finished) {
@@ -913,6 +990,14 @@ unsigned ContinuousBatchScheduler::numActive() const {
   return numActiveLocked();
 }
 
+unsigned ContinuousBatchScheduler::occupancy() const {
+  std::scoped_lock lock(mutex_);
+  const size_t total =
+      static_cast<size_t>(numActiveLocked()) + pending_.size_approx();
+  return static_cast<unsigned>(
+      std::min<size_t>(total, std::numeric_limits<unsigned>::max()));
+}
+
 unsigned ContinuousBatchScheduler::numActiveLocked() const noexcept {
   unsigned count = 0;
   for (const auto& s : slots_) {
@@ -1007,18 +1092,133 @@ double RuntimeStatsSnapshot::prefillTokensPerSecond() const {
              : 0.0;
 }
 
-bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
+bool ContinuousBatchScheduler::cancel(uint32_t seqId, uint64_t admissionId) {
+  if (std::this_thread::get_id() == workerThreadId_.load()) {
+    // A streaming callback (onToken/onAdmitted/onDone) is cancelling from
+    // the worker thread, which holds mutex_ while it streams: locking it
+    // here would self-deadlock (the hazard whole-model cancel dodges via
+    // the non-locking requestCancelAll flag). Record only -- no ownership
+    // check, no notify. The worker is awake by definition and reconciles
+    // deferred teardown at its loop top and on every lock reacquisition
+    // before it can sleep or admit new work; the apply side validates the
+    // admission id, so a stale record no-ops there.
+    recordPendingSlotCancel(seqId, admissionId);
+    return true;
+  }
   std::scoped_lock lock(mutex_);
-  const bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
-  if (occupied) {
+  // Request-time ownership check: a mismatch means the admission this
+  // cancel was aimed at already finished (and the seqId may already name
+  // an unrelated successor) -- do nothing rather than touch that slot.
+  const bool owned = slotOwnedByLocked(seqId, admissionId);
+  if (owned) {
     if (workerStarted_ && !stopping_) {
-      pendingSlotCancels_.push_back(seqId);
+      // Notified while mutex_ is held so the wakeup cannot slip between the
+      // worker's predicate check and its wait.
+      recordPendingSlotCancel(seqId, admissionId);
       workCv_.notify_all();
     } else {
       cancelSlotLocked(seqId);
     }
   }
-  return occupied;
+  return owned;
+}
+
+bool ContinuousBatchScheduler::cancelGroupQueued(const uint64_t groupTag) {
+  if (groupTag == 0) {
+    return false;
+  }
+  if (std::this_thread::get_id() == workerThreadId_.load()) {
+    // Worker thread (a streaming callback) holds mutex_ — record only, exactly
+    // as cancel(seqId, admissionId) does. The worker reconciles deferred
+    // teardown at its loop top before it can admit anything or sleep.
+    recordPendingGroupCancel(groupTag);
+    return true;
+  }
+  std::scoped_lock lock(mutex_);
+  if (!taggedGroups_.contains(groupTag)) {
+    return false;
+  }
+  if (workerStarted_ && !stopping_) {
+    // Notified while mutex_ is held so the wakeup cannot slip between the
+    // worker's predicate check and its wait.
+    recordPendingGroupCancel(groupTag);
+    workCv_.notify_all();
+  } else {
+    applyGroupQueuedCancelLocked(groupTag);
+  }
+  return true;
+}
+
+void ContinuousBatchScheduler::applyGroupQueuedCancelLocked(
+    const uint64_t groupTag) noexcept {
+  const auto found = taggedGroups_.find(groupTag);
+  if (found == taggedGroups_.end()) {
+    return; // the group finished between record and apply
+  }
+  const std::shared_ptr<BatchGroup> group = found->second.lock();
+  if (!group || group->done) {
+    return;
+  }
+  // Fully admitted between record and apply: every request has a slot, so the
+  // submitter's own slot teardown covers the group and keeps the graceful
+  // partial-output cancel. Settling it here would downgrade that to a throw.
+  if (group->admittedCount >= group->totalCount) {
+    return;
+  }
+  // A lone request keeps the graceful empty-output cancel that the single-job
+  // contract pins — the same choice submitLocked's refusal path makes: its
+  // caller cannot tell a cancel that landed while the request was queued from
+  // one that landed during prefill, and the latter must not throw. Settling it
+  // done-without-error releases its blocked processBatch at once (the point of
+  // this call) while keeping that terminal. `admittedCount == 0` here, so the
+  // group holds no slot to tear down.
+  if (group->totalCount <= 1) {
+    group->stats = stats_;
+    group->done = true;
+    workCv_.notify_all();
+    return;
+  }
+  // A multi-prompt group instead rejects: some of its prompts never ran, so
+  // completing it as a success with empty strings would disguise the
+  // cancellation. Same terminal as cancelPendingLocked and as a refusal at
+  // admission. failGroupLocked marks the group done and notifies, which
+  // releases its blocked processBatch immediately; the stale pending_ entries
+  // are discarded by admitPendingIntoFreeSlotsLocked's done-check when a slot
+  // next frees.
+  failGroupLocked(
+      group,
+      std::make_exception_ptr(
+          qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_lib_inference_addon_llama::errors::toString(
+                  qvac_lib_inference_addon_llama::errors::Cancelled),
+              "ContinuousBatchScheduler: request cancelled before it "
+              "could run (queued behind the parallel limit when its "
+              "group was cancelled)")));
+}
+
+void ContinuousBatchScheduler::recordPendingGroupCancel(
+    const uint64_t groupTag) {
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  pendingGroupCancels_.push_back(groupTag);
+}
+
+void ContinuousBatchScheduler::recordPendingSlotCancel(
+    uint32_t seqId, uint64_t admissionId) {
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  pendingSlotCancels_.push_back(
+      PendingSlotCancel{.seqId = seqId, .admissionId = admissionId});
+}
+
+bool ContinuousBatchScheduler::slotOwnedByLocked(
+    uint32_t seqId, uint64_t admissionId) const noexcept {
+  return seqId < slots_.size() && slots_[seqId].has_value() &&
+         slots_[seqId]->admissionId == admissionId;
+}
+
+bool ContinuousBatchScheduler::hasPendingCancels() const {
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  return !pendingSlotCancels_.empty() || !pendingGroupCancels_.empty();
 }
 
 void ContinuousBatchScheduler::cancelSlotLocked(
@@ -1094,10 +1294,32 @@ void ContinuousBatchScheduler::cancelSlotLocked(
 }
 
 void ContinuousBatchScheduler::applyDeferredTeardownLocked() noexcept {
-  for (const uint32_t seqId : pendingSlotCancels_) {
-    cancelSlotLocked(seqId);
+  std::vector<PendingSlotCancel> pendingCancels;
+  std::vector<uint64_t> pendingGroups;
+  try {
+    std::scoped_lock pendingLock(pendingCancelsMtx_);
+    pendingCancels.swap(pendingSlotCancels_);
+    pendingGroups.swap(pendingGroupCancels_);
+  } catch (...) {
+    // std::mutex::lock may throw std::system_error on an unrecoverable
+    // failure; leave the recorded cancels in place for the next drain
+    // rather than terminate from this noexcept teardown path.
+    logTeardownFailureNoexcept("deferred-cancel drain failed to lock");
   }
-  pendingSlotCancels_.clear();
+  // Groups first: settling one frees the slots its admitted siblings hold, and
+  // doing it before the per-slot pass keeps a same-group slot cancel from
+  // racing that teardown.
+  for (const uint64_t groupTag : pendingGroups) {
+    applyGroupQueuedCancelLocked(groupTag);
+  }
+  for (const PendingSlotCancel& pending : pendingCancels) {
+    // Apply-time ownership re-check: the slot may have drained (and been
+    // re-admitted) between record and apply; a stale record must not tear
+    // down the seqId's next occupant.
+    if (slotOwnedByLocked(pending.seqId, pending.admissionId)) {
+      cancelSlotLocked(pending.seqId);
+    }
+  }
   if (clearRequested_) {
     clearRequested_ = false;
     clearLocked();
@@ -1281,11 +1503,83 @@ void ContinuousBatchScheduler::saveCacheForSlot(
   slot.activeCacheSavedToDisk = true;
 }
 
+ObservedRequestStats computeObservedStats(
+    const std::chrono::steady_clock::time_point enqueuedAt, const Request& req,
+    const std::optional<GenerationStopReason> stopReason) {
+  ObservedRequestStats observed;
+  observed.stopReason = stopReason;
+  observed.generatedTokens = static_cast<int64_t>(req.generatedTokens.size());
+  // Mirror accumulateSlot: full prompt once prefill completed, the partial
+  // fed count for a request cancelled mid/pre-prefill.
+  observed.promptTokens = req.isPrefillComplete()
+                              ? static_cast<int64_t>(req.prefillTokenCount)
+                              : static_cast<int64_t>(req.prefillFedCount);
+  if (!req.firstTokenAt.has_value() || !req.lastTokenAt.has_value()) {
+    return observed; // never sampled a token: no timing figures exist
+  }
+  observed.ttftMs =
+      std::chrono::duration<double, std::milli>(*req.firstTokenAt - enqueuedAt)
+          .count();
+  const double genWindowMs = std::chrono::duration<double, std::milli>(
+                                 *req.lastTokenAt - *req.firstTokenAt)
+                                 .count();
+  // N tokens span N-1 inter-token gaps; a single token has no honest rate.
+  if (observed.generatedTokens > 1 && genWindowMs > 0.0) {
+    constexpr double kMillisInSecond = 1000.0;
+    observed.genTps = kMillisInSecond *
+                      static_cast<double>(observed.generatedTokens - 1) /
+                      genWindowMs;
+  }
+  return observed;
+}
+
+ObservedRequestStats
+aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
+  ObservedRequestStats agg;
+  double ttftSum = 0.0;
+  double tpsSum = 0.0;
+  int64_t ttftCount = 0;
+  int64_t tpsCount = 0;
+  bool stopReasonAgrees = true;
+  for (const ObservedRequestStats& stats : all) {
+    agg.generatedTokens += stats.generatedTokens;
+    agg.promptTokens += stats.promptTokens;
+    // Kept only while every request reports the same reason: a one-item group
+    // (the concurrent single-prompt path) keeps it, a mixed group drops it.
+    if (&stats == &all.front()) {
+      agg.stopReason = stats.stopReason;
+    } else if (stats.stopReason != agg.stopReason) {
+      stopReasonAgrees = false;
+    }
+    if (stats.ttftMs > 0.0) {
+      ttftSum += stats.ttftMs;
+      ++ttftCount;
+    }
+    if (stats.genTps > 0.0) {
+      tpsSum += stats.genTps;
+      ++tpsCount;
+    }
+  }
+  if (ttftCount > 0) {
+    agg.ttftMs = ttftSum / static_cast<double>(ttftCount);
+  }
+  if (tpsCount > 0) {
+    agg.genTps = tpsSum / static_cast<double>(tpsCount);
+  }
+  if (!stopReasonAgrees) {
+    agg.stopReason.reset();
+  }
+  return agg;
+}
+
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
   int64_t nSlides = 0;
   int64_t thinkingDiscards = 0;
+  // Read after the caller has finalized the driver, so a finished sequence
+  // reports its terminal reason; a cancelled/prefill-only slot reports None.
+  std::optional<GenerationStopReason> stopReason;
   if (slot.driver) {
     // `onCancel` has already rolled `nPast` back to the admission cursor
     // and, on the graceful-cancel leg, `saveCacheForSlot` persists that
@@ -1300,8 +1594,16 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     nSlides = static_cast<int64_t>(slot.driver->getNSlides());
     thinkingDiscards =
         static_cast<int64_t>(slot.driver->getThinkingBlockDiscards());
+    stopReason = slot.driver->getGenerationStopReason();
   }
   stats_.accumulateSlot(nPast, nSlides, thinkingDiscards, req);
+  // Every terminal path that folds a slot into the aggregate also records the
+  // request's observed end-to-end figures for its submitter, next to its
+  // output.
+  if (slot.group) {
+    slot.group->requestStats[slot.outputIndex] =
+        computeObservedStats(slot.enqueuedAt, req, stopReason);
+  }
 }
 
 } // namespace qvac_lib_inference_addon_llama::batching

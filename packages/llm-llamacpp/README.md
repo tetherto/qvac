@@ -43,8 +43,8 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 - **Non-Adreno GPUs**: Normal GPU selection applies (no special behavior).
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
-- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
+- inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler)
+- qvac-fabric-llm.cpp (≥9840.1.1): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 ## Installation
@@ -152,7 +152,8 @@ The `config` obj consists of a set of hyper-parameters which can be used to twea
 const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
-  device: 'cpu' // must be specified: 'gpu' or 'cpu' else it will throw an error
+  device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
+  no_mmap: 'true' // disable memory-mapped model loading
 }
 ```
 
@@ -167,7 +168,7 @@ const config = {
 | top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
 | predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
 | seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
-| no_mmap           | "" (passing empty string sets the flag)     | —                            | Disable memory mapping for model loading              |
+| no_mmap           | `""`, `"true"`, or `"false"`                | `"false"`                    | Disable memory mapping for model loading              |
 | reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
@@ -302,7 +303,7 @@ const results = await response.await()
 // results: [ { id: 'batch-1', output: 'Apple' }, { id: 'batch-2', output: 'France' }, { id: 'batch-3', output: 'Blue' } ]
 ```
 
-Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOptions`:
+Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOptions`. The `batch-` prefix is reserved for auto-minted ids and rejected on caller-assigned ones:
 
 ```javascript
 const response = await model.run([
@@ -325,26 +326,38 @@ try {
 
 ### API behavior by state
 
-The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
+
+- `response.cancel()` — **targeted**: cancels only the job (or batch group) that `run()` call produced, leaving other concurrent jobs running.
+- `model.cancel()` — **global**: cancels every live job (in-flight and queued) at the moment of the call, plus any finetuning in progress.
 
 | Current state | Action called | What happens |
 |---------------|----------------|----------------------------------------------------------------|
 | idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
 | idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves      |
-| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
-| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
+| busy, `parallel: 1` (or `rejectWhenBusy: true`) | run | **Throw** — an `Error` with `code === 'RUN_BUSY'` (message `"Cannot set new job: a job is already set or being processed"`) the moment the slot pool is full. Branch on the code; the message is prose and may change |
+| busy, `parallel >= 2` (default `rejectWhenBusy: false`) | run | **Allowed** — the job is admitted concurrently (continuous batching) or queued until a slot frees; each call gets its own independent `QvacResponse` |
+| busy          | `response.cancel()` | **Allowed** — cancels only that response's job/group; Promise resolves when it has stopped |
+| busy          | `model.cancel()`    | **Allowed** — cancels all live jobs; Promise resolves when they have stopped |
 
-When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
-- `"Cannot set new job: a job is already set or being processed"`
+Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
+
+"Full" is counted in slots, not calls: a batch run of N prompts is one job that occupies up to N slots, so with `parallel: 4` a single in-flight `run([p, p, p, p])` is enough to fail-fast a following run. An active finetune counts as full at any `parallel`, since it holds the model exclusively.
+
+#### Prefill (cache warming) with `parallel >= 2`
+
+A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it is *persistable*: `saveCacheToDisk: true` plus a `cacheKey`. A live-only prefill (no persistence) warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
 
 #### Cancelling a batch
 
-When more prompts are submitted in one batch than the configured `parallel` slots, the overflow prompts wait in an internal queue until a slot frees up. `cancel` treats the two groups differently, mirroring how cancelling a single request behaves:
+`response.cancel()` on a `BatchResponse` cancels only that batch group — other concurrent runs (single or batch) keep going; `model.cancel()` cancels every live job. Within the cancelled group, when more prompts were submitted than the configured `parallel` slots the overflow prompts wait in an internal queue until a slot frees up, and cancel treats the two subsets differently, mirroring how cancelling a single request behaves:
 
 - **In-flight prompts** (already decoding in a slot) are cancelled gracefully: they keep whatever they generated so far and the call resolves normally — no error.
 - **Queued prompts** (still waiting, never admitted to a slot) had no chance to run and produced nothing. These are surfaced as an error rather than silent empty results: the batch call rejects with a `Cancelled` `StatusError`.
 
-So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts.
+So a cancelled batch that contained queued prompts rejects with `Cancelled`; callers should handle that rejection rather than expecting empty strings for the un-run prompts. A single (non-batch) run resolves with an empty string once it has started, but rejects with `Cancelled` if it was still waiting in the scheduler's queue and so never ran at all — see [Cancellation semantics](./docs/continuous-batching.md#cancellation-semantics). Either way the rejection is an `Error` carrying the native **message** with no `code`: a job's asynchronous terminal is forwarded through addon-cpp's `Output::Error`, which keeps only the text, so `err.code` is not available here (unlike `RUN_BUSY`, which is built in JS and does carry one). Match on `err.message` for now.
+
+Cancelling a queued job resolves immediately, whether or not the slots it was waiting for are held by an unrelated run — you never wait out someone else's generation to cancel your own queued work.
 
 
 ## Fine-tuning
@@ -406,13 +419,14 @@ npm run quickstart
 
 ## OCR with Vision-Language Models
 
-In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
+In addition to pipeline-based OCR (`@qvac/ocr-ggml`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
 
 ### Supported OCR Models
 
 | Model | Params | Quantization | Description |
 |-------|--------|-------------|-------------|
 | LightON OCR-2 1B | 0.6B (LLM) + ~550M (vision) | Q4_K_M | OCR-specialized, full-page transcription, 11 languages |
+| Unlimited-OCR | 3B (DeepseekV2 MoE) + SAM+CLIP vision | Q4_K_M | OCR-specialized, full-page document parsing with layout boxes + HTML tables |
 | SmolVLM2-500M | 500M | Q8_0 | General vision-language, can follow targeted extraction prompts |
 
 ### LightON OCR-2
@@ -461,6 +475,64 @@ const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
 const messages = [
   { role: 'user', type: 'media', content: imageBytes },
   { role: 'user', content: 'Extract all text from this image and format it as markdown.' }
+]
+
+const response = await model.run(messages)
+const output = []
+
+response.onUpdate(token => {
+  output.push(token)
+})
+
+await response.await()
+
+console.log(output.join(''))
+
+await model.unload()
+```
+
+### Unlimited-OCR
+
+[Unlimited-OCR](https://huggingface.co/baidu/Unlimited-OCR) is a 3B OCR-specialized vision-language model (Apache 2.0), an advancement of DeepSeek-OCR. It parses full-page documents into text with layout regions (`<|det|>` boxes) and reconstructs tables as HTML — useful for invoices, forms, and scanned reports.
+
+**Characteristics:**
+- DeepEncoder vision tower (SAM ViT-B + CLIP-L) + DeepseekV2 MoE decoder
+- Emits `<|det|>type [x0,y0,x1,y1]<|/det|>` layout regions and `<table>…</table>` structure
+- Requires both the LLM model and the **F16** mmproj (keep the vision projector at F16 — quantizing it hurts OCR accuracy)
+- Requires `qvac-fabric >= 9840` (ships the `deepseek2-ocr` engine + `deepseekocr` clip projector)
+- **Prompt matters:** use `document parsing.` (layout + tables), `Multi page parsing.` (long docs), or `Free OCR. ` (plain text). A generic "extract the text" prompt yields near-empty output.
+
+**Usage Example:**
+
+```js
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const fs = require('bare-fs')
+const path = require('bare-path')
+
+const dirPath = path.resolve('./models')
+
+const model = new LlmLlamacpp({
+  files: {
+    model: [path.join(dirPath, 'unlimited-ocr-Q4_K_M.gguf')],
+    projectionModel: path.join(dirPath, 'mmproj-unlimited-ocr-F16.gguf')
+  },
+  config: {
+    device: 'cpu',
+    gpu_layers: '0',
+    ctx_size: '8192',
+    temp: '0',
+    predict: '2048'
+  },
+  logger: console
+})
+
+await model.load()
+
+const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
+
+const messages = [
+  { role: 'user', type: 'media', content: imageBytes },
+  { role: 'user', content: 'document parsing.' }
 ]
 
 const response = await model.run(messages)

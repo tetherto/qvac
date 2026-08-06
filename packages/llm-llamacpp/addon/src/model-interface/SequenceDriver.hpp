@@ -26,6 +26,15 @@ enum class GenerationStopReason : uint8_t {
   ContextOverflow,
 };
 
+// addon.js maps the numeric `stopReason` runtime stat back to a label by
+// indexing its STOP_REASONS array with these values — keep them frozen.
+static_assert(static_cast<uint8_t>(GenerationStopReason::None) == 0);
+static_assert(static_cast<uint8_t>(GenerationStopReason::Eos) == 1);
+static_assert(static_cast<uint8_t>(GenerationStopReason::Antiprompt) == 2);
+static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
+static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
+static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
@@ -138,6 +147,18 @@ public:
 
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
 
+  /// Why this sequence's generation stopped, once the scheduler has finalized
+  /// the driver (`None` before that, for a prefill-only slot, or on a
+  /// cancel/decode-error leg, which skips `onGenerationFinished`). Per
+  /// sequence, so unlike the shared per-context vision counters it can be
+  /// reported for one request without misattribution. Declared on both bases
+  /// with the same signature as `LlmContext::getGenerationStopReason`, like
+  /// `getNPast`/`getNSlides` — the concrete contexts' single `override`
+  /// satisfies both.
+  [[nodiscard]] virtual GenerationStopReason getGenerationStopReason() const {
+    return GenerationStopReason::None;
+  }
+
   // Apply the per-request `remove_thinking_from_context` toggle to the
   // driver. The single-prompt path goes through `applyGenerationParams`
   // (which restores on scope exit); the batch path uses this setter
@@ -186,7 +207,7 @@ public:
     (void)mediaIndex;
     (void)pos;
     throw qvac_errors::StatusError(
-        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InternalError),
         "SequenceDriver::evalMediaSegment: driver stages no media segments");

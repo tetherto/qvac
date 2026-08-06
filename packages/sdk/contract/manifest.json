@@ -1,6 +1,12 @@
 {
   "methods": [
     {
+      "name": "audioGenStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/audioGenStream.request",
+      "responseSchema": "schema.json#/$defs/audioGenStream.response"
+    },
+    {
       "name": "batchCompletionStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/batchCompletionStream.request",
@@ -29,6 +35,12 @@
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/classify.request",
       "responseSchema": "schema.json#/$defs/classify.response"
+    },
+    {
+      "name": "completionOrchestrate",
+      "callShape": "duplex",
+      "requestSchema": "schema.json#/$defs/completionOrchestrate.request",
+      "responseSchema": "schema.json#/$defs/completionOrchestrate.response"
     },
     {
       "name": "completionStream",
@@ -85,6 +97,12 @@
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/getModelInfo.request",
       "responseSchema": "schema.json#/$defs/getModelInfo.response"
+    },
+    {
+      "name": "getSystemResources",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/getSystemResources.request",
+      "responseSchema": "schema.json#/$defs/getSystemResources.response"
     },
     {
       "name": "heartbeat",

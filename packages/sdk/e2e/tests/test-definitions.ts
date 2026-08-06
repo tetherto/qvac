@@ -30,6 +30,7 @@ import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
 import { delegatedInferenceTests } from './delegated-inference-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
+import { audioGenTests } from './audio-gen-tests.js'
 import { finetuneTests } from './finetune-tests.js'
 import { lifecycleTests } from './lifecycle-tests.js'
 import { configTests } from './config-tests.js'
@@ -39,6 +40,8 @@ import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
+import { snapStorageTests } from './snap-storage-tests.js'
+import { systemResourcesTests } from './system-resources-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -67,6 +70,23 @@ export const modelLoadEmbedding: TestDefinition = {
 
 export const modelLoadOcr: TestDefinition = {
   testId: 'model-load-ocr',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 90000
+  }
+}
+
+// Loads OCR_DOCTR with no explicit pipelineType/detectorModelSrc — the
+// gap that let QVAC-22514 ship: with only OCR_LATIN (EasyOCR) covered, the
+// plugin could assume the EasyOCR pipeline for every recognizer and no e2e
+// test noticed. This exercises the auto pipelineType: "doctr" inference and
+// DBNet detector derivation on the load path.
+export const modelLoadOcrDoctr: TestDefinition = {
+  testId: 'model-load-ocr-doctr',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
@@ -198,6 +218,7 @@ export const tests = [
   modelLoadLlm,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -286,6 +307,9 @@ export const tests = [
   // Diffusion tests
   ...diffusionTests,
 
+  // Audio generation tests (desktop-only; mobile skips via SkipExecutor)
+  ...audioGenTests,
+
   // Delegated inference tests (P2P)
   ...delegatedInferenceTests,
 
@@ -317,6 +341,12 @@ export const tests = [
 
   // Custom plugin system tests (custom-echo-plugin, error paths)
   ...pluginTests,
+
+  // Strict Snap storage-path conformance
+  ...snapStorageTests,
+
+  // Local hardware capabilities and on-demand usage sampling
+  ...systemResourcesTests,
 
   // Additional model tests
   modelSwitchLlm,

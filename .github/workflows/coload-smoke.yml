@@ -1,0 +1,168 @@
+# Reusable multi-addon co-load smoke (desktop, linux-x64).
+#
+# Per-addon CI loads exactly one addon per run, so it cannot catch the class of
+# bug where addon A and addon B each pass alone but crash when both are
+# dlopen'd into one process (the @qvac/tts-ggml@0.2.1 ggml_backend_is_cpu
+# crash). This runs packages/ggml-coload-smoke, which require()s several @qvac
+# ggml addons into ONE Bare process across a matrix of combinations.
+#
+# Called by on-pr-<addon>.yml after `prebuild`, gated by the run-coload-tests
+# label (ci-router). It co-loads the PUBLISHED baseline of the other addons and
+# overlays THIS PR's freshly-built prebuild for `addon` from the run's
+# `prebuilds` artifact, so the smoke exercises the PR's diff, not the registry
+# baseline. COLOAD_REQUIRE_INSTALLED makes a silent fall-back to monorepo source
+# fatal, so a green run provably loaded the overlaid package.
+
+name: Co-load smoke (ggml, desktop)
+
+on:
+  workflow_call:
+    inputs:
+      addon:
+        description: "Addon short name whose PR prebuild to overlay (e.g. tts-ggml); matches packages/<addon> and addons.js."
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout (defaults to this repo)."
+        required: false
+        type: string
+      ref:
+        description: "Git ref to checkout (defaults to the triggering ref)."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      combos: ${{ steps.gen.outputs.combos }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Compute co-load combinations for ${{ inputs.addon }}
+        id: gen
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        env:
+          ADDON: ${{ inputs.addon }}
+        run: node scripts/coload-combinations.mjs --changed "$ADDON"
+
+  coload:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.combos != '' && needs.prepare.outputs.combos != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        combo: ${{ fromJSON(needs.prepare.outputs.combos) }}
+    name: coload-${{ matrix.combo.name }}
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      # Runtime deps the freshly-built linux-x64 prebuild dlopen's (matches the
+      # desktop integration-test set): libgomp/libomp for OpenMP, libblas for
+      # the BLAS soname, Mesa Vulkan ICD so the backend probe finds a device.
+      - name: Install linux runtime dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgomp1 libomp5 libblas3 mesa-vulkan-drivers
+
+      - name: Install bare tooling
+        shell: bash
+        run: npm install -g --force bare bare-make
+
+      - name: Install co-load harness deps
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        run: npm install
+
+      - name: Install combo addons (published baseline)
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        env:
+          ADDONS: ${{ matrix.combo.addons }}
+        run: |
+          set -euo pipefail
+          PKGS=""
+          for a in ${ADDONS//,/ }; do PKGS="$PKGS @qvac/$a"; done
+          echo "Installing combo '${{ matrix.combo.name }}' baseline:$PKGS"
+          npm install --no-save $PKGS
+
+      - name: Download this PR's freshly-built prebuilds
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ runner.temp }}/pr-prebuilds
+
+      - name: Overlay the PR's ${{ inputs.addon }} prebuild (linux-x64)
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        env:
+          ADDON: ${{ inputs.addon }}
+          SRC: ${{ runner.temp }}/pr-prebuilds
+        run: |
+          set -euo pipefail
+          DEST="node_modules/@qvac/$ADDON/prebuilds/linux-x64"
+          if [ ! -d "$SRC/linux-x64" ]; then
+            echo "::error::PR prebuilds artifact has no linux-x64/ for $ADDON"
+            ls -R "$SRC" || true
+            exit 1
+          fi
+          # The combo installs the published baseline for every addon it loads.
+          # A missing package means no combo loads $ADDON, so overlaying would
+          # create an orphan directory and the smoke would pass without ever
+          # exercising this PR's build.
+          if [ ! -d "node_modules/@qvac/$ADDON" ]; then
+            echo "::error::@qvac/$ADDON is not installed for combo '${{ matrix.combo.name }}'; the overlay would not be loaded"
+            exit 1
+          fi
+          mkdir -p "$DEST"
+          cp -r "$SRC/linux-x64/." "$DEST/"
+          # Published @qvac packages use the qvac_ prefix; a freshly-built
+          # prebuild may still carry the tetherto_ build prefix (mirrors the
+          # rename in integration-test-*.yml).
+          find "node_modules/@qvac/$ADDON/prebuilds" -depth -name 'tetherto_*' | while read -r f; do
+            mv "$f" "$(dirname "$f")/$(basename "$f" | sed 's/^tetherto_/qvac_/')"
+          done
+          echo "Overlaid PR prebuild for $ADDON into $DEST:"
+          ls -la "$DEST"
+
+      - name: Co-load smoke (PR code)
+        working-directory: packages/ggml-coload-smoke
+        shell: bash
+        env:
+          COLOAD_ADDONS: ${{ matrix.combo.addons }}
+          COLOAD_REQUIRE_INSTALLED: '1'
+        run: bare test/coload.test.js

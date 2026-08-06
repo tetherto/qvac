@@ -22,9 +22,15 @@ async function loadSupertonicTTS(params = {}) {
     config.useGPU = false
   }
 
+  const files = { supertonicModel: supertonicPath }
+  // The enhancer / denoiser paths are the "on" switches for the LavaSR stages;
+  // only set them when a path was resolved so an unset value leaves the stage off.
+  if (params.lavasrEnhancerPath) files.lavasrEnhancer = params.lavasrEnhancerPath
+  if (params.lavasrDenoiserPath) files.lavasrDenoiser = params.lavasrDenoiserPath
+
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
-    files: { supertonicModel: supertonicPath },
+    files,
     voice: params.voice || 'F1',
     steps: params.steps,
     speed: params.speed,
@@ -65,7 +71,8 @@ async function runSupertonicTTS(model, params = {}, expectation = {}) {
 
     const sampleCount = outputArray.length
     const stats = response.stats || null
-    const durationMs = stats?.audioDurationMs || sampleCount / (sampleRate / 1000)
+    const outputSampleRate = reportedSampleRate || sampleRate
+    const durationMs = stats?.audioDurationMs || sampleCount / (outputSampleRate / 1000)
 
     let passed = true
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) passed = false
@@ -75,7 +82,7 @@ async function runSupertonicTTS(model, params = {}, expectation = {}) {
     if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs)
       passed = false
 
-    const wavBuffer = createWavBuffer(outputArray, sampleRate)
+    const wavBuffer = createWavBuffer(outputArray, outputSampleRate)
 
     if (params.saveWav === true) {
       const wavPath = params.wavOutputPath || path.join(__dirname, '../output/supertonic.wav')
@@ -96,7 +103,7 @@ async function runSupertonicTTS(model, params = {}, expectation = {}) {
         samples: outputArray,
         sampleCount,
         durationMs,
-        sampleRate,
+        sampleRate: outputSampleRate,
         reportedSampleRate,
         wavBuffer,
         stats

@@ -2,7 +2,8 @@
 
 const test = require('brittle')
 
-test('client api surface', async t => {
+// lunte-disable-next-line require-await
+test('client api surface', async (t) => {
   const { QVACRegistryClient } = require('../../index')
   t.ok(QVACRegistryClient, 'QVACRegistryClient class exists')
 
@@ -21,14 +22,30 @@ test('client api surface', async t => {
   t.ok(QVACRegistryClient.prototype.resume, 'has resume method')
 })
 
-test('client find methods are async functions', async t => {
+// lunte-disable-next-line require-await
+test('client find methods are async functions', async (t) => {
   const QVACRegistryClient = require('../../lib/client')
 
-  t.ok(QVACRegistryClient.prototype.findModels.constructor.name === 'AsyncFunction', 'findModels is async')
-  t.ok(QVACRegistryClient.prototype.findModelsByEngine.constructor.name === 'AsyncFunction', 'findModelsByEngine is async')
-  t.ok(QVACRegistryClient.prototype.findModelsByName.constructor.name === 'AsyncFunction', 'findModelsByName is async')
-  t.ok(QVACRegistryClient.prototype.findModelsByQuantization.constructor.name === 'AsyncFunction', 'findModelsByQuantization is async')
+  t.ok(
+    QVACRegistryClient.prototype.findModels.constructor.name === 'AsyncFunction',
+    'findModels is async'
+  )
+  t.ok(
+    QVACRegistryClient.prototype.findModelsByEngine.constructor.name === 'AsyncFunction',
+    'findModelsByEngine is async'
+  )
+  t.ok(
+    QVACRegistryClient.prototype.findModelsByName.constructor.name === 'AsyncFunction',
+    'findModelsByName is async'
+  )
+  t.ok(
+    QVACRegistryClient.prototype.findModelsByQuantization.constructor.name === 'AsyncFunction',
+    'findModelsByQuantization is async'
+  )
   t.ok(QVACRegistryClient.prototype.findBy.constructor.name === 'AsyncFunction', 'findBy is async')
-  t.ok(QVACRegistryClient.prototype.suspend.constructor.name === 'AsyncFunction', 'suspend is async')
+  t.ok(
+    QVACRegistryClient.prototype.suspend.constructor.name === 'AsyncFunction',
+    'suspend is async'
+  )
   t.ok(QVACRegistryClient.prototype.resume.constructor.name === 'AsyncFunction', 'resume is async')
 })

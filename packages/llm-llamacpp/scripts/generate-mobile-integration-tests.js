@@ -106,7 +106,7 @@ function validateGroups(functionNames) {
   // test_groups override, and are deliberately absent from test-groups.json
   // so normal mobile integration runs never trigger the heavy benchmark.
   // Exclude them from the group-coverage requirement.
-  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf')
+  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest'
 
   const coveredByFamily = new Map()
   for (const [platform, splits] of Object.entries(groups)) {

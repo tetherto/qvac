@@ -54,6 +54,55 @@ jobs:
           node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/good/package/prebuilds/android-arm64 --platform android
           echo "OK: gate correctly passed on 0.2.0."
 
+      - name: Gate MUST resolve engine symbols against an external --provider-dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reproduce the shared-runtime (@qvac/fabric) case: an addon .bare with an
+          # UND ggml_* symbol + DT_NEEDED on qvac__fabric@0.bare, whose provider lives
+          # OUTSIDE the scanned prebuilds/ tree (it ships in node_modules and is
+          # pre-loaded at runtime, not co-located beside the addon). Critically, the
+          # provider FILE on disk is the unversioned `qvac__fabric.bare` while the
+          # addon's DT_NEEDED is the ABI-versioned SONAME `qvac__fabric@0.bare` -- the
+          # real fabric layout. The gate must index the provider by its DT_SONAME (not
+          # its basename) to match the DT_NEEDED across this divergence.
+          rm -rf /tmp/prov
+          mkdir -p /tmp/prov/prebuilds/linux-x64 /tmp/prov/providers/linux-x64
+          printf 'int ggml_test_symbol(void){return 42;}\n' > /tmp/prov/provider.c
+          printf 'extern int ggml_test_symbol(void);\nint addon_entry(void){return ggml_test_symbol();}\n' > /tmp/prov/addon.c
+          cc -shared -fPIC -Wl,-soname,qvac__fabric@0.bare -o /tmp/prov/providers/linux-x64/qvac__fabric.bare /tmp/prov/provider.c
+          cc -shared -fPIC -o /tmp/prov/prebuilds/linux-x64/qvac__addon.bare /tmp/prov/addon.c -L/tmp/prov/providers/linux-x64 -l:qvac__fabric.bare -Wl,--no-as-needed
+          # Without the provider dir the engine symbol is unresolved -> MUST hard-fail
+          # (proves --provider-dir did not neuter the real UND check).
+          if node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/prov/prebuilds --platform linux; then
+            echo "::error::Gate PASSED with the shared-runtime provider absent -- it would miss a genuinely-unresolved engine symbol."
+            exit 1
+          fi
+          echo "OK: gate hard-failed when the shared-runtime provider was not indexed."
+          # With --provider-dir the fabric exports resolve the UND import -> MUST pass.
+          node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/prov/prebuilds --provider-dir /tmp/prov/providers --platform linux
+          echo "OK: gate passed once the shared-runtime provider was indexed via --provider-dir."
+
+      - name: Gate MUST NOT mask UND symbols when --provider-dir is present but the addon does not DT_NEEDED it
+        shell: bash
+        run: |
+          set -euo pipefail
+          # An addon with a genuine UND ggml_* and NO DT_NEEDED on the provider soname
+          # must still hard-fail even when a --provider-dir is indexed (e.g. @qvac/fabric
+          # happens to be in node_modules but this binary does not dynamically link it).
+          # Proves resolution is keyed on each binary's own DT_NEEDED, not a global pool.
+          rm -rf /tmp/mask
+          mkdir -p /tmp/mask/prebuilds/linux-x64 /tmp/mask/providers/linux-x64
+          printf 'int ggml_test_symbol(void){return 42;}\n' > /tmp/mask/provider.c
+          printf 'extern int ggml_test_symbol(void);\nint addon_entry(void){return ggml_test_symbol();}\n' > /tmp/mask/addon.c
+          cc -shared -fPIC -Wl,-soname,qvac__fabric@0.bare -o /tmp/mask/providers/linux-x64/qvac__fabric.bare /tmp/mask/provider.c
+          cc -shared -fPIC -o /tmp/mask/prebuilds/linux-x64/qvac__static.bare /tmp/mask/addon.c
+          if node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/mask/prebuilds --provider-dir /tmp/mask/providers --platform linux; then
+            echo "::error::Gate PASSED on an addon without a matching DT_NEEDED -- the provider index would mask a genuine dlopen-crash UND."
+            exit 1
+          fi
+          echo "OK: gate hard-failed when the provider was indexed but the addon did not DT_NEEDED its soname."
+
   fleet-dryrun:
     # De-risks the fleet-wide activation flagged in review: the gate runs inside
     # reusable-prebuilds.yml, which all 14 prebuild-*.yml callers reference by
@@ -82,7 +131,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          addons="tts-ggml transcription-parakeet transcription-whispercpp bci-whispercpp llm-llamacpp embed-llamacpp classification-ggml vla-ggml ocr-ggml translation-nmtcpp diffusion-cpp ocr-onnx"
+          addons="tts-ggml transcription-parakeet transcription-whispercpp bci-whispercpp llm-llamacpp embed-llamacpp classification-ggml vla-ggml ocr-ggml translation-nmtcpp diffusion-cpp"
           checked=0
           failed=0
           skipped=0

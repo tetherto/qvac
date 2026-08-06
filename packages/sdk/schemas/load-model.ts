@@ -15,6 +15,7 @@ import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
+  ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
 } from './text-to-speech'
 import { ocrConfigSchema } from './ocr'
@@ -34,6 +35,7 @@ import {
   ttsModelTypeSchema,
   ocrModelTypeSchema,
   diffusionModelTypeSchema,
+  audioGenModelTypeSchema,
   vlaModelTypeSchema,
   classificationModelTypeSchema,
   ModelType,
@@ -45,6 +47,7 @@ import {
 import { sdcppConfigSchema } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
 import { classificationConfigSchema } from './classification'
+import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
@@ -88,11 +91,13 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
     configKeys(
       ttsChatterboxLoadConfigSchema,
       ttsSupertonicLoadConfigSchema,
+      ttsParlerLoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],
   [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
   [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
+  [ModelType.audiogenGgml, configKeys(audioGenConfigSchema)],
   [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
   [ModelType.ggmlClassification, configKeys(classificationConfigSchema)]
 ])
@@ -193,6 +198,14 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: diffusionModelTypeSchema,
       modelConfig: sdcppConfigSchema.strict().optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelSrc: modelSrcInputSchema.optional(),
+      modelType: audioGenModelTypeSchema,
+      modelConfig: audioGenConfigSchema
     })
     .strict(),
   z
@@ -406,6 +419,25 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
       ...loadModelRequestCommonFields,
+      modelSrc: modelSrcInputSchema.optional(),
+      modelType: audioGenModelTypeSchema,
+      modelConfig: audioGenConfigSchema
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.audiogenGgml,
+      modelSrc: data.modelSrc ? modelInputToSrcSchema.parse(data.modelSrc) : '',
+      modelName: data.modelSrc ? modelInputToNameSchema.parse(data.modelSrc) : undefined,
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId })
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
       modelType: vlaModelTypeSchema,
       modelConfig: vlaConfigSchema.strict().optional()
     })
@@ -553,6 +585,13 @@ export const loadDiffusionModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadAudioGenModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.audiogenGgml),
+    modelConfig: audioGenConfigSchema
+  })
+  .strict()
+
 export const loadVlaModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlVla),
@@ -589,6 +628,7 @@ export const loadModelSrcRequestSchema = z
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
     loadDiffusionModelRequestSchema,
+    loadAudioGenModelRequestSchema,
     loadVlaModelRequestSchema,
     loadClassificationModelRequestSchema,
     loadCustomPluginModelRequestSchema
@@ -751,9 +791,11 @@ export type InferredConfig<S> = S extends {
                 ? z.input<typeof parakeetConfigSchema>
                 : S extends { engine: typeof ModelType.sdcppGeneration }
                   ? z.input<typeof sdcppConfigSchema>
-                  : S extends { engine: typeof ModelType.ggmlVla }
-                    ? z.input<typeof vlaConfigSchema>
-                    : Record<string, unknown>
+                  : S extends { engine: typeof ModelType.audiogenGgml }
+                    ? z.input<typeof audioGenConfigSchema>
+                    : S extends { engine: typeof ModelType.ggmlVla }
+                      ? z.input<typeof vlaConfigSchema>
+                      : Record<string, unknown>
 
 /**
  * `loadModel` options for descriptors that preserve a literal `engine`.

@@ -1,0 +1,296 @@
+name: General CI/CD (inference)
+# Dedicated publish flow for @qvac/inference.
+#
+# Unlike the generic library template, @qvac/inference has a real build step
+# (`prepare` -> `tsc -p tsconfig.build.json` + a `bare` d.ts fixer). Publishing
+# through the generic path runs that build implicitly during `npm publish` in a
+# job with no `node_modules`, so `tsc` cannot resolve `zod`, `bare-*`, or the
+# `@qvac/*` deps and the publish fails.
+#
+# This workflow instead follows the publish-sdk.yml pattern:
+#   1. a single `build` job installs deps + compiles once, then uploads `dist`;
+#   2. the GPR / npm publish jobs download that prebuilt `dist` and publish it
+#      with NPM_CONFIG_IGNORE_SCRIPTS=true, so `npm publish` never rebuilds.
+# The shared `publish-library-to-gpr` action is used unchanged.
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/inference/**"
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "NPM dist-tag override (e.g. release-1.x). Leave empty to derive from the branch."
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel an in-flight publish (GPR/npm) mid-run.
+  cancel-in-progress: false
+
+jobs:
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: inference
+          package-json-path: packages/inference/package.json
+          changelog-path: packages/inference/CHANGELOG.md
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      # Reuse the canonical branch->stream mapping (main->dev, release-*,
+      # feature-*, tmp-*) from tetherto/qvac-actions, the same action every other
+      # publish workflow in this repo uses, instead of a repo-local copy. Remote
+      # actions are fetched automatically, so this job needs no checkout.
+      - name: Determine publish streams
+        id: logic
+        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+
+  # Install deps + compile ONCE, then hand the built dist to every publish job.
+  build:
+    name: Build @qvac/inference
+    needs: [publish-logic]
+    if: >-
+      needs.publish-logic.outputs.publish_main == 'true'
+      || needs.publish-logic.outputs.publish_feature == 'true'
+      || needs.publish-logic.outputs.publish_tmp == 'true'
+      || needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        shell: bash
+        working-directory: packages/inference
+        env:
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -eu
+          # @qvac/* resolve from public npm; @tetherto/* (mono dev builds) from GPR.
+          # Token is written to the config files from the env var, never echoed.
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          cat > bunfig.toml <<BUNFIG
+          [install]
+          registry = "https://registry.npmjs.org/"
+
+          [install.scopes]
+          "@tetherto" = { token = "${GIT_PAT}", url = "https://npm.pkg.github.com" }
+          BUNFIG
+
+      - name: Install dependencies
+        working-directory: packages/inference
+        run: bun install
+
+      - name: Build (compile + rewrite d.ts extensions)
+        working-directory: packages/inference
+        run: bun run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: inference-dist
+          path: packages/inference/dist/
+          # Fail the build (not just warn) if the compile produced no dist,
+          # so a broken build can't green-light publish or ship empty.
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-main-gpr-dev:
+    name: Publish to GitHub Packages (dev)
+    needs: [build, publish-logic]
+    if: needs.publish-logic.outputs.publish_main == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    # dist is prebuilt in the `build` job; skip lifecycle scripts so `npm publish`
+    # ships it as-is instead of re-running the `prepare` build with no node_modules.
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: inference-dist
+          path: packages/inference/dist
+
+      - name: Publish to GitHub Packages (dev)
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/inference
+          name-suffix: "-mono"
+
+  publish-feature-gpr:
+    name: Publish to GitHub Packages (feature)
+    needs: [build, publish-logic]
+    if: needs.publish-logic.outputs.publish_feature == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: inference-dist
+          path: packages/inference/dist
+
+      - name: Publish to GitHub Packages (feature)
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/inference
+          name-suffix: "-mono"
+
+  publish-tmp-gpr:
+    name: Publish to GitHub Packages (tmp)
+    needs: [build, publish-logic]
+    if: needs.publish-logic.outputs.publish_tmp == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: inference-dist
+          path: packages/inference/dist
+
+      - name: Publish to GitHub Packages (tmp)
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: packages/inference
+          name-suffix: "-mono"
+
+  publish-release-npm:
+    name: Publish to NPM
+    needs: [build, publish-logic, release-merge-guard]
+    if: >-
+      needs.publish-logic.outputs.publish_release == 'true'
+      && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    env:
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download prebuilt dist
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: inference-dist
+          path: packages/inference/dist
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: packages/inference
+          tag: ${{ inputs.npm_tag }}
+
+      - name: Publish to NPM
+        id: publish
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          tag: ${{ steps.dist-tag.outputs.tag }}
+          workdir: packages/inference
+
+  # Tag the published version (no GitHub Release; SDK-only releases policy).
+  create-tag:
+    needs: [publish-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "inference"
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}

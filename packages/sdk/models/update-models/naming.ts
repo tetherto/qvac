@@ -152,9 +152,16 @@ function generateBaseName(input: BaseNameInput): string {
       return generateParakeetName(input)
     case 'diffusion':
       return generateDiffusionName(input)
+    case 'audiogen':
+      return generateAudioGenName(input)
     default:
       return cleanPart(input.filename.replace(/\.\w+$/, ''))
   }
+}
+
+function generateAudioGenName({ filename }: BaseNameInput): string {
+  const modelName = cleanPart(filename.replace(/\.\w+$/, ''))
+  return `AUDIOGEN_${modelName}`
 }
 
 function generateVadSileroName({ filename }: BaseNameInput): string {
@@ -330,7 +337,14 @@ function generateLlmName({
     }
   }
 
-  const nameParts = [familyName, params, type, quantization].filter((p) => p && p !== '')
+  const familyTokens = cleanPart(familyName).split('_')
+  // Avoid duplicating params when the registry model name already ends with
+  // the same size (for example, Qwen3-4B + 4B).
+  const paramsAlreadyIncluded =
+    params !== '' && familyTokens[familyTokens.length - 1] === cleanPart(params)
+  const nameParts = [familyName, paramsAlreadyIncluded ? '' : params, type, quantization].filter(
+    (p) => p && p !== ''
+  )
   let exportName = nameParts.map(cleanPart).join('_')
 
   if (isMMProj) {

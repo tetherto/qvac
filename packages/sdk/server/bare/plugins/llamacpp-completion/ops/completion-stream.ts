@@ -18,7 +18,10 @@ import {
 } from '@/server/bare/plugins/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/server/bare/ops/kv-cache-utils'
 import { getModel, getModelConfig, type AnyModel } from '@/server/bare/registry/model-registry'
-import { decideCachedHistorySlice } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state'
+import {
+  decideCachedHistorySlice,
+  shouldCommitCachedTurn
+} from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state'
 import {
   createKvCacheSession,
   generateConfigHash,
@@ -40,7 +43,10 @@ import { AttachmentNotFoundError } from '@/utils/errors-server'
 import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/server/bare/types/addon-responses'
-import { normalizeCompletionStats } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
+import {
+  normalizeCompletionStats,
+  withEmittedTokens
+} from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
 import fs from 'bare-fs'
 
 const logger = getServerLogger()
@@ -90,23 +96,6 @@ export type CompletionGenerationParams = GenerationParams & {
 
 type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'saveCacheToDisk' | 'prefill'> & {
   generationParams?: CompletionGenerationParams
-}
-
-/**
- * Decide whether a completed turn earned the right to record its kv-cache
- * boundary. A `savedCount` is only safe to write when the turn ran to
- * completion AND produced at least one token — anything else (cancelled
- * mid-decode, zero-token reply, early EOS) leaves the on-disk cache file
- * in an unknown state relative to `history.length + 1`, and a stale entry
- * would slice the next turn's history down to an empty payload.
- *
- * Replaces the pre-0.11.0 `shouldRecordSavedCount(wasCancelled, ...)` with
- * a signal-driven check that reads directly from the request's
- * `AbortSignal`. The local helper keeps the call sites in
- * `completion-stream.ts` honest without importing the registry every time.
- */
-function shouldCommitTurn(signal: AbortSignal, producedTokens: boolean): boolean {
-  return !signal.aborted && producedTokens
 }
 
 function transformMessage(
@@ -160,12 +149,7 @@ function transformMessage(
 }
 
 function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOptions) {
-  const run = model.run.bind(model) as (
-    prompt: ChatHistory[],
-    opts?: CompletionRunOptions
-  ) => ReturnType<typeof model.run>
-
-  return run(prompt, opts)
+  return model.run(prompt, opts)
 }
 
 export function transformMessages(
@@ -337,11 +321,15 @@ async function* processModelResponse(
 
   let accumulatedText = ''
   let producedTokens = false
+  let emittedPieces = 0
   let toolCallsResult: ToolCall[] = []
 
   for await (const token of response.iterate()) {
     const tokenStr = token as string
-    if (tokenStr.length > 0) producedTokens = true
+    if (tokenStr.length > 0) {
+      producedTokens = true
+      emittedPieces++
+    }
     accumulatedText += tokenStr
     yield { token: tokenStr }
   }
@@ -357,7 +345,7 @@ async function* processModelResponse(
   }
 
   const responseWithStats = response as unknown as ResponseWithStats
-  const stats = normalizeCompletionStats(responseWithStats.stats)
+  const stats = withEmittedTokens(normalizeCompletionStats(responseWithStats.stats), emittedPieces)
 
   return {
     ...buildStreamResult(modelExecutionMs, stats),
@@ -561,12 +549,18 @@ export async function* completion(
     { cacheKey: turn.cachePath, saveCacheToDisk: true },
     dialect
   )
+  const shouldCommitTurn = shouldCommitCachedTurn({
+    aborted: signal.aborted,
+    producedTokens: result.producedTokens,
+    generatedTokens: result.stats?.generatedTokens,
+    predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict
+  })
 
   if (typeof kvCache === 'string') {
     // Custom-key path: the addon wrote the new cache state inline at
     // the same path. Either commit (records the boundary, suppresses
     // rollback) or fall through to the deferred rollback.
-    if (shouldCommitTurn(signal, result.producedTokens)) {
+    if (shouldCommitTurn) {
       await session.commitTurn(turn, {
         kind: 'static',
         messageCount: history.length + 1
@@ -590,10 +584,9 @@ export async function* completion(
     return result
   }
 
-  if (!shouldCommitTurn(signal, result.producedTokens)) {
-    // Cancelled or zero-token turn — the addon wrote the file but its
-    // contents don't correspond to a clean turn boundary. Let the
-    // deferred rollback unlink it.
+  if (!shouldCommitTurn) {
+    // Cancelled, zero-token, or budget-exhausted turns do not establish
+    // a trustworthy message boundary.
     return result
   }
 

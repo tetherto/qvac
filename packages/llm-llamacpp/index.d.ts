@@ -26,14 +26,41 @@ export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  /** Single-request admission: resolves `true` if accepted, `false` if busy. */
-  runJob(data: AddonRunJobMessage[]): Promise<boolean>
+  /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
+  runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>
   /** Batch admission: resolves the accepted flag plus the assigned sequence ids. */
   runJob(data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>
   cancel(): Promise<void>
-  finetune?(params: FinetuneOptions): Promise<boolean>
+  /** Cancel a single job by its native-assigned id, leaving other concurrent jobs running. */
+  cancelJob(id: number): Promise<void>
+  /** Active jobs (in-flight + queued) per the native scheduler — the authoritative admission count. */
+  activeJobs(): number
+  /**
+   * Requests occupying or waiting for a continuous-batching slot
+   * (active + pending). Capacity is consumed in slots, not jobs — one batch
+   * job of N prompts takes up to N — so admission compares the max of this and
+   * `activeJobs()` against `parallel`. 0 when no batch scheduler is active
+   * (`parallel: 1`). Optional: an older binding may not export it.
+   */
+  activeSlots?(): number
+  /** Resolves the scheduler-minted exclusive-job id when admitted, `false` when rejected. */
+  finetune?(params: FinetuneOptions): Promise<number | false>
   unload(): Promise<void>
 }
+
+/**
+ * Discriminated admission result: the native binding only sets `id` when the
+ * scheduler minted one, so a job id exists exactly when the job was accepted.
+ */
+export type AdmissionResult =
+  | {
+      accepted: true
+      /** Native-assigned job id used to route this request's streamed output. */
+      id: number
+    }
+  | { accepted: false; id?: never }
+
+export type AddonRunJobResult = AdmissionResult
 
 export interface AddonBatchRunItem {
   /** Optional caller-supplied id; the native binding auto-assigns one when omitted. */
@@ -41,10 +68,20 @@ export interface AddonBatchRunItem {
   messages: AddonRunJobMessage[]
 }
 
-export interface AddonBatchRunResult {
-  accepted: boolean
-  ids: string[]
-}
+/**
+ * Batch admission result. The per-sequence `ids` are reported on both
+ * branches (they are assigned while parsing the batch input); the native
+ * group id used to route the batch's terminal events exists only when the
+ * batch was accepted.
+ */
+export type AddonBatchRunResult =
+  | {
+      accepted: true
+      /** Native group id used by the batch handler to route this group's terminal events. */
+      id: number
+      ids: string[]
+    }
+  | { accepted: false; id?: never; ids: string[] }
 
 export interface LlamaConfig {
   device?: string
@@ -57,7 +94,7 @@ export interface LlamaConfig {
   top_k?: NumericLike
   predict?: NumericLike
   seed?: NumericLike
-  no_mmap?: boolean | ''
+  no_mmap?: '' | 'true' | 'false'
   reverse_prompt?: string
   repeat_penalty?: NumericLike
   presence_penalty?: NumericLike
@@ -93,10 +130,25 @@ export interface LlamaConfig {
   /**
    * Number of concurrent sequence slots for continuous-batching (`--parallel` /
    * `n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch
-   * scheduler so the prompts of a single batch-array `run()` call are decoded
-   * together across slots; separate top-level `run()` calls are not batched
-   * (only one response is active at a time). Default `1` (sequential, batching
-   * disabled).
+   * scheduler: the prompts of a single batch-array `run()` call and separate
+   * concurrent top-level `run()` calls are both decoded together across slots,
+   * so multiple responses can be active at once. Default `1` (sequential, a
+   * single response active at a time, batching disabled).
+   *
+   * Cost: `parallel` is a real resource commitment, sized upfront so a busy
+   * server is ready to serve at full concurrency with no warm-up. It sizes
+   * the native scheduler's worker pool one-to-one — that many OS threads are
+   * created at load and held for the model's lifetime, idle or not — and the
+   * KV cache is split evenly across the slots (each gets `ctx_size /
+   * parallel` tokens). Size it to the concurrency you actually intend to
+   * serve, not to a generous upper bound.
+   *
+   * Range `1..256`. The upper bound is the engine's own sequence limit
+   * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
+   * spawning its whole thread pool and then failing the model load with a
+   * generic error. `ctx_size / parallel` must also leave at least one token
+   * per slot, so a `parallel` too large for the context is refused as an
+   * `InvalidArgument` naming both knobs.
    */
   parallel?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined
@@ -106,7 +158,13 @@ export interface LlmLlamacppArgs {
   files: { model: string[]; projectionModel?: string }
   config: LlamaConfig
   logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
+  /**
+   * `rejectWhenBusy` is the instance-level admission policy when the worker
+   * pool is full; defaults to `true` for `parallel: 1` and `false` for
+   * `parallel >= 2`, and can be overridden per call via
+   * `RunOptions.rejectWhenBusy` (see its doc for the full contract).
+   */
+  opts?: { stats?: boolean; rejectWhenBusy?: boolean }
 }
 
 export interface UserTextMessage {
@@ -186,15 +244,14 @@ export interface GenerationParams {
    * end-of-generation so subsequent turns do not accumulate reasoning
    * history.
    *
-   * Defaults to `true`: for reasoning-capable models the safer
-   * default is to drop hidden reasoning blocks so that later turns
-   * are not steered by internal reasoning that the user never sees.
-   * Set to `false` to preserve reasoning tokens in the KV / SSM
-   * cache across turns (e.g. chain-of-thought agents that want the
-   * next turn to attend to prior reasoning, interpretability
-   * tooling, or cache-reuse patterns that depend on the
-   * reasoning-inclusive state). Supported on both text and
-   * multimodal contexts. No-op for models without a recognised
+   * Defaults to `false` for all models except the Qwen3 reasoning family
+   * (Qwen3, Qwen3.5, and Qwen3.6, including MoE variants), which defaults
+   * to `true`. Set this per-request `generationParams` value to override the
+   * model default. Set to `false` to preserve reasoning tokens in the KV / SSM
+   * cache across turns (e.g. chain-of-thought agents that want the next turn
+   * to attend to prior reasoning, interpretability tooling, or cache-reuse
+   * patterns that depend on the reasoning-inclusive state). Supported on both
+   * text and multimodal contexts. No-op for models without a recognised
    * reasoning channel.
    *
    * Recurrent / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba,
@@ -265,6 +322,14 @@ export interface GenerationParams {
 }
 
 export interface RunOptions {
+  /**
+   * Run prefill only (cache warming): the prompt is evaluated but no tokens
+   * are generated. On a model loaded with `parallel >= 2` a prefill is
+   * admitted only when it is *persistable* (`saveCacheToDisk: true` plus a
+   * `cacheKey`) — a live-only prefill warms context state that no concurrent
+   * job could reach and is rejected with `InvalidArgument`; run live-only
+   * prefills on a `parallel: 1` model. The same rule applies per batch item.
+   */
   prefill?: boolean
   generationParams?: GenerationParams
   cacheKey?: string
@@ -291,11 +356,33 @@ export interface RunOptions {
    * via `removeLastNTokens` and therefore save on cancel as usual.
    */
   saveCacheToDisk?: boolean
+  /**
+   * Admission policy when the worker pool is full. `true` rejects before
+   * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the
+   * code, not the message. `false` submits to the native multi-job
+   * scheduler, which queues the job in a nearly unbounded waiting room beyond
+   * the pool (queued jobs start as slots free); under any realistic backlog it
+   * is queued rather than rejected. Overrides the instance-level
+   * `opts.rejectWhenBusy`, whose default is `true` for `parallel: 1` and
+   * `false` for `parallel >= 2`.
+   */
+  rejectWhenBusy?: boolean
 }
 
 export interface BatchPrompt {
+  /**
+   * Correlates streamed chunks and results to this prompt. Auto-minted
+   * (`batch-N`) when omitted; the `batch-` prefix is reserved for those
+   * mints, so a provided id must not start with it.
+   */
   id?: string
   prompt: Message[]
+  /**
+   * Per-item options. `rejectWhenBusy` is a group policy — a batch is
+   * admitted as one native job, so items that set it must agree (a conflict
+   * throws `TypeError` before admission) and the agreed value gates the
+   * whole group.
+   */
   runOptions?: RunOptions
 }
 
@@ -336,11 +423,37 @@ export interface RuntimeStats {
    */
   thinkingBlockDiscards: number
   /**
-   * Average active sequences decoded together during the last request,
-   * including overlapping requests from other callers.
+   * How busy the shared backend was, not a property of your request: the
+   * mean number of sequences decoded together per engine step, including
+   * overlapping requests from other callers (capped by the `parallel`
+   * configuration). 1.0 = the model was effectively yours alone; ~N = your
+   * tokens shared compute with N-1 others, so this request's observed `TPS`
+   * is roughly the backend's aggregate rate divided by N. Even on a single
+   * request it tells apart "slow model" from "busy backend". Always
+   * model-level — never per-job.
    */
   avgConcurrentSeq: number
   backendDevice: 'cpu' | 'gpu'
+  /**
+   * Why generation stopped. Per-sequence, so it is reported for a single
+   * request on either path (sequential or one prompt on a parallel model).
+   *
+   * Absent when it cannot be attributed to one request: a `runBatched` group
+   * whose prompts stopped for different reasons reports nothing rather than
+   * picking one, and the whole-model `runtimeStats()` view omits it while
+   * continuous batching is active for the same reason.
+   */
+  stopReason?:
+    | 'none'
+    | 'eos'
+    | 'antiprompt'
+    | 'predictionLimit'
+    | 'sequenceLimit'
+    | 'contextOverflow'
+  /** Vision-encode time for the most recent inference. Multimodal models only. */
+  visionEncodeMs?: number
+  /** Vision slice/tile count for the most recent inference. Multimodal models only. */
+  visionEncodeTiles?: number
 }
 
 export interface FinetuneValidationNone {
@@ -464,9 +577,27 @@ export default class LlmLlamacpp {
   constructor(args: LlmLlamacppArgs)
 
   load(): Promise<void>
+  /**
+   * Run inference. When the model was loaded with `config.parallel >= 2`,
+   * multiple `run()` calls may be concurrently in flight (continuous
+   * batching): separate top-level calls are decoded together across slots,
+   * and each call returns an independent `QvacResponse` that receives only
+   * its own output tokens and stats. A call at capacity throws an `Error` with `code === 'RUN_BUSY'`
+   * when the effective `rejectWhenBusy` policy is `true` (the default for
+   * `parallel: 1`), and queues until a slot frees when it is `false` (the
+   * default for `parallel >= 2`). Use `response.cancel()` to cancel just
+   * that call's job or batch group.
+   */
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
   run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
   finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>
+  /**
+   * Global cancel: stops every job live at the moment of the call — in-flight
+   * and queued, across all concurrent `run()` calls — plus any finetuning in
+   * progress (its pause checkpoint is removed so the next `finetune()` starts
+   * fresh). For cancelling a single request or batch group, use
+   * `response.cancel()` on that call's response instead.
+   */
   cancel(): Promise<void>
   pause(): Promise<void>
   unload(): Promise<void>

@@ -7,8 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
+  to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
+  vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
+  volume / style) via the `instruct` option.
+
+### Fixed
+
+- **iOS model loading.** CosyVoice3 and Parler-TTS now load their models within
+  the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
+  loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
+  so they no longer OOM on non-entitled devices. Output is byte-identical.
+
+## [0.6.2] - 2026-08-03
+
+### Changed
+- Optimize OpenCL GPU backend implementation (Android) for Parler-TTS model
+- Update `ggml-speech` dependency version to align with other packages that also depend on it.
+
+## [0.6.1] - 2026-07-30
+
+### Fixed
+
+- **Parler no longer fails on iOS with `parler: DAC decode failed`.** The DAC
+  decoder's compute arena grew with the output length (~13.6 + 1.957 MiB per
+  frame, unbounded), and streaming re-decoded the whole code prefix on every
+  chunk, so a streamed utterance walked ~10 growing allocations up to 837 MiB.
+  That is fatal on iOS, where Metal buffers are backed by `posix_memalign`, and
+  invisible on macOS, which uses `vm_allocate`. Decoding is now windowed, so
+  peak DAC memory is constant in output length and streaming is 2.2–2.5×
+  faster. Audio is unchanged.
+
 ### Changed
 
+- **Parler always samples.** `topK: 1` selects argmax decoding, which this model
+  family cannot terminate — it collapses into a silence attractor after the
+  first word, and end-of-sequence is gated on the first codebook emitting EOS as
+  its argmax, so generation runs to `maxFrames` and yields a truncated utterance
+  followed by silence. Such requests are now repaired to the model's sampled
+  defaults (temperature 1.0, `topK` 50) with a warning on stderr. Use `seed` for
+  reproducible output — a fixed seed is bit-reproducible.
+
+## [0.6.0] - 2026-07-24
+
+### Added
+
+- **Parler-TTS engine (mini-v1 / large-v1 / indic) (QVAC-19261).** Third
+  engine family under the same `TTSGgml` surface: description-conditioned
+  TTS (Flan-T5 encoder → delay-pattern decoder → DAC codec, native
+  44.1 kHz). Detection via `engine: 'parler'`,
+  `files.parlerModel`, or a `modelDir` containing
+  `parler-<mini|large|indic>[-vN][-<quant>].gguf` (mini > large > indic;
+  q8_0 > q6_k > f16 > f32 within a variant). The indic variant covers 21
+  Indic languages with script-native digit normalization.
+- **Parler Metal GPU support (QVAC-21593).** `config.useGPU: true` /
+  `nGpuLayers` offloads the Parler engine to Metal on Apple (~2.25x vs CPU
+  on indic q8_0; decode flash-attention + fused QKV/heads + DAC phase-matmul);
+  other backends fall back to CPU and the CPU output stays byte-identical.
+  Adds CPU + Metal CI coverage across the published quant tiers.
+- **Parler voice descriptions + emotion flag.** The voice is set either by
+  a free-text `description` (alias `voiceDescription`) or by template
+  fields — `voice`, `emotion`, `pitch`, `pace`, `expressivity`, `noise`,
+  `reverb`, `quality` — rendered natively by tts-cpp's
+  `build_description()` in the models' training-caption phrasing.
+  `emotion` accepts the 12 trained styles (command, anger, narration,
+  conversation, disgust, fear, happy, neutral, proper noun, news, sad,
+  surprise; case-insensitive, invalid values error listing the set).
+  Description and template fields are mutually exclusive at the same
+  level; everything defaults to the models' recommended fallback caption,
+  so Parler works with zero description configuration. Template fields
+  are also accepted **per call** (`run({ input, emotion })`,
+  `runStream`/`runStreaming` options) — the only engine with a per-call
+  channel — merging over the constructor fields without a reload.
+- **Parler sampling/generation knobs.** `temperature`, `topK`, `topP`,
+  `maxFrames`, `minNewTokens`, `normalizeNumbers`, `seed`, `threads`,
+  `config.outputSampleRate` (addon-side resample from the native
+  44.1 kHz), all optional with the GGUF's generation defaults. Requires a
+  `tts-cpp` pin that ships the parler engine (qvac-ext-lib-whisper.cpp
+  PR #92). New `examples/parler-tts.js`, integration/unit suites, C++
+  config tests, and a `parler` model-download group (mini q8_0).
+
+## [0.5.1] - 2026-07-21
+
+### Changed
+
+- Migrated the published JavaScript wrapper to generated TypeScript sources and added declarations for the supported `./text-chunker` and `./lib/textStreamAccumulator.js` subpath exports, while preserving the existing CommonJS runtime API.
 - Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`tts-cpp` >= 2026-07-13#2, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels (chatterbox q4 CPU mean RTF 2.70 -> 2.28 on ubuntu-24.04-arm).
 - Bumped the `tts-cpp` `version>=` floor from `2026-07-13#2` to `2026-07-13#3` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), which raises the `ggml-speech` floor to `2026-07-15` (`tetherto/qvac-ext-ggml` speech `d7e27ac7`, [#42](https://github.com/tetherto/qvac-ext-ggml/pull/42) — QVAC-21623 ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM). `tts-cpp` source is unchanged (rebuild-only re-pin); the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical). Registry baseline unchanged.
 
@@ -35,6 +120,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Supertonic models now report `enhancerBackendDevice` (`-1` none / `0` CPU /
   `1` GPU) and `enhancerBackendId` (the ggml backend id, e.g. `3` for Vulkan),
   so hosts can confirm where the enhancer actually ran.
+- **LavaSR enhancer + denoiser wiring in the shipped `test/utils` helpers.**
+  `runChatterboxTTS` / `runSupertonicTTS` accept optional `lavasrEnhancerPath`
+  and `lavasrDenoiserPath` that map to the addon's `files.lavasrEnhancer` (the
+  LavaSR 48 kHz bandwidth-extension enhancer) and `files.lavasrDenoiser` (the
+  UL-UNAS speech denoiser, which runs before the enhancer) — each path is the
+  "on" switch for its stage, so an unset value leaves that stage off.
+  `downloadModel.js` gains `ensureLavaSREnhancerGguf()` / `ensureLavaSRDenoiserGguf()`
+  — which fetch their GGUF from the QVAC registry by default, with
+  `LAVASR_ENHANCER_GGUF` / `LAVASR_DENOISER_GGUF` /
+  `LAVASR_{ENHANCER,DENOISER}_REGISTRY_PATH` / locally-staged overrides — plus
+  shared `normalizeEnhancer()` / `normalizeDenoiser()` helpers. The benchmark/CI
+  enhancer and denoiser axes built on these utilities are documented in
+  `benchmarks/RTF-BENCHMARKS.md`.
+- **LavaSR enhancer quant tier in the shipped `test/utils` helpers.**
+  `downloadModel.js` `ensureLavaSREnhancerGguf({ quant })` now resolves a per-tier
+  enhancer GGUF — `f16` (default) / `f32` / `q8_0` — to its own on-disk file
+  (`lavasr-enhancer.gguf` for the byte-stable `f16` default,
+  `lavasr-enhancer-<tier>.gguf` otherwise) and registry path, with shared
+  `normalizeEnhancerVariant()` / `enhancerVariantTag()` helpers. A published tier
+  (`isEnhancerVariantPublished()` — `f16`/`f32` today) that fails to resolve is a
+  real error the benchmark hard-fails on, matching the engine GGUF, while a
+  not-yet-published tier soft-skips; the shared policy lives in
+  `classifyEnhancerResolution()` / `classifyDenoiserResolution()`. The benchmark/CI
+  enhancer quant axis built on these utilities is documented in
+  `benchmarks/RTF-BENCHMARKS.md`.
+- **LavaSR enhancer / denoiser on the mobile Device Farm benchmark.** The
+  `integration-mobile-test-tts-ggml.yml` benchmark matrix now sweeps the fp16
+  enhancer (CPU + GPU) and the denoiser (CPU) on supertonic + chatterbox for both
+  Android and iOS. iOS resolves the GGUFs from the registry on-device; Android has
+  no on-device network, so `scripts/generate-mobile-model-manifest.js` pre-signs
+  the fp16 enhancer + denoiser and `scripts/generate-prestage-block.js` adb-pushes
+  them into `<models>/lavasr/`, where `ensureLavaSREnhancerGguf` /
+  `ensureLavaSRDenoiserGguf` (now scanning the Android prestage dirs) pick them up.
+  The label and perf-report artifact name gain the `lavasr` / `denoise` tags so the
+  new rows don't collide with the engine-only rows. CI-only; not shipped with the
+  npm package.
 - Opt-in `vulkanCacheDir` (Supertonic + `useGPU: true`): persists the Vulkan pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`) and pre-warms it at `load()` so the first-dispatch shader-compile cost is paid once per install, not on the first `run()`. Fully opt-in/non-breaking; Vulkan analogue of `openclCacheDir` (QVAC-21910, tetherto/qvac#3120).
 - **Per-call cancellation via `AbortSignal` on `run()`.** `model.run({ input, signal })` now accepts an optional `AbortSignal`; when it aborts, `response.await()` rejects with the abort reason. An already-aborted signal rejects deterministically without dispatching the engine (no native interrupt) — the race-free way to cancel on fast hardware. Additive/non-breaking. Non-streaming `run()` only: **ignored when `streamOutput: true`** (and on `runStream` / `runStreaming`). (QVAC-22247, tetherto/qvac#3260)
 

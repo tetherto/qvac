@@ -652,6 +652,54 @@ function _loadMobileUrlConfig() {
   return urlConfig
 }
 
+// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
+// adb writes on Android 11+); we copy from here instead of downloading from
+// presigned S3. Host side: scripts/generate-prestage-block.js.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function readPrestagedModel(modelName) {
+  if (platform !== 'android') return null
+  try {
+    const src = path.join(PRESTAGED_MODEL_DIR, modelName)
+    const sizePath = `${src}.size`
+    if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
+    const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return null
+    if (fs.statSync(src).size !== expectedSize) return null
+    return { src, expectedSize }
+  } catch (_) {}
+  return null
+}
+
+function prestagedModelPath(modelName) {
+  const staged = readPrestagedModel(modelName)
+  return staged ? staged.src : null
+}
+
+// The host pushes an exact byte-count sidecar with each model. Require both the
+// staged source and copied destination to match it so truncated adb/app copies
+// fall through to the network download.
+function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
+  const staged = readPrestagedModel(modelName)
+  if (!staged || staged.expectedSize < minBytes) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(staged.src, destPath)
+    if (fs.statSync(destPath).size === staged.expectedSize) {
+      console.log(`[prestage] Using pre-staged model ${modelName}`)
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+  return false
+}
+
 /**
  * Ensures an EasyOCR GGUF model is available and returns its path.
  * On desktop: uses env vars (OCR_GGML_DETECTOR / OCR_GGML_RECOGNIZER) or defaults.
@@ -690,6 +738,10 @@ async function ensureModelPath(modelName) {
   const destPath = path.join(GGML_MODELS_DIR, filename)
   if (fs.existsSync(destPath)) {
     console.log(`   Model cached: ${filename}`)
+    return destPath
+  }
+
+  if (copyPrestagedModel(filename, destPath)) {
     return destPath
   }
 
@@ -755,6 +807,10 @@ async function ensureDoctrModels() {
   for (const [key, { filename, urlKey }] of Object.entries(mobileModels)) {
     const destPath = path.join(GGML_MODELS_DIR, filename)
     if (fs.existsSync(destPath)) {
+      paths[key] = destPath
+      continue
+    }
+    if (copyPrestagedModel(filename, destPath)) {
       paths[key] = destPath
       continue
     }
@@ -1347,6 +1403,8 @@ module.exports = {
   getImagePath,
   ensureModelPath,
   ensureDoctrModels,
+  copyPrestagedModel,
+  prestagedModelPath,
   GGML_MODELS_DIR,
   formatOCRPerformanceMetrics,
   safeUnload,

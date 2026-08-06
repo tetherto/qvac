@@ -1,6 +1,10 @@
 {
   "ios": {
-    "finetuning": ["runFinetuningPauseResumeTest"],
+    "finetuning": [
+      "runFinetuningPauseResumeTest",
+      "runFinetuningCancelSlotReleaseTest"
+    ],
+    "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
@@ -16,7 +20,8 @@
       "runCacheStateMachineTest",
       "runConfigParametersTest",
       "runKvCacheTypeDefaultsTest",
-      "runToolsCompactTest"
+      "runToolsCompactTest",
+      "runUnloadThrowingListenerTest"
     ],
     "lightB": [
       "runGenerationParamsTest",
@@ -34,14 +39,19 @@
     "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
+      "runFinetuningCancelSlotReleaseTest",
       "runConfigParametersTest",
       "runQuantizedKvcacheTest",
       "runMultiGpuTest"
     ],
+    "funcShardF": [
+      "runFinetuningArchsTest"
+    ],
     "funcShardB": [
       "runToolsCompactTest",
       "runSlidingContextTest",
-      "runKvCacheTypeDefaultsTest"
+      "runKvCacheTypeDefaultsTest",
+      "runUnloadThrowingListenerTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
@@ -70,6 +80,7 @@
   "androidWeekly": {
     "ocr": [
       "runOcrLightonTest",
+      "runOcrUnlimitedTest",
       "runOcrPaddleTest"
     ],
     "imageHeavy": [
@@ -80,6 +91,9 @@
       "runGemma4ImageElephantPerfTest",
       "runGemma4ImageFruitPlatePerfTest",
       "runGemma4ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfUnlimitedOcr": [
+      "runUnlimitedOcrPerfTest"
     ],
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
@@ -91,6 +105,7 @@
   "iosWeekly": {
     "ocr": [
       "runOcrLightonTest",
+      "runOcrUnlimitedTest",
       "runOcrPaddleTest"
     ],
     "imageHeavy": [
@@ -101,6 +116,9 @@
       "runGemma4ImageElephantPerfTest",
       "runGemma4ImageFruitPlatePerfTest",
       "runGemma4ImageHighResAuroraPerfTest"
+    ],
+    "vlmPerfUnlimitedOcr": [
+      "runUnlimitedOcrPerfTest"
     ],
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",

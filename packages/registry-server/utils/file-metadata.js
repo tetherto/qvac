@@ -5,7 +5,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { createReadStream } = require('fs')
 
-async function calculateFileChecksum (filePath) {
+async function calculateFileChecksum(filePath) {
   const hash = crypto.createHash('sha256')
   const stream = createReadStream(filePath)
 
@@ -16,7 +16,7 @@ async function calculateFileChecksum (filePath) {
   return hash.digest('hex')
 }
 
-async function getFileMetadata (filePath) {
+async function getFileMetadata(filePath) {
   const stats = await fsPromises.stat(filePath)
   const checksum = await calculateFileChecksum(filePath)
 

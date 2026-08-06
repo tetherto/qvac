@@ -11,9 +11,23 @@ import {
   PluginModelTypeReservedError
 } from '@/utils/errors-server'
 import { createAddonLoggerCallback } from '@/logging/addon'
+import { getServerLogger } from '@/logging'
 import { formatZodError } from '@/utils/zod-error'
 
 const plugins = new Map<string, QvacPlugin>()
+
+interface PluginLoggingModule {
+  setLogger: (callback: (priority: number, message: string) => void) => void
+  releaseLogger?: () => void
+}
+
+function getLoggingModule(plugin: QvacPlugin) {
+  return plugin.logging?.module as PluginLoggingModule | undefined
+}
+
+function findPluginUsingLoggingModule(loggingModule: PluginLoggingModule) {
+  return Array.from(plugins.values()).find((plugin) => plugin.logging?.module === loggingModule)
+}
 
 function getModelTypeForError(plugin: unknown) {
   if (!plugin || typeof plugin !== 'object') return '(unknown)'
@@ -51,12 +65,23 @@ export function registerPlugin(plugin: QvacPlugin): void {
     }
   }
 
+  const loggingModule = getLoggingModule(plugin)
+  const pluginUsingLoggingModule = loggingModule
+    ? findPluginUsingLoggingModule(loggingModule)
+    : undefined
+  if (
+    pluginUsingLoggingModule &&
+    pluginUsingLoggingModule.logging?.namespace !== plugin.logging?.namespace
+  ) {
+    throw new PluginLoggingInvalidError(
+      plugin.modelType,
+      'plugins sharing logging.module must use the same namespace'
+    )
+  }
+
   plugins.set(plugin.modelType, plugin)
 
-  if (plugin.logging?.module && plugin.logging?.namespace) {
-    const loggingModule = plugin.logging.module as {
-      setLogger: (callback: (priority: number, message: string) => void) => void
-    }
+  if (loggingModule && plugin.logging?.namespace && !pluginUsingLoggingModule) {
     loggingModule.setLogger(createAddonLoggerCallback(plugin.logging.namespace))
   }
 }
@@ -88,14 +113,13 @@ export function unregisterPlugin(modelType: string): boolean {
   const plugin = plugins.get(modelType)
   if (!plugin) return false
 
-  if (plugin.logging?.module) {
-    const loggingModule = plugin.logging.module as {
-      releaseLogger?: () => void
-    }
+  const loggingModule = getLoggingModule(plugin)
+  plugins.delete(modelType)
+  if (loggingModule && !findPluginUsingLoggingModule(loggingModule)) {
     loggingModule.releaseLogger?.()
   }
 
-  return plugins.delete(modelType)
+  return true
 }
 
 export function getAllPlugins(): QvacPlugin[] {
@@ -103,13 +127,26 @@ export function getAllPlugins(): QvacPlugin[] {
 }
 
 export function clearPlugins(): void {
+  const loggingModules = new Map<PluginLoggingModule, string>()
   for (const plugin of plugins.values()) {
-    if (plugin.logging?.module) {
-      const loggingModule = plugin.logging.module as {
-        releaseLogger?: () => void
-      }
-      loggingModule.releaseLogger?.()
+    const loggingModule = getLoggingModule(plugin)
+    if (loggingModule && !loggingModules.has(loggingModule)) {
+      loggingModules.set(loggingModule, plugin.modelType)
     }
   }
   plugins.clear()
+  for (const [loggingModule, modelType] of loggingModules) {
+    try {
+      loggingModule.releaseLogger?.()
+    } catch (error) {
+      // A plugin's logger teardown must not abort the sweep or leave the
+      // registry half-cleared for the next caller — but surface it, so a leaked
+      // reference or async handle is not masked as a clean teardown.
+      getServerLogger().warn(
+        `[${modelType}] releaseLogger failed during clearPlugins: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
 }

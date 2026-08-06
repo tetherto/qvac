@@ -7,6 +7,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-05
+
+This release adds Google FuzzTest coverage for the image preprocessor and wires
+bounded fuzz runs into the Linux C++ CI workflow. No public addon API changes.
+
+## Features
+
+### FuzzTest coverage for `preprocessToTensor`
+
+The addon now ships Phase 0 fuzzing for `ImagePreprocessor::preprocessToTensor`,
+exercising both the encoded-image decode path (JPEG/PNG magic detection and
+`stb_image` decode) and the raw-RGB resize/normalize path. Fuzz targets compile
+the preprocessor sources directly without linking `@qvac/fabric`, so they run
+under full ASan + LeakSanitizer.
+
+New npm scripts support local fuzz workflows: `fuzz` (bounded run),
+`fuzz:continuous` (coverage-guided, time-boxed via `--fuzz_for`), and
+`test:cpp:fuzz` (combined unit-test + fuzz configure/build/run). Production
+builds pass `-D BUILD_FUZZING=OFF` explicitly so a prior fuzz configure cannot
+skip the shipped `.bare` module.
+
+Fuzz dependencies (Abseil, FuzzTest, RE2, ANTLR4, GoogleTest) resolve from
+vcpkg via a new manifest `fuzz` feature. Linux CI runs a bounded fuzz stage
+after C++ unit tests in `cpp-tests-classification.yml`.
+
+## Pull Requests
+
+- [#3527](https://github.com/tetherto/qvac/pull/3527) - QVAC-22734 infra: add FuzzTest fuzzing (Phase 0)
+
+## [0.15.1] - 2026-07-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.3.0` -> `^0.3.1`, picking up
+  `qvac-fabric` 9840.1.1 compatibility. No API change for this package.
+
+## [0.15.0] - 2026-07-28
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.2.0` → `^0.3.0`, which carries `qvac-fabric`
+  `9840.0.0` → `9840.0.1` (training weight-repack disable, Metal `acc`/`set`
+  threadgroup dispatch fix, and MoE/hybrid training loss scaling). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so the
+  range bump is what picks up the new fabric. No API change for this package.
+
+## [0.14.0] - 2026-07-23
+
+This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. ggml is now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.
+
+### Changed
+
+- The ggml runtime and its compute backends are now provided by the `@qvac/fabric` npm dependency (`^0.2.0`) rather than the static `qvac-fabric` vcpkg port. The addon no longer bundles ggml; on desktop it resolves the single `@qvac/fabric` install and loads the backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile (where the package tree isn't resolvable from the packed worklet bundle). Run `npm install` so `@qvac/fabric` is present before `bare-make generate`/`build`, and ensure the dependency isn't pruned at runtime.
+- The ggml CPU backend is now acquired via the registry API (`ggml_backend_dev_by_type` + `ggml_backend_dev_init`) on every platform, replacing the direct `ggml_backend_cpu_init` call. `@qvac/fabric` does not export `ggml_backend_cpu_init` from its Windows DLL import library, so the previous approach failed to link `win32-x64` prebuilds; `GGML_BACKEND_DL` dlopen is retained only for loading the Linux/Android backend modules.
+
+### Pull Requests
+
+- [#3301](https://github.com/tetherto/qvac/pull/3301) - QVAC-22035 feat: migrate classification-ggml to shared @qvac/fabric runtime
+
+## [0.13.1] - 2026-07-21
+
+### Fixed
+
+- The C++ → JS logger callback invoked the sink method detached from its instance (`const write = sink[level]; write(message)`). Logger implementations that rely on `this` internally (such as `@qvac/logging`'s `QvacLogger`) threw on every call, and the surrounding `try {} catch {}` silently dropped each native log line. The callback now invokes `sink[level](message)` as a method (same bug class fixed in ocr-ggml and translation-nmtcpp under QVAC-22177).
+
 ## [0.13.0] - 2026-07-20
 
 ### Changed

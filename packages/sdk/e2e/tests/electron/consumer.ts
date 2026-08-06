@@ -22,6 +22,7 @@ import {
   QWEN3_1_7B_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -30,6 +31,8 @@ import {
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -76,11 +79,16 @@ import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
+import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
+
+const isSnapConsumer = process.env['QVAC_TEST_PLATFORM'] === 'snap-linux'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -164,6 +172,14 @@ resources.define('ocr', {
   // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time).
   // Mirrors desktop so Electron covers the same OCR model/plugin path.
   config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
+})
+
+// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
+// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
+// the DBNet detector from the recognizer src. Mirrors desktop.
+resources.define('doctr', {
+  constant: OCR_DOCTR,
+  type: 'ggml-ocr'
 })
 
 // Classification ships bundled weights inside @qvac/classification-ggml,
@@ -251,6 +267,33 @@ resources.define('tts-chatterbox', {
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
     referenceAudioSrc: path.resolve(process.cwd(), 'assets/audio', 'transcription-short-wav.wav')
+  }
+})
+
+resources.define('tts-parler', {
+  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
+  }
+})
+
+resources.define('tts-parler-indic', {
+  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    normalizeNumbers: true
   }
 })
 
@@ -365,6 +408,11 @@ function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
 }
 
+function resolveElectronRuntimeDir() {
+  const snapCommon = process.env['SNAP_USER_COMMON']
+  return snapCommon ? path.join(snapCommon, 'qvac-test-runtime') : process.cwd()
+}
+
 function resolveBatchAttachmentPath(inputPath: string) {
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
@@ -372,18 +420,22 @@ function resolveBatchAttachmentPath(inputPath: string) {
 }
 
 function ensureElectronE2EConfig() {
-  const electronFixturePath = path.resolve(process.cwd(), 'fixtures/qvac.config.electron.json')
-  const e2eFixturePath = path.resolve(process.cwd(), 'fixtures/qvac.config.e2e.json')
+  const configDir = process.cwd()
+  const runtimeDir = resolveElectronRuntimeDir()
+  const electronFixturePath = path.resolve(configDir, 'fixtures/qvac.config.electron.json')
+  const e2eFixturePath = path.resolve(configDir, 'fixtures/qvac.config.e2e.json')
   const existingPath = process.env['QVAC_CONFIG_PATH']
   const electronFixtureConfig = readJsonConfig(electronFixturePath)
   const e2eFixtureConfig = readJsonConfig(e2eFixturePath)
-  const existingConfig = existingPath ? readJsonConfig(existingPath) : {}
+  const existingConfig =
+    existingPath && fs.existsSync(existingPath) ? readJsonConfig(existingPath) : {}
   const mergedConfig = {
     ...electronFixtureConfig,
     ...e2eFixtureConfig,
     ...existingConfig
   }
-  const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
+  fs.mkdirSync(runtimeDir, { recursive: true })
+  const generatedPath = path.resolve(runtimeDir, 'qvac.config.e2e.generated.json')
 
   fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
@@ -404,14 +456,30 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
   await resources.downloadAllOnce(console.log, { allowedDeps })
 }
 
+export async function runSnapRefreshProbe() {
+  await executeSnapRefreshProbe(ensureElectronE2EConfig)
+}
+
+const snapStorageHandler = isSnapConsumer
+  ? new SnapStorageExecutor()
+  : new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    )
+
 export const executor = createExecutor({
   handlers: [
+    snapStorageHandler,
     // Electron keeps the stable desktop/shared surface enabled, but excludes
     // suites that are resource-heavy or incompatible with the packaged
     // Electron worker lifecycle.
     new SkipExecutor(
       /^(diffusion-|addon-logging-diffusion$)/,
       'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
+    ),
+    new SkipExecutor(
+      /^audio-gen-/,
+      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^delegated-/,
@@ -464,6 +532,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),

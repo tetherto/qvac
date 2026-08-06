@@ -89,6 +89,22 @@
       "bytes": 11341184384,
       "group": "base"
     },
+    "Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf": {
+      "urls": [
+        "https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF/resolve/9873ba175b4b204a81f4a43c9644e6c385ee4459/Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf"
+      ],
+      "sha256": "3024aef1dfa6a474ea76886d67fa6cdf029366d4a934f28ceec217f77b2cfd2d",
+      "bytes": 3564739296,
+      "group": "wan22"
+    },
+    "wan2.2_vae.safetensors": {
+      "urls": [
+        "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/fb1388adc906ab39ffc26ee40e96b22886b56bc4/split_files/vae/wan2.2_vae.safetensors"
+      ],
+      "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156",
+      "bytes": 1409400960,
+      "group": "wan22"
+    },
     "wan_2.1_vae.safetensors": {
       "urls": [
         "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/vae/wan_2.1_vae.safetensors"

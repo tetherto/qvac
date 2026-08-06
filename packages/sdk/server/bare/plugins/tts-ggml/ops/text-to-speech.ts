@@ -9,14 +9,24 @@ import {
   type TtsOpYield,
   collectTtsStats
 } from '@/server/bare/utils/tts-stats'
+import {
+  assertParlerJobOptionsSupported,
+  getParlerJobOptions,
+  type ParlerJobOptions
+} from '@/server/bare/plugins/tts-ggml/ops/parler-options'
 
 type RunStreamModel = {
   runStream: (
     text: string,
-    options?: { locale?: string; maxChunkScalars?: number }
+    options?: ParlerJobOptions & { locale?: string; maxChunkScalars?: number }
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
-    stats?: { audioDurationMs?: number; totalSamples?: number }
+    stats?: {
+      audioDurationMs?: number
+      totalSamples?: number
+      enhancerBackendDevice?: number
+      enhancerBackendId?: number
+    }
   }>
 }
 
@@ -32,6 +42,7 @@ function hasRunStream(model: unknown): model is RunStreamModel {
 export async function* textToSpeech(
   params: TtsRequest
 ): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
+  const request = ttsRequestSchema.parse(params)
   const {
     modelId,
     inputType,
@@ -40,9 +51,11 @@ export async function* textToSpeech(
     sentenceStream,
     sentenceStreamLocale,
     sentenceStreamMaxChunkScalars
-  } = ttsRequestSchema.parse(params)
+  } = request
+  const parlerJobOptions = getParlerJobOptions(request)
 
   const model = getModel(modelId)
+  assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
   const modelStart = nowMs()
 
   if (sentenceStream) {
@@ -51,12 +64,15 @@ export async function* textToSpeech(
     }
 
     const streamOpts =
-      sentenceStreamLocale !== undefined || sentenceStreamMaxChunkScalars !== undefined
+      sentenceStreamLocale !== undefined ||
+      sentenceStreamMaxChunkScalars !== undefined ||
+      Object.keys(parlerJobOptions).length > 0
         ? {
             ...(sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
             ...(sentenceStreamMaxChunkScalars !== undefined
               ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
-              : {})
+              : {}),
+            ...parlerJobOptions
           }
         : undefined
 
@@ -96,7 +112,8 @@ export async function* textToSpeech(
   const response = (await model.run({
     input: text,
     inputType,
-    ...(stream ? { streamOutput: true } : {})
+    ...(stream ? { streamOutput: true } : {}),
+    ...parlerJobOptions
   })) as unknown as TtsResponse
 
   if (!stream) {
@@ -107,14 +124,7 @@ export async function* textToSpeech(
     }
 
     const modelExecutionMs = nowMs() - modelStart
-    const stats: TtsStats = {
-      ...(response.stats?.audioDurationMs !== undefined && {
-        audioDuration: response.stats.audioDurationMs
-      }),
-      ...(response.stats?.totalSamples !== undefined && {
-        totalSamples: response.stats.totalSamples
-      })
-    }
+    const stats = collectTtsStats(response)
 
     yield { buffer: completeBuffer }
     return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
@@ -125,14 +135,7 @@ export async function* textToSpeech(
   }
 
   const modelExecutionMs = nowMs() - modelStart
-  const stats: TtsStats = {
-    ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs
-    }),
-    ...(response.stats?.totalSamples !== undefined && {
-      totalSamples: response.stats.totalSamples
-    })
-  }
+  const stats = collectTtsStats(response)
 
   return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
 }

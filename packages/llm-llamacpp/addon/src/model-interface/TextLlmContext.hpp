@@ -88,6 +88,8 @@ public:
    */
   void stop() override;
 
+  void resetStopFlag() override;
+
   /**
    * The get context method. It returns the context.
    *
@@ -152,6 +154,10 @@ public:
 
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
+
+  [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
+    return generationStopReason_;
+  }
 
   [[nodiscard]] std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() override;
@@ -286,7 +292,7 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
   void configureReasoningTags(
@@ -364,6 +370,23 @@ private:
   // compaction stay family-agnostic via `reasoningEnabled_`.
   bool isQwen3ReasoningFamily_ = false;
 
+  // EOS-inside-reasoning recovery: the recovery substitutes `</think>\n\n` so
+  // the model produces an answer after thinking, but on marginal prompts the
+  // very next sampled token is EOG again, which would defeat the recovery
+  // with an empty answer. One-shot: consumed by the next sampled token.
+  // Narrowed vs the original (reverted in 39a2fef88) fix: all EOG ids are
+  // banned in a single pre-sampling pass (no sample-and-reroll loop). The
+  // ban is unconditional — the generation loop only calls onLogitsReady()
+  // while the n_predict budget allows the current token, so banning EOG on
+  // the final budgeted sample yields a content token without ever
+  // extending generation past the budget.
+  bool banEogAfterReasoningRecovery_ = false;
+
+  // All EOG token ids of the loaded vocab, precomputed once in
+  // initializeCommonState() (Qwen3 family only) so the recovery ban is one
+  // pass over a short list with no mid-stream O(nVocab) scan.
+  std::vector<llama_token> eogTokens_;
+
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;
   llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
@@ -374,21 +397,19 @@ private:
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
 
-  // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-on (opt-out via `generationParams` with
-  // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
-  bool removeThinkingFromContext_ = true;
+  // Per-request toggle for post-generation thinking-block KV compaction.
+  // Default-off, except Qwen3-family models opt in during initialization;
+  // `generationParams` can always override it.
+  bool removeThinkingFromContext_ = false;
 
-  // True when this context's model is recurrent or hybrid
+  // True when this context's model is recurrent, hybrid, or DeepSeek V4.
   // (`llama_model_is_recurrent || llama_model_is_hybrid`) — Mamba /
   // RWKV pure-recurrent and hybrid SSM + attention families (Qwen3.5,
   // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
   // For these we use the snapshot + replay path: snapshot the full
-  // sequence state at end-of-prefill, restore at end-of-generation,
+  // DeepSeek V4 has the same checkpoint requirement despite not reporting
+  // either predicate. We snapshot the full sequence state at end-of-prefill,
+  // restore at end-of-generation,
   // then batched-replay the captured post-reasoning tokens.
   // Pure-attention models keep the existing
   // `seq_rm + seq_add` path untouched.

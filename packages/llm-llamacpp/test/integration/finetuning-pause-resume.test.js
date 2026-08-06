@@ -10,6 +10,9 @@ const {
   verifyFinalStatus,
   cleanupCheckpoints,
   cleanupIntegrationCacheFiles,
+  assertFiniteMetricIfPresent,
+  waitForProgress,
+  runLoraInference,
   safeTest
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -42,35 +45,6 @@ const FINETUNE_MODELS = [
   }
 ]
 
-function waitForProgress(handle, minSteps = 2, timeoutMs = 600_000) {
-  return new Promise((resolve, reject) => {
-    let count = 0
-    const timer = setTimeout(() => {
-      handle.removeListener('stats', onStats)
-      reject(
-        new Error(
-          `waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`
-        )
-      )
-    }, timeoutMs)
-    const onStats = () => {
-      if (++count >= minSteps) {
-        clearTimeout(timer)
-        handle.removeListener('stats', onStats)
-        resolve()
-      }
-    }
-    handle.on('stats', onStats)
-  })
-}
-
-function assertFiniteMetricIfPresent(t, stats, key, modelId) {
-  const value = stats?.[key]
-  if (value == null || (typeof value === 'number' && isNaN(value))) return
-  t.is(typeof value, 'number', `[${modelId}] ${key} should be a number when present`)
-  t.ok(Number.isFinite(value), `[${modelId}] ${key} should be finite (not Inf), got: ${value}`)
-}
-
 function assertLossAndAccuracyAreFinite(t, result, modelId) {
   const stats = result?.stats
   if (!stats || typeof stats !== 'object') return
@@ -82,45 +56,6 @@ function assertLossAndAccuracyAreFinite(t, result, modelId) {
   assertFiniteMetricIfPresent(t, stats, 'train_accuracy_uncertainty', modelId)
   assertFiniteMetricIfPresent(t, stats, 'val_accuracy', modelId)
   assertFiniteMetricIfPresent(t, stats, 'val_accuracy_uncertainty', modelId)
-}
-
-async function runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath) {
-  t.comment(`[${modelVariant.id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
-
-  const inferModelPath = path.join(modelDir, modelName)
-  const inferConfig = {
-    gpu_layers: '999',
-    ctx_size: '512',
-    device: forceCpuDevice ? 'cpu' : 'gpu',
-    predict: '32',
-    lora: loraAdapterPath
-  }
-
-  const inferModel = new LlmLlamacpp({
-    files: { model: [inferModelPath] },
-    config: inferConfig,
-    logger: console,
-    opts: { stats: true }
-  })
-
-  try {
-    await inferModel.load()
-    const prompt = [{ role: 'user', content: 'Hello' }]
-    const response = await inferModel.run(prompt)
-    let generated = ''
-    await response
-      .onUpdate((token) => {
-        generated += token
-      })
-      .await()
-    t.ok(generated.length > 0, `[${modelVariant.id}] LoRA inference should produce output`)
-    t.comment(
-      `[${modelVariant.id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
-    )
-    t.comment(`[${modelVariant.id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
-  } finally {
-    await inferModel.unload().catch(() => {})
-  }
 }
 
 safeTest(
@@ -175,16 +110,18 @@ safeTest(
             !isNaN(stats.accuracy),
             `[${modelVariant.id}] progress accuracy must not be NaN (step ${stats.global_steps})`
           )
-          if (!isNaN(stats.loss_uncertainty))
+          if (!isNaN(stats.loss_uncertainty)) {
             t.ok(
               Number.isFinite(stats.loss_uncertainty),
               `[${modelVariant.id}] progress loss_uncertainty should be finite (step ${stats.global_steps})`
             )
-          if (!isNaN(stats.accuracy_uncertainty))
+          }
+          if (!isNaN(stats.accuracy_uncertainty)) {
             t.ok(
               Number.isFinite(stats.accuracy_uncertainty),
               `[${modelVariant.id}] progress accuracy_uncertainty should be finite (step ${stats.global_steps})`
             )
+          }
           t.comment(
             `[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)}±${stats.loss_uncertainty?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}±${(stats.accuracy_uncertainty * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`
           )
@@ -206,31 +143,41 @@ safeTest(
           )
 
           const earlyStats = pauseResult.stats
-          t.ok(earlyStats?.train_loss != null, `[${modelVariant.id}] train_loss must not be null`)
           t.ok(
-            earlyStats?.train_loss_uncertainty != null,
+            earlyStats?.train_loss !== null && earlyStats?.train_loss !== undefined,
+            `[${modelVariant.id}] train_loss must not be null`
+          )
+          t.ok(
+            earlyStats?.train_loss_uncertainty !== null &&
+              earlyStats?.train_loss_uncertainty !== undefined,
             `[${modelVariant.id}] train_loss_uncertainty must not be null`
           )
           t.ok(
-            earlyStats?.train_accuracy != null,
+            earlyStats?.train_accuracy !== null && earlyStats?.train_accuracy !== undefined,
             `[${modelVariant.id}] train_accuracy must not be null`
           )
           t.ok(
-            earlyStats?.train_accuracy_uncertainty != null,
+            earlyStats?.train_accuracy_uncertainty !== null &&
+              earlyStats?.train_accuracy_uncertainty !== undefined,
             `[${modelVariant.id}] train_accuracy_uncertainty must not be null`
           )
-          t.ok(earlyStats?.val_loss != null, `[${modelVariant.id}] val_loss must not be null`)
+          t.ok(
+            earlyStats?.val_loss !== null && earlyStats?.val_loss !== undefined,
+            `[${modelVariant.id}] val_loss must not be null`
+          )
           t.ok(earlyStats?.val_loss !== 0, `[${modelVariant.id}] val_loss must not be 0`)
           t.ok(
-            earlyStats?.val_loss_uncertainty != null,
+            earlyStats?.val_loss_uncertainty !== null &&
+              earlyStats?.val_loss_uncertainty !== undefined,
             `[${modelVariant.id}] val_loss_uncertainty must not be null`
           )
           t.ok(
-            earlyStats?.val_accuracy != null,
+            earlyStats?.val_accuracy !== null && earlyStats?.val_accuracy !== undefined,
             `[${modelVariant.id}] val_accuracy must not be null`
           )
           t.ok(
-            earlyStats?.val_accuracy_uncertainty != null,
+            earlyStats?.val_accuracy_uncertainty !== null &&
+              earlyStats?.val_accuracy_uncertainty !== undefined,
             `[${modelVariant.id}] val_accuracy_uncertainty must not be null`
           )
 
@@ -247,7 +194,13 @@ safeTest(
             finetuneConfig.outputParametersDir,
             'trained-lora-adapter.gguf'
           )
-          await runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath)
+          await runLoraInference(t, {
+            id: modelVariant.id,
+            modelPath: path.join(modelDir, modelName),
+            loraAdapterPath,
+            forceCpuDevice,
+            logStats: true
+          })
           t.pass(`[${modelVariant.id}] finetuning (early) + LoRA inference completed`)
           continue
         }
@@ -265,16 +218,18 @@ safeTest(
             !isNaN(stats.accuracy),
             `[${modelVariant.id}] resume progress accuracy must not be NaN (step ${stats.global_steps})`
           )
-          if (!isNaN(stats.loss_uncertainty))
+          if (!isNaN(stats.loss_uncertainty)) {
             t.ok(
               Number.isFinite(stats.loss_uncertainty),
               `[${modelVariant.id}] resume progress loss_uncertainty should be finite (step ${stats.global_steps})`
             )
-          if (!isNaN(stats.accuracy_uncertainty))
+          }
+          if (!isNaN(stats.accuracy_uncertainty)) {
             t.ok(
               Number.isFinite(stats.accuracy_uncertainty),
               `[${modelVariant.id}] resume progress accuracy_uncertainty should be finite (step ${stats.global_steps})`
             )
+          }
           t.comment(
             `[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)}±${stats.loss_uncertainty?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}±${(stats.accuracy_uncertainty * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`
           )
@@ -315,7 +270,7 @@ safeTest(
           `[${modelVariant.id}] train_loss must be a positive number`
         )
         t.ok(
-          stats.train_loss_uncertainty != null,
+          stats.train_loss_uncertainty !== null && stats.train_loss_uncertainty !== undefined,
           `[${modelVariant.id}] train_loss_uncertainty must not be null`
         )
         t.ok(
@@ -323,20 +278,27 @@ safeTest(
           `[${modelVariant.id}] train_accuracy must not be NaN`
         )
         t.ok(
-          stats.train_accuracy_uncertainty != null,
+          stats.train_accuracy_uncertainty !== null &&
+            stats.train_accuracy_uncertainty !== undefined,
           `[${modelVariant.id}] train_accuracy_uncertainty must not be null`
         )
-        t.ok(stats.val_loss != null, `[${modelVariant.id}] val_loss must not be null`)
+        t.ok(
+          stats.val_loss !== null && stats.val_loss !== undefined,
+          `[${modelVariant.id}] val_loss must not be null`
+        )
         t.ok(!isNaN(stats.val_loss), `[${modelVariant.id}] val_loss must not be NaN`)
         t.ok(stats.val_loss !== 0, `[${modelVariant.id}] val_loss must not be 0`)
         t.ok(
-          stats.val_loss_uncertainty != null,
+          stats.val_loss_uncertainty !== null && stats.val_loss_uncertainty !== undefined,
           `[${modelVariant.id}] val_loss_uncertainty must not be null`
         )
-        t.ok(stats.val_accuracy != null, `[${modelVariant.id}] val_accuracy must not be null`)
+        t.ok(
+          stats.val_accuracy !== null && stats.val_accuracy !== undefined,
+          `[${modelVariant.id}] val_accuracy must not be null`
+        )
         t.ok(!isNaN(stats.val_accuracy), `[${modelVariant.id}] val_accuracy must not be NaN`)
         t.ok(
-          stats.val_accuracy_uncertainty != null,
+          stats.val_accuracy_uncertainty !== null && stats.val_accuracy_uncertainty !== undefined,
           `[${modelVariant.id}] val_accuracy_uncertainty must not be null`
         )
 
@@ -351,7 +313,13 @@ safeTest(
           finetuneConfig.outputParametersDir,
           'trained-lora-adapter.gguf'
         )
-        await runLoraInference(t, modelVariant, modelName, modelDir, loraAdapterPath)
+        await runLoraInference(t, {
+          id: modelVariant.id,
+          modelPath: path.join(modelDir, modelName),
+          loraAdapterPath,
+          forceCpuDevice,
+          logStats: true
+        })
         t.pass(`[${modelVariant.id}] finetuning + LoRA inference completed`)
       } finally {
         loggerHandle.release()

@@ -20,6 +20,33 @@ Both `downloadAsset()` and `loadModel()` return a decorated promise (`Promise<st
 
 For how to use each function, see [SDK — API reference](/reference/api/).
 
+## Prepare catalog models for offline use
+
+Use `downloadAsset()` to provision a catalog model without loading it into memory. A later `loadModel()` call with the same catalog constant checks the configured cache first, validates the cached files against bundled size and checksum metadata, and can load them without contacting the registry.
+
+```ts
+import { downloadAsset, loadModel, QWEN3_4B_INST_Q4_K_M } from "@qvac/sdk";
+
+// Run this while the registry is reachable.
+await downloadAsset({ assetSrc: QWEN3_4B_INST_Q4_K_M });
+
+// This can run offline once the download has completed.
+const modelId = await loadModel({ modelSrc: QWEN3_4B_INST_Q4_K_M });
+```
+
+The SDK instance that performs each call must use the same [`cacheDirectory`](/configuration#options). The initial download still requires registry access; this workflow prepares an application for later offline startup rather than providing a fallback source when the registry is unreachable.
+
+If an application manages its own model files, pass a local path and an explicit model type instead:
+
+```ts
+const modelId = await loadModel({
+  modelSrc: "/opt/models/model.gguf",
+  modelType: "llamacpp-completion",
+});
+```
+
+Local-path loading does not associate the file with a catalog constant or validate it against catalog checksum metadata. Applications using this path are responsible for provisioning and integrity checks.
+
 ## Cancel a specific call by `requestId`
 
 Both `downloadAsset()` and `loadModel()` return `Promise<string> & { requestId: string }`. The await result is unchanged (the asset path or model id, respectively), but `op.requestId` is available **synchronously** before `await` resolves — so a stop button can be wired immediately, before the first progress event arrives:
@@ -72,4 +99,3 @@ The following script shows an example of pausing and resuming a download using `
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
 </Callout>
-

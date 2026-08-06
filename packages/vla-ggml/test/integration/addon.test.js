@@ -5,7 +5,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
-const { VlaModel, preprocessImage, padState } = require('../..')
+const { VlaModel, preprocessImage, padState, ERR_CODES } = require('../..')
 
 // ---------------------------------------------------------------------------
 // Performance reporter wiring. Mirrors the OCR addon pattern:
@@ -133,194 +133,14 @@ const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 // ensureIndicTransModel).
 // ---------------------------------------------------------------------------
 
-function _loadUrlsConfig() {
-  if (!global.assetPaths) return null
-  const candidates = [
-    '../../testAssets/smolvla-urls.json',
-    '../mobile/testAssets/smolvla-urls.json',
-    'testAssets/smolvla-urls.json',
-    '../testAssets/smolvla-urls.json'
-  ]
-  for (const candidate of candidates) {
-    const p = global.assetPaths[candidate]
-    if (!p) continue
-    try {
-      const raw = fs.readFileSync(p.replace('file://', ''), 'utf8')
-      return JSON.parse(raw)
-    } catch (err) {
-      console.log(`[vla-model] failed to read ${candidate}: ${err && err.message}`)
-    }
-  }
-  return null
-}
-
-function _streamDownload(url, destPath, maxRedirects = 5) {
-  const https = require('bare-https')
-  return new Promise((resolve, reject) => {
-    let resolved = false
-    const safeResolve = () => {
-      if (!resolved) {
-        resolved = true
-        resolve()
-      }
-    }
-    const safeReject = (err) => {
-      if (!resolved) {
-        resolved = true
-        reject(err)
-      }
-    }
-
-    console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
-    const file = fs.createWriteStream(destPath)
-    file.on('error', (err) => {
-      file.destroy()
-      try {
-        fs.unlinkSync(destPath)
-      } catch (_) {}
-      safeReject(err)
-    })
-
-    const req = https.request(url, (res) => {
-      if ([301, 302, 307, 308].includes(res.statusCode)) {
-        // Drain the redirect body so bare-https can release the underlying socket.
-        if (typeof res.resume === 'function') res.resume()
-        file.destroy()
-        try {
-          fs.unlinkSync(destPath)
-        } catch (_) {}
-        const location = res.headers.location
-        if (location && maxRedirects > 0) {
-          _streamDownload(location, destPath, maxRedirects - 1).then(safeResolve, safeReject)
-          return
-        }
-        safeReject(new Error(`HTTP ${res.statusCode}: redirect not followed`))
-        return
-      }
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        if (typeof res.resume === 'function') res.resume()
-        file.destroy()
-        try {
-          fs.unlinkSync(destPath)
-        } catch (_) {}
-        safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
-        return
-      }
-
-      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
-      const LOG_INTERVAL_BYTES = 50 * 1024 * 1024 // log every 50 MB
-      let downloadedBytes = 0
-      let nextLogBytes = LOG_INTERVAL_BYTES
-      res.on('data', (chunk) => {
-        downloadedBytes += chunk.length
-        if (downloadedBytes >= nextLogBytes) {
-          const mb = downloadedBytes / (1024 * 1024)
-          const pct =
-            contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
-          console.log(`[vla-model] progress: ${mb.toFixed(0)}MB${pct}`)
-          nextLogBytes += LOG_INTERVAL_BYTES
-        }
-      })
-      res.on('error', (err) => {
-        file.destroy()
-        try {
-          fs.unlinkSync(destPath)
-        } catch (_) {}
-        safeReject(err)
-      })
-      res.pipe(file)
-      file.on('close', () => {
-        const mb = downloadedBytes / (1024 * 1024)
-        console.log(`[vla-model] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
-        safeResolve()
-      })
-    })
-    req.on('error', (err) => {
-      file.destroy()
-      try {
-        fs.unlinkSync(destPath)
-      } catch (_) {}
-      safeReject(err)
-    })
-    req.end()
-  })
-}
-
-async function _downloadFile(url, destPath, maxRedirects = 5, maxRetries = 3) {
-  let lastErr = null
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    if (attempt > 0) {
-      const backoffMs = 500 * 2 ** (attempt - 1)
-      console.log(
-        `[vla-model] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`
-      )
-      await new Promise((resolve) => setTimeout(resolve, backoffMs))
-    }
-    try {
-      await _streamDownload(url, destPath, maxRedirects)
-      return
-    } catch (err) {
-      lastErr = err
-      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
-      try {
-        fs.unlinkSync(destPath)
-      } catch (_) {}
-    }
-  }
-  throw new Error(
-    `[vla-model] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`
-  )
-}
-
-// Streaming SHA-256 over a local file. Used to validate the downloaded GGUF
-// against the publisher-supplied digest in smolvla-urls.json. Returns lower-
-// case hex; resolves to null if the bare-crypto stream isn't available so
-// the caller can fall back to size-only validation.
-async function _sha256File(filePath) {
-  let crypto
-  try {
-    crypto = require('bare-crypto')
-  } catch (_) {
-    return null
-  }
-  return await new Promise((resolve, reject) => {
-    let hash
-    try {
-      hash = crypto.createHash('sha256')
-    } catch (_) {
-      return resolve(null)
-    }
-    const stream = fs.createReadStream(filePath)
-    stream.on('data', (chunk) => hash.update(chunk))
-    stream.on('error', reject)
-    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
-  })
-}
-
-// Verify a cached GGUF against publisher metadata. Strictest check first:
-// exact byte size, then sha256 if both publisher and runtime can compute it.
-// Returns { ok: true } on match, { ok: false, reason } otherwise.
-async function _verifyCachedModel(filePath, urlConfig) {
-  const stat = fs.statSync(filePath)
-  if (urlConfig && Number.isInteger(urlConfig.sizeBytes)) {
-    if (stat.size !== urlConfig.sizeBytes) {
-      return { ok: false, reason: `size ${stat.size} != expected ${urlConfig.sizeBytes}` }
-    }
-  } else {
-    const cachedMB = stat.size / (1024 * 1024)
-    if (cachedMB < 100) {
-      return { ok: false, reason: `size ${cachedMB.toFixed(2)}MB < 100MB floor` }
-    }
-  }
-  if (urlConfig && typeof urlConfig.sha256 === 'string' && urlConfig.sha256.length === 64) {
-    const got = await _sha256File(filePath)
-    if (got && got !== urlConfig.sha256.toLowerCase()) {
-      return { ok: false, reason: `sha256 ${got} != expected ${urlConfig.sha256}` }
-    }
-    if (got) console.log(`[vla-model] sha256 verified: ${got.slice(0, 12)}…`)
-  }
-  return { ok: true }
-}
+// Download + cache-verify helpers are shared across the VLA integration tests
+// (see _vla-model-download.cjs — literal require so the mobile bundler includes
+// it). Only the model-specific urls filename is bound here.
+const _vlaDl = require('./_vla-model-download.cjs')
+const _loadUrlsConfig = () => _vlaDl.loadUrlsConfig('smolvla-urls.json')
+const _downloadFile = _vlaDl.downloadFile
+const _verifyCachedModel = _vlaDl.verifyCachedModel
+const _copyPrestagedModel = _vlaDl.copyPrestagedModel
 
 async function _ensureMobileModel() {
   const modelFilename = 'smolvla-libero-vision-q8.gguf'
@@ -346,6 +166,21 @@ async function _ensureMobileModel() {
       return destPath
     }
     console.log(`[vla-model] cached GGUF rejected (${verdict.reason}) — re-downloading`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+
+  // The pre_test phase adb-pushed this shard's GGUF to /data/local/tmp; copy +
+  // verify it instead of the 1.9GB S3 download that flakes on mobile networks.
+  if (_copyPrestagedModel(modelFilename, destPath)) {
+    const staged = await _verifyCachedModel(destPath, urlConfig)
+    if (staged.ok) {
+      const mb = fs.statSync(destPath).size / (1024 * 1024)
+      console.log(`[vla-model] using pre-staged GGUF: ${destPath} (${mb.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`[vla-model] pre-staged GGUF rejected (${staged.reason}) — downloading`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
@@ -812,6 +647,46 @@ test(
       )
     } finally {
       await model.unload().catch(() => {})
+    }
+  }
+)
+
+// An embodiment named on an architecture that has none must be an error, not a
+// silently-ignored field: `embodiment` is GR00T-only, so a caller who passes it
+// with a SmolVLA GGUF has almost certainly pointed `files` at the wrong model,
+// and loading whatever the file happens to be hides that. The rejection is
+// raised by the factory off the sniffed architecture, so it costs one metadata
+// open — no weights are read.
+test(
+  'integration: config.embodiment on a non-GR00T GGUF is rejected (needs GGUF)',
+  { timeout: 300000 },
+  async (t) => {
+    const modelPath = process.env.QVAC_VLA_MODEL
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
+      t.pass()
+      return
+    }
+
+    for (const embodiment of ['oxe_droid_relative_eef_relative_joint', 24]) {
+      const model = new VlaModel({
+        files: { model: [path.resolve(modelPath)] },
+        config: { embodiment }
+      })
+      let err = null
+      try {
+        await model.load({ backend: 'cpu' })
+      } catch (e) {
+        err = e
+      } finally {
+        await model.unload().catch(() => {})
+      }
+      t.ok(err, `embodiment ${JSON.stringify(embodiment)} rejected on a SmolVLA GGUF`)
+      t.ok(
+        err && /GR00T-only/.test(err.message || ''),
+        `error names the architecture mismatch (got: ${err && err.message})`
+      )
+      t.is(err && err.code, ERR_CODES.INVALID_CONFIG, 'reported as INVALID_CONFIG')
     }
   }
 )

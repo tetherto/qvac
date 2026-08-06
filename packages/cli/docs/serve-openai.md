@@ -46,6 +46,36 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
+## Model source constants in config
+
+`serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant
+names, including fields inside nested objects. The CLI resolves those names to
+the same `ModelConstant` objects accepted by the SDK. The snake-case
+`upscaler.model_src` field follows the same rules except in video mode, where
+the SDK ignores the entire `upscaler` block and the CLI leaves it unchanged:
+
+```json
+{
+  "serve": {
+    "models": {
+      "chatterbox": {
+        "model": "TTS_T3_TURBO_EN_CHATTERBOX_Q8_0",
+        "type": "tts",
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "s3genModelSrc": "TTS_S3GEN_EN_CHATTERBOX"
+        }
+      }
+    }
+  }
+}
+```
+
+These fields also accept full source URLs such as `registry://…` and filesystem
+paths. Bare filenames remain unchanged for downstream filesystem resolution.
+Unknown `CONSTANT_CASE` values are rejected with the full config path.
+
 ## `POST /v1/completions`
 
 Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with
@@ -313,6 +343,31 @@ Response shape matches `/v1/images/generations`.
 | `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                         |
 | `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                   |
 
+## `POST /v1/audio/transcriptions`
+
+Transcribes audio in its source language using a transcription model.
+
+### Request
+
+- **Content-Type:** `multipart/form-data`
+- **Fields:**
+  - `file` (required) — audio file
+  - `model` (required) — a `serve.models` alias whose endpoint category is `transcription`
+  - `prompt` (optional) — initial prompt where supported
+  - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
+- `json` and `text` work with Whisper and Parakeet. The timed formats `srt`, `vtt`, and `verbose_json` require Whisper segment metadata. Requesting a timed format from Parakeet returns `400 unsupported_response_format`.
+- In partial `verbose_json`, `duration` is the end of the last transcribed segment, not the submitted audio length.
+- `language` is configured when the model loads; a per-request value is logged and ignored. `temperature` is also logged and ignored.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
+  -F model=whisper-transcribe \
+  -F file=@./sample.wav \
+  -F response_format=srt
+```
+
+See [Audio transcription and translation timed responses](#audio-transcription-and-translation-timed-responses) for the shared SRT, WebVTT, and partial `verbose_json` examples, and [Audio transcription and translation errors](#audio-transcription-and-translation-errors) for timed-format failures.
+
 ## `POST /v1/audio/translations`
 
 OpenAI’s **translations** endpoint always returns **English text**. It maps to Whisper’s **translate** task (not “transcribe then run a text translator”).
@@ -324,7 +379,9 @@ OpenAI’s **translations** endpoint always returns **English text**. It maps to
   - `file` (required) — audio file (same as transcriptions)
   - `model` (required) — must name a `serve.models` alias whose **endpoint category** is `audio-translation` (see below)
   - `prompt` (optional) — passed through to the SDK transcribe path (Whisper initial prompt where supported)
-  - `response_format` (optional) — `json` (default) or `text`. `srt`, `vtt`, and `verbose_json` are not implemented yet.
+  - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
+- The timed formats `srt`, `vtt`, and `verbose_json` require Whisper segment metadata. A non-Whisper model returns `400 unsupported_response_format`.
+- In partial `verbose_json`, `duration` is the end of the last transcribed segment, not the submitted audio length.
 - **Not supported:** `language`. Per-request language selection is not part of OpenAI’s translations API; output is always English. Use `/v1/audio/transcriptions` if you need non-English text.
 
 ### Registering a translation model (`whispercpp-audio-translation`)
@@ -387,22 +444,66 @@ curl -s http://127.0.0.1:11434/v1/audio/translations \
 Response (`json`): `{ "text": "..." }`  
 Response (`text`): body is plain UTF-8 text.
 
+### Audio transcription and translation timed responses
+
+SRT responses use `Content-Type: text/plain; charset=utf-8` and comma-separated milliseconds:
+
+```srt
+1
+00:00:00,000 --> 00:00:01,250
+Hello
+
+2
+00:00:01,250 --> 00:00:02,500
+world
+```
+
+WebVTT responses use `Content-Type: text/vtt; charset=utf-8`, a `WEBVTT` header, and dot-separated milliseconds:
+
+```vtt
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:01.250
+Hello
+
+2
+00:00:01.250 --> 00:00:02.500
+world
+```
+
+`verbose_json` is a deliberately partial response built from the same Whisper metadata:
+
+```json
+{
+  "text": "Hello world",
+  "duration": 2.5,
+  "segments": [
+    { "id": 0, "start": 0, "end": 1.25, "text": " Hello" },
+    { "id": 1, "start": 1.25, "end": 2.5, "text": " world" }
+  ]
+}
+```
+
+This is not full OpenAI `verbose_json` compatibility. Its `duration` is the maximum transcribed segment end, not the submitted audio length. QVAC omits the top-level `language`, `task`, and `words` fields, and the segment-level `seek`, `tokens`, `temperature`, `avg_logprob`, `compression_ratio`, and `no_speech_prob` fields. Consumers must treat those fields as absent rather than infer placeholder values.
+
 ### Same weights as transcriptions
 
 You normally use the **same** underlying weights for both transcription and translation; register **two aliases** that share the same `"model": "WHISPER_…"` constant — one without `type` (defaults to transcription) and one with `type: "whispercpp-audio-translation"`.
 
-### Errors
+### Audio transcription and translation errors
 
-| HTTP | `error.code`                     | When                                                                                                   |
-| ---- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 400  | `invalid_content_type`           | Not `multipart/form-data`                                                                              |
-| 400  | `missing_file` / `missing_model` | Required fields missing                                                                                |
-| 400  | `unsupported_param`              | e.g. `language` present                                                                                |
-| 400  | `unsupported_response_format`    | `srt`, `vtt`, `verbose_json`                                                                           |
-| 400  | `invalid_model_type`             | Alias is not an `audio-translation` model (use `type: whispercpp-audio-translation` in `serve.models`) |
-| 404  | `model_not_found`                | Unknown alias                                                                                          |
-| 503  | `model_not_ready`                | Model not loaded yet                                                                                   |
-| 500  | `translation_error`              | SDK / engine failure                                                                                   |
+| HTTP | `error.code`                     | When                                                                                                         |
+| ---- | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 400  | `invalid_content_type`           | Not `multipart/form-data`                                                                                    |
+| 400  | `missing_file` / `missing_model` | Required fields missing                                                                                      |
+| 400  | `unsupported_param`              | `language` is present on a translation request                                                               |
+| 400  | `invalid_response_format`        | Format is not `json`, `text`, `srt`, `vtt`, or `verbose_json`                                                |
+| 400  | `unsupported_response_format`    | `srt`, `vtt`, or `verbose_json` requested from a model without Whisper segment metadata (including Parakeet) |
+| 400  | `invalid_model_type`             | Alias does not match the endpoint category (`transcription` or `audio-translation`)                          |
+| 404  | `model_not_found`                | Unknown alias                                                                                                |
+| 503  | `model_not_ready`                | Model not loaded yet                                                                                         |
+| 500  | `internal_error`                 | SDK / engine failure or invalid transcription metadata                                                       |
 
 ## `POST /v1/audio/speech`
 

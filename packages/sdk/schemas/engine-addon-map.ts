@@ -3,6 +3,7 @@ import {
   ADDON_BCI,
   ADDON_CLASSIFICATION,
   ADDON_DIFFUSION,
+  ADDON_AUDIOGEN,
   ADDON_EMBEDDING,
   ADDON_LLM,
   ADDON_NMT,
@@ -31,6 +32,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.ggmlOcr]: 'ocr',
   [ModelType.parakeetTranscription]: 'parakeet',
   [ModelType.sdcppGeneration]: 'diffusion',
+  [ModelType.audiogenGgml]: 'audiogen',
   [ModelType.ggmlVla]: 'vla',
   [ModelType.ggmlClassification]: 'classification',
   'onnx-vad': 'vad'
@@ -38,7 +40,7 @@ export const ENGINE_TO_ADDON = {
 
 // Legacy engine names → canonical engine.
 // Used for backward compatibility with old registry data that uses @qvac/* package names.
-const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
+export const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   [ADDON_LLM]: ModelType.llamacppCompletion,
   [ADDON_WHISPER]: ModelType.whispercppTranscription,
   [ADDON_BCI]: ModelType.bciWhispercppTranscription,
@@ -66,6 +68,9 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   ocr: ModelType.ggmlOcr,
   [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
   diffusion: ModelType.sdcppGeneration,
+  [ADDON_AUDIOGEN]: ModelType.audiogenGgml,
+  '@qvac/audiogen': ModelType.audiogenGgml,
+  audiogen: ModelType.audiogenGgml,
   [ADDON_VLA]: ModelType.ggmlVla,
   vla: ModelType.ggmlVla,
   [ADDON_CLASSIFICATION]: ModelType.ggmlClassification,

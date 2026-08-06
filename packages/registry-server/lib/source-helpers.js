@@ -1,17 +1,17 @@
 'use strict'
 
-function ensureUrl (source) {
+function ensureUrl(source) {
   if (typeof source !== 'string' || source.trim().length === 0) {
     throw new TypeError('source must be a non-empty string')
   }
   return source.trim()
 }
 
-function normalizePath (value) {
+function normalizePath(value) {
   return value.replace(/^\/+/, '')
 }
 
-function parseCanonicalSource (source) {
+function parseCanonicalSource(source) {
   const trimmed = ensureUrl(source)
 
   if (trimmed.startsWith('s3://')) {
@@ -55,7 +55,7 @@ function parseCanonicalSource (source) {
  * @param {string} bucket - Bucket name to inject when source has none
  * @returns {object} sourceInfo with resolved bucket
  */
-function resolveS3Bucket (sourceInfo, bucket) {
+function resolveS3Bucket(sourceInfo, bucket) {
   if (sourceInfo.protocol !== 's3') return sourceInfo
   if (sourceInfo.bucket) return sourceInfo
 

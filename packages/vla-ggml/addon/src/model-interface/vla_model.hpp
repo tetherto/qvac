@@ -3,17 +3,17 @@
 // Polymorphic VLA model interface for multi-architecture dispatch.
 //
 // `IVlaModel` hides the SmolVLA-specific C-style types and entry points from
-// the addon layer so the same `VlaModel` shell can dispatch to either the
-// existing SmolVLA implementation or the upcoming π₀.₅ implementation, keyed
-// off the GGUF `general.architecture` metadata string (see
-// `model_factory.hpp`).
+// the addon layer so the same `VlaModel` shell can dispatch to any of the
+// SmolVLA, π₀.₅, or GR00T implementations, keyed off the GGUF
+// `general.architecture` metadata string (see `model_factory.hpp`).
 //
 // The generic hparams and timing structs intentionally use architecture-
 // neutral field names. The SmolVLA adapter back-fills `prefill_*` from
 // `smollm2_*`; the addon's runtimeStats() also re-emits the legacy SmolVLA-
-// named keys until consumers migrate (TODO: drop after π₀.₅ ships).
+// named keys until consumers migrate.
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 
 namespace qvac_lib_infer_vla_ggml {
@@ -37,6 +37,48 @@ struct VlaHparamsGeneric {
   // is ignored on the discrete path.
   enum class StateInputMode { Continuous, Discrete };
   StateInputMode state_input_mode = StateInputMode::Continuous;
+  // How the consumer passes camera images. SmolVLA and π₀.₅ take raw pixel
+  // planes (`3 · vision_image_size²` floats per camera); GR00T takes images
+  // already resized/normalized/patchified by Gr00tPolicy (a
+  // `patches · patch_flat` buffer per camera). Both are `Continuous` state
+  // models, so `state_input_mode` can't distinguish the image contract — this
+  // is the axis the JS validator branches on to accept groot's patch buffers.
+  enum class ImageInputMode { Pixels, Patches };
+  ImageInputMode image_input_mode = ImageInputMode::Pixels;
+  // Exact float count of one camera's patch buffer, for the `Patches` contract
+  // (0 on the `Pixels` path, where the JS validator derives `3 · w · h`
+  // instead). Fixed per model — `imgWidth`/`imgHeight` must equal
+  // `vision_image_size`, so the patch geometry is constant. The JS validator
+  // uses this to reject a mis-sized patch buffer before the native memcpy.
+  int image_patch_elems = 0;
+  // GR00T only: the embodiment tag actually resolved at load (lets a caller
+  // confirm which embodiment a '' default selected). Empty for SmolVLA / π₀.₅,
+  // and for a GR00T GGUF that names no embodiment at all. A single-embodiment
+  // (v1) GGUF DOES report its baked tag here, so this is not a "can this model
+  // switch embodiments" predicate — setEmbodiment() rejects such a model
+  // unconditionally. Rank-3 embodiment tensors are what make a GGUF switchable.
+  std::string selected_embodiment_tag;
+  // The resolved embodiment's numeric id (the checkpoint's `cat_id`), so a
+  // caller that selected by id can read back what it got — and one that
+  // selected by tag can learn the id to use later. -1 when no embodiment was
+  // resolved (SmolVLA / π₀.₅).
+  int selected_embodiment_cat_id = -1;
+};
+
+// A caller's embodiment selection: by tag, by numeric id (`cat_id`), or neither
+// (= the GGUF's default embodiment). `num_cameras` optionally overrides the
+// GGUF's stored camera count for the selected embodiment, which is what makes
+// rows whose count was unknown at conversion time selectable at all (the count
+// is a data-config property, not a checkpoint tensor).
+//
+// `tag` and `cat_id` are mutually exclusive — passing both is an error rather
+// than a precedence rule, so a caller can never silently get the other one.
+struct VlaEmbodimentRequest {
+  std::string tag;     // empty = unset
+  int cat_id = -1;     // < 0 = unset
+  int num_cameras = 0; // <= 0 = unset (use the GGUF's stored count)
+
+  bool unset() const { return tag.empty() && cat_id < 0; }
 };
 
 // Architecture-neutral wall-clock timings (milliseconds). The SmolVLA-named
@@ -63,6 +105,16 @@ public:
   virtual const VlaHparamsGeneric& hparams() const = 0;
   virtual std::string backendName() const = 0;
   virtual bool hasGpu() const = 0;
+
+  // Switch the active embodiment on an already-loaded model, so one load can
+  // serve any embodiment the checkpoint ships (multi-embodiment GR00T only —
+  // see GrootModel::setEmbodiment). Not pure: SmolVLA and π₀.₅ are
+  // single-embodiment architectures, and so is a v1 GR00T GGUF, and reporting
+  // that as an error is the whole implementation.
+  virtual void setEmbodiment(const VlaEmbodimentRequest& /*request*/) {
+    throw std::runtime_error(
+        "setEmbodiment: this model does not support embodiment selection");
+  }
 
   // Run a single inference. Returns true on success. On failure, the
   // implementation should leave `actions_out`/`n_actions_out`/`timing_out`

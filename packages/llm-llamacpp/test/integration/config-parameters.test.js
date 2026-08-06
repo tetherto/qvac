@@ -97,6 +97,14 @@ const scenarios = [
     expectSuccess: true
   },
   {
+    name: 'no_mmap disables memory-mapped model loading',
+    overrides: {
+      no_mmap: 'true',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
     name: 'Zero temperature produces deterministic output',
     overrides: {
       temp: '0',
