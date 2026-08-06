@@ -131,6 +131,22 @@ test('mobile peak is floored at the recorded post-load footprint', () => {
   assert.equal(row.peakRssMb, 400)
 })
 
+test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
+  // normalizeReport serves both CI artifacts and manual drops; only the former
+  // carry a guessed backend label.
+  const manual = {
+    platform: 'android-arm64',
+    platformName: 'android',
+    model: { name: 'ggml-bci-windowed.bin' },
+    requested: { useGPU: true },
+    labels: { device: 'Samsung Galaxy S25 Ultra', backend: 'vulkan' },
+    summary: { tokensPerSecond: { mean: 40 }, wallMs: { mean: 500 } }
+  }
+  assert.equal(normalizeReport(manual, '/x/manual.json', 'manual').backend, 'vulkan')
+  // The same shape arriving from CI is a platform guess and still gets corrected.
+  assert.equal(normalizeReport(manual, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+})
+
 test('android GPU rows on Adreno devices resolve to opencl unless a backend id says otherwise', () => {
   // The Galaxy S25 family is Adreno, and ggml's Adreno path is OpenCL — the
   // plain android platform guess said vulkan for these rows.

@@ -19,9 +19,9 @@
 const fs = require('fs')
 const path = require('path')
 
-// GGML GPU backend cascade shared by both engines: Vulkan (linux/win32/android),
-// Metal (darwin/ios), OpenCL (Adreno android). CUDA is not supported on any
-// platform.
+// GGML GPU backend cascade shared by both engines: Vulkan (linux/win32/Mali
+// android), Metal (darwin/ios), OpenCL (Adreno android, e.g. Samsung Galaxy
+// S25). CUDA is not supported on any platform.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 // ggml active-backend ids reported by the addon (post-merge this is the unified
@@ -166,7 +166,9 @@ function numberOrNaN (value) {
 // Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
 // run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25/i
+// The trailing guard keeps "S25", "S25 Ultra" and "S25+" matching while a
+// future "S250"-style SKU does not silently inherit the correction.
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
@@ -328,6 +330,12 @@ function normalizeManualRecord (record, sourceFile) {
   const engine = resolveEngine(record)
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
+  // A manual drop's `backend` is hand-authored, not a platform guess, so it is
+  // ground truth like a reported backend id: never second-guess it. The Adreno
+  // correction only applies when the record left the backend out.
+  const adreno = record.backend
+    ? false
+    : isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)
 
   return {
     source: record.source || 'manual',
@@ -338,8 +346,7 @@ function normalizeManualRecord (record, sourceFile) {
     model: record.model || record.modelType || 'unknown',
     quant: record.quant || quantFromName(record.dirName) || quantFromName(record.model) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backend,
-      isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)),
+    backend: normalizeBackend(platformFamily, useGPU, record.backend, adreno),
     gpuModel: useGPU ? (record.gpuModel || record.gpu_model || null) : null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),

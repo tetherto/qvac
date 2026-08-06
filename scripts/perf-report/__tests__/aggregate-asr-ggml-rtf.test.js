@@ -247,6 +247,59 @@ test('android GPU rows on Adreno devices fall back to opencl when no backend id 
   }
 })
 
+test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
+  // manual-results drops are the escape hatch for backends CI cannot produce,
+  // so an author who writes `vulkan` for an Adreno device must get vulkan back.
+  const manual = {
+    device: 'Samsung Galaxy S25 Ultra',
+    platform: 'android-arm64',
+    platformFamily: 'android',
+    gpu: 'gpu',
+    backend: 'vulkan',
+    gpuModel: 'Adreno (TM) 830',
+    model: 'tiny',
+    meanRtf: 0.3
+  }
+  assert.equal(normalizeManualRecord(manual, '/x/manual.json').backend, 'vulkan')
+
+  // A manual record that omits the backend still gets the correction.
+  const guessed = { ...manual }
+  delete guessed.backend
+  assert.equal(normalizeManualRecord(guessed, '/x/manual.json').backend, 'opencl')
+})
+
+test('device names that merely start with the S25 digits are not treated as Adreno', () => {
+  const report = (name) => ({
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name, platform: 'android', gpu: null },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900 }
+    }]
+  })
+  assert.equal(normalizeMobileRecords(report('Samsung Galaxy S25 Ultra'), '/x/a/performance-report.json')[0].backend, 'opencl')
+  assert.equal(normalizeMobileRecords(report('Samsung Galaxy S250'), '/x/b/performance-report.json')[0].backend, 'vulkan')
+})
+
+test('backend id 99 (other-gpu) is not in the id table and falls through to the guess', () => {
+  const report = (name) => ({
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name, platform: 'android', gpu: null },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900, backend_id: 99 }
+    }]
+  })
+  // Falls through to the platform cascade, so the Adreno correction still
+  // applies on an S25 and plain android still guesses vulkan elsewhere.
+  assert.equal(normalizeMobileRecords(report('Samsung Galaxy S25 Ultra'), '/x/a/performance-report.json')[0].backend, 'opencl')
+  assert.equal(normalizeMobileRecords(report('Google Pixel 9'), '/x/b/performance-report.json')[0].backend, 'vulkan')
+})
+
 test('android GPU fallback stays vulkan off Adreno, and a reported backend id beats the Adreno correction', () => {
   const mali = {
     addon: 'whisper',

@@ -105,7 +105,9 @@ const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl
 // Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
 // run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25/i
+// The trailing guard keeps "S25", "S25 Ultra" and "S25+" matching while a
+// future "S250"-style SKU does not silently inherit the correction.
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
@@ -137,6 +139,10 @@ function normalizeBackend (platformName, useGPU, backendHint, adreno) {
 // Prefer the observed ggml backend id (per-device ground truth) over the
 // platform-family guess. Falls back to normalizeBackend for artifacts produced
 // before the mobile benchmarks emitted `backend_id`.
+//
+// Takes a backendHint the ASR/BCI twins do not: tts-ggml's canonical mobile
+// labels carry a backend token that parseCanonicalTestLabel extracts, whereas
+// their mobile record shapes have no hint to pass.
 function resolveMobileBackend (backendId, platformName, useGPU, backendHint, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
@@ -470,6 +476,12 @@ function normalizeMobileRecord (record, sourceFile) {
 function normalizeManualRecord (record, sourceFile) {
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
+  // A manual drop's `backend` is hand-authored, not a platform guess, so it is
+  // ground truth like a reported backend id: never second-guess it. The Adreno
+  // correction only applies when the record left the backend out.
+  const adreno = record.backend
+    ? false
+    : isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)
 
   return {
     source: record.source || 'manual',
@@ -490,8 +502,7 @@ function normalizeManualRecord (record, sourceFile) {
       DEFAULT_ENHANCER_VARIANT,
     denoiser: (record.model && record.model.denoiser) || record.denoiser || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backend,
-      isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)),
+    backend: normalizeBackend(platformFamily, useGPU, record.backend, adreno),
     gpuModel: record.gpuModel || record.gpu_model || null,
     label: String(record.label || ''),
     numThreads: record.numThreads !== undefined ? record.numThreads : null,

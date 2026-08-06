@@ -10,8 +10,9 @@
 const fs = require('fs')
 const path = require('path')
 
-// BCI GPU backends: Vulkan (linux/win32/android), Metal (darwin/ios), OpenCL
-// (Adreno android). No CoreML/DirectML path. CUDA is disabled in the build.
+// BCI GPU backends: Vulkan (linux/win32/Mali android), Metal (darwin/ios),
+// OpenCL (Adreno android, e.g. Samsung Galaxy S25). No CoreML/DirectML path.
+// CUDA is disabled in the build.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 // ggml active-backend ids reported by the addon, mapped to the backend label.
@@ -114,7 +115,9 @@ function humanizeSourceFile (sourceFile) {
 // Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
 // run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25/i
+// The trailing guard keeps "S25", "S25 Ultra" and "S25+" matching while a
+// future "S250"-style SKU does not silently inherit the correction.
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
@@ -126,8 +129,10 @@ function normalizeBackend (platformName, useGPU, backendHint, adreno) {
   const hint = String(backendHint || '').toLowerCase()
   // An android "vulkan" hint is itself a platform-family guess (labels stamp
   // it without probing the device), so Adreno devices correct it like the
-  // fallback guess below.
-  if (adreno && useGPU && platform === 'android' && (!hint || hint === 'vulkan')) {
+  // fallback guess below. The placeholder tokens are listed for parity with the
+  // ASR/TTS aggregators; BCI's harness does not emit them today.
+  if (adreno && useGPU && platform === 'android' &&
+      (!hint || hint === 'vulkan' || hint === 'mobile-accelerated' || hint === 'gpu')) {
     return 'opencl'
   }
   if (hint) return hint
@@ -168,6 +173,14 @@ function normalizeReport (report, sourceFile, source) {
   const useGPU = Boolean(report.requested && report.requested.useGPU)
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
   const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
+  const backendHint = (report.labels && report.labels.backend) ||
+    (report.requested && report.requested.backendHint)
+  // This normalizer serves both CI artifacts (whose backend label is a platform
+  // guess) and manual drops (whose backend is hand-authored ground truth). Only
+  // second-guess the former.
+  const adreno = source === 'manual' && backendHint
+    ? false
+    : isAdrenoDevice(gpuModel, deviceLabel)
 
   return {
     source,
@@ -176,7 +189,7 @@ function normalizeReport (report, sourceFile, source) {
     platformFamily: platformName || 'unknown',
     model: report.model && report.model.name ? report.model.name.replace(/\.bin$/, '') : 'unknown',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || (report.requested && report.requested.backendHint), isAdrenoDevice(gpuModel, deviceLabel)),
+    backend: normalizeBackend(platformName, useGPU, backendHint, adreno),
     meanTps: num(tps.mean),
     stddevTps: num(tps.stddev),
     p50Tps: num(tps.p50),

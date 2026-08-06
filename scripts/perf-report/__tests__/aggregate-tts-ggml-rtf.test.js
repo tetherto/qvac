@@ -232,6 +232,26 @@ test('android GPU rows on Adreno devices resolve to opencl, correcting the guess
   assert.equal(cpuRecord.backend, 'cpu')
 })
 
+test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
+  // manual-results drops are the escape hatch for backends CI cannot produce,
+  // so an author who writes `vulkan` for an Adreno device must get vulkan back.
+  const manual = {
+    device: 'Samsung Galaxy S25 Ultra',
+    platform: 'android-arm64',
+    platformFamily: 'android',
+    gpu: 'gpu',
+    backend: 'vulkan',
+    gpuModel: 'Adreno (TM) 830',
+    engine: 'supertonic',
+    meanRtf: 0.3
+  }
+  assert.equal(normalizeManualRecord(manual, '/x/manual.json').backend, 'vulkan')
+
+  const guessed = { ...manual }
+  delete guessed.backend
+  assert.equal(normalizeManualRecord(guessed, '/x/manual.json').backend, 'opencl')
+})
+
 test('the observed backend id is ground truth and beats both the label hint and the Adreno heuristic', () => {
   // The mobile benchmarks now emit metrics.backend_id (0=CPU 1=Metal 2=CUDA
   // 3=Vulkan 4=OpenCL), so the platform guess is only a fallback for older
