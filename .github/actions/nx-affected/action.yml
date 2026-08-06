@@ -1,12 +1,5 @@
 name: 'Nx affected matrix'
-description: >
-  Shared nx-affected matrix computation for the *-nx.yml consolidated
-  workflows. Checks out the repo, installs deps, resolves base/head (real
-  merge-base via nrwl/nx-set-shas on a real pull_request event, otherwise the
-  base-ref/head-ref inputs from a workflow_dispatch/workflow_call caller),
-  computes the transitive nx-affected package set, and intersects it with the
-  caller's own YAML config table. Single source of truth — do NOT inline this
-  per workflow.
+description: 'Shared nx-affected matrix computation for the *-nx.yml consolidated workflows.'
 
 inputs:
   config:
