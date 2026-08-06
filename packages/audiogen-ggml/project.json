@@ -6,7 +6,12 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/audiogen-ggml"
+        "cwd": "packages/audiogen-ggml",
+        "ci": {
+          "artifactNamePrefix": "audiogen-ggml-",
+          "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",

@@ -6,7 +6,11 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/ocr-ggml"
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "artifactNamePrefix": "ggml-ocr-",
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",
