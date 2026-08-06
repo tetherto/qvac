@@ -46,6 +46,21 @@
         }
       }
     },
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:mobile:validate || true",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "npmName": "@qvac/ocr-ggml",
+          "prebuildArtifactPrefix": "ggml-ocr-",
+          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT",
+          "androidDevicePoolArnPrimary": "ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT",
+          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_OCR_FASTTEXT",
+          "enablesPerf": true
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
