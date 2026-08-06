@@ -13,7 +13,7 @@
 
 - **Local-first:** load AI models and perform inference on your own machine. No third-party APIs, SaaS, or cloud involved.
 - **P2P:** build unstoppable internet systems — like BitTorrent, IPFS, and blockchain networks, but for AI.
-- **Cross-platform:** run across Linux, macOS, Windows, Android, and iOS, with client SDKs in JavaScript/TypeScript and Python — write code once, run it everywhere.
+- **Cross-platform:** consistent developer experience across Linux, macOS, Windows, Android, and iOS.
 - **OpenAI-compatible API:** integrate with the broader AI ecosystem.
 - **Open source:** 100% free to use and modify — build on top, contribute back, be part of our community.
 
@@ -153,7 +153,7 @@ source .venv/bin/activate
 pip install "tetherto-qvac-sdk"
 ```
 
-3. Install the worker:
+3. Install the worker (requires Node.js and npm — `install-worker` shells out to `npm install`):
 
 ```bash
 python -m tetherto.qvac_sdk install-worker
