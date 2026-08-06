@@ -1195,6 +1195,122 @@ async function ensureParlerModel(options = {}) {
   return { success: false, path: null, targetDir: requestedDir, variant, quant }
 }
 
+// CosyVoice3 (Fun-CosyVoice3-0.5B): a Qwen2 speech LM (q8_0) + DiT flow (f32) +
+// CausalHiFT vocoder (f32), plus the Qwen2 BPE tokenizer (vocab.json / merges.txt)
+// and a baked default voice.  Unlike the single-GGUF engines, the CosyVoice3
+// engine consumes a whole directory: EngineOptions::model_dir auto-resolves the
+// three `cosyvoice3-{llm,flow,hift}-*.gguf` files plus `vocab.json`, `merges.txt`
+// and `voice.gguf` from it.  The registry publishes the voice as `voice-en.gguf`,
+// so it is staged locally under the `voice.gguf` name the engine expects (the
+// descriptor `name` is the on-disk destination; `registryPath` is the source).
+const REGISTRY_DATE_COSYVOICE = '2026-07-23'
+const COSYVOICE_DIRNAME = 'cosyvoice3'
+const COSYVOICE_REGISTRY_PREFIX = `qvac_models_compiled/ggml/cosy_voice/${REGISTRY_DATE_COSYVOICE}`
+
+// Generous size bands (truncation guards only): every file has a distinct name +
+// registry path, so a stale cache can never be mistaken for another file.
+const SIZE_COSYVOICE_LLM = { minSize: 50_000_000, maxSize: 2_000_000_000 }
+const SIZE_COSYVOICE_FLOW = { minSize: 10_000_000, maxSize: 2_000_000_000 }
+const SIZE_COSYVOICE_HIFT = { minSize: 1_000_000, maxSize: 1_000_000_000 }
+const SIZE_COSYVOICE_VOICE = { minSize: 1_000, maxSize: 100_000_000 }
+const SIZE_COSYVOICE_VOCAB = { minSize: 10_000, maxSize: 50_000_000 }
+const SIZE_COSYVOICE_MERGES = { minSize: 10_000, maxSize: 50_000_000 }
+
+const COSYVOICE_FILES = [
+  {
+    name: 'cosyvoice3-llm-q8_0.gguf',
+    ...SIZE_COSYVOICE_LLM,
+    registryPath: `${COSYVOICE_REGISTRY_PREFIX}/cosyvoice3-llm-q8_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'cosyvoice3-flow-f32.gguf',
+    ...SIZE_COSYVOICE_FLOW,
+    registryPath: `${COSYVOICE_REGISTRY_PREFIX}/cosyvoice3-flow-f32.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'cosyvoice3-hift-f32.gguf',
+    ...SIZE_COSYVOICE_HIFT,
+    registryPath: `${COSYVOICE_REGISTRY_PREFIX}/cosyvoice3-hift-f32.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    // Registry file is `voice-en.gguf`; the engine looks for `voice.gguf`, so
+    // stage it under that name (destination = descriptor `name`).
+    name: 'voice.gguf',
+    ...SIZE_COSYVOICE_VOICE,
+    registryPath: `${COSYVOICE_REGISTRY_PREFIX}/voice-en.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'vocab.json',
+    ...SIZE_COSYVOICE_VOCAB,
+    registryPath: `${COSYVOICE_REGISTRY_PREFIX}/vocab.json`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'merges.txt',
+    ...SIZE_COSYVOICE_MERGES,
+    registryPath: `${COSYVOICE_REGISTRY_PREFIX}/merges.txt`,
+    registrySource: REGISTRY_SOURCE
+  }
+]
+
+/**
+ * Ensure the CosyVoice3 model directory is staged in a location the native
+ * addon can read, and return that directory.  Mirrors ensureChatterboxModels /
+ * ensureMecabDict (multi-file): prefer an already-staged local copy, otherwise
+ * fetch all six files from the QVAC model registry (S3).
+ *
+ * The returned `modelDir` is passed to the TTSGgml constructor as
+ * `files: { cosyvoiceModelDir: modelDir }`; the CosyVoice3 engine
+ * (EngineOptions::model_dir) auto-resolves the three GGUFs + tokenizer +
+ * voice.gguf from it.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - dir to stage / look in
+ *   (default ./models/cosyvoice3).
+ * @returns {Promise<{ success: boolean, modelDir: string, targetDir: string }>}
+ */
+async function ensureCosyvoiceModel(options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models', COSYVOICE_DIRNAME)
+  console.log(`Ensuring CosyVoice3 model dir (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      const cd = path.join(d, COSYVOICE_DIRNAME)
+      if (!candidateDirs.includes(cd)) candidateDirs.push(cd)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      const cd = path.join(d, COSYVOICE_DIRNAME)
+      if (!candidateDirs.includes(cd)) candidateDirs.push(cd)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, COSYVOICE_FILES)) {
+      console.log(` ✓ using CosyVoice3 model dir at ${dir}`)
+      return { success: true, modelDir: dir, targetDir: dir }
+    }
+  }
+
+  if (await tryFetchGgufsFromRegistry(COSYVOICE_FILES, requestedDir)) {
+    return { success: true, modelDir: requestedDir, targetDir: requestedDir }
+  }
+
+  console.log(' CosyVoice3 model files not found locally and registry fetch failed.')
+  console.log(` Expected these files under ${requestedDir}:`)
+  for (const f of COSYVOICE_FILES) console.log(`   ${f.name}  (${f.registryPath})`)
+  console.log(
+    ' Assemble one offline with ' +
+      'qvac-ext-lib-whisper.cpp/tts-cpp/scripts/assemble-cosyvoice3-model.py.'
+  )
+  return { success: false, modelDir: requestedDir, targetDir: requestedDir }
+}
+
 /**
  * Ensure a Supertonic 3 GGUF for the requested quant tier is staged in a
  * directory the native addon can read, and return that path.
@@ -1639,6 +1755,7 @@ module.exports = {
   ensureParlerModel,
   parlerQuantFromVariant,
   DEFAULT_PARLER_QUANT,
+  ensureCosyvoiceModel,
   ensureMecabDict,
   ensureCangjieTsv,
   ensureLavaSREnhancerGguf,
