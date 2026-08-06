@@ -129,7 +129,6 @@ export {
   type ResourceProvenance,
   type ResourceMetric,
   type GraphicsDriver,
-  type GraphicsApi,
   type GraphicsDriverCapabilities,
   type BackendProbeResult,
   type BackendDevice,

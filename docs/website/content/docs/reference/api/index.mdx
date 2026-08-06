@@ -514,12 +514,8 @@ if (resources.capabilities.gpus.status === "supported") {
 }
 ```
 
-Profiled inference operation events may expose `event.backend` with the backend
-and device actually selected, graphics API, driver details, and a structured
-fallback reason. Addons attach this metadata with `attachBackendDiagnostics`.
-`gpuId`, when present, comes from the current worker resource collector and is
-stable only for that collector's lifetime. QVAC-21926 still tracks the addon
-producer work; the SDK does not infer compatibility from inventory or logs.
+Backend selection diagnostics are exposed on profiled operation events; see
+[`profiler`](#profiler).
 
 ---
 
@@ -1755,6 +1751,14 @@ function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, 
 ### `profiler`
 
 QVAC SDK Profiler
+
+Profiled inference operation events may expose `event.backend` with the backend
+and device actually selected, graphics API, driver details, and a structured
+fallback reason. Addons attach this metadata with `attachBackendDiagnostics`.
+For streaming operations, metadata must be attached to the terminal chunk.
+`gpuId`, when present, comes from the current worker resource collector and is
+stable only for that collector's lifetime. The SDK validates attached metadata
+and does not infer compatibility from inventory or logs.
 
 **Shape**:
 

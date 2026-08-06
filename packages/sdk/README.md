@@ -111,8 +111,8 @@ selected backend and device, graphics API, driver, fallback reason, and probe
 result. Addons attach backend metadata with `attachBackendDiagnostics`; the SDK
 validates it before recording the operation event. `gpuId`, when present,
 identifies a GPU from the current worker resource collector and is stable only
-for that collector's lifetime. QVAC-21926 still tracks the addon producer work;
-this SDK does not infer compatibility from driver inventory or log text.
+for that collector's lifetime. The SDK does not infer compatibility from driver
+inventory or log text.
 
 ## Examples
 

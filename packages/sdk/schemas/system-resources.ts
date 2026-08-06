@@ -183,7 +183,6 @@ export type ResourceMetric<T> =
       reason?: string
     }
 export type GraphicsDriver = z.infer<typeof graphicsDriverSchema>
-export type GraphicsApi = GraphicsDriver
 export type GraphicsDriverCapabilities = z.infer<typeof graphicsDriverCapabilitiesSchema>
 export type BackendProbeResult = z.infer<typeof backendProbeResultSchema>
 export type BackendDevice = z.infer<typeof backendDeviceSchema>

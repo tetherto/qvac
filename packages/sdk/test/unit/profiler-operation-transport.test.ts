@@ -2,9 +2,11 @@ import test from 'brittle'
 import { BACKEND_DIAGNOSTICS_KEY, sourceTypeSchema, type OperationEvent } from '@/schemas'
 import { buildOperationEvent } from '@/server/rpc/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
+import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
 import { attachBackendDiagnostics, extractProfilingMeta } from '@/profiling'
 import { clearAggregator, getAggregates, recordEvent } from '@/profiling/aggregator'
+import { readBackendDiagnostics } from '@/server/rpc/profiling/backend-diagnostics'
 
 test('sourceType: accepts expected values and rejects unknown', (t) => {
   const expected = ['hyperdrive', 'http', 'registry', 'filesystem']
@@ -87,9 +89,39 @@ test('operation metrics: attaches backend selection diagnostics', (t) => {
   } as const
   const response = attachBackendDiagnostics({}, diagnostics)
 
-  const event = buildOperationEvent('completionStream', 'profile-backend', 100, 50, {}, response)
+  const event = buildOperationEvent(
+    'unregisteredBackendOp',
+    'profile-backend',
+    100,
+    50,
+    {},
+    response
+  )
 
   t.alike(event?.backend, diagnostics)
+})
+
+test('backend diagnostics helper rejects malformed producer metadata', (t) => {
+  t.exception(() =>
+    attachBackendDiagnostics(
+      {},
+      {
+        selectedBackend: '',
+        selectedDevice: 'gpu'
+      }
+    )
+  )
+})
+
+test('backend diagnostics survive model-factory result forwarding', (t) => {
+  const diagnostics = {
+    selectedBackend: 'llama.cpp-metal',
+    selectedDevice: 'gpu'
+  } as const
+  const pluginResult = attachBackendDiagnostics({ model: {} }, diagnostics)
+  const loadResult = forwardBackendDiagnostics({}, pluginResult)
+
+  t.alike(readBackendDiagnostics(loadResult), diagnostics)
 })
 
 test('operation metrics: drops malformed backend diagnostics', (t) => {

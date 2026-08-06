@@ -4,8 +4,6 @@
  */
 
 import {
-  BACKEND_DIAGNOSTICS_KEY,
-  inferenceBackendDiagnosticsSchema,
   type CompletionStats,
   type OCRStats,
   type TranslationStats,
@@ -15,10 +13,10 @@ import {
   type DiffusionStats,
   type VideoStats
 } from '@/schemas'
-import { getServerLogger } from '@/logging'
 import { readModelExecutionMs } from '@/profiling/model-execution'
 import type { ProfilingEvent, ProfilingEventKind } from '@/profiling/types'
 import type { LoadModelProfilingMeta, DownloadStats } from '@/server/rpc/handlers/load-model/types'
+import { readBackendDiagnostics } from './backend-diagnostics'
 
 export type MetricExtractor<T> = (data: T) => Record<string, number> | undefined
 
@@ -35,7 +33,6 @@ export interface OperationMetricsConfig<TRequest = unknown, TResponse = unknown>
 }
 
 const metricsRegistry = new Map<string, OperationMetricsConfig>()
-const logger = getServerLogger()
 
 export interface DownloadAssetProfilingMeta {
   sourceType?: string
@@ -50,21 +47,6 @@ interface DownloadStatsShape {
 }
 
 type ResponseWithProfilingMeta<T> = { __profilingMeta?: T }
-
-function readBackendDiagnostics(response: unknown) {
-  if (!response || typeof response !== 'object') return undefined
-
-  const diagnostics = (response as Record<symbol, unknown>)[BACKEND_DIAGNOSTICS_KEY]
-  if (diagnostics === undefined) return undefined
-
-  const result = inferenceBackendDiagnosticsSchema.safeParse(diagnostics)
-  if (!result.success) {
-    logger.debug('Ignoring invalid backend diagnostics', result.error)
-    return undefined
-  }
-
-  return result.data
-}
 
 function extractDownloadStatsGauges(
   stats: DownloadStatsShape | undefined,
