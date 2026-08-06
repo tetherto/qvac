@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
+  directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
+  dialects, description-conditioned English), with a capability matrix and
+  explicit guidance that Supertonic v1/v2 are not recommended for new
+  integrations in favour of Supertonic 3.
+
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
   vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
