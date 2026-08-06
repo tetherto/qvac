@@ -8,10 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
   `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
   produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
   Pixel 9a instead of silently accepting a CPU fallback.
+
+## [0.2.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
 
 ## [0.1.1] - 2026-08-03
 

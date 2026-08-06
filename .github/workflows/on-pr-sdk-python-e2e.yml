@@ -51,7 +51,7 @@ jobs:
       - name: Install (with transport + optional extras)
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install --quiet -e ".[gen,dev,bare-rpc,vla,notebook]"
+          .venv/bin/pip install --quiet -e ".[gen,dev,vla,notebook]"
 
       # All-public @qvac deps, no auth — same as the CLI's plain build.
       - name: Build worker
