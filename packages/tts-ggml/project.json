@@ -48,6 +48,22 @@
         }
       }
     },
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:mobile:validate || true",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "npmName": "@qvac/tts-ggml",
+          "prebuildArtifactPrefix": "tts-ggml-",
+          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML",
+          "deviceFarmProjectArnFallback": "AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS",
+          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_TTS_GGML",
+          "iosDevicePoolArnFallback": "IOS_DEVICE_POOL_ARN_ONNX_TTS",
+          "enablesPerf": false
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
