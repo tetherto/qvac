@@ -392,7 +392,7 @@ runs:
         echo "  ❌ Failed: $USER_FAILED"
         echo ""
 
-        if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+        if [ "$USER_FAILED" -gt 0 ]; then
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "❌ FAILED TESTS"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -439,7 +439,7 @@ runs:
           echo "| Test cases failed | $TOTAL_FAILED |"
           echo "| Test cases skipped | $TOTAL_SKIPPED |"
           echo ""
-          if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+          if [ "$USER_FAILED" -gt 0 ]; then
             echo "<details><summary>Failed devices</summary>"
             echo ""
             for failed_info in "${FAILED_TEST_DETAILS[@]}"; do
