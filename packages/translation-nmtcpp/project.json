@@ -45,6 +45,19 @@
         }
       }
     },
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:mobile:validate || true",
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "npmName": "@qvac/translation-nmtcpp",
+          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP",
+          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_NMTCPP",
+          "enablesPerf": true
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

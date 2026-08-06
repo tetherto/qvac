@@ -43,6 +43,22 @@
         }
       }
     },
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:mobile:validate || true",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "npmName": "@qvac/classification-ggml",
+          "prebuildArtifactPrefix": "classification-ggml-",
+          "deviceFarmProjectArnPrimary": "LLM_AWS_DEVICE_FARM_PROJECT_ARN",
+          "androidDevicePoolArnPrimary": "LLM_ANDROID_DEVICE_POOL_ARN",
+          "iosDevicePoolArnPrimary": "LLM_IOS_DEVICE_POOL_ARN",
+          "enablesPerf": false,
+          "extraPreBuildCommand": "npm run mobile:copy-prebuilds"
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
