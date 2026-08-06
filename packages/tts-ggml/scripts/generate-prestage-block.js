@@ -42,6 +42,19 @@ function engineEntries(manifest, variant) {
   return entries
 }
 
+// CosyVoice3 is a directory-consuming engine with a quant-fixed model set (LLM
+// q8_0 + flow/hift f32 + tokenizer + voice), so its prestage list is the whole
+// `cosyvoice` manifest group regardless of the row's variant — unlike the q4/q8
+// single-GGUF engines, `variant` doesn't select a file here. The targetNames
+// already carry the `cosyvoice3/` subdir the on-device resolver scans.
+function cosyvoiceEntries(manifest) {
+  const entries = Array.isArray(manifest.cosyvoice) ? manifest.cosyvoice : []
+  if (entries.length === 0) {
+    throw new Error('No manifest entries found for engine "cosyvoice"')
+  }
+  return entries
+}
+
 // Only the LavaSR GGUFs whose axis the row turned on. An engine-only row wants
 // nothing here, so its prestage list stays byte-for-byte what it was pre-LavaSR.
 function requestedLavasrKinds(axes) {
@@ -58,8 +71,15 @@ function qualityEntries(manifest, enabled) {
   return enabled === true && Array.isArray(manifest.quality) ? manifest.quality : []
 }
 
+// A cosyvoice row pushes the fixed cosyvoice group (ignoring variant); every
+// other engine keeps the exact q4/q8-by-variant selection it had before, so its
+// prestage list stays byte-for-byte unchanged.
 function selectEntries(manifest, options) {
-  return engineEntries(manifest, options.variant)
+  const engine =
+    options.engine === 'cosyvoice'
+      ? cosyvoiceEntries(manifest)
+      : engineEntries(manifest, options.variant)
+  return engine
     .concat(lavasrEntries(manifest, options))
     .concat(qualityEntries(manifest, options.quality))
 }
@@ -108,6 +128,7 @@ function buildPrestageBlock(manifest, options) {
 function readOptionsFromEnv(env) {
   return {
     variant: resolveVariant(env.TTS_GGML_MOBILE_BENCHMARK_VARIANT),
+    engine: env.TTS_GGML_MOBILE_BENCHMARK_ENGINE || 'chatterbox',
     enhancer: env.TTS_GGML_MOBILE_BENCHMARK_ENHANCER || 'none',
     denoiser: env.TTS_GGML_MOBILE_BENCHMARK_DENOISER || 'none',
     quality: env.TTS_GGML_MOBILE_BENCHMARK_QUALITY !== 'false'
@@ -128,6 +149,7 @@ module.exports = {
   PRESTAGE_DIR,
   resolveVariant,
   engineEntries,
+  cosyvoiceEntries,
   requestedLavasrKinds,
   lavasrEntries,
   qualityEntries,

@@ -416,6 +416,11 @@ async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/finetuning-moe.test.js', options)
 }
 
+async function runFinetuningCancelSlotReleaseTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningCancelSlotReleaseTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-cancel-slot-release.test.js', options)
+}
+
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningPauseResumeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
@@ -574,6 +579,11 @@ async function runTurboquantTest (options = {}) { // eslint-disable-line no-unus
 async function runUnlimitedOcrPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUnlimitedOcrPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/unlimited-ocr-perf.test.js', options)
+}
+
+async function runUnloadThrowingListenerTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUnloadThrowingListenerTest')) return __FILTERED
+  return runIntegrationModule('../integration/unload-throwing-listener.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars

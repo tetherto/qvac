@@ -6,6 +6,7 @@
 #include <js.h>
 
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
+#include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
 #include "model-interface/supertonic/SupertonicConfig.hpp"
 
@@ -14,6 +15,7 @@ namespace qvac::ttsggml {
 enum class EngineType {
   Chatterbox,
   Supertonic,
+  Cosyvoice,
   Parler,
 };
 
@@ -30,6 +32,10 @@ public:
       js_env_t* env);
 
   supertonic::SupertonicConfig buildSupertonicConfig(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
+
+  cosyvoice::CosyvoiceConfig buildCosyvoiceConfig(
       qvac_lib_inference_addon_cpp::js::Object configurationParams,
       js_env_t* env);
 
