@@ -139,6 +139,9 @@ struct SdVidGenConfig {
   // axis to bound peak VRAM at high resolution / long clips. Maps to
   // sd_tiling_params_t::temporal_tiling. No effect on Wan (spatial-only VAE).
   bool vaeTemporalTiling = false;
+  // Backend-specific key=value overrides, such as LTX video VAE
+  // temporal_tile_frames and temporal_tile_overlap.
+  std::string vaeExtraTilingArgs;
 
   // -- Step-caching ----------------------------------------------------------
   // Mapped to sd_vid_gen_params_t::cache. Same enum as image generation.

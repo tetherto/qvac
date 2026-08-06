@@ -327,6 +327,9 @@ void SdModel::load() {
   params.offload_params_to_cpu = config_.offloadToCpu;
   params.keep_clip_on_cpu = config_.keepClipOnCpu;
   params.keep_vae_on_cpu = config_.keepVaeOnCpu;
+  params.vae_auto_cpu_fallback = config_.vaeAutoCpuFallback;
+  params.vae_auto_cpu_fallback_memory_ratio =
+      config_.vaeAutoCpuFallbackMemoryRatio;
 
   // Also set the newer backend spec so offload intent survives sd.cpp builds
   // that route parameter placement through params_backend.
@@ -1206,6 +1209,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   vidParams.vae_tiling_params.target_overlap = vid.vaeTileOverlap;
   // Temporal tiling -- LTX-2 video VAE only; no-op for Wan.
   vidParams.vae_tiling_params.temporal_tiling = vid.vaeTemporalTiling;
+  vidParams.vae_tiling_params.extra_tiling_args =
+      vid.vaeExtraTilingArgs.empty() ? nullptr : vid.vaeExtraTilingArgs.c_str();
 
   // Step-caching
   sd_cache_params_init(&vidParams.cache);

@@ -78,6 +78,8 @@ export interface VideoGenerationParams {
     vae_tile_size?: number | string;
     vae_tile_overlap?: number;
     temporal_tiling?: boolean;
+    /** Backend-specific VAE tiling overrides as a comma-separated key=value list. */
+    vae_extra_tiling_args?: string;
     cache_mode?: CacheMode;
     cache_preset?: string;
     cache_threshold?: number;

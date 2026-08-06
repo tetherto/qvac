@@ -89,6 +89,8 @@ export interface VideoGenerationParams {
   vae_tile_size?: number | string
   vae_tile_overlap?: number
   temporal_tiling?: boolean
+  /** Backend-specific VAE tiling overrides as a comma-separated key=value list. */
+  vae_extra_tiling_args?: string
   cache_mode?: CacheMode
   cache_preset?: string
   cache_threshold?: number
@@ -572,6 +574,14 @@ export default class VideoStableDiffusion {
     ) {
       throw new RangeError(
         `reference_downscale_factor must be a positive finite number. Got: ${params.reference_downscale_factor}`
+      )
+    }
+    if (
+      params.vae_extra_tiling_args != null &&
+      typeof params.vae_extra_tiling_args !== 'string'
+    ) {
+      throw new TypeError(
+        `vae_extra_tiling_args must be a string. Got: ${typeof params.vae_extra_tiling_args}`
       )
     }
 

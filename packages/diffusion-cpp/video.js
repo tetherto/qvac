@@ -370,6 +370,10 @@ class VideoStableDiffusion {
                 params.reference_downscale_factor <= 0)) {
             throw new RangeError(`reference_downscale_factor must be a positive finite number. Got: ${params.reference_downscale_factor}`);
         }
+        if (params.vae_extra_tiling_args != null &&
+            typeof params.vae_extra_tiling_args !== 'string') {
+            throw new TypeError(`vae_extra_tiling_args must be a string. Got: ${typeof params.vae_extra_tiling_args}`);
+        }
         if (params.vace_strength != null &&
             (!Array.isArray(params.control_frames) || params.control_frames.length === 0)) {
             this.logger.warn('vace_strength was set but control_frames is not provided — ' +

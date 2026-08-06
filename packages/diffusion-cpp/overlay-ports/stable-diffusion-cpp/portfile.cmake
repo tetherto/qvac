@@ -1,13 +1,10 @@
-# Local development overlay for the LTX IC-LoRA engine pull request.
-#
-# The ref is an immutable, signed commit from
-# tetherto/qvac-ext-stable-diffusion.cpp#25. Promote the same commit to
-# qvac-registry-vcpkg before removing this overlay.
+# Published LTX IC-LoRA engine overlay, pinned to an immutable commit.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 146ede0c888b5efa7db9521aefd4164a42651242
-    SHA512 9153b50c58e49c8a2ccc678ef1d7b6fb47866575dabf09fd0a895832a3535f7be96b17f2d05fdab79038eec096ecf8972d684110d65220e4ac470d47c64e22f9
+    REF dda3a3ead67c9fd3f49398e66ab097e0f5817994
+    SHA512 20d804eaaf3490e75d2d24fb8eea0ed4ffc7209842d72e6c884e2cb2241cd9ba6aa35a93e8c1332b792c1ac80ee52308aaa2f268f6fc5e82064f093e94e509b5
+    HEAD_REF 2026-07-03-ltx-lora
 )
 
 set(SD_FLASH_ATTN OFF)

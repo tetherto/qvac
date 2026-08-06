@@ -55,6 +55,12 @@ function mainGpuFromEnv() {
   return index
 }
 
+function requireFile(label, filePath) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`${label} not found: ${filePath}`)
+  }
+}
+
 function formatDuration(milliseconds) {
   if (!Number.isFinite(milliseconds) || milliseconds < 0) return null
   if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`
@@ -134,6 +140,15 @@ function createProgressLogger(startedAt) {
 }
 
 async function main() {
+  for (const [name, filePath] of Object.entries(files)) {
+    requireFile(`LTX ${name}`, filePath)
+  }
+  requireFile('Reference sheet', referencePath)
+  requireFile(
+    'Ingredients LoRA (run HF_TOKEN=hf_... ./scripts/download-model-ltx-ingredients.sh)',
+    loraPath
+  )
+
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
   const reference = fs.readFileSync(referencePath)
 
@@ -148,12 +163,20 @@ async function main() {
       threads: 4,
       device: process.env.LTX_DEVICE || 'gpu',
       'main-gpu': mainGpuFromEnv(),
-      diffusion_fa: true,
+      diffusion_fa: envFlag('DIFFUSION_FA', true),
+      diffusion_conv_direct: envFlag('DIFFUSION_CONV_DIRECT', true),
       // LTX-2.3 plus Gemma and the VAE exceed a 32 GB card. Keep parameters in
       // system RAM by default so Vulkan has headroom for generation buffers.
       offload_to_cpu: envFlag('LTX_OFFLOAD_TO_CPU', true),
+      // An explicit CPU override remains available. Otherwise preflight each
+      // VAE graph and route only oversized graphs to CPU; DiT remains on Vulkan.
+      vae_on_cpu: envFlag('LTX_VAE_ON_CPU', false),
+      vae_auto_cpu_fallback: envFlag('LTX_VAE_AUTO_CPU_FALLBACK', true),
+      vae_auto_cpu_fallback_memory_ratio: Number(
+        process.env.LTX_VAE_AUTO_CPU_FALLBACK_MEMORY_RATIO || 0.9
+      ),
       vae_tiling: true,
-      vae_conv_direct: true,
+      vae_conv_direct: envFlag('VAE_CONV_DIRECT', true),
       lora_apply_mode: 'at_runtime',
       verbosity: Number(process.env.VERBOSITY || 2)
     },
@@ -185,7 +208,8 @@ async function main() {
       reference_attention_strength: 1,
       reference_downscale_factor: 1,
       temporal_tiling: true,
-      vae_tile_size: Number(process.env.VAE_TILE_SIZE || 8)
+      vae_tile_size: Number(process.env.VAE_TILE_SIZE || 4),
+      vae_extra_tiling_args: process.env.VAE_EXTRA_TILING_ARGS
     })
 
     let avi

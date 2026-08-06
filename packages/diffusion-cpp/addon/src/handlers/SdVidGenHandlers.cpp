@@ -316,6 +316,11 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.vaeTemporalTiling = requireBool(v, "temporal_tiling");
      }},
 
+    {"vae_extra_tiling_args",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.vaeExtraTilingArgs = requireStr(v, "vae_extra_tiling_args");
+     }},
+
     // -- Step-caching --------------------------------------------------------
 
     {"cache_mode",
