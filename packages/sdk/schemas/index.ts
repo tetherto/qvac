@@ -70,6 +70,8 @@ export {
   MODEL_EXECUTION_KEY,
   BACKEND_DIAGNOSTICS_KEY,
   profilerModeSchema,
+  profilerGPUResourceGaugeSchema,
+  profilerResourceGaugeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,
   operationEventSchema,
@@ -82,7 +84,9 @@ export {
   type OperationEvent,
   type ProfilingRequestMeta,
   type ProfilingResponseMeta,
-  type PerCallProfiling
+  type PerCallProfiling,
+  type ProfilerGPUResourceGauge,
+  type ProfilerResourceGauge
 } from './profiling'
 export { runtimeContextSchema, type RuntimeContext } from './runtime-context'
 export * from './get-model-info'

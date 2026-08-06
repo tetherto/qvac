@@ -1,11 +1,25 @@
 import test from 'brittle'
-import { BACKEND_DIAGNOSTICS_KEY, sourceTypeSchema, type OperationEvent } from '@/schemas'
-import { buildOperationEvent } from '@/server/rpc/profiling'
+import {
+  BACKEND_DIAGNOSTICS_KEY,
+  OPERATION_EVENT_KEY,
+  PROFILING_KEY,
+  sourceTypeSchema,
+  type OperationEvent
+} from '@/schemas'
+import { buildOperationEvent, profileReplyHandler } from '@/server/rpc/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
 import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
-import { attachBackendDiagnostics, extractProfilingMeta } from '@/profiling'
+import {
+  attachBackendDiagnostics,
+  createDelegatedProfilingMeta,
+  extractProfilingMeta
+} from '@/profiling'
 import { clearAggregator, getAggregates, recordEvent } from '@/profiling/aggregator'
+import {
+  destroyWorkerResourceCollector,
+  initializeWorkerResourceCollector
+} from '@/server/bare/resources/worker-collector'
 import { readBackendDiagnostics } from '@/server/rpc/profiling/backend-diagnostics'
 
 test('sourceType: accepts expected values and rejects unknown', (t) => {
@@ -15,6 +29,18 @@ test('sourceType: accepts expected values and rejects unknown', (t) => {
   }
 
   t.absent(sourceTypeSchema.safeParse('unknown').success, 'unknown is invalid')
+})
+
+test('delegated profiling metadata forwards resource opt-in explicitly', (t) => {
+  const defaultMeta = createDelegatedProfilingMeta('default')
+  const optedInMeta = createDelegatedProfilingMeta('opted-in', {
+    includeResources: true
+  })
+
+  t.is(defaultMeta.includeResources, false)
+  t.is(defaultMeta.resourceOrigin, 'provider')
+  t.is(optedInMeta.includeResources, true)
+  t.is(optedInMeta.resourceOrigin, 'provider')
 })
 
 test('operation metrics: loadModel extracts gauges and tags', (t) => {
@@ -144,6 +170,32 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
     ms: 500,
     profileId: 'round-trip-test',
     gauges: { totalLoadTime: 500, downloadTime: 200 },
+    resources: {
+      origin: 'local',
+      sampledAt: 123,
+      cpu: {
+        status: 'supported',
+        value: 0.25,
+        provenance: { source: 'bare-cpu-info', scope: 'system' }
+      },
+      memory: {
+        usedBytes: {
+          status: 'supported',
+          value: 1024,
+          provenance: { source: 'bare-cpu-info', scope: 'system' }
+        },
+        totalBytes: {
+          status: 'supported',
+          value: 4096,
+          provenance: { source: 'bare-cpu-info', scope: 'system' }
+        }
+      },
+      gpus: {
+        status: 'supported',
+        value: [],
+        provenance: { source: 'bare-gpu-info', scope: 'system' }
+      }
+    },
     backend: {
       selectedBackend: 'llama.cpp-cpu',
       selectedDevice: 'cpu',
@@ -172,12 +224,123 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
   t.is(extracted!.operation!.ms, 500)
   t.is(extracted!.operation!.profileId, 'round-trip-test')
   t.alike(extracted!.operation!.gauges, { totalLoadTime: 500, downloadTime: 200 })
+  t.alike(extracted!.operation!.resources, operation.resources)
   t.alike(extracted!.operation!.backend, operation.backend)
   t.alike(extracted!.operation!.tags, {
     modelType: 'llamacpp-completion',
     sourceType: 'registry',
     cacheHit: 'true'
   })
+})
+
+test('operation profiling: resource gauges sample only when requested', async (t) => {
+  let sampleCalls = 0
+  destroyWorkerResourceCollector()
+
+  const withoutCollector = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {},
+      perCall: { enabled: true, includeResourceGauges: true }
+    },
+    async () => ({ ok: true })
+  )
+  const eventWithoutCollector = (withoutCollector as { [OPERATION_EVENT_KEY]?: OperationEvent })[
+    OPERATION_EVENT_KEY
+  ]
+  t.absent(eventWithoutCollector?.resources, 'an uninitialized collector produces no gauge block')
+
+  initializeWorkerResourceCollector({
+    cpuArchitectures: [1],
+    gpuTypes: [1],
+    createCPUInfo: () => ({
+      query: () => ({
+        name: 'CPU',
+        vendor: 'Vendor',
+        arch: 1,
+        physicalCores: 4,
+        logicalCores: 8,
+        performanceCores: 4,
+        efficiencyCores: 0,
+        frequency: 1,
+        cacheLine: 64,
+        memory: 4096
+      }),
+      sample: () => {
+        sampleCalls++
+        return { compute: 0.25, memoryUsed: 1024, memoryTotal: 4096 }
+      },
+      destroy: () => {}
+    }),
+    createGPUInfo: () => undefined,
+    createGPUId: () => 'gpu-1',
+    now: () => 123
+  })
+
+  const unprofiled = await profileReplyHandler(
+    { op: 'resourceTest', request: {}, perCall: { enabled: false } },
+    async () => ({ ok: true })
+  )
+  t.is(sampleCalls, 0, 'disabled profiling does not sample')
+  t.absent(
+    (unprofiled as { [OPERATION_EVENT_KEY]?: OperationEvent })[OPERATION_EVENT_KEY],
+    'disabled profiling has no operation event'
+  )
+
+  const profiledWithoutResources = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {},
+      perCall: { enabled: true }
+    },
+    async () => ({ ok: true })
+  )
+  const operationWithoutResources = (
+    profiledWithoutResources as { [OPERATION_EVENT_KEY]?: OperationEvent }
+  )[OPERATION_EVENT_KEY]
+  t.is(sampleCalls, 0, 'profiling without resource opt-in does not sample')
+  t.absent(operationWithoutResources?.resources)
+
+  const profiled = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {},
+      perCall: { enabled: true, includeResourceGauges: true }
+    },
+    async () => ({ ok: true })
+  )
+  const operationEvent = (profiled as { [OPERATION_EVENT_KEY]?: OperationEvent })[
+    OPERATION_EVENT_KEY
+  ]
+  t.is(sampleCalls, 1, 'opt-in profiling samples once')
+  t.ok(
+    operationEvent?.resources?.sampledAt !== undefined &&
+      operationEvent.resources.sampledAt >= operationEvent.ts,
+    'resource sample uses the event monotonic clock'
+  )
+  t.is(operationEvent?.resources?.cpu.status, 'supported')
+  t.is(operationEvent?.resources?.memory.usedBytes.status, 'supported')
+  t.is(operationEvent?.resources?.gpus.status, 'failed')
+  t.is(operationEvent?.resources?.origin, 'local')
+
+  const providerProfiled = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {
+        [PROFILING_KEY]: createDelegatedProfilingMeta('provider-profile', {
+          includeResources: true
+        })
+      }
+    },
+    async () => ({ ok: true })
+  )
+  const providerOperation = (providerProfiled as { [OPERATION_EVENT_KEY]?: OperationEvent })[
+    OPERATION_EVENT_KEY
+  ]
+  t.is(sampleCalls, 2, 'delegated resource opt-in samples once')
+  t.is(providerOperation?.resources?.origin, 'provider')
+
+  destroyWorkerResourceCollector()
 })
 
 test('cacheHit: cache-hit path omits download metrics', (t) => {

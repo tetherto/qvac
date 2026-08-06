@@ -1760,6 +1760,13 @@ For streaming operations, metadata must be attached to the terminal chunk.
 stable only for that collector's lifetime. The SDK validates attached metadata
 and does not infer compatibility from inventory or logs.
 
+`ProfilerRuntimeOptions.includeResourceGauges` opts into one timestamped worker
+CPU, memory, and GPU sample per profiled operation. Samples are available on
+verbose `recentEvents[].resources` and preserve `ResourceMetric<T>` status,
+source, and scope semantics. `resources.sampledAt` uses the same monotonic clock
+as the event's `ts`; `resources.origin` distinguishes `local` and delegated
+`provider` workers.
+
 **Shape**:
 
 ```ts

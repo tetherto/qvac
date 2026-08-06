@@ -1,3 +1,4 @@
+import type { ProfilerResourceGauge } from '@/schemas/profiling'
 import type { InferenceBackendDiagnostics } from '@/schemas/system-resources'
 
 export type ProfilingEventKind = 'rpc' | 'handler' | 'download' | 'load' | 'delegation'
@@ -15,6 +16,7 @@ export interface ProfilingEvent {
   bytes?: number
   /** Numeric gauges (e.g., throughput, token counters) */
   gauges?: Record<string, number>
+  resources?: ProfilerResourceGauge
   backend?: InferenceBackendDiagnostics
   /** String tags (e.g., handlerType, sourceType, modelId) */
   tags?: Record<string, string>
@@ -23,6 +25,7 @@ export interface ProfilingEvent {
 export interface ProfilerRuntimeOptions {
   mode?: 'summary' | 'verbose'
   includeServerBreakdown?: boolean
+  includeResourceGauges?: boolean
   operationFilters?: string[]
 }
 
@@ -40,6 +43,7 @@ export interface ProfilerExport {
     enabled: boolean
     mode: 'summary' | 'verbose'
     includeServerBreakdown: boolean
+    includeResourceGauges: boolean
     operationFilters: string[]
     maxRecentEvents: number
   }
