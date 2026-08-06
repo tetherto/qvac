@@ -3303,6 +3303,47 @@
     "tags": ["vae", "wan"]
   },
   {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/acvlab/ABot-World-0-5B-LF",
+    "description": "ABot-World interactive world model (keyboard-driven causal walk), Wan2.2-TI2V-5B derivative",
+    "notes": "Driven via the diffusion-cpp world session API; not a batch text/image-to-video model.",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "params": "5B",
+    "tags": ["generation", "diffusion", "video", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/madebyollin/taehv",
+    "description": "taehv (taew2.2) tiny streaming video decoder for the Wan 2.2 TI2V latent space",
+    "notes": "Real-time pixel decoder for ABot-World walk sessions.",
+    "licenseId": "MIT",
+    "quantization": "F16",
+    "tags": ["vae", "taehv", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "description": "UMT5-XXL text encoder (encoder-only GGUF) for ABot-World native scene creation",
+    "notes": "GGUF conversion of the Comfy-Org umt5_xxl_fp16 repackage; walk-level validated quantization (F16 parity work uses the registry's umt5_xxl_fp16.safetensors entry).",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "tags": ["text-encoder", "wan", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    "description": "Wan 2.2 VAE (48-channel, GGUF) - ABot-World first-frame encoder",
+    "notes": "GGUF conversion of the Comfy-Org wan2.2_vae repackage.",
+    "licenseId": "Apache-2.0",
+    "quantization": "F16",
+    "tags": ["vae", "wan", "abot-world"]
+  },
+  {
     "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf",
     "engine": "@qvac/diffusion-cpp",
     "description": "LTX-2.3 distilled text/image-to-video diffusion model",

@@ -1,0 +1,80 @@
+---
+title: "@qvac/audiogen-ggml"
+titleStyle: code
+description: Native music generation with ACE-Step 1.5 and GGML.
+schemaType: APIReference
+---
+
+## Overview
+
+[`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml) is a Bare native addon for generating music from captions, lyrics, and musical controls. It runs ACE-Step 1.5 locally with CPU inference or optional Metal/Vulkan acceleration and returns interleaved stereo Int16 PCM.
+
+<Callout type="info">
+  SDK consumers should use [`audioGen()` through
+  `@qvac/sdk`](/ai-capabilities/music-generation). Use this package directly
+  only when building against the addon-level Bare API.
+</Callout>
+
+## Pipeline
+
+Generation runs through four persistent model stages:
+
+1. A Qwen3 text encoder for captions and lyrics.
+2. An ACE-Step language model for song structure and musical controls.
+3. A DiT model for latent audio generation.
+4. A VAE decoder for the final waveform.
+
+The models are loaded once and reused between runs.
+
+## Models
+
+| Stage | File |
+| --- | --- |
+| Text encoder | `Qwen3-Embedding-0.6B-Q8_0.gguf` |
+| Language model | `acestep-5Hz-lm-0.6B-Q8_0.gguf` |
+| Turbo DiT, Q4 | `acestep-v15-turbo-Q4_K_M.gguf` |
+| Turbo DiT, Q8 | `acestep-v15-turbo-Q8_0.gguf` |
+| SFT DiT, Q8 | `acestep-v15-sft-Q8_0.gguf` |
+| VAE | `vae-BF16.gguf` |
+
+Choose one DiT variant and combine it with the fixed text encoder, language model, and VAE.
+
+## Installation
+
+```bash
+npm install @qvac/audiogen-ggml
+```
+
+The package requires a supported native prebuild and the four GGUF files. Models are not bundled with the addon.
+
+## Minimal Bare usage
+
+```js
+const { AudioGen } = require("@qvac/audiogen-ggml");
+
+const model = new AudioGen({
+  files: {
+    modelDir: "/path/to/acestep/models",
+    ditVariant: "turbo-q4",
+  },
+  config: { useGPU: true },
+});
+
+await model.load();
+
+const response = await model.run("lo-fi hip hop with mellow piano", {
+  lyrics: "[Instrumental]",
+  seed: 42,
+});
+
+for await (const update of response.iterate()) {
+  if (update.outputArray) {
+    // Interleaved Int16 PCM at update.sampleRate.
+  }
+}
+
+const stats = await response.await();
+await model.destroy();
+```
+
+For runtime controls, supported encoders, cancellation, and complete examples, see the [package README](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml#readme).
