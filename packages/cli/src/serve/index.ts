@@ -19,6 +19,7 @@ import { createLogger } from '../logger.js'
 import type { Logger } from '../logger.js'
 import { findConfigFile, loadConfig } from '../config.js'
 import { parseServeConfig } from './config.js'
+import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from './cors.js'
 import { createModelRegistry } from './core/model-registry.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
@@ -45,6 +46,7 @@ export interface StartServerOptions {
   model?: string[] | undefined
   apiKey?: string | undefined
   cors?: boolean | undefined
+  corsOrigins?: string[] | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
   /** Silence the logger entirely. Useful when capturing the OpenAPI spec or
@@ -60,6 +62,11 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
   const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
+  if (options.cors && serveConfig.cors.origins.length === 0) {
+    throw new Error(
+      '--cors requires at least one explicit origin from --cors-origin or serve.cors.origins'
+    )
+  }
   const registry = createModelRegistry()
 
   const responsesStore = createResponsesStore()
@@ -144,13 +151,13 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     })
   }
 
-  // `--docs` implies CORS: the Swagger UI's "Try it out" feature always issues
-  // cross-origin requests (browser origin vs spec `servers` URL often differ —
-  // localhost vs 127.0.0.1, port forwards, etc.), and the UI is unusable
-  // without `Access-Control-Allow-Origin`.
-  if (options.cors || options.docs) {
+  const corsOrigins = resolveCorsOrigins(serveConfig.cors.origins, options)
+  if (corsOrigins.length > 0) {
+    const matchCorsOrigin = createCorsOriginMatcher(corsOrigins)
     await app.register(cors, {
-      origin: '*',
+      origin(origin, callback) {
+        matchCorsOrigin(origin, (error, allowed) => callback(error, allowed ?? false))
+      },
       methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       strictPreflight: false
@@ -217,6 +224,11 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
   app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
+  if (!isLoopbackHost(options.host) && !options.apiKey) {
+    app.qvac.logger.warn(
+      `Security warning: binding to non-loopback host "${options.host}" without --api-key exposes the API to the network.`
+    )
+  }
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')
@@ -231,6 +243,24 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
 
 function isIntrospectionPath(url: string): boolean {
   return url === '/openapi.json' || url === '/docs' || url.startsWith('/docs/')
+}
+
+function resolveCorsOrigins(origins: readonly string[], options: StartServerOptions): string[] {
+  const resolved = [...origins]
+  if (options.docs) {
+    resolved.push(
+      `http://localhost:${options.port}`,
+      `http://127.0.0.1:${options.port}`,
+      `http://[::1]:${options.port}`
+    )
+    if (isLoopbackHost(options.host)) {
+      const host = options.host.includes(':')
+        ? `[${options.host.replace(/^\[(.*)\]$/, '$1')}]`
+        : options.host
+      resolved.push(`http://${host}:${options.port}`)
+    }
+  }
+  return [...new Set(resolved.map(normalizeCorsOrigin))]
 }
 
 function logStartupSummary(app: FastifyInstance, logger: Logger): void {

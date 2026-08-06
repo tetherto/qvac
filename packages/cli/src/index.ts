@@ -252,6 +252,7 @@ function setupCli(): void {
     )
     .option('--api-key <key>', 'Require Bearer token authentication')
     .option('--cors', 'Enable CORS headers')
+    .option('--cors-origin <origin>', 'Trusted CORS origin (repeatable)', collect, [])
     .option(
       '--public-base-url <url>',
       'Externally reachable origin (required for image response_format=url)'
@@ -266,6 +267,7 @@ function setupCli(): void {
         model: string[]
         apiKey?: string
         cors?: boolean
+        corsOrigin: string[]
         publicBaseUrl?: string
         docs?: boolean
         verbose?: boolean
@@ -280,6 +282,7 @@ function setupCli(): void {
             model: options.model.length > 0 ? options.model : undefined,
             apiKey: options.apiKey,
             cors: options.cors,
+            corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
             publicBaseUrl: options.publicBaseUrl,
             docs: options.docs,
             verbose: options.verbose
