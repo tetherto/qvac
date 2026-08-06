@@ -7,7 +7,6 @@ gated the same way as the bare-rpc transport suite."""
 from __future__ import annotations
 
 import base64
-import importlib.util
 import io
 import os
 import threading
@@ -27,8 +26,6 @@ SDK_DIR = os.environ.get(
     os.path.join(os.path.dirname(__file__), "..", "..", "sdk"),
 )
 WORKER_PATH = os.path.join(SDK_DIR, "dist", "server", "worker.js")
-
-BARE_RPC_AVAILABLE = importlib.util.find_spec("bare_rpc") is not None
 
 
 class FakeTransport:
@@ -167,7 +164,6 @@ def test_text_to_speech_returns_float32_pcm_array():
 # ---- real-worker e2e ----------------------------------------------------------
 
 
-@pytest.mark.skipif(not BARE_RPC_AVAILABLE, reason="bare_rpc extra not installed")
 @pytest.mark.skipif(
     not WORKER_AVAILABLE,
     reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",

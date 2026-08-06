@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
+  to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
+  vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
+  volume / style) via the `instruct` option.
+
+### Fixed
+
+- **iOS model loading.** CosyVoice3 and Parler-TTS now load their models within
+  the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
+  loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
+  so they no longer OOM on non-entitled devices. Output is byte-identical.
+
 ## [0.6.2] - 2026-08-03
 
 ### Changed

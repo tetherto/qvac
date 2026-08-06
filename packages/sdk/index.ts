@@ -55,6 +55,7 @@ export {
   vlaPreprocessImage,
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
+  audioGen,
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
@@ -150,6 +151,14 @@ export {
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  type AudioGenClientParams,
+  type AudioGenConfig,
+  type AudioGenRuntimeConfig,
+  type AudioGenProgress,
+  type AudioGenAudio,
+  type AudioGenStats,
+  type AudioGenResult,
+  type AudioGenStreamResponse,
   type VideoClientParams,
   type VideoStreamResponse,
   type VideoStats,
@@ -177,6 +186,7 @@ export {
   PLUGIN_TTS,
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
+  PLUGIN_AUDIOGEN,
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION,
   SDK_DEFAULT_PLUGINS,
