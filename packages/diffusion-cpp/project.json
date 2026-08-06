@@ -63,6 +63,17 @@
         }
       }
     },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-diffusion-cpp-rtf.js",
+          "manualDir": "packages/diffusion-cpp/benchmarks/manual-results"
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

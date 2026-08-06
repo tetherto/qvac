@@ -66,6 +66,17 @@
         }
       }
     },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/bci-whispercpp",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-bci-rtf.js",
+          "manualDir": "packages/bci-whispercpp/benchmarks/manual-results"
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
