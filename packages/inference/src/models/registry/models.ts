@@ -17635,6 +17635,102 @@ export const models = [
     engine: 'whispercpp-transcription',
     quantization: '',
     params: ''
+  },
+  {
+    name: 'AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/acestep/2026-07-22/acestep-5Hz-lm-0.6B-Q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4477891,
+    blobBlockLength: 10832,
+    blobByteOffset: 293450820714,
+    modelId: 'acestep-5Hz-lm-0.6B-Q8_0.gguf',
+    addon: 'audiogen',
+    expectedSize: 709846656,
+    sha256Checksum: 'bdaf9e292d4470f31c19cafeaca1b74936a114667e3a85e5d33b65247e9908ec',
+    engine: 'audiogen-ggml',
+    quantization: 'q8_0',
+    params: '0.6B'
+  },
+  {
+    name: 'AUDIOGEN_ACESTEP_V15_SFT_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-sft-Q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4488723,
+    blobBlockLength: 38903,
+    blobByteOffset: 294160667370,
+    modelId: 'acestep-v15-sft-Q8_0.gguf',
+    addon: 'audiogen',
+    expectedSize: 2549527936,
+    sha256Checksum: '17f1984e48aaab27b3eb8ccbf0b754a6656e677884c60ea7003845cfc0059b70',
+    engine: 'audiogen-ggml',
+    quantization: 'q8_0',
+    params: ''
+  },
+  {
+    name: 'AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M',
+    registryPath: 'qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4527626,
+    blobBlockLength: 22060,
+    blobByteOffset: 296710195306,
+    modelId: 'acestep-v15-turbo-Q4_K_M.gguf',
+    addon: 'audiogen',
+    expectedSize: 1445710272,
+    sha256Checksum: '55b4d8514850f3d0f82536f37e99673aaf48df802b5ae5b153eea32a2e2daa5e',
+    engine: 'audiogen-ggml',
+    quantization: 'q4_k_m',
+    params: ''
+  },
+  {
+    name: 'AUDIOGEN_ACESTEP_V15_TURBO_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4549686,
+    blobBlockLength: 38903,
+    blobByteOffset: 298155905578,
+    modelId: 'acestep-v15-turbo-Q8_0.gguf',
+    addon: 'audiogen',
+    expectedSize: 2549528000,
+    sha256Checksum: '288f708a61cfc241013a98a62f98ba331f83fe34d0d3559acdd9b0f6a2f7cd6b',
+    engine: 'audiogen-ggml',
+    quantization: 'q8_0',
+    params: ''
+  },
+  {
+    name: 'AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/acestep/2026-07-22/Qwen3-Embedding-0.6B-Q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4465925,
+    blobBlockLength: 11966,
+    blobByteOffset: 292666675754,
+    modelId: 'Qwen3-Embedding-0.6B-Q8_0.gguf',
+    addon: 'audiogen',
+    expectedSize: 784144960,
+    sha256Checksum: '972f23255e46adfe744a0eb9a0039f3c63988f65753b0968d776e8b27168c321',
+    engine: 'audiogen-ggml',
+    quantization: 'q8_0',
+    params: '0.6B'
+  },
+  {
+    name: 'AUDIOGEN_VAE_BF16',
+    registryPath: 'qvac_models_compiled/ggml/acestep/2026-07-22/vae-BF16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4588589,
+    blobBlockLength: 5149,
+    blobByteOffset: 300705433578,
+    modelId: 'vae-BF16.gguf',
+    addon: 'audiogen',
+    expectedSize: 337420928,
+    sha256Checksum: '0599862ac5d15cd308e1d2e368373aea6c02e25ebd1737ad4a4562a0901b0ef8',
+    engine: 'audiogen-ggml',
+    quantization: 'bf16',
+    params: ''
   }
 ] as const satisfies readonly RegistryItem[]
 
@@ -24258,3 +24354,111 @@ export function getModelByPath(registryPath: string): RegistryItem | undefined {
 export function getModelBySrc(modelId: string, blobCoreKey: string): RegistryItem | undefined {
   return models.find((model) => model.modelId === modelId && model.blobCoreKey === blobCoreKey)
 }
+
+export const AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0 = {
+  name: 'AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0',
+  src: `registry://${models[681].registrySource}/${models[681].registryPath}`,
+  registryPath: models[681].registryPath,
+  registrySource: models[681].registrySource,
+  blobCoreKey: models[681].blobCoreKey,
+  blobBlockOffset: models[681].blobBlockOffset,
+  blobBlockLength: models[681].blobBlockLength,
+  blobByteOffset: models[681].blobByteOffset,
+  modelId: models[681].modelId,
+  expectedSize: models[681].expectedSize,
+  sha256Checksum: models[681].sha256Checksum,
+  addon: models[681].addon,
+  engine: models[681].engine,
+  quantization: models[681].quantization,
+  params: models[681].params
+} as const
+
+export const AUDIOGEN_ACESTEP_V15_SFT_Q8_0 = {
+  name: 'AUDIOGEN_ACESTEP_V15_SFT_Q8_0',
+  src: `registry://${models[682].registrySource}/${models[682].registryPath}`,
+  registryPath: models[682].registryPath,
+  registrySource: models[682].registrySource,
+  blobCoreKey: models[682].blobCoreKey,
+  blobBlockOffset: models[682].blobBlockOffset,
+  blobBlockLength: models[682].blobBlockLength,
+  blobByteOffset: models[682].blobByteOffset,
+  modelId: models[682].modelId,
+  expectedSize: models[682].expectedSize,
+  sha256Checksum: models[682].sha256Checksum,
+  addon: models[682].addon,
+  engine: models[682].engine,
+  quantization: models[682].quantization,
+  params: models[682].params
+} as const
+
+export const AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M = {
+  name: 'AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M',
+  src: `registry://${models[683].registrySource}/${models[683].registryPath}`,
+  registryPath: models[683].registryPath,
+  registrySource: models[683].registrySource,
+  blobCoreKey: models[683].blobCoreKey,
+  blobBlockOffset: models[683].blobBlockOffset,
+  blobBlockLength: models[683].blobBlockLength,
+  blobByteOffset: models[683].blobByteOffset,
+  modelId: models[683].modelId,
+  expectedSize: models[683].expectedSize,
+  sha256Checksum: models[683].sha256Checksum,
+  addon: models[683].addon,
+  engine: models[683].engine,
+  quantization: models[683].quantization,
+  params: models[683].params
+} as const
+
+export const AUDIOGEN_ACESTEP_V15_TURBO_Q8_0 = {
+  name: 'AUDIOGEN_ACESTEP_V15_TURBO_Q8_0',
+  src: `registry://${models[684].registrySource}/${models[684].registryPath}`,
+  registryPath: models[684].registryPath,
+  registrySource: models[684].registrySource,
+  blobCoreKey: models[684].blobCoreKey,
+  blobBlockOffset: models[684].blobBlockOffset,
+  blobBlockLength: models[684].blobBlockLength,
+  blobByteOffset: models[684].blobByteOffset,
+  modelId: models[684].modelId,
+  expectedSize: models[684].expectedSize,
+  sha256Checksum: models[684].sha256Checksum,
+  addon: models[684].addon,
+  engine: models[684].engine,
+  quantization: models[684].quantization,
+  params: models[684].params
+} as const
+
+export const AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0 = {
+  name: 'AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0',
+  src: `registry://${models[685].registrySource}/${models[685].registryPath}`,
+  registryPath: models[685].registryPath,
+  registrySource: models[685].registrySource,
+  blobCoreKey: models[685].blobCoreKey,
+  blobBlockOffset: models[685].blobBlockOffset,
+  blobBlockLength: models[685].blobBlockLength,
+  blobByteOffset: models[685].blobByteOffset,
+  modelId: models[685].modelId,
+  expectedSize: models[685].expectedSize,
+  sha256Checksum: models[685].sha256Checksum,
+  addon: models[685].addon,
+  engine: models[685].engine,
+  quantization: models[685].quantization,
+  params: models[685].params
+} as const
+
+export const AUDIOGEN_VAE_BF16 = {
+  name: 'AUDIOGEN_VAE_BF16',
+  src: `registry://${models[686].registrySource}/${models[686].registryPath}`,
+  registryPath: models[686].registryPath,
+  registrySource: models[686].registrySource,
+  blobCoreKey: models[686].blobCoreKey,
+  blobBlockOffset: models[686].blobBlockOffset,
+  blobBlockLength: models[686].blobBlockLength,
+  blobByteOffset: models[686].blobByteOffset,
+  modelId: models[686].modelId,
+  expectedSize: models[686].expectedSize,
+  sha256Checksum: models[686].sha256Checksum,
+  addon: models[686].addon,
+  engine: models[686].engine,
+  quantization: models[686].quantization,
+  params: models[686].params
+} as const
