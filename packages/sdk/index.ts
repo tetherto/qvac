@@ -130,6 +130,11 @@ export {
   type ResourceMetric,
   type GraphicsDriver,
   type GraphicsDriverCapabilities,
+  type BackendProbeResult,
+  type BackendDevice,
+  type BackendDriver,
+  type BackendFallback,
+  type InferenceBackendDiagnostics,
   type CPUResourceCapabilities,
   type GPUResourceCapabilities,
   type SystemResourceCapabilities,
@@ -261,7 +266,7 @@ export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler } from './profiling'
+export { profiler, attachBackendDiagnostics } from './profiling'
 export type {
   ProfilerRuntimeOptions,
   ProfilerExport,

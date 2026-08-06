@@ -1,4 +1,5 @@
 import type { ProfilerResourceGauge } from '@/schemas/profiling'
+import type { InferenceBackendDiagnostics } from '@/schemas/system-resources'
 
 export type ProfilingEventKind = 'rpc' | 'handler' | 'download' | 'load' | 'delegation'
 
@@ -16,6 +17,7 @@ export interface ProfilingEvent {
   /** Numeric gauges (e.g., throughput, token counters) */
   gauges?: Record<string, number>
   resources?: ProfilerResourceGauge
+  backend?: InferenceBackendDiagnostics
   /** String tags (e.g., handlerType, sourceType, modelId) */
   tags?: Record<string, string>
 }
