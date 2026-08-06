@@ -435,11 +435,18 @@ jobs:
       # Data-only handoff from the (fork-code) build job. NONE of it is executed
       # here: the app binary is uploaded to Device Farm, app.test.js is packed +
       # run on the Device Farm host, and addon test/mobile is read-only.
+      #
+      # Extracted to runner.temp, NOT into $GITHUB_WORKSPACE: an artifact produced by
+      # the fork-code job must not be able to land on top of anything in the workspace
+      # (the trusted framework checkout and the composite actions both live there).
+      # Follows the pattern in integration-test-vla.yml, except the steps below read
+      # straight out of the staging dir rather than copying it back into the workspace.
+      # Flagged by CodeQL actions/artifact-poisoning/critical.
       - name: Download Device Farm handoff data
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: mobile-bundle-${{ matrix.platform }}
-          path: df-handoff
+          path: ${{ runner.temp }}/mobile-bundle-staging
 
       # A CLEAN copy from source, NOT from the build artifact: build ran fork code and
       # could have tampered with e2e/package.json, and installing that here — where AWS
@@ -466,12 +473,15 @@ jobs:
       # a fork-tampered package.json can no longer reach the AWS creds.
       - name: Assemble Device Farm inputs
         shell: bash
+        env:
+          STAGING: ${{ runner.temp }}/mobile-bundle-staging
+          APP_NAME: ${{ matrix.app_name }}
         run: |
-          cp df-handoff/e2e-tests/app.test.js test-framework/e2e/tests/app.test.js
+          cp "$STAGING/e2e-tests/app.test.js" test-framework/e2e/tests/app.test.js
           mkdir -p "addon/${ADDON_WORKDIR}/test/mobile"
-          cp -R df-handoff/addon-test-mobile/. "addon/${ADDON_WORKDIR}/test/mobile/"
+          cp -R "$STAGING/addon-test-mobile/." "addon/${ADDON_WORKDIR}/test/mobile/"
           mkdir -p df-app
-          cp "df-handoff/app/${{ matrix.app_name }}" "df-app/${{ matrix.app_name }}"
+          cp "$STAGING/app/$APP_NAME" "df-app/$APP_NAME"
           ls -la test-framework/e2e/tests df-app "addon/${ADDON_WORKDIR}/test/mobile"
 
       - name: Upload to Device Farm
