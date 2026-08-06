@@ -83,6 +83,73 @@ function s3Cp(bucket, s3Path, dest) {
   if (res.status !== 0) throw new Error(`aws s3 cp exited ${res.status} for ${uri}`)
 }
 
+async function stageFile(bucket, name, entry, dest) {
+  if (!entry.s3Path) throw new Error(`${name}: missing s3Path in manifest`)
+  const hasIntegrity = entry.sha256 != null || entry.bytes != null
+
+  if (existsSync(dest)) {
+    if (hasIntegrity) {
+      const res = await verify(dest, entry)
+      if (res.ok) {
+        console.log(`  OK ${name}: present + verified — skip`)
+        return 'skipped'
+      }
+      console.log(`  ! ${name}: present but failed integrity (${res.reason}) — re-staging`)
+      rmSync(dest, { force: true })
+    } else if (statSync(dest).size > 0) {
+      console.log(`  OK ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`)
+      return 'skipped'
+    } else {
+      rmSync(dest, { force: true })
+    }
+  }
+
+  s3Cp(bucket, entry.s3Path, dest)
+
+  if (!existsSync(dest) || statSync(dest).size < 1) {
+    throw new Error(`${name}: staged file missing or empty after copy`)
+  }
+  if (hasIntegrity) {
+    const res = await verify(dest, entry)
+    if (!res.ok) {
+      rmSync(dest, { force: true })
+      throw new Error(`${name}: freshly staged file failed integrity: ${res.reason}`)
+    }
+  }
+  const { size } = statSync(dest)
+  console.log(`  OK ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
+  return 'staged'
+}
+
+async function stageCoremlSidecars(bucket, sidecars, outputDir) {
+  const coremlDir = join(outputDir, 'coreml')
+  mkdirSync(coremlDir, { recursive: true })
+
+  for (const [name, entry] of Object.entries(sidecars)) {
+    if (!name.endsWith('.zip')) {
+      throw new Error(`${name}: coremlSidecars entries must be .zip archives`)
+    }
+    const zipDest = join(coremlDir, name)
+    const bundleDir = join(coremlDir, name.replace(/\.zip$/, ''))
+
+    const outcome = await stageFile(bucket, name, entry, zipDest)
+    if (outcome === 'skipped' && existsSync(bundleDir)) continue
+
+    rmSync(bundleDir, { recursive: true, force: true })
+    console.log(`  > unzip ${name}`)
+    const res = spawnSync('unzip', ['-o', '-q', zipDest, '-d', coremlDir], { stdio: 'inherit' })
+    if (res.error) throw res.error
+    if (res.status !== 0) throw new Error(`unzip exited ${res.status} for ${name}`)
+    if (!existsSync(bundleDir)) {
+      throw new Error(
+        `${name}: extraction did not produce ${bundleDir} ` +
+          '(zip must contain the .mlmodelc directory at its root)'
+      )
+    }
+    console.log(`  OK ${name}: extracted to ${bundleDir}`)
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
 
@@ -101,46 +168,22 @@ async function main() {
   let skipped = 0
 
   for (const [name, entry] of entries) {
-    if (!entry.s3Path) throw new Error(`${name}: missing s3Path in manifest`)
-    const dest = join(args.output, name)
-    const hasIntegrity = entry.sha256 != null || entry.bytes != null
+    const outcome = await stageFile(bucket, name, entry, join(args.output, name))
+    if (outcome === 'staged') staged++
+    else skipped++
+  }
 
-    if (existsSync(dest)) {
-      if (hasIntegrity) {
-        const res = await verify(dest, entry)
-        if (res.ok) {
-          console.log(`  OK ${name}: present + verified — skip`)
-          skipped++
-          continue
-        }
-        console.log(`  ! ${name}: present but failed integrity (${res.reason}) — re-staging`)
-        rmSync(dest, { force: true })
-      } else if (statSync(dest).size > 0) {
-        console.log(
-          `  OK ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`
-        )
-        skipped++
-        continue
-      } else {
-        rmSync(dest, { force: true })
-      }
+  const sidecars = manifest.coremlSidecars || {}
+  const sidecarCount = Object.keys(sidecars).length
+  if (sidecarCount > 0) {
+    if (process.platform === 'darwin') {
+      console.log(
+        `Staging ${sidecarCount} Core ML encoder sidecar(s) into ${join(args.output, 'coreml')}`
+      )
+      await stageCoremlSidecars(bucket, sidecars, args.output)
+    } else {
+      console.log(`Skipping ${sidecarCount} Core ML sidecar(s) — darwin-only`)
     }
-
-    s3Cp(bucket, entry.s3Path, dest)
-
-    if (!existsSync(dest) || statSync(dest).size < 1) {
-      throw new Error(`${name}: staged file missing or empty after copy`)
-    }
-    if (hasIntegrity) {
-      const res = await verify(dest, entry)
-      if (!res.ok) {
-        rmSync(dest, { force: true })
-        throw new Error(`${name}: freshly staged file failed integrity: ${res.reason}`)
-      }
-    }
-    const { size } = statSync(dest)
-    console.log(`  OK ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
-    staged++
   }
 
   console.log(`Done: ${staged} staged, ${skipped} already present`)

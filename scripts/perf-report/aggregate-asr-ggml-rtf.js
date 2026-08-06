@@ -22,7 +22,11 @@ const path = require('path')
 // GGML GPU backend cascade shared by both engines: Vulkan (linux/win32/Mali
 // android), Metal (darwin/ios), OpenCL (Adreno android, e.g. Samsung Galaxy
 // S25). CUDA is not supported on any platform.
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'coreml']
+const ENGINE_GPU_BACKENDS = {
+  whisper: ['vulkan', 'metal', 'opencl'],
+  parakeet: ['vulkan', 'metal', 'opencl', 'coreml']
+}
 
 // ggml active-backend ids reported by the addon (post-merge this is the unified
 // BackendId enum — one map serves both engines), mapped to the backend label.
@@ -603,7 +607,7 @@ function sortRecords (records) {
   return records.sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
 }
 
-function coverageFor (records) {
+function coverageFor (records, supportedBackends = SUPPORTED_GPU_BACKENDS) {
   const gpuCoverage = new Set(
     records
       .filter(record => record.gpu === 'gpu')
@@ -613,7 +617,7 @@ function coverageFor (records) {
   return {
     rowCount: records.length,
     gpuBackendsCovered: Array.from(gpuCoverage).sort(),
-    missingBackends: SUPPORTED_GPU_BACKENDS.filter(backend => !gpuCoverage.has(backend))
+    missingBackends: supportedBackends.filter(backend => !gpuCoverage.has(backend))
   }
 }
 
@@ -627,7 +631,10 @@ function buildCoverage (records) {
   // engine as well as overall.
   const byEngine = {}
   for (const engine of ENGINES) {
-    byEngine[engine] = coverageFor(records.filter(record => record.engine === engine))
+    byEngine[engine] = coverageFor(
+      records.filter(record => record.engine === engine),
+      ENGINE_GPU_BACKENDS[engine]
+    )
   }
 
   return Object.assign(coverageFor(records), {

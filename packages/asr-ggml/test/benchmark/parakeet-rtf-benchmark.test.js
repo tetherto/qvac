@@ -125,6 +125,7 @@ function getBenchmarkSettings() {
     numWarmup: getEnvInteger('QVAC_PARAKEET_BENCHMARK_WARMUP_RUNS', 1),
     numRuns: getEnvInteger('QVAC_PARAKEET_BENCHMARK_RUNS', isMobile ? 3 : 5),
     useGPU: getEnvBoolean('QVAC_PARAKEET_BENCHMARK_USE_GPU', false),
+    expectCoreml: getEnvBoolean('QVAC_PARAKEET_BENCHMARK_COREML', false),
     backendHint,
     deviceLabel,
     runnerLabel,
@@ -302,6 +303,8 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
   console.log(`  Model type:     ${benchmarkSettings.modelType}`)
   console.log(`  Quant:          ${benchmarkSettings.resolvedQuant || 'default'}`)
   console.log(`  GPU requested:  ${benchmarkSettings.useGPU}`)
+  if (benchmarkSettings.expectCoreml)
+    console.log('  CoreML sidecar: expected (lane fails if it does not load)')
   if (benchmarkSettings.backendHint)
     console.log(`  Backend hint:   ${benchmarkSettings.backendHint}`)
   if (benchmarkSettings.deviceLabel)
@@ -333,6 +336,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
   const allResults = []
   let observedBackendId = null
+  let observedEncoderOnCoreml = 0
   let model = new ASRGgml({
     files: { model: modelPath },
     config: {
@@ -437,12 +441,14 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         totalWallMs: jobStats.totalWallMs || 0,
         backendDevice: typeof jobStats.backendDevice === 'number' ? jobStats.backendDevice : null,
         backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null,
+        encoderOnCoreml: jobStats.encoderOnCoreml ? 1 : 0,
         avgRssBytes: runMemory.avgBytes,
         peakRssBytes: runMemory.peakBytes,
         rssSampleCount: runMemory.count
       }
 
       if (run.backendId !== null) observedBackendId = run.backendId
+      if (run.encoderOnCoreml) observedEncoderOnCoreml = 1
 
       allResults.push(run)
 
@@ -480,6 +486,12 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
     const memorySummary = await measureMemory(model, allResults, rssBeforeLoad, rssAfterLoad)
     model = null
+
+    const activeBackend = observedEncoderOnCoreml
+      ? 'coreml'
+      : observedBackendId !== null
+        ? backendIdToName(observedBackendId)
+        : ''
 
     console.log('\n' + '='.repeat(70))
     console.log('RTF BENCHMARK RESULTS')
@@ -544,7 +556,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
           benchmarkSettings.useGPU,
           benchmarkSettings.backendHint
         ),
-        activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
+        activeBackend,
         gpuModel: _hwGpu() || backendGpuModel,
         requestedBackend: benchmarkSettings.useGPU ? 'gpu' : 'cpu',
         label: benchmarkSettings.label
@@ -580,7 +592,8 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         decoderMs: decoderStats,
         memory: memorySummary,
         backendId: observedBackendId,
-        activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : ''
+        encoderOnCoreml: observedEncoderOnCoreml,
+        activeBackend
       },
       runs: allResults
     }
@@ -599,7 +612,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         benchmarkSettings.useGPU,
         benchmarkSettings.backendHint
       ),
-      activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : '',
+      activeBackend,
       deviceLabel: benchmarkSettings.deviceLabel,
       runnerLabel: benchmarkSettings.runnerLabel,
       summary: report.summary
@@ -625,6 +638,15 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     )
 
     t.ok(rtfStats.mean > 0, 'Mean RTF should be positive')
+
+    if (benchmarkSettings.expectCoreml) {
+      t.ok(observedEncoderOnCoreml === 1, 'Core ML encoder sidecar loaded (encoderOnCoreml=1)')
+    } else {
+      t.ok(
+        observedEncoderOnCoreml === 0,
+        'Encoder stayed on the ggml backend (no stray Core ML sidecar next to the GGUF)'
+      )
+    }
 
     if (upperBound !== null) {
       t.ok(

@@ -54,14 +54,24 @@ function sha256File(filePath) {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
-  const entries = Object.entries(manifest.models || {})
+  const entries = [
+    ...Object.entries(manifest.models || {}).map(([name, entry]) => [
+      name,
+      entry,
+      join(args.models, name)
+    ]),
+    ...Object.entries(manifest.coremlSidecars || {}).map(([name, entry]) => [
+      name,
+      entry,
+      join(args.models, 'coreml', name)
+    ])
+  ]
 
   let pinned = 0
   let missing = 0
   const drift = []
 
-  for (const [name, entry] of entries) {
-    const file = join(args.models, name)
+  for (const [name, entry, file] of entries) {
     if (!existsSync(file)) {
       console.log(
         `  - ${name}: not present locally — leaving ${entry.bytes == null ? 'unpinned' : 'as-is'}`

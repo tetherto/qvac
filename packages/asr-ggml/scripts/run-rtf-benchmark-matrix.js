@@ -26,6 +26,11 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 
 const RESULTS_DIR = path.resolve(__dirname, '..', 'benchmarks', 'results')
+const MODELS_DIR = path.resolve(__dirname, '..', 'models')
+
+const COREML_GGUF_STEMS = {
+  tdt: 'parakeet-tdt-0.6b-v3'
+}
 
 const ENGINES = {
   whisper: {
@@ -117,7 +122,8 @@ function buildLabel(engine, entry, index) {
   const gpuTag = normalizeBoolean(entry.useGPU) ? 'gpu' : 'cpu'
   if (engine === 'parakeet') {
     const quantPart = entry.quant ? `-${entry.quant}` : ''
-    return `${index + 1}-${entry.modelType || 'tdt'}${quantPart}-${gpuTag}`
+    const coremlPart = normalizeBoolean(entry.coreml) ? '-coreml' : ''
+    return `${index + 1}-${entry.modelType || 'tdt'}${quantPart}-${gpuTag}${coremlPart}`
   }
   const model = String(entry.modelFile || 'ggml-tiny.bin').replace(/\.bin$/, '')
   return `${index + 1}-${model}-${gpuTag}`
@@ -157,6 +163,56 @@ function buildWhisperEnv(entry, label) {
   return env
 }
 
+class SkipEntryError extends Error {}
+
+function prepareCoremlEntry(entry, modelsDir = MODELS_DIR) {
+  if (process.platform !== 'darwin') {
+    throw new SkipEntryError('coreml entries are darwin-only (Apple Neural Engine)')
+  }
+
+  const modelType = String(entry.modelType || 'tdt')
+  const stem = COREML_GGUF_STEMS[modelType]
+  if (!stem) {
+    throw new Error(
+      `coreml is not supported for modelType "${modelType}" (expected ${Object.keys(COREML_GGUF_STEMS).join('|')})`
+    )
+  }
+
+  const quant = String(entry.quant || 'q8_0')
+  const coremlStagingDir = path.join(modelsDir, 'coreml')
+  const ggufName = `${stem}.${quant}.gguf`
+  const ggufSource = path.join(modelsDir, ggufName)
+  const sidecarDir = path.join(coremlStagingDir, `${stem}-encoder.mlmodelc`)
+
+  if (!fs.existsSync(sidecarDir)) {
+    throw new SkipEntryError(
+      `Core ML sidecar ${path.basename(sidecarDir)} is not staged under models/coreml/ ` +
+        '(no coremlSidecars manifest entry yet, or staging was skipped)'
+    )
+  }
+  if (!fs.existsSync(ggufSource)) {
+    throw new Error(`${ggufName} is not staged under models/ (required next to the sidecar)`)
+  }
+
+  const ggufLink = path.join(coremlStagingDir, ggufName)
+  if (!fs.existsSync(ggufLink)) {
+    try {
+      fs.symlinkSync(path.join('..', ggufName), ggufLink)
+    } catch {
+      try {
+        fs.linkSync(ggufSource, ggufLink)
+      } catch {
+        fs.copyFileSync(ggufSource, ggufLink)
+      }
+    }
+  }
+
+  return {
+    [`QVAC_TEST_GGUF_${modelType.toUpperCase()}`]: ggufLink,
+    QVAC_PARAKEET_BENCHMARK_COREML: 'true'
+  }
+}
+
 function buildParakeetEnv(entry, label) {
   const env = {
     ...process.env,
@@ -168,7 +224,9 @@ function buildParakeetEnv(entry, label) {
     QVAC_PARAKEET_BENCHMARK_LABEL: label,
     QVAC_PARAKEET_BENCHMARK_BACKEND: entry.backendHint
       ? String(entry.backendHint)
-      : process.env.QVAC_PARAKEET_BENCHMARK_BACKEND || '',
+      : normalizeBoolean(entry.coreml)
+        ? 'coreml'
+        : process.env.QVAC_PARAKEET_BENCHMARK_BACKEND || '',
     QVAC_PARAKEET_BENCHMARK_DEVICE: entry.deviceLabel
       ? String(entry.deviceLabel)
       : process.env.QVAC_ASR_GGML_BENCHMARK_DEVICE ||
@@ -221,7 +279,10 @@ function stampEngine(engine, before) {
 function runBenchmarkEntry(pkgDir, entry, index) {
   const engine = resolveEngine(entry, index)
   const label = buildLabel(engine, entry, index)
+  const coremlEnv =
+    engine === 'parakeet' && normalizeBoolean(entry.coreml) ? prepareCoremlEntry(entry) : null
   const env = engine === 'parakeet' ? buildParakeetEnv(entry, label) : buildWhisperEnv(entry, label)
+  if (coremlEnv) Object.assign(env, coremlEnv)
   const { npmScript } = ENGINES[engine]
 
   console.log('')
@@ -233,6 +294,7 @@ function runBenchmarkEntry(pkgDir, entry, index) {
     console.log(`  quant:     ${env.QVAC_PARAKEET_BENCHMARK_QUANT || 'default'}`)
     console.log(`  useGPU:    ${env.QVAC_PARAKEET_BENCHMARK_USE_GPU}`)
     console.log(`  backend:   ${env.QVAC_PARAKEET_BENCHMARK_BACKEND || 'default'}`)
+    console.log(`  coreml:    ${env.QVAC_PARAKEET_BENCHMARK_COREML || 'false'}`)
   } else {
     console.log(`  modelFile: ${env.QVAC_WHISPER_BENCHMARK_MODEL_FILE}`)
     console.log(`  useGPU:    ${env.QVAC_WHISPER_BENCHMARK_USE_GPU}`)
@@ -260,11 +322,17 @@ function main() {
   const pkgDir = path.resolve(__dirname, '..')
   const matrix = parseMatrixConfig()
   const failures = []
+  const skips = []
 
   for (let i = 0; i < matrix.length; i++) {
     try {
       runBenchmarkEntry(pkgDir, matrix[i], i)
     } catch (err) {
+      if (err instanceof SkipEntryError) {
+        console.error(`\n[matrix-runner] entry ${i + 1} SKIPPED: ${err.message}\n`)
+        skips.push({ index: i + 1, message: err.message })
+        continue
+      }
       console.error(`\n[matrix-runner] entry ${i + 1} failed: ${err.message}\n`)
       failures.push({ index: i + 1, message: err.message })
     }
@@ -272,8 +340,13 @@ function main() {
 
   console.log('')
   console.log(
-    `Completed ${matrix.length - failures.length}/${matrix.length} benchmark configuration(s).`
+    `Completed ${matrix.length - failures.length - skips.length}/${matrix.length} benchmark configuration(s).`
   )
+
+  if (skips.length > 0) {
+    console.log(`${skips.length} skipped:`)
+    for (const s of skips) console.log(`  - entry ${s.index}: ${s.message}`)
+  }
 
   if (failures.length > 0) {
     console.log(`${failures.length} failure(s):`)
@@ -288,4 +361,10 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { parseMatrixConfig }
+module.exports = {
+  parseMatrixConfig,
+  SkipEntryError,
+  prepareCoremlEntry,
+  buildLabel,
+  buildParakeetEnv
+}

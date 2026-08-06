@@ -14,6 +14,21 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Parakeet Core ML (Apple Neural Engine) RTF benchmark lanes on darwin-arm64:
+  `coreml: true` matrix entries stage the engine's `<stem>-encoder.mlmodelc`
+  sidecar (declared under `coremlSidecars` in
+  `test/integration/parakeet-models.manifest.json`, zipped in the QVAC model
+  registry) next to a per-lane copy of the GGUF, and the RTF benchmark fails
+  the lane unless `stats.encoderOnCoreml` confirms the sidecar loaded (and
+  fails cpu/metal lanes if a stray sidecar loads). Reports label the lane
+  backend `coreml`. **TDT only** — the engine refuses the sidecar for CTC at
+  both its load and run sites (CTC greedy decode reads logits off the ggml CTC
+  head), so a `ctc` entry is rejected by the matrix runner instead of producing
+  a lane that silently falls back to Metal. Benchmark harness only — no addon
+  or JavaScript API change.
+
 ### Fixed
 
 - **Parakeet duplex streaming no longer drops the tail of the transcript when

@@ -681,6 +681,82 @@ npm run test:benchmark:rtf:matrix
 workflow. Aggregated historical results:
 [`benchmarks/results/results_summary.md`](benchmarks/results/results_summary.md).
 
+### Parakeet Core ML (Apple Neural Engine) RTF lanes
+
+On darwin-arm64 the RTF matrix additionally benchmarks the parakeet **TDT**
+models with the engine's Core ML encoder sidecar (`coreml: true` entries,
+reported as backend `coreml`). The sidecar drives only the offline
+FastConformer encoder on the Neural Engine; the decoder stays on the ggml
+backend selected by `useGPU`.
+
+**TDT only.** The engine refuses the sidecar for CTC models at both the load
+site (`maybe_init_coreml_encoder`) and the run site
+(`should_use_coreml_encoder`), because CTC greedy decode reads its logits off
+the ggml CTC head and the encoder-only sidecar does not emit them. A `ctc`
+entry is therefore rejected by the matrix runner rather than staged: staging a
+valid, ANE-placed CTC sidecar anyway produces a lane that reports
+`encoderOnCoreml=0`, silently falls back to Metal, and fails its own
+`expectCoreml` assertion.
+
+How the lane works:
+
+1. `test/integration/parakeet-models.manifest.json` declares zipped sidecars
+   under `coremlSidecars` (a compiled `.mlmodelc` is a directory, so S3 stores
+   it zipped, e.g. `parakeet-tdt-0.6b-v3-encoder.mlmodelc.zip`).
+2. `scripts/stage-integration-models.mjs` stages + extracts them into
+   `models/coreml/` (darwin only).
+3. `scripts/run-rtf-benchmark-matrix.js` links the matching GGUF next to the
+   sidecar for `coreml: true` entries only — plain cpu/metal entries keep the
+   sidecar-free `models/` copy — and the benchmark fails the lane if
+   `stats.encoderOnCoreml` does not report 1 (and conversely fails cpu/metal
+   lanes if a stray sidecar loads).
+
+What `encoderOnCoreml` does and does not prove: it is **model-level** — the
+sidecar loaded, nothing more. Per-run routing is not reported, so a sidecar that
+loads and then fails every prediction still satisfies the assertion and
+publishes ggml numbers under a `coreml` label. Two consequences worth knowing
+when reading a lane's output:
+
+- The benchmark's warmup pass feeds 1 s of silence (101 mel frames), which the
+  fixed-shape sidecar rejects, so **one** `Core ML encoder failed (rc=5);
+  falling back to ggml encoder` warning per lane is expected and harmless. The
+  warning is not rate-limited, so one line means only the warmup fell back —
+  more lines than warmups means measured runs fell back too.
+- To confirm the ANE actually did the work, re-run the same staged lane with
+  `PARAKEET_COREML_DISABLE=1` (presence-checked, any value) and compare: on an
+  M1 Pro the sidecar lane came in at RTF 0.0110 against 0.0179 for the same
+  layout with the sidecar disabled, i.e. the Metal baseline.
+
+Publishing a sidecar (once per model, from a macOS arm64 host):
+
+```bash
+# The sidecar loads for any input but runs on the ANE ONLY at its traced mel
+# length, so export against the exact audio the RTF benchmark feeds
+# (examples/parakeet-samples/sample.raw, 16 kHz mono s16le -> 322137 samples,
+# so 1 + 322137/160 = 2014 mel frames; the engine's formula is
+# `1 + n_samples / hop_length`):
+ffmpeg -f s16le -ar 16000 -ac 1 -i examples/parakeet-samples/sample.raw /tmp/rtf-sample.wav
+
+# In a tetherto/qvac-ext-lib-whisper.cpp checkout at the speech-cpp port's
+# pinned REF (needs torch>=2.3, coremltools>=8). The GGUF must be f16 (or f32):
+# the reference encoder loader reads raw F16/F32 tensors and raises on any
+# quantised type, so a q8_0/q4_0 copy cannot seed the export.
+python engines/parakeet/scripts/export-encoder-coreml.py \
+  --gguf models/parakeet-tdt-0.6b-v3.f16.gguf \
+  --wav /tmp/rtf-sample.wav \
+  --out parakeet-tdt-0.6b-v3-encoder.mlpackage \
+  --compile-dir .   # prints ANE placement — verify ops land on the ANE
+
+zip -r parakeet-tdt-0.6b-v3-encoder.mlmodelc.zip parakeet-tdt-0.6b-v3-encoder.mlmodelc
+# Upload to s3://$MODEL_S3_BUCKET/qvac_models_compiled/coreml/parakeet/<date>/
+# and add the coremlSidecars manifest entry (s3Path + sha256 + bytes).
+```
+
+One sidecar serves every quant of its model (the engine strips the quant tag
+when resolving `<stem>-encoder.mlmodelc`). Until a sidecar is published the
+matrix runner skips its coreml entries loudly and the aggregated report lists
+`coreml` under parakeet's missing GPU backends.
+
 ## Examples
 
 Whisper:
