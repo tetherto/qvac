@@ -153,7 +153,7 @@ safeTest(
 
 // n_discarded=0, n_predict=SLIDE_PREDICT
 safeTest(
-  'Generation fails with context overflow when sliding disabled',
+  'Generation stops at the context boundary when sliding is disabled',
   {
     timeout: 900_000,
     skip
@@ -165,13 +165,11 @@ safeTest(
       n_discarded: '0'
     })
 
-    try {
-      await runAndCollect(model, STORY_PROMPT)
-      t.fail('expected context overflow error but generation completed without error')
-    } catch (err) {
-      const msg = err?.message || String(err)
-      t.ok(/context|overflow/i.test(msg), `context overflow error surfaced: "${msg.slice(0, 120)}"`)
-    }
+    const { text, stats } = await runAndCollect(model, STORY_PROMPT)
+
+    t.ok(text.length > 0, 'tokens generated before the context boundary')
+    t.is(stats.stopReason, 'contextOverflow', 'runtime stats identify context exhaustion')
+    t.ok(stats.generatedTokens < SLIDE_PREDICT, 'context boundary stopped generation early')
 
     // sleep for 10 seconds to allow the model to cleanup
     await new Promise((resolve) => setTimeout(resolve, 10000))
