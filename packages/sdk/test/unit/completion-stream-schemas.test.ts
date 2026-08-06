@@ -57,9 +57,10 @@ test('generationParamsSchema: rejects non-boolean remove_thinking_from_context',
   t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: 1 }).success, false)
 })
 
-test('toolDialectSchema: accepts qwen35 and gemma4', (t) => {
+test('toolDialectSchema: accepts qwen35, gemma4 and dsml', (t) => {
   t.is(toolDialectSchema.safeParse('qwen35').success, true)
   t.is(toolDialectSchema.safeParse('gemma4').success, true)
+  t.is(toolDialectSchema.safeParse('dsml').success, true)
 })
 
 test('toolDialectSchema: rejects unknown dialects', (t) => {

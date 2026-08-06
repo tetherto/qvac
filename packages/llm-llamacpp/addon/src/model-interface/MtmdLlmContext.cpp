@@ -1117,6 +1117,8 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 
+void MtmdLlmContext::resetStopFlag() { stopGeneration_.store(false); }
+
 llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }
 
 void MtmdLlmContext::setRemoveThinkingFromContext(bool value) {

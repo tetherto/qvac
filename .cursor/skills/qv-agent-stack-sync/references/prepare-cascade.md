@@ -30,7 +30,7 @@ node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<slug>
 
 Author `CHANGELOG_LLM.md`, prettier-check, rebuild aggregate, announcement-post (gitignored), NOTICE. Path map: `scripts/sdk/package-paths.cjs`.
 
-4. `--package=sdk` only: `qv-sdk-bare-sdk-sync` + docs Step 8 from `qv-sdk-changelog`.
+4. `--package=sdk` only: `qv-sdk-lockstep-sync` + docs Step 8 from `qv-sdk-changelog`.
 
 Commit `chore[notask]: release @qvac/<slug> <version>` (use `chore[bc|notask]:` when breaking). Push to `ORG_REMOTE`.
 
