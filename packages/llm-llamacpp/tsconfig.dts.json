@@ -3,13 +3,15 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "strict": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "outDir": "./dts-out",
+    "lib": ["ES2022"],
+    "types": ["node"],
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": []
+    "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noEmit": true
   },
-  "files": ["test/types/consumer-emit.test-d.ts"]
+  "include": ["index.d.ts", "addonLogging.d.ts", "test/types/addon-admission.test-d.ts"]
 }
