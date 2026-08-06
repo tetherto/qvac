@@ -106,34 +106,30 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-// Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
-// (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
-// row from an Adreno device whose backend was guessed (or hinted with the same
-// platform guess) must resolve to opencl. Observed backend ids are never
-// overridden.
-// Device Farm stamps the model into the device name ("Samsung Galaxy S25
-// Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
-// run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-// The trailing guard keeps "S25", "S25 Ultra" and "S25+" matching while a
-// future "S250"-style SKU does not silently inherit the correction.
 const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'mobile-accelerated', 'gpu'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
     ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
 }
 
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
 function normalizeBackend (platformName, useGPU, backendHint, adreno) {
   const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
-  // An android "vulkan" hint is itself a platform-family guess (labels stamp
-  // it without probing the device), so Adreno devices correct it like the
-  // fallback guess below. The placeholder tokens are listed for parity with the
-  // ASR/TTS aggregators; BCI's harness does not emit them today.
-  if (adreno && useGPU && platform === 'android' &&
-      (!hint || hint === 'vulkan' || hint === 'mobile-accelerated' || hint === 'gpu')) {
-    return 'opencl'
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
   }
   if (hint) return hint
   if (!useGPU) return 'cpu'
@@ -175,12 +171,7 @@ function normalizeReport (report, sourceFile, source) {
   const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
   const backendHint = (report.labels && report.labels.backend) ||
     (report.requested && report.requested.backendHint)
-  // This normalizer serves both CI artifacts (whose backend label is a platform
-  // guess) and manual drops (whose backend is hand-authored ground truth). Only
-  // second-guess the former.
-  const adreno = source === 'manual' && backendHint
-    ? false
-    : isAdrenoDevice(gpuModel, deviceLabel)
+  const adreno = needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel)
 
   return {
     source,

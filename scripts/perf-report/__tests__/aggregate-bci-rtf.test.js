@@ -132,8 +132,6 @@ test('mobile peak is floored at the recorded post-load footprint', () => {
 })
 
 test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
-  // normalizeReport serves both CI artifacts and manual drops; only the former
-  // carry a guessed backend label.
   const manual = {
     platform: 'android-arm64',
     platformName: 'android',
@@ -143,13 +141,13 @@ test('a hand-authored manual backend is never second-guessed by the Adreno corre
     summary: { tokensPerSecond: { mean: 40 }, wallMs: { mean: 500 } }
   }
   assert.equal(normalizeReport(manual, '/x/manual.json', 'manual').backend, 'vulkan')
-  // The same shape arriving from CI is a platform guess and still gets corrected.
   assert.equal(normalizeReport(manual, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+
+  const unlabelled = { ...manual, labels: { device: 'Samsung Galaxy S25 Ultra' } }
+  assert.equal(normalizeReport(unlabelled, '/x/manual.json', 'manual').backend, 'opencl')
 })
 
 test('android GPU rows on Adreno devices resolve to opencl unless a backend id says otherwise', () => {
-  // The Galaxy S25 family is Adreno, and ggml's Adreno path is OpenCL — the
-  // plain android platform guess said vulkan for these rows.
   const gpuResult = (metrics) => ({
     test: '[ggml-bci-windowed] [GPU] mobile-perf run 1',
     execution_provider: 'gpu',
@@ -160,12 +158,10 @@ test('android GPU rows on Adreno devices resolve to opencl unless a backend id s
   adreno.device = { name: 'Samsung Galaxy S25', platform: 'android', gpu: 'Adreno (TM) 830' }
   assert.equal(normalizeMobileRecords(adreno, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'opencl')
 
-  // Non-Adreno android devices keep the vulkan fallback.
   const mali = mobileReport([gpuResult({ tps: 40, wall_time_ms: 900 })])
   mali.device = { name: 'Pixel 9', platform: 'android', gpu: 'Mali-G715' }
   assert.equal(normalizeMobileRecords(mali, '/x/Pixel_9/performance-report.json')[0].backend, 'vulkan')
 
-  // An observed backend id (3 == vulkan) is ground truth and wins.
   const observed = mobileReport([gpuResult({ tps: 40, wall_time_ms: 900, backend_id: 3 })])
   observed.device = { name: 'Samsung Galaxy S25', platform: 'android', gpu: 'Adreno (TM) 830' }
   assert.equal(normalizeMobileRecords(observed, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'vulkan')

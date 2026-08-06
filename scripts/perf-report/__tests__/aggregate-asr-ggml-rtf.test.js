@@ -218,8 +218,6 @@ test('whisper mobile backend comes from the reported ggml backend id, not the pl
 })
 
 test('android GPU rows on Adreno devices fall back to opencl when no backend id is reported', () => {
-  // The Galaxy S25 family is Adreno, and ggml's Adreno path is OpenCL — the
-  // plain android platform guess said vulkan for these rows.
   const gpuResult = {
     test: '[ggml-tiny] [GPU] mobile-perf run 1',
     execution_provider: 'gpu',
@@ -233,8 +231,6 @@ test('android GPU rows on Adreno devices fall back to opencl when no backend id 
   }
   assert.equal(normalizeMobileRecords(probed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')[0].backend, 'opencl')
 
-  // Device-name match covers Device Farm reports, where the GPU probe cannot
-  // run and device.gpu is always null. Both naming forms are accepted.
   for (const name of ['Samsung Galaxy S25 Ultra', 'Samsung S25 Ultra']) {
     const unprobed = {
       addon: 'whisper',
@@ -248,8 +244,6 @@ test('android GPU rows on Adreno devices fall back to opencl when no backend id 
 })
 
 test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
-  // manual-results drops are the escape hatch for backends CI cannot produce,
-  // so an author who writes `vulkan` for an Adreno device must get vulkan back.
   const manual = {
     device: 'Samsung Galaxy S25 Ultra',
     platform: 'android-arm64',
@@ -262,10 +256,25 @@ test('a hand-authored manual backend is never second-guessed by the Adreno corre
   }
   assert.equal(normalizeManualRecord(manual, '/x/manual.json').backend, 'vulkan')
 
-  // A manual record that omits the backend still gets the correction.
   const guessed = { ...manual }
   delete guessed.backend
   assert.equal(normalizeManualRecord(guessed, '/x/manual.json').backend, 'opencl')
+})
+
+test('a full-schema manual artifact keeps its authored backend, while the same shape from CI is corrected', () => {
+  const fullSchema = {
+    platform: 'android-arm64',
+    platformName: 'android',
+    model: { name: 'ggml-tiny.bin' },
+    requested: { useGPU: true },
+    labels: { device: 'Samsung Galaxy S25 Ultra', backend: 'vulkan' },
+    summary: { rtf: { mean: 0.3 } }
+  }
+  assert.equal(normalizeReport(fullSchema, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeReport(fullSchema, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+
+  const unlabelled = { ...fullSchema, labels: { device: 'Samsung Galaxy S25 Ultra' } }
+  assert.equal(normalizeReport(unlabelled, '/x/manual.json', 'manual').backend, 'opencl')
 })
 
 test('device names that merely start with the S25 digits are not treated as Adreno', () => {
@@ -294,8 +303,6 @@ test('backend id 99 (other-gpu) is not in the id table and falls through to the 
       metrics: { real_time_factor: 0.3, wall_time_ms: 900, backend_id: 99 }
     }]
   })
-  // Falls through to the platform cascade, so the Adreno correction still
-  // applies on an S25 and plain android still guesses vulkan elsewhere.
   assert.equal(normalizeMobileRecords(report('Samsung Galaxy S25 Ultra'), '/x/a/performance-report.json')[0].backend, 'opencl')
   assert.equal(normalizeMobileRecords(report('Google Pixel 9'), '/x/b/performance-report.json')[0].backend, 'vulkan')
 })
@@ -320,7 +327,6 @@ test('android GPU fallback stays vulkan off Adreno, and a reported backend id be
     results: [{
       test: '[ggml-tiny] [GPU] mobile-perf run 1',
       execution_provider: 'gpu',
-      // 3 == vulkan: observed ground truth, kept even on an Adreno device.
       metrics: { real_time_factor: 0.3, wall_time_ms: 900, backend_id: 3 }
     }]
   }

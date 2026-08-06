@@ -134,17 +134,6 @@ function buildCanonicalStreamingReport(settings, summary, backend) {
           // chunkCount.mean (the "Chunks/run" column for mobile streaming rows).
           chunks_per_run_mean:
             typeof chunkCount.mean === 'number' ? Number(chunkCount.mean.toFixed(2)) : null,
-          // The ggml backend the device actually selected (0=CPU 1=Metal
-          // 2=CUDA 3=Vulkan 4=OpenCL 99=other), so the aggregator labels the
-          // real backend instead of guessing from the platform family.
-          //
-          // Null today on the sentence-stream path: index.js's
-          // computeSentenceStreamStats() rebuilds the response stats from an
-          // accumulator carrying only totalTime / audioDurationMs /
-          // totalSamples, so backendId never reaches `response.stats`. Emitted
-          // anyway so these rows pick up ground truth for free once the wrapper
-          // preserves it; until then the aggregator's Adreno fallback labels
-          // them.
           backend_id: typeof summary.backendId === 'number' ? summary.backendId : null
         }
       }

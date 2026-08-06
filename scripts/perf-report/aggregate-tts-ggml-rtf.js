@@ -89,41 +89,36 @@ function formatMaybeInteger (value) {
   return String(Math.round(Number(value)))
 }
 
-// ggml active-backend ids reported by the addon, mapped to the backend label.
-// Used to recover the REAL backend a mobile device selected at runtime rather
-// than guessing it from the platform family (Adreno=OpenCL vs Mali=Vulkan).
-// 99 ("other-gpu") is deliberately absent so it falls through to the guess.
 const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
 
-// Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
-// (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
-// row from an Adreno device whose backend was guessed must resolve to opencl.
-// The mobile test labels carry a "vulkan" token derived from the same platform
-// guess, so that hint is corrected too. This heuristic only covers artifacts
-// that predate the `backend_id` metric — newer runs carry ground truth.
-// Device Farm stamps the model into the device name ("Samsung Galaxy S25
-// Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
-// run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-// The trailing guard keeps "S25", "S25 Ultra" and "S25+" matching while a
-// future "S250"-style SKU does not silently inherit the correction.
 const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const PLACEHOLDER_BACKEND_HINTS = new Set(['gpu', 'mobile-accelerated'])
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'gpu', 'mobile-accelerated'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
+const MANUAL_SOURCE = 'manual'
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
     ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
 }
 
-// tts-cpp's GPU backend cascade: Vulkan on linux/win32/android (OpenCL on
-// Adreno android), Metal on darwin/ios. CUDA is not supported on any platform.
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
 function normalizeBackend (platformName, useGPU, backendHint, adreno) {
   const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
-  if (adreno && useGPU && platform === 'android' &&
-      (!hint || hint === 'vulkan' || hint === 'gpu' || hint === 'mobile-accelerated')) {
-    return 'opencl'
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
   }
-  if (hint && hint !== 'gpu' && hint !== 'mobile-accelerated') return hint
+  if (hint && !PLACEHOLDER_BACKEND_HINTS.has(hint)) return hint
   if (!useGPU) return 'cpu'
 
   switch (platform) {
@@ -136,13 +131,6 @@ function normalizeBackend (platformName, useGPU, backendHint, adreno) {
   }
 }
 
-// Prefer the observed ggml backend id (per-device ground truth) over the
-// platform-family guess. Falls back to normalizeBackend for artifacts produced
-// before the mobile benchmarks emitted `backend_id`.
-//
-// Takes a backendHint the ASR/BCI twins do not: tts-ggml's canonical mobile
-// labels carry a backend token that parseCanonicalTestLabel extracts, whereas
-// their mobile record shapes have no hint to pass.
 function resolveMobileBackend (backendId, platformName, useGPU, backendHint, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
@@ -367,7 +355,7 @@ function buildLabel (report) {
   return String(label || '')
 }
 
-function normalizeDesktopRecord (report, sourceFile) {
+function normalizeDesktopRecord (report, sourceFile, source = 'desktop-ci') {
   const summary = report.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
@@ -378,13 +366,15 @@ function normalizeDesktopRecord (report, sourceFile) {
   const useGPU = Boolean(report.requested && report.requested.useGPU)
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
   const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
-  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '', isAdrenoDevice(gpuModel, deviceLabel))
+  const backendHint = (report.labels && report.labels.backend) || ''
+  const backend = normalizeBackend(platformName, useGPU, backendHint,
+    needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel))
   const numThreads = report.requested && report.requested.numThreads !== undefined
     ? report.requested.numThreads
     : (report.config && report.config.numThreads !== undefined ? report.config.numThreads : null)
 
   return {
-    source: 'desktop-ci',
+    source,
     device: deviceLabel || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
@@ -422,7 +412,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   }
 }
 
-function normalizeMobileRecord (record, sourceFile) {
+function normalizeMobileRecord (record, sourceFile, source = 'mobile-ci') {
   const summary = record.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
@@ -432,10 +422,10 @@ function normalizeMobileRecord (record, sourceFile) {
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
   const backend = resolveMobileBackend(record.backendId, platformFamily, useGPU, record.backendHint,
-    isAdrenoDevice(record.gpuModel, record.deviceLabel))
+    needsAdrenoCorrection(source, record.backendHint, record.gpuModel, record.deviceLabel))
 
   return {
-    source: 'mobile-ci',
+    source,
     device: record.deviceLabel || humanizeSourceFile(record.sourceFile || sourceFile),
     platform: record.platform || platformFamily || 'unknown',
     platformFamily: platformFamily || 'unknown',
@@ -476,15 +466,12 @@ function normalizeMobileRecord (record, sourceFile) {
 function normalizeManualRecord (record, sourceFile) {
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
-  // A manual drop's `backend` is hand-authored, not a platform guess, so it is
-  // ground truth like a reported backend id: never second-guess it. The Adreno
-  // correction only applies when the record left the backend out.
-  const adreno = record.backend
-    ? false
-    : isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)
+  const source = record.source || MANUAL_SOURCE
+  const adreno = needsAdrenoCorrection(source, record.backend,
+    record.gpuModel || record.gpu_model, record.device)
 
   return {
-    source: record.source || 'manual',
+    source,
     device: record.device || humanizeSourceFile(sourceFile),
     platform: record.platform || 'unknown',
     platformFamily: platformFamily || 'unknown',
@@ -537,11 +524,10 @@ function normalizeStreamingRecord (report, sourceFile, source) {
   const platformName = report.platformName || ''
   const useGPU = Boolean((report.requested && report.requested.useGPU) || report.useGPU)
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || report.deviceLabel || ''
-  // Only the mobile canonical path passes a top-level backendId; desktop
-  // streaming artifacts keep theirs under summary and stay on the hint path.
-  const backend = resolveMobileBackend(report.backendId, platformName, useGPU,
-    (report.labels && report.labels.backend) || report.backendHint || '',
-    isAdrenoDevice((report.labels && report.labels.gpuModel) || report.gpuModel, deviceLabel))
+  const gpuModel = (report.labels && report.labels.gpuModel) || report.gpuModel
+  const backendHint = (report.labels && report.labels.backend) || report.backendHint || ''
+  const backend = resolveMobileBackend(report.backendId, platformName, useGPU, backendHint,
+    needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel))
 
   return {
     source: source || 'desktop-ci',
@@ -630,19 +616,19 @@ function loadManualRecords (manualDir) {
     const items = Array.isArray(payload) ? payload : (payload.records || [payload])
     for (const item of items) {
       if (isStreamingReport(item)) {
-        streaming.push(normalizeStreamingRecord(item, file, 'manual'))
+        streaming.push(normalizeStreamingRecord(item, file, MANUAL_SOURCE))
         continue
       }
 
       let record
       if (isDesktopArtifact(item)) {
-        record = normalizeDesktopRecord(item, file)
+        record = normalizeDesktopRecord(item, file, MANUAL_SOURCE)
       } else if (isMobileExtractedArtifact(item)) {
-        record = normalizeMobileRecord(item, file)
+        record = normalizeMobileRecord(item, file, MANUAL_SOURCE)
       } else {
         record = normalizeManualRecord(item, file)
       }
-      record.source = 'manual'
+      record.source = MANUAL_SOURCE
       records.push(record)
     }
   }

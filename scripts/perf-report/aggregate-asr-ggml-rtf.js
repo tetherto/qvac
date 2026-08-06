@@ -157,37 +157,33 @@ function numberOrNaN (value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : NaN
 }
 
-// Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
-// (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
-// row from an Adreno device whose backend was guessed (or hinted with the same
-// platform guess) must resolve to opencl. Observed backend ids are never
-// overridden.
-// Device Farm stamps the model into the device name ("Samsung Galaxy S25
-// Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
-// run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-// The trailing guard keeps "S25", "S25 Ultra" and "S25+" matching while a
-// future "S250"-style SKU does not silently inherit the correction.
 const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const PLACEHOLDER_BACKEND_HINTS = new Set(['mobile-accelerated', 'gpu'])
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'mobile-accelerated', 'gpu'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
     ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
 }
 
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
 function normalizeBackend (platformName, useGPU, backendHint, adreno) {
   const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
-  // An android "vulkan" hint is itself a platform-family guess (labels stamp
-  // it without probing the device), so Adreno devices correct it like the
-  // fallback guess below.
-  if (adreno && useGPU && platform === 'android' &&
-      (!hint || hint === 'vulkan' || hint === 'mobile-accelerated' || hint === 'gpu')) {
-    return 'opencl'
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
   }
-  // 'mobile-accelerated'/'gpu' are placeholders, not ggml backends — fall
-  // through to the platform cascade so the row names a real backend.
-  if (hint && hint !== 'mobile-accelerated' && hint !== 'gpu') return hint
+  if (hint && !PLACEHOLDER_BACKEND_HINTS.has(hint)) return hint
   if (!useGPU) return 'cpu'
 
   switch (platform) {
@@ -298,7 +294,8 @@ function normalizeReport (report, sourceFile, source) {
     model: reportModelName(report, engine),
     quant: reportQuant(report, sourceFile),
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, backendHint, isAdrenoDevice(gpuModel, label)),
+    backend: normalizeBackend(platformName, useGPU, backendHint,
+      needsAdrenoCorrection(source, backendHint, gpuModel, label)),
     // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
     // to them — the probe stamps the GPU name onto every report regardless of
     // whether that run used it.
@@ -330,12 +327,9 @@ function normalizeManualRecord (record, sourceFile) {
   const engine = resolveEngine(record)
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
-  // A manual drop's `backend` is hand-authored, not a platform guess, so it is
-  // ground truth like a reported backend id: never second-guess it. The Adreno
-  // correction only applies when the record left the backend out.
-  const adreno = record.backend
-    ? false
-    : isAdrenoDevice(record.gpuModel || record.gpu_model, record.device)
+  const source = record.source || 'manual'
+  const adreno = needsAdrenoCorrection(source, record.backend,
+    record.gpuModel || record.gpu_model, record.device)
 
   return {
     source: record.source || 'manual',

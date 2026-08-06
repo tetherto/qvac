@@ -26,7 +26,9 @@ const assert = require('node:assert/strict')
 const {
   parseCanonicalTestLabel,
   normalizeDesktopRecord,
+  normalizeMobileRecord,
   normalizeManualRecord,
+  normalizeStreamingRecord,
   expandCanonicalReport,
   dedupeRecords,
   renderMarkdown
@@ -199,32 +201,24 @@ test('mobile smoke rows infer backend from platform and remain visibly marked', 
 })
 
 test('android GPU rows on Adreno devices resolve to opencl, correcting the guessed vulkan label token', () => {
-  // The mobile harness stamps a platform-guessed "vulkan" token into the test
-  // label, but the Galaxy S25 family is Adreno and ggml's Adreno path is
-  // OpenCL.
   const adreno = mobileCanonicalReport()
   adreno.device = { name: 'Samsung Galaxy S25', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Adreno (TM) 830' }
   adreno.results[0].test = '[GPU] supertonic q4 vulkan'
   const [adrenoRecord] = expandCanonicalReport(adreno, '/x/Samsung_Galaxy_S25/performance-report.json').records
   assert.equal(adrenoRecord.backend, 'opencl')
 
-  // Device Farm shape as actually emitted: the GPU probe cannot run there, so
-  // device.gpu is null and the device name is the only Adreno signal.
   const unprobed = mobileCanonicalReport()
   unprobed.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
   unprobed.results[0].test = '[GPU] supertonic q4 vulkan'
   const [unprobedRecord] = expandCanonicalReport(unprobed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json').records
   assert.equal(unprobedRecord.backend, 'opencl')
 
-  // Non-Adreno android devices keep their vulkan rows.
   const mali = mobileCanonicalReport()
   mali.device = { name: 'Pixel 9', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Mali-G715' }
   mali.results[0].test = '[GPU] supertonic q4 vulkan'
   const [maliRecord] = expandCanonicalReport(mali, '/x/Pixel_9/performance-report.json').records
   assert.equal(maliRecord.backend, 'vulkan')
 
-  // An explicit non-vulkan hint (e.g. a manual metal drop) is never rewritten,
-  // and Adreno CPU rows stay cpu.
   const cpu = mobileCanonicalReport()
   cpu.device = { name: 'Samsung Galaxy S25', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Adreno (TM) 830' }
   cpu.results[0].test = '[CPU] supertonic q4 cpu'
@@ -233,8 +227,6 @@ test('android GPU rows on Adreno devices resolve to opencl, correcting the guess
 })
 
 test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
-  // manual-results drops are the escape hatch for backends CI cannot produce,
-  // so an author who writes `vulkan` for an Adreno device must get vulkan back.
   const manual = {
     device: 'Samsung Galaxy S25 Ultra',
     platform: 'android-arm64',
@@ -252,10 +244,45 @@ test('a hand-authored manual backend is never second-guessed by the Adreno corre
   assert.equal(normalizeManualRecord(guessed, '/x/manual.json').backend, 'opencl')
 })
 
+test('manual full-schema and compact artifacts keep their authored backend, unlike the same shapes from CI', () => {
+  const fullSchema = {
+    platform: 'android-arm64',
+    platformName: 'android',
+    engine: 'supertonic',
+    model: { type: 'supertonic', variant: 'q4' },
+    requested: { useGPU: true },
+    labels: { device: 'Samsung Galaxy S25 Ultra', backend: 'vulkan' },
+    summary: { rtf: { mean: 0.3 } }
+  }
+  assert.equal(normalizeDesktopRecord(fullSchema, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeDesktopRecord(fullSchema, '/x/ci.json').backend, 'opencl')
+
+  const compact = {
+    engine: 'supertonic',
+    modelType: 'supertonic',
+    platformName: 'android',
+    deviceLabel: 'Samsung Galaxy S25 Ultra',
+    useGPU: true,
+    backendHint: 'vulkan',
+    summary: { rtf: { mean: 0.3 } }
+  }
+  assert.equal(normalizeMobileRecord(compact, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeMobileRecord(compact, '/x/ci.json').backend, 'opencl')
+
+  const streaming = {
+    engine: 'supertonic',
+    kind: 'streaming',
+    platformName: 'android',
+    deviceLabel: 'Samsung Galaxy S25 Ultra',
+    useGPU: true,
+    backendHint: 'vulkan',
+    summary: { ttfaMs: { mean: 120 } }
+  }
+  assert.equal(normalizeStreamingRecord(streaming, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeStreamingRecord(streaming, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+})
+
 test('the observed backend id is ground truth and beats both the label hint and the Adreno heuristic', () => {
-  // The mobile benchmarks now emit metrics.backend_id (0=CPU 1=Metal 2=CUDA
-  // 3=Vulkan 4=OpenCL), so the platform guess is only a fallback for older
-  // artifacts.
   const withId = (deviceName, backendId, label) => {
     const report = mobileCanonicalReport()
     report.device = { name: deviceName, platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
@@ -264,11 +291,8 @@ test('the observed backend id is ground truth and beats both the label hint and 
     return expandCanonicalReport(report, `/x/${deviceName.replace(/ /g, '_')}/performance-report.json`).records[0]
   }
 
-  // 4 == opencl on a device the name heuristic would not have caught.
   assert.equal(withId('Google Pixel 9', 4, '[GPU] supertonic q4 vulkan').backend, 'opencl')
-  // 3 == vulkan on an Adreno device: ground truth wins over the correction.
   assert.equal(withId('Samsung Galaxy S25 Ultra', 3, '[GPU] supertonic q4 vulkan').backend, 'vulkan')
-  // Absent id keeps the Adreno fallback for pre-backend_id artifacts.
   assert.equal(withId('Samsung Galaxy S25 Ultra', null, '[GPU] supertonic q4 vulkan').backend, 'opencl')
 })
 
