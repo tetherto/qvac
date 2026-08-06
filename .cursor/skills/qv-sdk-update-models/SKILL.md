@@ -51,7 +51,7 @@ Combine as needed: `/qv-sdk-update-models --cascade`, `/qv-sdk-update-models --c
 - `packages/sdk` dependencies installed (`bun install` in that package if needed).
 - Optional: `QVAC_REGISTRY_CORE_KEY` to target a non-default registry core.
 - For `--with-python` / `--cascade`: `packages/sdk-python/.venv` with gen extras
-  (`python3 -m venv .venv && .venv/bin/pip install -e ".[gen,dev,bare-rpc]"`).
+  (`python3 -m venv .venv && .venv/bin/pip install -e ".[gen,dev]"`).
 - `gh` CLI for PR creation (same expectations as `qv-sdk-pr-create`).
 
 **Secrets:** this skill only needs registry network access. It does not read

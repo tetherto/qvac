@@ -3,9 +3,9 @@ import type { TestDefinition } from '@tetherto/qvac-test-suite'
 /**
  * End-to-end coverage for registry-download configuration plumbing.
  *
- * The qvac.config.json at the root of this package sets:
- *   - registryDownloadMaxRetries: 5
- *   - registryStreamTimeoutMs:    120000
+ * The desktop e2e fixture sets:
+ *   - registryDownloadMaxRetries: 10
+ *   - registryStreamTimeoutMs:    600000
  *
  * If either field is rejected by the SDK config schema, or the worker
  * fails to accept it, the consumer will not start at all and the full

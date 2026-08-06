@@ -8,6 +8,7 @@ contract/model-type-maps.json.
 from __future__ import annotations
 
 ALIAS_TO_CANONICAL: dict[str, str] = {
+    "audiogen": "audiogen-ggml",
     "bci": "bci-whispercpp-transcription",
     "classification": "ggml-classification",
     "diffusion": "sdcpp-generation",
@@ -22,6 +23,7 @@ ALIAS_TO_CANONICAL: dict[str, str] = {
 }
 
 ENGINE_TO_ADDON: dict[str, str] = {
+    "audiogen-ggml": "audiogen",
     "bci-whispercpp-transcription": "bci",
     "ggml-classification": "classification",
     "ggml-ocr": "ocr",
@@ -38,6 +40,8 @@ ENGINE_TO_ADDON: dict[str, str] = {
 }
 
 LEGACY_ENGINE_TO_CANONICAL: dict[str, str] = {
+    "@qvac/audiogen": "audiogen-ggml",
+    "@qvac/audiogen-ggml": "audiogen-ggml",
     "@qvac/bci-whispercpp": "bci-whispercpp-transcription",
     "@qvac/classification-ggml": "ggml-classification",
     "@qvac/diffusion-cpp": "sdcpp-generation",
@@ -54,6 +58,7 @@ LEGACY_ENGINE_TO_CANONICAL: dict[str, str] = {
     "@qvac/tts-onnx": "tts-ggml",
     "@qvac/vad-silero": "onnx-vad",
     "@qvac/vla-ggml": "ggml-vla",
+    "audiogen": "audiogen-ggml",
     "bci": "bci-whispercpp-transcription",
     "classification": "ggml-classification",
     "diffusion": "sdcpp-generation",

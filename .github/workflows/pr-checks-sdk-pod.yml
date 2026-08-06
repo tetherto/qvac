@@ -59,6 +59,14 @@ jobs:
   # commit (not the PR), so a PR cannot edit the config to skip its own checks.
   # Packages are checked sequentially in this single job (instead of a parallel
   # matrix) so that exactly one check appears on every PR.
+  #
+  # First-add exemption: a package's config entry is read from base, so the PR
+  # that introduces a package is not gated by this job — its entry is absent
+  # from base, the package filters out, and the job passes without running its
+  # checks. This follows from config-from-base being the anti-tampering
+  # property: it necessarily exempts the introducing PR. Such a PR is gated by a
+  # local run of these checks; once its entry is on the base branch, every
+  # later PR touching the package is gated here.
   # ---------------------------------------------------------------------------
   sdk-pod-checks:
     name: SDK Pod Checks

@@ -1,9 +1,11 @@
 import { transcribe } from '@qvac/sdk'
 import * as fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { transcriptionTests } from '../../../transcription-tests.js'
+import { runF32leQueueRecovery } from '../../transcription-f32le-queue-recovery.js'
 import {
   runMetadataStreamDuplex,
   validateSegments,
@@ -15,6 +17,9 @@ export class TranscriptionExecutor extends AbstractModelExecutor<typeof transcri
 
   protected handlers = Object.fromEntries(
     transcriptionTests.map((test) => {
+      if (test.testId === 'transcription-f32le-queue-recovery') {
+        return [test.testId, this.f32leQueueRecovery.bind(this)]
+      }
       if (test.testId === 'transcription-metadata-batch') {
         return [test.testId, this.metadataBatch.bind(this)]
       }
@@ -24,6 +29,41 @@ export class TranscriptionExecutor extends AbstractModelExecutor<typeof transcri
       return [test.testId, this.generic.bind(this)]
     })
   ) as never
+
+  async f32leQueueRecovery(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as { audioFileName: string }
+    const whisperModelId = await this.resources.ensureLoaded('whisper')
+    const audioPath = path.resolve(process.cwd(), 'assets/audio', p.audioFileName)
+    const wavBuffer = await fs.readFile(audioPath)
+    const wavBytes = new Uint8Array(wavBuffer.buffer, wavBuffer.byteOffset, wavBuffer.byteLength)
+
+    return runF32leQueueRecovery(
+      whisperModelId,
+      wavBytes,
+      expectation as Expectation,
+      async (validAudio, malformedAudio) => {
+        const directory = await fs.mkdtemp(path.join(tmpdir(), 'qvac-f32le-recovery-'))
+        const validPath = path.join(directory, 'valid.f32le')
+        const malformedPath = path.join(directory, 'malformed.f32le')
+
+        try {
+          await fs.writeFile(validPath, validAudio)
+          await fs.writeFile(malformedPath, malformedAudio)
+        } catch (error) {
+          await fs.rm(directory, { recursive: true, force: true })
+          throw error
+        }
+
+        return {
+          validPath,
+          malformedPath,
+          cleanup: async () => {
+            await fs.rm(directory, { recursive: true, force: true })
+          }
+        }
+      }
+    )
+  }
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { audioFileName: string; timeout?: number; prompt?: string | null }

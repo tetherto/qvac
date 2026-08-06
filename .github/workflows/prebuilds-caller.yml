@@ -123,6 +123,22 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
+  model-fit-build:
+    if: contains(fromJSON(inputs.changed-packages), 'model-fit')
+    concurrency:
+      group: prebuilds-model-fit-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-model-fit.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
   ocr-ggml-build:
     if: contains(fromJSON(inputs.changed-packages), 'ocr-ggml')
     concurrency:

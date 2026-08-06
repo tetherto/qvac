@@ -100,18 +100,21 @@ export type {
   AggregatedStats,
   ProfilingEventKind
 } from './types'
-export type { ProfilerMode } from '@/schemas'
+export type { ProfilerMode, ProfilerGPUResourceGauge, ProfilerResourceGauge } from '@/schemas'
 export { nowMs } from './clock'
+export { attachBackendDiagnostics } from './backend-diagnostics'
 export {
   record,
   shouldProfile,
   shouldIncludeServerBreakdown,
+  shouldIncludeResourceGauges,
   generateId,
   isEnabled,
   type ResolvedProfilerConfig
 } from './controller'
 export {
   createProfilingMeta,
+  createDelegatedProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,

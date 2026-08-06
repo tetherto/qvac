@@ -122,7 +122,7 @@ jobs:
 
       - name: Install (with transport + optional extras)
         run: |
-          "$PYBIN" -m pip install -e ".[gen,dev,bare-rpc,vla,notebook]"
+          "$PYBIN" -m pip install -e ".[gen,dev,vla,notebook]"
 
       - name: Build worker
         run: |
