@@ -1,36 +1,4 @@
 # Consolidates 5 of the 6 benchmark-performance-<pkg>.yml files.
-#
-# Real dependency ordering (this is why this branch is stacked on top of
-# prebuilds-nx / integration-mobile-test-nx / cpp-test-coverage-nx /
-# cpp-tests-nx / integration-test-nx, not branched directly off the
-# foundation): prebuild/desktop/mobile each call the shared nx-consolidated
-# workflow ONCE (not once per legacy per-package file) and let ITS OWN
-# nx-affected filtering decide what actually runs, using the same
-# base-ref/head-ref this file's own matrix job used. This only works because
-# those 3 files already exist earlier in this branch's history.
-#
-# Known simplification: the legacy per-package files toggle a
-# `run_rtf_benchmarks`/`run_integration_tests` input to switch a package's
-# integration-test file into "benchmark mode" (asr-ggml's real file has
-# test:integration / test:integration:gpu / test:stand-alone:gpu variants
-# gated on this). integration-test-nx.yml / integration-mobile-test-nx.yml
-# don't carry that toggle (asr-ggml itself is carved out of that
-# consolidation for unrelated reasons - see integration-test-nx.yml). This
-# file runs the regular integration-test path for whatever's affected, not a
-# specialized RTF-only benchmark path. Revisit if/when RTF-specific toggling
-# needs to be threaded through the consolidated files too.
-#
-# Per-package summarize metadata (aggregate script, manual-results dir)
-# comes from each package's own project.json (targets["benchmark"].options.ci
-# via a `benchmark` carrier target - not itself run; the real work is fully
-# delegated to prebuild/desktop-benchmarks/mobile-benchmarks below), not a
-# hand-typed table - see .github/actions/nx-project-matrix. The summarize job
-# reads it back out via jq - no separate bash associative arrays to keep in
-# sync.
-#
-# Carve-out: tts-ggml.yml stays untouched and separate - its `summarize` job
-# has a bespoke "GPU coverage map" markdown table specific to TTS backends,
-# not something a generic loop can normalize.
 name: "Benchmark Performance (nx)"
 
 on:
