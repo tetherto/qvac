@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.31.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
 ## [0.30.1] - 2026-07-30
 
 ### Changed

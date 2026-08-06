@@ -51,6 +51,18 @@ const MANIFEST = {
       url: 'https://s3/den.gguf'
     }
   ],
+  cosyvoice: [
+    {
+      name: 'cosyvoice3-llm-q8_0.gguf',
+      targetName: 'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+      url: 'https://s3/cv-llm.gguf'
+    },
+    {
+      name: 'voice-en.gguf',
+      targetName: 'cosyvoice3/voice.gguf',
+      url: 'https://s3/cv-voice.gguf'
+    }
+  ],
   quality: [
     {
       name: 'ggml-tiny.bin',
@@ -108,6 +120,36 @@ test('qualityEntries selects the Whisper model only when quality is enabled', ()
 test('selectEntries keeps an engine-only row byte-identical to pre-LavaSR', () => {
   const engineOnly = selectEntries(MANIFEST, { variant: 'q4', enhancer: 'none', denoiser: 'none' })
   assert.deepEqual(engineOnly, MANIFEST.q4)
+})
+
+test('selectEntries pushes the fixed cosyvoice group when the row is a cosyvoice row', () => {
+  const cosyvoice = selectEntries(MANIFEST, {
+    variant: 'q8',
+    engine: 'cosyvoice',
+    enhancer: 'none',
+    denoiser: 'none'
+  })
+  assert.deepEqual(
+    cosyvoice.map((e) => e.targetName),
+    ['cosyvoice3/cosyvoice3-llm-q8_0.gguf', 'cosyvoice3/voice.gguf']
+  )
+})
+
+test('selectEntries ignores variant for a cosyvoice row (q4 and q8 stage the same group)', () => {
+  const q4 = selectEntries(MANIFEST, { variant: 'q4', engine: 'cosyvoice' })
+  const q8 = selectEntries(MANIFEST, { variant: 'q8', engine: 'cosyvoice' })
+  assert.deepEqual(q4, q8)
+  assert.deepEqual(q4, MANIFEST.cosyvoice)
+})
+
+test('selectEntries keeps a non-cosyvoice engine on the variant path unchanged', () => {
+  const chatterbox = selectEntries(MANIFEST, {
+    variant: 'q4',
+    engine: 'chatterbox',
+    enhancer: 'none',
+    denoiser: 'none'
+  })
+  assert.deepEqual(chatterbox, MANIFEST.q4)
 })
 
 test('selectEntries appends only the requested LavaSR GGUF after the engine models', () => {
@@ -193,6 +235,7 @@ test('buildPrestageBlock for a lavasr row stages the engine model and the enhanc
 test('readOptionsFromEnv defaults the LavaSR axes to none and quality to enabled', () => {
   assert.deepEqual(readOptionsFromEnv({ TTS_GGML_MOBILE_BENCHMARK_VARIANT: 'q8' }), {
     variant: 'q8',
+    engine: 'chatterbox',
     enhancer: 'none',
     denoiser: 'none',
     quality: true
@@ -203,7 +246,15 @@ test('readOptionsFromEnv defaults the LavaSR axes to none and quality to enabled
       TTS_GGML_MOBILE_BENCHMARK_ENHANCER: 'lavasr',
       TTS_GGML_MOBILE_BENCHMARK_DENOISER: 'lavasr'
     }),
-    { variant: 'q4', enhancer: 'lavasr', denoiser: 'lavasr', quality: true }
+    { variant: 'q4', engine: 'chatterbox', enhancer: 'lavasr', denoiser: 'lavasr', quality: true }
   )
   assert.equal(readOptionsFromEnv({ TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'false' }).quality, false)
+})
+
+test('readOptionsFromEnv reads the engine axis (default chatterbox)', () => {
+  assert.equal(readOptionsFromEnv({}).engine, 'chatterbox')
+  assert.equal(
+    readOptionsFromEnv({ TTS_GGML_MOBILE_BENCHMARK_ENGINE: 'cosyvoice' }).engine,
+    'cosyvoice'
+  )
 })

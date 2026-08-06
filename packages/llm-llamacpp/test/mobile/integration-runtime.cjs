@@ -165,7 +165,7 @@ global.__shouldRunTest = function shouldRunTest(testName) {
   return __filterRe.test(testName)
 }
 
-async function runIntegrationModule(relativeModulePath, options = {}) {
+async function runIntegrationModule(relativeModulePath) {
   const modulePath = path.join(__dirname, relativeModulePath)
 
   if (!fs.existsSync(modulePath)) {
