@@ -222,7 +222,7 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
-    "@qvac/translation-nmtcpp": "^8.2.1",
+    "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.16.2",
     "bare-abort-controller": "^1.0.0",
