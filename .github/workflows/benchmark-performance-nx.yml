@@ -21,9 +21,12 @@
 # needs to be threaded through the consolidated files too.
 #
 # Per-package summarize metadata (aggregate script, manual-results dir)
-# lives in the SAME config table the nx-affected action already reads for
-# matrix filtering, and the summarize job reads it back out via jq - no
-# separate bash associative arrays to keep in sync.
+# comes from each package's own project.json (targets["benchmark"].options.ci
+# via a `benchmark` carrier target - not itself run; the real work is fully
+# delegated to prebuild/desktop-benchmarks/mobile-benchmarks below), not a
+# hand-typed table - see .github/actions/nx-project-matrix. The summarize job
+# reads it back out via jq - no separate bash associative arrays to keep in
+# sync.
 #
 # Carve-out: tts-ggml.yml stays untouched and separate - its `summarize` job
 # has a bespoke "GPU coverage map" markdown table specific to TTS backends,
@@ -67,33 +70,18 @@ permissions:
 
 jobs:
   matrix:
-    name: Determine affected packages (nx affected, transitive)
+    name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
     steps:
       - id: compute
-        uses: ./.github/actions/nx-affected
+        uses: ./.github/actions/nx-project-matrix
         with:
+          target: benchmark
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
-          config: |
-            - package: asr-ggml
-              aggregateScript: scripts/perf-report/aggregate-asr-ggml-rtf.js
-              manualDir: packages/asr-ggml/benchmarks/manual-results
-            - package: bci-whispercpp
-              aggregateScript: scripts/perf-report/aggregate-bci-rtf.js
-              manualDir: packages/bci-whispercpp/benchmarks/manual-results
-            - package: diffusion-cpp
-              aggregateScript: scripts/perf-report/aggregate-diffusion-cpp-rtf.js
-              manualDir: packages/diffusion-cpp/benchmarks/manual-results
-            - package: llm-llamacpp
-              aggregateScript: scripts/perf-report/aggregate-llamacpp-llm-rtf.js
-              manualDir: packages/llm-llamacpp/benchmarks/manual-results
-            - package: ocr-ggml
-              aggregateScript: scripts/perf-report/aggregate-ocr-ggml-rtf.js
-              manualDir: packages/ocr-ggml/benchmarks/manual-results
 
   context:
     needs: matrix
