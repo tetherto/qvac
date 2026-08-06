@@ -214,9 +214,11 @@ jobs:
 
       # Presigns the PARAKEET GGUF URLs and stores a local manifest consumed by
       # generate-prestage-block.js below. Whisper models are NOT in the manifest
-      # and are not pre-staged: whisper's mobile tests resolve ggml-tiny
-      # on-device via helpers.ensureWhisperModel(), exactly as in the whisper
-      # parent lane. Runs on every mobile run (functional and benchmark).
+      # (they are public HuggingFace downloads, not presigned registry GGUFs):
+      # the prestage block stages them from a fixed list inside
+      # generate-prestage-block.js, and helpers.copyPrestagedModel() picks them
+      # up on-device (falling back to helpers.ensureWhisperModel() if a host-side
+      # stage was skipped). Runs on every mobile run (functional and benchmark).
       - name: Generate ASR GGML mobile model manifest
         working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
         shell: bash

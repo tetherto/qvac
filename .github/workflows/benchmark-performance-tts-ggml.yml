@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: true
+      mobile_run_rtf_benchmarks:
+        description: "Mobile leg mode: RTF/streaming benchmark matrix (true, default) or the functional integration matrix (false). Set false to exercise a new engine's functional mobile lane (e.g. runCosyvoice3Test) from a branch prebuild before it has benchmark-harness support."
+        required: false
+        type: boolean
+        default: true
       benchmark_matrix_json:
         description: "Optional JSON array overriding the desktop benchmark matrix for all runners"
         required: false
@@ -107,7 +112,7 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
-      run_rtf_benchmarks: true
+      run_rtf_benchmarks: ${{ inputs.mobile_run_rtf_benchmarks }}
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
 
   summarize:

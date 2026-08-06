@@ -63,22 +63,20 @@ Third-Party Model Licenses
 
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  cosyvoice3-flow-f32
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  cosyvoice3-hift-f32
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  cosyvoice3-llm-q8_0
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   craft_mlt_25k
     https://www.jaided.ai/easyocr/modelhub/
   crnn_mobilenet_v3_small
     https://github.com/mindee/doctr
-  crnn_mobilenet_v3_small
-    https://github.com/felixdittrich92/OnnxTR
   db_mobilenet_v3_large
     https://github.com/mindee/doctr
-  db_mobilenet_v3_large
-    https://github.com/felixdittrich92/OnnxTR
-  db_resnet50
-    https://github.com/felixdittrich92/OnnxTR
   de-tiny-ggml-model-f16
     https://huggingface.co/primeline/whisper-tiny-german-1224
-  detector_craft
-    https://www.jaided.ai/easyocr/modelhub/
   dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   en-base-ggml-model-f16
@@ -113,6 +111,8 @@ Third-Party Model Licenses
     https://huggingface.co/bygreencn/whisper-base-ja
   ja-tiny-ggml-model-f16
     https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
+  Kwaipilot_KAT-Coder-V2.5-Dev-GGUF
+    https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF
   laser-dolphin-mixtral-2x7b-dpo-GGUF
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   latin_g2
@@ -125,6 +125,10 @@ Third-Party Model Licenses
     https://huggingface.co/qvac/MedPsy-1.7B-GGUF
   MedPsy-4B-GGUF
     https://huggingface.co/qvac/MedPsy-4B-GGUF
+  merges
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  mmproj-unlimited-ocr-Q8_0
+    https://huggingface.co/baidu/Unlimited-OCR
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parler-indic-f16
@@ -133,8 +137,6 @@ Third-Party Model Licenses
     https://huggingface.co/parler-tts/parler-tts-large-v1
   parler-mini-v1-f16
     https://huggingface.co/parler-tts/parler-tts-mini-v1
-  parseq
-    https://github.com/felixdittrich92/OnnxTR
   pi05-base-q-aggressive
     https://huggingface.co/lerobot/pi05_base
   pt-base-ggml-model-f16
@@ -175,32 +177,6 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/Qwen3.6-27B-GGUF
   Qwen3.6-35B-A3B-GGUF
     https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF
-  recognizer_arabic
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_bengali
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_cyrillic
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_devanagari
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_japanese
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_kannada
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_korean
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_latin
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_tamil
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_telugu
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_thai
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_zh_sim
-    https://www.jaided.ai/easyocr/modelhub/
-  recognizer_zh_tra
-    https://www.jaided.ai/easyocr/modelhub/
   ru-base-ggml-model-f16
     https://huggingface.co/CheeLi03/whisper-base-rus-8
   ru-tiny-ggml-model-f16
@@ -217,14 +193,26 @@ Third-Party Model Licenses
     https://huggingface.co/HuggingFaceVLA/smolvla_libero
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+  unlimited-ocr-gguf
+    https://huggingface.co/vimalnakrani/unlimited-ocr-gguf
+  voice-en
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  voice-zh-2
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  voice-zh-female
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   Wan_2.1_ComfyUI_repackaged
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
+  Wan_2.2_ComfyUI_Repackaged
+    https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged
   Wan2.1-I2V-14B-480P-gguf
     https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf
   Wan2.1-I2V-14B-720P-gguf
     https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf
   Wan2.1-T2V-14B-gguf
     https://huggingface.co/city96/Wan2.1-T2V-14B-gguf
+  Wan2.2-TI2V-5B-Turbo-GGUF
+    https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
@@ -280,6 +268,8 @@ Third-Party Model Licenses
 
   embeddinggemma-300m-GGUF
     https://huggingface.co/unsloth/embeddinggemma-300m-GGUF
+  gemma-3-12b-it-GGUF
+    https://huggingface.co/unsloth/gemma-3-12b-it-GGUF
 
 --- health-ai-developer-foundations (HAI-DEF Terms of Use) ---
 
@@ -296,6 +286,13 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF
   Llama-3.2-1B-Instruct-Q4_0-00001-of-00008
     https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF
+
+--- ltx-2-community ---
+
+  LTX-2.3-GGUF
+    https://huggingface.co/QuantStack/LTX-2.3-GGUF
+  LTX-2.3-GGUF
+    https://huggingface.co/unsloth/LTX-2.3-GGUF
 
 --- mit (MIT License) ---
 
@@ -325,6 +322,8 @@ Third-Party Model Licenses
     https://huggingface.co/ResembleAI/chatterbox-turbo
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
+  DeepSeek-V4-Flash-0731-GGUF
+    https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF
   es-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-es
   ggml-indictrans2-en-indic-1B-f16
@@ -577,6 +576,8 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
+  groot-q8_vf16
+    https://huggingface.co/nvidia/GR00T-N1.7-3B
 
 --- openrail ---
 
@@ -623,31 +624,36 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/asr-ggml@0.1.0
+  @qvac/asr-ggml@0.1.1
+    https://github.com/tetherto/qvac
+  @qvac/audiogen-ggml@0.1.0
     https://github.com/tetherto/qvac
   @qvac/bci-whispercpp@0.5.1
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.13.0
+  @qvac/classification-ggml@0.15.1
     https://github.com/tetherto/qvac
   @qvac/decoder-audio@0.5.0
     https://github.com/tetherto/qvac
   @qvac/diagnostics@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/diffusion-cpp@0.15.0
+  @qvac/diffusion-cpp@0.17.0
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.28.0
+  @qvac/embed-llamacpp@0.30.1
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
+  @qvac/fabric@0.3.1
+    https://github.com/tetherto/qvac
   @qvac/infer-base@0.4.2
     https://github.com/tetherto/qvac
-  @qvac/infer-base@0.6.1
+  @qvac/infer-base@0.6.2
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.38.0
+  @qvac/llm-llamacpp@0.39.2
     https://github.com/tetherto/qvac
-  @qvac/logging@0.1.0
-  @qvac/ocr-ggml@0.12.1
+  @qvac/logging@0.1.1
+    https://github.com/tetherto/qvac
+  @qvac/ocr-ggml@0.13.1
     https://github.com/tetherto/qvac
   @qvac/rag@0.6.4
     https://github.com/tetherto/qvac
@@ -655,11 +661,11 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@8.1.0
+  @qvac/translation-nmtcpp@8.2.1
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml@0.5.1
+  @qvac/tts-ggml@0.6.1
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.14.0
+  @qvac/vla-ggml@0.16.2
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -669,34 +675,38 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-abort
   bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
-  bare-addon-resolve@1.10.0
+  bare-addon-resolve@1.10.1
     https://github.com/holepunchto/bare-addon-resolve
   bare-ansi-escapes@2.2.3
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.2.0
     https://github.com/holepunchto/bare-assert
-  bare-buffer@3.6.1
+  bare-buffer@3.6.2
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
     https://github.com/holepunchto/bare-bundle
   bare-bundle-id@1.0.2
     https://github.com/holepunchto/bare-bundle-id
+  bare-cpu-info@0.1.1
+    https://github.com/holepunchto/bare-cpu-info
   bare-crypto@1.15.3
     https://github.com/holepunchto/bare-crypto
   bare-dns@2.1.4
     https://github.com/holepunchto/bare-dns
-  bare-env@3.0.0
+  bare-env@3.0.1
     https://github.com/holepunchto/bare-env
   bare-events@2.9.1
     https://github.com/holepunchto/bare-events
-  bare-fetch@3.0.1
+  bare-fetch@3.2.0
     https://github.com/holepunchto/bare-fetch
-  bare-ffmpeg@1.2.3
+  bare-ffmpeg@1.5.0
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
-  bare-fs@4.7.2
+  bare-fs@4.7.4
     https://github.com/holepunchto/bare-fs
+  bare-gpu-info@0.1.1
+    https://github.com/holepunchto/bare-gpu-info
   bare-hrtime@2.1.1
     https://github.com/holepunchto/bare-hrtime
   bare-http-parser@1.1.5
@@ -707,63 +717,69 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-https
   bare-inspect@3.1.4
     https://github.com/holepunchto/bare-inspect
-  bare-lief@0.2.4
+  bare-lief@0.2.6
     https://github.com/holepunchto/bare-lief
-  bare-link@3.2.2
+  bare-link@3.3.0
     https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
-  bare-module-lexer@1.5.2
+  bare-module-lexer@1.6.3
     https://github.com/holepunchto/bare-module-lexer
-  bare-module-resolve@1.12.2
+  bare-module-resolve@1.12.4
     https://github.com/holepunchto/bare-module-resolve
-  bare-module-traverse@2.1.2
+  bare-module-traverse@2.4.4
     https://github.com/holepunchto/bare-module-traverse
   bare-net@2.3.2
     https://github.com/holepunchto/bare-net
-  bare-os@3.9.1
+  bare-os@3.9.3
     https://github.com/holepunchto/bare-os
-  bare-pack@2.1.3
+  bare-pack@2.2.1
     https://github.com/holepunchto/bare-pack
-  bare-path@3.0.1
+  bare-path@3.1.1
     https://github.com/holepunchto/bare-path
-  bare-pipe@4.2.2
+  bare-performance@2.1.1
+    https://github.com/holepunchto/bare-performance
+  bare-pipe@4.2.3
     https://github.com/holepunchto/bare-pipe
-  bare-process@4.4.1
+  bare-posix@1.0.1
+    https://github.com/holepunchto/bare-posix
+  bare-process@4.5.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.3.3
+  bare-rpc@1.3.8
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.28.7
+  bare-runtime@1.30.3
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.28.7
+  bare-runtime-darwin-arm64@1.30.3
     https://github.com/holepunchto/bare-runtime
-  bare-semver@1.0.3
+  bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
   bare-signals@4.2.0
     https://github.com/holepunchto/bare-signals
-  bare-stdio@1.0.2
+  bare-signals@5.0.0
+    https://github.com/holepunchto/bare-signals
+  bare-stdio@1.0.3
     https://github.com/holepunchto/bare-stdio
   bare-stream@2.13.3
     https://github.com/holepunchto/bare-stream
-  bare-structured-clone@1.5.5
+  bare-structured-clone@1.6.0
     https://github.com/holepunchto/bare-structured-clone
   bare-subprocess@6.1.0
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.5.1
+  bare-tcp@2.5.3
     https://github.com/holepunchto/bare-tcp
   bare-tls@3.1.7
     https://github.com/holepunchto/bare-tls
-  bare-tty@5.1.1
+  bare-tty@5.1.2
     https://github.com/holepunchto/bare-tty
   bare-type@1.1.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.4.5
+  bare-url@2.4.6
     https://github.com/holepunchto/bare-url
-  bare-zlib@1.4.0
+  bare-zlib@1.4.1
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  compact-encoding@3.2.0
+  compact-encoding@3.3.0
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -773,7 +789,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/device-file
   events-universal@1.0.1
     https://github.com/holepunchto/events-universal
-  fd-lock@2.1.1
+  fd-lock@2.2.0
     https://github.com/holepunchto/fd-lock
   fs-native-extensions@1.5.0
     https://github.com/holepunchto/fs-native-extensions
@@ -783,11 +799,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-errors
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
-  hypercore-stats@2.4.0
+  hypercore-stats@2.4.1
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@3.1.1
+  hypercore-storage@3.2.0
     https://github.com/holepunchto/hypercore-storage
-  hyperdb@6.7.0
+  hyperdb@6.8.0
     https://github.com/holepunchto/hyperdb
   hyperdht-address@1.1.1
     https://github.com/holepunchto/hyperdht-address
@@ -795,9 +811,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdht-stats
   hyperdispatch@1.6.0
     https://github.com/holepunchto/hyperdispatch
-  hyperdrive@13.3.2
+  hyperdrive@13.3.3
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.21.0
+  hyperschema@1.22.0
     https://github.com/holepunchto/hyperschema
   hyperswarm-stats@1.3.1
     https://github.com/holepunchto/hyperswarm-stats
@@ -807,7 +823,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
-  paparam@1.10.1
+  paparam@1.10.2
     https://github.com/holepunchto/paparam
   passive-core-watcher@1.0.1
     https://github.com/holepunchto/passive-core-watcher
@@ -827,7 +843,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.16.0
+  rocksdb-native@3.17.2
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -854,7 +870,7 @@ JavaScript Dependencies
     https://github.com/chm-diederichs/noise-curve-ed
   quickbit-universal@2.2.0
     https://github.com/holepunchto/quickbit-universal
-  semver@7.8.4
+  semver@7.8.5
     https://github.com/npm/node-semver
   simdle-universal@1.1.2
     https://github.com/holepunchto/simdle-universal
@@ -869,7 +885,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/bogon
   codecs@3.1.0
     https://github.com/mafintosh/codecs
-  corestore@7.10.1
+  corestore@7.12.0
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
@@ -887,11 +903,11 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.33.1
+  hypercore@11.35.1
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.32.0
+  hyperdht@6.33.0
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.0
     https://github.com/holepunchto/hyperswarm
@@ -961,7 +977,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/unordered-set
   varint@5.0.0
     https://github.com/chrisdickinson/varint
-  xache@1.2.1
+  xache@1.3.0
     https://github.com/mafintosh/xache
   z32@1.1.0
     https://github.com/mafintosh/z32
