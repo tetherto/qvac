@@ -102,7 +102,7 @@ by the examples.
 | `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant        |
 | `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
 | `./scripts/download-model-ltx.sh`     | LTX-2.3 video + audio files   |
-| `./scripts/download-model-abot.sh`    | ABot-World set into `test/model/abot` (internal S3; public path: the [P2P registry](docs/abot-world.md)) |
+| `./scripts/download-model-abot.sh`    | ABot-World set into `test/model/abot` (from the [P2P model registry](docs/abot-world.md), no credentials) |
 
 The FLUX.2 [klein] default image example uses:
 

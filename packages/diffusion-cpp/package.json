@@ -89,6 +89,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
+    "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-fs": "^4.5.1",

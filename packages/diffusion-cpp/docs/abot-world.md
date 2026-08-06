@@ -75,10 +75,12 @@ Apps built on the QVAC SDK can instead discover the set at runtime via
 `modelRegistrySearch({ filter: 'ABot' })` and download with the returned
 `registrySource`/`registryPath`.
 
-(Internal alternative: `scripts/download-model-abot.sh` fetches the same set
-from corp S3 into `test/model/abot` — the directory the integration tests
-use; needs AWS credentials. The CI test lanes provision the same files
-themselves.)
+(`s3` in these commands is the registry's *source label* for this entry set —
+part of the public registry protocol, not a storage URL.)
+
+`scripts/download-model-abot.sh` wraps the same downloads and defaults to
+`test/model/abot`, the directory the integration tests use (the CI lanes
+provision the same files themselves via `@qvac/registry-client`).
 
 > If `npm install -g` fails with `EACCES` on a host without sudo, install
 > locally instead: `npm i @qvac/registry-client` in a scratch directory and

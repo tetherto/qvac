@@ -10,30 +10,29 @@
 //      one-shot generator.
 //   2. Walk lane — an interactive walk session (@qvac/diffusion-cpp/world)
 //      steps through the fixed scene under keyboard actions and streams
-//      decoded PNG frames (no-op until a scene pack ships in the S3 set).
+//      decoded PNG frames (no-op until a scene pack ships in the set).
 //   3. World-generation lane — the full workflow: native createScene()
 //      (umT5 + Wan2.2 VAE) from a real photo, then a KV-cache walk over a
 //      mixed key tape with busy-contract and motion asserts.
 //   4. Variations lane — parameter coverage: small-image upscale path,
 //      448x256 output, JPEG frame encoding.
 //
-// Model provisioning (self-contained):
-//   - UMT5-XXL comes from the pinned models manifest via ensureModelPath
-//     (same file the Wan tests use, so it is usually cached on the runner).
-//   - The ABot GGUFs live on corp S3 (private bucket); when AWS credentials
-//     are present in the environment (the integration workflow configures
-//     them via OIDC in this job) they are fetched with `aws s3 cp` and
-//     verified against the SHA256SUMS published in the same S3 prefix.
-//   - ABOT_MODELS_DIR overrides both (local runs, see
+// Model provisioning (self-contained, public):
+//   - The ABot model set is published in the QVAC P2P model registry
+//     (tag `abot-world`); missing files are downloaded in-process with
+//     @qvac/registry-client (no credentials - the client joins the public
+//     swarm with its built-in discovery key). Transfers are merkle-verified
+//     by hypercore; on top, each file's byte size is pinned below, so a
+//     truncated or drifted blob fails the lane instead of poisoning it.
+//   - ABOT_MODELS_DIR overrides provisioning entirely (local runs, see
 //     scripts/download-model-abot.sh).
-//   - The walk lane additionally needs the scene pack (scene.safetensors)
-//     and taew2_2_f16.gguf; if the scene pack is not present after
-//     provisioning (not uploaded yet), the walk lane passes as a no-op with
-//     an explanatory message instead of failing the suite.
+//   - The fixed-scene walk lane additionally needs a scene pack
+//     (scene.safetensors); it is not part of the published set, so that lane
+//     passes as a no-op with an explanatory message when absent.
 //
-// The S3 path is Linux-only (aws CLI + sha256sum are present on the
-// qvac-ubuntu*-gpu runners); other platforms skip unless ABOT_MODELS_DIR is
-// set.
+// Gate: the lanes run on the Linux x64 GPU legs in CI (NO_GPU excludes the
+// arm64 legs) and anywhere ABOT_MODELS_DIR points at a provisioned set.
+// Plain local runs skip rather than surprise-download ~13 GB.
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -46,54 +45,96 @@ const WorldStableDiffusion = require('../../world.js')
 const { readImageDimensions } = require('../../addon.js')
 const { ensureModelPath, setupJsLogger } = require('./utils.js')
 
-const S3_PREFIX = 's3://tether-ai-dev/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17'
+// P2P registry namespace of the validated set. 's3' is the registry's
+// source LABEL for these entries (a key namespace in the public registry
+// protocol - the client streams the blobs from the P2P swarm).
+const REGISTRY_PATH = 'qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17'
+const REGISTRY_SOURCE = 's3'
 const DIT_NAME = 'abot-world-0-5b-lf-dit-q8_0.gguf'
 const VAE_NAME = 'wan2.2_vae_f16.gguf'
 const TAEHV_NAME = 'taew2_2_f16.gguf'
+const T5_Q8_NAME = 'umt5-xxl-enc-q8_0.gguf'
 const SCENE_NAME = 'scene.safetensors'
-const SUMS_NAME = 'SHA256SUMS'
+// Exact byte sizes of the published blobs (drift/truncation tripwire).
+const SET_BYTES = {
+  [DIT_NAME]: 5_885_489_920,
+  [VAE_NAME]: 1_409_493_568,
+  [TAEHV_NAME]: 22_844_832,
+  [T5_Q8_NAME]: 6_035_988_320
+}
 
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const isLinux = os.platform() === 'linux'
+const isX64 = os.arch() === 'x64'
 const overrideDir = proc.env.ABOT_MODELS_DIR || ''
-const haveAwsCreds = !!(proc.env.AWS_ACCESS_KEY_ID || proc.env.AWS_SESSION_TOKEN)
-const canFetchS3 = isLinux && haveAwsCreds
+const canFetchRegistry = isLinux && isX64 && proc.env.CI === 'true'
 
-const skip = noGpu || (!overrideDir && !canFetchS3)
+const skip = noGpu || (!overrideDir && !canFetchRegistry)
 
-console.log('[ABot-World] skip:', skip, 'override:', !!overrideDir, 'awsCreds:', haveAwsCreds)
+console.log(
+  '[ABot-World] skip:',
+  skip,
+  'override:',
+  !!overrideDir,
+  'registryFetch:',
+  canFetchRegistry
+)
 
-function run(cmd, args, opts) {
-  const { spawn } = require('bare-subprocess')
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: 'inherit', ...opts })
-    child.on('error', reject)
-    child.on('exit', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`${cmd} ${args.join(' ')} exited with code ${code}`))
-    })
-  })
+function isComplete(dest, bytes) {
+  try {
+    return fs.statSync(dest).size === bytes
+  } catch (_) {
+    return false
+  }
 }
 
-async function provisionFromS3(dir) {
+async function provisionFromRegistry(dir) {
   fs.mkdirSync(dir, { recursive: true })
-  for (const name of [SUMS_NAME, DIT_NAME, VAE_NAME, TAEHV_NAME]) {
-    const dest = path.join(dir, name)
-    if (name !== SUMS_NAME && fs.existsSync(dest)) continue
-    await run('aws', ['s3', 'cp', `${S3_PREFIX}/${name}`, dest])
-  }
-  // The scene pack and the umT5 encoder GGUFs ship alongside the other
-  // GGUFs in newer uploads of the model set; tolerate their absence (the
-  // walk lane no-ops without the scene, and the world-generation lane falls
-  // back to the manifest safetensors without the encoder).
-  for (const name of [SCENE_NAME, 'umt5-xxl-enc-q8_0.gguf']) {
-    const dest = path.join(dir, name)
-    if (!fs.existsSync(dest)) {
-      await run('aws', ['s3', 'cp', `${S3_PREFIX}/${name}`, dest]).catch(() => {})
+  const missing = Object.keys(SET_BYTES).filter(
+    (name) => !isComplete(path.join(dir, name), SET_BYTES[name])
+  )
+  const sceneMissing = !fs.existsSync(path.join(dir, SCENE_NAME))
+  if (missing.length === 0 && !sceneMissing) return
+
+  // Lazy require: only lanes that actually provision touch the swarm stack.
+  const { QVACRegistryClient } = require('@qvac/registry-client')
+  const client = new QVACRegistryClient()
+  await client.ready()
+  try {
+    for (const name of missing) {
+      const dest = path.join(dir, name)
+      console.log(`[ABot-World] downloading ${name} from the P2P registry ...`)
+      try {
+        await client.downloadModel(`${REGISTRY_PATH}/${name}`, REGISTRY_SOURCE, {
+          outputFile: dest,
+          timeout: 1_800_000
+        })
+      } catch (err) {
+        try {
+          fs.unlinkSync(dest) // never leave a partial blob behind
+        } catch (_) {}
+        throw err
+      }
+      if (!isComplete(dest, SET_BYTES[name])) {
+        const got = fs.existsSync(dest) ? fs.statSync(dest).size : 0
+        try {
+          fs.unlinkSync(dest)
+        } catch (_) {}
+        throw new Error(`${name}: downloaded ${got} bytes, expected ${SET_BYTES[name]}`)
+      }
     }
+    if (sceneMissing) {
+      // Optional set member (fixed-scene walk lane no-ops without it).
+      await client
+        .downloadModel(`${REGISTRY_PATH}/${SCENE_NAME}`, REGISTRY_SOURCE, {
+          outputFile: path.join(dir, SCENE_NAME),
+          timeout: 300_000
+        })
+        .catch(() => {})
+    }
+  } finally {
+    await client.close().catch(() => {})
   }
-  // Verify transfer integrity against the checksums published with the set.
-  await run('sha256sum', ['--check', '--ignore-missing', SUMS_NAME], { cwd: dir })
 }
 
 test(
@@ -104,8 +145,8 @@ test(
 
     const dir = overrideDir || path.resolve(__dirname, '../model/abot')
     if (!overrideDir) {
-      await provisionFromS3(dir)
-      t.pass('ABot GGUFs fetched from S3 and sha256-verified')
+      await provisionFromRegistry(dir)
+      t.pass('ABot GGUFs provisioned from the P2P registry and size-verified')
     }
 
     const t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
@@ -156,7 +197,7 @@ test(
 
     const dir = overrideDir || path.resolve(__dirname, '../model/abot')
     if (!overrideDir) {
-      await provisionFromS3(dir)
+      await provisionFromRegistry(dir)
     }
 
     const scenePath = path.join(dir, SCENE_NAME)
@@ -229,7 +270,7 @@ test(
 async function provisionWorldGeneration(t) {
   const dir = overrideDir || path.resolve(__dirname, '../model/abot')
   if (!overrideDir) {
-    await provisionFromS3(dir)
+    await provisionFromRegistry(dir)
   }
 
   const taehvPath = path.join(dir, TAEHV_NAME)
@@ -243,12 +284,13 @@ async function provisionWorldGeneration(t) {
   }
 
   // Prompt encoder resolution: prefer the model set's own umT5 GGUFs when
-  // provisioned (S3 / ABOT_MODELS_DIR; Q8_0 is the validated deployment
-  // quant), else fall back to the pinned-manifest safetensors the Wan tests
-  // use. All three forms are gated against the golden PyTorch extraction
-  // (prompt_embeds cosine 0.9973 F16 / 0.9969 Q8 CUDA, latents 0.9987).
+  // provisioned (registry set / ABOT_MODELS_DIR; Q8_0 is the validated
+  // deployment quant), else fall back to the pinned-manifest safetensors the
+  // Wan tests use. All three forms are gated against the golden PyTorch
+  // extraction (prompt_embeds cosine 0.9973 F16 / 0.9969 Q8 CUDA, latents
+  // 0.9987).
   let t5Xxl = ''
-  for (const name of ['umt5-xxl-enc-q8_0.gguf', 'umt5-xxl-enc-f16.gguf']) {
+  for (const name of [T5_Q8_NAME, 'umt5-xxl-enc-f16.gguf']) {
     const candidate = path.join(dir, name)
     if (fs.existsSync(candidate)) {
       t5Xxl = candidate
