@@ -1,3 +1,15 @@
 {
-  "extends": "./tsconfig.json"
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./dts-out",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": []
+  },
+  "files": ["test/types/consumer-emit.test-d.ts"]
 }

@@ -52,33 +52,13 @@ try {
     if (installResult.status !== 0) {
       status = installResult.status ?? 1
     } else {
-      fs.mkdirSync(path.join(temporaryRoot, 'test', 'types'), { recursive: true })
-      fs.copyFileSync(
-        path.join(packageRoot, 'test/types/consumer-emit.test-d.ts'),
-        path.join(temporaryRoot, 'test/types/consumer-emit.test-d.ts')
-      )
-      fs.writeFileSync(
-        path.join(temporaryRoot, 'tsconfig.dts.json'),
-        JSON.stringify(
-          {
-            compilerOptions: {
-              target: 'ES2022',
-              module: 'ES2022',
-              moduleResolution: 'bundler',
-              strict: true,
-              declaration: true,
-              emitDeclarationOnly: true,
-              outDir: './dts-out',
-              skipLibCheck: true,
-              esModuleInterop: true,
-              types: []
-            },
-            files: ['test/types/consumer-emit.test-d.ts']
-          },
-          null,
-          2
-        )
-      )
+      // Fixture and its config are copied from the package so both stay
+      // reviewable here rather than embedded in this script.
+      for (const fixture of ['test/types/consumer-emit.test-d.ts', 'tsconfig.dts.json']) {
+        const destination = path.join(temporaryRoot, fixture)
+        fs.mkdirSync(path.dirname(destination), { recursive: true })
+        fs.copyFileSync(path.join(packageRoot, fixture), destination)
+      }
 
       const typecheckResult = run(
         process.execPath,
