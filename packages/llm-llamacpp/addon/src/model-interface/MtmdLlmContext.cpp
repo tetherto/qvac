@@ -727,7 +727,7 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 bool MtmdLlmContext::cancelGenerationCleanup(
     const std::function<void(const std::string&)>& outputCallback) {
   // Rollback = "request never happened": roll back to the pre-request
-  // cursor for both cancellation and n_predict truncation inside reasoning.
+  // cursor for cancellation or a known truncation inside reasoning.
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
@@ -776,7 +776,7 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   compactor_.clearSpan();
-  generationStopReason_ = GenerationStopReason::None;
+  generationStopReason_ = stopReasonAfterRequestRollback(generationStopReason_);
   // The sampled tokens were accepted before rollback; clear sampler history so
   // the next clean request cannot inherit a request that "never happened".
   common_sampler_reset(smpl_.get());
@@ -880,7 +880,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
               tools_.anchor(),
               tools_.enabled() ? "true" : "false"));
       generationStopReason_ = GenerationStopReason::ContextOverflow;
-      return {.ok = false};
+      break;
     }
     applyContextDiscard();
 

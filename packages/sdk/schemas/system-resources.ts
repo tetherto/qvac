@@ -65,6 +65,41 @@ export const graphicsDriverCapabilitiesSchema = z.object({
   rocm: resourceMetricSchema(z.boolean())
 })
 
+export const backendProbeResultSchema = z.object({
+  status: z.enum(['compatible', 'incompatible', 'unknown']),
+  backend: z.string().min(1),
+  reason: z.string().optional()
+})
+
+export const backendDeviceSchema = z.enum(['cpu', 'gpu'])
+
+export const backendDriverSchema = z.object({
+  name: z.string().min(1),
+  version: z.string().min(1).optional()
+})
+
+export const backendFallbackSchema = z.object({
+  requestedBackend: z.string().min(1).optional(),
+  requestedDevice: backendDeviceSchema.optional(),
+  reason: z.string().min(1)
+})
+
+export const inferenceBackendDiagnosticsSchema = z.object({
+  selectedBackend: z.string().min(1),
+  selectedDevice: backendDeviceSchema,
+  graphicsApi: graphicsDriverSchema.optional(),
+  driver: backendDriverSchema.optional(),
+  gpuId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "GPU ID from the current worker's resource collector; stable only for that collector's lifetime."
+    ),
+  fallback: backendFallbackSchema.optional(),
+  probe: backendProbeResultSchema.optional()
+})
+
 export const cpuResourceCapabilitiesSchema = z.object({
   name: resourceMetricSchema(z.string()),
   vendor: resourceMetricSchema(z.string()),
@@ -149,6 +184,11 @@ export type ResourceMetric<T> =
     }
 export type GraphicsDriver = z.infer<typeof graphicsDriverSchema>
 export type GraphicsDriverCapabilities = z.infer<typeof graphicsDriverCapabilitiesSchema>
+export type BackendProbeResult = z.infer<typeof backendProbeResultSchema>
+export type BackendDevice = z.infer<typeof backendDeviceSchema>
+export type BackendDriver = z.infer<typeof backendDriverSchema>
+export type BackendFallback = z.infer<typeof backendFallbackSchema>
+export type InferenceBackendDiagnostics = z.infer<typeof inferenceBackendDiagnosticsSchema>
 export type CPUResourceCapabilities = z.infer<typeof cpuResourceCapabilitiesSchema>
 export type GPUResourceCapabilities = z.infer<typeof gpuResourceCapabilitiesSchema>
 export type SystemResourceCapabilities = z.infer<typeof systemResourceCapabilitiesSchema>

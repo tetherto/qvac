@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.18.0] - 2026-08-06
+
+### Fixed
+
+- The native binding now treats the shared runtime's optional job id return from
+  `runJob()` as the acceptance signal, fixing the `qvac-lib-inference-addon-cpp`
+  1.3.3 build failure.
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
 ## [0.17.0] - 2026-08-03
 
 ### Added
@@ -22,7 +40,6 @@
 
 ### Fixed
 
-- The native binding now treats the shared runtime's optional job id return from `runJob()` as the acceptance signal, fixing the `qvac-lib-inference-addon-cpp` 1.3.3 build failure.
 - GPU-backend loads no longer read the whole embodiment bank into host RAM to discard it unread. The rank-3 rows are held out of VRAM by giving them a non-null data pointer, which is all the ggml allocator inspects; the bytes were then streamed in anyway even though the selected row is read straight from the file. On a 17-row ship set that removed ~340 MB of disk read, ~340 MB of copying and a ~340 MB transient allocation from every GPU load (roughly double under `--embodiments all`), which matters most on the mobile RAM budgets the q5 build targets.
 - A GGUF carrying rank-3 embodiment weights but no readable `groot.embodiment.stored_cat_ids` table is now a load-time error instead of a clean load followed by a `GGML_ASSERT` process abort on the first `run()`. Relatedly, a `groot.embodiment.*` array that is present but not an int32 array is reported as corruption rather than silently treated as absent, and `groot.embodiment.count` is cross-checked against the table length instead of being written and never read.
 - The pre-transpose refill copied one matrix element per `std::memcpy` call with a runtime element size, which the compiler cannot fold into a move — about 5 million out-of-line calls per refill at `HIDDEN_SIZE` 1024. It is now a typed element copy. This ran at load before, and `setEmbodiment` puts it on a repeatable path.
