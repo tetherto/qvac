@@ -128,8 +128,11 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # workflow_call uses prebuild_package; workflow_dispatch exposes the
+          # equivalent package_spec input. Keep both paths pinned explicitly so
+          # manual validation cannot silently ignore the requested native build.
+          package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
+          force-npm-prebuild: ${{ (inputs.prebuild_package != '' || inputs.package_spec != '') && 'true' || 'false' }}
 
       # The release environment authorizes GitHub OIDC to assume the scoped AWS
       # role used for model-manifest signing; no long-lived AWS keys are stored.

@@ -1348,6 +1348,27 @@ test('mobile monitor maps both flagship runs back to each test spec', () => {
   assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/)
 })
 
+test('mobile shards pass grep explicitly and retain host-phase failure logs', () => {
+  const uploadAction = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/action.yml',
+  )
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  assert.match(uploadAction, /export GROUP_GREP_B64=/)
+  assert.match(
+    generateTestspec,
+    /base64 -d > \/tmp\/qvacShardGrep\.txt/,
+  )
+  assert.match(collectLogs, /\*Test\*spec\*output\*/)
+  assert.match(collectLogs, /\*Standard\*Output\*/)
+  assert.match(collectLogs, /Host phase log:/)
+})
+
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
   const matrices = workflow.match(
@@ -1393,5 +1414,13 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
   assert.match(
     workflow,
     /TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
+  )
+  assert.match(
+    workflow,
+    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
   )
 })

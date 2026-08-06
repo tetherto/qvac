@@ -13,6 +13,7 @@
 #
 # Optional env:
 #   PERF_EXTRACT_B64     — base64-encoded perf-extract.js (empty = skip)
+#   GROUP_GREP_B64       — base64-encoded grep for this test-spec shard
 #   SHARD_ENABLES_PERF   — "true" to wire perf bridging for this shard (set per-group by action.yml)
 #   ENABLES_PERF         — (legacy) global fallback if SHARD_ENABLES_PERF is unset
 #   QVAC_PERF_RUNS       — override for QVAC_PERF_RUNS
@@ -77,6 +78,7 @@ phases:
       - npm install --legacy-peer-deps 2>&1
       - echo "Decoding wdio config..."
       - echo "${WDIO_CONFIG_B64}" | base64 -d > tests/wdio.config.devicefarm.js
+      - echo "${GROUP_GREP_B64:-}" | base64 -d > /tmp/qvacShardGrep.txt
 EOF
 
 # --- Optional: perf-extract.js deployment ---

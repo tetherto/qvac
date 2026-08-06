@@ -235,7 +235,7 @@ function buildFunctionalPrestageScript(manifestB64) {
   return `set -euo pipefail
 PRESTAGE_DIR=${PRESTAGE_DIR}
 echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
+GREP=$(cat /tmp/qvacShardGrep.txt)
 export GREP
 echo "[prestage] shard grep: '$GREP'"
 node -e "${buildFunctionalSelectionCode()}"

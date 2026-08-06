@@ -366,12 +366,13 @@ test('functional mapping fails when any required manifest target is absent', () 
   )
 })
 
-test('functional prestage script reads the current spec grep and deduplicates targets', () => {
+test('functional prestage script reads the explicit shard grep and deduplicates targets', () => {
   const script = buildFunctionalPrestageScript('QkFTRTY0')
 
   assert.ok(script.startsWith('set -euo pipefail\n'))
   assertBashSyntax(script)
-  assert.match(script, /tests\/wdio\.config\.devicefarm\.js/)
+  assert.match(script, /cat \/tmp\/qvacShardGrep\.txt/)
+  assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
   assert.match(script, /functional shard grep is required/)
   assert.match(script, /missing functional mapping/)
   assert.match(script, /seen\.has\(m\.targetName\)/)
