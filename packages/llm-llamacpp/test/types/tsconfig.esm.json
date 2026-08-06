@@ -13,11 +13,7 @@
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "useUnknownInCatchVariables": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "files": [
-    "consumer-esm.test-d.ts"
-  ]
+  "files": ["consumer-esm.test-d.ts"]
 }
