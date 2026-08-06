@@ -16,13 +16,6 @@
         "vulkan-loader",
         "spirv-headers"
       ]
-    },
-    {
-      "kind": "git",
-      "reference": "fed8ffb4449bcc7d22c59bf5ba1a2fc27e11dfad",
-      "baseline": "fed8ffb4449bcc7d22c59bf5ba1a2fc27e11dfad",
-      "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-      "packages": ["tts-cpp"]
     }
   ]
 }
