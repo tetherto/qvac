@@ -158,11 +158,23 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The harness comes from the default branch so a pull request cannot
+      # edit the action that judges it; only the package under test is taken
+      # from the head.
+      - name: Checkout harness (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/run-lint-and-unit-tests
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          path: pr
           persist-credentials: false
 
       - name: Set up Node.js
@@ -176,7 +188,7 @@ jobs:
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/llm-llamacpp
+          workdir: pr/packages/llm-llamacpp
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'

@@ -1,7 +1,7 @@
 // Type-level consumer test mirroring the SDK's import shapes, compiled with
 // the SDK's module settings. Type-checked only — never executed.
 import LlmLlamacpp, { pickPrimaryGgufPath } from "../../index";
-import type { GenerationParams, RunOptions, Message, BatchPrompt } from "../../index";
+import type { GenerationParams, RunOptions, Message, BatchPrompt, QvacResponse } from "../../index";
 import llmAddonLogging, {
   setLogger,
   releaseLogger,
@@ -38,6 +38,11 @@ async function sdkShapes() {
   await model.unload();
 }
 void sdkShapes;
+
+// Upstream exposed `QvacResponse` as a top-level named type export; it must
+// stay importable that way, not only as `LlmLlamacpp.QvacResponse`.
+declare const response: QvacResponse;
+void response;
 
 const primary: string = pickPrimaryGgufPath(["/abs/model.gguf"]);
 void primary;

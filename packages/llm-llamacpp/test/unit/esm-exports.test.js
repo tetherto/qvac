@@ -7,6 +7,27 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 
+// Every entrypoint that ships, with the named exports it must keep. Driven off
+// one table so a new entrypoint cannot be added without declaring its exports.
+const ENTRYPOINTS = [
+  { file: 'index.js', named: ['pickPrimaryGgufPath', 'QvacResponse'] },
+  { file: 'addon.js', named: ['LlamaInterface', 'mapAddonEvent'] },
+  { file: 'batchHandler.js', named: ['RUN_BUSY_ERROR_MESSAGE', 'RUN_BUSY_ERROR_CODE', 'runBusyError'] },
+  { file: 'addonLogging.js', named: ['setLogger', 'releaseLogger'] }
+]
+
+for (const { file, named } of ENTRYPOINTS) {
+  test(`${file} emits the top-level assignments the lexer needs`, (t) => {
+    const emitted = fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8')
+    for (const name of named) {
+      t.ok(
+        emitted.includes(`exports.${name} = `),
+        `${name} is a top-level exports assignment`
+      )
+    }
+  })
+}
+
 test('ESM default import resolves to the LlmLlamacpp class', async (t) => {
   const ns = await import('../../index.js')
 
@@ -25,17 +46,19 @@ test('ESM named bindings link and match the statics', async (t) => {
   t.is(ns.QvacResponse, ns.default.QvacResponse, 'named === static')
 })
 
-// addonLogging.js needs the native binding at load, so assert on the emitted file.
-test('addonLogging emits the top-level assignments the lexer needs', (t) => {
-  const emitted = fs.readFileSync(path.join(__dirname, '..', '..', 'addonLogging.js'), 'utf8')
+test('batchHandler ESM named bindings link', async (t) => {
+  const ns = await import('../../batchHandler.js')
 
-  t.ok(emitted.includes('exports.setLogger = '), 'setLogger is a top-level exports assignment')
-  t.ok(
-    emitted.includes('exports.releaseLogger = '),
-    'releaseLogger is a top-level exports assignment'
-  )
-  t.ok(
-    emitted.includes('module.exports = addonLogging'),
-    'module.exports stays the bare addonLogging object'
-  )
+  t.is(typeof ns.default, 'function', 'default export is the BatchHandler class')
+  t.is(typeof ns.RUN_BUSY_ERROR_MESSAGE, 'string', 'named RUN_BUSY_ERROR_MESSAGE binding links')
+  t.is(ns.RUN_BUSY_ERROR_CODE, 'RUN_BUSY', 'named RUN_BUSY_ERROR_CODE binding links')
+  t.is(typeof ns.runBusyError, 'function', 'named runBusyError binding links')
+  t.is(ns.runBusyError().code, 'RUN_BUSY', 'runBusyError still builds the coded error')
+})
+
+test('addon ESM named bindings link', async (t) => {
+  const ns = await import('../../addon.js')
+
+  t.is(typeof ns.LlamaInterface, 'function', 'named LlamaInterface binding links')
+  t.is(typeof ns.mapAddonEvent, 'function', 'named mapAddonEvent binding links')
 })

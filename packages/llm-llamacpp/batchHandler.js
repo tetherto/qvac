@@ -227,4 +227,10 @@ class BatchHandler {
         });
     }
 }
+// Runtime-redundant: ESM named imports need the top-level `module.exports.X =` form.
+/* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface. */
+module.exports.RUN_BUSY_ERROR_MESSAGE = RUN_BUSY_ERROR_MESSAGE;
+module.exports.RUN_BUSY_ERROR_CODE = RUN_BUSY_ERROR_CODE;
+module.exports.runBusyError = runBusyError;
 module.exports = BatchHandler;
+/* eslint-enable @typescript-eslint/no-unsafe-member-access */
