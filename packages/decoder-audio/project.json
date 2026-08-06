@@ -1,0 +1,34 @@
+{
+  "name": "@qvac/decoder-audio",
+  "root": "packages/decoder-audio",
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/decoder-audio"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/decoder-audio"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/decoder-audio"
+      }
+    },
+    "test:dts": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/decoder-audio"
+      }
+    }
+  }
+}
