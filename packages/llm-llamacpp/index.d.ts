@@ -411,6 +411,9 @@ export interface RuntimeStats {
   CacheTokens: number
   generatedTokens: number
   promptTokens: number
+  /** Why the most recent single-sequence generation stopped. */
+  stopReason?:
+    'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
   /** Context-window slides for single requests, or the sum across completed batch slots. */
   contextSlides: number
   /**
