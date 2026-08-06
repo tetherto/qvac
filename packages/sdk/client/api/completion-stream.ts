@@ -51,7 +51,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * @param params.mcp - Optional array of MCP client inputs for tool integration
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
- * @param params.toolDialect - Override the SDK's name-based dialect detection. Supported values: `"hermes"`, `"pythonic"`, `"json"`, `"harmony"`, `"qwen35"` (Qwen3.5/3.6), `"gemma4"`. Use when the auto-router doesn't recognise your model name. Drives both streaming frame detection and finalization parsing.
+ * @param params.toolDialect - Override the SDK's name-based dialect detection. Supported values: `"hermes"`, `"pythonic"`, `"json"`, `"harmony"`, `"qwen35"` (Qwen3.5/3.6), `"gemma4"`, `"dsml"` (DeepSeek V3.2/V4). Use when the auto-router doesn't recognise your model name. Drives both streaming frame detection and finalization parsing.
  * Common override case: Llama 3.x tool-calling fine-tunes that emit the native pythonic header (`<|start_header_id|>tool_call<|end_header_id|>...<|eot_id|>`).
  * @param params.responseFormat - Optional structured-output constraint applied to the model's output:
  *   - `{ type: "text" }` — no constraint (default behavior)

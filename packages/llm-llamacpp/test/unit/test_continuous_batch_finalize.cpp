@@ -125,6 +125,29 @@ TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
   EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
 }
 
+TEST(GenerationStopReason, IdentifiesReasoningTruncations) {
+  EXPECT_TRUE(
+      isKnownReasoningTruncation(GenerationStopReason::PredictionLimit));
+  EXPECT_TRUE(isKnownReasoningTruncation(GenerationStopReason::SequenceLimit));
+  EXPECT_TRUE(
+      isKnownReasoningTruncation(GenerationStopReason::ContextOverflow));
+  EXPECT_FALSE(isKnownReasoningTruncation(GenerationStopReason::None));
+  EXPECT_FALSE(isKnownReasoningTruncation(GenerationStopReason::Eos));
+  EXPECT_FALSE(isKnownReasoningTruncation(GenerationStopReason::Antiprompt));
+}
+
+TEST(GenerationStopReason, RetainsReasoningTruncationAfterRollback) {
+  EXPECT_EQ(
+      stopReasonAfterRequestRollback(GenerationStopReason::ContextOverflow),
+      GenerationStopReason::ContextOverflow);
+  EXPECT_EQ(
+      stopReasonAfterRequestRollback(GenerationStopReason::PredictionLimit),
+      GenerationStopReason::PredictionLimit);
+  EXPECT_EQ(
+      stopReasonAfterRequestRollback(GenerationStopReason::None),
+      GenerationStopReason::None);
+}
+
 /// A prefill-only slot never generated, so it only flushes via onSequenceEnd
 /// and must not run the generation-complete trim.
 TEST(ContinuousBatchFinalize, PrefillOnlyOnlyFlushes) {

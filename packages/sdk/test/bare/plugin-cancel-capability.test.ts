@@ -29,6 +29,7 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     { ttsPlugin },
     { ocrPlugin },
     { diffusionPlugin },
+    { audioGenPlugin },
     { vlaPlugin },
     { classificationPlugin }
   ] = await Promise.all([
@@ -40,6 +41,7 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     import('@/server/bare/plugins/tts-ggml/plugin'),
     import('@/server/bare/plugins/ggml-ocr/plugin'),
     import('@/server/bare/plugins/sdcpp-generation/plugin'),
+    import('@/server/bare/plugins/audiogen-ggml/plugin'),
     import('@/server/bare/plugins/ggml-vla/plugin'),
     import('@/server/bare/plugins/ggml-classification/plugin')
   ])
@@ -82,6 +84,9 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
       videoStream: { scope: 'model', hard: true },
       upscaleStream: { scope: 'none' }
     },
+    [audioGenPlugin.modelType]: {
+      audioGenStream: { scope: 'model', hard: true }
+    },
     [vlaPlugin.modelType]: {
       vlaRun: { scope: 'model', hard: true },
       vlaHparams: { scope: 'none' }
@@ -105,6 +110,7 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     ttsPlugin as unknown as BuiltinPlugin,
     ocrPlugin as unknown as BuiltinPlugin,
     diffusionPlugin as unknown as BuiltinPlugin,
+    audioGenPlugin as unknown as BuiltinPlugin,
     vlaPlugin as unknown as BuiltinPlugin,
     classificationPlugin as unknown as BuiltinPlugin
   ]
