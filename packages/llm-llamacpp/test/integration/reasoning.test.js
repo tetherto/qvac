@@ -674,9 +674,9 @@ const QWEN35_REASONING_CONFIG = {
 // restored at end-of-generation, and the post-reasoning tail is
 // replayed through `llama_decode` so the SSM advances over it without
 // absorbing the dropped span. The previous hard rejection has been
-// removed; this test pins the success path.
+// removed; this test pins the Qwen3.5 default-on success path.
 safeTest(
-  'Qwen3.5 honours remove_thinking_from_context opt-in',
+  'Qwen3.5 defaults remove_thinking_from_context on',
   {
     skip: isDarwinX64 || isWindowsX64,
     timeout: 900_000
@@ -689,15 +689,13 @@ safeTest(
 
     const messages = createInitialMessages()
 
-    const { response, stats } = await runCompletionWithStats(inference, messages, {
-      generationParams: { remove_thinking_from_context: true }
-    })
+    const { response, stats } = await runCompletionWithStats(inference, messages)
     t.comment(`response (len=${response.length}): ${response.slice(0, 200)}...`)
     t.comment(`stats: ${JSON.stringify(stats)}`)
 
     // The model produced visible reasoning tags during generation — the
     // compactor only drops a span if `<think>...</think>` actually fired.
-    verifyReasoningTags(t, response, 'Qwen3.5 opt-in')
+    verifyReasoningTags(t, response, 'Qwen3.5 default')
 
     const thinkingDiscards = toNumber(stats.thinkingBlockDiscards)
     // Under the uniform hard-fail contract (PR #2813), any compaction
@@ -706,7 +704,7 @@ safeTest(
     // succeeded.
     t.ok(
       thinkingDiscards >= 1,
-      `opt-in run should report at least one discard (got ${thinkingDiscards})`
+      `default run should report at least one discard (got ${thinkingDiscards})`
     )
   }
 )
@@ -955,11 +953,13 @@ safeTest(
       'compaction-on batch must actually drop a reasoning block (otherwise no replay decode ran)'
     )
 
-    // Batch TTFT and ppTPS are both derived from the same scheduler-owned
-    // prefill timer. Pin that internal contract instead of comparing two
-    // independent wall-clock runs: the off/on comparison is noisy on fast GPU
-    // hosts, while this invariant breaks if TTFT falls back to llama.cpp perf
-    // counters that include recurrent replay decode.
+    // A tagged batch run reports the observed TTFT (enqueue -> first sampled
+    // token, queue wait included), not the scheduler's raw prefill timer, so it
+    // structurally exceeds promptTokens/ppTPS rather than equalling it. Replay
+    // decode runs in onGenerationFinished, after the first token: TTFT staying
+    // within scheduling overhead of the derived prefill time proves the replay
+    // stayed out of it, on any host, without comparing two noisy wall-clock
+    // runs against each other.
     const ttftOff = toNumber(off.stats.TTFT)
     const ttftOn = toNumber(on.stats.TTFT)
     t.ok(ttftOff > 0, `batch off-run must report a non-zero TTFT (got ${ttftOff})`)
@@ -968,11 +968,18 @@ safeTest(
     const ppTpsOn = toNumber(on.stats.ppTPS)
     t.ok(ppTpsOn > 0, `batch on-run must report non-zero ppTPS (got ${ppTpsOn})`)
     const derivedPrefillMs = (1000 * promptTokensOn) / ppTpsOn
-    const ttftDiff = Math.abs(ttftOn - derivedPrefillMs)
     t.ok(
-      ttftDiff <= 0.001,
-      `batch TTFT (${ttftOn}ms) must match scheduler prefill time derived from ` +
-        `promptTokens/ppTPS (${derivedPrefillMs}ms, diff=${ttftDiff}ms)`
+      ttftOn + 0.5 >= derivedPrefillMs,
+      `observed batch TTFT (${ttftOn}ms) must cover at least the scheduler ` +
+        `prefill time derived from promptTokens/ppTPS (${derivedPrefillMs}ms)`
+    )
+    const schedulingOverheadBudgetMs = 250
+    t.ok(
+      ttftOn <= derivedPrefillMs + schedulingOverheadBudgetMs,
+      `observed batch TTFT (${ttftOn}ms) must stay within scheduling overhead ` +
+        `of the derived prefill time (${derivedPrefillMs}ms + ` +
+        `${schedulingOverheadBudgetMs}ms); a larger gap means replay decode ` +
+        'leaked into TTFT'
     )
 
     // promptTokens is scheduler-owned (populated by `accumulateSlot` from

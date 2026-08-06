@@ -6,17 +6,33 @@ import { PROFILING_KEY, type ProfilingRequestMeta, type ProfilingResponseMeta } 
 
 export function createProfilingMeta(
   profileId: string,
-  includeServerBreakdown: boolean
+  includeServerBreakdown: boolean,
+  includeResourceGauges: boolean
 ): ProfilingRequestMeta {
   return {
     enabled: true,
     id: profileId,
-    includeServer: includeServerBreakdown
+    includeServer: includeServerBreakdown,
+    includeResources: includeResourceGauges
   }
 }
 
 export function createProfilingDisabledMeta(): ProfilingRequestMeta {
   return { enabled: false }
+}
+
+export function createDelegatedProfilingMeta(
+  profileId: string,
+  meta?: ProfilingRequestMeta
+): ProfilingRequestMeta {
+  return {
+    enabled: true,
+    id: profileId,
+    includeServer: meta?.includeServer ?? false,
+    includeResources: meta?.includeResources ?? false,
+    resourceOrigin: 'provider',
+    ...(meta?.mode !== undefined && { mode: meta.mode })
+  }
 }
 
 export function injectProfilingMetaIntoObject(

@@ -1,0 +1,47 @@
+@qvac/model-fit
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/model-fit itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+This package bundles no model weights. The integration suite downloads a
+small public GGUF at test time; it is not distributed with the package.
+
+=========================================================================
+C++ Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  opencl
+    https://github.com/KhronosGroup/OpenCL-ICD-Loader
+  qvac-lib-inference-addon-cpp
+    https://github.com/tetherto/qvac
+  qvac-lint-cpp
+
+--- apache-2.0-with-llvm-exception ---
+
+  libc++ (LLVM C++ Standard Library)
+    https://github.com/llvm/llvm-project
+
+--- mit (MIT License) ---
+
+  qvac-fabric
+    https://github.com/tetherto/qvac-fabric-llm.cpp
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  bare-fs
+    https://github.com/holepunchto/bare-fs
+  bare-https
+    https://github.com/holepunchto/bare-https
+  bare-path
+    https://github.com/holepunchto/bare-path
+  bare-process
+    https://github.com/holepunchto/bare-process

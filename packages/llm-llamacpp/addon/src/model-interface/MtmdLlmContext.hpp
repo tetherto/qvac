@@ -110,6 +110,8 @@ public:
    */
   void stop() override;
 
+  void resetStopFlag() override;
+
   /**
    * The get context method. It returns the context.
    *
@@ -185,6 +187,8 @@ public:
 
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
+
+  void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
@@ -285,6 +289,8 @@ public:
   void snapshotPreRequestRollbackAnchor() override;
 
 private:
+  friend class MtmdLlmContextTestPeer;
+
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
@@ -330,7 +336,7 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
@@ -441,14 +447,10 @@ private:
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
 
-  // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-on (opt-out via `generationParams` with
-  // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
-  bool removeThinkingFromContext_ = true;
+  // Per-request toggle for post-generation thinking-block KV compaction.
+  // Default-off, except Qwen3-family models opt in during initialization;
+  // `generationParams` can always override it.
+  bool removeThinkingFromContext_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the end-of-prefill

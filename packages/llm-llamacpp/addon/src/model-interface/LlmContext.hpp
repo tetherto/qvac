@@ -43,14 +43,13 @@ struct GenerationParams {
   // applied to `params_.reasoning_budget` for the duration of the request and
   // restored on completion.
   std::optional<int> reasoning_budget;
-  // Per-request override for the post-generation thinking-block KV
-  // cache compaction. Default-on at the context level; passing
-  // `false` here opts out for this request (keeps the reasoning block
-  // in the cache), `true` re-affirms the default. Supported on both
-  // pure-attention and recurrent / hybrid-SSM models — recurrent /
-  // hybrid takes the snapshot + restore + replay path documented on
-  // `TextLlmContext::needsRecurrentSnapshot_`; pure-attention takes
-  // the `seq_rm + seq_add` path. Restored at end-of-request.
+  // Per-request override for post-generation thinking-block KV cache
+  // compaction. Contexts default off except the Qwen3 family, which defaults
+  // on. `false` keeps the reasoning block in cache; `true` enables
+  // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
+  // models — recurrent / hybrid takes the snapshot + restore + replay path
+  // documented on `TextLlmContext::needsRecurrentSnapshot_`; pure-attention
+  // takes the `seq_rm + seq_add` path. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
@@ -256,6 +255,14 @@ public:
    * The stop method. It stops the model inference.
    */
   virtual void stop() = 0;
+
+  /**
+   * Clears a pending stop request no run consumed. stop() only sets a flag
+   * read at fixed points of the eval loop, so a cancel landing after a run's
+   * last check (its completion tail) survives it; the next run must start
+   * unpoisoned.
+   */
+  virtual void resetStopFlag() = 0;
 
   /**
    * The get context method. It returns the context.

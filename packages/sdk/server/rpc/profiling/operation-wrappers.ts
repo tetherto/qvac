@@ -8,10 +8,13 @@ import {
   OPERATION_EVENT_KEY,
   type PerCallProfiling,
   type ProfilingRequestMeta,
-  type OperationEvent
+  type OperationEvent,
+  type ProfilerResourceGauge,
+  type SystemResourceSample
 } from '@/schemas'
 import { nowMs, generateProfileId } from '@/profiling/clock'
-import { record, shouldProfile } from '@/profiling/controller'
+import { record, shouldIncludeResourceGauges, shouldProfile } from '@/profiling/controller'
+import { getWorkerResourceCollector } from '@/server/bare/resources/worker-collector'
 import { buildOperationEvent } from './operation-metrics'
 import { isTerminalChunk } from '../rpc-utils'
 
@@ -31,6 +34,7 @@ export interface ProfiledStreamOptions<TRequest> {
 
 interface RecordOperationEventParams<TRequest, TResponse> {
   options: ProfiledReplyOptions<TRequest> | ProfiledStreamOptions<TRequest>
+  profiling: ResolvedOperationProfiling
   profileId: string
   startTs: number
   executionMs: number
@@ -38,6 +42,11 @@ interface RecordOperationEventParams<TRequest, TResponse> {
   ttfb?: number | undefined
   count?: number | undefined
   errored?: boolean | undefined
+}
+
+interface ResolvedOperationProfiling {
+  perCall: PerCallProfiling | undefined
+  resourceOrigin: ProfilerResourceGauge['origin']
 }
 
 function getRequestProfilingMeta(request: unknown): ProfilingRequestMeta | undefined {
@@ -53,26 +62,58 @@ function getRequestProfilingMeta(request: unknown): ProfilingRequestMeta | undef
   return meta
 }
 
-function resolvePerCallProfiling<TRequest>(
+function resolveOperationProfiling<TRequest>(
   options: ProfiledReplyOptions<TRequest> | ProfiledStreamOptions<TRequest>
-): PerCallProfiling | undefined {
+): ResolvedOperationProfiling {
   if (options.perCall) {
-    return options.perCall
+    return { perCall: options.perCall, resourceOrigin: 'local' }
   }
 
   const meta = getRequestProfilingMeta(options.request)
   if (!meta) {
-    return undefined
+    return { perCall: undefined, resourceOrigin: 'local' }
   }
 
   if (meta.enabled === false) {
-    return { enabled: false }
+    return {
+      perCall: { enabled: false },
+      resourceOrigin: meta.resourceOrigin ?? 'local'
+    }
   }
 
   return {
-    enabled: true,
-    includeServerBreakdown: meta.includeServer,
-    mode: meta.mode
+    perCall: {
+      enabled: true,
+      includeServerBreakdown: meta.includeServer,
+      includeResourceGauges: meta.includeResources,
+      mode: meta.mode
+    },
+    resourceOrigin: meta.resourceOrigin ?? 'local'
+  }
+}
+
+function toProfilerResourceGauge(
+  sample: SystemResourceSample,
+  sampledAt: number,
+  origin: ProfilerResourceGauge['origin']
+): ProfilerResourceGauge {
+  const gpus =
+    sample.gpus.status === 'supported'
+      ? {
+          ...sample.gpus,
+          value: sample.gpus.value.map((gpu) => ({
+            id: gpu.id,
+            compute: gpu.compute,
+            memoryUsedBytes: gpu.memoryUsedBytes
+          }))
+        }
+      : sample.gpus
+  return {
+    origin,
+    sampledAt,
+    cpu: sample.cpu,
+    memory: sample.memory,
+    gpus
   }
 }
 
@@ -99,6 +140,13 @@ function buildAndRecordOperationEvent<TRequest, TResponse>(
     event.count = params.count
   }
 
+  if (shouldIncludeResourceGauges(params.profiling.perCall)) {
+    const resources = getWorkerResourceCollector()?.sample()
+    if (resources) {
+      event.resources = toProfilerResourceGauge(resources, nowMs(), params.profiling.resourceOrigin)
+    }
+  }
+
   record(event)
 
   return event as OperationEvent
@@ -108,8 +156,8 @@ export async function profileReplyHandler<TRequest, TResponse>(
   options: ProfiledReplyOptions<TRequest>,
   handler: () => Promise<TResponse>
 ): Promise<TResponse> {
-  const perCall = resolvePerCallProfiling(options)
-  if (!shouldProfile(options.op, perCall)) {
+  const profiling = resolveOperationProfiling(options)
+  if (!shouldProfile(options.op, profiling.perCall)) {
     return handler()
   }
 
@@ -121,6 +169,7 @@ export async function profileReplyHandler<TRequest, TResponse>(
     const executionMs = nowMs() - startTs
     const event = buildAndRecordOperationEvent({
       options,
+      profiling,
       profileId,
       startTs,
       executionMs,
@@ -136,6 +185,7 @@ export async function profileReplyHandler<TRequest, TResponse>(
     const executionMs = nowMs() - startTs
     buildAndRecordOperationEvent({
       options,
+      profiling,
       profileId,
       startTs,
       executionMs,
@@ -150,8 +200,8 @@ export async function* profileStreamHandler<TRequest, TResponse, TReturn = unkno
   options: ProfiledStreamOptions<TRequest>,
   handler: () => AsyncGenerator<TResponse, TReturn>
 ): AsyncGenerator<TResponse, TReturn> {
-  const perCall = resolvePerCallProfiling(options)
-  if (!shouldProfile(options.op, perCall)) {
+  const profiling = resolveOperationProfiling(options)
+  if (!shouldProfile(options.op, profiling.perCall)) {
     return yield* handler()
   }
 
@@ -171,6 +221,7 @@ export async function* profileStreamHandler<TRequest, TResponse, TReturn = unkno
           const executionMs = nowMs() - startTs
           buildAndRecordOperationEvent({
             options,
+            profiling,
             profileId,
             startTs,
             executionMs,
@@ -194,6 +245,7 @@ export async function* profileStreamHandler<TRequest, TResponse, TReturn = unkno
         const executionMs = nowMs() - startTs
         const event = buildAndRecordOperationEvent({
           options,
+          profiling,
           profileId,
           startTs,
           executionMs,
@@ -215,6 +267,7 @@ export async function* profileStreamHandler<TRequest, TResponse, TReturn = unkno
     const executionMs = nowMs() - startTs
     buildAndRecordOperationEvent({
       options,
+      profiling,
       profileId,
       startTs,
       executionMs,

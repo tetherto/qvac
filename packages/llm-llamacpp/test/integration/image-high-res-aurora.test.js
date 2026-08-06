@@ -5,6 +5,7 @@
 // With per-test flushing (see _image-common.js) we preserve data
 // from earlier iterations even when the final run OOMs.
 
+// prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
 const { runPerImageBackendTests } = require('./_image-common.js')
 
 runPerImageBackendTests({
