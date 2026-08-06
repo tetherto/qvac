@@ -70,7 +70,8 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    # Slow Pixel devices can use about 107 minutes of the total job budget.
+    timeout-minutes: 150
     continue-on-error: true
     permissions:
       contents: read
@@ -244,6 +245,9 @@ jobs:
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+          # Chatterbox MTL takes up to 36.8 minutes on thermally throttled Pixel
+          # devices, beyond the generated Android test harness's 20-minute wait.
+          android-per-test-timeout-minutes: '45'
 
       # Benchmark runs (run_rtf_benchmarks=true): the benchmark runners are
       # intentionally NOT in test-groups.json, so they never run on normal PRs.
@@ -305,7 +309,8 @@ jobs:
           # row, re-introducing CosyVoice3 on the chatterbox row) is not used.
           test-groups: ${{ steps.perf_groups.outputs.groups || steps.functional_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
-          mocha-timeout-ms: '2700000'
+          # Keep Mocha's per-test ceiling above the 45-minute Android wait.
+          mocha-timeout-ms: '3300000'
           wdio-waitfor-timeout-ms: '600000'
           extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 

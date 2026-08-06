@@ -12,7 +12,11 @@ description = "Generated Python client for the QVAC SDK worker RPC"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-dependencies = ["pydantic>=2.6,<3"]
+dependencies = [
+  "pydantic>=2.6,<3",
+  "bare-rpc>=0.0.1",
+  "compact-encoding>=0.0.1",
+]
 
 [tool.hatch.version]
 path = "src/tetherto/qvac_sdk/_generated/sdk_version.py"
@@ -38,19 +42,6 @@ vla = ["numpy>=1.26"]
 notebook = ["numpy>=1.26", "pandas>=2.2"]
 # scripts/build_wheel.py: the self-contained per-platform wheel build.
 release = ["build>=1.2"]
-# The wire transport -- REQUIRED for the default experience, not truly optional.
-# It's an extra only because neither dep is on PyPI yet (both v0.0.1, git-only)
-# and PyPI rejects direct git references in a package's required dependencies.
-# Fold this into `dependencies` above once both are published. Pinned to their
-# current HEAD commits for reproducibility while unreleased.
-bare-rpc = [
-  "bare-rpc-python @ git+https://github.com/holepunchto/bare-rpc-python.git@5219c528866678553cb9716f80a199c9accfe8c1",
-  "compact-encoding-python @ git+https://github.com/holepunchto/compact-encoding-python.git@e7e1f080eb413c6ea06f8c6400a9716857c67266",
-]
-
-[tool.hatch.metadata]
-# QVAC-21806 PoC: bare-rpc-python/compact-encoding-python aren't on PyPI yet.
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 # PEP 420 namespace package: ship the whole `tetherto/` tree (no
@@ -107,7 +98,5 @@ disable_error_code = ["assignment"]
 
 [[tool.mypy.overrides]]
 module = ["bare_rpc", "compact_encoding"]
-# The bare-rpc extra is optional and git-only (no PyPI release, no py.typed
-# marker), so it's absent from the default install CI type-checks against.
-# bare_rpc_transport.py already guards the import at runtime.
+# Upstream wheels ship without py.typed.
 ignore_missing_imports = true

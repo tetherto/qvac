@@ -12,23 +12,17 @@ const STOP_REASONS = [
 
 /**
  * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
- * `FinetuneProgress`, or `null` to drop it. `state.skipNextRuntimeStats`
- * is used to swallow the TPS trailer that follows a finetune terminal.
+ * `FinetuneProgress`, or `null` to drop it.
  *
  * @param {string} rawEvent
  * @param {*} rawData
  * @param {*} rawError
- * @param {{ skipNextRuntimeStats: boolean }} state
  * @returns {{ type: string, data: *, error: * } | null}
  */
-function mapAddonEvent(rawEvent, rawData, rawError, state) {
-  // TPS-shaped runtime stats — either a real inference terminal or the stale
-  // trailer that follows a finetune terminal.
+function mapAddonEvent(rawEvent, rawData, rawError) {
+  // TPS-shaped runtime stats: a job's terminal snapshot. The one trailing a
+  // finetune terminal carries the finetune's own id and routes to its sink.
   if (rawData && typeof rawData === 'object' && 'TPS' in rawData) {
-    if (state.skipNextRuntimeStats) {
-      state.skipNextRuntimeStats = false
-      return null
-    }
     const stats = { ...rawData }
     if (stats.backendDevice === 0) {
       stats.backendDevice = 'cpu'
@@ -41,16 +35,13 @@ function mapAddonEvent(rawEvent, rawData, rawError, state) {
     return { type: 'JobEnded', data: stats, error: null }
   }
 
-  // Finetune terminal: dispatch JobEnded carrying the finetune payload and arm
-  // the skip flag so the TPS the C++ addon emits right after is not mistaken
-  // for an inference result that would clobber `_hasActiveResponse`.
+  // Finetune terminal: dispatch JobEnded carrying the finetune payload.
   if (
     rawData &&
     typeof rawData === 'object' &&
     rawData.op === 'finetune' &&
     typeof rawData.status === 'string'
   ) {
-    state.skipNextRuntimeStats = true
     return { type: 'JobEnded', data: rawData, error: null }
   }
 
@@ -113,19 +104,44 @@ class LlamaInterface {
    * @param {Uint8Array|null} weightsData.chunk
    * @param {Boolean} weightsData.completed
    */
-  async loadWeights(weightsData) {
-    this._binding.loadWeights(this._handle, weightsData)
+  loadWeights(weightsData) {
+    return Promise.resolve(this._binding.loadWeights(this._handle, weightsData))
   }
 
   /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
-  async activate() {
-    this._binding.activate(this._handle)
+  activate() {
+    return Promise.resolve(this._binding.activate(this._handle))
   }
 
   /**
-   * Cancel current inference job
+   * @returns {number} active jobs (in-flight + queued) per the native
+   * scheduler — the authoritative admission count.
+   */
+  activeJobs() {
+    if (!this._handle) return 0
+    return this._binding.activeJobs(this._handle)
+  }
+
+  /**
+   * @returns {number} requests occupying or waiting for a continuous-batching
+   * slot (active + pending). Capacity is consumed in slots, not jobs: one
+   * batch job of N prompts takes up to N of them, so `activeJobs()` alone
+   * under-reports a full pool. 0 when no batch scheduler is active
+   * (`parallel: 1`), where the job count is the right measure — admission
+   * therefore compares the max of the two against `parallel`.
+   */
+  activeSlots() {
+    if (!this._handle) return 0
+    return this._binding.activeSlots(this._handle)
+  }
+
+  /**
+   * Cancel every inference job live at the moment of this call (or pause a
+   * running finetune). Snapshot-based: the native binding captures the live
+   * job ids synchronously before deferring the cancellation, so a job started
+   * after this call is never touched.
    */
   async cancel(savePauseCheckpoint = 1) {
     if (!this._handle) return
@@ -133,33 +149,56 @@ class LlamaInterface {
   }
 
   /**
+   * Cancel a single job by its native-assigned id, leaving other concurrent
+   * jobs running. Routes to MultiJobScheduler::cancel(id) -> cancelById(id).
+   * @param {number} id - job id minted by runJob()
+   */
+  async cancelJob(id) {
+    if (!this._handle) return
+    // The native binding treats a missing id as cancel-all; cancelling every
+    // job is cancel()'s job, so require an explicit id here.
+    if (typeof id !== 'number') {
+      throw new TypeError(
+        'cancelJob(id) requires a numeric job id; use cancel() to cancel all jobs'
+      )
+    }
+    await this._binding.cancelJob(this._handle, id)
+  }
+
+  /**
    * Run finetuning when native binding provides support.
    */
-  async finetune(finetuningParams) {
+  finetune(finetuningParams) {
     if (typeof this._binding.finetune !== 'function') {
       throw new Error('Finetuning is not exposed by this native binding')
     }
     if (finetuningParams === undefined) {
       throw new Error('Finetuning parameters are required')
     }
-    return this._binding.finetune(this._handle, finetuningParams)
+    return Promise.resolve(this._binding.finetune(this._handle, finetuningParams))
   }
 
   /**
-   * Run one inference job with an array of message objects.
-   * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
+   * Run one inference job with an array of message objects, or a batch of
+   * jobs with an array of `{id?, messages}` items. The native binding mints
+   * the job id (single) / group id (batch) and returns it so concurrent jobs
+   * can be routed; a batch result also carries the per-item `ids` assigned
+   * to each sequence.
+   * @param {Array<{type: string, input?: string, content?: Uint8Array}> | Array<{id?: string, messages: Array<{type: string, input?: string, content?: Uint8Array}>}>} data - messages (text and/or media), or batch items
+   * @returns {Promise<{accepted: true, id: number, ids?: string[]} | {accepted: false, ids?: string[]}>} admission result. The scheduler-minted job id (`id`) — the group id for a batch — is present only when `accepted` is true; a batch run additionally reports the per-item `ids` on both the accepted and rejected branches.
    */
-  async runJob(data) {
-    return this._binding.runJob(this._handle, data)
+  runJob(data) {
+    return Promise.resolve(this._binding.runJob(this._handle, data))
   }
 
   /**
    * Unload the model and clear resources (including memory).
    */
-  async unload() {
-    if (!this._handle) return
+  unload() {
+    if (!this._handle) return Promise.resolve()
     this._binding.destroyInstance(this._handle)
     this._handle = null
+    return Promise.resolve()
   }
 }
 
