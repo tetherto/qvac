@@ -66,7 +66,7 @@ function urlHost(url) {
   }
 }
 
-async function downloadFileOnce(url, dest, opts = {}) {
+function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let settled = false
@@ -871,8 +871,11 @@ function parsePauseCheckpointMetadata(pauseCheckpointPath) {
     }
   }
   return {
-    epoch: meta.epoch != null ? parseInt(meta.epoch, 10) : undefined,
-    global_step: meta.global_step != null ? parseInt(meta.global_step, 10) : undefined
+    epoch: meta.epoch !== null && meta.epoch !== undefined ? parseInt(meta.epoch, 10) : undefined,
+    global_step:
+      meta.global_step !== null && meta.global_step !== undefined
+        ? parseInt(meta.global_step, 10)
+        : undefined
   }
 }
 
@@ -920,7 +923,7 @@ async function handleEarlyCompletion(
   return result
 }
 
-async function verifyFinalStatus(t, model, result = null) {
+function verifyFinalStatus(t, model, result = null) {
   t.ok(result, 'Result must be provided')
 }
 
@@ -930,7 +933,7 @@ async function verifyFinalStatus(t, model, result = null) {
 // early-return on it as an earlier version did (which hid regressions).
 function assertFiniteMetricIfPresent(t, stats, key, id) {
   const v = stats?.[key]
-  if (v == null) return
+  if (v === null || v === undefined) return
   t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
   t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not NaN/Inf), got: ${v}`)
 }

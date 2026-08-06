@@ -15,7 +15,7 @@ Orchestrate the published dependency cascade:
       -> @qvac/openclaw-plugin
 ```
 
-Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases still run `qv-sdk-bare-sdk-sync` for lockstep.
+Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases still run `qv-sdk-lockstep-sync` for bare-sdk + sdk-python.
 
 ## Modes
 
@@ -33,7 +33,7 @@ Invoke: `/qv-agent-stack-sync` or `/qv-agent-stack-sync --plan`.
 - `.cursor/skills/qv-sdk-changelog/SKILL.md`
 - `.cursor/skills/qv-sdk-pr-create/SKILL.md`
 - `.cursor/skills/qv-sdk-backmerge/SKILL.md`
-- `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` (sdk releases only)
+- `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` (sdk releases only)
 - `docs/architecture/AGENT-INTEGRATIONS.md`
 - `packages/cli/test/AGENT_STACK_E2E.md`
 - Planner: `.cursor/skills/_lib/sdk/agent-stack-plan.mjs`
@@ -92,7 +92,7 @@ Then for each `needs_release` package in dependency order, follow [references/pr
 5. Skip packages marked blocked; report them clearly.
 6. Do **not** merge. Do **not** trigger publish (Dima / human).
 
-SDK releases still chain `qv-sdk-bare-sdk-sync` + docs Step 8 from `qv-sdk-changelog`.
+SDK releases still chain `qv-sdk-lockstep-sync` + docs Step 8 from `qv-sdk-changelog`.
 
 ### 3. `--promote <slug>`
 

@@ -1,29 +1,17 @@
 """Unit coverage for BareRpcTransport.connect() cleanup on spawn failure.
 
-Does not need a built worker — only the bare_rpc extra — so it runs in the
-fast PR check once that extra is installed, and locally with `pip install -e
-'.[bare-rpc]'`.
+Does not need a built worker — only bare_rpc — so it runs in the fast PR check.
 """
 
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 
 import pytest
 
 from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 
-BARE_RPC_AVAILABLE = importlib.util.find_spec("bare_rpc") is not None
-
-pytestmark = [
-    pytest.mark.asyncio,
-    pytest.mark.skipif(
-        not BARE_RPC_AVAILABLE,
-        reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-        "(`pip install -e '.[bare-rpc]'`) to run these tests",
-    ),
-]
+pytestmark = [pytest.mark.asyncio]
 
 
 async def test_connect_closes_loopback_server_when_spawn_fails(monkeypatch) -> None:
