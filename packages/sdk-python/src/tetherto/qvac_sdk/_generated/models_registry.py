@@ -29,6 +29,60 @@ class ModelConstant:
     params: str
 
 
+ABOT_WORLD_0_5B_LF_VAE = ModelConstant(
+    name="ABOT_WORLD_0_5B_LF_VAE",
+    src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
+    registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3134496,
+    blob_block_length=349,
+    blob_byte_offset=205405185574,
+    model_id="taew2_2_f16.gguf",
+    expected_size=22844832,
+    sha256_checksum="848dda048c3fe4e5ace4e39f10e31798d894c7fb54458b6f730e5c0a9003eac2",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="F16",
+    params="",
+)
+
+ABOT_WORLD_0_5B_LF_VAE_F16 = ModelConstant(
+    name="ABOT_WORLD_0_5B_LF_VAE_F16",
+    src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
+    registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3226947,
+    blob_block_length=21508,
+    blob_byte_offset=211464018726,
+    model_id="wan2.2_vae_f16.gguf",
+    expected_size=1409493568,
+    sha256_checksum="281782f96ae387e8be97c036ca3b0ddcc3dc7d6540170da57ed94c7953c9fd1f",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="F16",
+    params="",
+)
+
+ABOT_WORLD_0_5B_Q8_0 = ModelConstant(
+    name="ABOT_WORLD_0_5B_Q8_0",
+    src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf",
+    registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3044690,
+    blob_block_length=89806,
+    blob_byte_offset=199519695654,
+    model_id="abot-world-0-5b-lf-dit-q8_0.gguf",
+    expected_size=5885489920,
+    sha256_checksum="f63276a210af0fe26daf7b95f29b02666c005f3e6557eaac9ea1be24e3367e1b",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="Q8_0",
+    params="5B",
+)
+
 AFRICAN_4B_TRANSLATION_Q4_K_M = ModelConstant(
     name="AFRICAN_4B_TRANSLATION_Q4_K_M",
     src="registry://hf/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
@@ -2099,6 +2153,24 @@ CLIP_VISION_H = ModelConstant(
     params="",
 )
 
+DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD = ModelConstant(
+    name="DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
+    src="registry://hf/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf",
+    registry_path="unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf",
+    registry_source="hf",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=2754074,
+    blob_block_length=81,
+    blob_byte_offset=180484199779,
+    model_id="DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf",
+    expected_size=90926928288,
+    sha256_checksum="057a3aacf912e079f22d07b94bc3b4ef46c6632476bc0bd1761347eb08edb2aa",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="UD-IQ2_M",
+    params="304B",
+)
+
 DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD = ModelConstant(
     name="DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     src="registry://s3/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
@@ -2513,6 +2585,24 @@ GROOT_Q5_VF16 = ModelConstant(
     params="groot-n1.7-3b-libero",
 )
 
+GROOT_Q5_VF16_1 = ModelConstant(
+    name="GROOT_Q5_VF16_1",
+    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    registry_source="s3",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=4529949,
+    blob_block_length=46466,
+    blob_byte_offset=296867803651,
+    model_id="groot-q5_vf16.gguf",
+    expected_size=3045175648,
+    sha256_checksum="d51e6466b63b70db39bdacc8555b85ad8b38db0dc57b7414b0daa001776165f0",
+    addon="vla",
+    engine="ggml-vla",
+    quantization="q5_vf16",
+    params="groot-n1.7-3b-multi",
+)
+
 GROOT_Q8_VF16 = ModelConstant(
     name="GROOT_Q8_VF16",
     src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
@@ -2529,6 +2619,24 @@ GROOT_Q8_VF16 = ModelConstant(
     engine="ggml-vla",
     quantization="q8_vf16",
     params="groot-n1.7-3b-libero",
+)
+
+GROOT_Q8_VF16_1 = ModelConstant(
+    name="GROOT_Q8_VF16_1",
+    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    registry_source="s3",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=4467918,
+    blob_block_length=62031,
+    blob_byte_offset=292802576547,
+    model_id="groot-q8_vf16.gguf",
+    expected_size=4065227104,
+    sha256_checksum="2f15b9cf9dc6eeb539821b563725857c46efdf7514f25b16130700ffe9f77010",
+    addon="vla",
+    engine="ggml-vla",
+    quantization="q8_vf16",
+    params="groot-n1.7-3b-multi",
 )
 
 GTE_LARGE_335M_FP16_SHARD = ModelConstant(
@@ -3861,6 +3969,60 @@ MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0 = ModelConstant(
     engine="llamacpp-completion",
     quantization="q8_0",
     params="500M",
+)
+
+MOE_35B_INST_IQ2_XXS = ModelConstant(
+    name="MOE_35B_INST_IQ2_XXS",
+    src="registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
+    registry_path="bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=4692905,
+    blob_block_length=149208,
+    blob_byte_offset=307541841194,
+    model_id="Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
+    expected_size=9778452896,
+    sha256_checksum="43a084de380dbba2aad32a6adff5395f47f7434a5a57294b8d113bb09228961f",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="iq2_xxs",
+    params="35B",
+)
+
+MOE_35B_INST_Q4_K_M = ModelConstant(
+    name="MOE_35B_INST_Q4_K_M",
+    src="registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf",
+    registry_path="bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf",
+    registry_source="hf",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=4141510,
+    blob_block_length=326408,
+    blob_byte_offset=271411128067,
+    model_id="Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf",
+    expected_size=21391448480,
+    sha256_checksum="4221c26e5663502d1c96fc901c9967d0e70ce2dcfaa5a9fb9280a46bd19e3c07",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="35B",
+)
+
+MOE_35B_INST_Q8_0 = ModelConstant(
+    name="MOE_35B_INST_Q8_0",
+    src="registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf",
+    registry_path="bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=4950610,
+    blob_block_length=563274,
+    blob_byte_offset=324430696842,
+    model_id="Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf",
+    expected_size=36914690464,
+    sha256_checksum="5fa510f44779b0e3d38a6678985f417a1c65e3000405ca5d6dcf7fd065e47a15",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="35B",
 )
 
 OCR_0_6B_MULTIMODAL_Q4_K_M = ModelConstant(
@@ -5825,6 +5987,24 @@ TTS_T3_TURBO_EN_CHATTERBOX_Q8_0 = ModelConstant(
     params="",
 )
 
+UMT5_XXL_ENC_Q8_0 = ModelConstant(
+    name="UMT5_XXL_ENC_Q8_0",
+    src="registry://s3/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf",
+    registry_path="qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3134845,
+    blob_block_length=92102,
+    blob_byte_offset=205428030406,
+    model_id="umt5-xxl-enc-q8_0.gguf",
+    expected_size=6035988320,
+    sha256_checksum="d529e94552a9793407ac5e8164624718373868ebe7227912c6221c9bb16bea4b",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="Q8_0",
+    params="",
+)
+
 UMT5_XXL_FP16 = ModelConstant(
     name="UMT5_XXL_FP16",
     src="registry://hf/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/text_encoders/umt5_xxl_fp16.safetensors",
@@ -6745,6 +6925,9 @@ WHISPER_TINY_Q8_0 = ModelConstant(
 
 __all__ = [
     "ModelConstant",
+    "ABOT_WORLD_0_5B_LF_VAE",
+    "ABOT_WORLD_0_5B_LF_VAE_F16",
+    "ABOT_WORLD_0_5B_Q8_0",
     "AFRICAN_4B_TRANSLATION_Q4_K_M",
     "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
     "AUDIOGEN_ACESTEP_V15_SFT_Q8_0",
@@ -6860,6 +7043,7 @@ __all__ = [
     "BITNET_1B_INST_TQ2_0",
     "BITNET_B1_58_3B_INST_TQ2_0",
     "CLIP_VISION_H",
+    "DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS",
     "EMBEDDINGGEMMA_300M_BF16",
@@ -6883,7 +7067,9 @@ __all__ = [
     "GPT_OSS_120B_INST_Q4_K_M_TENSORS",
     "GPT_OSS_20B_INST_Q4_K_M",
     "GROOT_Q5_VF16",
+    "GROOT_Q5_VF16_1",
     "GROOT_Q8_VF16",
+    "GROOT_Q8_VF16_1",
     "GTE_LARGE_335M_FP16_SHARD",
     "GTE_LARGE_335M_FP16_TENSORS",
     "GTE_LARGE_FP16",
@@ -6958,6 +7144,9 @@ __all__ = [
     "MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16",
     "MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16",
     "MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0",
+    "MOE_35B_INST_IQ2_XXS",
+    "MOE_35B_INST_Q4_K_M",
+    "MOE_35B_INST_Q8_0",
     "OCR_0_6B_MULTIMODAL_Q4_K_M",
     "OCR_3B_MULTIMODAL_Q4_0",
     "OCR_CRAFT",
@@ -7067,6 +7256,7 @@ __all__ = [
     "TTS_T3_TURBO_EN_CHATTERBOX_Q4_0",
     "TTS_T3_TURBO_EN_CHATTERBOX_Q5_0",
     "TTS_T3_TURBO_EN_CHATTERBOX_Q8_0",
+    "UMT5_XXL_ENC_Q8_0",
     "UMT5_XXL_FP16",
     "VAD_SILERO_5_1_2",
     "WAN2_1_I2V_14B_Q4_K_M",
