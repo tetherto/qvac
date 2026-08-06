@@ -41,7 +41,16 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/diffusion-cpp"
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "mode": "standard",
+          "vulkan": { "os": "windows-2025", "shell": "pwsh", "path": "C:\\VulkanSDK" },
+          "platforms": [
+            { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "windows-2025", "platform": "windows", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
       }
     }
   },

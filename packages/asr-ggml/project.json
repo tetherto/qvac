@@ -41,7 +41,20 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/asr-ggml"
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "mode": "coverage",
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+          ],
+          "hasCcache": true,
+          "needsWhisperHfModels": true,
+          "needsParakeetS3Gguf": true,
+          "buildOutputDir": "build/addon/tests",
+          "testEnvVars": [
+            { "name": "QVAC_TEST_GGUF", "path": "models/sortformer-4spk-v1.q4_0.gguf" }
+          ]
+        }
       }
     }
   },
