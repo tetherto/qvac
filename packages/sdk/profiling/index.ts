@@ -113,6 +113,7 @@ export {
 } from './controller'
 export {
   createProfilingMeta,
+  createDelegatedProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,

@@ -106,7 +106,7 @@ can be loaded.
 ### Profiler resource gauges
 
 Resource gauges are disabled by default. Enable them explicitly to attach one
-local resource sample to each profiled operation:
+worker resource sample to each profiled operation:
 
 ```ts
 import { profiler } from '@qvac/sdk'
@@ -120,6 +120,10 @@ const profile = profiler.exportJSON()
 The sample uses the same status, provenance, and scope semantics as
 `getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
 clock as the profiling event's `ts`, so the two timestamps are comparable.
+`resources.origin` is `local` for the current worker and `provider` for a
+delegated provider's worker. Samples are delivered to `profiler.onRecord`; they
+are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
+gauges in `summary` mode still incurs the sampling cost without retaining them.
 Disabling profiling or omitting `includeResourceGauges` performs no resource
 sampling. Enabling gauges adds one CPU query and one query per GPU to each
 profiled operation's response path. If the worker resource collector is not

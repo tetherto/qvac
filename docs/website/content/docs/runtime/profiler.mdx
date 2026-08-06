@@ -91,11 +91,16 @@ The gauges reuse the `ResourceMetric<T>` status, source, and scope semantics
 from `getSystemResources`. Unsupported metrics stay explicit rather than
 becoming zero. `resources.sampledAt` uses the same monotonic clock as the
 profiling event's `ts`, so the timestamps can be compared directly.
+`resources.origin` distinguishes the current `local` worker from a delegated
+`provider` worker. Samples are emitted through `profiler.onRecord`; they appear
+in `exportJSON().recentEvents` only in `verbose` mode. Enabling gauges in
+`summary` mode still pays the sampling cost without retaining the samples.
 Profiling-disabled operations and calls that do not opt in perform no resource
-sampling. Resource gauges are local diagnostics; they are not transmitted
-telemetry and do not affect model admission. Enabling them adds one CPU query
-and one query per GPU to each profiled operation's response path. If the worker
-resource collector is not initialized, the event omits the resource block.
+sampling. Resource gauges are operation-scoped diagnostics returned to the
+requesting SDK, not exported telemetry, and do not affect model admission.
+Enabling them adds one CPU query and one query per GPU to each profiled
+operation's response path. If the worker resource collector is not initialized,
+the event omits the resource block.
 
 ### Opt-out
 

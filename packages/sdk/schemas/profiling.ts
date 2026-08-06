@@ -35,6 +35,7 @@ export const profilerGPUResourceGaugeSchema = z.object({
 })
 
 export const profilerResourceGaugeSchema = z.object({
+  origin: z.enum(['local', 'provider']),
   sampledAt: systemResourceSampleSchema.shape.sampledAt,
   cpu: systemResourceSampleSchema.shape.cpu,
   memory: systemResourceSampleSchema.shape.memory,
@@ -85,6 +86,7 @@ export const profilingRequestMetaSchema = z.object({
   id: z.string().optional(),
   includeServer: z.boolean().optional(),
   includeResources: z.boolean().optional(),
+  resourceOrigin: z.enum(['local', 'provider']).optional(),
   mode: profilerModeSchema.optional()
 })
 

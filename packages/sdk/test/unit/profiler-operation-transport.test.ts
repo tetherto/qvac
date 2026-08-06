@@ -1,9 +1,14 @@
 import test from 'brittle'
-import { OPERATION_EVENT_KEY, sourceTypeSchema, type OperationEvent } from '@/schemas'
+import {
+  OPERATION_EVENT_KEY,
+  PROFILING_KEY,
+  sourceTypeSchema,
+  type OperationEvent
+} from '@/schemas'
 import { buildOperationEvent, profileReplyHandler } from '@/server/rpc/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
-import { extractProfilingMeta } from '@/profiling'
+import { createDelegatedProfilingMeta, extractProfilingMeta } from '@/profiling'
 import { clearAggregator, getAggregates, recordEvent } from '@/profiling/aggregator'
 import {
   destroyWorkerResourceCollector,
@@ -17,6 +22,18 @@ test('sourceType: accepts expected values and rejects unknown', (t) => {
   }
 
   t.absent(sourceTypeSchema.safeParse('unknown').success, 'unknown is invalid')
+})
+
+test('delegated profiling metadata forwards resource opt-in explicitly', (t) => {
+  const defaultMeta = createDelegatedProfilingMeta('default')
+  const optedInMeta = createDelegatedProfilingMeta('opted-in', {
+    includeResources: true
+  })
+
+  t.is(defaultMeta.includeResources, false)
+  t.is(defaultMeta.resourceOrigin, 'provider')
+  t.is(optedInMeta.includeResources, true)
+  t.is(optedInMeta.resourceOrigin, 'provider')
 })
 
 test('operation metrics: loadModel extracts gauges and tags', (t) => {
@@ -80,6 +97,7 @@ test('transport: operation event survives injection/extraction round-trip', (t) 
     profileId: 'round-trip-test',
     gauges: { totalLoadTime: 500, downloadTime: 200 },
     resources: {
+      origin: 'local',
       sampledAt: 123,
       cpu: {
         status: 'supported',
@@ -215,6 +233,24 @@ test('operation profiling: resource gauges sample only when requested', async (t
   t.is(operationEvent?.resources?.cpu.status, 'supported')
   t.is(operationEvent?.resources?.memory.usedBytes.status, 'supported')
   t.is(operationEvent?.resources?.gpus.status, 'failed')
+  t.is(operationEvent?.resources?.origin, 'local')
+
+  const providerProfiled = await profileReplyHandler(
+    {
+      op: 'resourceTest',
+      request: {
+        [PROFILING_KEY]: createDelegatedProfilingMeta('provider-profile', {
+          includeResources: true
+        })
+      }
+    },
+    async () => ({ ok: true })
+  )
+  const providerOperation = (providerProfiled as { [OPERATION_EVENT_KEY]?: OperationEvent })[
+    OPERATION_EVENT_KEY
+  ]
+  t.is(sampleCalls, 2, 'delegated resource opt-in samples once')
+  t.is(providerOperation?.resources?.origin, 'provider')
 
   destroyWorkerResourceCollector()
 })
