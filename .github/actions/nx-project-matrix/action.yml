@@ -1,24 +1,5 @@
 name: 'Nx project.json-driven matrix'
-description: >
-  Generic replacement for a hand-typed per-workflow YAML config table. Computes the nx-affected
-  set for a given target (same base/head resolution as ./nx-affected), then for each affected
-  project reads that target's `options.ci` block directly from each package's own project.json —
-  read from the BASE branch's committed content, never the PR head — and flattens
-  `options.ci.platforms[]` into one matrix row per (package, platform), adding `workdir` from the
-  project's own top-level `root` (never hand-authored in `options.ci` — it's already known to nx).
-  Emits the same `matrix`/`any` output shape ./nx-affected already does, so a consuming workflow's
-  `matrix` job is a drop-in swap.
-
-  SECURITY: project.json is a file a PR author fully controls. Reading options.ci from the PR head
-  would let a PR redirect its OWN run onto a different runner/matrix in the same PR — this action
-  always resolves options.ci via `git show <base>:packages/<pkg>/project.json`, never the checked-
-  out working tree at head. Verified fork-PR safe: `git show` here only ever reads already-fetched
-  base-repo history (fetch-depth 0 on the base repo, which is all `actions/checkout` ever touches
-  for a `pull_request` event — the fork's repo is never fetched), so this has no fork-specific
-  code path at all, unlike detect-native-changes which must special-case fork fetches because it
-  diffs head content. A package added in the same PR (no project.json on base yet) is skipped with
-  a warning, not treated as affected-with-no-config — see the two-step onboarding note in the
-  migration plan.
+description: 'Builds the matrix from each affected package''s project.json options.ci (read from base only, never PR head).'
 
 inputs:
   target:
