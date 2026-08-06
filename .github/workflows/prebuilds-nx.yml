@@ -1,9 +1,4 @@
-# Consolidates the 13 prebuilds-<pkg>.yml files (all thin wrappers around
-# reusable-prebuilds.yml, differing only in `with:` data). Matrix rows come
-# from each package's own project.json (targets["build"].options.ci), not a
-# hand-typed table - see .github/actions/nx-project-matrix. Matrix is
-# pre-filtered to nx-affected packages before the job runs - a job calling a
-# reusable workflow can't reference `matrix` in its own `if:`. Additive only.
+# Consolidates the 13 prebuilds-<pkg>.yml files.
 name: "Prebuilds (nx)"
 
 on:
