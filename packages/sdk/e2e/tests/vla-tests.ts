@@ -437,10 +437,12 @@ export const vlaGrootMultiHparamsShape = createVlaTest(
   'vla-groot-multi'
 )
 
-// Runtime switch round-trip: switch to the 4-camera DROID row by cat_id (24 —
-// oracle-validated in vla-ggml PR #3427), run inference with inputs rebuilt
-// from the refreshed hparams, reject an unknown tag without disturbing the
-// active embodiment, and switch back to the original row.
+// Runtime switch round-trip: switch to the 4-camera DROID row (cat_id 24 —
+// oracle-validated in vla-ggml PR #3427) via the `{ catId, numCameras }`
+// object selector, run inference with inputs rebuilt from the refreshed
+// hparams, reject an unknown tag without disturbing the active embodiment,
+// and switch back to the original row by plain cat_id — covering both
+// selector spellings.
 export const vlaGrootMultiSetEmbodiment = createVlaTest(
   'vla-groot-multi-set-embodiment',
   { switchCatId: 24, switchNumCameras: 4 },

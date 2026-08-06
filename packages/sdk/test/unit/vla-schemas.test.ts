@@ -79,6 +79,11 @@ test('vlaEmbodimentSelectorSchema: rejects an empty tag', (t) => {
   t.is(vlaEmbodimentSelectorSchema.safeParse('').success, false)
 })
 
+test('vlaEmbodimentSelectorSchema: caps tag length at 256', (t) => {
+  t.is(vlaEmbodimentSelectorSchema.safeParse('a'.repeat(256)).success, true)
+  t.is(vlaEmbodimentSelectorSchema.safeParse('a'.repeat(257)).success, false)
+})
+
 test('vlaEmbodimentSelectorSchema: accepts cat_id bounds 0 and 31', (t) => {
   t.is(vlaEmbodimentSelectorSchema.safeParse(0).success, true)
   t.is(vlaEmbodimentSelectorSchema.safeParse(31).success, true)

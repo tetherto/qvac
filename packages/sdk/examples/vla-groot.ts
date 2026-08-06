@@ -52,11 +52,14 @@ import {
 // LIBERO GR00T prompt layout (Qwen3-VL tokenizer). GR00T reports
 // `hparams.tokenizerMaxLength === 0` — it does not surface a tokenizer length,
 // so the prompt length is fixed by the model: 2 cameras × 64 merged image
-// tokens (256 patches, 2×2 merge) = 128 image tokens, plus text, = 148 total.
+// tokens (256 patches, 2×2 merge) = 128 image tokens, plus text ≈ 150 total.
 // A real consumer gets these from the tokenizer; the smoke hard-codes them.
+// The prompt length follows the ACTIVE embodiment's camera count (a 4-camera
+// DROID row needs 4 image-token runs, which a fixed 2-camera length cannot
+// hold), so it is computed per inference, not a constant.
 const IMAGE_TOKEN_ID = 151655
 const MERGED_TOKENS_PER_IMAGE = 64
-const PROMPT_LENGTH = 148
+const PROMPT_TEXT_TAIL = 20
 const TEXT_TOKEN_ID = 1000
 
 const modelSrcOverride = process.argv[2]
@@ -125,9 +128,13 @@ try {
     // GR00T requires the noise prior (flow-matching; it is not sampled in-model).
     const noise = new Float32Array(hp.chunkSize * hp.maxActionDim)
 
-    // Prompt: one run of `MERGED_TOKENS_PER_IMAGE` image tokens per camera, each
-    // followed by a text separator, padded out to the fixed `PROMPT_LENGTH`.
-    const tokens = new Int32Array(PROMPT_LENGTH)
+    // Prompt: one run of `MERGED_TOKENS_PER_IMAGE` image tokens per camera,
+    // each followed by a text separator, plus a short text tail. Sized off the
+    // active embodiment's camera count — a fixed 2-camera length would
+    // silently truncate the image-token runs of cameras 3+ after a switch to
+    // e.g. the 4-camera DROID row.
+    const promptLength = numCameras * (MERGED_TOKENS_PER_IMAGE + 1) + PROMPT_TEXT_TAIL
+    const tokens = new Int32Array(promptLength)
     let w = 0
     for (let cam = 0; cam < numCameras; cam++) {
       for (let k = 0; k < MERGED_TOKENS_PER_IMAGE && w < tokens.length; k++) {
@@ -136,7 +143,7 @@ try {
       if (w < tokens.length) tokens[w++] = TEXT_TOKEN_ID + cam
     }
     for (; w < tokens.length; w++) tokens[w] = TEXT_TOKEN_ID + w
-    const mask = new Uint8Array(PROMPT_LENGTH).fill(1)
+    const mask = new Uint8Array(promptLength).fill(1)
 
     console.log('▸ Running VLA inference...')
     const { actions, actionDim, chunkSize, stats } = await vla({

@@ -10016,6 +10016,7 @@ class Embodiment(RootModel[str]):
         str,
         Field(
             description="Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').",
+            max_length=256,
             min_length=1,
         ),
     ]
@@ -10033,6 +10034,7 @@ class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
         str | None,
         Field(
             description="Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').",
+            max_length=256,
             min_length=1,
         ),
     ] = None

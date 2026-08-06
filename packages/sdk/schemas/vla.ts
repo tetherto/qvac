@@ -12,9 +12,16 @@ const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/
 const MAX_EMBODIMENT_CAT_ID = 31
 const MAX_NUM_CAMERAS = 64
 
+// Sanity bound, not an addon contract — the addon only requires non-empty.
+// Real tags are short snake_case identifiers (longest known: 37 chars); the
+// cap stops a garbage or hostile string from travelling into the native
+// resolver while leaving ample headroom for legitimate tags.
+const MAX_EMBODIMENT_TAG_LENGTH = 256
+
 const embodimentTagSchema = z
   .string()
   .min(1)
+  .max(MAX_EMBODIMENT_TAG_LENGTH)
   .describe("Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').")
 
 const embodimentCatIdSchema = z
@@ -168,7 +175,7 @@ export const vlaHparamsSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(31)
+    .max(MAX_EMBODIMENT_CAT_ID)
     .optional()
     .describe(
       "The resolved embodiment's numeric `cat_id` — the value to pass back " +

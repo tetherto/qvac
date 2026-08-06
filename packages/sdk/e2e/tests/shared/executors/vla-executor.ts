@@ -185,10 +185,13 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
   }
 
   // Runtime embodiment switch round-trip on the multi-embodiment GR00T GGUF:
-  // switch by cat_id, run with inputs rebuilt from the refreshed hparams (the
-  // camera count follows the new embodiment), verify an unknown tag is
-  // rejected without disturbing the active embodiment, then switch back so
-  // other tests sharing the resource see the original default selection.
+  // switch via the `{ catId, numCameras }` object selector (exercising the
+  // camera-count override spelling), run with inputs rebuilt from the
+  // refreshed hparams (the camera count follows the new embodiment), verify
+  // an unknown tag is rejected without disturbing the active embodiment, then
+  // switch back by plain cat_id — covering both selector spellings. The
+  // restore runs in a finally so a throw mid-test cannot leave the shared
+  // vla-groot-multi resource on the switched embodiment for later tests.
   async runSetEmbodiment(
     dep: string,
     params: VlaParams,
@@ -199,39 +202,57 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
       const { hparams: initial } = await vlaHparams({ modelId })
       const initialCatId = (initial as HparamsShape).selectedEmbodimentCatId
       const switchCatId = params.switchCatId ?? 24
+      const switchNumCameras = params.switchNumCameras
 
-      const { hparams: switched } = await vlaSetEmbodiment({ modelId, embodiment: switchCatId })
-      const sw = switched as HparamsShape
-
+      let sw: HparamsShape | undefined
       let ranOnSwitched = false
-      const inputs = this.buildSyntheticInputs(sw)
-      const { actions } = await vla({ modelId, ...inputs })
-      ranOnSwitched = actions.length === sw.chunkSize * sw.actionDim
-
       let unknownTagRejected = false
+      let activeCatIdAfterReject: number | undefined
+      let restoredCatId: number | undefined
       try {
-        await vlaSetEmbodiment({ modelId, embodiment: 'qvac_e2e_no_such_embodiment' })
-      } catch {
-        unknownTagRejected = true
-      }
-      const { hparams: afterReject } = await vlaHparams({ modelId })
-      const activeCatIdAfterReject = (afterReject as HparamsShape).selectedEmbodimentCatId
+        const { hparams: switched } = await vlaSetEmbodiment({
+          modelId,
+          embodiment:
+            switchNumCameras !== undefined
+              ? { catId: switchCatId, numCameras: switchNumCameras }
+              : switchCatId
+        })
+        sw = switched as HparamsShape
 
-      const { hparams: restored } = await vlaSetEmbodiment({
-        modelId,
-        embodiment: initialCatId ?? 0
-      })
+        const inputs = this.buildSyntheticInputs(sw)
+        const { actions } = await vla({ modelId, ...inputs })
+        ranOnSwitched = actions.length === sw.chunkSize * sw.actionDim
+
+        try {
+          await vlaSetEmbodiment({ modelId, embodiment: 'qvac_e2e_no_such_embodiment' })
+        } catch {
+          unknownTagRejected = true
+        }
+        const { hparams: afterReject } = await vlaHparams({ modelId })
+        activeCatIdAfterReject = (afterReject as HparamsShape).selectedEmbodimentCatId
+      } finally {
+        try {
+          const { hparams: restored } = await vlaSetEmbodiment({
+            modelId,
+            embodiment: initialCatId ?? 0
+          })
+          restoredCatId = (restored as HparamsShape).selectedEmbodimentCatId
+        } catch {
+          // Leave restoredCatId undefined — the expectation's restore check
+          // fails visibly rather than masking the original error.
+        }
+      }
 
       return ValidationHelpers.validate(
         {
           initialCatId,
-          switchedCatId: sw.selectedEmbodimentCatId,
-          switchedTag: sw.selectedEmbodimentTag,
-          switchedNumCameras: sw.numCameras,
+          switchedCatId: sw?.selectedEmbodimentCatId,
+          switchedTag: sw?.selectedEmbodimentTag,
+          switchedNumCameras: sw?.numCameras,
           ranOnSwitched,
           unknownTagRejected,
           activeCatIdAfterReject,
-          restoredCatId: (restored as HparamsShape).selectedEmbodimentCatId
+          restoredCatId
         },
         expectation
       )

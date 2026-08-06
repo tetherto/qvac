@@ -12667,6 +12667,7 @@
                         {
                           "type": "string",
                           "minLength": 1,
+                          "maxLength": 256,
                           "description": "Embodiment tag string as stored in the GGUF (e.g. 'libero_sim')."
                         },
                         {
@@ -12681,6 +12682,7 @@
                             "tag": {
                               "type": "string",
                               "minLength": 1,
+                              "maxLength": 256,
                               "description": "Embodiment tag string as stored in the GGUF (e.g. 'libero_sim')."
                             },
                             "catId": {
