@@ -110,8 +110,11 @@ function humanizeSourceFile (sourceFile) {
 // row from an Adreno device whose backend was guessed (or hinted with the same
 // platform guess) must resolve to opencl. Observed backend ids are never
 // overridden.
+// Device Farm stamps the model into the device name ("Samsung Galaxy S25
+// Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
+// run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-const ADRENO_DEVICE_NAME_RE = /galaxy[\s_-]*s25/i
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25/i
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||

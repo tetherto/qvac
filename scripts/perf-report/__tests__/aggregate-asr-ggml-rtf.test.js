@@ -233,14 +233,18 @@ test('android GPU rows on Adreno devices fall back to opencl when no backend id 
   }
   assert.equal(normalizeMobileRecords(probed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')[0].backend, 'opencl')
 
-  // Device-name match covers reports whose GPU probe came back empty.
-  const unprobed = {
-    addon: 'whisper',
-    addon_type: 'whisper',
-    device: { name: 'Samsung Galaxy S25', platform: 'android' },
-    results: [gpuResult]
+  // Device-name match covers Device Farm reports, where the GPU probe cannot
+  // run and device.gpu is always null. Both naming forms are accepted.
+  for (const name of ['Samsung Galaxy S25 Ultra', 'Samsung S25 Ultra']) {
+    const unprobed = {
+      addon: 'whisper',
+      addon_type: 'whisper',
+      device: { name, platform: 'android', gpu: null },
+      results: [gpuResult]
+    }
+    const [row] = normalizeMobileRecords(unprobed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')
+    assert.equal(row.backend, 'opencl', `expected opencl for ${name}`)
   }
-  assert.equal(normalizeMobileRecords(unprobed, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'opencl')
 })
 
 test('android GPU fallback stays vulkan off Adreno, and a reported backend id beats the Adreno correction', () => {

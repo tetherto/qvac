@@ -208,9 +208,10 @@ test('android GPU rows on Adreno devices resolve to opencl, correcting the guess
   const [adrenoRecord] = expandCanonicalReport(adreno, '/x/Samsung_Galaxy_S25/performance-report.json').records
   assert.equal(adrenoRecord.backend, 'opencl')
 
-  // Device-name match covers reports whose GPU probe came back empty.
+  // Device Farm shape as actually emitted: the GPU probe cannot run there, so
+  // device.gpu is null and the device name is the only Adreno signal.
   const unprobed = mobileCanonicalReport()
-  unprobed.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: null }
+  unprobed.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
   unprobed.results[0].test = '[GPU] supertonic q4 vulkan'
   const [unprobedRecord] = expandCanonicalReport(unprobed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json').records
   assert.equal(unprobedRecord.backend, 'opencl')

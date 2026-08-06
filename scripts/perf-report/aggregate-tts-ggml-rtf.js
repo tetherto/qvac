@@ -95,8 +95,11 @@ function formatMaybeInteger (value) {
 // The mobile test labels carry a "vulkan" token derived from the same platform
 // guess (the harness does not probe the active backend), so that hint is
 // corrected too.
+// Device Farm stamps the model into the device name ("Samsung Galaxy S25
+// Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
+// run there, so device.gpu stays null.
 const ADRENO_GPU_RE = /adreno/i
-const ADRENO_DEVICE_NAME_RE = /galaxy[\s_-]*s25/i
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25/i
 
 function isAdrenoDevice (gpuModel, deviceName) {
   return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
