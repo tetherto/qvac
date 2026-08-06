@@ -37,7 +37,7 @@ Whether you're building applications with the SDK or using QVAC as a local model
 | **Image generation** | Text-to-image and image-to-image generation via a customized Diffusion backend. |
 | **Video generation** | Text-to-video and image-to-video generation via a customized Diffusion backend. |
 | **Transcription** | Automatic speech recognition (ASR) via a customized Whisper backend or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3). |
-| **Text-to-Speech** | Speech synthesis (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml). |
+| **Text-to-Speech** | Speech synthesis (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 engines. |
 | **Translation** | Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a customized Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |

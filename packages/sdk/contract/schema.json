@@ -8,6 +8,9 @@
       "description": "Any request accepted by the server, in wire (pre-parse) shape.",
       "anyOf": [
         {
+          "$ref": "#/$defs/audioGenStream.request"
+        },
+        {
           "$ref": "#/$defs/batchCompletionStream.request"
         },
         {
@@ -127,6 +130,9 @@
       "title": "AnyResponse",
       "description": "Any response emitted by the server, including progress updates and error envelopes.",
       "anyOf": [
+        {
+          "$ref": "#/$defs/audioGenStream.response"
+        },
         {
           "$ref": "#/$defs/batchCompletionStream.response"
         },
@@ -254,6 +260,143 @@
           "$ref": "#/$defs/videoStream.response"
         }
       ]
+    },
+    "audioGenStream.request": {
+      "title": "AudioGenStreamRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caption": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lyrics": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "vocalLanguage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bpm": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "keyscale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timesignature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "duration": {
+          "description": "Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "type": {
+          "type": "string",
+          "const": "audioGenStream"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "caption", "type"],
+      "additionalProperties": false
+    },
+    "audioGenStream.response": {
+      "title": "AudioGenStreamResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "audioGenStream"
+        },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["stage", "step", "total"],
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseProgress"
+        },
+        "data": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sampleRate": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "channels": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bitsPerSample": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "done": {
+          "default": false,
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "AudioGenStreamResponseStopReason"
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "audioDurationMs": {
+              "type": "number"
+            },
+            "totalTimeMs": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseStats"
+        }
+      },
+      "required": ["type", "done"],
+      "additionalProperties": false
     },
     "batchCompletionStream.request": {
       "title": "BatchCompletionStreamRequest",
@@ -1243,6 +1386,7 @@
                 "transcribe",
                 "translate",
                 "diffusion",
+                "audiogen",
                 "tts",
                 "ocr",
                 "vla",
@@ -2542,6 +2686,7 @@
         "parakeet-transcription",
         "ggml-ocr",
         "sdcpp-generation",
+        "audiogen-ggml",
         "ggml-vla",
         "ggml-classification"
       ],
@@ -2556,6 +2701,7 @@
         "parakeetTranscription",
         "ggmlOcr",
         "sdcppGeneration",
+        "audiogenGgml",
         "ggmlVla",
         "ggmlClassification"
       ]
@@ -2572,6 +2718,7 @@
         "@qvac/sdk/tts-ggml/plugin",
         "@qvac/sdk/ggml-ocr/plugin",
         "@qvac/sdk/sdcpp-generation/plugin",
+        "@qvac/sdk/audiogen-ggml/plugin",
         "@qvac/sdk/ggml-vla/plugin",
         "@qvac/sdk/ggml-classification/plugin"
       ],
@@ -2584,6 +2731,7 @@
         "TTS",
         "OCR",
         "DIFFUSION",
+        "AUDIOGEN",
         "VLA",
         "CLASSIFICATION"
       ]
@@ -3930,6 +4078,7 @@
                 "tts",
                 "ocr",
                 "diffusion",
+                "audiogen",
                 "vla",
                 "classification",
                 "other"
@@ -7892,6 +8041,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -7903,6 +8053,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -8233,6 +8384,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -8244,6 +8396,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -8488,6 +8641,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -8499,6 +8653,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -9104,6 +9259,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -9115,6 +9271,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -9185,6 +9342,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -9196,6 +9354,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -9301,6 +9460,7 @@
                                             "parakeet-transcription",
                                             "ggml-ocr",
                                             "sdcpp-generation",
+                                            "audiogen-ggml",
                                             "ggml-vla",
                                             "ggml-classification",
                                             "llm",
@@ -9312,6 +9472,7 @@
                                             "tts",
                                             "ocr",
                                             "diffusion",
+                                            "audiogen",
                                             "vla",
                                             "classification"
                                           ],
@@ -9382,6 +9543,7 @@
                                             "parakeet-transcription",
                                             "ggml-ocr",
                                             "sdcpp-generation",
+                                            "audiogen-ggml",
                                             "ggml-vla",
                                             "ggml-classification",
                                             "llm",
@@ -9393,6 +9555,7 @@
                                             "tts",
                                             "ocr",
                                             "diffusion",
+                                            "audiogen",
                                             "vla",
                                             "classification"
                                           ],
@@ -9463,6 +9626,7 @@
                                             "parakeet-transcription",
                                             "ggml-ocr",
                                             "sdcpp-generation",
+                                            "audiogen-ggml",
                                             "ggml-vla",
                                             "ggml-classification",
                                             "llm",
@@ -9474,6 +9638,7 @@
                                             "tts",
                                             "ocr",
                                             "diffusion",
+                                            "audiogen",
                                             "vla",
                                             "classification"
                                           ],
@@ -9804,6 +9969,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -9815,6 +9981,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -9885,6 +10052,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -9896,6 +10064,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -9966,6 +10135,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -9977,6 +10147,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -10047,6 +10218,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -10058,6 +10230,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -10128,6 +10301,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -10139,6 +10313,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -10209,6 +10384,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -10220,6 +10396,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -10373,6 +10550,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -10384,6 +10562,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -10454,6 +10633,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -10465,6 +10645,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -10800,6 +10981,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -10811,6 +10993,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11053,6 +11236,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11064,6 +11248,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11135,6 +11320,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11146,6 +11332,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11217,6 +11404,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11228,6 +11416,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11299,6 +11488,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11310,6 +11500,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11381,6 +11572,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11392,6 +11584,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11463,6 +11656,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11474,6 +11668,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11545,6 +11740,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11556,6 +11752,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11627,6 +11824,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11638,6 +11836,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11709,6 +11908,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11720,6 +11920,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11791,6 +11992,7 @@
                                     "parakeet-transcription",
                                     "ggml-ocr",
                                     "sdcpp-generation",
+                                    "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-classification",
                                     "llm",
@@ -11802,6 +12004,7 @@
                                     "tts",
                                     "ocr",
                                     "diffusion",
+                                    "audiogen",
                                     "vla",
                                     "classification"
                                   ],
@@ -11882,6 +12085,7 @@
                                         "parakeet-transcription",
                                         "ggml-ocr",
                                         "sdcpp-generation",
+                                        "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-classification",
                                         "llm",
@@ -11893,6 +12097,7 @@
                                         "tts",
                                         "ocr",
                                         "diffusion",
+                                        "audiogen",
                                         "vla",
                                         "classification"
                                       ],
@@ -11949,6 +12154,437 @@
               "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestSdcppGeneration"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string"
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "delegate": {
+                  "type": "object",
+                  "properties": {
+                    "providerPublicKey": {
+                      "type": "string",
+                      "pattern": "^[0-9a-fA-F]{64}$",
+                      "description": "Hex-encoded public key of the remote provider to delegate to."
+                    },
+                    "timeout": {
+                      "description": "Per-call timeout in milliseconds for the delegated request.",
+                      "type": "number",
+                      "minimum": 100
+                    },
+                    "healthCheckTimeout": {
+                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
+                      "type": "number",
+                      "minimum": 100
+                    },
+                    "fallbackToLocal": {
+                      "default": false,
+                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
+                      "type": "boolean"
+                    },
+                    "forceNewConnection": {
+                      "default": false,
+                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["providerPublicKey"],
+                  "title": "LoadModelSrcRequestAudiogenGgmlDelegate"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "audiogen-ggml"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "useGPU": {
+                      "type": "boolean"
+                    },
+                    "inferenceSteps": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "shift": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "nGpuLayers": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "threads": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "backendsDir": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "textEncModelSrc": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc"
+                        }
+                      ]
+                    },
+                    "lmModelSrc": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc"
+                        }
+                      ]
+                    },
+                    "ditModelSrc": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc"
+                        }
+                      ]
+                    },
+                    "vaeModelSrc": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc"
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestAudiogenGgml"
             },
             {
               "type": "object",
@@ -12455,6 +13091,7 @@
                                 "parakeet-transcription",
                                 "ggml-ocr",
                                 "sdcpp-generation",
+                                "audiogen-ggml",
                                 "ggml-vla",
                                 "ggml-classification",
                                 "llm",
@@ -12466,6 +13103,7 @@
                                 "tts",
                                 "ocr",
                                 "diffusion",
+                                "audiogen",
                                 "vla",
                                 "classification"
                               ],
@@ -12725,6 +13363,7 @@
                 "ocr",
                 "parakeet",
                 "diffusion",
+                "audiogen",
                 "vla",
                 "classification",
                 "other"
@@ -12753,6 +13392,7 @@
                 "ggml-ocr",
                 "parakeet-transcription",
                 "sdcpp-generation",
+                "audiogen-ggml",
                 "ggml-vla",
                 "ggml-classification",
                 "onnx-vad"
@@ -12867,6 +13507,7 @@
                   "ocr",
                   "parakeet",
                   "diffusion",
+                  "audiogen",
                   "vla",
                   "classification",
                   "other"
@@ -12895,6 +13536,7 @@
                   "ggml-ocr",
                   "parakeet-transcription",
                   "sdcpp-generation",
+                  "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
                   "onnx-vad"
@@ -12968,6 +13610,7 @@
             "ocr",
             "parakeet",
             "diffusion",
+            "audiogen",
             "vla",
             "classification",
             "other"
@@ -13038,6 +13681,7 @@
                   "ocr",
                   "parakeet",
                   "diffusion",
+                  "audiogen",
                   "vla",
                   "classification",
                   "other"
@@ -13066,6 +13710,7 @@
                   "ggml-ocr",
                   "parakeet-transcription",
                   "sdcpp-generation",
+                  "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
                   "onnx-vad"

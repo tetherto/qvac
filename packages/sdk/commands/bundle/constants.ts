@@ -8,6 +8,7 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'tts-ggml': { exportName: 'ttsPlugin' },
   'ggml-ocr': { exportName: 'ocrPlugin' },
   'sdcpp-generation': { exportName: 'diffusionPlugin' },
+  'audiogen-ggml': { exportName: 'audioGenPlugin' },
   'ggml-vla': { exportName: 'vlaPlugin' },
   'ggml-classification': { exportName: 'classificationPlugin' }
 }

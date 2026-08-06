@@ -15,6 +15,13 @@
     "sdk_sources": ["workspace"]
   },
   {
+    "package": "inference",
+    "path": "packages/inference",
+    "pkg_manager": "bun",
+    "needs_bare": true,
+    "tests_bare": true
+  },
+  {
     "package": "cli",
     "path": "packages/cli",
     "sdk_sources": ["workspace"],
