@@ -6,7 +6,13 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/vla-ggml"
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "artifactNamePrefix": "vla-",
+          "linuxExtraPackages": "libxi-dev libxtst-dev libxrandr-dev",
+          "includeVulkanSdk": true,
+          "includeRocm": true
+        }
       },
       "inputs": [
         "default",

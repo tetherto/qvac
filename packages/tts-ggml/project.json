@@ -6,7 +6,12 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/tts-ggml"
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "artifactNamePrefix": "tts-ggml-",
+          "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
+          "includeVulkanSdk": true
+        }
       },
       "inputs": [
         "default",

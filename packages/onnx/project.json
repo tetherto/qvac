@@ -6,7 +6,10 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run build",
-        "cwd": "packages/onnx"
+        "cwd": "packages/onnx",
+        "ci": {
+          "artifactNamePrefix": "onnx-"
+        }
       },
       "inputs": [
         "default",
