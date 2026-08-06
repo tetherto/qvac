@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.40.0] - 2026-08-06
+
+This minor release enables true cross-request continuous batching for
+`@qvac/llm-llamacpp`. Independent `run()` calls can now be admitted as separate
+native jobs and decode concurrently through the shared batch scheduler when
+`parallel` is configured above one.
+
+### Added
+
+- Multi-job addon admission for LLM requests, including scheduler-minted job ids
+  used to route streamed output, terminal stats, and cancellation to the correct
+  request.
+- Cross-request text and multimodal continuous batching: separate callers can
+  share decode steps instead of being serialized behind a single active job.
+- Per-job cancellation and active-job accounting for queued and in-flight LLM
+  work, covering batch generation, finetuning exclusivity, unload teardown, and
+  busy-slot rejection behavior.
+
+### Pull Requests
+
+- [#3445](https://github.com/tetherto/qvac/pull/3445) - QVAC-18397: Multi-job
+  queue at addon-cpp and LLM
+
 ## [0.39.4] - 2026-08-04
 
 Internal refactor of how JS configuration is parsed into C++. Generation,
