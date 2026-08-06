@@ -16,7 +16,6 @@ const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const isApple = platform === 'darwin' || platform === 'ios'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
 function getBaseDir() {
@@ -374,7 +373,7 @@ test(
     const TTSGgml = require('@qvac/tts-ggml')
     const text =
       'The quick brown fox jumps over the lazy dog while the sun sets slowly behind the hills.'
-    const useGPU = isApple && !NO_GPU
+    const useGPU = !NO_GPU
 
     async function synth(extra) {
       const model = new TTSGgml({
@@ -489,8 +488,8 @@ test(
 )
 
 // Desktop quant + backend coverage: q8_0 + f16 for indic/mini, q8_0 for large.
-// Runs on the platform's GPU-if-available backend (Metal on Apple GPU runners,
-// CPU otherwise). large self-gates on RAM; any tier that isn't staged skips
+// Runs on the platform's GPU-if-available backend (Metal on Apple, Vulkan on
+// Linux/Windows). large self-gates on RAM; any tier that isn't staged skips
 // (t.pass) so a not-yet-registered tier never fails CI. Registered per PR #3372.
 // Desktop-only: the mobile Parler surface is covered by the gpu-smoke legs.
 const PARLER_QUANT_MATRIX = [
@@ -524,7 +523,7 @@ for (const { variant, quant } of PARLER_QUANT_MATRIX) {
         return
       }
 
-      const useGPU = isApple && !NO_GPU
+      const useGPU = !NO_GPU
       const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42, useGPU })
       try {
         const text =

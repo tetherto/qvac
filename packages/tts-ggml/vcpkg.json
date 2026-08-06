@@ -1,4 +1,6 @@
 {
+  "name": "tts-ggml",
+  "version": "0.6.1",
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
