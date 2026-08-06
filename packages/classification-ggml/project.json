@@ -31,7 +31,16 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/classification-ggml"
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "mac-mini-m4", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
+          ]
+        }
       }
     },
     "lint": {
