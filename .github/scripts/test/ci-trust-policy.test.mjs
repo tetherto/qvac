@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+const MILLISECONDS_PER_MINUTE = 60_000
 
 function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
@@ -1277,4 +1278,24 @@ test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_targ
   assert.doesNotMatch(entry, /pull_request_target/)
   assert.doesNotMatch(entry, /secrets:\s*inherit/)
   assert.doesNotMatch(entry, /HF_TOKEN/)
+})
+
+test('tts-ggml Android per-test wait remains below its Mocha ceiling', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+
+  function integerValue(key) {
+    const match = workflow.match(new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, 'm'))
+    assert.ok(match, `${key} must be a literal integer`)
+    return Number(match[1])
+  }
+
+  const androidWaitMs =
+    integerValue('android-per-test-timeout-minutes') * MILLISECONDS_PER_MINUTE
+  const mochaTimeoutMs = integerValue('mocha-timeout-ms')
+
+  assert.ok(
+    androidWaitMs < mochaTimeoutMs,
+    `android per-test wait (${androidWaitMs} ms) must remain below ` +
+      `Mocha timeout (${mochaTimeoutMs} ms)`,
+  )
 })

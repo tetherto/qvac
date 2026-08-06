@@ -86,8 +86,10 @@ import {
   getSystemResourcesResponseSchema
 } from './system-resources'
 import { classifyRequestSchema, classifyResponseSchema } from './classification'
+import { audioGenStreamRequestSchema, audioGenStreamResponseSchema } from '@/schemas/audio-gen'
 
 export const requestSchema = z.union([
+  audioGenStreamRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -129,6 +131,7 @@ export const requestSchema = z.union([
 ])
 
 export const responseSchema = z.discriminatedUnion('type', [
+  audioGenStreamResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,

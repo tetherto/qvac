@@ -152,11 +152,18 @@ function generateBaseName(input: BaseNameInput): string {
       return generateParakeetName(input)
     case 'diffusion':
       return generateDiffusionName(input)
+    case 'audiogen':
+      return generateAudioGenName(input)
     case 'vla':
       return generateVlaName(input)
     default:
       return cleanPart(input.filename.replace(/\.\w+$/, ''))
   }
+}
+
+function generateAudioGenName({ filename }: BaseNameInput): string {
+  const modelName = cleanPart(filename.replace(/\.\w+$/, ''))
+  return `AUDIOGEN_${modelName}`
 }
 
 // VLA filenames alone don't always identify the model: the single- and
