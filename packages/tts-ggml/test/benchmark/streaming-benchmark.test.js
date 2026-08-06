@@ -133,7 +133,11 @@ function buildCanonicalStreamingReport(settings, summary, backend) {
           // Consumed by aggregate-tts-ggml-rtf.js expandCanonicalReport ->
           // chunkCount.mean (the "Chunks/run" column for mobile streaming rows).
           chunks_per_run_mean:
-            typeof chunkCount.mean === 'number' ? Number(chunkCount.mean.toFixed(2)) : null
+            typeof chunkCount.mean === 'number' ? Number(chunkCount.mean.toFixed(2)) : null,
+          // The ggml backend the device actually selected (0=CPU 1=Metal
+          // 2=CUDA 3=Vulkan 4=OpenCL 99=other), so the aggregator labels the
+          // real backend instead of guessing from the platform family.
+          backend_id: typeof summary.backendId === 'number' ? summary.backendId : null
         }
       }
     ]

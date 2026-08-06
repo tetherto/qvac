@@ -89,12 +89,18 @@ function formatMaybeInteger (value) {
   return String(Math.round(Number(value)))
 }
 
+// ggml active-backend ids reported by the addon, mapped to the backend label.
+// Used to recover the REAL backend a mobile device selected at runtime rather
+// than guessing it from the platform family (Adreno=OpenCL vs Mali=Vulkan).
+// 99 ("other-gpu") is deliberately absent so it falls through to the guess.
+const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
+
 // Samsung Galaxy S25 GPU rows displayed "vulkan". The S25 family is Adreno
 // (Snapdragon worldwide), and ggml's Adreno path is OpenCL, so an android GPU
 // row from an Adreno device whose backend was guessed must resolve to opencl.
 // The mobile test labels carry a "vulkan" token derived from the same platform
-// guess (the harness does not probe the active backend), so that hint is
-// corrected too.
+// guess, so that hint is corrected too. This heuristic only covers artifacts
+// that predate the `backend_id` metric — newer runs carry ground truth.
 // Device Farm stamps the model into the device name ("Samsung Galaxy S25
 // Ultra"), and it is the only Adreno signal on mobile: the GPU probe cannot
 // run there, so device.gpu stays null.
@@ -126,6 +132,16 @@ function normalizeBackend (platformName, useGPU, backendHint, adreno) {
     case 'win32': return hint || 'vulkan'
     default: return hint || 'gpu'
   }
+}
+
+// Prefer the observed ggml backend id (per-device ground truth) over the
+// platform-family guess. Falls back to normalizeBackend for artifacts produced
+// before the mobile benchmarks emitted `backend_id`.
+function resolveMobileBackend (backendId, platformName, useGPU, backendHint, adreno) {
+  if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
+    return BACKEND_BY_ID[backendId]
+  }
+  return normalizeBackend(platformName, useGPU, backendHint, adreno)
 }
 
 function humanizeSourceFile (sourceFile) {
@@ -247,6 +263,8 @@ function expandCanonicalReport (report, sourceFile) {
         deviceLabel: device.name,
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
+        backendId: toNumberOrNull(m.backend_id),
+        gpuModel: device.gpu || null,
         labels: { device: device.name, runner: device.runner, label: `${platformFamily}-streaming-${parsed.variant}` },
         summary: {
           ttfaMs: { mean: toNumberOrNull(m.ttfa_ms) },
@@ -273,6 +291,7 @@ function expandCanonicalReport (report, sourceFile) {
         runnerLabel: device.runner,
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
+        backendId: toNumberOrNull(m.backend_id),
         label: [
           `${platformFamily}-${parsed.variant || 'q4'}`,
           parsed.language ? `lang=${parsed.language}` : '',
@@ -406,7 +425,7 @@ function normalizeMobileRecord (record, sourceFile) {
   const memory = memoryFromSummary(summary)
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
-  const backend = normalizeBackend(platformFamily, useGPU, record.backendHint,
+  const backend = resolveMobileBackend(record.backendId, platformFamily, useGPU, record.backendHint,
     isAdrenoDevice(record.gpuModel, record.deviceLabel))
 
   return {
@@ -507,7 +526,10 @@ function normalizeStreamingRecord (report, sourceFile, source) {
   const platformName = report.platformName || ''
   const useGPU = Boolean((report.requested && report.requested.useGPU) || report.useGPU)
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || report.deviceLabel || ''
-  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || report.backendHint || '',
+  // Only the mobile canonical path passes a top-level backendId; desktop
+  // streaming artifacts keep theirs under summary and stay on the hint path.
+  const backend = resolveMobileBackend(report.backendId, platformName, useGPU,
+    (report.labels && report.labels.backend) || report.backendHint || '',
     isAdrenoDevice((report.labels && report.labels.gpuModel) || report.gpuModel, deviceLabel))
 
   return {

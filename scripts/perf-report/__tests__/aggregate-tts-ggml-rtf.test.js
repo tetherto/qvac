@@ -232,6 +232,37 @@ test('android GPU rows on Adreno devices resolve to opencl, correcting the guess
   assert.equal(cpuRecord.backend, 'cpu')
 })
 
+test('the observed backend id is ground truth and beats both the label hint and the Adreno heuristic', () => {
+  // The mobile benchmarks now emit metrics.backend_id (0=CPU 1=Metal 2=CUDA
+  // 3=Vulkan 4=OpenCL), so the platform guess is only a fallback for older
+  // artifacts.
+  const withId = (deviceName, backendId, label) => {
+    const report = mobileCanonicalReport()
+    report.device = { name: deviceName, platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
+    report.results[0].test = label
+    report.results[0].metrics.backend_id = backendId
+    return expandCanonicalReport(report, `/x/${deviceName.replace(/ /g, '_')}/performance-report.json`).records[0]
+  }
+
+  // 4 == opencl on a device the name heuristic would not have caught.
+  assert.equal(withId('Google Pixel 9', 4, '[GPU] supertonic q4 vulkan').backend, 'opencl')
+  // 3 == vulkan on an Adreno device: ground truth wins over the correction.
+  assert.equal(withId('Samsung Galaxy S25 Ultra', 3, '[GPU] supertonic q4 vulkan').backend, 'vulkan')
+  // Absent id keeps the Adreno fallback for pre-backend_id artifacts.
+  assert.equal(withId('Samsung Galaxy S25 Ultra', null, '[GPU] supertonic q4 vulkan').backend, 'opencl')
+})
+
+test('streaming rows also take the observed backend id from the canonical report', () => {
+  const report = mobileCanonicalReport()
+  report.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
+  report.results[0].test = '[GPU] streaming supertonic q4 vulkan'
+  report.results[0].metrics = { ttfa_ms: 120, inter_chunk_p95_ms: 40, wall_time_ms: 900, chunks_per_run_mean: 6, backend_id: 4 }
+
+  const { streaming } = expandCanonicalReport(report, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')
+  assert.equal(streaming.length, 1)
+  assert.equal(streaming[0].backend, 'opencl')
+})
+
 test('mobile multilingual rows keep language separate from variant and backend', () => {
   const report = mobileCanonicalReport()
   report.results[0].test = '[CPU] chatterbox mtl es'
