@@ -50,7 +50,17 @@ target_include_directories(
 #
 # Accepted consequence: output-callback-lifetime's QLOG also routes through JsLogger
 # (desktop leaves it on stdout). With no logger installed those calls take the no-owner
-# path, and test-groups.json isolates each suite in its own process.
+# path, and test-groups.json gives each SUITE its own app process, so logger state cannot
+# leak from the logger suite into another one.
+#
+# That isolation is COARSER than desktop, deliberately. Desktop runs one process per test
+# FILE — logger's scripts.test is `bare test.js && bare teardown.test.js && bare
+# reject.test.js` — whereas logger's three entries share a single device process here. So
+# logger/test.js can begin with singleton state left behind by teardown.test.js's
+# terminated workers, which desktop's process boundary never produces. Per-file groups
+# would restore exact parity at 7 device runs per platform instead of 4; that cost was
+# weighed and declined. Raised on #3624 — do not read the line above as desktop-equivalent
+# isolation.
 target_compile_definitions(${inference_addon_cpp_mobile_tests} PUBLIC JS_LOGGER)
 
 if(WIN32)
