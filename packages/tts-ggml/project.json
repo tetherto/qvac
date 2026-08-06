@@ -41,7 +41,22 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/tts-ggml"
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "mode": "coverage",
+          "platforms": [
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
+          ],
+          "hasCcache": true,
+          "needsTtsVenvModels": true,
+          "hardGateCommand": "cd build && ./tts_ggml_tests --gtest_filter='-*RealGguf*'",
+          "buildOutputDir": "build",
+          "testEnvVars": [
+            { "name": "QVAC_TEST_CHATTERBOX_T3_GGUF", "path": "models/chatterbox-t3-mtl.gguf" },
+            { "name": "QVAC_TEST_CHATTERBOX_S3GEN_GGUF", "path": "models/chatterbox-s3gen-mtl.gguf" },
+            { "name": "QVAC_TEST_SUPERTONIC_GGUF", "path": "models/supertonic.gguf" }
+          ]
+        }
       }
     }
   },
