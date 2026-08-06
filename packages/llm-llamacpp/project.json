@@ -34,6 +34,17 @@
         "cwd": "packages/llm-llamacpp"
       }
     },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'benchmark orchestrated by benchmark-performance-nx.yml'",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "aggregateScript": "scripts/perf-report/aggregate-llamacpp-llm-rtf.js",
+          "manualDir": "packages/llm-llamacpp/benchmarks/manual-results"
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
