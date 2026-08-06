@@ -114,6 +114,47 @@ test('createScene: parameter validation happens before any native call', async f
     /multiples of 32/,
     'height not a multiple of 32'
   )
+  await t.exception.all(
+    async () => world.createScene({ ...SCENE_OK, width: -32 }),
+    /positive multiples of 32/,
+    'negative width (multiple of 32) throws'
+  )
+  await t.exception.all(
+    async () => world.createScene({ ...SCENE_OK, height: 0 }),
+    /positive multiples of 32/,
+    'zero height throws instead of silently defaulting'
+  )
+  await t.exception.all(
+    async () => world.createScene({ ...SCENE_OK, width: 831.5 }),
+    /positive multiples of 32/,
+    'non-integer width throws'
+  )
+})
+
+test('constructor: frameJpegQuality range validation', async function (t) {
+  await t.exception.all(
+    () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: 101 } }),
+    /\[0, 100\]/,
+    'quality > 100 throws'
+  )
+  await t.exception.all(
+    () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: -1 } }),
+    /\[0, 100\]/,
+    'negative quality throws'
+  )
+  await t.exception.all(
+    () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: 42.5 } }),
+    /\[0, 100\]/,
+    'non-integer quality throws'
+  )
+  t.execution(
+    () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: 0 } }),
+    '0 (PNG) accepted'
+  )
+  t.execution(
+    () => new WorldStableDiffusion({ files: FILES, config: { frameJpegQuality: 85 } }),
+    '85 accepted'
+  )
 })
 
 test('step: rejects before load()', async function (t) {

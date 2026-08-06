@@ -366,7 +366,8 @@ JSCATCH
 
 /**
  * Run one walk step: generate the next block under the given action mask and
- * stream its decoded frames as PNG byte arrays (plus one progress JSON).
+ * stream its decoded frames as PNG byte arrays -- or JPEG when the session's
+ * frameJpegQuality is 1..100 -- (plus one progress JSON).
  * Args: [0] instance handle, [1] { input: { type: 'text', data: paramsJson } }
  * paramsJson: { "actionMask": <0..255> }
  */

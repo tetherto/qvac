@@ -2,15 +2,20 @@
 
 // ABot-World integration tests.
 //
-// Two lanes, both through the addon built against
-// qvac-ext-stable-diffusion.cpp#22 (temporary vcpkg overlay port):
+// Lanes below run through the addon built against the published
+// stable-diffusion-cpp registry port (2026-07-03#6, engine PRs #22 + #27):
 //
 //   1. Guard lane — the ABot model set loads natively and batch video
 //      generation is rejected: ABot is a causal/interactive model, not a
 //      one-shot generator.
-//   2. Walk lane — the real thing: an interactive walk session
-//      (@qvac/diffusion-cpp/world) steps through the fixed scene under
-//      keyboard actions and streams decoded PNG frames.
+//   2. Walk lane — an interactive walk session (@qvac/diffusion-cpp/world)
+//      steps through the fixed scene under keyboard actions and streams
+//      decoded PNG frames (no-op until a scene pack ships in the S3 set).
+//   3. World-generation lane — the full workflow: native createScene()
+//      (umT5 + Wan2.2 VAE) from a real photo, then a KV-cache walk over a
+//      mixed key tape with busy-contract and motion asserts.
+//   4. Variations lane — parameter coverage: small-image upscale path,
+//      448x256 output, JPEG frame encoding.
 //
 // Model provisioning (self-contained):
 //   - UMT5-XXL comes from the pinned models manifest via ensureModelPath

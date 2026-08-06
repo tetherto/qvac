@@ -15,7 +15,8 @@
  * ABOT_MODELS_DIR must contain:
  *   abot-world-0-5b-lf-dit-q8_0.gguf   (or set ABOT_DIT to a specific file)
  *   taew2_2_f16.gguf                   (or set ABOT_TAEHV)
- *   scene.safetensors                  (or set ABOT_SCENE)
+ *   scene.safetensors                  (or set ABOT_SCENE; optional — without
+ *                                       one, generate a world from the page)
  *
  * Optional env: HOST (127.0.0.1), PORT (8787), ABOT_THREADS, ABOT_SEED,
  * ABOT_BACKEND (e.g. "cpu", "cuda"), ABOT_KV_CACHE=1 (per-layer history KV
@@ -27,9 +28,11 @@
  * points at a file that does not exist yet AND ABOT_PROMPT + ABOT_IMAGE are
  * set, the server first builds the scene pack on-device (umT5-XXL prompt
  * encode + Wan2.2 VAE first-frame encode; models via ABOT_T5 / ABOT_VAE or
- * umt5-xxl-enc-f16.gguf / wan2.2_vae_f16.gguf in ABOT_MODELS_DIR), writes it
- * to ABOT_SCENE, then loads the walk session with it. Optional ABOT_WIDTH /
- * ABOT_HEIGHT (multiples of 32; default 832x480).
+ * umt5-xxl-enc-q8_0.gguf / umt5-xxl-enc-f16.gguf / wan2.2_vae_f16.gguf in
+ * ABOT_MODELS_DIR), writes it to ABOT_SCENE, then loads the walk session with
+ * it. Optional ABOT_WIDTH / ABOT_HEIGHT (multiples of 32; default 832x480).
+ * Without a scene and without creation inputs the server still starts and
+ * waits for the page's "Generate a world" upload instead of failing the load.
  *
  * Endpoints: GET / (page), /state (telemetry), /stream (paced MJPEG push),
  * /frame?i=N (single frame + X-Frame-Ts/-Block headers); POST /keys, /walk,
@@ -72,22 +75,37 @@ const PORT = Number(process.env.PORT || 8787)
 const MAX_BODY_BYTES = 64 * 1024
 const FRAME_RING_SIZE = 64
 
-function resolveModelFile(envKey, fallbackNames) {
+function findModelFile(envKey, fallbackNames) {
   if (process.env[envKey]) return process.env[envKey]
   const dir = process.env.ABOT_MODELS_DIR
-  if (!dir) {
-    console.error(
-      `world-walk-server: set ABOT_MODELS_DIR (or ${envKey}) — need ` +
-        `${fallbackNames.join(' / ')}`
-    )
-    process.exit(1)
-  }
+  if (!dir) return null
   for (const name of fallbackNames) {
     const candidate = path.join(dir, name)
     if (fs.existsSync(candidate)) return candidate
   }
-  console.error(`world-walk-server: none of ${fallbackNames.join(', ')} found in ${dir}`)
+  return null
+}
+
+function resolveModelFile(envKey, fallbackNames) {
+  const found = findModelFile(envKey, fallbackNames)
+  if (found) return found
+  console.error(
+    `world-walk-server: none of ${fallbackNames.join(', ')} found — ` +
+      `set ABOT_MODELS_DIR or ${envKey}`
+  )
   process.exit(1)
+}
+
+// Scene-creation encoders are only needed when a world is actually created,
+// so a walk-only setup (dit + taehv + prebuilt scene pack) must not require
+// them at startup — resolve lazily and throw (not exit) when missing.
+function requireSceneEncoder(envKey, fallbackNames) {
+  const found = findModelFile(envKey, fallbackNames)
+  if (found) return found
+  throw new Error(
+    `none of ${fallbackNames.join(', ')} found — scene creation needs it; ` +
+      `set ${envKey} or add it to ABOT_MODELS_DIR`
+  )
 }
 
 const DIT_PATH = resolveModelFile('ABOT_DIT', [
@@ -100,9 +118,10 @@ const TAEHV_PATH = resolveModelFile('ABOT_TAEHV', ['taew2_2_f16.gguf'])
 const SCENE_PATH =
   process.env.ABOT_SCENE ||
   path.join(process.env.ABOT_MODELS_DIR || '.', 'scene.safetensors')
-// Scene-creation encoders (also used by the /create-world upload workflow)
-const T5_PATH = process.env.ABOT_T5 || resolveModelFile('ABOT_T5', ['umt5-xxl-enc-f16.gguf'])
-const VAE_PATH = process.env.ABOT_VAE || resolveModelFile('ABOT_VAE', ['wan2.2_vae_f16.gguf'])
+// Scene-creation encoder names (resolved lazily by requireSceneEncoder).
+// Q8 first: that is the published P2P-registry set; F16 covers local converts.
+const T5_NAMES = ['umt5-xxl-enc-q8_0.gguf', 'umt5-xxl-enc-f16.gguf']
+const VAE_NAMES = ['wan2.2_vae_f16.gguf']
 // The active scene can be swapped at runtime by /create-world
 let currentScenePath = SCENE_PATH
 
@@ -135,6 +154,7 @@ const state = {
   generating: false,
   resetting: false,
   creating: false,
+  noScene: false,
   block: 0,
   lastStepMs: 0,
   error: null,
@@ -151,9 +171,12 @@ const STREAM_BOUNDARY = 'abotframe'
 
 function broadcastFrame(entry) {
   if (streamClients.size === 0) return
+  // frames are PNG or JPEG depending on frameJpegQuality - label each part
+  // by its magic bytes (same sniff as /frame)
+  const isJpeg = entry.png.length > 1 && entry.png[0] === 0xff && entry.png[1] === 0xd8
   const head = Buffer.from(
     `--${STREAM_BOUNDARY}\r\n` +
-      `Content-Type: image/jpeg\r\n` +
+      `Content-Type: ${isJpeg ? 'image/jpeg' : 'image/png'}\r\n` +
       `Content-Length: ${entry.png.length}\r\n` +
       `X-Frame-Index: ${entry.index}\r\n` +
       `X-Frame-Block: ${entry.block}\r\n\r\n`
@@ -336,6 +359,7 @@ async function handle(req, res) {
       generating: state.generating,
       resetting: state.resetting,
       creating: state.creating,
+      noScene: state.noScene,
       block: state.block,
       lastStepMs: state.lastStepMs,
       error: state.error,
@@ -421,9 +445,10 @@ async function handle(req, res) {
     state.creating = true
     state.running = false
     state.loaded = false
+    const prevScenePath = currentScenePath
     try {
       while (state.generating) {
-        await new Promise((r) => setTimeout(r, 100))
+        await new Promise((resolve) => setTimeout(resolve, 100))
       }
       try {
         await world.unload()
@@ -439,8 +464,8 @@ async function handle(req, res) {
       const response = await world.createScene({
         prompt,
         image: new Uint8Array(image),
-        t5: T5_PATH,
-        vae: VAE_PATH,
+        t5: requireSceneEncoder('ABOT_T5', T5_NAMES),
+        vae: requireSceneEncoder('ABOT_VAE', VAE_NAMES),
         output: scenePath,
         width: Number(process.env.ABOT_WIDTH || 832),
         height: Number(process.env.ABOT_HEIGHT || 480)
@@ -457,10 +482,36 @@ async function handle(req, res) {
       lastKeyChangeTs = 0
       pacedQueue.length = 0
       state.loaded = true
+      state.noScene = false
+      // uploaded packs are throwaway once replaced - drop the previous one so
+      // repeated generations don't accumulate ~10 MB files (never touches a
+      // user-provided scene path)
+      if (path.basename(prevScenePath).startsWith('scene_upload_')) {
+        try {
+          fs.unlinkSync(prevScenePath)
+        } catch (_) {}
+      }
       console.log('world-walk-server: new world ready (block 0)')
       sendJson(res, 200, { ok: true, scene: scenePath, prompt })
     } catch (err) {
       state.error = String(err?.message || err)
+      // fall back to the previous world so walking/reset still work; without
+      // this the server would be left pointing at a scene pack that was never
+      // written
+      currentScenePath = prevScenePath
+      try {
+        await world.unload()
+      } catch (_) {}
+      world = makeWorld()
+      if (fs.existsSync(prevScenePath)) {
+        try {
+          await world.load()
+          state.block = 0
+          state.loaded = true
+        } catch (_) {}
+      } else {
+        state.noScene = true
+      }
       sendJson(res, 500, { error: state.error })
     } finally {
       state.creating = false
@@ -472,8 +523,8 @@ async function handle(req, res) {
     // full world restart: reload the session on the original scene (block 0).
     // Heavy (~15 s, reloads DiT + taehv + scene); a native lightweight session
     // reset in the engine would make this instant - future improvement.
-    if (state.resetting) {
-      sendJson(res, 409, { error: 'already restarting' })
+    if (state.resetting || state.creating) {
+      sendJson(res, 409, { error: 'busy: world restart/creation in progress' })
       return
     }
     state.resetting = true
@@ -513,7 +564,11 @@ async function handle(req, res) {
     const parsed = JSON.parse(body.toString('utf8') || '{}')
     if (parsed.running && !state.running) {
       if (!state.loaded) {
-        sendJson(res, 409, { error: 'model still loading' })
+        sendJson(res, 409, {
+          error: state.noScene
+            ? 'no world yet — generate one from an image first'
+            : 'model still loading'
+        })
         return
       }
       state.error = null
@@ -809,6 +864,9 @@ const PAGE_HTML = /* html */ `<!doctype html>
         status.textContent = 'creating world from image…'
       } else if (s.resetting) {
         status.textContent = 'restarting world (fresh session)…'
+      } else if (!s.loaded && s.noScene) {
+        status.textContent = 'no world yet — generate one from an image (card 1)'
+        document.getElementById('placeholder').textContent = 'no world yet — generate one above'
       } else if (!s.loaded) {
         status.textContent = 'loading model…'
       } else if (s.running) {
@@ -868,8 +926,8 @@ async function createSceneIfRequested() {
   if (!prompt || !imagePath) {
     return // no scene and no creation inputs -> load() will fail with a clear error
   }
-  const t5 = process.env.ABOT_T5 || resolveModelFile('ABOT_T5', ['umt5-xxl-enc-f16.gguf'])
-  const vae = process.env.ABOT_VAE || resolveModelFile('ABOT_VAE', ['wan2.2_vae_f16.gguf'])
+  const t5 = requireSceneEncoder('ABOT_T5', T5_NAMES)
+  const vae = requireSceneEncoder('ABOT_VAE', VAE_NAMES)
   console.log(`world-walk-server: creating scene from "${prompt.slice(0, 60)}..." + ${imagePath}`)
   const t0 = Date.now()
   const response = await world.createScene({
@@ -885,13 +943,24 @@ async function createSceneIfRequested() {
   console.log(`world-walk-server: scene written to ${SCENE_PATH} in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
-createSceneIfRequested()
-  .then(() => world.load())
-  .then(() => {
-    state.loaded = true
-    console.log('world-walk-server: session ready — open the page and press "Start walk"')
-  })
-  .catch((err) => {
-    state.error = String(err?.message || err)
-    console.error('world-walk-server: startup failed:', err)
-  })
+async function startup() {
+  await createSceneIfRequested()
+  if (!fs.existsSync(currentScenePath)) {
+    // No scene pack and no ABOT_PROMPT/ABOT_IMAGE to create one: not an error.
+    // Wait for the page's "Generate a world" upload instead of failing load().
+    state.noScene = true
+    console.log(
+      'world-walk-server: no scene pack yet — open the page and use ' +
+        '"Generate a world" (or set ABOT_PROMPT + ABOT_IMAGE to create one at startup)'
+    )
+    return
+  }
+  await world.load()
+  state.loaded = true
+  console.log('world-walk-server: session ready — open the page and press "Start walk"')
+}
+
+startup().catch((err) => {
+  state.error = String(err?.message || err)
+  console.error('world-walk-server: startup failed:', err)
+})

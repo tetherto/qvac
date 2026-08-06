@@ -10,6 +10,7 @@
     "build:vulkan": "npm run build:ts && bare-make generate && bare-make build && bare-make install",
     "build:cuda": "npm run build:ts && bare-make generate -D SD_CUDA=ON && bare-make build && bare-make install",
     "example": "bare examples/load-model.js",
+    "walk:world": "bare examples/world-walk-server.js",
     "generate": "bare examples/generate-image.js",
     "generate:sd2": "bare examples/generate-image-sd2.js",
     "generate:esrgan": "bare examples/generate-image-esrgan-upscale.js",

@@ -1,15 +1,17 @@
 # diffusion-cpp
 
-Native C++ addon for image, video, and ESRGAN inference through
+Native C++ addon for image, video, interactive world-walk, and ESRGAN
+inference through
 [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp),
 built for the Bare Runtime.
 
-The package exposes three JS entry points:
+The package exposes four JS entry points:
 
 | API                    | Entry point                                 | Use case                                                                        |
 | ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
 | `ImgStableDiffusion`   | `@qvac/diffusion-cpp`                       | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
 | `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video                                      |
+| `WorldStableDiffusion` | `@qvac/diffusion-cpp/world`                 | ABot-World interactive walk: block-by-block generation under keyboard input     |
 | `EsrganUpscaler`       | named export from `@qvac/diffusion-cpp`     | Standalone PNG/JPEG upscaling                                                   |
 
 ## Table of Contents
@@ -100,6 +102,7 @@ by the examples.
 | `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant        |
 | `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
 | `./scripts/download-model-ltx.sh`     | LTX-2.3 video + audio files   |
+| `./scripts/download-model-abot.sh`    | ABot-World set into `test/model/abot` (internal S3; public path: the [P2P registry](docs/abot-world.md)) |
 
 The FLUX.2 [klein] default image example uses:
 
@@ -139,6 +142,7 @@ Downloads are resumable where supported by the script.
 | `npm run generate:ltx`                       | LTX-2.3 text-to-video with audio            |
 | `npm run generate:esrgan`                    | Image generation followed by ESRGAN upscale |
 | `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale                   |
+| `npm run walk:world`                         | ABot-World browser demo (generate + walk a world) |
 
 Outputs are written to `packages/diffusion-cpp/output/`.
 
@@ -481,11 +485,49 @@ ship in the QVAC P2P registry.
 # models (P2P registry, no credentials) + browser demo
 npm install -g @qvac/registry-client   # then see docs/abot-world.md for the 4 downloads
 export ABOT_MODELS_DIR=~/abot-models ABOT_KV_CACHE=1
-bare examples/world-walk-server.js     # open http://127.0.0.1:8787
+npm run walk:world                     # open http://127.0.0.1:8787
 ```
 
+```js
+const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
+
+const world = new WorldStableDiffusion({
+  files: { model: ditGguf, taehv: taehvGguf, scene: scenePack },
+  config: { seed: 42, kvCache: true }
+})
+await world.load()
+const response = await world.step({ W: true }) // one generated block forward
+await response
+  .onUpdate((data) => {
+    if (data instanceof Uint8Array) frames.push(data) // PNG/JPEG frames
+  })
+  .await()
+await world.unload()
+```
+
+**Hardware requirements** (interactive walk, Q8 DiT + KV cache):
+
+| tier | GPU | host RAM | disk | measured |
+|---|---|---|---|---|
+| minimum @ 832x480 | 24 GB card, **>= 20 GB VRAM free** (16.3 GB steady + ~2.7 GB transient at block 0) | 8 GB | 14 GB | RTX 5090: 1.78 s/block |
+| low-VRAM @ 448x256 | ~6 GB | 8 GB | 14 GB | laptop RTX 4050 |
+| optimal | RTX 5090-class, dedicated (no co-tenant VRAM); optional dual-GPU split `ABOT_BACKEND="diffusion=cuda0,vae=cuda1"` | 16 GB | NVMe | 6.7-6.8 fps generation |
+
+**Performance vs the PyTorch reference** (same 5090, same walk): the QVAC build
+generates **6.7 fps vs ~28.5 fps** for the reference's fp8 Triton pipeline —
+about **4.2x slower per block**, the main known trade-off of this
+implementation today. In exchange it starts 36x faster (first frame in 1.5 s vs
+~54 s), uses 14x less host RAM (3.1 GB vs 43.6 GB peak), one CPU core instead
+of two-plus, 14 GB on disk instead of ~38 GB, and needs no Python runtime.
+
+**Model fidelity**: the weights are converted to GGUF (DiT and umT5 at Q8_0,
+VAE and taehv at F16), so outputs are **not bit-exact** vs the PyTorch
+reference — parity is held by cosine-similarity gates instead (golden walk
+replays 0.993-0.99995, scene packs >= 0.997, ~32-38 dB walk-level PSNR), and
+walks are visually indistinguishable in validation.
+
 Full guide — building, the demo server (local and over-SSH playback), the world
-API for app developers, resolutions and performance knobs:
+API for app developers, resolutions, performance details and troubleshooting:
 **[docs/abot-world.md](docs/abot-world.md)**.
 
 ## ESRGAN Upscaler

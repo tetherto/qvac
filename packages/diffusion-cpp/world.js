@@ -49,7 +49,8 @@ function toActionMask(keys) {
  * ABot-World is a causal world model: it generates video block-by-block under
  * per-block keyboard actions instead of one batch call. A session holds the
  * DiT + taehv decoder and a fixed scene pack; each `step()` generates the next
- * block of the walk and streams its decoded frames as PNG byte arrays.
+ * block of the walk and streams its decoded frames as PNG byte arrays (or
+ * JPEG when `config.frameJpegQuality` is 1..100).
  *
  * ```js
  * const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
@@ -82,6 +83,13 @@ class WorldStableDiffusion {
         assertAbsolute('model', files.model);
         assertAbsolute('taehv', files.taehv);
         assertAbsolute('scene', files.scene);
+        const jpegQuality = config?.frameJpegQuality;
+        if (jpegQuality !== undefined &&
+            (!Number.isInteger(jpegQuality) || jpegQuality < 0 || jpegQuality > 100)) {
+            // catch it here: out of range only surfaces natively as an opaque
+            // "failed to encode walk frame" at step time
+            throw new TypeError(`config.frameJpegQuality must be an integer in [0, 100] (0 = PNG), got: ${String(jpegQuality)}`);
+        }
         this._files = files;
         this._config = config || {};
         this.logger = new QvacLogger(logger);
@@ -196,10 +204,15 @@ class WorldStableDiffusion {
         if (!(params.image instanceof Uint8Array) || params.image.length === 0) {
             throw new TypeError('params.image must be a non-empty Uint8Array (PNG/JPEG bytes)');
         }
-        const width = params.width || 832;
-        const height = params.height || 480;
-        if (width % 32 !== 0 || height % 32 !== 0) {
-            throw new Error(`scene width/height must be multiples of 32 (got ${width}x${height})`);
+        const width = params.width ?? 832;
+        const height = params.height ?? 480;
+        if (!Number.isInteger(width) ||
+            !Number.isInteger(height) ||
+            width <= 0 ||
+            height <= 0 ||
+            width % 32 !== 0 ||
+            height % 32 !== 0) {
+            throw new Error(`scene width/height must be positive multiples of 32 (got ${width}x${height})`);
         }
         if (!this.addon) {
             // scene creation is standalone — create the native instance on demand

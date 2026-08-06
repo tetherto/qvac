@@ -70,7 +70,8 @@ export interface WorldSceneParams {
  * ABot-World is a causal world model: it generates video block-by-block under
  * per-block keyboard actions instead of one batch call. A session holds the
  * DiT + taehv decoder and a fixed scene pack; each `step()` generates the next
- * block of the walk and streams its decoded frames as PNG byte arrays.
+ * block of the walk and streams its decoded frames as PNG byte arrays (or
+ * JPEG when `config.frameJpegQuality` is 1..100).
  *
  * ```js
  * const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
