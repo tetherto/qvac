@@ -198,9 +198,22 @@ jobs:
           path: addon
           fetch-depth: 0
 
+      # node/npm is job-managed on the self-hosted runners (installed per runner
+      # user via setup-node, not globally), so npm is only on PATH after this
+      # step runs. The validate step below invokes npm, so it must be set up
+      # first — matches the lts/* used by the setup composite action.
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Hard-fails on purpose. This covers both the generated mobile test list
+      # and test/mobile/model-manifest.json — an incomplete pre-stage map does
+      # not fail loudly on-device, it silently sends the phone to
+      # huggingface.co mid-test, which is the flakiness the pre-stage removes.
       - name: Validate mobile tests are up-to-date
         working-directory: addon/packages/llm-llamacpp
-        run: npm run test:mobile:validate || true
+        run: npm run test:mobile:validate
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup
@@ -333,7 +346,6 @@ jobs:
           # Host pre-stages this shard's models to /data/local/tmp (adb-writable
           # + app-readable) so the phone never downloads from huggingface.co.
           extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
-              echo "[prestage] done"
 
       - name: Schedule Device Farm test runs
         id: schedule
