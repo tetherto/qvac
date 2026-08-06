@@ -1,44 +1,27 @@
 {
-  "name": "@qvac/translation-nmtcpp",
-  "root": "packages/translation-nmtcpp",
+  "name": "@qvac/decoder-audio",
+  "root": "packages/decoder-audio",
   "targets": {
-    "build": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run build",
-        "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "includeVulkanSdk": true
-        }
-      },
-      "inputs": [
-        "default",
-        "!{projectRoot}/prebuilds/**"
-      ],
-      "outputs": [
-        "{projectRoot}/prebuilds"
-      ]
-    },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:unit",
-        "cwd": "packages/translation-nmtcpp"
+        "cwd": "packages/decoder-audio"
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/translation-nmtcpp",
+        "cwd": "packages/decoder-audio",
         "ci": {
-          "testCommandSuffix": true,
-          "useTeeLogging": true,
+          "envVarName": "QASE_API_TOKEN",
+          "envSecretName": "QASE_API_TOKEN",
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
             { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64" },
-            { "os": "ubuntu-22.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64" },
             { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
             { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
           ]
@@ -49,19 +32,15 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run lint",
-        "cwd": "packages/translation-nmtcpp"
+        "cwd": "packages/decoder-audio"
       }
     },
-    "test:cpp": {
+    "test:dts": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:cpp",
-        "cwd": "packages/translation-nmtcpp"
+        "command": "pnpm run test:dts",
+        "cwd": "packages/decoder-audio"
       }
     }
-  },
-  "implicitDependencies": [
-    "inference-addon-cpp",
-    "lint-cpp"
-  ]
+  }
 }

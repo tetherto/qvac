@@ -1,0 +1,34 @@
+{
+  "name": "@qvac/langdetect-text",
+  "root": "packages/langdetect-text",
+  "targets": {
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:unit",
+        "cwd": "packages/langdetect-text"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/langdetect-text"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/langdetect-text"
+      }
+    },
+    "test:dts": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:dts",
+        "cwd": "packages/langdetect-text"
+      }
+    }
+  }
+}

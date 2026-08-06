@@ -8,6 +8,11 @@
 # (bash `tee`/PIPESTATUS on Unix, PowerShell `Tee-Object` on Windows), and an
 # optional manual-dispatch-only `pin-model-manifest` job (diffusion-cpp).
 #
+# Matrix rows come from each package's own project.json
+# (targets["test:integration"].options.ci), not a hand-typed table - see
+# .github/actions/nx-project-matrix. Add a package by editing its
+# project.json, not this file.
+#
 # Carve-outs, both stay untouched and separate:
 #   - llm-llamacpp: own `label` field disambiguating multiple same-platform
 #     rows, a `test:integration:generate` pre-step, tee-based logging, and a
@@ -60,83 +65,18 @@ permissions:
 
 jobs:
   matrix:
-    name: Determine affected packages + build matrix (nx affected, transitive)
+    name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
     steps:
       - id: compute
-        uses: ./.github/actions/nx-affected
+        uses: ./.github/actions/nx-project-matrix
         with:
+          target: test:integration
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
-          config: |
-            - {package: classification-ggml, workdir: packages/classification-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64}
-            - {package: classification-ggml, workdir: packages/classification-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64}
-            - {package: classification-ggml, workdir: packages/classification-ggml, os: ubuntu-22.04-arm, platform: linux, arch: arm64}
-            - {package: classification-ggml, workdir: packages/classification-ggml, os: mac-mini-m4, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu}
-            - {package: classification-ggml, workdir: packages/classification-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-26.04, platform: linux, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: macos-26, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: macos-15-large, platform: darwin, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: audiogen-ggml, workdir: packages/audiogen-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-26.04, platform: linux, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: macos-26, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: macos-15-large, platform: darwin, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: bci-whispercpp, workdir: packages/bci-whispercpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: decoder-audio, workdir: packages/decoder-audio, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: decoder-audio, workdir: packages/decoder-audio, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: decoder-audio, workdir: packages/decoder-audio, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: decoder-audio, workdir: packages/decoder-audio, os: macos-15-large, platform: darwin, arch: x64, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: decoder-audio, workdir: packages/decoder-audio, os: macos-14, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: decoder-audio, workdir: packages/decoder-audio, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: mac-mini-m4, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: macos-15-large, platform: darwin, arch: x64, runner: macos-15-large, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: diffusion-cpp, workdir: packages/diffusion-cpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, useTeeLogging: true, hasGenerateStep: true, hasPinModelManifest: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, testCommandSuffix: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, testCommandSuffix: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, testCommandSuffix: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, testCommandSuffix: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: macos-15-xlarge, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, testCommandSuffix: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: macos-15-large, platform: darwin, arch: x64, testCommandSuffix: true}
-            - {package: embed-llamacpp, workdir: packages/embed-llamacpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, testCommandSuffix: true}
-            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: mac-mini-m4, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: ocr-ggml, workdir: packages/ocr-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: QASE_API_TOKEN, envSecretName: QASE_API_TOKEN}
-            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
-            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
-            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-24.04-arm, platform: linux, arch: arm64, testCommandSuffix: true, useTeeLogging: true}
-            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: ubuntu-22.04-arm, platform: linux, arch: arm64, testCommandSuffix: true, useTeeLogging: true}
-            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: macos-14, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, testCommandSuffix: true, useTeeLogging: true}
-            - {package: translation-nmtcpp, workdir: packages/translation-nmtcpp, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-26.04, platform: linux, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: macos-26, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: macos-15-large, platform: darwin, arch: x64, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: tts-ggml, workdir: packages/tts-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, envVarName: GITHUB_TOKEN, envSecretName: PAT_TOKEN}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-22.04, platform: linux, arch: x64, runner: qvac-ubuntu2204-x64, testCommandSuffix: true, useTeeLogging: true}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-24.04, platform: linux, arch: x64, runner: qvac-ubuntu2404-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-22.04-arm, platform: linux, arch: arm64, runner: ubuntu-22.04-arm, testCommandSuffix: true, useTeeLogging: true}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: ubuntu-24.04-arm, platform: linux, arch: arm64, runner: ubuntu-24.04-arm, testCommandSuffix: true, useTeeLogging: true}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: macos-15-xlarge, platform: darwin, arch: arm64, runner: qvac-macos26-arm64-gpu, testCommandSuffix: true, useTeeLogging: true}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: macos-15-large, platform: darwin, arch: x64, runner: macos-15-large, testCommandSuffix: true, useTeeLogging: true}
-            - {package: vla-ggml, workdir: packages/vla-ggml, os: windows-2025, platform: win32, arch: x64, runner: qvac-win25-x64-gpu, testCommandSuffix: true, useTeeLogging: true}
 
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
