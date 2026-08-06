@@ -6,7 +6,7 @@ numpy/pandas-native returns and live in-cell streaming. It's the ergonomic way
 to drive QVAC from a Jupyter notebook or a REPL.
 
 Needs the `notebook` extra (numpy + pandas):
-    pip install "tetherto-qvac-sdk[notebook,bare-rpc]"
+    pip install "tetherto-qvac-sdk[notebook]"
 
 RUN: python examples/notebook.py
 """
