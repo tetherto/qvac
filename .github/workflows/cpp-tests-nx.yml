@@ -4,13 +4,10 @@
 # coverage packages asr-ggml/bci-whispercpp/tts-ggml) into one job with one
 # flat matrix, gated by a single `mode: standard | coverage` field per row.
 #
-# Config uses YAML anchors/merge-keys to avoid repeating each package's
-# fixed fields (workdir, vulkan*, mode) across its platform rows - only the
-# per-platform fields (os/platform/arch/runner) and the package name vary
-# per expanded row. The two `&standardBase`/`&coverageBase` anchor entries
-# have no `package` field, so the nx-affected action's own filter
-# (`select(.package ...)`) drops them automatically - they never become
-# real matrix rows.
+# Matrix rows come from each package's own project.json
+# (targets["test:cpp"].options.ci), not a hand-typed table - see
+# .github/actions/nx-project-matrix. Add a package by editing its
+# project.json, not this file.
 #
 # Carve-outs (stay untouched, separate files):
 #   - llm-llamacpp.yml: multi-platform like the standard group but doesn't
@@ -55,167 +52,18 @@ permissions:
 
 jobs:
   matrix:
-    name: Determine affected packages (nx affected, transitive)
+    name: Determine affected packages (nx project.json, transitive)
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
     steps:
       - id: compute
-        uses: ./.github/actions/nx-affected
+        uses: ./.github/actions/nx-project-matrix
         with:
+          target: test:cpp
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
-          config: |
-            - &standardBase
-              mode: standard
-            - &coverageBase
-              mode: coverage
-              os: ubuntu-22.04
-              platform: linux
-              arch: x64
-              runner: qvac-ubuntu2204-x64-gpu
-
-            - &classification-ggml
-              <<: *standardBase
-              workdir: packages/classification-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
-            - <<: *classification-ggml
-              package: classification-ggml
-              os: ubuntu-24.04
-              platform: linux
-              arch: x64
-              runner: qvac-ubuntu2404-x64
-            - <<: *classification-ggml
-              package: classification-ggml
-              os: macos-15
-              platform: darwin
-              arch: arm64
-              runner: qvac-macos26-arm64-gpu
-            - <<: *classification-ggml
-              package: classification-ggml
-              os: windows-2025
-              platform: win32
-              arch: x64
-              runner: qvac-win25-x64
-
-            - &diffusion-cpp
-              <<: *standardBase
-              workdir: packages/diffusion-cpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
-            - <<: *diffusion-cpp
-              package: diffusion-cpp
-              os: macos-14
-              platform: darwin
-              arch: arm64
-              runner: qvac-macos26-arm64-gpu
-            - <<: *diffusion-cpp
-              package: diffusion-cpp
-              os: ubuntu-24.04
-              platform: linux
-              arch: x64
-              runner: qvac-ubuntu2404-x64
-            - <<: *diffusion-cpp
-              package: diffusion-cpp
-              os: windows-2025
-              platform: windows
-              arch: x64
-              runner: qvac-win25-x64
-
-            - &embed-llamacpp
-              <<: *standardBase
-              workdir: packages/embed-llamacpp
-              vulkanOs: windows-2025
-              vulkanShell: pwsh
-              vulkanPath: 'C:\VulkanSDK'
-            - <<: *embed-llamacpp
-              package: embed-llamacpp
-              os: ubuntu-24.04
-              platform: linux
-              arch: x64
-              runner: qvac-ubuntu2404-x64
-            - <<: *embed-llamacpp
-              package: embed-llamacpp
-              os: macos-14
-              platform: darwin
-              arch: arm64
-              runner: qvac-macos26-arm64-gpu
-            - <<: *embed-llamacpp
-              package: embed-llamacpp
-              os: macos-15-intel
-              platform: darwin
-              arch: x64
-            - <<: *embed-llamacpp
-              package: embed-llamacpp
-              os: windows-2025
-              platform: windows
-              arch: x64
-              runner: qvac-win25-x64
-
-            - &vla-ggml
-              <<: *standardBase
-              workdir: packages/vla-ggml
-              vulkanOs: ubuntu-24.04
-              vulkanShell: bash
-              vulkanPath: /opt/vulkansdk/x86_64
-            - <<: *vla-ggml
-              package: vla-ggml
-              os: ubuntu-24.04
-              platform: linux
-              arch: x64
-              runner: qvac-ubuntu2404-x64
-            - <<: *vla-ggml
-              package: vla-ggml
-              os: macos-14
-              platform: darwin
-              arch: arm64
-              runner: qvac-macos26-arm64-gpu
-            - <<: *vla-ggml
-              package: vla-ggml
-              os: macos-15-intel
-              platform: darwin
-              arch: x64
-            - <<: *vla-ggml
-              package: vla-ggml
-              os: windows-2025
-              platform: windows
-              arch: x64
-              runner: qvac-win25-x64
-
-            - <<: *coverageBase
-              package: asr-ggml
-              workdir: packages/asr-ggml
-              hasCcache: true
-              needsWhisperHfModels: true
-              needsParakeetS3Gguf: true
-              buildOutputDir: build/addon/tests
-              testEnvVars:
-                - name: QVAC_TEST_GGUF
-                  path: models/sortformer-4spk-v1.q4_0.gguf
-            - <<: *coverageBase
-              package: bci-whispercpp
-              workdir: packages/bci-whispercpp
-              hasCcache: false
-              buildOutputDir: build/addon/tests
-              testEnvVars: []
-            - <<: *coverageBase
-              package: tts-ggml
-              workdir: packages/tts-ggml
-              hasCcache: true
-              needsTtsVenvModels: true
-              hardGateCommand: "cd build && ./tts_ggml_tests --gtest_filter='-*RealGguf*'"
-              buildOutputDir: build
-              testEnvVars:
-                - name: QVAC_TEST_CHATTERBOX_T3_GGUF
-                  path: models/chatterbox-t3-mtl.gguf
-                - name: QVAC_TEST_CHATTERBOX_S3GEN_GGUF
-                  path: models/chatterbox-s3gen-mtl.gguf
-                - name: QVAC_TEST_SUPERTONIC_GGUF
-                  path: models/supertonic.gguf
 
   test-cpp:
     name: cpp-tests-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.arch }}
@@ -261,15 +109,15 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'bash'
+      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkan.os && matrix.vulkan.shell == 'bash'
         name: Set Vulkan SDK Path (bash)
         shell: bash
-        run: echo "VULKAN_SDK=${{ matrix.vulkanPath }}" >> $GITHUB_ENV
+        run: echo "VULKAN_SDK=${{ matrix.vulkan.path }}" >> $GITHUB_ENV
 
-      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkanOs && matrix.vulkanShell == 'pwsh'
+      - if: matrix.mode == 'standard' && matrix.os == matrix.vulkan.os && matrix.vulkan.shell == 'pwsh'
         name: Set Vulkan SDK Path (pwsh)
         shell: pwsh
-        run: echo "VULKAN_SDK=${{ matrix.vulkanPath }}" >> $Env:GITHUB_ENV
+        run: echo "VULKAN_SDK=${{ matrix.vulkan.path }}" >> $Env:GITHUB_ENV
 
       - name: Setup vcpkg (composite)
         if: matrix.mode == 'standard'
