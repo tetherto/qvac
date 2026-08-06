@@ -28,8 +28,12 @@ const primary: string = LlmLlamacpp.pickPrimaryGgufPath([
   "/abs/model-00002-of-00002.gguf",
 ]);
 void primary;
-const response = new LlmLlamacpp.QvacResponse({ cancelHandler: () => Promise.resolve() });
-void response;
+
+// `QvacResponse` is attached at runtime for bundled mobile tests but is
+// deliberately absent from the type surface — `typeof QvacResponse` cannot be
+// named by a consumer that does not depend on `@qvac/infer-base` directly.
+// @ts-expect-error - not part of the published constructor surface
+void LlmLlamacpp.QvacResponse;
 
 // Public instance surface.
 const addon: LlmLlamacpp.Addon | null = model.addon;

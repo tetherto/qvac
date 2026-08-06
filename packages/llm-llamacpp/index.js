@@ -193,6 +193,9 @@ function sanitizePromptForLog(prompt) {
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp = class LlmLlamacpp {
     static pickPrimaryGgufPath = pickPrimaryGgufPath;
+    // Attached for tests: a direct `require('@qvac/infer-base')` from a bundled
+    // mobile test file does not yield the class. Left off the constructor
+    // interface because `typeof QvacResponse` is not nameable by consumers.
     static QvacResponse = infer_base_1.QvacResponse;
     addon;
     opts;

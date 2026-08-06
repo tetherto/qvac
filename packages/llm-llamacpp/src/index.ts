@@ -288,7 +288,8 @@ function sanitizePromptForLog(prompt: Message[]): unknown {
   });
 }
 
-/** Public instance surface. An interface, so private fields stay out of the declarations. */
+// An interface rather than the class type, so private fields stay out of the
+// generated declarations.
 interface LlmLlamacpp {
   /** The native addon, or `null` before `load()` and after `unload()`. Advanced/test access only. */
   addon: LlmLlamacpp.Addon | null;
@@ -308,7 +309,7 @@ interface LlmLlamacpp {
    * default for `parallel >= 2`). Use `response.cancel()` to cancel just
    * that call's job or batch group.
    */
-  run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>;
+  run(prompt: Message[], runOptions?: RunOptions): Promise<LlmLlamacpp.QvacResponse>;
   run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>;
   finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>;
   /**
@@ -324,23 +325,19 @@ interface LlmLlamacpp {
   getState(): { configLoaded: boolean };
 }
 
-/** Static/constructor surface — what `module.exports` itself provides. */
+// Static/constructor surface — what `module.exports` itself provides.
 interface LlmLlamacppConstructor {
   new (args: LlmLlamacppArgs): LlmLlamacpp;
   /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
   readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
-  /**
-   * Re-exported for tests: in the mobile test bundle a direct
-   * `require('@qvac/infer-base')` does not yield the class ("QvacResponse is
-   * not a constructor"). Going through the package also pins class identity to
-   * the one the model registers in its sinks.
-   */
-  readonly QvacResponse: typeof QvacResponse;
 }
 
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   static readonly pickPrimaryGgufPath = pickPrimaryGgufPath;
+  // Attached for tests: a direct `require('@qvac/infer-base')` from a bundled
+  // mobile test file does not yield the class. Left off the constructor
+  // interface because `typeof QvacResponse` is not nameable by consumers.
   static readonly QvacResponse = QvacResponse;
 
   addon: LlamaInterface | null;
@@ -912,7 +909,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   }
 };
 
-/** Public types, merged with the value above. Types-only, so tsc emits no runtime code. */
+// Public types, merged with the value above. Types-only, so tsc emits no runtime code.
 // eslint-disable-next-line @typescript-eslint/no-namespace -- the only way to type a constructor-first CommonJS export.
 namespace LlmLlamacpp {
   export type NumericLike = number | `${number}`;
@@ -920,9 +917,19 @@ namespace LlmLlamacpp {
   export type AddonMessage = AddonModule.AddonMessage;
   export type AddonMediaMessage = AddonModule.AddonMediaMessage;
   export type AddonRunJobMessage = AddonModule.AddonRunJobMessage;
+  /**
+   * Discriminated admission result: the native binding only sets `id` when the
+   * scheduler minted one, so a job id exists exactly when the job was accepted.
+   */
   export type AdmissionResult = AddonModule.AdmissionResult;
   export type AddonRunJobResult = AddonModule.AddonRunJobResult;
   export type AddonBatchRunItem = AddonModule.AddonBatchRunItem;
+  /**
+   * Batch admission result. The per-sequence `ids` are reported on both
+   * branches (they are assigned while parsing the batch input); the native
+   * group id used to route the batch's terminal events exists only when the
+   * batch was accepted.
+   */
   export type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
 
   export interface Addon {

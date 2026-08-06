@@ -23,7 +23,7 @@
     "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js && node scripts/validate-mobile-manifest.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js batchHandler.js addonLogging.js index.d.ts addon.d.ts batchHandler.d.ts addonLogging.d.ts",
-    "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
+    "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer && npm run check:dts",
     "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
     "test:dts": "npm run test:types",
     "generate:benchmark-shards": "node scripts/generate-benchmark-shards.js",
@@ -46,7 +46,8 @@
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
-    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1",
+    "check:dts": "node scripts/check-dts.mjs"
   },
   "files": [
     "binding.js",
@@ -56,7 +57,6 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "addon.d.ts",
-    "batchHandler.d.ts",
     "prebuilds",
     "index.d.ts",
     "LICENSE",
