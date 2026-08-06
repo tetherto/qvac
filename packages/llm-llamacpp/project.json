@@ -41,7 +41,22 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/llm-llamacpp"
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "mode": "llm",
+          "vulkan": { "os": "windows-2025", "shell": "pwsh", "path": "C:\\VulkanSDK" },
+          "vcpkgMode": "composite-local-cache",
+          "hasWindowsCmakeGenerator": true,
+          "hasAppleClangWorkaround": true,
+          "needsUnitTestModelCache": true,
+          "hasResultsCountValidation": true,
+          "coverageOn": "ubuntu-24.04",
+          "platforms": [
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "macos-15-xlarge", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "windows-2025", "platform": "windows", "arch": "x64", "runner": "qvac-win25-x64" }
+          ]
+        }
       }
     }
   },
