@@ -57,6 +57,7 @@ jobs:
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
+      carveouts: ${{ steps.compute.outputs.carveouts }}
     steps:
       - id: compute
         uses: ./.github/actions/nx-project-matrix
@@ -65,6 +66,35 @@ jobs:
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
           overrides: ${{ inputs.overrides }}
+
+  # Carve-outs: asr-ggml (S3 pin-model-manifest + RTF matrix) and llm-llamacpp
+  # (perf-only subset + HTML report) have bespoke integration flows; routed to
+  # their own reusable when nx flags them affected (options.ci carveOut:true).
+  run-integration-asr:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'asr-ggml')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  run-integration-llm:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
