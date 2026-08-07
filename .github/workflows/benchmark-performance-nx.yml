@@ -1,4 +1,4 @@
-# Consolidates 5 of the 6 benchmark-performance-<pkg>.yml files.
+# Consolidates all 6 benchmark-performance-<pkg>.yml files.
 name: "Benchmark Performance (nx)"
 
 on:
