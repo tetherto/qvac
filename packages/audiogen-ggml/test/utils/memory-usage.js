@@ -80,17 +80,13 @@ function summarizeSamples(samples) {
   }
 }
 
-// Largest value, never dropping below `floor`. Non-positive samples are the
-// caller's concern; the name reflects the floor-only behaviour.
 function maxWithFloor(values, floor) {
   const list = Array.isArray(values) ? values : []
   return list.reduce((current, value) => (value > current ? value : current), floor || 0)
 }
 
-// Sample-count-weighted mean of per-run averages. Each run carries the mean of
-// its own samples plus how many it collected, so weighting by that count
-// recovers the true overall mean; a plain mean-of-means would skew toward runs
-// that happened to collect fewer samples.
+// Weighting by sample count recovers the true overall mean; a mean-of-means
+// would skew toward runs that collected fewer samples.
 function weightedMeanBytes(runs) {
   const weighted = (Array.isArray(runs) ? runs : []).filter(
     (run) => run && isPositiveNumber(run.avgRssBytes) && isPositiveNumber(run.rssSampleCount)
@@ -221,11 +217,6 @@ function buildMemorySummary(input) {
   }
 }
 
-// Fold the per-run sampler records collected by the benchmark harness
-// (`{ avgRssBytes, peakRssBytes, rssSampleCount }`) plus the surrounding
-// load/unload footprints into a single memory summary. Pure, so the weighting,
-// the empty-runs fallback to the post-load footprint, and the peak floor are
-// unit-testable without a live model.
 function summarizeRunMemory(runs, context) {
   const list = Array.isArray(runs) ? runs : []
   const ctx = context || {}

@@ -29,9 +29,7 @@ function backendIdToName(id) {
   return BACKEND_NAMES[id] || ''
 }
 
-// audiogen-cpp ships the same ggml backend cascade as tts-cpp: Metal on
-// darwin/ios, Vulkan on linux/win32/android. CUDA is not in the default
-// cascade, so it only appears when a hint explicitly asks for it.
+// CUDA is outside the default cascade, so it only appears when a hint asks.
 function resolveBackend(platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
   if (hint) return hint
