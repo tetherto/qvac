@@ -2,8 +2,14 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 const {
+  parseArgs,
+  runIdForFile,
+  loadArtifactRecords,
   parseCanonicalTestLabel,
   normalizeBackend,
   requestedBackendOfResult,
@@ -31,6 +37,8 @@ const {
   buildCanonicalReport,
   backendIdToName
 } = require('../../../packages/audiogen-ggml/test/utils/benchmark-report')
+
+const { patternArgs } = require('../gh-artifacts')
 
 const MB = 1024 * 1024
 
@@ -109,6 +117,12 @@ function mobileCanonicalReport (testLabel = '[GPU] acestep turbo-q8 vulkan') {
       }
     ]
   }
+}
+
+function writeReportUnderRun (root, runId, report) {
+  const dir = path.join(root, runId, 'perf-report-audiogen-ggml-android')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'performance-report.json'), JSON.stringify(report))
 }
 
 test('normalizeDitVariant accepts the three published DiT variants only', () => {
@@ -241,6 +255,68 @@ test('expandCanonicalReport stamps the supplied run id rather than the run_numbe
 
   const [unstamped] = expandCanonicalReport(report, 'file.json')
   assert.equal(unstamped.runId, '', 'run_number 99 is a per-workflow counter, not a run id')
+})
+
+test('runIdForFile reads the run id off the staging directory', () => {
+  const root = '/tmp/staging'
+
+  assert.equal(
+    runIdForFile(path.join(root, '31166105125', 'perf', 'performance-report.json'), root, ''),
+    '31166105125',
+    'gh run download names the per-run directory for the run'
+  )
+  assert.equal(
+    runIdForFile(path.join(root, 'perf', 'performance-report.json'), root, ''),
+    '',
+    'a directory that is not a run id is left out rather than guessed at'
+  )
+  assert.equal(
+    runIdForFile(path.join(root, '31166105125', 'performance-report.json'), root, '999'),
+    '999',
+    'an explicit --run-id wins over the directory'
+  )
+})
+
+test('a multi-run fetch attributes each mobile row to the run it came from', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audiogen-multi-run-'))
+  writeReportUnderRun(root, '31166105125', mobileCanonicalReport())
+  writeReportUnderRun(root, '31200000001', mobileCanonicalReport())
+
+  const runIds = loadArtifactRecords(root, '').map((record) => record.runId).sort()
+
+  assert.deepEqual(
+    runIds,
+    ['31166105125', '31200000001'],
+    'one --run-id cannot cover a fetch spanning several runs'
+  )
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
+test('the fetch names both lane artifacts so prebuilds are left behind', () => {
+  const args = patternArgs(['rtf-results-audiogen-ggml-*', 'perf-report-audiogen-ggml-*'])
+
+  assert.deepEqual(args, [
+    '-p', 'rtf-results-audiogen-ggml-*',
+    '-p', 'perf-report-audiogen-ggml-*'
+  ])
+  assert.deepEqual(patternArgs('one-*'), ['-p', 'one-*'], 'a lone glob still works')
+  assert.deepEqual(patternArgs(null), [], 'no pattern downloads everything, as before')
+})
+
+test('parseArgs takes a workflow to fetch from instead of a local directory', () => {
+  const fetched = parseArgs(['--workflow', 'Benchmark Performance (AudioGen GGML)'])
+  assert.equal(fetched.workflow, 'Benchmark Performance (AudioGen GGML)')
+  assert.equal(fetched.runs, 6, 'the weekly report defaults to six runs like the other addons')
+
+  const local = parseArgs(['--dir', 'artifacts'])
+  assert.equal(local.input, 'artifacts')
+  assert.equal(local.workflow, '', 'a local directory needs no CI query')
+
+  assert.throws(
+    () => parseArgs(['--output', 'report.md']),
+    /--input \/ --dir argument, or --workflow/,
+    'neither source given is still an error'
+  )
 })
 
 test('a report built for an unnamed ggml backend round-trips into the table', () => {

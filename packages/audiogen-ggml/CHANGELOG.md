@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `run-benchmarks` label makes a pull request run the benchmark matrix and
   render the findings table on the run summary. The table was previously
   reachable only from the manual sweep workflow.
+- ACE-Step appears in the weekly cross-addon performance report. The aggregator
+  can now fetch its own inputs with `--workflow` / `--runs`, folding the last six
+  sweeps into one table instead of only reading a directory staged by the run it
+  belongs to. Each row keeps the run id of the sweep it came from.
 
 ### Fixed
 

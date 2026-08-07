@@ -153,7 +153,7 @@ The matrix runner additionally honours `MATRIX_JSON` (the sweep) and
 
 ## Running in CI
 
-There are two entry points.
+There are three entry points.
 
 `.github/workflows/benchmark-performance-audiogen-ggml.yml` is the manual one
 (`workflow_dispatch`). It builds prebuilds (or takes a published
@@ -167,6 +167,12 @@ a full sweep renders for hours and downloads every DiT variant.
 
 Both paths share `reusable-summarize-audiogen-ggml-benchmarks.yml`, so the table
 on a PR is the table a manual sweep produces.
+
+`.github/workflows/perf-report.yml` is the weekly cross-addon report. It measures
+nothing itself: it re-aggregates the artifacts of the last six sweeps into
+`reports/audiogen-ggml-performance.md`, which lands in that run's summary
+alongside the other addons. ACE-Step is therefore only as fresh as the last
+sweep — nothing dispatches one on a schedule.
 
 **Desktop** — `integration-test-audiogen-ggml.yml` with
 `run_rtf_benchmarks: true`. Every runner sweeps the three variants on CPU;
@@ -210,10 +216,16 @@ CPU run on the same device and variant. Such a row renders as
 coverage for the backend it asked for.
 
 Mobile artifacts carry the shared extractor's per-workflow `run_number`, which is
-not a run id, so the `Run` column is filled from `--run-id` instead. The
-summarize workflow passes `github.run_id`, and every artifact it downloads comes
-from that run. Aggregating downloaded artifacts by hand without `--run-id` leaves
-the column empty rather than showing a number that cannot be resolved.
+not a run id, so the `Run` column is filled in from elsewhere. The summarize
+workflow passes its own `github.run_id` as `--run-id`, since every artifact it
+downloads comes from that run.
+
+That single id cannot describe a report spanning several sweeps, so the weekly
+aggregation instead passes `--workflow "Benchmark Performance (AudioGen GGML)"`
+and `--runs 6`. The script fetches the artifacts itself and reads each row's run
+id from the directory `gh run download` stages it under, which is named for the
+run. Point `--dir` at a tree of your own without that layout and the column stays
+empty rather than showing a number that cannot be resolved.
 
 ## Backends CI cannot reach
 

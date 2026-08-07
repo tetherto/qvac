@@ -6,7 +6,10 @@
 // packages/audiogen-ggml/benchmarks/RTF-BENCHMARKS.md.
 
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
+
+const { listWorkflowRuns, downloadRunArtifactsParallel } = require('./gh-artifacts')
 
 const ENGINE = 'acestep'
 const ADDON = 'audiogen-ggml'
@@ -35,13 +38,21 @@ const DEFAULT_DIT_VARIANT = 'turbo-q4'
 const DEFAULT_MANUAL_DIR = 'packages/audiogen-ggml/benchmarks/manual-results'
 const BYTES_PER_MB = 1024 * 1024
 
+// The desktop and mobile lanes upload under different names; naming both keeps
+// the fetch off the multi-megabyte prebuild artifacts sharing the run.
+const ARTIFACT_PATTERNS = ['rtf-results-audiogen-ggml-*', 'perf-report-audiogen-ggml-*']
+const DEFAULT_FETCH_RUNS = 6
+
 function parseArgs (argv) {
   const args = {
     input: '',
     output: '',
     jsonOutput: '',
     manualDir: path.resolve(DEFAULT_MANUAL_DIR),
-    runId: ''
+    runId: '',
+    workflow: '',
+    runs: DEFAULT_FETCH_RUNS,
+    repo: ''
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -62,10 +73,21 @@ function parseArgs (argv) {
     } else if (arg === '--run-id' && next) {
       args.runId = String(next)
       i++
+    } else if (arg === '--workflow' && next) {
+      args.workflow = next
+      i++
+    } else if (arg === '--runs' && next) {
+      args.runs = Number(next) || DEFAULT_FETCH_RUNS
+      i++
+    } else if (arg === '--repo' && next) {
+      args.repo = next
+      i++
     }
   }
 
-  if (!args.input) throw new Error('Missing required --input / --dir argument')
+  if (!args.input && !args.workflow) {
+    throw new Error('Missing required --input / --dir argument, or --workflow to fetch from CI')
+  }
   return args
 }
 
@@ -412,6 +434,15 @@ function isBenchmarkArtifactName (file) {
   return /^rtf-benchmark-.*\.json$/.test(base) || base === 'performance-report.json'
 }
 
+// `gh run download` stages each run under a directory named for its id, so a
+// fetch spanning several runs can still attribute every mobile row even though
+// one --run-id cannot cover them all.
+function runIdForFile (file, inputDir, explicitRunId) {
+  if (explicitRunId) return explicitRunId
+  const [head] = path.relative(inputDir, file).split(path.sep)
+  return /^\d+$/.test(head) ? head : ''
+}
+
 function loadArtifactRecords (inputDir, runId) {
   const records = []
   for (const file of walkFiles(inputDir).filter(isBenchmarkArtifactName)) {
@@ -419,7 +450,7 @@ function loadArtifactRecords (inputDir, runId) {
     if (!report) continue
 
     if (isCanonicalReport(report)) {
-      records.push(...expandCanonicalReport(report, file, runId))
+      records.push(...expandCanonicalReport(report, file, runIdForFile(file, inputDir, runId)))
     } else if (isDesktopArtifact(report)) {
       records.push(normalizeDesktopRecord(report, file))
     }
@@ -664,9 +695,27 @@ function collectRecords (args) {
   )
 }
 
-function main () {
+async function fetchWorkflowArtifacts (workflow, runs, repo) {
+  const found = listWorkflowRuns(workflow, runs, repo || null)
+  if (found.length === 0) {
+    console.log(`No completed runs found for "${workflow}"`)
+    return ''
+  }
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audiogen-rtf-'))
+  console.log(`Downloading artifacts from ${found.length} run(s) of "${workflow}" into ${dir}`)
+  await downloadRunArtifactsParallel(found, dir, ARTIFACT_PATTERNS, repo || null)
+  return dir
+}
+
+async function resolveInputDir (args) {
+  if (args.input) return args.input
+  return fetchWorkflowArtifacts(args.workflow, args.runs, args.repo)
+}
+
+async function main () {
   const args = parseArgs(process.argv.slice(2))
-  const records = collectRecords(args)
+  const records = collectRecords({ ...args, input: await resolveInputDir(args) })
   const markdown = renderMarkdown(records)
 
   if (args.output) writeOutput(args.output, markdown)
@@ -678,7 +727,10 @@ function main () {
 }
 
 if (require.main === module) {
-  main()
+  main().catch((error) => {
+    console.error(error.message)
+    process.exit(1)
+  })
 }
 
 module.exports = {
@@ -689,6 +741,7 @@ module.exports = {
   VALID_DIT_VARIANTS,
   NOISY_STDDEV_RATIO,
   parseArgs,
+  runIdForFile,
   normalizeBackend,
   requestedBackendOfResult,
   fellBackToOtherBackend,
