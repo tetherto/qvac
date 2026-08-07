@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from tetherto.qvac_sdk.vla import (
+    VlaEmbodimentSelector,
     VlaHparams,
     vla,
     vla_hparams,
@@ -228,7 +229,7 @@ async def test_vla_hparams_parses_groot_embodiment_fields():
 
 
 async def test_vla_set_embodiment_sends_selector_and_parses_refreshed_hparams():
-    selectors = [
+    selectors: list[VlaEmbodimentSelector] = [
         "oxe_droid_relative_eef_relative_joint",
         24,
         {"catId": 24, "numCameras": 4},
