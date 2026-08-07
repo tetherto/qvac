@@ -102,10 +102,7 @@ void resampleBatchOutput(
 
 namespace {
 
-// Rates once the LavaSR enhancer is active: it upsamples the engine's native
-// 24 kHz to `workRate` (48 kHz), and the streaming path emits at
-// `streamFinalRate` (a caller-requested rate, else the work rate). Both stay
-// zero when no enhancer is loaded.
+// Both rates stay zero when no enhancer is loaded.
 struct EnhancerRates {
   int workRate = 0;
   int streamFinalRate = 0;
@@ -143,7 +140,6 @@ std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
       finalRate);
 }
 
-// Mirrors loadEnhancer: an empty path leaves the stage disabled.
 std::shared_ptr<tts_cpp::lavasr::Denoiser>
 loadDenoiser(const std::string& ggufPath, const std::string& errorContext) {
   if (ggufPath.empty())
@@ -170,8 +166,6 @@ void applyBatchDenoiser(
   }
 }
 
-// Enhances the whole utterance in one pass; the streaming path enhances per
-// chunk through StreamingEnhancer instead.
 void applyBatchEnhancer(
     tts_cpp::cosyvoice::SynthesisResult& result,
     tts_cpp::lavasr::Enhancer& enhancer) {
@@ -342,11 +336,9 @@ void validateStreamingCompatibility(const CosyvoiceConfig& cfg) {
         "enable the LavaSR enhancer (which resamples seam-free), or disable "
         "streaming (streamChunkTokens) for resampled batch output.");
   }
-  // LavaSR denoiser + native chunk streaming is not supported yet: the UL-UNAS
-  // denoiser is causal but tts-cpp only exposes a one-shot denoise(), so a
-  // stateful streaming denoiser (like StreamingEnhancer) is the follow-up.
-  // Reject the combo up front rather than silently dropping denoising on the
-  // streaming path. Defense-in-depth: index.js rejects it before we get here.
+  // tts-cpp only exposes a one-shot denoise(), so streaming would silently drop
+  // denoising; a stateful streaming denoiser is the follow-up. index.js rejects
+  // this first, so reaching here means the addon was driven directly.
   if (!cfg.denoiserGgufPath.empty() && streamsNativeChunks(cfg)) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -446,6 +438,18 @@ void CosyvoiceModel::loadLocked() {
   backendId_ = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
 
+  // A half-loaded model must not look loaded: isLoaded() only reads engine_, so
+  // leaving it set after a post-processing failure would make the next load()
+  // a no-op and emit silently unenhanced audio.
+  try {
+    loadPostProcessingLocked();
+  } catch (...) {
+    unloadLocked();
+    throw;
+  }
+}
+
+void CosyvoiceModel::loadPostProcessingLocked() {
   // Pass the engine's *resolved* device, not the requested switch: if the
   // engine fell back to CPU, keep the enhancer on CPU too instead of forcing it
   // onto the GPU.
@@ -465,6 +469,8 @@ void CosyvoiceModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
+  enhancerBackendDevice_ = -1;
+  enhancerBackendId_ = -1;
 }
 
 void CosyvoiceModel::cancel() const {

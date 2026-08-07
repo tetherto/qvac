@@ -112,18 +112,13 @@ struct CosyvoiceConfig {
   /** Forwarded to `tts_cpp::cosyvoice::EngineOptions::backends_dir`. */
   std::string backendsDir;
 
-  // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the
-  // single switch: when set, the model bandwidth-extends CosyVoice3's native
-  // 24 kHz output to 48 kHz; empty disables enhancement (full backward compat).
-  // Works on both the batch path and native chunk streaming (the latter via
-  // StreamingEnhancer, which keeps chunk seams inaudible).
+  // Bandwidth-extends the native 24 kHz output to 48 kHz, on both the batch
+  // path and native chunk streaming. Empty disables enhancement.
   std::string enhancerGgufPath;
 
-  // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
-  // the single switch: when set, the model denoises the synthesized PCM BEFORE
-  // the enhancer (rate-preserving); empty disables it (full backward compat).
-  // Batch-only: tts-cpp exposes a one-shot denoise(), so combining it with
-  // native chunk streaming is rejected by CosyvoiceModel::validateConfig.
+  // Denoises the synthesized PCM before the enhancer, rate-preserving. Empty
+  // disables it. Batch-only: tts-cpp exposes a one-shot denoise(), so
+  // CosyvoiceModel::validateConfig rejects it with native chunk streaming.
   std::string denoiserGgufPath;
 };
 

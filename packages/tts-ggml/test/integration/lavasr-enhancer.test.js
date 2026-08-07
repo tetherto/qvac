@@ -10,9 +10,9 @@
 // model-backed tests assert the enhanced output is reported as 48 kHz for
 // Supertonic, Chatterbox and Parler, covering the native chunk streaming of the
 // latter two; they are gated on the converted enhancer GGUF being staged, and
-// skip cleanly otherwise. CosyVoice3's model-backed pair lives in
-// cosyvoice3-lavasr-enhancer.test.js, which the mobile suite shards onto the
-// only row that stages the CosyVoice3 model.
+// skip cleanly otherwise. CosyVoice3's model-backed coverage lives in
+// cosyvoice3-lavasr.test.js, which the mobile suite shards onto the only row
+// that stages the CosyVoice3 model.
 //
 // Stage the enhancer GGUF via scripts/convert-lavasr-enhancer-to-gguf.py (from
 // the public LavaSRcpp ONNX release) into models/lavasr/lavasr-enhancer.gguf,

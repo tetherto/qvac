@@ -1361,21 +1361,19 @@ class TTSGgml {
     if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
       throw new Error(
         "tts-ggml: the LavaSR denoiser is not yet supported with " +
-          "native chunk streaming (streamChunkTokens / " +
-          "streamFirstChunkTokens). Use batch synthesis, or drop the " +
-          "denoiser for streaming. Streaming denoise is a planned " +
-          "follow-up (needs a stateful streaming denoiser).",
+          "native chunk streaming (streamChunkTokens > 0). Use batch " +
+          "synthesis, or drop the denoiser for streaming. Streaming " +
+          "denoise is a planned follow-up (needs a stateful streaming " +
+          "denoiser).",
       );
     }
   }
 
-  // A token count of 0 means "no streaming" (same contract the addon's
-  // validateConfig enforces), so only a positive count requests it.
+  // Both addon engines start native chunk streaming on streamChunkTokens > 0
+  // alone: a count of 0 means batch, and streamFirstChunkTokens only sizes the
+  // first chunk once streaming is already on.
   private _requestsChunkStreaming(): boolean {
-    return (
-      (this._streamChunkTokens ?? 0) > 0 ||
-      (this._streamFirstChunkTokens ?? 0) > 0
-    );
+    return (this._streamChunkTokens ?? 0) > 0;
   }
 
   private _assertParlerOptionConsistency(): void {

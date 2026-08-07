@@ -65,9 +65,8 @@ std::filesystem::path lavasrStageDir() {
   return dir;
 }
 
-// A file that exists but holds no LavaSR weights, removed again when the test
-// ends. validateConfig only checks for presence, so this is enough to exercise
-// the accept path; an actual Enhancer::load would happen later in load().
+// validateConfig only checks for presence, so a weightless file is enough to
+// exercise the accept path; an actual Enhancer::load happens later, in load().
 class TempGguf {
 public:
   explicit TempGguf(const char* name) : path_(lavasrStageDir() / name) {
@@ -206,10 +205,9 @@ TEST(CosyvoiceStreaming, StreamingRequestedContract) {
   EXPECT_FALSE(streamingRequested(cfgZeroChunks, true));
 }
 
-// The stats are read off whatever actually reached the caller. Only the
-// streaming+enhancer path diverges from the engine's SynthesisResult, and
-// getting it wrong understates totalSamples or reports the wrong rate without
-// failing anything, so pin all four combinations.
+// Only the streaming+enhancer path diverges from the engine's SynthesisResult,
+// and getting it wrong misreports stats without failing anything, so pin all
+// four combinations.
 TEST(CosyvoiceStreaming, EmittedAudioFollowsWhatTheCallerReceived) {
   constexpr std::size_t kStreamed = 96000;
   constexpr std::size_t kBatch = 48000;
@@ -407,4 +405,25 @@ TEST(CosyvoiceRealGguf, StreamingDeliversChunks) {
   // event). The returned std::any is empty.
   EXPECT_FALSE(out.has_value())
       << "streaming process() returns no batch buffer";
+}
+
+// The enhancer loads after the engine, so a failure there must not leave the
+// model looking loaded: isLoaded() reads engine_ alone, and loadLocked()
+// returns early when it is set, which would turn the retry into a no-op that
+// silently synthesizes unenhanced audio.
+TEST(CosyvoiceRealGguf, FailedEnhancerLoadLeavesModelUnloaded) {
+  const auto dir = envOrEmpty("QVAC_TEST_COSYVOICE_MODEL_DIR");
+  if (dir.empty())
+    GTEST_SKIP() << "Set QVAC_TEST_COSYVOICE_MODEL_DIR to enable.";
+
+  TempGguf invalidEnhancer("cosyvoice-invalid-enhancer.gguf");
+  CosyvoiceConfig cfg;
+  cfg.modelDir = dir;
+  cfg.enhancerGgufPath = invalidEnhancer.path();
+  CosyvoiceModel m(cfg);
+
+  EXPECT_ANY_THROW(m.load());
+  EXPECT_FALSE(m.isLoaded()) << "a half-loaded model must not report loaded";
+  EXPECT_ANY_THROW(m.load()) << "the retry must fail rather than no-op";
+  EXPECT_FALSE(m.isLoaded());
 }

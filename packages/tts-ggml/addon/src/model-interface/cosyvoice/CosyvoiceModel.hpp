@@ -83,9 +83,8 @@ private:
     bool wasStreaming = false;
   };
   SynthResult synthesize(const std::string& text, const ChunkCallback& onChunk);
-  // `outSamples` / `emittedRate` describe what actually reached the caller: on
-  // the streaming+enhancer path that is the enhanced stream, not the engine's
-  // native-rate SynthesisResult.
+  // Takes what actually reached the caller (see resolveEmittedAudio), not the
+  // engine's native-rate SynthesisResult.
   void recordSynthesisStats(
       std::size_t outSamples, int emittedRate, float durationS,
       std::chrono::steady_clock::time_point t0,
@@ -93,19 +92,16 @@ private:
   static void validateConfig(const CosyvoiceConfig& cfg);
 
   void loadLocked();
+  void loadPostProcessingLocked();
   void unloadLocked();
 
   CosyvoiceConfig cfg_;
 
   mutable std::mutex engineMu_;
   std::shared_ptr<tts_cpp::cosyvoice::Engine> engine_;
-  // LavaSR enhancer: loaded alongside the engine when cfg_.enhancerGgufPath is
-  // set; null disables enhancement. Holds only const weights, so it is safe to
-  // share across concurrent enhance() calls.
+  // Holds only const weights, so it is safe to share across concurrent
+  // enhance() calls.
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
-  // LavaSR denoiser (runs before the enhancer, rate-preserving): loaded when
-  // cfg_.denoiserGgufPath is set; null disables denoising. Batch-only — the
-  // denoiser + streaming combination is rejected in validateConfig.
   std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser_;
 
   std::atomic_bool jobInProgress_{false};
@@ -124,10 +120,8 @@ private:
   bool gpuUnsupported_ = false;
   std::string backendName_ = "CPU";
 
-  // LavaSR enhancer backend, surfaced in runtimeStats so a host / GPU smoke
-  // test can confirm the enhancer network actually engaged the GPU. Device:
-  // -1 = no enhancer loaded, 0 = CPU, 1 = GPU. The id mirrors backendId_ and
-  // uses the same map as backendIdFromName() in BackendUtils.hpp.
+  // Device: -1 = no enhancer loaded, 0 = CPU, 1 = GPU. The id uses the same map
+  // as backendIdFromName() in BackendUtils.hpp.
   int enhancerBackendDevice_ = -1;
   int enhancerBackendId_ = -1;
 };
@@ -152,8 +146,6 @@ struct EmittedAudio {
   int sampleRate = 0;
 };
 
-// Free function for the same reason as streamingRequested: the stats depend on
-// this choice, and getting it wrong is silent.
 EmittedAudio resolveEmittedAudio(
     bool streaming, bool enhanced, int streamFinalRate,
     std::size_t streamedSamples, std::size_t batchSamples, int batchRate);

@@ -25,7 +25,7 @@
       "runLavasrEnhancerTest"
     ],
     "cosyvoice3": [
-      "runCosyvoice3LavasrEnhancerTest",
+      "runCosyvoice3LavasrTest",
       "runCosyvoice3Test"
     ],
     "cross-model-compatibility": [
@@ -59,7 +59,7 @@
       "runLavasrEnhancerTest"
     ],
     "cosyvoice3": [
-      "runCosyvoice3LavasrEnhancerTest",
+      "runCosyvoice3LavasrTest",
       "runCosyvoice3Test"
     ],
     "cross-model-compatibility": [

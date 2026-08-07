@@ -206,6 +206,18 @@ test('CosyVoice3: LavaSR denoiser rejected with native chunk streaming', (t) => 
   )
 })
 
+test('CosyVoice3: LavaSR denoiser accepted with streamFirstChunkTokens alone', (t) => {
+  // CosyvoiceModel::validateConfig starts streaming on streamChunkTokens > 0
+  // alone, so a first-chunk size without it is batch and keeps the denoiser.
+  const model = createMockedCosyvoiceModel({
+    files: { cosyvoiceModelDir: './models/cv3', lavasrDenoiser: './d.gguf' },
+    extra: { streamFirstChunkTokens: 20 }
+  })
+  const parameters = model._buildTtsParams()
+  t.is(parameters.lavasrDenoiserPath, './d.gguf', 'denoiser survives a batch config')
+  t.is(parameters.streamChunkTokens, undefined, 'no chunk streaming requested')
+})
+
 test('CosyVoice3: cosyvoice3-only options on other engines throw', (t) => {
   t.exception(
     () =>

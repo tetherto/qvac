@@ -395,6 +395,25 @@ test('Chatterbox: denoiser + streamChunkTokens 0 is accepted (0 means no streami
   )
 })
 
+test('Chatterbox: denoiser + streamFirstChunkTokens alone is accepted (batch)', (t) => {
+  // The addon starts native chunk streaming on streamChunkTokens > 0 alone, so
+  // a first-chunk size without it is still batch synthesis and must not cost
+  // the caller the denoiser.
+  t.execution(
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf',
+          lavasrDenoiser: '/abs/den.gguf'
+        },
+        streamFirstChunkTokens: 20,
+        config: { language: 'en' }
+      }),
+    'streamFirstChunkTokens on its own does not start streaming'
+  )
+})
+
 test('Chatterbox: denoiser and enhancer forward both paths (denoise before enhance)', (t) => {
   const model = new TTSGgml({
     files: {
