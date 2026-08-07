@@ -19,7 +19,7 @@ describe('isArchivedPage', () => {
   });
 
   it('returns false for a regular non-versioned page', () => {
-    expect(isArchivedPage(page('/quickstart'))).toBe(false);
+    expect(isArchivedPage(page('/js-ts-sdk'))).toBe(false);
   });
 
   it('returns false for the latest API page (served at the bare basePath)', () => {
@@ -72,7 +72,7 @@ describe('isArchivedVersionSlug', () => {
   });
 
   it('returns false for non-versioned pages', () => {
-    expect(isArchivedVersionSlug(['quickstart'])).toBe(false);
+    expect(isArchivedVersionSlug(['js-ts-sdk'])).toBe(false);
     expect(isArchivedVersionSlug(['reference', 'api'])).toBe(false);
   });
 
@@ -110,7 +110,7 @@ describe('isReleaseNotesPage', () => {
 
   it('returns false for non-release-notes pages', () => {
     expect(isReleaseNotesPage(page('/'))).toBe(false);
-    expect(isReleaseNotesPage(page('/quickstart'))).toBe(false);
+    expect(isReleaseNotesPage(page('/js-ts-sdk'))).toBe(false);
     expect(isReleaseNotesPage(page('/reference/api'))).toBe(false);
     expect(isReleaseNotesPage(page('/reference/api/v0.10.x'))).toBe(false);
   });
@@ -152,8 +152,8 @@ describe('buildPageCanonicalUrl', () => {
   });
 
   it('returns the self-URL for non-versioned pages', () => {
-    expect(buildPageCanonicalUrl(['quickstart'])).toBe(
-      `${DOCS_SITE_ORIGIN}/quickstart/`,
+    expect(buildPageCanonicalUrl(['js-ts-sdk'])).toBe(
+      `${DOCS_SITE_ORIGIN}/js-ts-sdk/`,
     );
     expect(buildPageCanonicalUrl(['reference', 'api'])).toBe(
       `${DOCS_SITE_ORIGIN}/reference/api/`,

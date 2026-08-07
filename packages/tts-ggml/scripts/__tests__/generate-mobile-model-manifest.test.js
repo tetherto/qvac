@@ -20,6 +20,7 @@ const {
   buildManifest,
   Q4_MODELS,
   Q8_MODELS,
+  FUNCTIONAL_MODELS,
   LAVASR_MODELS,
   COSYVOICE_MODELS,
   QUALITY_MODELS
@@ -31,13 +32,29 @@ function fakePresign(entry) {
   return { name: entry.name, targetName: entry.targetName, url: `signed:${entry.s3Key}` }
 }
 
-test('the manifest exposes q4, q8, lavasr, cosyvoice and quality sections', () => {
+test('the manifest exposes benchmark and functional model sections', () => {
   const { manifest } = buildManifest(fakePresign)
   assert.ok(Array.isArray(manifest.q4) && manifest.q4.length > 0, 'q4 section is populated')
   assert.ok(Array.isArray(manifest.q8) && manifest.q8.length > 0, 'q8 section is populated')
+  assert.equal(manifest.functional.length, 4, 'functional section has every Supertonic 3 tier')
   assert.equal(manifest.lavasr.length, 2, 'lavasr section has the enhancer + denoiser')
   assert.equal(manifest.cosyvoice.length, 6, 'cosyvoice section has the 6 model-dir files')
   assert.equal(manifest.quality.length, 1, 'quality section has the mobile Whisper model')
+})
+
+test('the functional section stages every Supertonic 3 quant under its resolver filename', () => {
+  const { manifest } = buildManifest(fakePresign)
+  assert.deepEqual(
+    manifest.functional.map((entry) => entry.targetName),
+    [
+      'supertonic3-f16.gguf',
+      'supertonic3-f32.gguf',
+      'supertonic3-q8_0.gguf',
+      'supertonic3-q4_0.gguf'
+    ]
+  )
+  assert.match(manifest.functional[0].url, /supertonic\/2026-06-10\/supertonic3-f16\.gguf$/)
+  assert.match(manifest.functional[2].url, /supertonic\/2026-06-15\/supertonic3-q8_0\.gguf$/)
 })
 
 test('the cosyvoice section targets the on-device cosyvoice3/ subdir the resolver scans', () => {
@@ -104,7 +121,13 @@ test('LAVASR_MODELS keeps the fp16 registry key / on-disk target split', () => {
 test('signedCount counts each distinct GGUF once across all sections', () => {
   const { signedCount } = buildManifest(fakePresign)
   const distinct = new Set(
-    [...Q4_MODELS, ...Q8_MODELS, ...LAVASR_MODELS, ...COSYVOICE_MODELS].map((entry) => entry.name)
+    [
+      ...Q4_MODELS,
+      ...Q8_MODELS,
+      ...FUNCTIONAL_MODELS,
+      ...LAVASR_MODELS,
+      ...COSYVOICE_MODELS
+    ].map((entry) => entry.name)
   )
   assert.equal(signedCount, distinct.size)
 })
