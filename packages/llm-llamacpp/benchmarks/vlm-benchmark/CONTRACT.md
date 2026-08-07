@@ -58,6 +58,19 @@ URLs are reported as Source=HF with repo+ref (unpinned refs flagged); other URLs
 Registry-type sources: `json:` form only, desktop-only (no registry client in the mobile app).
 Presigned S3 URLs work for a one-off dispatch but expire — don't commit them to the catalog.
 
+In **several-sources** mode the model axis is fixed, so only the FIRST token is used; empty
+falls back to `config.sourcesModel`. Both legs resolve it identically (`harness.cjs runAll()`
+for the addon, `resolve-cli-model.cjs` for the native CLIs), so a model with no catalog entry
+can be compared across engines with no config commit. A dispatch with CLI sources only
+(`matrix_sources=fabric@<ref>`) runs no addon leg at all, and the CLI step downloads the two
+blobs itself, which is what a model the published addon cannot load yet needs.
+
+A model needing a per-model flag (VisionPsy Flash needs `--image-no-upscale on`, else it runs
+base preprocessing and the run measures the wrong thing) carries it as `cliArgs` for the native
+CLIs and `addonConfig` for the addon. Both live on the spec, so a catalog entry or a `json:`
+spec can set them; a bare `<llm-url>|<mmproj-url>` pair cannot. Use `json:` for a one-off run of
+such a model, not the pair form.
+
 **`matrix_sources`** — comma-separated builds-under-comparison: `addon` (published, default) ·
 `addon@candidate` / `addon@baseline` *(build comparison)* · `fabric@<ref>` ·
 `upstream@<ref>` (CLI sources are desktop-only — Linux/macOS/Windows — several-sources mode).

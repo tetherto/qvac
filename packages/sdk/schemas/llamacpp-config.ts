@@ -83,6 +83,21 @@ export const llmConfigBaseSchema = z.object({
    */
   image_tile_mode: z.enum(['disabled', 'batched', 'sequential']).optional(),
   /**
+   * idefics3-style image preprocessing rule (multimodal models only):
+   *   - `"on"`: round the image's long side up to a whole number of slices and
+   *     cap it, so an image smaller than the cap keeps its own resolution and
+   *     becomes far fewer slices.
+   *   - `"off"`: always stretch the long side to the cap.
+   * When unset, the model's own GGUF value is used. Ignored with a warning by
+   * models that do not use idefics3-style preprocessing.
+   *
+   * Required for the VisionPsy Nano Flash checkpoint: its mmproj declares
+   * exactly the same vision hparams as the base checkpoint, so without this a
+   * Flash model silently runs base preprocessing. Changes the number of image
+   * tokens, and therefore both accuracy and encode time.
+   */
+  image_no_upscale: z.enum(['on', 'off']).optional(),
+  /**
    * Run the multimodal projector (mmproj / vision encoder) on the GPU
    * (multimodal models only). `true` forces GPU, `false` forces CPU. When
    * unset, the llm-llamacpp addon auto-selects the backend per device class:

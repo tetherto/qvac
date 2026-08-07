@@ -23,6 +23,9 @@ const BINARY = arg('binary')
 const SOURCE = arg('source', 'cli')
 const LLM = arg('llm')
 const MMPROJ = arg('mmproj')
+// Space-separated extra flags for the CLI, from the catalog entry's `cliArgs`. Empty for
+// every model that does not need one.
+const EXTRA_ARGS = String(arg('extra-args', '') || '').split(/\s+/).filter(Boolean)
 const BACKEND = arg('backend', 'cpu')
 const SAMPLES = parseInt(arg('samples', '3'), 10)
 const REPEATS = parseInt(arg('repeats', '3'), 10)
@@ -46,6 +49,11 @@ const MAX_TASKS = parseInt(arg('max-tasks', '0'), 10) || 0
 const IDS = (arg('ids', '') || '').split(',').map(s => s.trim()).filter(Boolean)
 const MAIN_ORIGIN = arg('main-origin', 'Qwen3.5-0.8B-Q8_0')
 const MMPROJ_ORIGIN = arg('mmproj-origin', 'Qwen3.5-0.8B mmproj-Q8_0')
+// Model identity for the markers. Was hardcoded to qwen, which mislabelled every
+// several-sources run of any other model. Defaults keep old logs readable.
+const MODEL_LABEL = arg('model-label', 'qwen')
+const MAIN_SOURCE = arg('main-source', 'Registry')
+const MMPROJ_SOURCE = arg('mmproj-source', 'Registry')
 
 if (!BINARY || !fs.existsSync(BINARY)) { console.error(`[cli-fixture] binary not found: ${BINARY}`); process.exit(2) }
 if (!LLM || !MMPROJ) { console.error('[cli-fixture] --llm and --mmproj are required'); process.exit(2) }
@@ -70,12 +78,11 @@ function main () {
   console.error('[VLMMETA]' + JSON.stringify({
     cell: SOURCE,
     source: SOURCE,
-    model: 'qwen',
-    mmproj: 'q8',
+    model: MODEL_LABEL,
     main_origin: MAIN_ORIGIN,
-    main_source: 'Registry',
+    main_source: MAIN_SOURCE,
     mmproj_origin: MMPROJ_ORIGIN,
-    mmproj_source: 'Registry'
+    mmproj_source: MMPROJ_SOURCE
   }) + '[/VLMMETA]')
 
   const items = selectedItems()
@@ -85,6 +92,7 @@ function main () {
       cliBinaryPath: BINARY,
       llmPath: LLM,
       mmprojPath: MMPROJ,
+      extraArgs: EXTRA_ARGS,
       imagePath: mediaPath(item.image),
       prompt: item.prompt,
       ctxSize: 4096,
@@ -96,7 +104,7 @@ function main () {
       perRunTimeoutMs: 5 * 60 * 1000
     }
     for (let rep = 0; rep < REPEATS; rep++) {
-      console.error('[VLMSEG]' + JSON.stringify({ cell: SOURCE, source: SOURCE, model: 'qwen', mmproj: 'q8', device: BACKEND, id: item.id, rep }) + '[/VLMSEG]')
+      console.error('[VLMSEG]' + JSON.stringify({ cell: SOURCE, source: SOURCE, model: MODEL_LABEL, device: BACKEND, id: item.id, rep }) + '[/VLMSEG]')
       try {
         const r = runOnceCli(spec)
         if (r.stderr) process.stderr.write(r.stderr + '\n') // surfaces `image ... encoded in N ms` after the [VLMSEG]
@@ -107,8 +115,7 @@ function main () {
         console.log('[VLMROW]' + JSON.stringify({
           cell: SOURCE,
           source: SOURCE,
-          model: 'qwen',
-          mmproj: 'q8',
+          model: MODEL_LABEL,
           device: BACKEND,
           rep,
           task: item.task,
@@ -123,15 +130,21 @@ function main () {
           decode_tps: m.decodeTps != null ? m.decodeTps : null,
           ttft_ms: ttft,
           gen_tokens: m.decodeTokens != null ? m.decodeTokens : null,
-          prompt_tokens: m.promptTokens != null ? m.promptTokens : null
+          prompt_tokens: m.promptTokens != null ? m.promptTokens : null,
+          // runOnceCli reads this from the `/usr/bin/time -v` wrapper. It was being
+          // dropped here, so the report's peak-RSS row was empty for every CLI leg.
+          rss_mb: r.peakRssMb != null ? r.peakRssMb : null,
+          // Per-row encode time and slice count, the same fields the addon harness
+          // emits, so the report has them even when the log-scraping path misses.
+          vision_enc_ms: m.visionEncodeMs != null ? m.visionEncodeMs : null,
+          vision_enc_tiles: m.visionEncodeSliceCount != null ? m.visionEncodeSliceCount : null
         }) + '[/VLMROW]')
         ok++
       } catch (e) {
         console.log('[VLMROW]' + JSON.stringify({
           cell: SOURCE,
           source: SOURCE,
-          model: 'qwen',
-          mmproj: 'q8',
+          model: MODEL_LABEL,
           device: BACKEND,
           rep,
           task: item.task,

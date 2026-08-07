@@ -579,8 +579,14 @@ jobs:
           # = the pinned npm pack — symlinked into ./prebuilds before its run (a fresh `bare`
           # process per source picks up the swap). Run the plain published addon (no swap)
           # first so the original prebuilds is intact for it.
+          # No addon-type token in matrix_sources means the dispatch asked for CLI
+          # sources only, so run no addon leg. Defaulting to the published addon here
+          # forced it into every CLI-only comparison, and for a model the published
+          # prebuild cannot load (new projector type on a fabric branch) that failure
+          # exits this step and the CLI step below never runs.
           if [ "$QVAC_VLM_MODE" = "several-sources" ]; then
-            SRCS=$(node -e "const s=require('./benchmarks/vlm-benchmark/sources.cjs');const a=s.parseSources(process.env.QVAC_VLM_SOURCES||'addon').filter(x=>x.type==='addon').map(x=>x.id);process.stdout.write((a.length?a:['addon']).join(' '))")
+            SRCS=$(node -e "const s=require('./benchmarks/vlm-benchmark/sources.cjs');const a=s.parseSources(process.env.QVAC_VLM_SOURCES||'addon').filter(x=>x.type==='addon').map(x=>x.id);process.stdout.write(a.join(' '))")
+            [ -z "$SRCS" ] && echo "no addon-type source requested, skipping the addon leg (CLI sources only)"
           else
             SRCS=addon
           fi
@@ -652,6 +658,7 @@ jobs:
           SAMPLES: ${{ inputs.matrix_samples }}
           PRESET: ${{ inputs.matrix_preset }}
           MATRIX_SOURCES: ${{ inputs.matrix_sources }}
+          QVAC_VLM_MODELS: ${{ inputs.matrix_models }} # '' → config.sourcesModel (same resolution as harness.cjs)
         run: |
           # Match the addon leg's run size: samples + repeats come from the active
           # preset in config.cjs (matrix_samples still overrides samples). CLI build +
@@ -678,19 +685,49 @@ jobs:
           node build-cli-sources.js --sources="$CLI_SRCS" \
             --fabric-ref=${{ needs.context.outputs.fabric_ref }} --upstream-ref=${{ needs.context.outputs.upstream_ref }} \
             --backend=${{ matrix.backend }}
-          # Model files were downloaded by the addon leg (names from config.cjs).
-          LLM="$MODEL_DIR/reg-qwen-unsloth-Q8_0.gguf"
-          MMPROJ="$MODEL_DIR/reg-qwen-mradermacher-mmproj-Q8_0.gguf"
+          # Blob names, URLs and provenance for the model under comparison, resolved the
+          # same way harness.cjs does (matrix_models first token, else config.sourcesModel).
+          # Hardcoding the qwen registry filenames here made every several-sources run
+          # measure qwen even when matrix_models asked for something else.
+          node resolve-cli-model.cjs > cli-model.env
+          cat cli-model.env
+          . ./cli-model.env
+          LLM="$MODEL_DIR/$LLM_NAME"
+          MMPROJ="$MODEL_DIR/$MMPROJ_NAME"
+          # The addon leg normally downloads these. A CLI-only comparison runs no addon
+          # leg, so fetch what is missing here.
+          mkdir -p "$MODEL_DIR"
+          fetch_blob () {
+            [ -s "$1" ] && return 0
+            if [ -z "$2" ]; then
+              echo "::error::$1 is missing and its source has no download URL (registry sources need an addon leg)"
+              exit 1
+            fi
+            echo ">> fetching $1"
+            if [ -n "$HF_TOKEN" ]; then
+              curl -fL --retry 3 -H "Authorization: Bearer $HF_TOKEN" -o "$1" "$2"
+            else
+              curl -fL --retry 3 -o "$1" "$2"
+            fi
+          }
+          fetch_blob "$LLM" "$LLM_URL"
+          fetch_blob "$MMPROJ" "$MMPROJ_URL"
           run_src () {
             echo ">> $1 over fixture ($2)"
+            # Model-specific flags (e.g. VisionPsy Flash's --image-no-upscale) are fabric-fork
+            # additions; upstream-cli aborts on an unknown argument, so only fabric gets them.
+            EXTRA=""
+            [ "$2" = "fabric" ] && EXTRA="$CLI_EXTRA_ARGS"
             node cli-fixture-runner.cjs \
               --binary "$3" --source "$1" --llm "$LLM" --mmproj "$MMPROJ" \
+              --extra-args "$EXTRA" \
               --backend "${{ matrix.backend }}" --samples "$SAMPLES" --repeats "$REPEATS" \
               --tasks "${PRESET_TASKS:-textvqa,vizwiz,gqa,docvqa,ai2d,ocr-small,ocr-page}" \
               --ids "$PRESET_IDS" \
               --task-samples "$TASK_SAMPLES" --max-tasks "$MAX_TASKS" \
-              --main-origin "Qwen3.5-0.8B-Q8_0 (Registry)" \
-              --mmproj-origin "Qwen3.5-0.8B mmproj-Q8_0 (Registry)" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
+              --main-origin "$MAIN_ORIGIN" --main-source "$MAIN_SOURCE" \
+              --mmproj-origin "$MMPROJ_ORIGIN" --mmproj-source "$MMPROJ_SOURCE" \
+              --model-label "$MODEL_LABEL" >> "$LOG" 2>&1 || echo "::warning::$1 run had errors"
           }
           case ",$CLI_SRCS," in *,fabric,*) run_src fabric-cli fabric "$(node -e "console.log(require('./cli-sources-resolved.json').fabric.binaryPath)")" ;; esac
           case ",$CLI_SRCS," in *,upstream,*) run_src upstream-cli upstream "$(node -e "console.log(require('./cli-sources-resolved.json').upstream.binaryPath)")" ;; esac

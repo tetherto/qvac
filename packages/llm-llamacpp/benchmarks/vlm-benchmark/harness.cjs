@@ -350,6 +350,11 @@ function runModel (spec) {
           n_predict: String(nPredict),
           verbosity: '2', // surfaces `image slice encoded in N ms` on native stderr
           'reasoning-budget': '0', // disable Qwen3.5 thinking -> clean direct answers
+          // Per-model load config, the addon-side twin of the catalog's `cliArgs`
+          // (e.g. VisionPsy Flash needs image-no-upscale, which nothing in its mmproj
+          // declares). Omitted entirely for models that define none, so the addon keeps
+          // its own defaults.
+          ...(spec.addonConfig || {}),
           ...(BACKENDS_DIR ? { backendsDir: BACKENDS_DIR } : {}) // candidate/baseline build swap (scheduler)
         },
         logger: console,
@@ -454,11 +459,15 @@ function runModel (spec) {
 // One test file -> one mobile test function -> one Device Farm spec -> one phone.
 // two-models runs the QVAC_VLM_MODELS launch param (catalog names, ad-hoc
 // <llm-url>|<mmproj-url> pairs, or json: specs — see models.cjs / CONTRACT.md §3),
-// falling back to the committed config.models pair; several-sources loads the one
-// sourcesModel (the other engines run via cli-fixture-runner.cjs, same log).
+// falling back to the committed config.models pair; several-sources runs ONE model
+// across the engines (the other engines run via cli-fixture-runner.cjs, same log).
+// several-sources honours the same launch param, first token only, so a model that
+// has no catalog entry can be compared across engines without a config commit;
+// empty falls back to config.sourcesModel. The workflow's CLI step resolves the
+// blob filenames the same way, so both legs read the same two files.
 function runAll () {
   const models = MODE === 'several-sources'
-    ? [config.sourcesModel]
+    ? parseModels(env('QVAC_VLM_MODELS'), config.catalog, [config.sourcesModel]).slice(0, 1)
     : parseModels(env('QVAC_VLM_MODELS'), config.catalog, config.models)
   // When the desktop scheduler drives one (source × model × block) per process it pins
   // the model by index (QVAC_VLM_MODEL_INDEX); otherwise run the whole list.
