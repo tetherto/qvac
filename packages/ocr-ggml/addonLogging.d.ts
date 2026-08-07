@@ -4,4 +4,6 @@ export interface AddonLogging {
     releaseLogger: () => void;
 }
 declare const addonLogging: AddonLogging;
+export declare const setLogger: AddonLogging["setLogger"];
+export declare const releaseLogger: AddonLogging["releaseLogger"];
 export default addonLogging;

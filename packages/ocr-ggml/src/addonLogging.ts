@@ -21,6 +21,13 @@ const addonLogging: AddonLogging = {
   },
 };
 
+// ESM named imports need the top-level `exports.X =` form these emit. They
+// delegate rather than capture, so the binding stays resolved on first call.
+export const setLogger: AddonLogging["setLogger"] = (callback) =>
+  addonLogging.setLogger(callback);
+export const releaseLogger: AddonLogging["releaseLogger"] = () =>
+  addonLogging.releaseLogger();
+
 export default addonLogging;
 
 module.exports = addonLogging;
