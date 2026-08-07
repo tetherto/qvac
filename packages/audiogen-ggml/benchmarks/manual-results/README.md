@@ -75,3 +75,5 @@ node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
   --manual-dir packages/audiogen-ggml/benchmarks/manual-results \
   --output /tmp/audiogen-ggml-performance-findings.md
 ```
+
+Demo branch: exercising the `run-benchmarks` label. Delete after the run.
