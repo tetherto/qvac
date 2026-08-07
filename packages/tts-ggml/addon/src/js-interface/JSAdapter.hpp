@@ -5,6 +5,8 @@
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <js.h>
 
+#include <tts-cpp/cosyvoice/engine.h>
+
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
@@ -46,6 +48,10 @@ public:
   // Shared by buildParlerConfig and the per-call runJob path (the same
   // description/template properties are legal on both objects).
   parler::ParlerDescriptionFields readParlerDescriptionFields(
+      qvac_lib_inference_addon_cpp::js::Object obj, js_env_t* env);
+
+  // Cross-engine conditioning, legal on both the config and the job object.
+  tts_cpp::cosyvoice::VoiceControls readVoiceControls(
       qvac_lib_inference_addon_cpp::js::Object obj, js_env_t* env);
 };
 

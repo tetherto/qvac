@@ -51,6 +51,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.steps.has_value())   opts.steps = *cfg.steps;
   if (cfg.speed.has_value())   opts.speed = *cfg.speed;
+  opts.pace = cfg.pace;
   if (cfg.seed.has_value())    opts.seed  = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads = *cfg.threads;
   if (cfg.nGpuLayers.has_value()) {
