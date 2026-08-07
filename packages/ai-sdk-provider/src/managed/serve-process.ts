@@ -103,13 +103,14 @@ function attachOutputTail(child: ChildProcess, maxChars = 4000): () => string {
 }
 
 async function waitForHealth(params: {
+  apiKey: string
   child: ChildProcess
   baseURL: string
   timeoutMs: number
   fetchImpl: typeof fetch
   getTail: () => string
 }): Promise<void> {
-  const { child, baseURL, timeoutMs, fetchImpl, getTail } = params
+  const { apiKey, child, baseURL, timeoutMs, fetchImpl, getTail } = params
   const healthUrl = `${baseURL}/models`
   const deadline = Date.now() + timeoutMs
 
@@ -142,7 +143,10 @@ async function waitForHealth(params: {
       const controller = new AbortController()
       const attemptTimer = setTimeout(() => controller.abort(), 2000)
       try {
-        const res = await fetchImpl(healthUrl, { signal: controller.signal })
+        const res = await fetchImpl(healthUrl, {
+          headers: { authorization: `Bearer ${apiKey}` },
+          signal: controller.signal
+        })
         if (res.ok) return
       } finally {
         clearTimeout(attemptTimer)
@@ -159,6 +163,7 @@ async function waitForHealth(params: {
 }
 
 export interface SpawnServeOptions {
+  readonly apiKey: string
   readonly configPath: string
   readonly port: number
   readonly host?: string
@@ -194,7 +199,9 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
     '--port',
     String(options.port),
     '--host',
-    host
+    host,
+    '--api-key',
+    options.apiKey
   ]
 
   // `detached: true` makes the serve its own process-group leader (pgid == pid).
@@ -216,7 +223,14 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
   }
 
   try {
-    await waitForHealth({ child, baseURL, timeoutMs: startTimeoutMs, fetchImpl, getTail })
+    await waitForHealth({
+      apiKey: options.apiKey,
+      child,
+      baseURL,
+      timeoutMs: startTimeoutMs,
+      fetchImpl,
+      getTail
+    })
   } catch (err) {
     await stopServe(child).catch(() => {})
     throw err

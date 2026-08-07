@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -25,6 +25,7 @@ import { allocateFreePort, spawnServe } from '../src/managed/serve-process.js'
 import { fakeServeSkip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
 
 const DEAD_PID = 2_147_483_646
+const API_KEY = 'managed-registry-test-key'
 
 async function withFakeHome(fn: () => Promise<void>): Promise<void> {
   const prevHome = process.env['HOME']
@@ -46,6 +47,7 @@ async function withFakeHome(fn: () => Promise<void>): Promise<void> {
 function makeRecord(over: Partial<ServeRecord>): ServeRecord {
   return {
     fleetKey: 'k',
+    apiKey: API_KEY,
     servePid: process.pid,
     runnerPid: process.pid,
     port: 1,
@@ -60,7 +62,12 @@ function makeRecord(over: Partial<ServeRecord>): ServeRecord {
 
 // A throwaway health endpoint so findReusableServe's GET /v1/models succeeds.
 async function listenHealthy(): Promise<{ baseURL: string; close: () => Promise<void> }> {
-  const server: Server = createServer((_req, res) => {
+  const server: Server = createServer((req, res) => {
+    if (req.headers.authorization !== `Bearer ${API_KEY}`) {
+      res.statusCode = 401
+      res.end('unauthorized')
+      return
+    }
     res.statusCode = 200
     res.end('{"object":"list","data":[]}')
   })
@@ -87,9 +94,20 @@ test('writeRecord / readRecord / removeRecord round-trip', async () => {
     assert.ok(rec)
     assert.equal(rec?.port, 1234)
     assert.deepEqual(await readdir(managedServesDir()), ['abc.json'])
+    const mode = (await stat(join(managedServesDir(), 'abc.json'))).mode & 0o777
+    assert.equal(mode, 0o600)
 
     removeRecord('abc')
     assert.equal(await readRecord('abc'), undefined)
+  })
+})
+
+test('readRecord rejects legacy records without an apiKey as stale', async () => {
+  await withFakeHome(async () => {
+    const { apiKey: _apiKey, ...legacy } = makeRecord({ fleetKey: 'legacy' })
+    await writeRecord(legacy as ServeRecord)
+
+    assert.equal(await readRecord('legacy'), undefined)
   })
 })
 
@@ -213,6 +231,7 @@ test(
         // Orphan that actually serves on its recorded baseURL → must be killed.
         const port = await allocateFreePort('127.0.0.1')
         const serve = await spawnServe({
+          apiKey: API_KEY,
           configPath: 'unused.json',
           port,
           serveBinPath: fake.binPath,

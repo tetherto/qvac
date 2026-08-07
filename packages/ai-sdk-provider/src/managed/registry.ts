@@ -20,6 +20,7 @@ export function managedServesDir(): string {
 
 export interface ServeRecord {
   readonly fleetKey: string
+  readonly apiKey: string
   // PID of the `qvac serve` process (what callers see as provider.pid).
   readonly servePid: number
   // PID of the detached runner that owns the serve and reaps it on idle.
@@ -61,10 +62,13 @@ export function isProcessAlive(pid: number): boolean {
 // ── Records ─────────────────────────────────────────────────────────────────
 
 export async function writeRecord(record: ServeRecord): Promise<void> {
-  await mkdir(managedServesDir(), { recursive: true })
+  await mkdir(managedServesDir(), { recursive: true, mode: 0o700 })
   const final = recordPath(record.fleetKey)
   const tmp = `${final}.${process.pid}.${Date.now()}.tmp`
-  await writeFile(tmp, `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+  await writeFile(tmp, `${JSON.stringify(record, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
   // Rename is atomic on the same filesystem, so a reader never sees a partial
   // record.
   await rename(tmp, final)
@@ -73,7 +77,14 @@ export async function writeRecord(record: ServeRecord): Promise<void> {
 function parseRecord(raw: string): ServeRecord | undefined {
   try {
     const r = JSON.parse(raw) as ServeRecord
-    if (typeof r.servePid === 'number' && typeof r.baseURL === 'string') return r
+    if (
+      typeof r.apiKey === 'string' &&
+      r.apiKey.length > 0 &&
+      typeof r.servePid === 'number' &&
+      typeof r.baseURL === 'string'
+    ) {
+      return r
+    }
   } catch {
     // corrupt/partial record — treated as absent
   }
@@ -183,13 +194,17 @@ export async function liveConsumers(fleetKey: string): Promise<number[]> {
 
 export async function healthCheck(
   baseURL: string,
+  apiKey: string,
   fetchImpl: typeof fetch,
   timeoutMs = 2_000
 ): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetchImpl(`${baseURL}/models`, { signal: controller.signal })
+    const res = await fetchImpl(`${baseURL}/models`, {
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: controller.signal
+    })
     return res.ok
   } catch {
     return false
@@ -208,7 +223,7 @@ export async function findReusableServe(
   const rec = await readRecord(fleetKey)
   if (rec === undefined) return undefined
   if (!isProcessAlive(rec.servePid) || !isProcessAlive(rec.runnerPid)) return undefined
-  if (!(await healthCheck(rec.baseURL, fetchImpl))) return undefined
+  if (!(await healthCheck(rec.baseURL, rec.apiKey, fetchImpl))) return undefined
   return rec
 }
 
@@ -233,7 +248,7 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
       // the OS recycled to a stranger also lands here; its stale record is
       // harmless — reuse health-checks and skips it, and the next spawn for the
       // key overwrites it.)
-      if (!(await healthCheck(rec.baseURL, fetchImpl))) continue
+      if (!(await healthCheck(rec.baseURL, rec.apiKey, fetchImpl))) continue
       try {
         process.kill(rec.servePid, 'SIGTERM')
       } catch {
@@ -254,7 +269,7 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
 }
 
 export function ensureDirSync(): void {
-  mkdirSync(managedServesDir(), { recursive: true })
+  mkdirSync(managedServesDir(), { recursive: true, mode: 0o700 })
 }
 
 // Atomic-ish sync record write for the runner (avoids a partial record race on
@@ -263,6 +278,9 @@ export function writeRecordSync(record: ServeRecord): void {
   ensureDirSync()
   const final = recordPath(record.fleetKey)
   const tmp = `${final}.${process.pid}.${Date.now()}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
   renameSync(tmp, final)
 }

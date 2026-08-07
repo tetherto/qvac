@@ -9,6 +9,8 @@ import { isProcessAlive } from '../src/managed/registry.js'
 import { allocateFreePort, spawnServe, stopServe } from '../src/managed/serve-process.js'
 import { fakeServeSkip as skip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
 
+const API_KEY = 'managed-test-key'
+
 test(
   'spawnServe brings up a healthy serve, reports coordinates, then stopServe terminates it',
   { skip },
@@ -18,6 +20,7 @@ test(
     try {
       const port = await allocateFreePort('127.0.0.1')
       const serve = await spawnServe({
+        apiKey: API_KEY,
         configPath: 'unused.json',
         port,
         serveBinPath: fake.binPath,
@@ -29,7 +32,9 @@ test(
       assert.equal(serve.baseURL, `http://127.0.0.1:${port}/v1`)
       assert.equal(isProcessAlive(serve.pid), true)
 
-      const res = await fetch(`${serve.baseURL}/models`)
+      const res = await fetch(`${serve.baseURL}/models`, {
+        headers: { authorization: `Bearer ${API_KEY}` }
+      })
       assert.equal(res.status, 200)
 
       await stopServe(serve.child)
@@ -54,6 +59,7 @@ test(
     try {
       await assert.rejects(
         spawnServe({
+          apiKey: API_KEY,
           configPath: 'unused.json',
           port: await allocateFreePort('127.0.0.1'),
           serveBinPath: fake.binPath,
@@ -81,6 +87,7 @@ test(
     try {
       await assert.rejects(
         spawnServe({
+          apiKey: API_KEY,
           configPath: 'unused.json',
           port: await allocateFreePort('127.0.0.1'),
           serveBinPath: fake.binPath,
@@ -105,6 +112,7 @@ test('stopServe escalates to SIGKILL when SIGTERM is ignored', { skip }, async (
   setBehavior('ignore-sigterm')
   try {
     const serve = await spawnServe({
+      apiKey: API_KEY,
       configPath: 'unused.json',
       port: await allocateFreePort('127.0.0.1'),
       serveBinPath: fake.binPath,
@@ -133,6 +141,7 @@ test(
     let workerPid = 0
     try {
       const serve = await spawnServe({
+        apiKey: API_KEY,
         configPath: 'unused.json',
         port: await allocateFreePort('127.0.0.1'),
         serveBinPath: fake.binPath,

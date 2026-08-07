@@ -23,6 +23,7 @@ import type { SpawnedServe } from './serve-process.js'
 
 export interface RunnerParams {
   readonly fleetKey: string
+  readonly apiKey: string
   readonly configPath: string
   readonly port: number
   readonly host: string
@@ -62,13 +63,14 @@ function cleanup(fleetKey: string, configPath: string): void {
 }
 
 export async function runRunner(params: RunnerParams): Promise<void> {
-  const { fleetKey, configPath, port, host, idleTimeoutMs, startTimeoutMs } = params
+  const { fleetKey, apiKey, configPath, port, host, idleTimeoutMs, startTimeoutMs } = params
 
   ensureDirSync()
 
   let spawned: SpawnedServe
   try {
     spawned = await spawnServe({
+      apiKey,
       configPath,
       port,
       host,
@@ -91,6 +93,7 @@ export async function runRunner(params: RunnerParams): Promise<void> {
 
   writeRecordSync({
     fleetKey,
+    apiKey,
     servePid,
     runnerPid: process.pid,
     port,

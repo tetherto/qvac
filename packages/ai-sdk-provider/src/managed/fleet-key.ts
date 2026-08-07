@@ -19,8 +19,11 @@ import type { SynthesizedServeConfig } from './config-synthesizer.js'
 // other port. An auto-allocated port (undefined) stays out of the key so the
 // common share-by-config case still collapses.
 //
-// Deliberately NOT part of the key: an auto-allocated port, apiKey/headers
-// (client-side only), and the ephemeral config path (per-spawn temp dir).
+// Deliberately NOT part of the key: an auto-allocated port, the generated
+// managed API key (persisted in the fleet record), client headers, and the
+// ephemeral config path (per-spawn temp dir).
+const FLEET_PROTOCOL_VERSION = 2
+
 export function computeFleetKey(
   config: SynthesizedServeConfig,
   host: string,
@@ -35,6 +38,7 @@ export function computeFleetKey(
     .map((alias) => [alias, stableStringify(models[alias])] as const)
 
   const payload = JSON.stringify({
+    protocolVersion: FLEET_PROTOCOL_VERSION,
     host,
     serveBinPath: serveBinPath ?? null,
     servePort: servePort ?? null,

@@ -46,8 +46,15 @@ test(
         assert.ok(provider.pid > 0)
         assert.equal(provider.baseURL, `http://127.0.0.1:${provider.port}/v1`)
 
-        // The provider points at the live (detached-runner-owned) fake serve.
-        const res = await fetch(`${provider.baseURL}/models`)
+        const [record] = await readAllRecords()
+        assert.ok(record)
+        assert.match(record.apiKey, /^[A-Za-z0-9_-]{43}$/)
+
+        const unauthenticated = await fetch(`${provider.baseURL}/models`)
+        assert.equal(unauthenticated.status, 401)
+        const res = await fetch(`${provider.baseURL}/models`, {
+          headers: { authorization: `Bearer ${record.apiKey}` }
+        })
         assert.equal(res.status, 200)
 
         // close() only detaches — the serve keeps running for other consumers.
@@ -90,9 +97,70 @@ test(
         // Exactly one serve is recorded for the shared fleet.
         const records = await readAllRecords()
         assert.equal(records.length, 1)
+        assert.match(records[0]!.apiKey, /^[A-Za-z0-9_-]{43}$/)
 
         await a.close()
         await b.close()
+      } finally {
+        setBehavior(undefined)
+        await reapAllManaged()
+        await fake.cleanup()
+      }
+    })
+  }
+)
+
+test(
+  'managed provider sends the persisted serve key instead of the caller apiKey',
+  { skip },
+  async () => {
+    await withFakeHome(async () => {
+      const fake = await makeFakeServe()
+      setBehavior('healthy')
+      let completionAuth: string | null = null
+      const customFetch: typeof fetch = (input, init) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+        if (url.endsWith('/models')) return fetch(input, init)
+        completionAuth = new Headers(
+          init?.headers ?? (input instanceof Request ? input.headers : undefined)
+        ).get('authorization')
+        return Promise.resolve(
+          Response.json({
+            id: 'cmpl-managed',
+            object: 'chat.completion',
+            created: 0,
+            model: 'QWEN3_600M_INST_Q4',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'ok' },
+                finish_reason: 'stop'
+              }
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+          })
+        )
+      }
+
+      try {
+        const provider = await createQvac({
+          mode: 'managed',
+          models: ['QWEN3_600M_INST_Q4'],
+          apiKey: 'caller-supplied-key',
+          fetch: customFetch,
+          serveBinPath: fake.binPath,
+          serveStartTimeout: 15_000
+        })
+        const [record] = await readAllRecords()
+        assert.ok(record)
+
+        const { generateText } = await import('ai')
+        await generateText({ model: provider.chatModel('QWEN3_600M_INST_Q4'), prompt: 'hi' })
+
+        assert.equal(completionAuth, `Bearer ${record.apiKey}`)
+        assert.notEqual(completionAuth, 'Bearer caller-supplied-key')
+        await provider.close()
       } finally {
         setBehavior(undefined)
         await reapAllManaged()
