@@ -46,7 +46,20 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/llm-llamacpp"
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'carve-out: routed to integration-mobile-test-llm-llamacpp.yml'",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "carveOut": true
+        }
       }
     },
     "benchmark": {

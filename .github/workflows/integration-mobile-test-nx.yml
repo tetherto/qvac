@@ -40,6 +40,7 @@ jobs:
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
+      carveouts: ${{ steps.compute.outputs.carveouts }}
     steps:
       - id: compute
         uses: ./.github/actions/nx-project-matrix
@@ -47,6 +48,23 @@ jobs:
           target: test:integration-mobile
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+
+  # Carve-out: llm-llamacpp uses sharded Device Farm scheduling outside the
+  # generic 2-D matrix; routed to its own reusable when nx flags it affected
+  # (options.ci carveOut:true on test:integration-mobile).
+  run-mobile-llm:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   build-and-test:
     name: Build ${{ matrix.platform.platform }} and Run E2E Tests (${{ matrix.package.package }})
