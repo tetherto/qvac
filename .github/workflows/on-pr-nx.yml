@@ -91,6 +91,37 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  # Affected packages + their on-pr flags (fold map), plus pre-filtered sublists
+  # for the flag-gated jobs (a uses: job can't gate per matrix row, so it runs
+  # over a filtered list). On pull_request nx-set-shas computes affected.
+  matrix:
+    needs: [authorize]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+      cpplint: ${{ steps.filter.outputs.cpplint }}
+      tschecks: ${{ steps.filter.outputs.tschecks }}
+      fabric: ${{ steps.filter.outputs.fabric }}
+      coload: ${{ steps.filter.outputs.coload }}
+    steps:
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: on-pr
+      - id: filter
+        shell: bash
+        env:
+          M: ${{ steps.compute.outputs.matrix }}
+        run: |
+          {
+            echo "cpplint=$(echo "$M" | jq -c '[.[] | select(.hasCppLint == true)]')"
+            echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true)]')"
+            echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"
+            echo "coload=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true)]')"
+          } >> "$GITHUB_OUTPUT"
+
   # The 4 leaves self-affect from their own project.json targets (and absorb
   # their carve-out packages internally), so on-pr calls them uniformly. On
   # pull_request the leaves' nx-set-shas computes affected from the PR diff.
@@ -151,11 +182,132 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
+  # Flag-gated per-package jobs, driven by the on-pr fold map. sanity runs for
+  # every affected package; the rest run over their pre-filtered sublist.
+  sanity-checks:
+    needs: [authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: ${{ matrix.workdir }}
+
+  cpp-lint:
+    needs: [authorize, ci-router, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.cpplint != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.cpplint || '[]') }}
+    uses: ./.github/workflows/cpp-lint.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: ${{ matrix.workdir }}
+      include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
+
+  ts-checks:
+    needs: [authorize, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.tschecks || '[]') }}
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: ${{ matrix.workdir }}
+        run: npm install
+      - name: Type declaration check
+        working-directory: ${{ matrix.workdir }}
+        run: npm run test:dts
+      - name: Run lint and unit tests
+        if: matrix.tsChecksMode == 'dts+lint'
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: ${{ matrix.workdir }}
+
+  fabric-lockstep:
+    needs: [authorize, matrix]
+    if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.fabric != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.fabric || '[]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Verify qvac-fabric versions are lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  coload-smoke:
+    needs: [authorize, ci-router, matrix, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.coload || '[]') }}
+    uses: ./.github/workflows/coload-smoke.yml
+    secrets: inherit
+    with:
+      addon: ${{ matrix.package }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  coload-smoke-mobile:
+    needs: [authorize, ci-router, matrix, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.coload || '[]') }}
+    uses: ./.github/workflows/coload-smoke-mobile.yml
+    secrets: inherit
+    with:
+      addon: ${{ matrix.package }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
   merge-guard:
-    needs: [authorize, ci-router, prebuild, cpp-tests, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, run-mobile-integration-tests, coload-smoke, coload-smoke-mobile]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped' }}
+      sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
