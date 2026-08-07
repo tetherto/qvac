@@ -73,6 +73,7 @@
         "command": "pnpm run test:cpp",
         "cwd": "packages/llm-llamacpp",
         "ci": {
+          "carveOut": true,
           "mode": "llm",
           "vulkan": { "os": "windows-2025", "shell": "pwsh", "path": "C:\\VulkanSDK" },
           "vcpkgMode": "composite-local-cache",
