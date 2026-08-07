@@ -66,9 +66,9 @@ const MODEL_1 = {
   label: 'qwen3.5-f16', //    short id — report column + marker key (keep filesystem-safe)
   name: 'Qwen3.5-0.8B · mmproj-F16', // display name
   ctx_size: '4096',
-  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+  llm: hf('Qwen3.5-0.8B-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
-  mmproj: hf('reg-qwen-unsloth-mmproj-F16.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
+  mmproj: hf('mmproj-Qwen3.5-0.8B-F16.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)} · mmproj-F16`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'mmproj-F16.gguf', QWEN_REG)
 }
 
@@ -76,9 +76,9 @@ const MODEL_2 = {
   label: 'qwen3.5-q8', //     short id
   name: 'Qwen3.5-0.8B · mmproj-Q8', // display name
   ctx_size: '4096',
-  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+  llm: hf('Qwen3.5-0.8B-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
-  mmproj: hf('reg-qwen-mradermacher-mmproj-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+  mmproj: hf('mmproj-Qwen3.5-0.8B-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
     'mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf',
     { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' })
 }
@@ -91,10 +91,10 @@ const GEMMA4_Q4 = {
   label: 'gemma4-q4',
   name: 'Gemma-4-E2B-it · Q4_K_M + mmproj-Q8',
   ctx_size: '4096',
-  llm: hf('reg-gemma4-e2b-Q4_K_M.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)}`,
+  llm: hf('google_gemma-4-E2B-it-Q4_K_M.gguf', `bartowski/google_gemma-4-E2B-it-GGUF@${SHA.gemmaBart.slice(0, 10)}`,
     'bartowski/google_gemma-4-E2B-it-GGUF', SHA.gemmaBart, 'google_gemma-4-E2B-it-Q4_K_M.gguf',
     { license: 'Gemma', link: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF' }),
-  mmproj: hf('reg-gemma4-e2b-mmproj-Q8_0.gguf', `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} · mmproj-Q8_0`,
+  mmproj: hf('mmproj-gemma-4-E2B-it-Q8_0.gguf', `ggml-org/gemma-4-E2B-it-GGUF@${SHA.gemmaGgml.slice(0, 10)} · mmproj-Q8_0`,
     'ggml-org/gemma-4-E2B-it-GGUF', SHA.gemmaGgml, 'mmproj-gemma-4-E2B-it-Q8_0.gguf',
     { license: 'Gemma', link: 'https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF' })
 }
@@ -184,9 +184,9 @@ const SOURCES_MODEL = {
   label: 'qwen3.5-0.8b-q8',
   name: 'Qwen3.5-0.8B (mmproj Q8)',
   ctx_size: '4096',
-  llm: hf('reg-qwen-unsloth-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
+  llm: hf('Qwen3.5-0.8B-Q8_0.gguf', `unsloth/Qwen3.5-0.8B-GGUF@${SHA.qwenUnsloth.slice(0, 10)}`,
     'unsloth/Qwen3.5-0.8B-GGUF', SHA.qwenUnsloth, 'Qwen3.5-0.8B-Q8_0.gguf', QWEN_REG),
-  mmproj: hf('reg-qwen-mradermacher-mmproj-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
+  mmproj: hf('mmproj-Qwen3.5-0.8B-Q8_0.gguf', `mradermacher/Qwen3.5-0.8B-GGUF@${SHA.qwenMrader.slice(0, 10)} · mmproj-Q8_0`,
     'mradermacher/Qwen3.5-0.8B-GGUF', SHA.qwenMrader, 'Qwen3.5-0.8B.mmproj-Q8_0.gguf',
     { license: 'Apache-2.0', link: 'https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF' })
 }
