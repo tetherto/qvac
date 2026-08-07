@@ -25,10 +25,10 @@
  *   - keywords, description, repository, exports, imports, files, scripts,
  *     devDependencies, peerDependenciesMeta. These intentionally diverge.
  *
- * Run from monorepo root:
- *   node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs           # apply
- *   node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs --dry-run # preview
- *   node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs --check   # exit 1 if drift
+ * Run from monorepo root (prefer /qv-sdk-lockstep-sync for the full client set):
+ *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs           # apply
+ *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs --dry-run # preview
+ *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs --check   # exit 1 if drift
  *
  * NOTE: This script only updates bare-sdk's package.json. After running it:
  *   1. Run `cd packages/bare-sdk && bun run check:deps-vs-sdk` to verify clean.
@@ -160,7 +160,7 @@ const summary = changes
 if (checkMode) {
   console.error(`[sync-bare-sdk] FAIL: drift detected (${changes.length} change(s)):`);
   console.error(summary);
-  console.error("\nFix: run `node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs`");
+  console.error("\nFix: run `node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs`");
   process.exit(1);
 }
 

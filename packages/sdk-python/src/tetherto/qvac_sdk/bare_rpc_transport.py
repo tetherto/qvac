@@ -25,22 +25,9 @@ import os
 from collections.abc import AsyncIterable, AsyncIterator, Sequence
 from typing import Any
 
+import bare_rpc
+
 from .errors import reconstruct_error
-
-try:
-    import bare_rpc
-except ImportError:
-    bare_rpc = None
-
-BARE_RPC_AVAILABLE = bare_rpc is not None
-
-
-class BareRpcNotInstalledError(ImportError):
-    def __init__(self) -> None:
-        super().__init__(
-            "bare_rpc is not installed -- install the 'bare-rpc' extra "
-            "(`pip install tetherto-qvac-sdk[bare-rpc]`) to use BareRpcTransport"
-        )
 
 
 def _json_or_raise(data: bytes) -> Any:
@@ -98,8 +85,6 @@ class BareRpcTransport:
         home_dir: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> None:
-        if bare_rpc is None:
-            raise BareRpcNotInstalledError()
         self._command = list(command)
         # QVAC_HOME_DIR lets CI/tests pin the worker's storage root (models,
         # registry) to a cacheable, per-OS-explicit path instead of the
