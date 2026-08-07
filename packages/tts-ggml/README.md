@@ -15,8 +15,8 @@ loaded once and reused across every synthesis call.  GPU acceleration
 is **opt-in** via `config: { useGPU: true }`; the default is CPU.  On
 Android `useGPU` flows through to `tts-cpp`, which picks the GPU
 backend per its own per-vendor allowlist (Adreno → OpenCL,
-Xclipse/Mali → Vulkan) for Chatterbox and Supertonic (Parler's
-validated GPU path is Apple/Metal only) (see
+Xclipse/Mali → Vulkan). Parler supports Apple/Metal and the validated
+Android paths, including Vulkan on ARM Mali (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
@@ -339,6 +339,10 @@ host's policy:
 > Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
 > `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined
 > Mali for the Chatterbox / S3Gen graph and fell back to CPU there.)
+>
+> Parler also opts into ARM Mali Vulkan on Android. Its GPU smoke test is
+> strict on Apple and Android; desktop Vulkan remains outside that test until
+> dedicated Linux and Windows validation is available.
 
 ### Android: dynamic backend loading
 
@@ -394,9 +398,9 @@ Hindi/Gujarati and the English mini/large models — emotion conditioning
 exists but is best-effort.  Per-call fields ride on `run()` input and the
 `runStream`/`runStreaming` options (one description is pinned per
 streaming response, keeping the native T5 cross-attention cache hot).
-Parler supports Metal GPU offload on Apple (`useGPU: true` / `nGpuLayers`,
-~2.25× vs CPU on indic q8_0); other backends fall back to CPU.  It emits
-native 44.1 kHz.
+Parler supports Metal GPU offload on Apple and the vendor-selected Android GPU
+backend (`useGPU: true` / `nGpuLayers`), including Vulkan on ARM Mali. Unsupported
+or unavailable backends fall back to CPU. It emits native 44.1 kHz.
 
 ## CosyVoice3 instruct
 
@@ -467,7 +471,7 @@ CosyVoice3 runs on **CPU** and emits native **24 kHz**.
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler's validated GPU backend is Apple/Metal (other backends fall back to CPU).  See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz) |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |

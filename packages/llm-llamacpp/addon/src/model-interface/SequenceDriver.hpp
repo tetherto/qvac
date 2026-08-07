@@ -35,6 +35,19 @@ static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
 static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
 static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
 
+[[nodiscard]] constexpr bool
+isKnownReasoningTruncation(GenerationStopReason reason) {
+  return reason == GenerationStopReason::PredictionLimit ||
+         reason == GenerationStopReason::SequenceLimit ||
+         reason == GenerationStopReason::ContextOverflow;
+}
+
+[[nodiscard]] constexpr GenerationStopReason
+stopReasonAfterRequestRollback(GenerationStopReason reason) {
+  return isKnownReasoningTruncation(reason) ? reason
+                                            : GenerationStopReason::None;
+}
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
