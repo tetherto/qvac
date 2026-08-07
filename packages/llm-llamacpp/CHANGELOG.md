@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.41.0] - 2026-08-07
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now
+  live under `src/` and the published root JavaScript entrypoints (`index.js`,
+  `addon.js`, `batchHandler.js`, `addonLogging.js`) and their `.d.ts`
+  declarations are generated from them and committed. Runtime behaviour and the
+  CommonJS export shape are unchanged.
+- The package is exported with `export =` rather than a default export, which
+  gives CommonJS consumers a real construct signature (`import LlmLlamacpp =
+  require('@qvac/llm-llamacpp')` previously failed with TS2351). A consequence
+  is that `import LlmLlamacpp from '@qvac/llm-llamacpp'` now requires
+  `esModuleInterop` or `allowSyntheticDefaultImports`; without either,
+  TypeScript reports TS1259.
+- `addon` is a public member of the published type instead of `protected`. An
+  interface cannot express `protected`, and the property was already public at
+  runtime, so this widens what the declarations support rather than changing
+  behaviour.
+- `BatchResponse.on` accepts the inherited `EventEmitter` event map in addition
+  to the `"output"` overload. Callback types for `"output"` are unchanged, but
+  an unrecognised event name no longer fails to compile.
+- `./addonLogging` additionally exports `setLogger` and `releaseLogger` as named
+  bindings, so ESM named imports resolve. The default export is unchanged.
+
 ## [0.40.0] - 2026-08-06
 
 One model instance can now serve several requests at once. Every `run()` call is

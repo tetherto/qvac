@@ -217,6 +217,122 @@ test('whisper mobile backend comes from the reported ggml backend id, not the pl
   assert.equal(row.gpuModel, 'Adreno 830')
 })
 
+test('android GPU rows on Adreno devices fall back to opencl when no backend id is reported', () => {
+  const gpuResult = {
+    test: '[ggml-tiny] [GPU] mobile-perf run 1',
+    execution_provider: 'gpu',
+    metrics: { real_time_factor: 0.3, wall_time_ms: 900 }
+  }
+  const probed = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Samsung Galaxy S25 Ultra', platform: 'android', gpu: 'Adreno (TM) 830' },
+    results: [gpuResult]
+  }
+  assert.equal(normalizeMobileRecords(probed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')[0].backend, 'opencl')
+
+  for (const name of ['Samsung Galaxy S25 Ultra', 'Samsung S25 Ultra']) {
+    const unprobed = {
+      addon: 'whisper',
+      addon_type: 'whisper',
+      device: { name, platform: 'android', gpu: null },
+      results: [gpuResult]
+    }
+    const [row] = normalizeMobileRecords(unprobed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')
+    assert.equal(row.backend, 'opencl', `expected opencl for ${name}`)
+  }
+})
+
+test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
+  const manual = {
+    device: 'Samsung Galaxy S25 Ultra',
+    platform: 'android-arm64',
+    platformFamily: 'android',
+    gpu: 'gpu',
+    backend: 'vulkan',
+    gpuModel: 'Adreno (TM) 830',
+    model: 'tiny',
+    meanRtf: 0.3
+  }
+  assert.equal(normalizeManualRecord(manual, '/x/manual.json').backend, 'vulkan')
+
+  const guessed = { ...manual }
+  delete guessed.backend
+  assert.equal(normalizeManualRecord(guessed, '/x/manual.json').backend, 'opencl')
+})
+
+test('a full-schema manual artifact keeps its authored backend, while the same shape from CI is corrected', () => {
+  const fullSchema = {
+    platform: 'android-arm64',
+    platformName: 'android',
+    model: { name: 'ggml-tiny.bin' },
+    requested: { useGPU: true },
+    labels: { device: 'Samsung Galaxy S25 Ultra', backend: 'vulkan' },
+    summary: { rtf: { mean: 0.3 } }
+  }
+  assert.equal(normalizeReport(fullSchema, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeReport(fullSchema, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+
+  const unlabelled = { ...fullSchema, labels: { device: 'Samsung Galaxy S25 Ultra' } }
+  assert.equal(normalizeReport(unlabelled, '/x/manual.json', 'manual').backend, 'opencl')
+})
+
+test('device names that merely start with the S25 digits are not treated as Adreno', () => {
+  const report = (name) => ({
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name, platform: 'android', gpu: null },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900 }
+    }]
+  })
+  assert.equal(normalizeMobileRecords(report('Samsung Galaxy S25 Ultra'), '/x/a/performance-report.json')[0].backend, 'opencl')
+  assert.equal(normalizeMobileRecords(report('Samsung Galaxy S250'), '/x/b/performance-report.json')[0].backend, 'vulkan')
+})
+
+test('backend id 99 (other-gpu) is not in the id table and falls through to the guess', () => {
+  const report = (name) => ({
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name, platform: 'android', gpu: null },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900, backend_id: 99 }
+    }]
+  })
+  assert.equal(normalizeMobileRecords(report('Samsung Galaxy S25 Ultra'), '/x/a/performance-report.json')[0].backend, 'opencl')
+  assert.equal(normalizeMobileRecords(report('Google Pixel 9'), '/x/b/performance-report.json')[0].backend, 'vulkan')
+})
+
+test('android GPU fallback stays vulkan off Adreno, and a reported backend id beats the Adreno correction', () => {
+  const mali = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Pixel 9', platform: 'android', gpu: 'Mali-G715' },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900 }
+    }]
+  }
+  assert.equal(normalizeMobileRecords(mali, '/x/Pixel_9/performance-report.json')[0].backend, 'vulkan')
+
+  const adrenoWithVulkanId = {
+    addon: 'whisper',
+    addon_type: 'whisper',
+    device: { name: 'Samsung Galaxy S25', platform: 'android', gpu: 'Adreno (TM) 830' },
+    results: [{
+      test: '[ggml-tiny] [GPU] mobile-perf run 1',
+      execution_provider: 'gpu',
+      metrics: { real_time_factor: 0.3, wall_time_ms: 900, backend_id: 3 }
+    }]
+  }
+  assert.equal(normalizeMobileRecords(adrenoWithVulkanId, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'vulkan')
+})
+
 test('mobile [sortformer-streaming] label maps to model sortformer-streaming, not sortformer', () => {
   // Guards the alternation ordering: `sortformer-streaming` (v2.1) must be
   // matched before `sortformer` (v1). If the order regresses, the v2.1 label

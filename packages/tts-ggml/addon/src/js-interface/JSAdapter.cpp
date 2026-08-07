@@ -205,6 +205,10 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
 
@@ -279,6 +283,10 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.streamLeftContextTokens =
       readOptionalInt(configurationParams, env, "streamLeftContextTokens");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
 }
