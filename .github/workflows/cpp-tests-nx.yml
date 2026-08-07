@@ -40,6 +40,7 @@ jobs:
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
+      carveouts: ${{ steps.compute.outputs.carveouts }}
     steps:
       - id: compute
         uses: ./.github/actions/nx-project-matrix
@@ -306,6 +307,47 @@ jobs:
             cat "${{ matrix.buildOutputDir }}/coverage-summary.txt" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+
+  # Carve-out packages have bespoke C++ test flows outside the generic matrix
+  # (own vcpkg cache / Windows generator / stub / distinct reusable). Routed to
+  # their own reusable when nx flags them affected via options.ci carveOut:true.
+  cpp-tests-llm:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/cpp-tests-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  cpp-tests-audiogen:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'audiogen-ggml')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/cpp-test-coverage-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  cpp-tests-translation:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'translation-nmtcpp')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   coverage-report:
     permissions:

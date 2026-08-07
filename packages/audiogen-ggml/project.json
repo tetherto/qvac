@@ -75,6 +75,16 @@
         }
       }
     },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'carve-out: routed to cpp-test-coverage-audiogen-ggml.yml'",
+        "cwd": "packages/audiogen-ggml",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

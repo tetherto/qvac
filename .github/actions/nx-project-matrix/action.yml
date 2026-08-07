@@ -25,6 +25,9 @@ outputs:
   any:
     description: '"true" if the matrix is non-empty, else "false"'
     value: ${{ steps.compute.outputs.any }}
+  carveouts:
+    description: 'JSON array of affected package short-names whose options.ci is flagged carveOut:true (routed to their own bespoke reusable by the caller, not the generic matrix job)'
+    value: ${{ steps.compute.outputs.carveouts }}
 
 runs:
   using: composite
@@ -118,6 +121,14 @@ runs:
           map(. as $row | $row * ($overrides[$row.package] // {}))
         ' <<< "$ROWS")
 
+        # Partition: rows flagged carveOut are routed by the caller to their own
+        # bespoke reusable (they have no platforms/generic config), so keep them
+        # out of the generic matrix and surface just their package names.
+        CARVEOUTS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut == true) | .package] | unique')
+        ROWS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut != true)]')
+
         echo "Matrix ($TARGET): $ROWS"
+        echo "Carve-outs ($TARGET): $CARVEOUTS"
         echo "matrix=$ROWS" >> "$GITHUB_OUTPUT"
         echo "any=$([ "$ROWS" != "[]" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        echo "carveouts=$CARVEOUTS" >> "$GITHUB_OUTPUT"
