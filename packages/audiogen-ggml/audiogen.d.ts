@@ -34,6 +34,15 @@ export interface AudioGenJobData {
     keyscale?: string;
     timesignature?: string;
     duration?: number;
+    lmTemperature?: number;
+    lmTopP?: number;
+    lmTopK?: number;
+    lmCfgScale?: number;
+    lmPhase1?: boolean;
+    dcwEnabled?: boolean;
+    dcwScaler?: number;
+    dcwHighScaler?: number;
+    audioCodes?: Int32Array;
 }
 /** Native output event: (handle, event, data, error). */
 export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unknown, error: unknown) => void;
