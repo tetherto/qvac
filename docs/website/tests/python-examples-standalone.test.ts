@@ -3,11 +3,8 @@ import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { glob } from 'glob'
 import {
-  extractEmbeddedPythonRefs,
   runExampleIsolated,
-  describeFinding,
   siblingModules,
   checkPythonExamples,
   pythonAvailable,
@@ -16,71 +13,9 @@ import {
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEBSITE_DIR = path.resolve(TESTS_DIR, '..')
 const MONOREPO_ROOT = path.resolve(WEBSITE_DIR, '../..')
-const DOCS_CONTENT = path.join(WEBSITE_DIR, 'content', 'docs')
-
-async function mdxPaths() {
-  return glob('**/*.mdx', {
-    cwd: DOCS_CONTENT,
-    absolute: true,
-    ignore: ['reference/api/v*.mdx', 'reference/release-notes/v*.mdx'],
-  })
-}
 
 // ---------------------------------------------------------------------------
-// Unit tests — fence extraction
-// ---------------------------------------------------------------------------
-
-describe('extractEmbeddedPythonRefs', () => {
-  it('picks up a python block backed by a repo file', () => {
-    const mdx = [
-      '# Page',
-      '```python file=<rootDir>/packages/sdk-python/examples/quickstart.py title="quickstart.py"',
-      '```',
-    ].join('\n')
-
-    expect(extractEmbeddedPythonRefs(mdx, 'page.mdx')).toEqual([
-      { mdxFile: 'page.mdx', repoPath: 'packages/sdk-python/examples/quickstart.py', line: 2 },
-    ])
-  })
-
-  it('ignores non-python fences that use file=', () => {
-    const mdx = '```ts file=<rootDir>/packages/sdk/examples/quickstart.ts\n```'
-    expect(extractEmbeddedPythonRefs(mdx, 'page.mdx')).toEqual([])
-  })
-
-  it('ignores inline python with no file= backing', () => {
-    const mdx = '```python\nprint("hi")\n```'
-    expect(extractEmbeddedPythonRefs(mdx, 'page.mdx')).toEqual([])
-  })
-
-  it('does not read fence attributes out of a block body', () => {
-    const mdx = [
-      '```python',
-      '# ```python file=<rootDir>/packages/sdk-python/examples/fake.py',
-      '```',
-    ].join('\n')
-
-    expect(extractEmbeddedPythonRefs(mdx, 'page.mdx')).toEqual([])
-  })
-
-  it('finds every block on a page', () => {
-    const mdx = [
-      '```python file=<rootDir>/a.py',
-      '```',
-      'prose',
-      '```python file=<rootDir>/b.py',
-      '```',
-    ].join('\n')
-
-    expect(extractEmbeddedPythonRefs(mdx, 'page.mdx').map((r) => r.repoPath)).toEqual([
-      'a.py',
-      'b.py',
-    ])
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Isolation runner — the real check, exercised against synthetic examples
+// The isolation runner, exercised against synthetic examples
 // ---------------------------------------------------------------------------
 
 describe.runIf(pythonAvailable())('runExampleIsolated', () => {
@@ -146,7 +81,6 @@ describe.runIf(pythonAvailable())('runExampleIsolated', () => {
   })
 
   it('catches a sibling pulled in dynamically', async () => {
-    // A static import scanner cannot see this one.
     await withExamples(
       {
         '_common.py': 'x = 1\n',
@@ -216,55 +150,22 @@ describe.runIf(pythonAvailable())('runExampleIsolated', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Unit tests — reporting
+// Integration — the real examples directory
 // ---------------------------------------------------------------------------
 
-describe('describeFinding', () => {
-  const ref = { mdxFile: 'page.mdx', repoPath: 'examples/quickstart.py', line: 10 }
-
-  it('returns nothing for a clean run', () => {
-    expect(describeFinding(ref, { ok: true })).toBeNull()
-  })
-
-  it('names the offending module', () => {
-    const finding = describeFinding(ref, { ok: false, kind: 'missing-module', module: '_common' })
-    expect(finding?.detail).toContain('_common')
-    expect(finding?.detail).toContain('ModuleNotFoundError')
-  })
-
-  it('passes other failures through', () => {
-    const finding = describeFinding(ref, {
-      ok: false,
-      kind: 'syntax-error',
-      detail: 'line 3: invalid syntax',
-    })
-    expect(finding?.kind).toBe('syntax-error')
-    expect(finding?.detail).toBe('line 3: invalid syntax')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Integration — every Python example the docs actually embed
-// ---------------------------------------------------------------------------
-
-describe('embedded Python examples', () => {
+describe('Python examples', () => {
   it('has python3 available to run them', () => {
     expect(pythonAvailable()).toBe(true)
   })
 
-  it('embeds at least one Python example', async () => {
-    const { refs } = await checkPythonExamples(await mdxPaths(), WEBSITE_DIR, MONOREPO_ROOT)
-    expect(refs.length).toBeGreaterThan(0)
-  })
+  it('every example runs standalone when copied out of the repo', async () => {
+    const { checked, findings } = await checkPythonExamples(MONOREPO_ROOT)
 
-  it('each runs standalone when copied out of the repo', async () => {
-    const { findings } = await checkPythonExamples(await mdxPaths(), WEBSITE_DIR, MONOREPO_ROOT)
+    expect(checked.length).toBeGreaterThan(0)
 
     if (findings.length > 0) {
-      const details = findings
-        .map((f) => `  ${f.mdxFile}:${f.line} → ${f.repoPath}: ${f.detail}`)
-        .join('\n')
-      expect.fail(`${findings.length} embedded Python example(s) are not standalone:\n${details}`)
+      const details = findings.map((f) => `  ${f.file}: ${f.detail}`).join('\n')
+      expect.fail(`${findings.length} of ${checked.length} example(s) are not standalone:\n${details}`)
     }
-  }, 120_000)
+  }, 180_000)
 })

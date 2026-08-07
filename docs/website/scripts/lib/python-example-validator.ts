@@ -1,20 +1,23 @@
 /**
- * Validate the Python examples the docs embed with ```python file=<rootDir>/...
+ * Prove every Python example runs on its own.
  *
- * The docs present each embedded block as something a reader can copy into an
- * empty directory and run. Checking that claim by inspecting import statements
- * only ever approximates it, so this runs the example instead: each file is
- * copied alone into a temp directory and executed there, with the examples
- * directory absent from `sys.path`.
+ * The docs embed these files verbatim and present each one as something a
+ * reader can copy into an empty directory and run. This checks that by doing
+ * it: each example is copied alone into a temp directory and executed there,
+ * so the examples directory is off `sys.path` and a sibling helper cannot
+ * resolve.
  *
- * A sibling helper cannot resolve under those conditions — which is exactly
- * the bug this guards against. `from _common import print_progress` resolves
- * in-repo, where the script's own directory is on `sys.path`, and raises
- * ModuleNotFoundError for everyone who copies the block out.
+ * That is the bug this guards against. `from _common import print_progress`
+ * resolves in-repo, where the script's own directory is on `sys.path`, and
+ * raises ModuleNotFoundError for everyone who copies the block out.
  *
  * Installed packages are stubbed inside the child process, so the run needs no
  * SDK, no worker and no model download, and a missing third-party package
  * cannot mask a repo-local import further down the file.
+ *
+ * Every `.py` in the directory is checked, not just the ones a page embeds
+ * today — the contract belongs to the directory, and a file embedded tomorrow
+ * is already covered.
  */
 
 import * as fs from 'fs/promises'
@@ -26,17 +29,8 @@ import { fileURLToPath } from 'url'
 const LIB_DIR = path.dirname(fileURLToPath(import.meta.url))
 const ISOLATION_RUNNER = path.join(LIB_DIR, 'run_isolated_example.py')
 
-const FENCE_OPEN_RE = /^```(\w+)?(.*)$/
-const FILE_ATTR_RE = /file=<rootDir>\/(\S+)/
-
-export interface EmbeddedPythonRef {
-  /** MDX file the block lives in, relative to the docs website dir. */
-  mdxFile: string
-  /** Referenced path, relative to the monorepo root. */
-  repoPath: string
-  /** 1-based line of the opening fence. */
-  line: number
-}
+/** Example directories the docs draw Python from, relative to the repo root. */
+export const PYTHON_EXAMPLE_DIRS = ['packages/sdk-python/examples']
 
 export interface IsolationResult {
   ok: boolean
@@ -46,47 +40,10 @@ export interface IsolationResult {
 }
 
 export interface PythonExampleFinding {
-  mdxFile: string
-  repoPath: string
-  line: number
+  /** Path relative to the monorepo root. */
+  file: string
   kind: 'missing-module' | 'syntax-error' | 'exec-error'
   detail: string
-}
-
-/**
- * Collect every ```python block that pulls its body from a repo file.
- *
- * Only fences tagged `python` count; a `file=` on a `ts` fence is the existing
- * checker's business.
- */
-export function extractEmbeddedPythonRefs(content: string, mdxFile: string): EmbeddedPythonRef[] {
-  const refs: EmbeddedPythonRef[] = []
-  const lines = content.split('\n')
-  let inside = false
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!
-    if (!line.startsWith('```')) continue
-
-    if (inside) {
-      inside = false
-      continue
-    }
-
-    const fence = line.match(FENCE_OPEN_RE)
-    if (!fence) continue
-    inside = true
-
-    const lang = (fence[1] || '').toLowerCase()
-    if (lang !== 'python' && lang !== 'py') continue
-
-    const fileAttr = line.match(FILE_ATTR_RE)
-    if (!fileAttr) continue
-
-    refs.push({ mdxFile, repoPath: fileAttr[1]!, line: i + 1 })
-  }
-
-  return refs
 }
 
 /** Importable module names sitting in `dir` — what must NOT be stubbed. */
@@ -109,6 +66,21 @@ export async function siblingModules(dir: string): Promise<Set<string>> {
   }
 
   return names
+}
+
+/** Every `.py` file directly inside `dir`, sorted. */
+export async function listExamples(dir: string): Promise<string[]> {
+  let entries
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.py'))
+    .map((entry) => entry.name)
+    .sort()
 }
 
 /** True when a Python interpreter the runner can use is on PATH. */
@@ -157,72 +129,54 @@ export async function runExampleIsolated(
   }
 }
 
-/** Turn an isolation result into a reportable finding, or null when clean. */
+/** Describe a failed run, or null when the example is clean. */
 export function describeFinding(
-  ref: EmbeddedPythonRef,
+  file: string,
   result: IsolationResult,
 ): PythonExampleFinding | null {
   if (result.ok) return null
 
   if (result.kind === 'missing-module') {
     return {
-      ...ref,
+      file,
       kind: 'missing-module',
       detail:
         `imports "${result.module}", which exists only beside it in the repo — ` +
-        `a reader copying this block gets ModuleNotFoundError`,
+        `a reader copying this example gets ModuleNotFoundError`,
     }
   }
 
   return {
-    ...ref,
+    file,
     kind: result.kind ?? 'exec-error',
     detail: result.detail ?? 'failed to run in isolation',
   }
 }
 
-/** Run the whole check against a docs content tree. */
+/** Run every example in every configured directory. */
 export async function checkPythonExamples(
-  mdxPaths: string[],
-  docsDir: string,
   monorepoRoot: string,
+  dirs: string[] = PYTHON_EXAMPLE_DIRS,
   python = 'python3',
-): Promise<{ refs: EmbeddedPythonRef[]; findings: PythonExampleFinding[] }> {
-  const refs: EmbeddedPythonRef[] = []
-
-  for (const mdxPath of mdxPaths) {
-    const content = await fs.readFile(mdxPath, 'utf-8')
-    refs.push(...extractEmbeddedPythonRefs(content, path.relative(docsDir, mdxPath)))
-  }
-
-  if (refs.length === 0) return { refs, findings: [] }
-
-  const siblingsByDir = new Map<string, Set<string>>()
-  for (const dir of new Set(refs.map((ref) => path.dirname(ref.repoPath)))) {
-    siblingsByDir.set(dir, await siblingModules(path.join(monorepoRoot, dir)))
-  }
-
-  // One example can be embedded on several pages; run each file once.
-  const resultsByPath = new Map<string, IsolationResult>()
+): Promise<{ checked: string[]; findings: PythonExampleFinding[] }> {
+  const checked: string[] = []
   const findings: PythonExampleFinding[] = []
 
-  for (const ref of refs) {
-    const abs = path.join(monorepoRoot, ref.repoPath)
+  for (const dir of dirs) {
+    const absDir = path.join(monorepoRoot, dir)
+    const siblings = await siblingModules(absDir)
 
-    if (!resultsByPath.has(ref.repoPath)) {
-      try {
-        await fs.access(abs)
-      } catch {
-        // A missing target is check 1's failure to report, not this one's.
-        continue
-      }
-      const siblings = siblingsByDir.get(path.dirname(ref.repoPath)) ?? new Set<string>()
-      resultsByPath.set(ref.repoPath, await runExampleIsolated(abs, siblings, python))
+    for (const name of await listExamples(absDir)) {
+      const file = `${dir}/${name}`
+      checked.push(file)
+
+      const finding = describeFinding(
+        file,
+        await runExampleIsolated(path.join(absDir, name), siblings, python),
+      )
+      if (finding) findings.push(finding)
     }
-
-    const finding = describeFinding(ref, resultsByPath.get(ref.repoPath)!)
-    if (finding) findings.push(finding)
   }
 
-  return { refs, findings }
+  return { checked, findings }
 }

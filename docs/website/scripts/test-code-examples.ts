@@ -294,12 +294,13 @@ async function checkInlineSyntax(): Promise<CheckResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Check 5 — embedded Python examples parse and import nothing local
+// Check 5 — every Python example runs standalone
 //
 // Checks 1-4 only ever look at TypeScript. A ```python file=... block is
 // resolved by the MDX pipeline and shipped verbatim, so a Python example that
 // imports a sibling helper renders fine on the page and still fails for anyone
-// who copies it out of the repo.
+// who copies it out of the repo. Each example is run alone in a temp directory
+// to prove it doesn't.
 // ---------------------------------------------------------------------------
 
 async function checkPythonStandalone(): Promise<CheckResult> {
@@ -309,25 +310,18 @@ async function checkPythonStandalone(): Promise<CheckResult> {
       passed: false,
       skipped: true,
       total: 0,
-      failures: ["python3 not on PATH (needed to parse embedded Python examples)"],
+      failures: ["python3 not on PATH (needed to run the Python examples)"],
     };
   }
 
-  const { refs, findings } = await checkPythonExamples(
-    await findMdxFiles(),
-    DOCS_DIR,
-    MONOREPO_ROOT,
-  );
-
-  const failures = findings.map(
-    (f) => `${f.mdxFile}:${f.line}: ${f.repoPath} ${f.detail}`,
-  );
+  const { checked, findings } = await checkPythonExamples(MONOREPO_ROOT);
+  const failures = findings.map((f) => `${f.file}: ${f.detail}`);
 
   return {
     name: "Python examples standalone",
     passed: failures.length === 0,
     skipped: false,
-    total: refs.length,
+    total: checked.length,
     failures,
   };
 }
