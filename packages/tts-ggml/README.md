@@ -264,8 +264,9 @@ python scripts/convert-lavasr-enhancer-to-gguf.py \
 
 Notes:
 
-- Works for Supertonic and Chatterbox, on the batch path, sentence-level
-  streaming, **and** Chatterbox native chunk streaming (`streamChunkTokens > 0`).
+- Works for all three engines — Chatterbox, Supertonic and Parler — on the batch
+  path, sentence-level streaming, **and** Chatterbox / Parler native chunk
+  streaming (`streamChunkTokens > 0`).
 - For native chunk streaming the enhancer runs over a sliding window with
   look-ahead + crossfade so each emitted chunk is bandwidth-extended seam-free.
   This adds **~0.34 s of look-ahead latency** (inherent to the enhancer's
@@ -274,6 +275,12 @@ Notes:
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
   different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
+- Parler is natively 44.1 kHz, so enhancement there buys spectral detail rather
+  than raw bandwidth. It also lifts a streaming restriction: Parler normally
+  rejects `config.outputSampleRate` together with `streamChunkTokens` (the engine
+  has no seam-free per-chunk resampler), but with the enhancer active the
+  requested rate is applied inside the enhancer's overlap windows and is
+  accepted.
 - With `opts.stats`, `response.stats.enhancerBackendDevice` (`-1` none / `0` CPU
   / `1` GPU) and `enhancerBackendId` report where the enhancer actually ran.
 
@@ -283,7 +290,7 @@ LavaSR's first stage — the UL-UNAS **denoiser**, which cleans the signal befor
 the enhancer bandwidth-extends it — is wired through the addon. It is enabled the
 same way as the enhancer, via `files.lavasrDenoiser` (or a
 `denoiser: { type: 'lavasr', denoiserPath }` block), and runs before the
-enhancer (rate-preserving) on the batch path for both engines:
+enhancer (rate-preserving) on the batch path for all three engines:
 
 ```js
 const model = new TTSGgml({
@@ -313,9 +320,9 @@ Notes:
 - The UL-UNAS forward runs at 16 kHz internally (resampled in/out), so the
   denoiser is **rate-preserving**: the emitted audio keeps the engine's sample
   rate. With no denoiser path the output is unchanged (full backward compat).
-- Denoiser + Chatterbox native chunk streaming (`streamChunkTokens > 0`) is
-  rejected up front — a stateful streaming denoiser is the follow-up. Use batch
-  synthesis, or drop the denoiser for streaming.
+- Denoiser + native chunk streaming (`streamChunkTokens > 0`, Chatterbox or
+  Parler) is rejected up front — a stateful streaming denoiser is the follow-up.
+  Use batch synthesis, or drop the denoiser for streaming.
 - The tts-cpp UL-UNAS forward is implemented in
   [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
@@ -472,7 +479,7 @@ CosyVoice3 runs on **CPU** and emits native **24 kHz**.
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
-| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz) |
+| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic/Parler 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
@@ -547,6 +554,7 @@ Runnable demos under `examples/`:
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
+| `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz, CPU). `bare examples/cosyvoice-tts.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
