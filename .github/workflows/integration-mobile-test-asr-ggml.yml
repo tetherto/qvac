@@ -69,7 +69,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.ref || github.ref }}-${{ inputs.run_rtf_benchmarks && 'benchmark' || 'functional' }}
+  group: ${{ github.workflow }}-${{ inputs.repository || github.repository }}-${{ inputs.ref || github.ref }}-${{ inputs.package_spec || inputs.prebuild_package || 'artifact' }}-${{ inputs.run_rtf_benchmarks && 'benchmark' || 'functional' }}
   cancel-in-progress: true
 
 jobs:
@@ -81,9 +81,10 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.engine && format('{0} {1} {2}', matrix.engine, matrix.model || matrix.model_type, matrix.use_gpu && 'gpu' || 'cpu') || 'functional' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    # Functional shards can spend up to 120 minutes in Device Farm plus queue
-    # time; retain enough budget for build, scheduling, and log collection.
-    timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 180 || 150 }}
+    # Device Farm monitoring can consume 150 minutes for functional runs and
+    # 120 for benchmarks. Reserve another hour for checkout, dependency setup,
+    # app build, upload, scheduling, log collection, and cancellation cleanup.
+    timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 210 || 180 }}
     continue-on-error: true
     permissions:
       contents: read

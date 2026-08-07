@@ -1478,6 +1478,10 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
   )
   assert.match(
     workflow,
+    /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
+  )
+  assert.match(
+    workflow,
     /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
   )
   assert.match(workflow, /egress-policy:\s*audit/)
@@ -1513,7 +1517,7 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
   )
   assert.match(
     workflow,
-    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
+    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 210 \|\| 180 \}\}/,
   )
   assert.match(
     workflow,

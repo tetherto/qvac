@@ -7,6 +7,8 @@ const path = require('node:path')
 
 const groups = require('../../test/mobile/test-groups.json')
 const perfRunners = require('../../test/mobile/perf-tests.json')
+const { TEST_MODELS } = require('../generate-mobile-model-manifest')
+const { WHISPER_TEST_MODEL_NAMES } = require('../generate-prestage-block')
 
 const integrationAutoPath = path.resolve(__dirname, '../../test/mobile/integration.auto.cjs')
 const EXPECTED_GROUPS = ['whisper-perf', 'parakeet-perf']
@@ -58,6 +60,19 @@ test('functional ASR shards retain every mobile performance runner', () => {
     assert.deepEqual(
       perfRunners.filter((runner) => !runners.has(runner)),
       []
+    )
+  }
+})
+
+test('every shard runner has an explicit model or model-free manifest entry', () => {
+  for (const platform of ['ios', 'android']) {
+    assert.deepEqual(
+      sorted(Object.keys(WHISPER_TEST_MODEL_NAMES)),
+      sorted(groups[platform]['whisper-perf'])
+    )
+    assert.deepEqual(
+      sorted(Object.keys(TEST_MODELS)),
+      sorted(groups[platform]['parakeet-perf'])
     )
   }
 })

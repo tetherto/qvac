@@ -71,29 +71,29 @@ function buildWhisperStageFunction() {
   NAME="$1"; URL="$2"
   echo "[prestage] staging $NAME"
   adb shell rm -f "$PRESTAGE_DIR/$NAME" "$PRESTAGE_DIR/$NAME.size" || true
-  if ! curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then
+  if ! curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "$HOST_PRESTAGE_DIR/$NAME" "$URL"; then
     echo "[prestage] WARN: host download failed for $NAME; device will use network fallback"
-    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    rm -f "$HOST_PRESTAGE_DIR/$NAME" "$HOST_PRESTAGE_DIR/$NAME.size"
     return 0
   fi
-  if ! wc -c < "/tmp/prestage/$NAME" > "/tmp/prestage/$NAME.size"; then
+  if ! wc -c < "$HOST_PRESTAGE_DIR/$NAME" > "$HOST_PRESTAGE_DIR/$NAME.size"; then
     echo "[prestage] WARN: could not measure $NAME; device will use network fallback"
-    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    rm -f "$HOST_PRESTAGE_DIR/$NAME" "$HOST_PRESTAGE_DIR/$NAME.size"
     return 0
   fi
-  if ! adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"; then
+  if ! adb push "$HOST_PRESTAGE_DIR/$NAME" "$PRESTAGE_DIR/$NAME"; then
     echo "[prestage] WARN: adb push failed for $NAME; device will use network fallback"
     adb shell rm -f "$PRESTAGE_DIR/$NAME" "$PRESTAGE_DIR/$NAME.size" || true
-    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    rm -f "$HOST_PRESTAGE_DIR/$NAME" "$HOST_PRESTAGE_DIR/$NAME.size"
     return 0
   fi
-  if ! adb push "/tmp/prestage/$NAME.size" "$PRESTAGE_DIR/$NAME.size"; then
+  if ! adb push "$HOST_PRESTAGE_DIR/$NAME.size" "$PRESTAGE_DIR/$NAME.size"; then
     echo "[prestage] WARN: size metadata push failed for $NAME; device will use network fallback"
     adb shell rm -f "$PRESTAGE_DIR/$NAME" "$PRESTAGE_DIR/$NAME.size" || true
-    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    rm -f "$HOST_PRESTAGE_DIR/$NAME" "$HOST_PRESTAGE_DIR/$NAME.size"
     return 0
   fi
-  rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+  rm -f "$HOST_PRESTAGE_DIR/$NAME" "$HOST_PRESTAGE_DIR/$NAME.size"
 }`
 }
 
@@ -103,6 +103,87 @@ function buildWhisperStageBlock(models) {
 ${stageCalls}`
 }
 
+function selectPrestageModels() {
+  const fs = require('fs')
+  const path = require('path')
+  const root = process.env.QVAC_PRESTAGE_TMP_DIR || '/tmp'
+  const tests = (process.env.GREP || '')
+    .split('|')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (tests.length === 0) throw new Error('functional shard grep is required')
+
+  const definitions = [
+    { kind: 'parakeet', file: 'model-manifest.json' },
+    { kind: 'whisper', file: 'whisper-manifest.json' }
+  ]
+  const manifests = Object.fromEntries(
+    definitions.map(({ kind, file }) => {
+      const value = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'))
+      if (!value || Array.isArray(value) || typeof value !== 'object') {
+        throw new Error(`invalid ${kind} manifest: expected an object`)
+      }
+      return [kind, value]
+    })
+  )
+  const output = { parakeet: [], whisper: [] }
+  const seen = { parakeet: new Map(), whisper: new Map() }
+
+  for (const test of tests) {
+    const matches = definitions.filter(({ kind }) =>
+      Object.prototype.hasOwnProperty.call(manifests[kind], test)
+    )
+    if (matches.length === 0) throw new Error(`missing model mapping for runner: ${test}`)
+    if (matches.length > 1) throw new Error(`ambiguous model mapping for runner: ${test}`)
+
+    const kind = matches[0].kind
+    const entries = manifests[kind][test]
+    if (!Array.isArray(entries)) {
+      throw new Error(`invalid ${kind} model mapping for runner ${test}: expected an array`)
+    }
+    for (const [index, model] of entries.entries()) {
+      const invalid =
+        !model ||
+        Array.isArray(model) ||
+        typeof model !== 'object' ||
+        typeof model.name !== 'string' ||
+        model.name.trim() === '' ||
+        /[\t\r\n]/.test(model.name) ||
+        typeof model.url !== 'string' ||
+        model.url.trim() === '' ||
+        /[\t\r\n]/.test(model.url)
+      if (invalid) {
+        throw new Error(`invalid ${kind} model mapping for runner ${test} at index ${index}`)
+      }
+
+      const previousUrl = seen[kind].get(model.name)
+      if (previousUrl && previousUrl !== model.url) {
+        throw new Error(`conflicting URLs for ${kind} model ${model.name}`)
+      }
+      if (!previousUrl) {
+        seen[kind].set(model.name, model.url)
+        output[kind].push(`${model.name}\t${model.url}`)
+      }
+    }
+  }
+
+  for (const kind of ['parakeet', 'whisper']) {
+    const rows = output[kind]
+    fs.writeFileSync(
+      path.join(root, `${kind}-prestage-list.tsv`),
+      rows.join('\n') + (rows.length ? '\n' : '')
+    )
+  }
+  console.error(
+    `[prestage] ${output.parakeet.length} parakeet + ${output.whisper.length} ` +
+      `whisper model(s) for ${tests.length} test(s)`
+  )
+}
+
+function buildSelectionCode() {
+  return `(${selectPrestageModels.toString()})()`
+}
+
 // Parakeet block: presigned-S3 GGUFs resolved from the manifest by the explicit
 // shard grep, staged fail-hard (a missing 600 MB-class model on-device would
 // blow the mocha budget). Whisper block appended after, staged gracefully.
@@ -110,30 +191,38 @@ function buildScript(manifestB64) {
   const whisperManifestB64 = Buffer.from(JSON.stringify(buildWhisperManifest()), 'utf8').toString(
     'base64'
   )
+  const selectionCodeB64 = Buffer.from(buildSelectionCode(), 'utf8').toString('base64')
   return `set -euo pipefail
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
+TMP_ROOT="\${QVAC_PRESTAGE_TMP_DIR:-/tmp}"
+HOST_PRESTAGE_DIR="$TMP_ROOT/prestage"
 adb shell mkdir -p "$PRESTAGE_DIR"
-mkdir -p /tmp/prestage
-echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-echo "${whisperManifestB64}" | base64 -d > /tmp/whisper-manifest.json
-GREP=$(cat /tmp/qvacShardGrep.txt)
+mkdir -p "$HOST_PRESTAGE_DIR"
+echo "${manifestB64}" | base64 -d > "$TMP_ROOT/model-manifest.json"
+echo "${whisperManifestB64}" | base64 -d > "$TMP_ROOT/whisper-manifest.json"
+echo "${selectionCodeB64}" | base64 -d > "$TMP_ROOT/select-prestage-models.js"
+GREP=$(cat "$TMP_ROOT/qvacShardGrep.txt")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
 [ -n "$GREP" ] || { echo "[prestage] FATAL: shard grep is required"; exit 1; }
-node -e "const fs=require('fs');const tests=process.env.GREP.split('|').map(s=>s.trim()).filter(Boolean);const select=(path)=>{const man=JSON.parse(fs.readFileSync(path,'utf8'));const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}return out};const write=(path,rows)=>fs.writeFileSync(path,rows.join('\\n')+(rows.length?'\\n':''));const parakeet=select('/tmp/model-manifest.json');const whisper=select('/tmp/whisper-manifest.json');write('/tmp/parakeet-prestage-list.tsv',parakeet);write('/tmp/whisper-prestage-list.tsv',whisper);console.error('[prestage] '+parakeet.length+' parakeet + '+whisper.length+' whisper model(s) for '+tests.length+' test(s)')"
-while IFS=$(printf '\\t') read -r NAME URL; do
-  [ -z "$NAME" ] && continue
+node "$TMP_ROOT/select-prestage-models.js"
+while IFS=$'\\t' read -r NAME URL; do
+  if [ -z "$NAME" ]; then
+    continue
+  fi
   echo "[prestage] staging required parakeet model $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
-  adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"
+  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "$HOST_PRESTAGE_DIR/$NAME" "$URL"
+  adb push "$HOST_PRESTAGE_DIR/$NAME" "$PRESTAGE_DIR/$NAME"
   adb shell test -s "$PRESTAGE_DIR/$NAME" || { echo "[prestage] FATAL: $NAME not present on device after push"; exit 1; }
-  rm -f "/tmp/prestage/$NAME"
-done < /tmp/parakeet-prestage-list.tsv
+  rm -f "$HOST_PRESTAGE_DIR/$NAME"
+done < "$TMP_ROOT/parakeet-prestage-list.tsv"
 ${buildWhisperStageFunction()}
-while IFS=$(printf '\\t') read -r NAME URL; do
-  [ -z "$NAME" ] && continue
+while IFS=$'\\t' read -r NAME URL; do
+  if [ -z "$NAME" ]; then
+    continue
+  fi
   stage "$NAME" "$URL"
-done < /tmp/whisper-prestage-list.tsv
+done < "$TMP_ROOT/whisper-prestage-list.tsv"
 echo "[prestage] device contents:"
 adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
@@ -164,5 +253,6 @@ module.exports = {
   WHISPER_TEST_MODEL_NAMES,
   buildWhisperManifest,
   buildWhisperStageBlock,
+  buildSelectionCode,
   buildScript
 }
