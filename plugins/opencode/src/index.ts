@@ -6,10 +6,10 @@
 //   1. spawns a real node/bun child (the host) that runs managed mode via
 //      `@qvac/ai-sdk-provider` (OpenCode's own runtime is its compiled binary,
 //      which managed mode cannot spawn its supervisor from);
-//   2. waits only for the host's proxy to start listening — not for the model
-//      to download — so `opencode run` never trips OpenCode's startup timeout;
-//   3. injects an OpenAI-compatible `qvac` provider pointed at the proxy and
-//      sets it as this project's default model.
+//   2. waits for managed serve to resolve, then receives its private base URL
+//      and API key through the host handshake;
+//   3. injects an authenticated OpenAI-compatible `qvac` provider pointed at
+//      the host proxy and sets it as this project's default model.
 //
 // Options come from (lowest to highest precedence) defaults, a `qvac.json` in
 // the project dir, the `opencode.json` plugin tuple options, and `QVAC_*` env.
@@ -21,15 +21,14 @@ import { fileURLToPath } from 'node:url'
 import type { Config, Hooks, Plugin } from '@opencode-ai/plugin'
 
 import { HostExitedError, HostListenTimeoutError, HostSpawnFailedError } from './errors.js'
+import {
+  createManagedProviderConfig,
+  parseHostListening,
+  type HostListening
+} from './managed-serve-handshake.js'
 import { hostEnv, resolveOptions, type RawOptions, type ResolvedOptions } from './options.js'
 
 declare const Bun: { which(cmd: string): string | null } | undefined
-
-interface HostListening {
-  readonly baseURL: string
-  readonly modelId: string
-  readonly modelName: string
-}
 
 function resolveRuntime(options: ResolvedOptions): string {
   if (options.runtime !== undefined) return options.runtime
@@ -37,10 +36,9 @@ function resolveRuntime(options: ResolvedOptions): string {
   return process.execPath
 }
 
-// Spawn the host and resolve once it prints `QVAC_LISTENING {…}` — which it does
-// as soon as its proxy is up, before the (possibly slow) model download. Host
-// milestones stay hidden by default so they do not corrupt OpenCode's TUI; enable
-// `debug` / `QVAC_DEBUG=1` to mirror them onto stderr.
+// Spawn the host and resolve once it prints its private `QVAC_LISTENING {…}`
+// handshake after managed serve is healthy. Host milestones stay hidden by
+// default so they do not corrupt OpenCode's TUI.
 function spawnHost(
   options: ResolvedOptions,
   projectDir: string
@@ -71,19 +69,27 @@ function spawnHost(
       return
     }
     const rl = createInterface({ input: stdout })
+    const handshakeTimeoutMs = options.readyTimeoutMs + options.listenTimeoutMs
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      reject(new HostListenTimeoutError(options.listenTimeoutMs))
-    }, options.listenTimeoutMs)
+      reject(new HostListenTimeoutError(handshakeTimeoutMs))
+    }, handshakeTimeoutMs)
 
     rl.on('line', (line: string) => {
       const match = line.match(/^QVAC_LISTENING (.+)$/)
       if (match !== null && !settled) {
-        settled = true
-        clearTimeout(timer)
-        const info = JSON.parse(match[1] as string) as HostListening
-        resolve({ child, listening: info })
+        try {
+          const info = parseHostListening(match[1] as string)
+          settled = true
+          clearTimeout(timer)
+          resolve({ child, listening: info })
+        } catch (err) {
+          settled = true
+          clearTimeout(timer)
+          child.kill('SIGTERM')
+          reject(err)
+        }
         return
       }
       if (options.debug) process.stderr.write(`[qvac] ${line}\n`)
@@ -119,22 +125,7 @@ function registerTeardown(child: ReturnType<typeof spawn>): void {
 
 function injectProvider(cfg: Config, listening: HostListening, options: ResolvedOptions): void {
   const providers = cfg.provider ?? {}
-  providers['qvac'] = {
-    npm: '@ai-sdk/openai-compatible',
-    name: 'QVAC (local, managed)',
-    // A generous per-request timeout so a cold first-run model download (handled
-    // behind the proxy) isn't cut off by OpenCode's 5-minute default.
-    options: { baseURL: listening.baseURL, apiKey: 'qvac', timeout: options.readyTimeoutMs },
-    // Keyed by the friendly, models.dev-style id so OpenCode's model id
-    // (`qvac/qwen3.5-9b`) matches the serve alias the host registered, 1:1.
-    models: {
-      [listening.modelId]: {
-        name: `${listening.modelName} (local)`,
-        tool_call: true,
-        reasoning: true
-      }
-    }
-  }
+  providers['qvac'] = createManagedProviderConfig(listening, options.readyTimeoutMs)
   cfg.provider = providers
 
   // Make the managed model this project's default so plain `opencode` uses it,

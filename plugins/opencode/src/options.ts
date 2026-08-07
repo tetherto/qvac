@@ -19,15 +19,14 @@ export interface ResolvedOptions {
   // commands as prose instead of emitting structured tool_calls.
   readonly tools: boolean
   // Apply the OpenAI-compat transforms (array-content flatten + `<think>`
-  // reasoning split). Turn off once serve closes those gaps; the proxy itself
-  // stays (it provides the instant-listen startup decoupling).
+  // reasoning split). Turn off once serve closes those gaps.
   readonly shim: boolean
   // Path to the node/bun runtime that hosts the serve. Auto-detected when unset.
   readonly runtime: string | undefined
   // Budget for the serve to become healthy, including a cold model download.
   readonly readyTimeoutMs: number
-  // Budget for the host proxy to begin listening (not the model download). The
-  // plugin only blocks startup on this; it is near-instant.
+  // Additional budget for the host process and private handshake, beyond the
+  // managed serve's ready timeout.
   readonly listenTimeoutMs: number
   // Mirror host milestones onto OpenCode's stderr and enable per-request traces.
   readonly debug: boolean

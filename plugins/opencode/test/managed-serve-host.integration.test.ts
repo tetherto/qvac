@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 interface ListeningLine {
+  readonly apiKey: string
   readonly baseURL: string
   readonly modelId: string
   readonly modelName: string
@@ -124,11 +125,12 @@ test(
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
 
     try {
-      const listeningPromise = waitForJsonLine<ListeningLine>(child, 'QVAC_LISTENING ', 10_000)
+      const listeningPromise = waitForJsonLine<ListeningLine>(child, 'QVAC_LISTENING ', timeoutMs)
       const readyPromise = waitForJsonLine<ReadyLine>(child, 'QVAC_READY ', timeoutMs)
       void readyPromise.catch(() => undefined)
 
       const listening = await listeningPromise
+      assert.match(listening.apiKey, /^[A-Za-z0-9_-]{43}$/)
       assert.match(listening.baseURL, /^http:\/\/127\.0\.0\.1:\d+\/v1$/)
       assert.equal(typeof listening.modelId, 'string')
       assert.equal(typeof listening.modelName, 'string')
@@ -138,12 +140,13 @@ test(
       assert.ok(ready.servePort > 0)
       assert.ok(ready.pid > 0)
 
-      const models = await requestJson(`${listening.baseURL}/models`)
+      const authorization = { authorization: `Bearer ${listening.apiKey}` }
+      const models = await requestJson(`${listening.baseURL}/models`, { headers: authorization })
       assert.equal(models.status, 200)
 
       const chat = await requestJson(`${listening.baseURL}/chat/completions`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           model: listening.modelId,
           messages: [

@@ -4,7 +4,11 @@
 // code rather than a bare `Error`.
 
 export type QvacOpencodePluginErrorCode =
-  'INVALID_OPTION' | 'HOST_SPAWN_FAILED' | 'HOST_EXITED' | 'HOST_LISTEN_TIMEOUT'
+  | 'INVALID_OPTION'
+  | 'HOST_SPAWN_FAILED'
+  | 'HOST_EXITED'
+  | 'HOST_LISTEN_TIMEOUT'
+  | 'HOST_INVALID_HANDSHAKE'
 
 export class QvacOpencodePluginError extends Error {
   readonly code: QvacOpencodePluginErrorCode
@@ -50,9 +54,20 @@ export class HostListenTimeoutError extends QvacOpencodePluginError {
   constructor(timeoutMs: number) {
     super(
       'HOST_LISTEN_TIMEOUT',
-      `qvac serve host did not begin listening within ${timeoutMs}ms. ` +
-        'This is the proxy startup budget, not the model download — raise `readyTimeoutMs` only if the host process itself is slow to boot.'
+      `qvac serve host did not return a valid listening handshake within ${timeoutMs}ms. ` +
+        'The budget includes managed model startup; raise `readyTimeoutMs` for a slow cold download.'
     )
     this.name = 'HostListenTimeoutError'
+  }
+}
+
+export class HostInvalidHandshakeError extends QvacOpencodePluginError {
+  constructor(message: string, cause?: unknown) {
+    super(
+      'HOST_INVALID_HANDSHAKE',
+      `qvac serve host returned an invalid QVAC_LISTENING handshake: ${message}`,
+      cause === undefined ? undefined : { cause }
+    )
+    this.name = 'HostInvalidHandshakeError'
   }
 }

@@ -57,8 +57,18 @@ function startServer(
   })
 }
 
-function postJson(port: number, path: string, body: unknown): Promise<TestResponse> {
+function postJson(
+  port: number,
+  path: string,
+  body: unknown,
+  authorization?: string
+): Promise<TestResponse> {
   const raw = JSON.stringify(body)
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'content-length': String(Buffer.byteLength(raw))
+  }
+  if (authorization !== undefined) headers['authorization'] = authorization
   return new Promise((resolve, reject) => {
     const req = httpRequest(
       {
@@ -66,10 +76,7 @@ function postJson(port: number, path: string, body: unknown): Promise<TestRespon
         port,
         path,
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'content-length': String(Buffer.byteLength(raw))
-        }
+        headers
       },
       (res) => {
         const chunks: Buffer[] = []
@@ -113,6 +120,32 @@ function postRaw(port: number, path: string, body: string): Promise<TestResponse
     req.end()
   })
 }
+
+test('proxy replaces upstream authorization with the live managed key', async () => {
+  const apiKey = 'a'.repeat(43)
+  let forwardedAuthorization: string | undefined
+  const upstreamServer = await startServer((req, res) => {
+    forwardedAuthorization = req.headers.authorization
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ ok: true }))
+  })
+  const proxy = await startOpenAICompatibleProxy({
+    getUpstream: () => ({ hostname: '127.0.0.1', port: String(upstreamServer.port) }),
+    getApiKey: () => apiKey,
+    whenUpstream: Promise.resolve(),
+    openAICompatTransforms: true,
+    upstreamTimeoutMs: 1000,
+    logger
+  })
+  try {
+    const res = await postJson(proxy.port, '/v1/models', {}, 'Bearer stale-key')
+    assert.equal(res.statusCode, 200)
+    assert.equal(forwardedAuthorization, `Bearer ${apiKey}`)
+  } finally {
+    await proxy.close()
+    await upstreamServer.close()
+  }
+})
 
 test('proxy flattens OpenCode array message content before forwarding', async () => {
   let forwarded: unknown

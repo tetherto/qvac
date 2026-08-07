@@ -23,6 +23,7 @@ export interface Upstream {
 
 export interface ProxyOptions {
   readonly getUpstream: () => Upstream | undefined
+  readonly getApiKey?: () => string | undefined
   readonly whenUpstream: Promise<void>
   readonly openAICompatTransforms: boolean
   readonly upstreamTimeoutMs: number
@@ -41,7 +42,11 @@ export function originOf(baseURL: string): Upstream {
   return { hostname: u.hostname, port: u.port }
 }
 
-function buildForwardHeaders(req: IncomingMessage, bodyLength: number): Record<string, string> {
+function buildForwardHeaders(
+  req: IncomingMessage,
+  bodyLength: number,
+  apiKey: string | undefined
+): Record<string, string> {
   const headers: Record<string, string> = {}
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue
@@ -51,6 +56,7 @@ function buildForwardHeaders(req: IncomingMessage, bodyLength: number): Record<s
   delete headers['accept-encoding']
   delete headers['content-length']
   if (bodyLength > 0) headers['content-length'] = String(bodyLength)
+  if (apiKey !== undefined) headers['authorization'] = `Bearer ${apiKey}`
   return headers
 }
 
@@ -181,7 +187,7 @@ async function forwardToUpstream(
         port: upstream.port,
         path: req.url,
         method: req.method,
-        headers: buildForwardHeaders(req, body.length)
+        headers: buildForwardHeaders(req, body.length, options.getApiKey?.())
       },
       (proxyRes) => {
         options.logger.trace(

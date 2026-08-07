@@ -49,6 +49,7 @@ test(
         const [record] = await readAllRecords()
         assert.ok(record)
         assert.match(record.apiKey, /^[A-Za-z0-9_-]{43}$/)
+        assert.equal(provider.apiKey, record.apiKey)
 
         const unauthenticated = await fetch(`${provider.baseURL}/models`)
         assert.equal(unauthenticated.status, 401)
@@ -221,6 +222,7 @@ test('managed crash recovery sends the replacement record key', { skip }, async 
       assert.ok(after)
       assert.notEqual(after.apiKey, before.apiKey)
       assert.equal(recoveredAuth, `Bearer ${after.apiKey}`)
+      assert.equal(provider.apiKey, after.apiKey)
       assert.equal(completionAttempts, 2)
       await provider.close()
     } finally {

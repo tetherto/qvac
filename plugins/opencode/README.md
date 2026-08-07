@@ -27,11 +27,11 @@ as the project model by default.
    `process.execPath` is the editor — not a JS runtime — so managed mode can't
    spawn its detached supervisor from there. The host gives it a real runtime,
    and means the serve is reaped even if OpenCode is killed hard.)
-2. The host starts a small local proxy and immediately reports it is listening —
-   **before** the model downloads. The plugin injects an OpenAI-compatible
-   `qvac` provider pointed at the proxy and returns, so `opencode run` never
-   trips OpenCode's startup timeout. The model loads in the background; the first
-   turn waits on it (a slow cold turn, not a failure).
+2. The host starts a small local proxy, resolves the managed serve, and returns
+   its private connection details to the plugin. The plugin injects an
+   authenticated OpenAI-compatible `qvac` provider pointed at the proxy. A cold
+   model download therefore happens during plugin startup and is covered by
+   `readyTimeoutMs`.
 3. The host runs `createQvac({ mode: 'managed' })` from
    [`@qvac/ai-sdk-provider`](https://www.npmjs.com/package/@qvac/ai-sdk-provider),
    which brings up a shared, idle-reaped serve on an auto-allocated port.
@@ -110,8 +110,8 @@ two points today, so the host runs a small in-process proxy that bridges them:
   OpenCode shows a collapsed "Thought" block instead of raw tags.
 
 Both are stopgaps for serve gaps. Set `shim: false` (or `QVAC_SHIM=0`) to turn
-the transforms off once serve closes those gaps; the proxy itself stays (it is
-what lets startup return before the model finishes loading).
+the transforms off once serve closes those gaps. The proxy also keeps managed
+authorization synchronized when it forwards OpenCode requests.
 
 ## Performance expectations
 

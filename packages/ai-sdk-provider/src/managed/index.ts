@@ -381,6 +381,7 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
   // Expose the coordinates as getters over `live` so they keep reflecting the
   // real serve after a crash-recovery respawn moves it to a new port/pid.
   Object.defineProperties(base, {
+    apiKey: { get: () => live.apiKey, enumerable: true, configurable: true },
     baseURL: { get: () => live.baseURL, enumerable: true, configurable: true },
     port: { get: () => live.port, enumerable: true, configurable: true },
     pid: { get: () => live.servePid, enumerable: true, configurable: true }

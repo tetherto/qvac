@@ -21,20 +21,21 @@ async function main(): Promise<void> {
   const config = resolveManagedServeHostConfig(process.env)
   const logger = createHostLogger({ debug: config.debug, logFile: config.logFile })
   const t0 = Date.now()
-  const live: { upstream: Upstream | undefined } = { upstream: undefined }
+  const live: { apiKey: string | undefined; upstream: Upstream | undefined } = {
+    apiKey: undefined,
+    upstream: undefined
+  }
   const upstreamReady = deferred<void>()
 
   const proxy = await startOpenAICompatibleProxy({
     getUpstream: () => live.upstream,
+    getApiKey: () => live.apiKey,
     whenUpstream: upstreamReady.promise,
     openAICompatTransforms: config.openAICompatTransforms,
     upstreamTimeoutMs: config.upstreamTimeoutMs,
     logger
   })
   const proxyBaseURL = `http://127.0.0.1:${proxy.port}/v1`
-  logger.log(
-    `QVAC_LISTENING ${JSON.stringify({ baseURL: proxyBaseURL, modelId: config.modelId, modelName: config.modelName })}`
-  )
 
   logger.log(
     `starting managed serve for ${config.modelId} (ctx_size=${config.ctxSize}, reasoning_budget=${config.reasoningBudget}, tools=${config.tools})...`
@@ -60,8 +61,17 @@ async function main(): Promise<void> {
     serveStartTimeout: config.readyTimeoutMs
   })
 
+  live.apiKey = qvac.apiKey
   live.upstream = originOf(qvac.baseURL)
   upstreamReady.resolve()
+  process.stdout.write(
+    `QVAC_LISTENING ${JSON.stringify({
+      apiKey: qvac.apiKey,
+      baseURL: proxyBaseURL,
+      modelId: config.modelId,
+      modelName: config.modelName
+    })}\n`
+  )
   logger.log(`healthy in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
   logger.log(
     `QVAC_READY ${JSON.stringify({ baseURL: proxyBaseURL, servePort: qvac.port, pid: qvac.pid, modelId: config.modelId })}`
@@ -81,6 +91,7 @@ async function main(): Promise<void> {
 
   const retarget = setInterval(() => {
     try {
+      live.apiKey = qvac.apiKey
       live.upstream = originOf(qvac.baseURL)
     } catch {
       // keep the last known origin

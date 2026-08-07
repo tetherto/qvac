@@ -218,7 +218,7 @@ interface QvacManagedModel {
 }
 ```
 
-The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics.
+The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics. Its read-only `provider.apiKey` getter exposes the current managed key for trusted adapters that must connect directly to the managed serve; treat it as secret material and read it fresh after recovery.
 
 ### Per-model configuration
 

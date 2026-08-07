@@ -133,7 +133,7 @@ Implement here only for OpenCode-specific behavior:
 - Injecting `provider.qvac` into OpenCode's config.
 - Setting project `model` and `small_model` to `qvac/<model>` when `setDefaultModel` is true.
 - Spawning a real Node/Bun host process because OpenCode runs plugins inside a compiled binary whose `process.execPath` is not a JS runtime.
-- Returning quickly on `QVAC_LISTENING` so `opencode run` does not hit startup timeout while model download/preload continues behind the local proxy.
+- Validating the private `QVAC_LISTENING` handshake and injecting the managed serve's current API key into OpenCode.
 - Proxy/shim behavior that only exists because OpenCode or `@ai-sdk/openai-compatible` currently disagrees with QVAC serve.
 - Plugin option parsing from defaults, project `qvac.json`, plugin tuple options, and `QVAC_*` env vars.
 
@@ -186,8 +186,8 @@ OpenCode-specific constraints shaped the plugin:
 
 - OpenCode plugins run inside OpenCode's compiled binary. `process.execPath` points at the editor/binary, not Node/Bun, so `@qvac/ai-sdk-provider` cannot spawn its managed supervisor directly from the plugin process.
 - The plugin therefore spawns a host child in a real Node/Bun runtime. The host imports `@qvac/ai-sdk-provider`, starts managed mode, and owns the local proxy.
-- The host prints `QVAC_LISTENING` as soon as the local proxy is listening, before model download/preload completes. The plugin can then inject the provider and return within OpenCode's startup budget.
-- The first user turn may be slow on a cold model because the proxy waits for the upstream serve/model to become ready.
+- The host prints `QVAC_LISTENING` only after managed serve resolves, because the private handshake carries the generated API key. A cold model download therefore occurs during plugin startup under `readyTimeoutMs`.
+- The proxy replaces upstream authorization with the managed provider's live key so a recovered serve cannot inherit stale credentials.
 - Host logs are quiet by default so they do not corrupt OpenCode's TUI. `debug` / `QVAC_DEBUG=1` mirrors milestones and request traces to stderr.
 - Multiple OpenCode windows share a matching serve through provider managed-mode reuse.
 
