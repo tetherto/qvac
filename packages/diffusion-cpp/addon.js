@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WorldSessionInterface = exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
+exports.WorldSessionInterface = exports.ActionFlag = exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 exports.readImageDimensions = readImageDimensions;
 /* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
@@ -225,6 +225,25 @@ class EsrganUpscalerInterface {
 }
 exports.EsrganUpscalerInterface = EsrganUpscalerInterface;
 /**
+ * Named bits for the walk action mask (WASD move, IJKL look camera).
+ * Combine with bitwise OR: `ActionFlag.W | ActionFlag.L`. Values mirror
+ * `KEY_ORDER` in world.ts and the native `ActionFlag` enum in
+ * WorldSessionModel.hpp (pinned there by test_world_session.cpp and here
+ * by the unit matrix).
+ */
+var ActionFlag;
+(function (ActionFlag) {
+    ActionFlag[ActionFlag["None"] = 0] = "None";
+    ActionFlag[ActionFlag["W"] = 1] = "W";
+    ActionFlag[ActionFlag["A"] = 2] = "A";
+    ActionFlag[ActionFlag["S"] = 4] = "S";
+    ActionFlag[ActionFlag["D"] = 8] = "D";
+    ActionFlag[ActionFlag["I"] = 16] = "I";
+    ActionFlag[ActionFlag["J"] = 32] = "J";
+    ActionFlag[ActionFlag["K"] = 64] = "K";
+    ActionFlag[ActionFlag["L"] = 128] = "L";
+})(ActionFlag || (exports.ActionFlag = ActionFlag = {}));
+/**
  * JavaScript wrapper around the native ABot-World walk-session addon. The
  * session is a standalone model object (own DiT + taehv decoder + scene
  * pack); frames stream through the same string/typed-array output handlers
@@ -256,8 +275,8 @@ class WorldSessionInterface {
         await this._binding.cancel(this._handle);
     }
     /**
-     * Generate the next block under an 8-key action mask
-     * (bit 0..7 = W,A,S,D,I,J,K,L held).
+     * Generate the next block under an 8-key action mask — a bitwise OR of
+     * `ActionFlag` values (bit 0..7 = W,A,S,D,I,J,K,L held).
      * @returns true if the job was accepted, false if busy
      */
     async runStep(actionMask) {
@@ -291,6 +310,7 @@ const cjsExports = {
     SdInterface,
     EsrganUpscalerInterface,
     WorldSessionInterface,
+    ActionFlag,
     mapAddonEvent,
     readImageDimensions
 };

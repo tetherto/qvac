@@ -22,17 +22,39 @@ struct WorldSessionConfig {
   std::string scenePath;    // scene pack safetensors
   std::string backendsDir;  // DL backend modules directory
   std::string backend;      // backend spec ("" = default; "cpu", "cuda", ...)
-  int nThreads = -1;        // -1 = auto-detect physical cores
+  // -1 = auto-detect physical cores: the package-wide default (same as
+  // SdCtxConfig / EsrganConfig). GPU-backend walks average ~1 busy core, so
+  // auto-detect costs nothing there; the CPU backend needs the real pool.
+  int nThreads = -1;
   int64_t seed = 42;        // walk noise seed
   int numFramePerBlock = 0; // 0 = model default (3)
   int localAttnSize = 0;    // 0 = engine default (8); latent-frame window
   bool offloadParamsToCpu = false;
-  int frameJpegQuality = 0; // 0 = lossless PNG frames; 1..100 = JPEG quality
+  // Frame encoding: 0 = lossless PNG; 1..100 = JPEG at that quality on the
+  // standard JPEG scale (higher = better quality / larger frames, 100 =
+  // least compression; 85 is a good remote-streaming value). A continuous
+  // encoder dial with 0 reserved for PNG, not an enum.
+  int frameJpegQuality = 0;
   // Per-layer history KV cache (~3.7x fewer frame-passes per block). The
   // engine validates it against localAttnSize at load and fails fast on a
   // window the compile-time KV ring cannot hold.
   bool kvCache = false;
   bool profile = false; // per-stage timing logs from the native session
+};
+
+// Named bits for WorldSessionModel::WalkStepJob::actionMask (WASD move,
+// IJKL look). Combine with bitwise OR. Values mirror the JS `ActionFlag`
+// export and `KEY_ORDER` in src/world.ts; test_world_session.cpp pins them.
+enum class ActionFlag : uint32_t {
+  None = 0,
+  W = 1U << 0,
+  A = 1U << 1,
+  S = 1U << 2,
+  D = 1U << 3,
+  I = 1U << 4,
+  J = 1U << 5,
+  K = 1U << 6,
+  L = 1U << 7,
 };
 
 } // namespace qvac_lib_inference_addon_sd
@@ -68,7 +90,8 @@ public:
   runtimeStats() const final;
 
   struct WalkStepJob {
-    uint32_t actionMask{0}; // bit 0..7 = W,A,S,D,I,J,K,L held
+    // Bitwise OR of qvac_lib_inference_addon_sd::ActionFlag values.
+    uint32_t actionMask{0};
     std::function<void(const std::string&)> progressCallback;
     std::function<void(const std::vector<uint8_t>&)> outputCallback;
   };

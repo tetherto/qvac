@@ -410,6 +410,25 @@ export interface WorldBinding {
 }
 
 /**
+ * Named bits for the walk action mask (WASD move, IJKL look camera).
+ * Combine with bitwise OR: `ActionFlag.W | ActionFlag.L`. Values mirror
+ * `KEY_ORDER` in world.ts and the native `ActionFlag` enum in
+ * WorldSessionModel.hpp (pinned there by test_world_session.cpp and here
+ * by the unit matrix).
+ */
+export enum ActionFlag {
+  None = 0,
+  W = 1 << 0,
+  A = 1 << 1,
+  S = 1 << 2,
+  D = 1 << 3,
+  I = 1 << 4,
+  J = 1 << 5,
+  K = 1 << 6,
+  L = 1 << 7
+}
+
+/**
  * JavaScript wrapper around the native ABot-World walk-session addon. The
  * session is a standalone model object (own DiT + taehv decoder + scene
  * pack); frames stream through the same string/typed-array output handlers
@@ -454,11 +473,11 @@ export class WorldSessionInterface {
   }
 
   /**
-   * Generate the next block under an 8-key action mask
-   * (bit 0..7 = W,A,S,D,I,J,K,L held).
+   * Generate the next block under an 8-key action mask — a bitwise OR of
+   * `ActionFlag` values (bit 0..7 = W,A,S,D,I,J,K,L held).
    * @returns true if the job was accepted, false if busy
    */
-  async runStep(actionMask: number): Promise<boolean> {
+  async runStep(actionMask: ActionFlag | number): Promise<boolean> {
     return this._binding.runWorldStepJob(this._handle, {
       type: 'text',
       input: JSON.stringify({ actionMask })
@@ -490,6 +509,7 @@ const cjsExports = {
   SdInterface,
   EsrganUpscalerInterface,
   WorldSessionInterface,
+  ActionFlag,
   mapAddonEvent,
   readImageDimensions
 }

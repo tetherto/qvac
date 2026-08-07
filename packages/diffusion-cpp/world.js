@@ -1,11 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ActionFlag = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
+Object.defineProperty(exports, "ActionFlag", { enumerable: true, get: function () { return addon_1.ActionFlag; } });
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed';
 /** Keyboard bit order used by ABot-World's action adapter. */
 const KEY_ORDER = ['W', 'A', 'S', 'D', 'I', 'J', 'K', 'L'];
@@ -171,7 +173,8 @@ class WorldStableDiffusion {
      *   - `string`     — progress JSON `{"step":N,"frames":M,"elapsed_ms":T}`
      *
      * @param keys - Keys held during this block: a keys object `{ W: true }`,
-     *        an array `['W']`, or a raw 8-bit mask (bit 0..7 = W,A,S,D,I,J,K,L).
+     *        an array `['W']`, or a raw 8-bit mask built from `ActionFlag`
+     *        values (bit 0..7 = W,A,S,D,I,J,K,L).
      *        Omit for no keys (idle).
      */
     async step(keys = 0) {
@@ -308,5 +311,5 @@ class WorldStableDiffusion {
     }
 }
 exports.default = WorldStableDiffusion;
-const cjsExports = Object.assign(WorldStableDiffusion, { toActionMask, KEY_ORDER });
+const cjsExports = Object.assign(WorldStableDiffusion, { toActionMask, KEY_ORDER, ActionFlag: addon_1.ActionFlag });
 module.exports = cjsExports;

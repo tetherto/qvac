@@ -9,11 +9,14 @@ import {
   type QvacResponse
 } from '@qvac/infer-base'
 import {
+  ActionFlag,
   WorldSessionInterface,
   mapAddonEvent,
   type WorldBinding,
   type WorldConfigurationParams
 } from './addon'
+
+export { ActionFlag }
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
@@ -24,7 +27,8 @@ const KEY_ORDER: readonly WalkKey[] = ['W', 'A', 'S', 'D', 'I', 'J', 'K', 'L']
 
 /**
  * Keys held during a block: a keys object (`{ W: true }`), an array
- * (`['W', 'J']`), or a raw 8-bit mask (bit 0..7 = W,A,S,D,I,J,K,L).
+ * (`['W', 'J']`), or a raw 8-bit mask — a bitwise OR of `ActionFlag` values
+ * (`ActionFlag.W | ActionFlag.L`; bit 0..7 = W,A,S,D,I,J,K,L).
  */
 export type WalkKeys = number | readonly string[] | Readonly<Record<string, unknown>>
 
@@ -51,7 +55,11 @@ export interface WorldConfig {
   localAttnSize?: number
   offloadParamsToCpu?: boolean
   backendsDir?: string
-  /** 0 = lossless PNG frames; 1..100 = JPEG at that quality. */
+  /**
+   * Frame encoding: 0 = lossless PNG; 1..100 = JPEG at that quality on the
+   * standard JPEG scale (higher = better quality / larger frames; 85 is a
+   * good remote-streaming value).
+   */
   frameJpegQuality?: number
   /**
    * Per-layer history KV cache (~3.7x fewer frame-passes per block). The
@@ -280,7 +288,8 @@ export default class WorldStableDiffusion {
    *   - `string`     — progress JSON `{"step":N,"frames":M,"elapsed_ms":T}`
    *
    * @param keys - Keys held during this block: a keys object `{ W: true }`,
-   *        an array `['W']`, or a raw 8-bit mask (bit 0..7 = W,A,S,D,I,J,K,L).
+   *        an array `['W']`, or a raw 8-bit mask built from `ActionFlag`
+   *        values (bit 0..7 = W,A,S,D,I,J,K,L).
    *        Omit for no keys (idle).
    */
   async step(keys: WalkKeys = 0): Promise<QvacResponse> {
@@ -438,5 +447,5 @@ export default class WorldStableDiffusion {
   }
 }
 
-const cjsExports = Object.assign(WorldStableDiffusion, { toActionMask, KEY_ORDER })
+const cjsExports = Object.assign(WorldStableDiffusion, { toActionMask, KEY_ORDER, ActionFlag })
 module.exports = cjsExports

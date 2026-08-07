@@ -63,10 +63,25 @@ TEST_F(WorldSessionModelTest, LoadWithPartialPathsThrowsInvalidArgument) {
   EXPECT_FALSE(model.isLoaded());
 }
 
+TEST_F(WorldSessionModelTest, ActionFlagBitsMatchTheDocumentedKeyOrder) {
+  // The JS side builds masks from KEY_ORDER = [W,A,S,D,I,J,K,L] (bit 0..7);
+  // the JS ActionFlag export mirrors these values. Pin the native enum so
+  // the three can never drift apart silently.
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::None), 0U);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::W), 1U << 0);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::A), 1U << 1);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::S), 1U << 2);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::D), 1U << 3);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::I), 1U << 4);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::J), 1U << 5);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::K), 1U << 6);
+  EXPECT_EQ(static_cast<uint32_t>(ActionFlag::L), 1U << 7);
+}
+
 TEST_F(WorldSessionModelTest, WalkStepBeforeLoadThrows) {
   WorldSessionModel model(WorldSessionConfig{});
   WorldSessionModel::WalkStepJob job;
-  job.actionMask = 0b00000001; // W held
+  job.actionMask = static_cast<uint32_t>(ActionFlag::W);
   EXPECT_THROW(model.process(std::any(job)), StatusError);
 }
 

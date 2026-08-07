@@ -157,6 +157,20 @@ test('constructor: frameJpegQuality range validation', async function (t) {
   )
 })
 
+test('ActionFlag: named bits agree with KEY_ORDER and toActionMask', function (t) {
+  const { ActionFlag } = WorldStableDiffusion
+  t.is(ActionFlag.None, 0, 'None is 0')
+  KEY_ORDER.forEach((key, bit) => {
+    t.is(ActionFlag[key], 1 << bit, `ActionFlag.${key} is bit ${bit}`)
+    t.is(toActionMask([key]), ActionFlag[key], `toActionMask(['${key}']) matches ActionFlag.${key}`)
+  })
+  t.is(
+    toActionMask(ActionFlag.W | ActionFlag.L),
+    ActionFlag.W | ActionFlag.L,
+    'OR-combined flags pass through as a raw mask'
+  )
+})
+
 test('step: rejects before load()', async function (t) {
   const world = new WorldStableDiffusion({ files: FILES })
   await t.exception.all(

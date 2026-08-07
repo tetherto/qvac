@@ -142,6 +142,24 @@ export interface WorldBinding {
     destroyInstance(handle: unknown): void;
 }
 /**
+ * Named bits for the walk action mask (WASD move, IJKL look camera).
+ * Combine with bitwise OR: `ActionFlag.W | ActionFlag.L`. Values mirror
+ * `KEY_ORDER` in world.ts and the native `ActionFlag` enum in
+ * WorldSessionModel.hpp (pinned there by test_world_session.cpp and here
+ * by the unit matrix).
+ */
+export declare enum ActionFlag {
+    None = 0,
+    W = 1,
+    A = 2,
+    S = 4,
+    D = 8,
+    I = 16,
+    J = 32,
+    K = 64,
+    L = 128
+}
+/**
  * JavaScript wrapper around the native ABot-World walk-session addon. The
  * session is a standalone model object (own DiT + taehv decoder + scene
  * pack); frames stream through the same string/typed-array output handlers
@@ -154,11 +172,11 @@ export declare class WorldSessionInterface {
     activate(): Promise<void>;
     cancel(): Promise<void>;
     /**
-     * Generate the next block under an 8-key action mask
-     * (bit 0..7 = W,A,S,D,I,J,K,L held).
+     * Generate the next block under an 8-key action mask — a bitwise OR of
+     * `ActionFlag` values (bit 0..7 = W,A,S,D,I,J,K,L held).
      * @returns true if the job was accepted, false if busy
      */
-    runStep(actionMask: number): Promise<boolean>;
+    runStep(actionMask: ActionFlag | number): Promise<boolean>;
     /**
      * Create a scene pack natively (umT5 prompt encode + Wan2.2 VAE first-frame
      * encode). Standalone: works before/without activate().

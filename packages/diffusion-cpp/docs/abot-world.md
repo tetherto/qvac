@@ -275,9 +275,10 @@ Key API facts:
   against the compiled KV ring and **fails at load** on an unsupported
   combination), `offloadParamsToCpu`, `frameJpegQuality` (0 = PNG, 1..100 =
   JPEG), `kvCache`, `profile`. Types ship in `world.d.ts`.
-- **Keys**: object `{ W: true, L: true }`, array `['S','J']`, or raw mask
-  (bit 0..7 = `W A S D I J K L`; WASD move, IJKL camera). Case-insensitive;
-  unknown keys throw.
+- **Keys**: object `{ W: true, L: true }`, array `['S','J']`, or a raw mask
+  built from the exported `ActionFlag` named bits
+  (`world.step(ActionFlag.W | ActionFlag.L)`; bit 0..7 = `W A S D I J K L`;
+  WASD move, IJKL camera). Case-insensitive; unknown keys throw.
 - **One step at a time**: a second `step()` while a block is still streaming
   rejects with `Cannot set new job...` — await the response first (drive your
   key loop off that contract, as the demo does).
