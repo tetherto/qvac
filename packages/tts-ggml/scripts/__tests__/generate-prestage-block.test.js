@@ -319,6 +319,19 @@ test('functionalModelsByTest maps each functional runner to only its required st
     ]
   )
   assert.deepEqual(
+    modelsByTest.runCosyvoice3LavasrTest.map((entry) => entry.targetName),
+    [
+      'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+      'cosyvoice3/cosyvoice3-flow-f32.gguf',
+      'cosyvoice3/cosyvoice3-hift-f32.gguf',
+      'cosyvoice3/voice.gguf',
+      'cosyvoice3/vocab.json',
+      'cosyvoice3/merges.txt',
+      'lavasr/lavasr-enhancer.gguf',
+      'lavasr/lavasr-denoiser.gguf'
+    ]
+  )
+  assert.deepEqual(
     modelsByTest.runSupertonic3QuantTest.map((entry) => entry.targetName),
     [
       'supertonic3-f16.gguf',

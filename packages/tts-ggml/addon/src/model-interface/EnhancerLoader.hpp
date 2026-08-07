@@ -10,6 +10,11 @@
 
 namespace qvac::ttsggml {
 
+// Mirrors Enhancer::output_sample_rate() for callers that need the emitted rate
+// before an enhancer exists: AddonJs bakes it into the JS output handlers at
+// instance creation, before load() runs.
+inline constexpr int kLavasrEnhancedSampleRate = 48000;
+
 // Outcome of loadEnhancer: the enhancer (null when disabled) plus the
 // runtimeStats backend codes (backendDeviceCode / backendIdFromName), or the
 // kBackend*None sentinels when no enhancer is loaded.

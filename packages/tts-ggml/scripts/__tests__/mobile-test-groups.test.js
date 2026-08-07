@@ -28,7 +28,7 @@ const EXPECTED_ASSIGNMENTS = {
   supertonic3: ['runSupertonic3QuantTest'],
   parler: ['runParlerTest'],
   lavasr: ['runLavasrEnhancerTest'],
-  cosyvoice3: ['runCosyvoice3Test'],
+  cosyvoice3: ['runCosyvoice3LavasrTest', 'runCosyvoice3Test'],
   'cross-model-compatibility': [
     'runMultipleRunsTest',
     'runGpuSmokeTest',
