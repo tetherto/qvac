@@ -82,7 +82,10 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/translation-nmtcpp"
+        "cwd": "packages/translation-nmtcpp",
+        "ci": {
+          "carveOut": true
+        }
       }
     }
   },
