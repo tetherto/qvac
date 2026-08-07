@@ -334,6 +334,12 @@ class VideoStableDiffusion {
         if (hasReferenceConditioning && !isLtx) {
             throw new Error('LTX IC-LoRA reference conditioning is only supported by LTX video models.');
         }
+        if (params.reference_images != null && mode === 'img2vid') {
+            throw new Error('LTX IC-LoRA reference conditioning cannot be combined with img2vid/init_image.');
+        }
+        if (params.reference_images != null && this._config.vae_decode_only === true) {
+            throw new Error('LTX IC-LoRA reference conditioning requires VAE encoder weights; vae_decode_only must be false.');
+        }
         if (params.reference_images != null) {
             if (!Array.isArray(params.reference_images) || params.reference_images.length === 0) {
                 throw new TypeError('reference_images must be a non-empty Array of Uint8Array');
@@ -366,9 +372,8 @@ class VideoStableDiffusion {
             throw new RangeError(`reference_attention_strength must be in [0, 1]. Got: ${params.reference_attention_strength}`);
         }
         if (params.reference_downscale_factor != null &&
-            (!Number.isFinite(params.reference_downscale_factor) ||
-                params.reference_downscale_factor <= 0)) {
-            throw new RangeError(`reference_downscale_factor must be a positive finite number. Got: ${params.reference_downscale_factor}`);
+            (!Number.isFinite(params.reference_downscale_factor) || params.reference_downscale_factor !== 1)) {
+            throw new RangeError(`reference_downscale_factor must be exactly 1. Got: ${params.reference_downscale_factor}`);
         }
         if (params.vae_extra_tiling_args != null &&
             typeof params.vae_extra_tiling_args !== 'string') {

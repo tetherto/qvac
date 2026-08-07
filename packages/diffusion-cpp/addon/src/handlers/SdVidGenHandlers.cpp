@@ -1,5 +1,7 @@
 #include "SdVidGenHandlers.hpp"
 
+#include <cmath>
+
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "SdParsers.hpp"
@@ -238,8 +240,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
      }},
     {"lora_strength",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.loraStrength =
-           static_cast<float>(requireNum(v, "lora_strength"));
+       c.loraStrength = static_cast<float>(requireNum(v, "lora_strength"));
        if (c.loraStrength < 0.0f || c.loraStrength > 10.0f)
          throw StatusError(
              general_error::InvalidArgument,
@@ -275,10 +276,10 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
      [](SdVidGenConfig& c, const picojson::value& v) {
        const float factor =
            static_cast<float>(requireNum(v, "reference_downscale_factor"));
-       if (factor <= 0.0f)
+       if (!std::isfinite(factor) || factor != 1.0f)
          throw StatusError(
              general_error::InvalidArgument,
-             "reference_downscale_factor must be positive, got: " +
+             "reference_downscale_factor must be exactly 1, got: " +
                  std::to_string(factor));
        c.referenceDownscaleFactor = factor;
      }},

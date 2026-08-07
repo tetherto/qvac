@@ -83,7 +83,7 @@ export interface VideoGenerationParams {
   reference_images?: Uint8Array[]
   /** LTX IC-LoRA reference denoise-mask strength in [0, 1]. */
   reference_attention_strength?: number
-  /** LTX IC-LoRA reference-image spatial downscale factor. */
+  /** LTX IC-LoRA reference-image spatial factor. Currently only exactly 1 is supported. */
   reference_downscale_factor?: number
   vae_tiling?: boolean
   vae_tile_size?: number | string
@@ -532,6 +532,14 @@ export default class VideoStableDiffusion {
     if (hasReferenceConditioning && !isLtx) {
       throw new Error('LTX IC-LoRA reference conditioning is only supported by LTX video models.')
     }
+    if (params.reference_images != null && mode === 'img2vid') {
+      throw new Error('LTX IC-LoRA reference conditioning cannot be combined with img2vid/init_image.')
+    }
+    if (params.reference_images != null && this._config.vae_decode_only === true) {
+      throw new Error(
+        'LTX IC-LoRA reference conditioning requires VAE encoder weights; vae_decode_only must be false.'
+      )
+    }
     if (params.reference_images != null) {
       if (!Array.isArray(params.reference_images) || params.reference_images.length === 0) {
         throw new TypeError('reference_images must be a non-empty Array of Uint8Array')
@@ -569,11 +577,10 @@ export default class VideoStableDiffusion {
     }
     if (
       params.reference_downscale_factor != null &&
-      (!Number.isFinite(params.reference_downscale_factor) ||
-        params.reference_downscale_factor <= 0)
+      (!Number.isFinite(params.reference_downscale_factor) || params.reference_downscale_factor !== 1)
     ) {
       throw new RangeError(
-        `reference_downscale_factor must be a positive finite number. Got: ${params.reference_downscale_factor}`
+        `reference_downscale_factor must be exactly 1. Got: ${params.reference_downscale_factor}`
       )
     }
     if (

@@ -232,8 +232,8 @@ struct PreparedLoras {
 // Mirrors the pinned fork's CLI flow in examples/common/common.hpp:
 // build owned path storage first, then build sd_lora_t entries that point
 // at that stable storage for the lifetime of generate_image().
-PreparedLoras prepareLoras(const std::string& loraPath,
-                           float multiplier = 1.0f) {
+PreparedLoras
+prepareLoras(const std::string& loraPath, float multiplier = 1.0f) {
   PreparedLoras prepared;
   if (loraPath.empty()) {
     return prepared;
@@ -963,12 +963,28 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   const bool hasReferenceOptions =
       paramsObject.find("reference_attention_strength") != paramsObject.end() ||
       paramsObject.find("reference_downscale_factor") != paramsObject.end();
-  if ((!job.referenceImagesBytes.empty() || hasReferenceOptions) && !isLtxModel_)
+  const bool hasReferenceImages = !job.referenceImagesBytes.empty();
+  if (hasReferenceImages && job.referenceImagesBytes.size() != 1)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX Ingredients requires exactly one composite reference sheet");
+  if (hasReferenceImages &&
+      (vid.mode == "img2vid" || !job.initImageBytes.empty()))
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX IC-LoRA reference conditioning cannot be combined with img2vid "
+        "or init_image");
+  if (hasReferenceImages && config_.vaeDecodeOnly)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX IC-LoRA reference conditioning requires VAE encoder weights; "
+        "vae_decode_only must be false");
+  if ((hasReferenceImages || hasReferenceOptions) && !isLtxModel_)
     throw StatusError(
         general_error::InvalidArgument,
         "LTX IC-LoRA reference conditioning is only supported by LTX video "
         "models");
-  if ((hasReferenceOptions && job.referenceImagesBytes.empty()))
+  if (hasReferenceOptions && !hasReferenceImages)
     throw StatusError(
         general_error::InvalidArgument,
         "reference_attention_strength and reference_downscale_factor require "
@@ -977,6 +993,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     throw StatusError(
         general_error::InvalidArgument,
         "video lora is only supported by LTX video models");
+  if (vid.stgScale > 0.0f && !isLtxModel_)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "active stg_scale is only supported by LTX video models");
 
   // Keep the direct native entry point consistent with video.js: an A14B MoE
   // tuning knob without a high-noise expert is always a caller error, not a
@@ -1153,8 +1173,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     vidParams.reference_attention_strength =
         vid.referenceAttentionStrength.value();
   if (vid.referenceDownscaleFactor.has_value())
-    vidParams.reference_downscale_factor =
-        vid.referenceDownscaleFactor.value();
+    vidParams.reference_downscale_factor = vid.referenceDownscaleFactor.value();
 
   // Low-noise / only-expert sample params
   vidParams.sample_params.sample_method = vid.sampleMethod;

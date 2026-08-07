@@ -72,7 +72,7 @@ export interface VideoGenerationParams {
     reference_images?: Uint8Array[];
     /** LTX IC-LoRA reference denoise-mask strength in [0, 1]. */
     reference_attention_strength?: number;
-    /** LTX IC-LoRA reference-image spatial downscale factor. */
+    /** LTX IC-LoRA reference-image spatial factor. Currently only exactly 1 is supported. */
     reference_downscale_factor?: number;
     vae_tiling?: boolean;
     vae_tile_size?: number | string;
