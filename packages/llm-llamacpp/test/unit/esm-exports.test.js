@@ -23,7 +23,11 @@ for (const { file, named } of ENTRYPOINTS) {
   test(`${file} emits the top-level assignments the lexer needs`, (t) => {
     const emitted = fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8')
     for (const name of named) {
-      t.ok(emitted.includes(`exports.${name} = `), `${name} is a top-level exports assignment`)
+      // The lexer accepts either top-level form, so assert on both rather than
+      // relying on `exports.X =` matching inside `module.exports.X =`.
+      const assigned =
+        emitted.includes(`\nexports.${name} = `) || emitted.includes(`\nmodule.exports.${name} = `)
+      t.ok(assigned, `${name} is a top-level exports assignment`)
     }
   })
 }
