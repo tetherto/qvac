@@ -70,8 +70,9 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    # Slow Pixel devices can use about 107 minutes of the total job budget.
-    timeout-minutes: 150
+    # Functional shards can spend up to 120 minutes in Device Farm plus queue
+    # time; retain enough budget for build, scheduling, and log collection.
+    timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 180 || 150 }}
     continue-on-error: true
     permissions:
       contents: read
@@ -88,11 +89,18 @@ jobs:
       # q4+q8 CPU coverage. The LavaSR rows (enhancer CPU+GPU, denoiser CPU on
       # supertonic + chatterbox) use the fp16 enhancer + denoiser: iOS fetches
       # them from the registry on-device, Android pre-stages them (see the
-      # manifest / prestage steps below). The default (non-benchmark) matrix is
-      # unchanged.
-      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"cosyvoice","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q8","engine":"cosyvoice","use_gpu":false}]}') }}
+      # manifest / prestage steps below). Functional runs build once per
+      # platform, then upload one Device Farm spec per model-family shard.
+      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit Device Farm, object-store, GitHub, npm, and mobile build egress
+          # before promoting this mixed hosted/self-hosted workflow to block mode.
+          egress-policy: audit
+
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -121,29 +129,23 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # workflow_call uses prebuild_package; workflow_dispatch exposes the
+          # equivalent package_spec input. Keep both paths pinned explicitly so
+          # manual validation cannot silently ignore the requested native build.
+          package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
+          force-npm-prebuild: ${{ (inputs.prebuild_package != '' || inputs.package_spec != '') && 'true' || 'false' }}
 
-      # Widened for cosyvoice: the cosyvoice DEFAULT (non-benchmark) Android row
-      # still needs pre-staged models (its GGUFs are adb-pushed from the presigned
-      # manifest, not fetched on-device), so AWS OIDC must also run for
-      # cosyvoice rows. Every other engine keeps `run_rtf_benchmarks && Android`
-      # (the `matrix.engine == 'cosyvoice'` clause is false for them, so the
-      # condition collapses back to the original).
+      # The release environment authorizes GitHub OIDC to assume the scoped AWS
+      # role used for model-manifest signing; no long-lived AWS keys are stored.
       - name: Configure AWS credentials via OIDC
-        if: ${{ (inputs.run_rtf_benchmarks || matrix.engine == 'cosyvoice') && matrix.platform == 'Android' }}
+        if: ${{ matrix.platform == 'Android' }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      # Benchmark runs pre-sign q4/q8 model URLs and store a local manifest
-      # consumed by generate-prestage-block.js below. Widened for cosyvoice: the
-      # cosyvoice DEFAULT Android row also pre-stages (its `cosyvoice` group is
-      # signed into the same manifest), so the manifest must be generated for it
-      # too. Non-cosyvoice engines are unchanged (the clause is false for them).
       - name: Generate TTS-GGML mobile model manifest
-        if: ${{ (inputs.run_rtf_benchmarks || matrix.engine == 'cosyvoice') && matrix.platform == 'Android' }}
+        if: ${{ matrix.platform == 'Android' }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         shell: bash
         env:
@@ -207,17 +209,9 @@ jobs:
           cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
           mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
 
-      # Android mirrors Parakeet's pre-stage flow: choose q4/q8 URLs from the
-      # generated manifest and emit Device Farm host commands that download each
-      # model then adb-push it to /data/local/tmp/qvac-tts-ggml/models.
-      # Widened for cosyvoice (see AWS/manifest steps above): the cosyvoice
-      # DEFAULT Android row emits pre-stage commands too. `engine` tells the
-      # prestage script to push the fixed `cosyvoice` manifest group (variant is
-      # ignored for cosyvoice). Non-cosyvoice engines keep the original gating and
-      # the original variant-driven q4/q8 selection.
       - name: Generate model pre-stage commands (Android)
         id: prestage
-        if: ${{ (inputs.run_rtf_benchmarks || matrix.engine == 'cosyvoice') && matrix.platform == 'Android' }}
+        if: ${{ matrix.platform == 'Android' }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         env:
           TTS_GGML_MOBILE_BENCHMARK_VARIANT: ${{ matrix.variant }}
@@ -225,6 +219,7 @@ jobs:
           TTS_GGML_MOBILE_BENCHMARK_ENHANCER: ${{ matrix.enhancer || 'none' }}
           TTS_GGML_MOBILE_BENCHMARK_DENOISER: ${{ matrix.denoiser || 'none' }}
           TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'true'
+          TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
         run: |
           node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -269,29 +264,6 @@ jobs:
           echo "Benchmark grep: $GREP"
           printf 'groups=[{"name":"perf","grep":"%s"}]\n' "$GREP" >> "$GITHUB_OUTPUT"
 
-      # Normal (non-benchmark) runs: resolve ONE functional group for this build
-      # row's engine from test-groups.json. Any non-cosyvoice engine uses the
-      # 'chatterbox' catch-all group (full Chatterbox/Supertonic/Parler/LavaSR
-      # coverage); the dedicated 'cosyvoice' row runs only runCosyvoice3Test.
-      # This keeps CosyVoice3 — whose ~2.4 GB models are adb-pre-staged only on
-      # the cosyvoice row and are too large to fetch reliably on-device on the
-      # chatterbox row — off every other row, so the whole matrix stays green.
-      - name: Resolve functional test-groups by engine
-        id: functional_groups
-        if: ${{ !inputs.run_rtf_benchmarks }}
-        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
-        env:
-          PLATFORM_KEY: ${{ matrix.platform == 'iOS' && 'ios' || 'android' }}
-          ENGINE_KEY: ${{ (matrix.engine || 'chatterbox') == 'cosyvoice' && 'cosyvoice' || 'chatterbox' }}
-        run: |
-          GREP=$(jq -r --arg p "$PLATFORM_KEY" --arg e "$ENGINE_KEY" '.[$p][$e] | join("|")' test/mobile/test-groups.json)
-          if [ -z "$GREP" ] || [ "$GREP" = "null" ]; then
-            echo "::error::No functional test group for $PLATFORM_KEY/$ENGINE_KEY in test-groups.json"
-            exit 1
-          fi
-          echo "Functional grep ($PLATFORM_KEY/$ENGINE_KEY): $GREP"
-          printf 'groups=[{"name":"functional","grep":"%s"}]\n' "$GREP" >> "$GITHUB_OUTPUT"
-
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -303,11 +275,7 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
-          # Benchmark runs => only the benchmarks (perf_groups). Normal runs =>
-          # the engine-scoped functional group (functional_groups). Never empty,
-          # so the action's auto-detect (which would run every group on every
-          # row, re-introducing CosyVoice3 on the chatterbox row) is not used.
-          test-groups: ${{ steps.perf_groups.outputs.groups || steps.functional_groups.outputs.groups }}
+          test-groups: ${{ steps.perf_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           # Keep Mocha's per-test ceiling above the 45-minute Android wait.
           mocha-timeout-ms: '3300000'
@@ -324,6 +292,8 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: dual-flagship
+          multi-spec-dual-flagship: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
@@ -332,6 +302,9 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # Functional multi-spec runs need headroom beyond Device Farm's
+          # 120-minute execution ceiling for normal queue variance.
+          max-wait-time-seconds: ${{ !inputs.run_rtf_benchmarks && '9000' || '7200' }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
