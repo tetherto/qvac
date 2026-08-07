@@ -2,6 +2,21 @@
   "name": "@qvac/ocr-ggml",
   "root": "packages/ocr-ggml",
   "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts",
+          "hasFabricLockstep": true,
+          "hasPerfReport": true,
+          "perfReportVariant": "composite"
+        }
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {

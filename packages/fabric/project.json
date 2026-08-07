@@ -2,6 +2,17 @@
   "name": "@qvac/fabric",
   "root": "packages/fabric",
   "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/fabric",
+        "ci": {
+          "sanityVariant": "inline",
+          "hasCppLint": true
+        }
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {

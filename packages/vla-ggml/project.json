@@ -2,6 +2,20 @@
   "name": "@qvac/vla-ggml",
   "root": "packages/vla-ggml",
   "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/vla-ggml",
+        "ci": {
+          "hasCppLint": true,
+          "includeRocmSdk": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts+lint",
+          "hasFabricLockstep": true
+        }
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": {
