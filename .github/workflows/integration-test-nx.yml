@@ -17,6 +17,11 @@ on:
         type: boolean
         required: false
         default: false
+      overrides:
+        description: "JSON object of {package: {ciField: value}} to override per-run (e.g. flip runRtfBenchmarks on for one package)"
+        type: string
+        required: false
+        default: "{}"
   workflow_call:
     inputs:
       ref:
@@ -37,6 +42,10 @@ on:
       prebuild_package:
         type: string
         required: false
+      overrides:
+        type: string
+        required: false
+        default: "{}"
 
 permissions:
   contents: read
@@ -55,6 +64,7 @@ jobs:
           target: test:integration
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          overrides: ${{ inputs.overrides }}
 
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
@@ -193,12 +203,14 @@ jobs:
           Remove-Item $TARBALL
 
       - name: Run integration tests (Unix, tee'd)
-        if: matrix.useTeeLogging && matrix.platform != 'win32'
+        if: matrix.useTeeLogging && matrix.platform != 'win32' && matrix.runIntegrationTests != false
         working-directory: ${{ matrix.workdir }}
         shell: bash
         env:
           QVAC_ENV_NAME: ${{ matrix.envVarName }}
           QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+          QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
+          QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
         run: |
           [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
           if [ "${{ matrix.hasGenerateStep }}" = "true" ]; then
@@ -208,14 +220,17 @@ jobs:
           exit "${PIPESTATUS[0]}"
 
       - name: Run integration tests (Windows, tee'd)
-        if: matrix.useTeeLogging && matrix.platform == 'win32'
+        if: matrix.useTeeLogging && matrix.platform == 'win32' && matrix.runIntegrationTests != false
         working-directory: ${{ matrix.workdir }}
         shell: powershell
+        env:
+          QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
+          QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
         run: |
           npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} | Tee-Object test-output.log
 
       - name: Run integration tests
-        if: '!matrix.useTeeLogging'
+        if: '!matrix.useTeeLogging && matrix.runIntegrationTests != false'
         working-directory: ${{ matrix.workdir }}
         env:
           QVAC_ENV_NAME: ${{ matrix.envVarName }}
@@ -233,3 +248,41 @@ jobs:
           path: ${{ matrix.workdir }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 30
+
+      # RTF/throughput benchmark leg — only bci-whispercpp declares
+      # runRtfBenchmarks/benchmarkMatrixJson in its options.ci today. Add the
+      # matching QVAC_<PKG>_BENCHMARK_* env vars here when another package's
+      # own scripts/run-rtf-benchmark-matrix.js needs this leg.
+      - name: Run RTF benchmark (Unix)
+        if: always() && !cancelled() && matrix.platform != 'win32' && matrix.runRtfBenchmarks
+        continue-on-error: true
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ toJson(matrix.benchmarkMatrixJson) }}
+
+      - name: Run RTF benchmark (Windows)
+        if: always() && !cancelled() && matrix.platform == 'win32' && matrix.runRtfBenchmarks
+        continue-on-error: true
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ toJson(matrix.benchmarkMatrixJson) }}
+
+      - name: Upload RTF benchmark results
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-${{ matrix.runner || matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ matrix.workdir }}/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: ignore
