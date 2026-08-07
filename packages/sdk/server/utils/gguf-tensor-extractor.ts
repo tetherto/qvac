@@ -1,6 +1,7 @@
-import { createReadStream } from 'bare-fs'
+import { promises as fsPromises, createReadStream } from 'bare-fs'
 import { getServerLogger } from '@/logging'
 import { ModelLoadFailedError } from '@/utils/errors-server'
+import { validateAndJoinPath } from './path-security'
 
 const logger = getServerLogger()
 
@@ -284,6 +285,71 @@ async function extractTensorNamesFromHeader(filePath: string): Promise<string[]>
   } finally {
     destroyStream()
   }
+}
+
+/**
+ * Extract tensor names from all GGUF shards and write to {baseFilename}.tensors.txt
+ * Required for sharded models to enable incremental/async loading
+ * @throws ModelLoadFailedError if any shard fails extraction
+ */
+export async function extractAndWriteTensorsFile(
+  shardDir: string,
+  shardFilenames: string[],
+  baseFilename: string
+): Promise<string> {
+  const tensorsFilePath = validateAndJoinPath(shardDir, `${baseFilename}.tensors.txt`)
+
+  try {
+    await fsPromises.access(tensorsFilePath)
+    logger.info(`Tensors file already exists: ${tensorsFilePath}`)
+    return tensorsFilePath
+  } catch {
+    // Continue with extraction
+  }
+
+  logger.info(`Extracting tensors from ${shardFilenames.length} shards...`)
+
+  const allTensorNames = new Set<string>()
+  const failedShards: string[] = []
+
+  for (const filename of shardFilenames) {
+    const shardPath = validateAndJoinPath(shardDir, filename)
+
+    try {
+      logger.debug(`Extracting tensors from ${filename}...`)
+      const tensorNames = await extractTensorNamesFromHeader(shardPath)
+
+      if (tensorNames.length > 0) {
+        tensorNames.forEach((name) => allTensorNames.add(name))
+        logger.info(`Extracted ${tensorNames.length} tensors from ${filename}`)
+      } else {
+        failedShards.push(filename)
+        logger.error(`No tensors found in ${filename}`)
+      }
+    } catch (error) {
+      failedShards.push(filename)
+      logger.error(`Failed to extract tensors from ${filename}:`, error)
+    }
+  }
+
+  if (failedShards.length > 0) {
+    throw new ModelLoadFailedError(
+      `Failed to extract tensors from ${failedShards.length}/${shardFilenames.length} shards: ${failedShards.join(', ')}`
+    )
+  }
+
+  if (allTensorNames.size === 0) {
+    throw new ModelLoadFailedError(`Could not extract any tensors from shards.`)
+  }
+
+  const tensorNames = Array.from(allTensorNames).sort()
+  await fsPromises.writeFile(tensorsFilePath, tensorNames.join('\n') + '\n', 'utf8')
+
+  logger.info(
+    `Tensors file created: ${tensorsFilePath} (${tensorNames.length} tensors from ${shardFilenames.length} shards)`
+  )
+
+  return tensorsFilePath
 }
 
 /**

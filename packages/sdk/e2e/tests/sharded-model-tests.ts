@@ -157,7 +157,7 @@ export const shardedModelLlmReload: TestDefinition = {
 export const shardedModelLlmMissingShards: TestDefinition = {
   testId: 'sharded-model-llm-missing-shards',
   params: { modelPath: '/invalid/path/sharded-model-00001-of-00005.gguf' },
-  expectation: { validation: 'throws-error', errorContains: 'Missing shards for' },
+  expectation: { validation: 'throws-error', errorContains: 'Missing shards or' },
   metadata: {
     category: 'sharded-model',
     dependency: 'none',

@@ -20,14 +20,17 @@ Some models may be distributed as **multiple files** (shards) instead of a singl
 
 ## Local sharded models
 
-All numbered shard files **must** be present in the same directory, for example:
+All files **must** be present in the same directory:
 
-- `model-00001-of-00005.gguf`
-- `model-00002-of-00005.gguf`
-- …
-- `model-00005-of-00005.gguf`
+- All numbered shard files, for example:
+  - `model-00001-of-00005.gguf`
+  - `model-00002-of-00005.gguf`
+  - …
+  - `model-00005-of-00005.gguf`
+- A companion tensors manifest file:
+  - `model.tensors.txt`
 
-When using `loadModel()`, you pass the path to any shard (e.g., `model-00003-of-00005.gguf`), and the SDK automatically detects and loads the remaining shards.
+When using `loadModel()`, you pass the path to the first shard (e.g., `model-00001-of-00005.gguf`), and the SDK automatically detects and loads the remaining shards.
 
 ## Functions
 
