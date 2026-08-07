@@ -55,25 +55,29 @@ obvious for each job.
 
 | If you need… | Use this model | Notes |
 | --- | --- | --- |
-| Lowest RTF on phones / edge devices | `supertonic3-q4_0.gguf` (or `supertonic3-q8_0.gguf` for quality) | ~263 MB class; 31 languages; GPU on Android (Vulkan/OpenCL). Prefer v3 over v1/v2. |
-| English + voice cloning + low first-audio latency | `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` | Reference-wav / voice-profile cloning; native `streamChunkTokens` chunk streaming; Metal / Vulkan / OpenCL. Native 24 kHz. |
+| Lowest RTF on phones / edge devices | `supertonic3-q4_0.gguf` (or `supertonic3-q8_0.gguf` for quality) | ~80 MB (`q4_0`) / ~126 MB (`q8_0`); 31 languages. Prefer v3 over v1/v2. |
+| English + voice cloning + low first-audio latency | `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` | Reference-wav / voice-profile cloning; native `streamChunkTokens` chunk streaming. Native 24 kHz. |
 | Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
-| Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates; Metal GPU on Apple. Native 44.1 kHz. |
+| Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
 | Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU today; native 24 kHz. |
-| Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Smaller / faster Parler. Step up to `parler-large-v1-q8_0.gguf` when quality matters more than size/RTF. |
+| Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
+| Voice cloning with noisy input audio | Any engine above + `lavasr-denoiser.gguf` | Post-process (batch path); cleans before optional enhancement. See [Speech enhancement (LavaSR)](#speech-enhancement-lavasr). |
 | 48 kHz bandwidth-extended output | Any engine above + `lavasr-enhancer.gguf` | Post-process, not a TTS engine. Optional `lavasr-denoiser.gguf` first (batch path). |
+
+GPU / backend support is documented in
+[Backends & GPU acceleration](#backends--gpu-acceleration) — not duplicated
+here, so this guide does not go stale when backends change.
 
 ### Capability matrix
 
-| Model | Languages | Size (approx.) | Sample rate | Voice control | Streaming | GPU |
-| --- | --- | ---: | ---: | --- | --- | --- |
-| `supertonic3-q4_0` / `q8_0` / `f16` | 31 | ~263 MB | 44.1 kHz | Baked voice ids (`F1`, `M1`, …) | Sentence streaming | Metal / Vulkan / OpenCL |
-| `chatterbox-t3-turbo` + `s3gen` | English | ~1.7 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk | Metal / Vulkan / OpenCL |
-| `chatterbox-t3-mtl` + `s3gen-mtl` | Multilingual | ~2.0 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk | Metal / Vulkan / OpenCL |
-| `parler-indic-q8_0` | 21 Indic | ~1.3 GB | 44.1 kHz | `voice` / `emotion` / description | Sentence streaming | Metal (Apple); else CPU |
-| `parler-mini-v1-q8_0` | English | ~1.2 GB | 44.1 kHz | Description / templates | Sentence streaming | Metal (Apple); else CPU |
-| `parler-large-v1-q8_0` | English | ~2.8 GB | 44.1 kHz | Description / templates | Sentence streaming | Metal (Apple); else CPU |
-| CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir | 24 kHz | `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts | CPU |
+| Model | Languages | Size (approx.) | Sample rate | Voice control | Streaming |
+| --- | --- | ---: | ---: | --- | --- |
+| `supertonic3-q4_0` / `q8_0` / `f16` | 31 | ~80 / ~126 / ~191 MB | 44.1 kHz | Baked voice ids (`F1`, `M1`, …) | Sentence streaming |
+| `chatterbox-t3-turbo` + `s3gen` | English | ~1.7 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
+| `chatterbox-t3-mtl` + `s3gen-mtl` | Multilingual | ~2.0 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
+| `parler-indic-q8_0` | 21 Indic | ~1.3 GB | 44.1 kHz | `voice` / `emotion` / description | Sentence streaming |
+| `parler-mini-v1-q8_0` | English | ~1.2 GB | 44.1 kHz | Description / templates | Sentence streaming |
+| CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir | 24 kHz | `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts |
 
 ### Legacy Supertonic v1 / v2
 
@@ -124,7 +128,7 @@ chatterbox-s3gen-mtl.gguf  (~1.0 GB)
 
 # Supertonic 3 (Supertone/supertonic-3; 31 languages) — preferred Supertonic
 # checkpoint; published per quant tier (auto-detected from modelDir)
-supertonic3-f16.gguf       (also -q8_0 / -q4_0 / -f32)
+supertonic3-q4_0.gguf      (~80 MB; also -q8_0 ~126 MB / -f16 ~191 MB / -f32)
 
 # Legacy Supertonic (not recommended for new integrations — see Choosing a model)
 supertonic.gguf            (~263 MB) — v1 English only
