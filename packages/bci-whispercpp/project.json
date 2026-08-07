@@ -41,14 +41,21 @@
           "envSecretName": "PAT_TOKEN",
           "runIntegrationTests": true,
           "runRtfBenchmarks": false,
+          "rtfBenchmark": {
+            "command": "node scripts/run-rtf-benchmark-matrix.js",
+            "matrixEnvVar": "QVAC_BCI_BENCHMARK_MATRIX_JSON",
+            "comboGroups": [
+              [{}]
+            ]
+          },
           "platforms": [
-            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }, { "useGPU": true, "backendHint": "vulkan" }] },
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }, { "useGPU": true, "backendHint": "vulkan" }] },
-            { "os": "ubuntu-26.04", "platform": "linux", "arch": "x64", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }] },
-            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }] },
-            { "os": "macos-26", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }, { "useGPU": true, "backendHint": "metal" }] },
-            { "os": "macos-15-large", "platform": "darwin", "arch": "x64", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }] },
-            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu", "benchmarkMatrixJson": [{ "useGPU": false, "backendHint": "cpu" }, { "useGPU": true, "backendHint": "vulkan" }] }
+            { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
+            { "os": "ubuntu-26.04", "platform": "linux", "arch": "x64", "noGpu": true },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "noGpu": true },
+            { "os": "macos-26", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64", "noGpu": true },
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
           ]
         }
       }
