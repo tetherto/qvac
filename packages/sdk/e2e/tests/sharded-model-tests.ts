@@ -119,6 +119,7 @@ export const shardedModelLlmLoad: TestDefinition = {
   testId: 'sharded-model-llm-load',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
   metadata: {
     category: 'sharded-model',
     dependency: 'sharded-llm',
