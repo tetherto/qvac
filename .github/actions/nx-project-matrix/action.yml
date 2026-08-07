@@ -1,5 +1,5 @@
 name: 'Nx project.json-driven matrix'
-description: 'Builds the matrix from each affected package''s project.json options.ci (read from base only, never PR head).'
+description: 'Builds the matrix from each affected package''s project.json options.ci (read from base only, never PR head), with optional per-run overrides validated against each package''s own declared fields.'
 
 inputs:
   target:
@@ -13,6 +13,10 @@ inputs:
     description: 'Head ref for nx affected when not resolvable from a pull_request event'
     required: false
     default: 'HEAD'
+  overrides:
+    description: 'JSON object of {package: {ciField: value}} to override per-run. Each field must already exist in that package''s own options.ci for this target.'
+    required: false
+    default: '{}'
 
 outputs:
   matrix:
@@ -43,6 +47,7 @@ runs:
         INPUT_TARGET: ${{ inputs.target }}
         INPUT_BASE_REF: ${{ inputs.base-ref }}
         INPUT_HEAD_REF: ${{ inputs.head-ref }}
+        INPUT_OVERRIDES: ${{ inputs.overrides }}
       run: |
         set -euo pipefail
         TARGET="$INPUT_TARGET"
@@ -81,6 +86,37 @@ runs:
           ')
           ROWS=$(jq -c --argjson new "$PKG_ROWS" '. + $new' <<< "$ROWS")
         done
+
+        # Per-run overrides: a key is valid only if it already exists as a
+        # field on that package's own row (i.e. was declared in its
+        # options.ci for this target). Applied uniformly across every row
+        # belonging to that package. Comes from the dispatch/call input, same
+        # trust level as any other free-form workflow input — never sourced
+        # from PR-head project.json.
+        OVERRIDES="$INPUT_OVERRIDES"
+        echo "$OVERRIDES" | jq -e 'type == "object"' >/dev/null || {
+          echo "::error::overrides must be a JSON object, got: $OVERRIDES"
+          exit 1
+        }
+
+        for pkg in $(echo "$OVERRIDES" | jq -r 'keys[]'); do
+          PKG_ROW_COUNT=$(echo "$ROWS" | jq --arg p "$pkg" '[.[] | select(.package == $p)] | length')
+          if [ "$PKG_ROW_COUNT" -eq 0 ]; then
+            echo "::error::overrides references package '$pkg', which is not affected or has no $TARGET options.ci"
+            exit 1
+          fi
+          for key in $(echo "$OVERRIDES" | jq -r --arg p "$pkg" '.[$p] | keys[]'); do
+            KEY_EXISTS=$(echo "$ROWS" | jq --arg p "$pkg" --arg k "$key" '[.[] | select(.package == $p) | has($k)] | any')
+            if [ "$KEY_EXISTS" != "true" ]; then
+              echo "::error::overrides key '$key' for package '$pkg' is not a declared options.ci field for target $TARGET"
+              exit 1
+            fi
+          done
+        done
+
+        ROWS=$(jq -c --argjson overrides "$OVERRIDES" '
+          map(. as $row | $row * ($overrides[$row.package] // {}))
+        ' <<< "$ROWS")
 
         echo "Matrix ($TARGET): $ROWS"
         echo "matrix=$ROWS" >> "$GITHUB_OUTPUT"
