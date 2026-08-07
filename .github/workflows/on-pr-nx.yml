@@ -1,0 +1,161 @@
+# Consolidates the 14 on-pr-<pkg>.yml orchestrators. INTERIM: triggers on
+# pull_request (unprivileged) — the leaves self-affect via nx-set-shas, so no
+# context/sha job and no fork-security overlay yet. Flip to pull_request_target
+# + fork-security once nx lands on main (see plan Part 2). Spine (4a): gates +
+# the 4 self-affecting -nx leaves + merge-guard; flag-gated per-package jobs (4b).
+name: On PR Trigger (nx)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - "packages/**"
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repo to build (owner/name). Defaults to this repo."
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA). Defaults to current ref."
+        required: false
+        type: string
+      run_verify:
+        description: "Run all CI stages (prebuild + integration)."
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  checks: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
+  authorize:
+    needs: [fork-approval]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  # The 4 leaves self-affect from their own project.json targets (and absorb
+  # their carve-out packages internally), so on-pr calls them uniformly. On
+  # pull_request the leaves' nx-set-shas computes affected from the PR diff.
+  prebuild:
+    needs: [authorize, ci-router]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  cpp-tests:
+    needs: [authorize, ci-router]
+    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_cpp_tests == 'true'
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/cpp-tests-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  run-integration-tests:
+    needs: [authorize, ci-router, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  run-mobile-integration-tests:
+    needs: [authorize, ci-router, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-nx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  merge-guard:
+    needs: [authorize, ci-router, prebuild, cpp-tests, run-integration-tests, run-mobile-integration-tests]
+    if: always() && !cancelled()
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
