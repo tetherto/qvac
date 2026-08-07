@@ -679,15 +679,15 @@ class TTSGgml {
                 "use sentence-level streaming via the engine-agnostic " +
                 "runStream() / runStreaming() / run({ streamOutput: true }) APIs.");
         }
-        // Parler option consistency runs between the supertonic and denoiser
-        // streaming guards, matching the pre-migration single-method throw order.
+        // Runs before the denoiser guard so a Parler description/template conflict
+        // is reported ahead of the engine-agnostic streaming constraints.
         this._assertParlerOptionConsistency();
         this._assertCosyvoiceOptionConsistency();
         if (this._denoiserGgufPath &&
             (this._streamChunkTokens != null ||
                 this._streamFirstChunkTokens != null)) {
             throw new Error("tts-ggml: the LavaSR denoiser is not yet supported with " +
-                "Chatterbox native chunk streaming (streamChunkTokens / " +
+                "native chunk streaming (streamChunkTokens / " +
                 "streamFirstChunkTokens). Use batch synthesis, or drop the " +
                 "denoiser for streaming. Streaming denoise is a planned " +
                 "follow-up (needs a stateful streaming denoiser).");
@@ -695,11 +695,6 @@ class TTSGgml {
     }
     _assertParlerOptionConsistency() {
         if (this._engineType === ENGINE_PARLER) {
-            if (this._enhancerGgufPath || this._denoiserGgufPath) {
-                throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
-                    "the parler engine (native 44.1 kHz output needs no bandwidth " +
-                    "extension). Drop lavasrEnhancer / lavasrDenoiser.");
-            }
             assertParlerDescFieldsConsistent(pickParlerDescFields({
                 description: this._description,
                 voice: this._voice,
@@ -1276,6 +1271,7 @@ class TTSGgml {
         if (this._config.useGPU != null) {
             parameters.useGPU = !!this._config.useGPU;
         }
+        this._assignLavasrParams(parameters);
         if (this._backendsDir) {
             parameters.backendsDir = this._backendsDir;
         }
@@ -1295,17 +1291,21 @@ class TTSGgml {
         if (this._config.useGPU != null) {
             parameters.useGPU = !!this._config.useGPU;
         }
-        if (this._enhancerGgufPath) {
-            parameters.lavasrEnhancerPath = this._enhancerGgufPath;
-        }
-        if (this._denoiserGgufPath) {
-            parameters.lavasrDenoiserPath = this._denoiserGgufPath;
-        }
+        this._assignLavasrParams(parameters);
         if (this._backendsDir) {
             parameters.backendsDir = this._backendsDir;
         }
         if (this._openclCacheDir) {
             parameters.openclCacheDir = this._openclCacheDir;
+        }
+    }
+    /** LavaSR post-processing paths, shared by every engine that supports them. */
+    _assignLavasrParams(parameters) {
+        if (this._enhancerGgufPath) {
+            parameters.lavasrEnhancerPath = this._enhancerGgufPath;
+        }
+        if (this._denoiserGgufPath) {
+            parameters.lavasrDenoiserPath = this._denoiserGgufPath;
         }
     }
     _createAddon(configuration, outputCallback) {

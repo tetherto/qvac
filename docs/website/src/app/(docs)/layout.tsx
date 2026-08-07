@@ -63,10 +63,10 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         nav={{ ...base.nav, mode: 'top' }}
         links={linkItems}
         tree={{ name: 'docs', $id: 'latest', children: customTree }}
-        searchToggle={{
-          components: {
-            lg: <AskAISearchToggleLarge />,
-            sm: <AskAISearchToggleSmall />,
+        slots={{
+          searchTrigger: {
+            full: AskAISearchToggleLarge,
+            sm: AskAISearchToggleSmall,
           },
         }}
       >

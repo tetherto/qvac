@@ -120,19 +120,21 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(cvm);
   } else if (engineType == EngineType::Parler) {
     auto cfg = adapter.buildParlerConfig(configurationParams, env);
+    const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto ptm = make_unique<ParlerModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : ptm->sampleRate();
+    sampleRate =
+        outSr > 0 ? outSr
+                  : (enhanced ? kLavasrEnhancedSampleRate : ptm->sampleRate());
     model = std::move(ptm);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
-    sampleRate =
-        outSr > 0
-            ? outSr
-            : (enhanced ? kLavasrEnhancedSampleRate
-                        : chatterbox::kChatterboxNativeSampleRate);
+    sampleRate = outSr > 0
+                     ? outSr
+                     : (enhanced ? kLavasrEnhancedSampleRate
+                                 : chatterbox::kChatterboxNativeSampleRate);
     model = make_unique<ChatterboxModel>(std::move(cfg));
   }
 

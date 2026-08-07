@@ -19,9 +19,9 @@ struct LoadedEnhancer {
   int backendId = kBackendIdNone;
 };
 
-// Shared LavaSR-enhancer load path for the model backends (Chatterbox +
-// Supertonic behave identically here, so the logic lives in one place to keep
-// the two loaders from drifting).
+// Shared LavaSR-enhancer load path for the model backends (every engine behaves
+// identically here, so the logic lives in one place to keep the loaders from
+// drifting).
 //
 //   ggufPath      empty => enhancer disabled (returns the kBackend*None codes).
 //   resolvedGpu   the engine's *resolved* device (backendDevice_ ==

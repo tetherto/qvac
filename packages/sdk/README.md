@@ -103,6 +103,43 @@ Supported values include provenance with a source and optional scope. These
 values are diagnostics; they do not reserve memory or guarantee that a model
 can be loaded.
 
+GPU capabilities expose observed driver names, versions, and graphics APIs.
+These observations do not prove that an inference backend is compatible.
+
+Profiled inference operation events may include `event.backend` with the
+selected backend and device, graphics API, driver, fallback reason, and probe
+result. Addons attach backend metadata with `attachBackendDiagnostics`; the SDK
+validates it before recording the operation event. `gpuId`, when present,
+identifies a GPU from the current worker resource collector and is stable only
+for that collector's lifetime. The SDK does not infer compatibility from driver
+inventory or log text.
+
+### Profiler resource gauges
+
+Resource gauges are disabled by default. Enable them explicitly to attach one
+worker resource sample to each profiled operation:
+
+```ts
+import { profiler } from '@qvac/sdk'
+
+profiler.enable({ mode: 'verbose', includeResourceGauges: true })
+
+// Run SDK operations, then inspect recentEvents[].resources.
+const profile = profiler.exportJSON()
+```
+
+The sample uses the same status, provenance, and scope semantics as
+`getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
+clock as the profiling event's `ts`, so the two timestamps are comparable.
+`resources.origin` is `local` for the current worker and `provider` for a
+delegated provider's worker. Samples are delivered to `profiler.onRecord`; they
+are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
+gauges in `summary` mode still incurs the sampling cost without retaining them.
+Disabling profiling or omitting `includeResourceGauges` performs no resource
+sampling. Enabling gauges adds one CPU query and one query per GPU to each
+profiled operation's response path. If the worker resource collector is not
+initialized, the event omits the resource block.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:

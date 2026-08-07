@@ -24,6 +24,7 @@ export interface ResolvedProfilerConfig {
   enabled: boolean
   mode: ProfilerMode
   includeServerBreakdown: boolean
+  includeResourceGauges: boolean
   operationFilters: string[]
   maxRecentEvents: number
 }
@@ -32,6 +33,7 @@ const DEFAULT_CONFIG: ResolvedProfilerConfig = {
   enabled: false,
   mode: 'summary',
   includeServerBreakdown: false,
+  includeResourceGauges: false,
   operationFilters: [],
   maxRecentEvents: 1000
 }
@@ -91,6 +93,8 @@ export function getEffectiveConfig(): ResolvedProfilerConfig {
     mode: state.runtimeOptions.mode ?? DEFAULT_CONFIG.mode,
     includeServerBreakdown:
       state.runtimeOptions.includeServerBreakdown ?? DEFAULT_CONFIG.includeServerBreakdown,
+    includeResourceGauges:
+      state.runtimeOptions.includeResourceGauges ?? DEFAULT_CONFIG.includeResourceGauges,
     operationFilters: [
       ...(state.runtimeOptions.operationFilters ?? DEFAULT_CONFIG.operationFilters)
     ],
@@ -120,6 +124,14 @@ export function shouldIncludeServerBreakdown(perCallOptions?: PerCallProfiling):
     return perCallOptions.includeServerBreakdown
   }
   return getEffectiveConfig().includeServerBreakdown
+}
+
+export function shouldIncludeResourceGauges(perCallOptions?: PerCallProfiling): boolean {
+  if (perCallOptions?.includeResourceGauges !== undefined) {
+    return perCallOptions.includeResourceGauges
+  }
+
+  return getEffectiveConfig().includeResourceGauges
 }
 
 export function generateId(): string {
