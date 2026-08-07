@@ -228,12 +228,18 @@ async def test_vla_hparams_parses_groot_embodiment_fields():
 
 
 async def test_vla_set_embodiment_sends_selector_and_parses_refreshed_hparams():
-    selectors = ["oxe_droid_relative_eef_relative_joint", 24, {"catId": 24, "numCameras": 4}]
+    selectors = [
+        "oxe_droid_relative_eef_relative_joint",
+        24,
+        {"catId": 24, "numCameras": 4},
+    ]
     for selector in selectors:
         transport = FakeTransport(
             {"type": "pluginInvoke", "result": {"hparams": _GROOT_DROID_HPARAMS}}
         )
-        hparams = await vla_set_embodiment(transport, model_id="m-1", embodiment=selector)
+        hparams = await vla_set_embodiment(
+            transport, model_id="m-1", embodiment=selector
+        )
         assert transport.sent["handler"] == "vlaSetEmbodiment"
         assert transport.sent["params"]["embodiment"] == selector
         assert isinstance(hparams, VlaHparams)
