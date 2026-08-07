@@ -1,0 +1,12 @@
+node_modules/
+build/
+prebuilds/
+dist/
+
+# Generated from the desktop suite and regenerated in CI before the app is built,
+# so it is deliberately not committed: no regenerate-and-commit step to forget, and
+# no generated noise in diffs. Run `npm run test:mobile:generate` locally first.
+test/integration/
+test/mobile/integration.auto.cjs
+test/mobile/test-groups.json
+generated/
