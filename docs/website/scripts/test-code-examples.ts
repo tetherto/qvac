@@ -9,6 +9,7 @@
  *   2. SDK examples type-check against current SDK types
  *   3. Prebuild transpilation produces expected .js output
  *   4. Inline TS/JS code blocks parse without syntax errors
+ *   5. Embedded Python examples parse and are standalone
  */
 
 import * as fs from "fs/promises";
@@ -16,6 +17,7 @@ import * as path from "path";
 import { execFileSync, execSync } from "child_process";
 import { glob } from "glob";
 import ts from "typescript";
+import { checkPythonExamples, pythonAvailable } from "./lib/python-example-validator";
 
 const DOCS_DIR = process.cwd();
 const MONOREPO_ROOT = path.resolve(DOCS_DIR, "../..");
@@ -292,13 +294,58 @@ async function checkInlineSyntax(): Promise<CheckResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Check 5 — embedded Python examples parse and import nothing local
+//
+// Checks 1-4 only ever look at TypeScript. A ```python file=... block is
+// resolved by the MDX pipeline and shipped verbatim, so a Python example that
+// imports a sibling helper renders fine on the page and still fails for anyone
+// who copies it out of the repo.
+// ---------------------------------------------------------------------------
+
+async function checkPythonStandalone(): Promise<CheckResult> {
+  if (!pythonAvailable()) {
+    return {
+      name: "Python examples standalone",
+      passed: false,
+      skipped: true,
+      total: 0,
+      failures: ["python3 not on PATH (needed to parse embedded Python examples)"],
+    };
+  }
+
+  const { refs, findings } = await checkPythonExamples(
+    await findMdxFiles(),
+    DOCS_DIR,
+    MONOREPO_ROOT,
+  );
+
+  const failures = findings.map(
+    (f) => `${f.mdxFile}:${f.line}: ${f.repoPath} ${f.detail}`,
+  );
+
+  return {
+    name: "Python examples standalone",
+    passed: failures.length === 0,
+    skipped: false,
+    total: refs.length,
+    failures,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
 async function main() {
   console.log("=== Docs Code Examples Test ===\n");
 
-  const checks = [checkFileReferences, checkSdkTypecheck, checkPrebuild, checkInlineSyntax];
+  const checks = [
+    checkFileReferences,
+    checkSdkTypecheck,
+    checkPrebuild,
+    checkInlineSyntax,
+    checkPythonStandalone,
+  ];
   const results: CheckResult[] = [];
 
   for (let i = 0; i < checks.length; i++) {
