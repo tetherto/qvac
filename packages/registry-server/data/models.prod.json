@@ -8323,5 +8323,38 @@
     "tags": ["generation", "instruct", "moe", "kat-coder"],
     "notes": "",
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "description": "Indic Conformer CTC 600M multilingual GGUF",
+    "quantization": "f16",
+    "params": "600M",
+    "licenseId": "MIT",
+    "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
+    "notes": "F16 GGUF conversion of ai4bharat/indic-conformer"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "description": "Indic Conformer CTC 600M multilingual GGUF",
+    "quantization": "q4_0",
+    "params": "600M",
+    "licenseId": "MIT",
+    "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
+    "notes": "Q4_0 GGUF conversion of ai4bharat/indic-conformer"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "description": "Indic Conformer CTC 600M multilingual GGUF",
+    "quantization": "q8_0",
+    "params": "600M",
+    "licenseId": "MIT",
+    "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
+    "notes": "Q8_0 GGUF conversion of ai4bharat/indic-conformer"
   }
 ]
