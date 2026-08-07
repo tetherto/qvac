@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on both batch synthesis and native chunk streaming (seam-free). The
   `files.lavasrDenoiser` / `denoiser` stage runs before it on the batch path.
   `enhancerBackendDevice` / `enhancerBackendId` are reported in runtime stats,
-  matching Chatterbox and Supertonic.
+  matching the other engines.
 
 ### Fixed
 
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
   loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
   so they no longer OOM on non-entitled devices. Output is byte-identical.
-- **`denoiser` with a non-streaming token count.** Both addon engines start
+- **`denoiser` with a non-streaming token count.** The streaming engines start
   native chunk streaming on `streamChunkTokens > 0` alone, but an explicit
   `streamChunkTokens: 0` — or a `streamFirstChunkTokens` passed on its own —
   was still rejected as a streaming request and disabled the denoiser path.

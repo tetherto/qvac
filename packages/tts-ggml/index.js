@@ -691,9 +691,9 @@ class TTSGgml {
                 "denoiser).");
         }
     }
-    // Both addon engines start native chunk streaming on streamChunkTokens > 0
-    // alone: a count of 0 means batch, and streamFirstChunkTokens only sizes the
-    // first chunk once streaming is already on.
+    // Every streaming engine starts native chunk streaming on
+    // streamChunkTokens > 0 alone: a count of 0 means batch, and
+    // streamFirstChunkTokens only sizes the first chunk once streaming is on.
     _requestsChunkStreaming() {
         return (this._streamChunkTokens ?? 0) > 0;
     }

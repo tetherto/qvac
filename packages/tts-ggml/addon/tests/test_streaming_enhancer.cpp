@@ -1,6 +1,7 @@
 // Unit tests for StreamingEnhancer — the stateful wrapper that lets the
-// Chatterbox and CosyVoice3 native chunk-streaming paths emit LavaSR-enhanced
-// audio chunk by chunk (overlap-reprocess with look-ahead margin + crossfade).
+// Chatterbox, Parler and CosyVoice3 native chunk-streaming paths emit
+// LavaSR-enhanced audio chunk by chunk (overlap-reprocess with look-ahead
+// margin + crossfade).
 //
 // The real enhancer is injected as a transform, so these exercise the
 // streaming bookkeeping (windowing, hold-back, crossfade, compaction) in
