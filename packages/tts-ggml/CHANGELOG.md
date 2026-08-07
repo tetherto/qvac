@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+<<<<<<< HEAD
+- **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
+  directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
+  dialects, description-conditioned English), with a capability matrix and
+  explicit guidance that Supertonic v1/v2 are not recommended for new
+  integrations in favour of Supertonic 3.
+
+=======
 - **LavaSR enhancer and denoiser support for Parler.** The LavaSR post-processing
   stages were previously rejected for the Parler engine; supplying
   `files.lavasrEnhancer` (or `enhancer.enhancerPath`) now bandwidth-extends
@@ -24,10 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Chatterbox uses, so streamed chunks are enhanced seam-free at the cost of
   ~0.34 s of look-ahead latency. The denoiser stays batch-only and is rejected
   with streaming, as it is for Chatterbox.
+>>>>>>> main
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
   vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
   volume / style) via the `instruct` option.
+- **LavaSR enhancer + denoiser for CosyVoice3.** `files.lavasrEnhancer` /
+  `enhancer` now bandwidth-extend CosyVoice3's native 24 kHz output to 48 kHz,
+  on both batch synthesis and native chunk streaming (seam-free). The
+  `files.lavasrDenoiser` / `denoiser` stage runs before it on the batch path.
+  `enhancerBackendDevice` / `enhancerBackendId` are reported in runtime stats,
+  matching the other engines.
 
 ### Fixed
 
@@ -39,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
   loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
   so they no longer OOM on non-entitled devices. Output is byte-identical.
+- **`denoiser` with a non-streaming token count.** The streaming engines start
+  native chunk streaming on `streamChunkTokens > 0` alone, but an explicit
+  `streamChunkTokens: 0` — or a `streamFirstChunkTokens` passed on its own —
+  was still rejected as a streaming request and disabled the denoiser path.
+- **Failed LavaSR load left CosyVoice3 half-loaded.** When the enhancer or
+  denoiser GGUF failed to load, the engine stayed loaded behind it, so the model
+  still reported itself as loaded and a retry became a no-op that silently
+  synthesized unenhanced audio. It now unloads before rethrowing.
 
 ### Changed
 
@@ -50,6 +73,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still rejected, with the error naming the enhancer as an option.
 - Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
   with the shared addon runtime validated across the live addon consumer set.
+- **`outputSampleRate` with CosyVoice3 streaming.** Previously rejected for any
+  non-native rate; it is now accepted while streaming when the LavaSR enhancer
+  is active, because the enhancer resamples inside its overlap-reprocess window
+  without introducing chunk seams.
 
 ### Pull Requests
 
