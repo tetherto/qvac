@@ -13,7 +13,11 @@
           "tsChecksMode": "dts+lint",
           "hasFabricLockstep": true,
           "hasPerfReport": true,
-          "perfReportVariant": "composite"
+          "perfReportVariant": "composite",
+          "perfReportPattern": "perf-report-llamacpp-llm-*",
+          "perfReportTitle": "LLM Performance Report (All Platforms)",
+          "perfReportExtraArgs": "--addon-type vision --device-details",
+          "perfReportMediaDir": "packages/llm-llamacpp/media"
         }
       }
     },
