@@ -414,29 +414,18 @@
 }
 
 /* ===========================================
-   SIDEBAR SCROLLBAR — fade edges to match viewport
+   SIDEBAR SCROLLBAR — Firefox supplement
    ===========================================
-   The sidebar viewport fades its top/bottom 12px via `mask-image`
-   (set inline in `Base.SidebarViewport`). Radix's `type="always"`
-   scrollbar is rendered as a sibling of that viewport, so it does
-   NOT inherit the fade and ends up flush against the bottom of the
-   top navbar. Replicate the same 12px fade here so the always-
-   visible thumb tucks elegantly under the navbar (and above the
-   footer / Ask AI pill) instead of touching them.
-
-   Selector targets the Radix vertical scrollbar specifically:
-   the only sibling of `[data-radix-scroll-area-viewport]` inside
-   `#nd-sidebar` carrying `data-orientation="vertical"`.
-*/
+   The patched `Base.SidebarViewport` (see patches/fumadocs-ui) already
+   carries fumadocs' own `fd-scroll-container`, which sizes and colors
+   the bar through `::-webkit-scrollbar`. Firefox ignores those pseudo
+   elements, so restate the same intent in the standard properties it
+   does understand. Upstream leaves this gap in its own glass / flux
+   sidebars; we close it to keep the slim bar on every engine. */
 @layer utilities {
-  #nd-sidebar [data-radix-scroll-area-viewport] ~ [data-orientation="vertical"] {
-    mask-image: linear-gradient(
-      to bottom,
-      transparent,
-      black 12px,
-      black calc(100% - 12px),
-      transparent
-    );
+  [data-sidebar-scroller] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-fd-border) transparent;
   }
 }
 

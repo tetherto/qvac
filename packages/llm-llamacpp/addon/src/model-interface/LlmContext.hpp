@@ -242,11 +242,12 @@ public:
    * The generate response method. It generates the response token by token.
    *
    * @param outputCallback - the output callback.
-   * @return - ok=false for context overflow; cancelled=true when generation
-   * was stopped by user cancellation; rollbackOk=false when a cancellation
-   * or prediction-limit truncation inside reasoning could not restore the
-   * pre-request recurrent state and callers must skip cache persistence for
-   * this request.
+   * @return - cancelled=true when generation was stopped by user cancellation;
+   * rollbackOk=false when a cancellation or prediction-limit truncation inside
+   * reasoning could not restore the pre-request recurrent state and callers
+   * must skip cache persistence for this request. Generation-time context
+   * exhaustion is a successful terminal outcome exposed through runtime stats;
+   * prompt admission overflow still throws before this method runs.
    */
   virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;
