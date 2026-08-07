@@ -300,14 +300,15 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     /**
      * LavaSR neural speech enhancement. Opt-in CPU/GGML bandwidth extension to
      * 48 kHz, enabled by a GGUF path here or through `files.lavasrEnhancer`.
-     * Works for both engines, including Chatterbox native chunk streaming.
+     * Works for every engine, including Chatterbox and Parler native chunk
+     * streaming.
      */
     enhancer?: LavaSREnhancerOptions;
     /**
      * LavaSR neural speech denoiser (UL-UNAS). Opt-in preprocessing that runs
      * before the enhancer and preserves the sample rate. Enabled by a GGUF path
-     * here or through `files.lavasrDenoiser`; rejected with Chatterbox native
-     * chunk streaming.
+     * here or through `files.lavasrDenoiser`; rejected with native chunk
+     * streaming.
      */
     denoiser?: LavaSRDenoiserOptions;
     /** Directory the addon scans for dynamically loaded ggml backends. */
@@ -350,7 +351,8 @@ interface TTSOutputChunk {
     outputArray: ArrayBuffer;
     /**
      * Output sample rate. The native engine rate (24000 for Chatterbox,
-     * 44100 for Supertonic), or 48000 when the LavaSR enhancer is active.
+     * 44100 for Supertonic and Parler), or 48000 when the LavaSR enhancer is
+     * active.
      */
     sampleRate?: number;
 }
@@ -537,6 +539,8 @@ declare class TTSGgml {
     private _buildSupertonicParams;
     private _buildParlerParams;
     private _assignCommonNativeParams;
+    /** LavaSR post-processing paths, shared by every engine that supports them. */
+    private _assignLavasrParams;
     private _createAddon;
     unload(): Promise<void>;
     destroy(): Promise<void>;
