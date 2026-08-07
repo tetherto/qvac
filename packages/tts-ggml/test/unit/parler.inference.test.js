@@ -278,8 +278,8 @@ test('Parler: parler-only options on other engines throw', (t) => {
         files: { supertonicModel: './models/supertonic.gguf' },
         emotion: 'happy'
       }),
-    /parler-only/,
-    'emotion on supertonic throws'
+    /does not support `emotion`/,
+    'emotion is cross-engine now, so supertonic reports it has no emotion control'
   )
   t.exception(
     () =>
@@ -357,8 +357,13 @@ test('Parler: per-call fields on other engines throw', async (t) => {
   await model.load()
   await t.exception(
     model.run({ type: 'text', input: 'x', emotion: 'happy' }),
-    /parler-only/,
+    /does not support `emotion`/,
     'per-call emotion on supertonic rejects'
+  )
+  await t.exception(
+    model.run({ type: 'text', input: 'x', voice: 'Laura', pitch: 'high' }),
+    /parler-only/,
+    'per-call description/template fields stay parler-only'
   )
   await model.unload()
 })

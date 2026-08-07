@@ -181,6 +181,12 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     // token2wav low-latency streaming is reserved in tts-cpp).
     CosyvoiceModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    // Per-call conditioning rides as siblings of `input` on the job object,
+    // exactly as Parler's description fields do below.
+    JSAdapter adapter;
+    modelInput.controls =
+        adapter.readVoiceControls(args.getJsObject(1, "inputObj"), env);
+    modelInput.hasControls = !modelInput.controls.empty();
     auto outputQueue = instance.addonCpp->outputQueue;
     modelInput.chunkCallback =
         [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {

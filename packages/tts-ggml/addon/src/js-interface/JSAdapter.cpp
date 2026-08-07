@@ -181,6 +181,15 @@ JSAdapter::readParlerDescriptionFields(js::Object obj, js_env_t* env) {
   return desc;
 }
 
+tts_cpp::cosyvoice::VoiceControls
+JSAdapter::readVoiceControls(js::Object obj, js_env_t* env) {
+  tts_cpp::cosyvoice::VoiceControls controls;
+  controls.emotion = readOptionalString(obj, env, "emotion");
+  controls.pace = readOptionalString(obj, env, "pace");
+  controls.instruct_text = readOptionalString(obj, env, "instruct");
+  return controls;
+}
+
 parler::ParlerConfig
 JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   parler::ParlerConfig cfg;
@@ -223,6 +232,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   }
   cfg.steps             = readOptionalInt(configurationParams, env, "steps");
   cfg.speed             = readOptionalFloat(configurationParams, env, "speed");
+  cfg.pace              = readOptionalString(configurationParams, env, "pace");
   cfg.seed              = readOptionalInt(configurationParams, env, "seed");
   cfg.threads           = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers        = readOptionalInt(configurationParams, env, "nGpuLayers");
@@ -264,6 +274,8 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.promptText = readOptionalString(configurationParams, env, "promptText");
   cfg.voice = readOptionalString(configurationParams, env, "voice");
   cfg.instruct = readOptionalString(configurationParams, env, "instruct");
+  cfg.emotion = readOptionalString(configurationParams, env, "emotion");
+  cfg.pace = readOptionalString(configurationParams, env, "pace");
   {
     auto lang = readOptionalString(configurationParams, env, "language");
     if (!lang.empty())
