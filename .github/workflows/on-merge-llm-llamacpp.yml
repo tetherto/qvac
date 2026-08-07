@@ -122,6 +122,14 @@ jobs:
           name: prebuilds
           path: packages/llm-llamacpp/prebuilds
 
+      - name: Install dependencies
+        working-directory: packages/llm-llamacpp
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper and verify it matches the commit
+        working-directory: packages/llm-llamacpp
+        run: npm run check:generated
+
       - name: Scope package as @tetherto for GPR
         shell: bash
         run: |
@@ -180,6 +188,14 @@ jobs:
         with:
           name: prebuilds
           path: packages/llm-llamacpp/prebuilds
+
+      - name: Install dependencies
+        working-directory: packages/llm-llamacpp
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper and verify it matches the commit
+        working-directory: packages/llm-llamacpp
+        run: npm run check:generated
 
       - name: Scope package as @qvac for npm
         working-directory: packages/llm-llamacpp
