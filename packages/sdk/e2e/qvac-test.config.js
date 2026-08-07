@@ -15,6 +15,9 @@ export default {
     username: { env: 'MQTT_USERNAME' },
     password: { env: 'MQTT_PASSWORD' },
 
+    // Preserve QoS 1 state across reconnects while expiring abandoned CI sessions
+    sessionExpiryInterval: 2 * 60 * 60,
+
     // Disable certificate validation for self-signed certs (testing only)
     rejectUnauthorized: true
 
