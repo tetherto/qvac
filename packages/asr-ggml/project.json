@@ -12,7 +12,12 @@
           "hasCoload": true,
           "coloadActive": false,
           "hasPerfReport": true,
-          "perfReportVariant": "rtf"
+          "perfReportVariant": "rtf",
+          "perfReportScript": "scripts/perf-report/aggregate-asr-ggml-rtf.js",
+          "perfReportManualDir": "packages/asr-ggml/benchmarks/manual-results",
+          "perfReportDesktopPattern": "rtf-results-asr-ggml-*",
+          "perfReportMobilePattern": "perf-report-asr-ggml-*",
+          "perfReportOutputStem": "asr-ggml-unified-performance-report"
         }
       }
     },

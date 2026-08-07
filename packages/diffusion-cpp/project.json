@@ -12,7 +12,9 @@
           "hasTsChecks": true,
           "tsChecksMode": "dts",
           "hasPerfReport": true,
-          "perfReportVariant": "composite"
+          "perfReportVariant": "composite",
+          "perfReportPattern": "perf-report-diffusion-cpp-*",
+          "perfReportTitle": "Diffusion Performance Report (All Platforms)"
         }
       }
     },
