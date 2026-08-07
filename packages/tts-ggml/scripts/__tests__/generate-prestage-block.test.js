@@ -32,7 +32,9 @@ const {
   buildPrestageBlock,
   readOptionsFromEnv,
   PRESTAGE_DIR,
-  IOS_MODELS_ROOT
+  IOS_MODELS_ROOT,
+  IOS_MODELS_PARENT,
+  IOS_MODELS_BASENAME
 } = require('../generate-prestage-block')
 
 const MANIFEST = {
@@ -186,6 +188,50 @@ test('buildIosPrestageScript stages into the Documents/models container via pymo
   assert.ok(/traceback\|afcexception\|failed with status/.test(script), 'fails hard on an AFC token')
   assert.ok(!script.includes('adb '), 'iOS backend uses no adb')
   assert.ok(!script.includes(PRESTAGE_DIR), 'iOS backend does not touch the Android prestage dir')
+})
+
+// Regression: AfcService._push_internal only makedirs() on the *directory*
+// push branch. A single-file push whose remote parent (Documents/models) is
+// missing raises AfcFileNotFoundError instead of creating it, so every
+// tts-ggml target used to hard-fail on a fresh container. The fix seeds the
+// device dir tree once via a directory push before the per-file loop.
+test('buildIosPrestageScript seeds the device dir tree with a directory push before staging files', () => {
+  const script = buildIosPrestageScript('QkFTRTY0', 'q4')
+  assert.ok(script.includes(`MODELS_PARENT=${IOS_MODELS_PARENT}`), 'pins the models root parent')
+  assert.ok(
+    script.includes(`SCAFFOLD_DIR=/tmp/prestage-scaffold/${IOS_MODELS_BASENAME}`),
+    'names a local scaffold dir whose basename matches the models root'
+  )
+  assert.ok(
+    script.includes('pymobiledevice3 apps push "$BID" "$SCAFFOLD_DIR" "$MODELS_PARENT"'),
+    'pushes the scaffold directory (not a file) so AFC takes the makedirs branch'
+  )
+
+  const seedIdx = script.indexOf('pymobiledevice3 apps push "$BID" "$SCAFFOLD_DIR" "$MODELS_PARENT"')
+  const firstFilePushIdx = script.indexOf(
+    'pymobiledevice3 apps push "$BID" "/tmp/prestage/$TARGET" "$MODELS_ROOT/$TARGET"'
+  )
+  assert.ok(seedIdx > -1 && firstFilePushIdx > -1 && seedIdx < firstFilePushIdx, 'seeds the tree before any per-file push')
+
+  assert.ok(
+    script.includes('printf \'%s\\n\' "$SEED_OUT"') &&
+      /SEED_RC.*-ne 0.*traceback\|afcexception/.test(script.replace(/\n/g, ' ')),
+    'fails hard on a non-zero exit or AFC error token from the seed push, mirroring the per-file guard'
+  )
+})
+
+test('buildIosPrestageScript derives scaffold subdirs from the selected targets, not a hardcoded list', () => {
+  const flatOnly = Buffer.from('supertonic.gguf\thttps://s3/s-q4.gguf\n', 'utf8').toString('base64')
+  const flatScript = buildIosPrestageScript(flatOnly, 'q4')
+  assert.ok(
+    !/mkdir -p "\$SCAFFOLD_DIR\/lavasr"/.test(flatScript) &&
+      !/mkdir -p "\$SCAFFOLD_DIR\/whisper"/.test(flatScript),
+    'does not hardcode lavasr/whisper subdirs — an engine-only manifest has none to seed'
+  )
+  assert.ok(
+    flatScript.includes('[ "$SUBDIR" != "." ] && mkdir -p "$SCAFFOLD_DIR/$SUBDIR"'),
+    'still seeds whatever nested subdir a future manifest target introduces'
+  )
 })
 
 test('buildPlatformScript selects the backend by platform and rejects unknown ones', () => {

@@ -10,8 +10,18 @@ const PRESTAGE_DIR = '/data/local/tmp/qvac-tts-ggml/models'
 // already scans global.testDir/models (engine), .../models/lavasr (enhancer +
 // denoiser) and .../models/whisper (quality), so pushing each manifest target
 // under Documents/models/<target> is picked up with no on-device download and no
-// resolver change. AFC (pymobiledevice3 apps push) creates parent dirs.
+// resolver change.
+//
+// AFC parent-dir caveat: AfcService._push_internal only calls makedirs() on the
+// *directory* branch of `apps push` — pushing a single file whose remote parent
+// is missing raises AfcFileNotFoundError instead of creating it. The other iOS
+// addons push flat into `Documents/<name>`, whose parent (Documents) always
+// exists in a fresh container, so they never hit this. tts-ggml nests under
+// `Documents/models/...`, which does not exist yet, so buildIosPrestageScript
+// seeds that tree with one directory push before the per-file loop (see below).
 const IOS_MODELS_ROOT = 'Documents/models'
+const IOS_MODELS_PARENT = path.posix.dirname(IOS_MODELS_ROOT)
+const IOS_MODELS_BASENAME = path.posix.basename(IOS_MODELS_ROOT)
 const IOS_BUNDLE_ID = 'io.tether.test.qvac'
 const ALLOWED_VARIANTS = ['q4', 'q8']
 
@@ -102,25 +112,47 @@ echo "[prestage] done"`
 
 // iOS host script for the macOS Device Farm host. Mirrors the Android flow but
 // stages into the app's Documents container via pymobiledevice3 instead of adb.
-// Two host-environment quirks, both proven on Device Farm iOS:
+// Three host-environment quirks, all proven on Device Farm iOS:
 //   1. The pre_test phase runs under sudo, so SUDO_UID/SUDO_GID are set and
 //      pymobiledevice3 aborts trying to chown ~/.pymobiledevice3 (EPERM).
 //      Unsetting them makes it skip the chown.
 //   2. `apps push` can exit 0 while logging an AFC error, so success is NOT
 //      inferred from the exit code alone — fail hard on a non-zero exit OR a
 //      specific AFC/Python failure token (mirrors Android's `adb shell test -s`).
-// `apps push` uses AfcService.push, which creates parent dirs, so the nested
-// lavasr/ and whisper/ targets need no explicit mkdir on the device.
+//   3. `apps push` (AfcService._push_internal) only makedirs() on the directory
+//      branch; pushing a single file whose remote parent is missing raises
+//      AfcFileNotFoundError instead of creating it, and Documents/models does
+//      not exist in a fresh container. So before the per-file loop, seed the
+//      whole tree by pushing an empty local scaffold directory (its subdirs
+//      built from the selected targets' dirnames) — that push takes the
+//      directory branch, which recursively makedirs every dir in it, so the
+//      per-file pushes below always find their parent already there.
 function buildIosPrestageScript(listB64, variant) {
   return `set -e
 export PATH="$HOME/.local/bin:$PATH"
 unset SUDO_UID SUDO_GID
 BID=${IOS_BUNDLE_ID}
 MODELS_ROOT=${IOS_MODELS_ROOT}
+MODELS_PARENT=${IOS_MODELS_PARENT}
+SCAFFOLD_DIR=/tmp/prestage-scaffold/${IOS_MODELS_BASENAME}
 echo "[prestage] installing pymobiledevice3..."
 python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
 pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
 echo "${listB64}" | base64 -d > /tmp/prestage-list.tsv
+rm -rf "$SCAFFOLD_DIR"
+mkdir -p "$SCAFFOLD_DIR"
+while IFS=$(printf '\\t') read -r TARGET URL; do
+  [ -z "$TARGET" ] && continue
+  SUBDIR="$(dirname "$TARGET")"
+  [ "$SUBDIR" != "." ] && mkdir -p "$SCAFFOLD_DIR/$SUBDIR"
+done < /tmp/prestage-list.tsv
+echo "[prestage] seeding device dir tree at $MODELS_ROOT..."
+if SEED_OUT=$(pymobiledevice3 apps push "$BID" "$SCAFFOLD_DIR" "$MODELS_PARENT" 2>&1); then SEED_RC=0; else SEED_RC=$?; fi
+printf '%s\\n' "$SEED_OUT"
+if [ "$SEED_RC" -ne 0 ] || printf '%s' "$SEED_OUT" | grep -qiE "traceback|afcexception|failed with status|perm_denied|object_not_found|not permitted"; then
+  echo "[prestage] FATAL: seeding $MODELS_ROOT dir tree failed (rc=$SEED_RC; see AFC error above)"; exit 1
+fi
+echo "[prestage] seeded $MODELS_ROOT"
 mkdir -p /tmp/prestage
 while IFS=$(printf '\\t') read -r TARGET URL; do
   [ -z "$TARGET" ] && continue
@@ -181,6 +213,8 @@ module.exports = {
   ALLOWED_VARIANTS,
   PRESTAGE_DIR,
   IOS_MODELS_ROOT,
+  IOS_MODELS_PARENT,
+  IOS_MODELS_BASENAME,
   IOS_BUNDLE_ID,
   resolveVariant,
   engineEntries,
