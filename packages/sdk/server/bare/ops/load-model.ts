@@ -11,11 +11,7 @@ import {
   startLogBuffering,
   stopLogBufferingWithTimeout
 } from '@/server/bare/registry/logging-stream-registry'
-import {
-  detectShardedModel,
-  generateShardFilenames,
-  validateShardedModelCache
-} from '@/server/utils'
+import { checkAllShardsExist, detectShardedModel, generateShardFilenames } from '@/server/utils'
 import {
   PluginNotFoundError,
   ModelFileNotFoundError,
@@ -65,14 +61,15 @@ export async function loadModel(
     throw new PluginNotFoundError(modelType)
   }
   if (isShardedModel) {
-    // For sharded models, validate all shards and tensors.txt exist
+    // The addon rebuilds the shard list natively from the first shard path, so
+    // only the numbered shards have to be on disk.
     const shardDir = path.dirname(modelPath)
-    const isValid = await validateShardedModelCache(shardDir, modelFileName)
+    const allShardsExist = await checkAllShardsExist(shardDir, modelFileName)
 
-    if (!isValid) {
+    if (!allShardsExist) {
       const numberedShards = generateShardFilenames(modelFileName)
       throw new ModelFileNotFoundError(
-        `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`
+        `Missing shards for ${shardInfo.baseFilename}. Expected ${numberedShards.length} shard files in ${shardDir}`
       )
     }
   } else if (!plugin.skipPrimaryModelPathValidation) {

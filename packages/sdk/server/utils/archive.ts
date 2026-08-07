@@ -3,12 +3,7 @@ import path from 'bare-path'
 import fs from 'bare-fs'
 import { createGunzip } from 'bare-zlib'
 import tarStream from 'tar-stream'
-import {
-  detectShardedModel,
-  generateShardFilenames,
-  extractTensorsFromShards,
-  validateShardedModelCache
-} from './shard-utils'
+import { checkAllShardsExist, detectShardedModel, generateShardFilenames } from './shard-utils'
 import {
   ModelLoadFailedError,
   ArchiveExtractionFailedError,
@@ -190,7 +185,7 @@ export async function extractAndValidateShardedArchive(
     const existingShard = existingFiles.find((f) => detectShardedModel(String(f)).isSharded)
 
     if (existingShard) {
-      const isComplete = await validateShardedModelCache(extractDir, String(existingShard))
+      const isComplete = await checkAllShardsExist(extractDir, String(existingShard))
 
       if (isComplete) {
         logger.info(`✅ Archive already extracted: ${extractDir}`)
@@ -239,9 +234,6 @@ export async function extractAndValidateShardedArchive(
       throw new ArchiveMissingShardsError(shardFilename)
     }
   }
-
-  // Generate tensors.txt if it doesn't exist
-  await extractTensorsFromShards(extractDir, shardedFileName)
 
   logger.info(`Archive extracted to ${extractDir} successfully: ${files.length} files`)
 
