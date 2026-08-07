@@ -21,6 +21,10 @@ const addonLogging: AddonLogging = {
   releaseLogger: binding.releaseLogger,
 };
 
+// ESM named imports need the top-level `exports.X =` form these emit.
+export const setLogger = addonLogging.setLogger;
+export const releaseLogger = addonLogging.releaseLogger;
+
 export default addonLogging;
 
 module.exports = addonLogging;
