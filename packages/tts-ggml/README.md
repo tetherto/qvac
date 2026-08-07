@@ -2,11 +2,13 @@
 
 Text-to-speech Bare addon backed by the [`qvac-tts.cpp`][qvac-tts-cpp]
 GGML library.  Wraps multiple engines under one package: **Chatterbox**
-(Turbo English + multilingual), **Supertonic** (v1 English, v2, and
-v3 31-language), **Parler** (mini/large English + indic 21-language,
+(Turbo English + multilingual), **Supertonic** (v3 31-language preferred;
+v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), and **CosyVoice3**
 (Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU), plus optional
-LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.
+LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
+which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
+
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
@@ -42,11 +44,67 @@ Android paths, including Vulkan on ARM Mali (see
 - **Cancellation** via `model.cancel()` — stops T3 decode on the next
   token; in-flight S3Gen chunk runs to completion.
 
+## Choosing a model
+
+Pick a **specific GGUF** (or CosyVoice3 model directory), not only an engine
+family. Capabilities overlap; the tables below weight language coverage,
+latency, size, and control surface so the default recommendation is
+obvious for each job.
+
+### Decision guide
+
+| If you need… | Use this model | Notes |
+| --- | --- | --- |
+| Lowest RTF on phones / edge devices | `supertonic3-q4_0.gguf` (or `supertonic3-q8_0.gguf` for quality) | ~80 MB (`q4_0`) / ~126 MB (`q8_0`); 31 languages. Prefer v3 over v1/v2. |
+| English + voice cloning + low first-audio latency | `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` | Reference-wav / voice-profile cloning; native `streamChunkTokens` chunk streaming. Native 24 kHz. |
+| Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
+| Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
+| Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU today; native 24 kHz. |
+| Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
+| Voice cloning with noisy input audio | Any engine above + `lavasr-denoiser.gguf` | Post-process (batch path); cleans before optional enhancement. See [Speech enhancement (LavaSR)](#speech-enhancement-lavasr). |
+| 48 kHz bandwidth-extended output | Any engine above + `lavasr-enhancer.gguf` | Post-process, not a TTS engine. Optional `lavasr-denoiser.gguf` first (batch path). |
+
+GPU / backend support is documented in
+[Backends & GPU acceleration](#backends--gpu-acceleration) — not duplicated
+here, so this guide does not go stale when backends change.
+
+### Capability matrix
+
+| Model | Languages | Size (approx.) | Sample rate | Voice control | Streaming |
+| --- | --- | ---: | ---: | --- | --- |
+| `supertonic3-q4_0` / `q8_0` / `f16` | 31 | ~80 / ~126 / ~191 MB | 44.1 kHz | Baked voice ids (`F1`, `M1`, …) | Sentence streaming |
+| `chatterbox-t3-turbo` + `s3gen` | English | ~1.7 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
+| `chatterbox-t3-mtl` + `s3gen-mtl` | Multilingual | ~2.0 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
+| `parler-indic-q8_0` | 21 Indic | ~1.3 GB | 44.1 kHz | `voice` / `emotion` / description | Sentence streaming |
+| `parler-mini-v1-q8_0` | English | ~1.2 GB | 44.1 kHz | Description / templates | Sentence streaming |
+| CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir | 24 kHz | `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts |
+
+### Legacy Supertonic v1 / v2
+
+| Model | Status | Why |
+| --- | --- | --- |
+| `supertonic.gguf` (v1, English) | **Not recommended for new integrations** | Supertonic 3 covers English and is the edge/RTF default. No reason to prefer v1 over v3. |
+| `supertonic2.gguf` (en/ko/es/pt/fr) | **Not recommended for new integrations** | Supertonic 3 is a strict superset (31 languages, same engine path, published quant tiers). Prefer `supertonic3-*.gguf`. |
+
+Both remain loadable for existing apps and CI. New projects should stage
+Supertonic 3 only unless a pinned dependency still requires v1/v2.
+
+### Quick defaults
+
+- **Mobile / low RTF:** `supertonic3-q4_0.gguf`
+- **Product English with cloning:** Chatterbox Turbo GGUF pair
+- **Indic product:** `parler-indic-q8_0.gguf`
+- **Chinese dialect product:** CosyVoice3 model directory
+
+See [Model files](#model-files) for on-disk layouts and
+[API overview](#api-overview) for constructor options.
+
 ## Install
 
 ```bash
 npm install @qvac/tts-ggml
 ```
+
 
 Requires [Bare](https://github.com/holepunchto/bare) `>=1.19.0`.
 Prebuilds are published for darwin-arm64, android-arm64, ios-arm64;
@@ -68,15 +126,14 @@ chatterbox-s3gen.gguf      (~1.0 GB) — S3Gen encoder/CFM + HiFT + CAMPPlus + S
 chatterbox-t3-mtl.gguf     (~1.0 GB)
 chatterbox-s3gen-mtl.gguf  (~1.0 GB)
 
-# Supertonic English (Supertone/supertonic; 44.1 kHz, voice baked in)
-supertonic.gguf            (~263 MB)
+# Supertonic 3 (Supertone/supertonic-3; 31 languages) — preferred Supertonic
+# checkpoint; published per quant tier (auto-detected from modelDir)
+supertonic3-q4_0.gguf      (~80 MB; also -q8_0 ~126 MB / -f16 ~191 MB / -f32)
 
-# Supertonic multilingual (Supertone/supertonic-2; en/ko/es/pt/fr)
-supertonic2.gguf           (~263 MB)
+# Legacy Supertonic (not recommended for new integrations — see Choosing a model)
+supertonic.gguf            (~263 MB) — v1 English only
+supertonic2.gguf           (~263 MB) — v2 en/ko/es/pt/fr; subset of v3
 
-# Supertonic 3 (Supertone/supertonic-3; 31 languages) — published per quant
-# tier with the quant in the filename (auto-detected from modelDir)
-supertonic3-f16.gguf       (also -q8_0 / -q4_0 / -f32)
 
 # Parler (parler-tts/parler-tts-{mini,large}-v1 + ai4bharat/indic-parler-tts;
 # 44.1 kHz, description-conditioned) — published per quant tier
