@@ -183,24 +183,67 @@ test('Parler: constructor guards reject conflicting / unsupported options', (t) 
       createMockedParlerModel({
         files: {
           parlerModel: './models/parler-mini-v1-q8_0.gguf',
-          lavasrEnhancer: '/abs/enh.gguf'
-        }
-      }),
-    /LavaSR/,
-    'enhancer throws'
-  )
-  t.exception(
-    () =>
-      createMockedParlerModel({
-        files: {
-          parlerModel: './models/parler-mini-v1-q8_0.gguf',
           lavasrDenoiser: '/abs/den.gguf'
         },
         extra: { streamChunkTokens: 40 }
       }),
-    /not supported with the parler engine/,
-    'denoiser + streaming throws the parler-specific error, not the Chatterbox one'
+    /denoiser is not yet supported with native chunk streaming/,
+    'denoiser + native chunk streaming throws'
   )
+})
+
+test('Parler: LavaSR enhancer forwards to params', (t) => {
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.engineType, TTSGgml.ENGINE_PARLER)
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf', 'enhancer path reaches the addon')
+  t.absent(params.lavasrDenoiserPath, 'no denoiser key when only the enhancer is set')
+})
+
+test('Parler: LavaSR denoiser forwards to params on the batch path', (t) => {
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf',
+      lavasrDenoiser: '/abs/den.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
+  t.is(params.lavasrDenoiserPath, '/abs/den.gguf', 'denoiser path reaches the addon')
+})
+
+test('Parler: enhancer combines with native chunk streaming', (t) => {
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    },
+    extra: { streamChunkTokens: 43 }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
+  t.is(params.streamChunkTokens, 43, 'streaming + enhancer is accepted')
+})
+
+test('Parler: enhancer accepts a non-native outputSampleRate while streaming', (t) => {
+  // StreamingEnhancer resamples inside its overlap windows, so the requested
+  // rate survives chunk seams; the addon enforces the same rule in C++.
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    },
+    extra: { streamChunkTokens: 43, config: { outputSampleRate: 24000 } }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.outputSampleRate, 24000)
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
 })
 
 test('Parler: streamChunkTokens / streamFirstChunkTokens forward to params', (t) => {

@@ -1,19 +1,12 @@
----
-title: SDK Release Notes — v0.17.x (latest)
-description: Release notes for QVAC SDK v0.17.0.
----
-
-## v0.17.0
-
-### @qvac/sdk
+# QVAC SDK v0.17.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.0
 
 QVAC SDK 0.17.0 adds music generation through AudioGen (ACE-Step), unifies Whisper and Parakeet behind a single ASR addon without changing the transcription API, and teaches the SDK to parse DeepSeek V3.2/V4 DSML tool calls. It also ships backend-selection diagnostics and opt-in profiler resource gauges, tightens automatic KV cache disk use, and refreshes the model registry with AudioGen, DeepSeek V4, MoE 35B, and related constants.
 
-#### New APIs
+## New APIs
 
-##### AudioGen Music Generation
+### AudioGen Music Generation
 
 You can now generate music from a text caption through the unified SDK surface. Load the ACE-Step stack (text encoder, language model, DiT, and VAE), then stream progress and receive PCM audio. Generation is cancellable via the shared `cancel` API.
 
@@ -48,7 +41,7 @@ for await (const progress of run.progressStream) {
 const { pcm, sampleRate, channels } = await run.audio;
 ```
 
-##### DSML Tool Calls for DeepSeek V3.2 / V4
+### DSML Tool Calls for DeepSeek V3.2 / V4
 
 DeepSeek V3.2 and V4 emit tool calls in DSML (DeepSeek Markup Language). The SDK now parses that dialect so tool calls surface on `toolCallStream` instead of leaking raw markup into content. Set `toolDialect: "dsml"` explicitly, or let the SDK auto-detect it from DeepSeek V3.2 / V4 model ids.
 
@@ -66,7 +59,7 @@ for await (const evt of result.toolCallStream) {
 }
 ```
 
-##### Emitted vs Generated Token Counts
+### Emitted vs Generated Token Counts
 
 Completion stats now distinguish decode length from what was actually emitted. Prefer `emittedTokens` for OpenAI-compatible usage accounting; keep using `generatedTokens` for length / KV-cache budget decisions. Serve endpoints prefer `emittedTokens` when present.
 
@@ -78,7 +71,7 @@ stats?.generatedTokens;
 stats?.emittedTokens;
 ```
 
-##### Backend Diagnostics Contract
+### Backend Diagnostics Contract
 
 When the profiler is enabled, backend-selection events can report which backend was chosen and why a fallback occurred, so you can see selection and fallback reasons without digging through logs.
 
@@ -96,7 +89,7 @@ profiler.onRecord((event) => {
 });
 ```
 
-##### Opt-In Profiler Resource Gauges
+### Opt-In Profiler Resource Gauges
 
 Pass `includeResourceGauges: true` when enabling the profiler to attach per-event resource gauge snapshots to the exported profile.
 
@@ -112,23 +105,23 @@ const profile = profiler.exportJSON();
 console.log(profile.recentEvents?.map((event) => event.resources));
 ```
 
-#### Features
+## Features
 
-##### Unified ASR Addon
+### Unified ASR Addon
 
 Whisper and Parakeet transcription now run through the unified `@qvac/asr-ggml` addon. Existing transcription callers keep the same SDK contract; adapters normalize segments, VAD scores, end-of-turn sources, and runtime stats back to the stable surface while dependencies and examples move onto the shared ASR package.
 
-#### Bug Fixes
+## Bug Fixes
 
 `clearPlugins` now finishes cleanup even when a plugin's `releaseLogger` throws, so a failing logger teardown cannot leave plugins half-cleared.
 
 Automatic KV caches under `~/.qvac/kv-cache` are bounded with a 24-hour idle TTL and a 4 GiB least-recently-used quota. Caller-owned named caches are left alone; empty hash directories from rename/rollback/failed-prime paths are pruned.
 
-#### Model Changes
+## Model Changes
 
 This release adds AudioGen (ACE-Step) model constants and refreshes the registry with DeepSeek V4, MoE 35B, GR00T variants, UMT5, and ABot-World entries.
 
-##### Added Models
+### Added Models
 
 ```text
 ABOT_WORLD_0_5B_LF_VAE
