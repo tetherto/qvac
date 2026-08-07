@@ -105,6 +105,8 @@ jobs:
       tschecks: ${{ steps.filter.outputs.tschecks }}
       fabric: ${{ steps.filter.outputs.fabric }}
       coload: ${{ steps.filter.outputs.coload }}
+      perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
+      perfrtf: ${{ steps.filter.outputs.perfrtf }}
     steps:
       - id: compute
         uses: ./.github/actions/nx-project-matrix
@@ -120,6 +122,8 @@ jobs:
             echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true)]')"
             echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"
             echo "coload=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true)]')"
+            echo "perfcomposite=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "composite" and .perfReportPattern != null)]')"
+            echo "perfrtf=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "rtf")]')"
           } >> "$GITHUB_OUTPUT"
 
   # The 4 leaves self-affect from their own project.json targets (and absorb
@@ -302,6 +306,90 @@ jobs:
       addon: ${{ matrix.package }}
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
+  # Perf reports (informational, not a merge gate). Composite variant
+  # (ocr/diffusion) via the shared combine-perf-reports action; rtf variant
+  # (asr) via its own aggregator. llm perf-report is pending (needs the
+  # composite extra-args extension for --addon-type vision).
+  perf-report:
+    needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.perfcomposite || '[]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo (composites + perf scripts)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+            scripts/perf-report
+          sparse-checkout-cone-mode: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Combine performance reports
+        uses: ./.github/actions/run-mobile-integration-tests/combine-perf-reports
+        with:
+          artifact-pattern: ${{ matrix.perfReportPattern }}-${{ github.run_number }}
+          report-title: ${{ matrix.perfReportTitle }}
+          exclude: ${{ matrix.perfReportExclude }}
+
+  perf-report-rtf:
+    needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]'
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.perfrtf || '[]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+      - name: Download desktop RTF artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: ${{ matrix.perfReportDesktopPattern }}
+          path: benchmark-artifacts/desktop
+          merge-multiple: false
+      - name: Download mobile performance artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: ${{ matrix.perfReportMobilePattern }}
+          path: benchmark-artifacts/mobile
+          merge-multiple: false
+      - name: Generate unified performance report
+        run: |
+          node "${{ matrix.perfReportScript }}" \
+            --dir benchmark-artifacts \
+            --manual-dir "${{ matrix.perfReportManualDir }}" \
+            --output "benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md" \
+            --output-json "benchmark-artifacts/${{ matrix.perfReportOutputStem }}.json" \
+            --output-html "benchmark-artifacts/${{ matrix.perfReportOutputStem }}.html"
+      - name: Add unified performance summary
+        run: node -e "process.stdout.write(require('fs').readFileSync('benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md', 'utf8'))" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unified performance report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ matrix.perfReportOutputStem }}
+          path: |
+            benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md
+            benchmark-artifacts/${{ matrix.perfReportOutputStem }}.json
+            benchmark-artifacts/${{ matrix.perfReportOutputStem }}.html
+          retention-days: 30
 
   merge-guard:
     needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, run-mobile-integration-tests, coload-smoke, coload-smoke-mobile]
