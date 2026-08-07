@@ -46,7 +46,7 @@ import {
   vlaHparams,
   vlaSetEmbodiment,
   vlaPadState,
-  type VlaEmbodimentSelector
+  type VlaEmbodimentSelection
 } from '@qvac/sdk'
 
 // LIBERO GR00T prompt layout (Qwen3-VL tokenizer). GR00T reports
@@ -67,7 +67,7 @@ const modelSrc = modelSrcOverride ?? GROOT_Q8_VF16
 
 // A tag string or a numeric cat_id, straight from the env. '24' is a cat_id,
 // 'libero_sim' a tag.
-function embodimentFromEnv(name: string): VlaEmbodimentSelector | undefined {
+function embodimentFromEnv(name: string): VlaEmbodimentSelection | undefined {
   const env = process.env as Record<string, string | undefined>
   const raw = env[name]
   if (raw === undefined || raw === '') return undefined

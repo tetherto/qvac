@@ -1,7 +1,7 @@
 import {
   type VlaClientRunParams,
   type VlaClientRunResult,
-  type VlaEmbodimentSelector,
+  type VlaEmbodimentSelection,
   type VlaHparams,
   type VlaHparamsRequest,
   type VlaHparamsResponse,
@@ -177,7 +177,7 @@ export async function vlaHparams(params: {
  */
 export async function vlaSetEmbodiment(params: {
   modelId: string
-  embodiment: VlaEmbodimentSelector
+  embodiment: VlaEmbodimentSelection
 }): Promise<{ hparams: VlaHparams }> {
   const wireRequest: VlaSetEmbodimentRequest = {
     type: 'vlaSetEmbodiment',

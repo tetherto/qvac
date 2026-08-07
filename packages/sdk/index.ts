@@ -174,6 +174,7 @@ export {
   type VlaConfig,
   type VlaClientRunParams,
   type VlaClientRunResult,
+  type VlaEmbodimentSelection,
   type VlaEmbodimentSelector,
   type VlaHparams,
   type VlaStats,

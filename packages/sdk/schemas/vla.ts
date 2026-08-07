@@ -81,6 +81,19 @@ export const vlaEmbodimentSelectionSchema = z.union([
   })
 ])
 
+/**
+ * The static type matching `vlaEmbodimentSelectionSchema`. Hand-written
+ * because zod refinements don't narrow the inferred type — `z.input` of the
+ * schema would still allow the load-path-only `{ numCameras }` / `{}`
+ * spellings that the switch schema rejects at runtime. The `never` fields
+ * encode "exactly one of tag / catId" structurally.
+ */
+export type VlaEmbodimentSelection =
+  | string
+  | number
+  | { tag: string; catId?: never; numCameras?: number }
+  | { catId: number; tag?: never; numCameras?: number }
+
 // ============================================
 // Load-time config
 // ============================================
