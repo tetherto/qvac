@@ -13,7 +13,10 @@
           "tsChecksMode": "dts",
           "hasFabricLockstep": true,
           "hasPerfReport": true,
-          "perfReportVariant": "composite"
+          "perfReportVariant": "composite",
+          "perfReportPattern": "perf-report-ocr-*",
+          "perfReportTitle": "OCR-GGML Performance Report (All Platforms)",
+          "perfReportExclude": "full-suite|canvasSize lab_results"
         }
       }
     },
