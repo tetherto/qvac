@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdir, open, readFile, rm, stat } from 'node:fs/promises'
+import { open, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import {
@@ -19,6 +19,7 @@ import { ServeSpawnFailedError, ServeStartTimeoutError } from './errors.js'
 import { computeFleetKey } from './fleet-key.js'
 import {
   addConsumer,
+  ensureManagedServesDir,
   findReusableServe,
   healthCheck,
   isProcessAlive,
@@ -28,7 +29,8 @@ import {
   removeConsumer,
   sweepServes
 } from './registry.js'
-import { runnerSpawnSpec } from './runner.js'
+import { runnerSpawnSpec, writeRunnerParamsFile } from './runner.js'
+import type { RunnerParams } from './runner.js'
 import { allocateFreePort } from './serve-process.js'
 
 interface Resolved {
@@ -85,9 +87,9 @@ async function lockOlderThan(key: string, ms: number): Promise<boolean> {
 // is a fallback only for a lock whose owner pid we can't read.
 // Exported for tests; not part of the package's public surface.
 export async function tryLock(key: string): Promise<boolean> {
-  await mkdir(managedServesDir(), { recursive: true })
+  await ensureManagedServesDir()
   try {
-    const fh = await open(lockPath(key), 'wx')
+    const fh = await open(lockPath(key), 'wx', 0o600)
     await fh.writeFile(String(process.pid))
     await fh.close()
     return true
@@ -138,21 +140,19 @@ async function waitForHealthyRecord(
   return undefined
 }
 
-function spawnRunner(params: {
-  fleetKey: string
-  apiKey: string
-  configPath: string
-  port: number
-  host: string
-  idleTimeoutMs: number
-  startTimeoutMs: number
-  serveBinPath?: string
-}): void {
-  const { command, args } = runnerSpawnSpec()
-  const child = spawn(command, [...args, JSON.stringify(params)], {
+async function spawnRunner(params: RunnerParams): Promise<void> {
+  const paramsPath = await writeRunnerParamsFile(params)
+  const { command, args } = runnerSpawnSpec(paramsPath)
+  const child = spawn(command, args, {
     detached: true,
     stdio: process.env['QVAC_MANAGED_DEBUG'] !== undefined ? 'inherit' : 'ignore',
     env: process.env
+  })
+  child.once('error', () => {
+    void rm(paramsPath, { force: true })
+  })
+  child.once('exit', () => {
+    void rm(paramsPath, { force: true })
   })
   // Fully detach: the runner outlives us so the serve can be shared and reaped
   // on its own idle schedule rather than dying with this client.
@@ -246,7 +246,7 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
           const ephemeral = await writeEphemeralConfig(options.models)
           await rm(errorPath(fleetKey), { force: true }).catch(() => {})
 
-          spawnRunner({
+          await spawnRunner({
             fleetKey,
             apiKey,
             configPath: ephemeral.configPath,

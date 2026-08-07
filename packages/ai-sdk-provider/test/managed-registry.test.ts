@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -10,6 +10,7 @@ import test from 'node:test'
 import {
   addConsumer,
   consumersDir,
+  ensureDirSync,
   findReusableServe,
   isProcessAlive,
   liveConsumers,
@@ -21,6 +22,7 @@ import {
   sweepServes,
   writeRecord
 } from '../src/managed/registry.js'
+import { releaseLock, tryLock } from '../src/managed/index.js'
 import { allocateFreePort, spawnServe } from '../src/managed/serve-process.js'
 import { fakeServeSkip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
 
@@ -61,7 +63,11 @@ function makeRecord(over: Partial<ServeRecord>): ServeRecord {
 }
 
 // A throwaway health endpoint so findReusableServe's GET /v1/models succeeds.
-async function listenHealthy(): Promise<{ baseURL: string; close: () => Promise<void> }> {
+async function listenHealthy(): Promise<{
+  baseURL: string
+  port: number
+  close: () => Promise<void>
+}> {
   const server: Server = createServer((req, res) => {
     if (req.headers.authorization !== `Bearer ${API_KEY}`) {
       res.statusCode = 401
@@ -76,6 +82,7 @@ async function listenHealthy(): Promise<{ baseURL: string; close: () => Promise<
   if (addr === null || typeof addr === 'string') throw new Error('no port')
   return {
     baseURL: `http://127.0.0.1:${addr.port}/v1`,
+    port: addr.port,
     close: () => new Promise<void>((resolve) => server.close(() => resolve()))
   }
 }
@@ -89,7 +96,9 @@ test('isProcessAlive is true for the current process and false for a dead pid', 
 
 test('writeRecord / readRecord / removeRecord round-trip', async () => {
   await withFakeHome(async () => {
-    await writeRecord(makeRecord({ fleetKey: 'abc', port: 1234 }))
+    await writeRecord(
+      makeRecord({ fleetKey: 'abc', port: 1234, baseURL: 'http://127.0.0.1:1234/v1' })
+    )
     const rec = await readRecord('abc')
     assert.ok(rec)
     assert.equal(rec?.port, 1234)
@@ -102,12 +111,58 @@ test('writeRecord / readRecord / removeRecord round-trip', async () => {
   })
 })
 
+test('managed registry paths self-heal permissions in production creation order', async () => {
+  await withFakeHome(async () => {
+    const fleetKey = 'secure'
+    const consumerId = `${process.pid}.secure`
+
+    await addConsumer(fleetKey, consumerId)
+    assert.equal((await stat(managedServesDir())).mode & 0o777, 0o700)
+    assert.equal((await stat(consumersDir(fleetKey))).mode & 0o777, 0o700)
+    assert.equal((await stat(join(consumersDir(fleetKey), consumerId))).mode & 0o777, 0o600)
+
+    await chmod(managedServesDir(), 0o777)
+    assert.equal(await tryLock(fleetKey), true)
+    assert.equal((await stat(managedServesDir())).mode & 0o777, 0o700)
+    await releaseLock(fleetKey)
+
+    await chmod(managedServesDir(), 0o777)
+    await writeRecord(makeRecord({ fleetKey }))
+    assert.equal((await stat(managedServesDir())).mode & 0o777, 0o700)
+    assert.equal((await stat(join(managedServesDir(), `${fleetKey}.json`))).mode & 0o777, 0o600)
+
+    await chmod(managedServesDir(), 0o777)
+    ensureDirSync()
+    assert.equal((await stat(managedServesDir())).mode & 0o777, 0o700)
+  })
+})
+
 test('readRecord rejects legacy records without an apiKey as stale', async () => {
   await withFakeHome(async () => {
     const { apiKey: _apiKey, ...legacy } = makeRecord({ fleetKey: 'legacy' })
     await writeRecord(legacy as ServeRecord)
 
     assert.equal(await readRecord('legacy'), undefined)
+  })
+})
+
+test('sweepServes removes a dead legacy keyless record and its config artifacts', async () => {
+  await withFakeHome(async () => {
+    const configDir = join(managedServesDir(), 'legacy-config')
+    const configPath = join(configDir, 'qvac.config.json')
+    await mkdir(configDir, { recursive: true })
+    await writeFile(configPath, '{}')
+    const { apiKey: _apiKey, ...legacy } = makeRecord({
+      fleetKey: 'legacy-dead',
+      servePid: DEAD_PID,
+      runnerPid: DEAD_PID,
+      configPath
+    })
+    await writeRecord(legacy as ServeRecord)
+
+    assert.deepEqual(await sweepServes(), ['legacy-dead'])
+    await assert.rejects(stat(join(managedServesDir(), 'legacy-dead.json')), { code: 'ENOENT' })
+    await assert.rejects(stat(configDir), { code: 'ENOENT' })
   })
 })
 
@@ -130,7 +185,9 @@ test('findReusableServe returns a healthy, owned serve and skips an unhealthy on
   await withFakeHome(async () => {
     const healthy = await listenHealthy()
     try {
-      await writeRecord(makeRecord({ fleetKey: 'live', baseURL: healthy.baseURL }))
+      await writeRecord(
+        makeRecord({ fleetKey: 'live', baseURL: healthy.baseURL, port: healthy.port })
+      )
       const found = await findReusableServe('live', fetch)
       assert.ok(found)
       assert.equal(found?.baseURL, healthy.baseURL)
@@ -146,6 +203,46 @@ test('findReusableServe rejects a record whose serve pid is dead', async () => {
   await withFakeHome(async () => {
     await writeRecord(makeRecord({ fleetKey: 'dead', servePid: DEAD_PID }))
     assert.equal(await findReusableServe('dead', fetch), undefined)
+  })
+})
+
+test('findReusableServe rejects mismatched record destinations before sending authorization', async () => {
+  await withFakeHome(async () => {
+    await writeRecord(
+      makeRecord({
+        fleetKey: 'mismatch',
+        host: '127.0.0.1',
+        port: 1234,
+        baseURL: 'http://localhost:5678/v1'
+      })
+    )
+    let fetchCalls = 0
+    const fetchImpl: typeof fetch = () => {
+      fetchCalls += 1
+      return Promise.resolve(new Response(null, { status: 200 }))
+    }
+
+    assert.equal(await findReusableServe('mismatch', fetchImpl), undefined)
+    assert.equal(fetchCalls, 0)
+  })
+})
+
+test('findReusableServe accepts an authenticated non-loopback destination', async () => {
+  await withFakeHome(async () => {
+    await writeRecord(
+      makeRecord({
+        fleetKey: 'network',
+        host: '192.0.2.10',
+        port: 4321,
+        baseURL: 'http://192.0.2.10:4321/v1'
+      })
+    )
+    const fetchImpl: typeof fetch = (_input, init) => {
+      assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${API_KEY}`)
+      return Promise.resolve(new Response(null, { status: 200 }))
+    }
+
+    assert.ok(await findReusableServe('network', fetchImpl))
   })
 })
 
@@ -243,6 +340,7 @@ test(
             servePid: serve.pid,
             runnerPid: DEAD_PID,
             baseURL: serve.baseURL,
+            port: serve.port,
             configPath: ''
           })
         )

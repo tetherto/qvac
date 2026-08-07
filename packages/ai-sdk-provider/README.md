@@ -52,7 +52,8 @@ cat > qvac.config.json <<'EOF'
 }
 EOF
 
-qvac serve openai
+export QVAC_API_KEY='replace-with-a-random-secret'
+qvac serve openai --api-key "$QVAC_API_KEY"
 ```
 
 By default, `qvac serve` listens on `http://127.0.0.1:11434/v1` (the port may change in a future CLI release — see the **Default base URL** note below).
@@ -65,7 +66,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
-  apiKey: 'qvac' // anything non-empty; serve does not validate
+  apiKey: process.env.QVAC_API_KEY // must match the serve's --api-key value
 })
 
 const { textStream } = streamText({
@@ -153,6 +154,10 @@ External mode (above) assumes you've already authored a `qvac.config.json` and h
 
 The serve is **shared and self-cleaning**: a second session (or a separate tool) asking for the same models attaches to the already-warm serve instead of paying another cold start, and the serve is torn down by a detached supervisor a few minutes after the last user goes away. You never have to babysit a process — see [Shared serves & lifecycle](#shared-serves--lifecycle).
 
+Managed mode generates a cryptographically random API key for each new serve fleet, stores it in the private managed registry record, and reuses that record's key when attaching to the same fleet. The provider owns this key: a caller-supplied `authorization` header is replaced with the resolved managed key.
+
+Custom `fetch` wrappers receive requests after managed authorization has been applied. Treat the `Authorization` header as secret material and do not log request headers.
+
 ```bash
 # Managed mode needs the QVAC CLI available (optional peer dependency):
 npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli
@@ -196,12 +201,11 @@ interface QvacManagedOptions {
   // entry is the default alias unless one sets `default: true`.
   models: (string | QvacManagedModel)[]
   servePort?: number // default: auto-allocate a free port
-  serveHost?: string // default: '127.0.0.1' (loopback only)
+  serveHost?: string // default: '127.0.0.1'
   serveStartTimeout?: number // ms to wait for health; default: 180000
   serveBinPath?: string // override the `qvac` binary; default: resolve @qvac/cli
   reuse?: boolean // share/reuse a matching serve; default: true (false if servePort is pinned)
   serveIdleTimeout?: number // ms to keep a shared serve after its last user exits; default: 300000
-  apiKey?: string // default: 'qvac'
   headers?: Record<string, string>
   fetch?: typeof fetch
 }
@@ -351,7 +355,7 @@ const qvac = createQvac() // uses DEFAULT_BASE_URL
 
 > ⚠️ **The default `baseURL` is a placeholder pending the CLI port-change ticket.** `qvac serve` today defaults to `11434` (which collides with Ollama). The CLI will move to a non-conflicting port in a future release, and this package's default will move with it. **Set `baseURL` explicitly to your `qvac serve` port** until the default is finalized — otherwise the provider will fail to connect.
 
-The default `apiKey` is the literal string `'qvac'`. `qvac serve` does not validate the key; the value matters only because some OpenAI-shaped HTTP clients refuse to issue a request without an `Authorization` header.
+In external mode, the provider's default `apiKey` is the literal string `'qvac'`. If `qvac serve` was started with `--api-key`, pass that exact key to `createQvac`; otherwise authenticated requests are rejected. Managed mode does not use this default: it generates and owns a random key for the spawned serve.
 
 ---
 
