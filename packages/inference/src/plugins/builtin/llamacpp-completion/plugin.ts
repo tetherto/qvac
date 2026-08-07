@@ -43,6 +43,7 @@ import {
   isAddonContextOverflowError,
   parseContextOverflowMessage
 } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
+import { stoppedByLength } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { isAddonCancelledError } from '@/plugins/builtin/llamacpp-completion/ops/batch-cancelled'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
@@ -408,28 +409,27 @@ export const llmPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats, toolCalls } = result.value
+          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary } = result.value
           // Cancellation rides the done path: observable via the last event's
           // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted
           // EOS tokens are not decoded by llama_decode, so n_eval (and
           // therefore stats.generatedTokens) counts only real decode calls.
-          // When generatedTokens >= effectivePredict the run exhausted its
-          // token budget without hitting EOS — emit stopReason "length".
-          // -1 (unlimited) and -2 (context fill) must never trigger this.
+          // Positive prediction-budget exhaustion and a full context window
+          // both map to stopReason "length"; cancellation takes precedence.
           const effectivePredict =
             request.generationParams?.predict ?? (modelCfg as LlmConfig).predict
-          const stoppedByBudget =
-            !cancelled &&
-            effectivePredict !== undefined &&
-            effectivePredict > 0 &&
-            stats?.generatedTokens !== undefined &&
-            stats.generatedTokens >= effectivePredict
+          const lengthStop = stoppedByLength({
+            cancelled,
+            effectivePredict,
+            generatedTokens: stats?.generatedTokens,
+            stoppedAtContextBoundary
+          })
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
             ...(cancelled && { stopReason: 'cancelled' as const }),
-            ...(stoppedByBudget && { stopReason: 'length' as const })
+            ...(lengthStop && { stopReason: 'length' as const })
           })
 
           if (!request.stream) {
