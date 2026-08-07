@@ -163,6 +163,7 @@ function functionalModelsByTest(manifest) {
     runChatterboxKvCacheGpuTest: combineTargets(chatterbox, chatterboxMtl),
     runChatterboxMtlTest: chatterboxMtl,
     runChatterboxSpeedTest: chatterbox,
+    runCosyvoice3LavasrEnhancerTest: combineTargets(cosyvoice3, lavasrEnhancer),
     runCosyvoice3Test: cosyvoice3,
     runGpuSmokeTest: q4,
     runLavasrEnhancerTest: combineTargets(chatterbox, supertonic, lavasrEnhancer),
