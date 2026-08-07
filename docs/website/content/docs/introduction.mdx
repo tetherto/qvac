@@ -1,13 +1,29 @@
 ---
 title: Introduction
-description: Use the JS/TS SDK to build local and P2P AI applications and systems.
+description: Use the SDK to build local and P2P AI applications and systems.
 ogImage: /og-sdk-main.png
 schemaType: TechArticle
 ---
 
 ## Overview
 
-Install the npm package `@qvac/sdk` in your project. Then, load models and use them to perform AI inference locally, or delegate inference to peers using the built-in P2P capability.
+Install the JS/TS or Python clients in your project. Then, load models and use them to perform AI inference locally, or delegate inference to peers using the built-in P2P capability.
+
+The SDK has two layers:
+
+- **Worker** — the runtime that actually runs the models. Today the worker ships as the `@qvac/sdk` npm package.
+- **Clients** — per-language APIs that drive the worker. Two clients ship today: JS/TS (`@qvac/sdk` on npm) and Python (`tetherto-qvac-sdk` on PyPI). Same worker, same generated contract, same capabilities.
+
+Pick the client that matches your stack:
+
+<Cards>
+  <Card href="/js-ts-sdk" title="JS/TS SDK">
+    JS/TS client — `@qvac/sdk` on npm. Runs on Node.js, Bare, and Expo.
+  </Card>
+  <Card href="/python-sdk" title="Python SDK">
+    Python client — `tetherto-qvac-sdk` on PyPI. Asyncio-native; ships a synchronous notebook facade.
+  </Card>
+</Cards>
 
 {/*
 ## Releases
@@ -18,26 +34,14 @@ Install the npm package `@qvac/sdk` in your project. Then, load models and use t
 
 ## Description
 
-The JS SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilities through a unified interface.
+The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilities through a unified interface.
 
 ### Key features
 
-- **Cross-platform:** portable code across Linux, macOS, and Windows (Node.js / [Bare runtime](https://bare.pears.com)); Android and iOS ([Expo](https://expo.dev)).
+- **Cross-platform:** portable code across Linux, macOS, and Windows (JS/TS on Node.js / [Bare runtime](https://bare.pears.com), Python on CPython); Android and iOS via [Expo](https://expo.dev) (TS only).
 - **Pluggable**: build lean apps by including only what you need, and extend the SDK with custom plugins.
-- **Type-safe:** typed JS API.
-- **Unified interface:** multiple AI tasks, one single npm package to install in your project.
-
-## Quickstart
-
-<Card href="/quickstart" title="Run your first example using the JS SDK">
-  At the end, you’ll find instructions for running all examples in this documentation.
-</Card>
-
-## Installation
-
-<Card href="/installation" title="Install and run on Node.js, Bare, or Expo">
-  Supported environments and how to install the SDK for each one.
-</Card>
+- **Type-safe:** typed APIs in both JavaScript and Python (Pydantic models generated from the same contract).
+- **Unified interface:** multiple AI tasks, one client package per language.
 
 ## Functionalities
 
@@ -81,36 +85,38 @@ The JS SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabi
 
 ## Flow
 
-Before you can use a model, you need to load it from some location into memory. Flow for performing AI inference:
+Before you can use a model, you need to load it from some location into memory. The flow for performing AI inference is:
 
-1. Call function [`loadModel()`](/reference/api#loadmodel) to initialize the SDK and load one model. You can load multiple models simultaneously calling `loadModel()` again.
-2. Perform AI tasks by calling the appropriate functions from SDK API — e.g., `completion()`.
-3. When you are done with a model, call [`unloadModel()`](/reference/api#unloadmodel) to release computer resources.
-4. Finally, close the SDK instance by calling [`close()`](/reference/api).
+1. Load one model into the SDK. You can load multiple models simultaneously by repeating the call.
+2. Perform AI tasks by calling the appropriate SDK functions — e.g., a completion.
+3. When you are done with a model, unload it to release computer resources.
+4. Finally, close the SDK instance.
+
+The concrete API names differ by client — in JS/TS it is `loadModel()` / `completion()` / `unloadModel()` / `close()` (see [API reference](/reference/api)); in Python it is `load_model` / `completion` / `unload_model` and the `Client()` context manager (see [Python SDK](/python-sdk)).
 
 ## Models
 
-Each [AI task](#ai-tasks) works with different model families, and among the supported ones, you can choose which to use and how to obtain them. `loadModel()` manages the download and caching of models (one or multiple files), and their loading from disk into memory, preparing them for use.
+Each [AI task](#ai-tasks) works with different model families, and among the supported ones, you can choose which to use and how to obtain them. Model loading manages the download and caching of models (one or multiple files), and their loading from disk into memory, preparing them for use.
 
-`loadModel()` supports loading models from three different locations:
-* Local filesystem, by providing a path.
-* HTTP server, by providing an HTTP URL.
-* Our distributed model registry.
- 
-The SDK package does not ship with built-in models, **but** its API exposes constants representing preconfigured models (e.g., `LLAMA_3_2_1B_INST_Q4_0`). Each constant maps a model already published to our model registry. When calling `loadModel()`, you can provide one of these constants instead of a location, making model retrieval transparent.
+Models can be loaded from three different locations:
+* Local filesystem, by providing a path
+* HTTP server, by providing an HTTP URL
+* Our distributed model registry
+
+SDK packages do not ship with built-in models, **but** their APIs expose constants representing preconfigured models (e.g., `LLAMA_3_2_1B_INST_Q4_0`). Each constant maps a model already published to our model registry. When loading a model, you can provide one of these constants instead of a location, making model retrieval transparent.
 
 <Card href="https://github.com/tetherto/qvac/blob/main/packages/sdk/models/registry/models.ts" title="Model registry index">
   See the index of models available in our distributed model registry.
 </Card>
 
-For more on querying the model registry, see [`modelRegistryList()`](/reference/api#modelregistrylist), [`modelRegistrySearch()`](/reference/api#modelregistrysearch), and [`modelRegistryGetModel()`](/reference/api#modelregistrygetmodel).
+For more on querying the model registry, see [`modelRegistryList()`](/reference/api#modelregistrylist), [`modelRegistrySearch()`](/reference/api#modelregistrysearch), and [`modelRegistryGetModel()`](/reference/api#modelregistrygetmodel) (JS/TS), or `model_registry_list` / `_search` / `_get_model` (Python — see [Python SDK — Running examples](/python-sdk#running-examples) for a runnable script).
 
-For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/reference/api#loadmodel).
+For more on loading models in JS/TS, see [`loadModel()` at `@qvac/sdk` API reference](/reference/api#loadmodel).
 
 ## Configuration
 
-<Card href="/configuration" title="qvac.config.*">
-  Use `qvac.config.*` to configure QVAC's overall behavior.
+<Card href="/configuration" title="Configuration">
+  Shared options and configuration schema.
 </Card>
 
 ### Plugin system
@@ -125,11 +131,16 @@ For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/re
   </Card>
 </Cards>
 
-## JS API
+## API reference
 
-<Card href="/reference/api" title="API reference">
-  `@qvac/sdk` npm package exposes a function-centric, typed JS API.
-</Card>
+<Cards>
+  <Card href="/reference/api" title="JS/TS API reference">
+    `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+  </Card>
+  <Card href="/python-sdk#api-reference" title="Python API surface">
+    `tetherto-qvac-sdk` re-exports the same contract as an asyncio-native Python surface.
+  </Card>
+</Cards>
 
 ## How it works
 
@@ -140,4 +151,5 @@ For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/re
 ## Other resources
 
 - [SDK landing page](https://qvac.tether.io/dev/sdk/)
-- [Package at npm](https://www.npmjs.com/package/@qvac/sdk)
+- [`@qvac/sdk` on npm](https://www.npmjs.com/package/@qvac/sdk)
+- [`tetherto-qvac-sdk` on PyPI](https://pypi.org/project/tetherto-qvac-sdk/)

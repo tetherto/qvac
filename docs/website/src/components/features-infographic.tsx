@@ -136,7 +136,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Run AI models locally, without relying on third-party APIs, SaaS, or cloud infrastructure.',
     angle: 315,
-    href: '/quickstart',
+    href: '/js-ts-sdk#quickstart',
   },
   {
     id: 'p2p',
@@ -152,7 +152,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Consistent developer experience across hardware, operating systems, and JavaScript runtimes — write code once, run it everywhere.',
     angle: 90,
-    href: '/installation#supported-environments',
+    href: '/system-requirements#supported-environments',
   },
   {
     id: 'pluggable',
@@ -180,9 +180,9 @@ export const DEFAULT_FEATURES: Feature[] = [
   },
   {
     id: 'unified',
-    name: 'Unified JS/TS interface',
+    name: 'Unified interface',
     description:
-      'Use one typed JavaScript SDK to run multiple AI capabilities from a single npm package.',
+      'Use one JS/TS or Python SDK client to run multiple AI capabilities.',
     angle: 270,
     href: '/introduction',
   },
