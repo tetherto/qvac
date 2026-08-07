@@ -6,18 +6,24 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <tts-cpp/cosyvoice/engine.h>
+#include <tts-cpp/lavasr/denoiser.h>
+#include <tts-cpp/lavasr/enhancer.h>
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
+#include "model-interface/StreamingEnhancer.hpp"
 
 namespace qvac::ttsggml::cosyvoice {
 
@@ -80,10 +86,10 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
 
 } // namespace
 
-// Batch-only output-rate conversion (the tts-cpp engine ignores
-// output_sample_rate; streaming is validated to the native rate). No-op unless
-// a non-native outputSampleRate was requested. Runs before stats so
-// sampleRate_/duration reflect the emitted rate.
+// The tts-cpp engine ignores output_sample_rate, so the addon resamples the
+// batch output itself; unenhanced streaming is validated to the native rate
+// instead. Must run before stats so sampleRate_/duration reflect the emitted
+// rate.
 void resampleBatchOutput(
     const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result) {
   if (cfg.outputSampleRate.has_value() && *cfg.outputSampleRate > 0 &&
@@ -94,16 +100,130 @@ void resampleBatchOutput(
   }
 }
 
-CosyvoiceModel::CosyvoiceModel(CosyvoiceConfig config)
-    : cfg_(std::move(config)) {
-  validateConfig(cfg_);
-  // load() is deferred to waitForLoadInitialization() so any heavy model
-  // parse runs off the JS event loop via JsAsyncTask::run-driven activate().
+namespace {
+
+// Both rates stay zero when no enhancer is loaded.
+struct EnhancerRates {
+  int workRate = 0;
+  int streamFinalRate = 0;
+};
+
+EnhancerRates resolveEnhancerRates(
+    const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer,
+    const std::optional<int>& outputSampleRate) {
+  if (!enhancer)
+    return {};
+  const int workRate = enhancer->output_sample_rate();
+  const bool hasRequestedRate =
+      outputSampleRate.has_value() && *outputSampleRate > 0;
+  return {workRate, hasRequestedRate ? *outputSampleRate : workRate};
 }
 
-CosyvoiceModel::~CosyvoiceModel() noexcept = default;
+// Mirrors ChatterboxModel::makeStreamingEnhancer; keep the two in sync.
+std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
+    const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer,
+    const EnhancerRates& rates) {
+  if (!enhancer)
+    return nullptr;
+  const int workRate = rates.workRate;
+  const int finalRate = rates.streamFinalRate;
+  return std::make_shared<StreamingEnhancer>(
+      [enhancer, workRate, finalRate](const std::vector<float>& raw) {
+        std::vector<float> enhanced =
+            enhancer->enhance(raw, kCosyvoiceNativeSampleRate);
+        if (finalRate != workRate) {
+          enhanced = OutputResampler::resample(enhanced, workRate, finalRate);
+        }
+        return enhanced;
+      },
+      kCosyvoiceNativeSampleRate,
+      finalRate);
+}
 
-void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
+std::shared_ptr<tts_cpp::lavasr::Denoiser>
+loadDenoiser(const std::string& ggufPath, const std::string& errorContext) {
+  if (ggufPath.empty())
+    return nullptr;
+  try {
+    return tts_cpp::lavasr::Denoiser::load(ggufPath);
+  } catch (const std::exception& e) {
+    throw createTTSError(
+        TTSErrorCode::InitializationFailed, errorContext + e.what());
+  }
+}
+
+// Rate-preserving. validateConfig rejects denoiser + streaming, so this only
+// ever runs on the batch path.
+void applyBatchDenoiser(
+    tts_cpp::cosyvoice::SynthesisResult& result,
+    tts_cpp::lavasr::Denoiser& denoiser) {
+  try {
+    result.pcm = denoiser.denoise(result.pcm, result.sample_rate);
+  } catch (const std::exception& e) {
+    throw createTTSError(
+        TTSErrorCode::SynthesisFailed,
+        std::string("cosyvoice.lavasr-denoiser: ") + e.what());
+  }
+}
+
+void applyBatchEnhancer(
+    tts_cpp::cosyvoice::SynthesisResult& result,
+    tts_cpp::lavasr::Enhancer& enhancer) {
+  try {
+    result.pcm = enhancer.enhance(result.pcm, result.sample_rate);
+    result.sample_rate = enhancer.output_sample_rate();
+  } catch (const std::exception& e) {
+    throw createTTSError(
+        TTSErrorCode::SynthesisFailed,
+        std::string("cosyvoice.lavasr: ") + e.what());
+  }
+}
+
+// resampleBatchOutput is unconditional because it closes both the enhanced and
+// the unenhanced case: applyBatchEnhancer leaves result.sample_rate at 48 kHz,
+// which still has to be reconciled with any requested outputSampleRate.
+void applyBatchPostProcessing(
+    const CosyvoiceConfig& cfg, tts_cpp::cosyvoice::SynthesisResult& result,
+    const std::shared_ptr<tts_cpp::lavasr::Denoiser>& denoiser,
+    const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer) {
+  if (denoiser)
+    applyBatchDenoiser(result, *denoiser);
+  if (enhancer)
+    applyBatchEnhancer(result, *enhancer);
+  resampleBatchOutput(cfg, result);
+}
+
+// The reference members borrow synthesize()'s locals, so an instance must not
+// outlive the engine->synthesize() call it is handed to.
+struct StreamChunkPostProcessor {
+  const CosyvoiceModel::ChunkCallback& emit;
+  std::shared_ptr<StreamingEnhancer> streamEnhancer;
+  std::size_t& emittedSamples;
+
+  std::vector<float>
+  enhanceStage(const float* pcm, std::size_t samples, bool isLast) const {
+    std::vector<float> audio = streamEnhancer->feed(pcm, samples);
+    if (isLast) {
+      const std::vector<float> tail = streamEnhancer->flush();
+      audio.insert(audio.end(), tail.begin(), tail.end());
+    }
+    return audio;
+  }
+
+  void operator()(
+      const float* pcm, std::size_t samples, int chunkIndex, bool isLast) {
+    if (!streamEnhancer) {
+      emittedSamples += samples;
+      emit(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+      return;
+    }
+    std::vector<float> audio = enhanceStage(pcm, samples, isLast);
+    emittedSamples += audio.size();
+    emit(pcmFloatToInt16(audio), chunkIndex, isLast);
+  }
+};
+
+void validateModelPaths(const CosyvoiceConfig& cfg) {
   if (cfg.modelDir.empty() && cfg.llmModelPath.empty()) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -149,6 +269,21 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         TTSErrorCode::ModelFileNotFound,
         "reference audio not found: " + cfg.referenceAudio);
   }
+  if (!cfg.enhancerGgufPath.empty() &&
+      !std::filesystem::exists(cfg.enhancerGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr enhancer GGUF not found: " + cfg.enhancerGgufPath);
+  }
+  if (!cfg.denoiserGgufPath.empty() &&
+      !std::filesystem::exists(cfg.denoiserGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
+  }
+}
+
+void validateSynthesisRanges(const CosyvoiceConfig& cfg) {
   if (cfg.cfmSteps.has_value() && *cfg.cfmSteps < 0) {
     throw StatusError(general_error::InvalidArgument, "cfmSteps must be >= 0");
   }
@@ -158,6 +293,9 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
         general_error::InvalidArgument,
         "outputSampleRate must be 0 or in [8000, 192000]");
   }
+}
+
+void validateStreamTokens(const CosyvoiceConfig& cfg) {
   if (cfg.streamChunkTokens.has_value() && *cfg.streamChunkTokens < 0) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -174,35 +312,78 @@ void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
     throw StatusError(
         general_error::InvalidArgument, "streamLeftContextTokens must be >= 0");
   }
-  // CosyVoice emits its native 24 kHz per chunk while streaming; addon-side
-  // per-chunk resampling would break the seams, so reject a non-native output
-  // rate while streaming (batch output is resampled instead). AddonJs always
-  // installs a chunkCallback for CosyVoice, so streaming == streamChunkTokens>0
-  // at construction.
-  if (cfg.streamChunkTokens.value_or(0) > 0 &&
+}
+
+// AddonJs always installs a chunkCallback for CosyVoice, so streaming ==
+// streamChunkTokens>0 at construction.
+bool streamsNativeChunks(const CosyvoiceConfig& cfg) {
+  return cfg.streamChunkTokens.value_or(0) > 0;
+}
+
+void validateStreamingCompatibility(const CosyvoiceConfig& cfg) {
+  // CosyVoice emits its native 24 kHz per chunk while streaming; naive
+  // addon-side per-chunk resampling would break the seams, so reject a
+  // non-native output rate while streaming (batch output is resampled
+  // instead). The LavaSR enhancer is the exception: StreamingEnhancer already
+  // reprocesses an overlapping window and crossfades the seams, so it folds the
+  // requested rate into that seam-free stage.
+  if (streamsNativeChunks(cfg) && cfg.enhancerGgufPath.empty() &&
       cfg.outputSampleRate.has_value() && *cfg.outputSampleRate != 0 &&
       *cfg.outputSampleRate != kCosyvoiceNativeSampleRate) {
     throw StatusError(
         general_error::InvalidArgument,
-        "CosyVoice native streaming emits at 24000 Hz; drop outputSampleRate "
-        "or disable streaming (streamChunkTokens) for resampled batch output.");
+        "CosyVoice native streaming emits at 24000 Hz; drop outputSampleRate, "
+        "enable the LavaSR enhancer (which resamples seam-free), or disable "
+        "streaming (streamChunkTokens) for resampled batch output.");
   }
-  // useGPU / nGpuLayers conflict check — mirrors the sibling engines so the
-  // option surface behaves identically even though iteration 1 runs CPU-only.
-  if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
-    const bool wantsGpuFlag = *cfg.useGpu;
-    const int layers = *cfg.nGpuLayers;
-    const bool layersWantGpu = layers != 0;
-    if (wantsGpuFlag != layersWantGpu) {
-      throw StatusError(
-          general_error::InvalidArgument,
-          std::string("CosyvoiceModel: useGPU=") +
-              (wantsGpuFlag ? "true" : "false") +
-              " conflicts with nGpuLayers=" + std::to_string(layers) +
-              ". Either drop one of the two, or make them agree "
-              "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
-    }
+  // tts-cpp only exposes a one-shot denoise(), so streaming would silently drop
+  // denoising; a stateful streaming denoiser is the follow-up. index.js rejects
+  // this first, so reaching here means the addon was driven directly.
+  if (!cfg.denoiserGgufPath.empty() && streamsNativeChunks(cfg)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "CosyvoiceModel: the LavaSR denoiser is not yet supported with native "
+        "chunk streaming (streamChunkTokens > 0). Use batch synthesis, or drop "
+        "the denoiser for streaming (streaming denoise is a planned "
+        "follow-up).");
   }
+}
+
+// useGPU / nGpuLayers conflict check — mirrors the sibling engines so the
+// option surface behaves identically even though iteration 1 runs CPU-only.
+void validateGpuIntent(const CosyvoiceConfig& cfg) {
+  if (!cfg.useGpu.has_value() || !cfg.nGpuLayers.has_value())
+    return;
+  const bool wantsGpuFlag = *cfg.useGpu;
+  const int layers = *cfg.nGpuLayers;
+  if (wantsGpuFlag == (layers != 0))
+    return;
+  throw StatusError(
+      general_error::InvalidArgument,
+      std::string("CosyvoiceModel: useGPU=") +
+          (wantsGpuFlag ? "true" : "false") +
+          " conflicts with nGpuLayers=" + std::to_string(layers) +
+          ". Either drop one of the two, or make them agree "
+          "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
+}
+
+} // namespace
+
+CosyvoiceModel::CosyvoiceModel(CosyvoiceConfig config)
+    : cfg_(std::move(config)) {
+  validateConfig(cfg_);
+  // load() is deferred to waitForLoadInitialization() so any heavy model
+  // parse runs off the JS event loop via JsAsyncTask::run-driven activate().
+}
+
+CosyvoiceModel::~CosyvoiceModel() noexcept = default;
+
+void CosyvoiceModel::validateConfig(const CosyvoiceConfig& cfg) {
+  validateModelPaths(cfg);
+  validateSynthesisRanges(cfg);
+  validateStreamTokens(cfg);
+  validateStreamingCompatibility(cfg);
+  validateGpuIntent(cfg);
 }
 
 void CosyvoiceModel::setConfig(CosyvoiceConfig config) {
@@ -212,6 +393,14 @@ void CosyvoiceModel::setConfig(CosyvoiceConfig config) {
 
 bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback) {
   return cfg.streamChunkTokens.value_or(0) > 0 && hasChunkCallback;
+}
+
+EmittedAudio resolveEmittedAudio(
+    bool streaming, bool enhanced, int streamFinalRate,
+    std::size_t streamedSamples, std::size_t batchSamples, int batchRate) {
+  if (!streaming)
+    return {batchSamples, batchRate};
+  return {streamedSamples, enhanced ? streamFinalRate : batchRate};
 }
 
 void CosyvoiceModel::load() {
@@ -248,9 +437,41 @@ void CosyvoiceModel::loadLocked() {
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
+
+  // A half-loaded model must not look loaded: isLoaded() only reads engine_, so
+  // leaving it set after a post-processing failure would make the next load()
+  // a no-op and emit silently unenhanced audio.
+  try {
+    loadPostProcessingLocked();
+  } catch (...) {
+    unloadLocked();
+    throw;
+  }
 }
 
-void CosyvoiceModel::unloadLocked() { engine_.reset(); }
+void CosyvoiceModel::loadPostProcessingLocked() {
+  // Pass the engine's *resolved* device, not the requested switch: if the
+  // engine fell back to CPU, keep the enhancer on CPU too instead of forcing it
+  // onto the GPU.
+  LoadedEnhancer loaded = loadEnhancer(
+      cfg_.enhancerGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "CosyvoiceModel::load: lavasr enhancer: ");
+  enhancer_ = std::move(loaded.enhancer);
+  enhancerBackendDevice_ = loaded.backendDevice;
+  enhancerBackendId_ = loaded.backendId;
+
+  denoiser_ = loadDenoiser(
+      cfg_.denoiserGgufPath, "CosyvoiceModel::load: lavasr denoiser: ");
+}
+
+void CosyvoiceModel::unloadLocked() {
+  engine_.reset();
+  enhancer_.reset();
+  denoiser_.reset();
+  enhancerBackendDevice_ = -1;
+  enhancerBackendId_ = -1;
+}
 
 void CosyvoiceModel::cancel() const {
   cancelRequested_.store(true, std::memory_order_relaxed);
@@ -265,10 +486,17 @@ void CosyvoiceModel::cancel() const {
 
 CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
     const std::string& text, const ChunkCallback& onChunk) {
+  // Keep the engine (and enhancer/denoiser) alive for the whole call even if
+  // reload() swaps new ones in concurrently — the replacements take effect on
+  // the NEXT synthesize.
   std::shared_ptr<tts_cpp::cosyvoice::Engine> engine;
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
+    enhancer = enhancer_;
+    denoiser = denoiser_;
   }
   if (!engine) {
     throw createTTSError(
@@ -283,20 +511,23 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
   textLength_ = text.size();
 
   const bool streaming = streamingRequested(cfg_, static_cast<bool>(onChunk));
+  const EnhancerRates rates =
+      resolveEnhancerRates(enhancer, cfg_.outputSampleRate);
+
+  // The streaming callback runs synchronously on this thread, so this plain
+  // counter safely tallies the emitted sample count for the stats below.
+  std::size_t streamedSamples = 0;
 
   const auto t0 = std::chrono::steady_clock::now();
   tts_cpp::cosyvoice::SynthesisResult result;
   try {
     if (streaming) {
-      // Bridge the engine's float chunk callback to the JS int16 sink.
-      auto engineCb = [&onChunk](
-                          const float* pcm,
-                          std::size_t samples,
-                          int chunkIndex,
-                          bool isLast) {
-        onChunk(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
-      };
-      result = engine->synthesize(text, engineCb);
+      result = engine->synthesize(
+          text,
+          StreamChunkPostProcessor{
+              onChunk,
+              makeStreamingEnhancer(enhancer, rates),
+              streamedSamples});
     } else {
       result = engine->synthesize(text);
     }
@@ -306,9 +537,20 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
         std::string("cosyvoice.synthesize: ") + e.what());
   }
 
-  resampleBatchOutput(cfg_, result);
+  if (!streaming) {
+    applyBatchPostProcessing(cfg_, result, denoiser, enhancer);
+  }
   const auto t1 = std::chrono::steady_clock::now();
-  recordSynthesisStats(result, t0, t1);
+
+  const EmittedAudio emitted = resolveEmittedAudio(
+      streaming,
+      static_cast<bool>(enhancer),
+      rates.streamFinalRate,
+      streamedSamples,
+      result.pcm.size(),
+      result.sample_rate);
+  recordSynthesisStats(
+      emitted.samples, emitted.sampleRate, result.duration_s, t0, t1);
 
   if (streaming) {
     return {Output{}, true}; // chunks already emitted via onChunk
@@ -317,14 +559,14 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
 }
 
 void CosyvoiceModel::recordSynthesisStats(
-    const tts_cpp::cosyvoice::SynthesisResult& result,
+    std::size_t outSamples, int emittedRate, float durationS,
     std::chrono::steady_clock::time_point t0,
     std::chrono::steady_clock::time_point t1) {
-  sampleRate_ = result.sample_rate;
-  totalSamples_ = static_cast<int64_t>(result.pcm.size());
+  sampleRate_ = emittedRate;
+  totalSamples_ = static_cast<int64_t>(outSamples);
   audioDurationMs_ =
-      result.duration_s > 0.0f
-          ? result.duration_s * 1000.0
+      durationS > 0.0f
+          ? durationS * 1000.0
           : (sampleRate_ > 0 ? (static_cast<double>(totalSamples_) * 1000.0 /
                                 static_cast<double>(sampleRate_))
                              : 0.0);
@@ -377,6 +619,10 @@ CosyvoiceModel::runtimeStats() const {
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
+  stats.emplace_back(
+      "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
   return stats;
 }
 

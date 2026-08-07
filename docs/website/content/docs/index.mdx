@@ -4,7 +4,8 @@ description: A local AI SDK for building cross-platform, P2P applications and sy
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay } from 'lucide-react'
+import { SiPython, SiTypescript } from '@icons-pack/react-simple-icons'
 
 ## Why QVAC?
 
@@ -107,28 +108,31 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   System overview diagram
 </object>
 
-_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Two clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)) and Python (`tetherto-qvac-sdk`, asyncio-native) — and both call into the same underlying runtime, so capabilities and behavior are identical either way.
 
-Additionally, QVAC provides a CLI with development tools, as well as an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). *By implementing the OpenAI API format, QVAC can integrate with the broader AI ecosystem.*
+Additionally, QVAC provides a CLI with development tools and an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). _You can use the HTTP server as a local model provider to connect any AI tool, harness, or system._
 
-Finally, QVAC also encompasses desktop and mobile [**flagship applications**](https://qvac.tether.io#products) to empower users and showcase QVAC capabilities, as well as [**research initiatives**](https://huggingface.co/qvac) to advance the state of the art in local AI.
+Finally, QVAC also encompasses [**QV.AC**](https://qv.ac), a desktop and mobile assistant app, to empower users and showcase QVAC capabilities, as well as [**research initiatives**](https://huggingface.co/qvac) to advance the state of the art in local AI.
 
 ## Next steps
 
 Choose how you want to start with QVAC:
 
 <Cards>
-  <Card href="/introduction" icon={<Map className="text-[var(--color-fd-primary)]" />} title="Get started with the SDK">
+  <Card href="/introduction" icon={<DoorOpen className="text-[var(--color-fd-primary)]" />} title="Get started">
     Learn the essentials for using the SDK: system requirements, compatibility matrix, setup basics, and core usage flows.
   </Card>
-  <Card href="/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
-    Run your first example using the JS/TS SDK. At the end, you'll find instructions to run any example in this documentation.
+  <Card href="/js-ts-sdk" icon={<SiTypescript className="text-[var(--color-fd-primary)]" size={20} />} title="JS/TS SDK">
+    Install `@qvac/sdk`, run the quickstart, and target Node.js, Bare, or Expo.
+  </Card>
+  <Card href="/python-sdk" icon={<SiPython className="text-[var(--color-fd-primary)]" size={20} />} title="Python SDK">
+    Install `tetherto-qvac-sdk`, run the quickstart, and drive the same worker from Python.
   </Card>
   <Card href="https://qvac.tether.io/products/workbench/" icon={<MonitorPlay className="text-[var(--color-fd-primary)]" />} title="See QVAC in practice">
-    Try QVAC Workbench, our flagship desktop and mobile app built with QVAC.
+    Try QV.AC, our flagship desktop and mobile assistant app built with QVAC.
   </Card>
-  <Card href="/cli/http-server" icon={<Server className="text-[var(--color-fd-primary)]" />} title="Integrate an OpenAI-compatible client">
-    Run the QVAC HTTP server and connect any existing OpenAI-compatible system to local AI.
+  <Card href="/cli/http-server" icon={<Server className="text-[var(--color-fd-primary)]" />} title="Use QVAC as a local model provider">
+    Run the QVAC HTTP server and connect it to any OpenAI-compatible tool, harness, or system.
   </Card>
 </Cards>
 

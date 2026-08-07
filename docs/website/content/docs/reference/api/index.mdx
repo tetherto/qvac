@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.16.x (latest)
+title: API Summary — v0.17.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,11 +12,43 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 49 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 51 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
 ## Functions
+
+### `audioGen`
+
+Generates PCM audio using a loaded AudioGen model.
+
+**Signature**:
+
+```ts
+function audioGen(params: AudioGenClientParams): AudioGenResult;
+```
+
+**Example**:
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    textEncModelSrc,
+    lmModelSrc,
+    ditModelSrc,
+    vaeModelSrc,
+  },
+});
+const run = audioGen({ modelId, caption: "ambient electronic music", duration: 10 });
+stopButton.onclick = () => cancel({ requestId: run.requestId });
+for await (const progress of run.progressStream) {
+  console.log(progress.stage, progress.step, progress.total);
+}
+const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
+const stats = await run.stats;
+```
+
+---
 
 ### `batchCompletion`
 
@@ -468,7 +500,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "bci" | "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "audiogen" | "llm" | "whisper" | "bci" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 **Throws**:
@@ -479,43 +511,13 @@ function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number
 
 ### `getSystemResources`
 
-Returns locally observed CPU, system-memory, GPU, driver, and graphics API
-capabilities. Pass `sample: true` to include one fresh CPU, memory, and GPU
-usage sample.
-
-Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
-Supported values include their source and optional scope. Driver names,
-versions, and graphics API flags are diagnostics only; they do not prove that
-an inference backend is compatible and never block model loading.
+No description available
 
 **Signature**:
 
 ```ts
 function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;
 ```
-
-**Example**:
-
-```ts
-const resources = await getSystemResources({ sample: true });
-
-if (resources.capabilities.gpus.status === "supported") {
-  for (const gpu of resources.capabilities.gpus.value) {
-    const name = gpu.name.status === "supported" ? gpu.name.value : "unknown";
-    const driver =
-      gpu.driverName.status === "supported" ? gpu.driverName.value : "unknown";
-    const version =
-      gpu.driverVersion.status === "supported"
-        ? gpu.driverVersion.value
-        : "unknown";
-
-    console.log(name, driver, version);
-  }
-}
-```
-
-Backend selection diagnostics are exposed on profiled operation events; see
-[`profiler`](#profiler).
 
 ---
 
@@ -1365,7 +1367,7 @@ function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextT
 ### `textToSpeechStream`
 
 Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
-Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+Uint8Array should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
 (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
 lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
 
@@ -1751,21 +1753,6 @@ function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, 
 ### `profiler`
 
 QVAC SDK Profiler
-
-Profiled inference operation events may expose `event.backend` with the backend
-and device actually selected, graphics API, driver details, and a structured
-fallback reason. Addons attach this metadata with `attachBackendDiagnostics`.
-For streaming operations, metadata must be attached to the terminal chunk.
-`gpuId`, when present, comes from the current worker resource collector and is
-stable only for that collector's lifetime. The SDK validates attached metadata
-and does not infer compatibility from inventory or logs.
-
-`ProfilerRuntimeOptions.includeResourceGauges` opts into one timestamped worker
-CPU, memory, and GPU sample per profiled operation. Samples are available on
-verbose `recentEvents[].resources` and preserve `ResourceMetric<T>` status,
-source, and scope semantics. `resources.sampledAt` uses the same monotonic clock
-as the event's `ts`; `resources.origin` distinguishes `local` and delegated
-`provider` workers.
 
 **Shape**:
 

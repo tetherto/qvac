@@ -159,24 +159,35 @@ AudioGen supports hard cancellation: the addon interrupts the active ACE-Step ge
 
 See [Runtime — Cancellation](/runtime/cancellation) for cancellation behavior shared across the SDK.
 
-## Python
-
-The generated Python client exposes the contract-level `audio_gen_stream()` method. Unlike the TypeScript `audioGen()` wrapper, it yields progress, base64 PCM chunks, and the terminal stats frame directly; callers decode and concatenate the chunks themselves.
-
-See [`packages/sdk-python/examples/audiogen.py`](https://github.com/tetherto/qvac/tree/main/packages/sdk-python/examples/audiogen.py) for a complete example.
-
 ## Example
 
-This example loads the registry-hosted ACE-Step models, reports progress, generates an instrumental, and writes the PCM output as WAV:
+This example loads the registry-hosted ACE-Step models, reports progress, generates an instrumental, and writes the PCM output as WAV.
 
+<Callout type="info">
+The generated Python client exposes the contract-level `audio_gen_stream()` method. Unlike the TypeScript `audioGen()` wrapper, it yields progress, base64 PCM chunks, and the terminal stats frame directly; callers decode and concatenate the chunks themselves — see the Python tab.
+</Callout>
+
+<Tabs>
+<Tab value="ts" label="TypeScript" default>
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music.ts title="generate-music.ts" lineNumbers
 ```
 
 </WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/audiogen.py title="audiogen.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
-  **Tip:** see the [SDK quickstart](/quickstart) for setup instructions, and
-  apply the first-run download configuration above on constrained connections.
+  **Tip:** see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python
+  quickstart](/python-sdk#quickstart) for setup instructions, and apply the
+  first-run download configuration above on constrained connections.
 </Callout>
