@@ -373,7 +373,7 @@ test('Chatterbox: denoiser + streamChunkTokens is rejected (streaming denoise is
         streamChunkTokens: 25,
         config: { language: 'en' }
       }),
-    /denoiser is not yet supported with Chatterbox native chunk streaming/,
+    /denoiser is not yet supported with native chunk streaming/,
     'denoiser + native chunk streaming throws (unlike the enhancer, which supports it)'
   )
 })

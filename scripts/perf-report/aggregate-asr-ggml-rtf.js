@@ -19,9 +19,9 @@
 const fs = require('fs')
 const path = require('path')
 
-// GGML GPU backend cascade shared by both engines: Vulkan (linux/win32/android),
-// Metal (darwin/ios), OpenCL (Adreno android). CUDA is not supported on any
-// platform.
+// GGML GPU backend cascade shared by both engines: Vulkan (linux/win32/Mali
+// android), Metal (darwin/ios), OpenCL (Adreno android, e.g. Samsung Galaxy
+// S25). CUDA is not supported on any platform.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 // ggml active-backend ids reported by the addon (post-merge this is the unified
@@ -157,14 +157,36 @@ function numberOrNaN (value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : NaN
 }
 
-function normalizeBackend (platformName, useGPU, backendHint) {
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const PLACEHOLDER_BACKEND_HINTS = new Set(['mobile-accelerated', 'gpu'])
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'mobile-accelerated', 'gpu'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
-  // 'mobile-accelerated'/'gpu' are placeholders, not ggml backends — fall
-  // through to the platform cascade so the row names a real backend.
-  if (hint && hint !== 'mobile-accelerated' && hint !== 'gpu') return hint
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
+  }
+  if (hint && !PLACEHOLDER_BACKEND_HINTS.has(hint)) return hint
   if (!useGPU) return 'cpu'
 
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'android':
       return 'vulkan'
     case 'ios':
@@ -182,11 +204,11 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 // platform-family guess. Falls back to normalizeBackend when the addon did not
 // report an id (older prebuilds, a snapshot without stats, or the parakeet
 // mobile path which never stamped one).
-function resolveMobileBackend (backendId, platformName, useGPU) {
+function resolveMobileBackend (backendId, platformName, useGPU, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
   }
-  return normalizeBackend(platformName, useGPU)
+  return normalizeBackend(platformName, useGPU, '', adreno)
 }
 
 function humanizeSourceFile (sourceFile) {
@@ -261,6 +283,7 @@ function normalizeReport (report, sourceFile, source) {
   const backendHint = (report.labels && report.labels.backend) ||
     (report.requested && report.requested.backendHint)
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
 
   return {
     source,
@@ -271,13 +294,12 @@ function normalizeReport (report, sourceFile, source) {
     model: reportModelName(report, engine),
     quant: reportQuant(report, sourceFile),
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, backendHint),
+    backend: normalizeBackend(platformName, useGPU, backendHint,
+      needsAdrenoCorrection(source, backendHint, gpuModel, label)),
     // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
     // to them — the probe stamps the GPU name onto every report regardless of
     // whether that run used it.
-    gpuModel: useGPU
-      ? ((report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null)
-      : null,
+    gpuModel: useGPU ? gpuModel : null,
     version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
     stddevRtf: Number(rtf.stddev),
@@ -305,6 +327,9 @@ function normalizeManualRecord (record, sourceFile) {
   const engine = resolveEngine(record)
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
+  const source = record.source || 'manual'
+  const adreno = needsAdrenoCorrection(source, record.backend,
+    record.gpuModel || record.gpu_model, record.device)
 
   return {
     source: record.source || 'manual',
@@ -315,7 +340,7 @@ function normalizeManualRecord (record, sourceFile) {
     model: record.model || record.modelType || 'unknown',
     quant: record.quant || quantFromName(record.dirName) || quantFromName(record.model) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    backend: normalizeBackend(platformFamily, useGPU, record.backend, adreno),
     gpuModel: useGPU ? (record.gpuModel || record.gpu_model || null) : null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),
@@ -458,7 +483,8 @@ function normalizeMobileRecords (report, sourceFile) {
       model: values.modelTag,
       quant: values.quant || '',
       gpu: values.provider,
-      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU,
+        isAdrenoDevice(device.gpu, device.name)),
       gpuModel: useGPU ? (device.gpu || null) : null,
       version: report.addonVersion || '',
       meanRtf: mean(values.rtf),

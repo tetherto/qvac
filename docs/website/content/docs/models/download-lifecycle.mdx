@@ -94,8 +94,20 @@ The following script shows an example of pausing and resuming a download using `
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/model_info.py title="model_info.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
+<Callout type="info">
+The Python example above (`model_info.py`) covers related model-info and download-progress operations (`get_model_info`, `download_asset_with_progress`). For the exact pause/resume flow shown in the JavaScript/TypeScript tabs, use `cancel(request_id=...)` from the Python SDK — the surface is identical to `cancel()` in JS/TS.
+</Callout>
+
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
 </Callout>
