@@ -328,6 +328,20 @@ jobs:
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
+      # Stamp the physical-device grouping label from the matrix so the two
+      # ubuntu 22/24 GPU legs collapse into one <platform>-<arch> column in the
+      # combined report. device.gpu (real hardware) is untouched. Set at source
+      # so the shared combine-perf-reports action needs no llm-specific folding.
+      - name: Stamp device grouping label
+        if: ${{ always() && !cancelled() }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          f=test/results/performance-report.json
+          if [ -f "$f" ]; then
+            jq --arg name "${{ matrix.platform }}-${{ matrix.arch }}" '.device.name = $name' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+          fi
+
       - name: Generate HTML performance report
         if: ${{ always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}

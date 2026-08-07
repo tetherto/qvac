@@ -329,6 +329,7 @@ jobs:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
             scripts/perf-report
+            ${{ matrix.perfReportMediaDir }}
           sparse-checkout-cone-mode: false
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -340,6 +341,7 @@ jobs:
           artifact-pattern: ${{ matrix.perfReportPattern }}-${{ github.run_number }}
           report-title: ${{ matrix.perfReportTitle }}
           exclude: ${{ matrix.perfReportExclude }}
+          extra-args: ${{ matrix.perfReportExtraArgs }}
 
   perf-report-rtf:
     needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
