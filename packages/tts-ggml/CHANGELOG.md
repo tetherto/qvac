@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **LavaSR enhancer on ARM Mali Vulkan.** Bumps `tts-cpp` to `2026-08-06`
+  so GPU-enabled LavaSR enhancement uses the validated Vulkan path on supported
+  Mali devices, including the Valhall-safe small-matrix workaround, while
+  preserving existing backend behavior elsewhere.
 - **iOS model loading.** CosyVoice3 and Parler-TTS now load their models within
   the default iOS app memory budget on CPU (map-in-place, mmap-backed weight
   loading plus CosyVoice3 sequential stage loading, via `tts-cpp` `2026-08-04`),
@@ -53,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   add CosyVoice3 engine to @qvac/tts-ggml
 - [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
   test addon-cpp 1.3.3 across consumers
+- [#3692](https://github.com/tetherto/qvac/pull/3692) - consume the LavaSR ARM
+  Mali Vulkan release
 
 ## [0.6.2] - 2026-08-03
 
