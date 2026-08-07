@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed engine unload no longer reports the whole footprint as reclaimed
   memory. Reclaim is reported as unavailable and the engine is left undestroyed
   so the caller's cleanup still runs.
+- A GPU request that fell back to CPU no longer disappears from the findings
+  table. It keyed identically to a genuine CPU run on the same device and
+  variant, so one of the two was dropped as a duplicate and the survivor could be
+  the fallback wearing a plain `cpu` label. Rows now key on the requested backend
+  as well and render as `cpu (requested vulkan)`.
+- Mobile rows report the GitHub run id in the `Run` column. They previously
+  carried the shared extractor's per-workflow `run_number`, which sat in the same
+  column as the desktop run ids and could not be resolved to a run.
 
 ## [0.1.1] - 2026-08-03
 

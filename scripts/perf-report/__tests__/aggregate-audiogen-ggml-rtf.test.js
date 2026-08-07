@@ -6,6 +6,8 @@ const assert = require('node:assert/strict')
 const {
   parseCanonicalTestLabel,
   normalizeBackend,
+  requestedBackendOfResult,
+  fellBackToOtherBackend,
   normalizeDitVariant,
   isCanonicalReport,
   isDesktopArtifact,
@@ -229,7 +231,16 @@ test('expandCanonicalReport turns a mobile report into rows', () => {
   assert.equal(record.gpuModel, 'Mali-G715')
   assert.equal(record.meanRtf, 6.5)
   assert.equal(record.peakRssMb, 4200.75)
-  assert.equal(record.runId, '99')
+})
+
+test('expandCanonicalReport stamps the supplied run id rather than the run_number', () => {
+  const report = mobileCanonicalReport()
+
+  const [stamped] = expandCanonicalReport(report, 'file.json', '31166105125')
+  assert.equal(stamped.runId, '31166105125', 'the Run column holds a GitHub run id')
+
+  const [unstamped] = expandCanonicalReport(report, 'file.json')
+  assert.equal(unstamped.runId, '', 'run_number 99 is a per-workflow counter, not a run id')
 })
 
 test('a report built for an unnamed ggml backend round-trips into the table', () => {
@@ -497,6 +508,93 @@ test('normalizeDesktopRecord keeps GPU when the request was honoured', () => {
 
   assert.equal(record.backend, 'vulkan')
   assert.equal(record.gpu, 'gpu')
+})
+
+test('requestedBackendOfResult reads the request and falls back to what ran', () => {
+  assert.equal(
+    requestedBackendOfResult(
+      { requested_backend: 'vulkan', requested_execution_provider: 'gpu' },
+      'android',
+      'cpu'
+    ),
+    'vulkan'
+  )
+  assert.equal(
+    requestedBackendOfResult({}, 'android', 'cpu'),
+    'cpu',
+    'an artifact without the field claims no unmet request'
+  )
+})
+
+test('fellBackToOtherBackend only flags a row whose request went unmet', () => {
+  assert.ok(fellBackToOtherBackend({ backend: 'cpu', requestedBackend: 'vulkan' }))
+  assert.ok(!fellBackToOtherBackend({ backend: 'vulkan', requestedBackend: 'vulkan' }))
+  assert.ok(!fellBackToOtherBackend({ backend: 'cpu' }))
+})
+
+test('a mobile GPU request that fell back keeps the backend it asked for', () => {
+  const report = mobileCanonicalReport('[CPU] acestep turbo-q4 cpu')
+  report.results[0].execution_provider = 'cpu'
+  report.results[0].requested_backend = 'vulkan'
+  report.results[0].requested_execution_provider = 'gpu'
+
+  const [record] = expandCanonicalReport(report, 'android-gpu.json')
+
+  assert.equal(record.backend, 'cpu', 'the observed backend still drives the row')
+  assert.equal(record.gpu, 'cpu')
+  assert.equal(record.requestedBackend, 'vulkan')
+})
+
+test('a desktop GPU request that fell back keeps the backend it asked for', () => {
+  const report = desktopReport()
+  report.labels.activeBackend = 'cpu'
+
+  const record = normalizeDesktopRecord(report, 'fallback.json')
+
+  assert.equal(record.backend, 'cpu')
+  assert.equal(record.requestedBackend, 'vulkan')
+})
+
+test('a fallback row survives beside the genuine CPU run on the same device', () => {
+  const cpuReport = desktopReport()
+  cpuReport.config.useGPU = false
+  cpuReport.labels.backend = 'cpu'
+  cpuReport.labels.activeBackend = 'cpu'
+  cpuReport.labels.label = '1-turbo-q4-cpu'
+
+  const fallbackReport = desktopReport()
+  fallbackReport.labels.activeBackend = 'cpu'
+  fallbackReport.labels.label = '1-turbo-q4-cpu'
+
+  const deduped = dedupeRecords([
+    normalizeDesktopRecord(cpuReport, 'cpu.json'),
+    normalizeDesktopRecord(fallbackReport, 'gpu-fallback.json')
+  ])
+
+  assert.equal(deduped.length, 2, 'the two runs measured different things')
+  assert.deepEqual(
+    deduped.map((record) => record.requestedBackend).sort(),
+    ['cpu', 'vulkan']
+  )
+})
+
+test('renderMarkdown names both backends on a fallback row and counts them', () => {
+  const report = desktopReport()
+  report.labels.activeBackend = 'cpu'
+
+  const markdown = renderMarkdown([normalizeDesktopRecord(report, 'fallback.json')])
+
+  assert.match(markdown, /\| cpu \(requested vulkan\) \|/)
+  assert.match(markdown, /1 row\(s\) ran on a different backend than the one requested/)
+})
+
+test('a fallback row does not count as coverage for the backend it asked for', () => {
+  const report = desktopReport()
+  report.labels.activeBackend = 'cpu'
+
+  const records = [normalizeDesktopRecord(report, 'fallback.json')]
+
+  assert.deepEqual(missingGpuBackends(records), ['vulkan', 'metal'])
 })
 
 test('normalizeManualRecord derives the provider from the stated backend', () => {

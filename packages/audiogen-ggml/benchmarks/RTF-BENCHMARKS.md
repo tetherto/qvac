@@ -203,6 +203,18 @@ Manual records are validated rather than coerced: an unknown DiT variant or
 backend is rejected with a warning naming the offending value, because reporting
 it under a valid-looking label would publish a wrong number.
 
+Rows are keyed on both the observed and the requested backend before duplicates
+are folded, so a GPU request that fell back to CPU stays distinct from a genuine
+CPU run on the same device and variant. Such a row renders as
+`cpu (requested vulkan)` and is counted under the table; it never counts as
+coverage for the backend it asked for.
+
+Mobile artifacts carry the shared extractor's per-workflow `run_number`, which is
+not a run id, so the `Run` column is filled from `--run-id` instead. The
+summarize workflow passes `github.run_id`, and every artifact it downloads comes
+from that run. Aggregating downloaded artifacts by hand without `--run-id` leaves
+the column empty rather than showing a number that cannot be resolved.
+
 ## Backends CI cannot reach
 
 CUDA and OpenCL are outside the default audiogen-cpp backend cascade, and some

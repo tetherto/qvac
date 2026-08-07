@@ -40,7 +40,8 @@ function parseArgs (argv) {
     input: '',
     output: '',
     jsonOutput: '',
-    manualDir: path.resolve(DEFAULT_MANUAL_DIR)
+    manualDir: path.resolve(DEFAULT_MANUAL_DIR),
+    runId: ''
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -57,6 +58,9 @@ function parseArgs (argv) {
       i++
     } else if (arg === '--manual-dir' && next) {
       args.manualDir = next
+      i++
+    } else if (arg === '--run-id' && next) {
+      args.runId = String(next)
       i++
     }
   }
@@ -120,6 +124,19 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 // request that fell back to CPU is not reported as GPU work.
 function providerForBackend (backend) {
   return backend === 'cpu' ? 'cpu' : 'gpu'
+}
+
+// A GPU request the runtime could not honour still renders audio and still
+// produces a row. Keeping the requested backend is what separates that row from
+// a genuine CPU run on the same device and variant.
+function requestedBackendOfResult (result, platformFamily, observedBackend) {
+  const hint = result.requested_backend
+  if (!hint) return observedBackend
+  return normalizeBackend(platformFamily, result.requested_execution_provider === 'gpu', hint)
+}
+
+function fellBackToOtherBackend (record) {
+  return Boolean(record.requestedBackend) && record.requestedBackend !== record.backend
 }
 
 function normalizeDitVariant (value) {
@@ -211,6 +228,7 @@ function normalizeDesktopRecord (report, sourceFile) {
       DEFAULT_DIT_VARIANT,
     gpu: providerForBackend(backend),
     backend,
+    requestedBackend: normalizeBackend(platformFamily, useGPU, labels.backend),
     gpuModel: labels.gpuModel || null,
     label: String(labels.label || ''),
     durationS: toNumberOrNull(config.durationS),
@@ -235,7 +253,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   }
 }
 
-function canonicalResultToRecord (result, report, sourceFile) {
+function canonicalResultToRecord (result, report, sourceFile, runId) {
   const parsed = parseCanonicalTestLabel(result.test)
   if (!parsed || parsed.engine !== ENGINE) return null
 
@@ -246,6 +264,7 @@ function canonicalResultToRecord (result, report, sourceFile) {
   const useGPU = parsed.useGPU || result.execution_provider === 'gpu'
   const ditVariant =
     parsed.ditVariant || normalizeDitVariant(result.ditVariant) || DEFAULT_DIT_VARIANT
+  const backend = normalizeBackend(platformFamily, useGPU, parsed.backendHint)
 
   return {
     source: 'mobile-ci',
@@ -254,7 +273,8 @@ function canonicalResultToRecord (result, report, sourceFile) {
     platformFamily: platformFamily || 'unknown',
     ditVariant,
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, parsed.backendHint),
+    backend,
+    requestedBackend: requestedBackendOfResult(result, platformFamily, backend),
     gpuModel: device.gpu || null,
     label: `${platformFamily}-${ditVariant}`,
     durationS: null,
@@ -273,16 +293,16 @@ function canonicalResultToRecord (result, report, sourceFile) {
     reclaimedMb: toNumberOrNull(metrics.reclaimed_mb),
     modelSizeMb: null,
     noisy: null,
-    runId: report.run_number || '',
+    runId: runId || '',
     sha: '',
     notes: sourceFile ? path.basename(sourceFile) : ''
   }
 }
 
-function expandCanonicalReport (report, sourceFile) {
+function expandCanonicalReport (report, sourceFile, runId) {
   if (!isCanonicalReport(report)) return []
   return report.results
-    .map((result) => canonicalResultToRecord(result, report, sourceFile))
+    .map((result) => canonicalResultToRecord(result, report, sourceFile, runId))
     .filter(Boolean)
 }
 
@@ -353,6 +373,7 @@ function normalizeManualRecord (record, sourceFile) {
     ditVariant: normalizeDitVariant(manualVariantOf(record)),
     gpu: providerForBackend(backend),
     backend,
+    requestedBackend: backend,
     gpuModel: record.gpuModel || record.gpu_model || null,
     label: String(record.label || ''),
     durationS: toNumberOrNull(record.durationS),
@@ -391,14 +412,14 @@ function isBenchmarkArtifactName (file) {
   return /^rtf-benchmark-.*\.json$/.test(base) || base === 'performance-report.json'
 }
 
-function loadArtifactRecords (inputDir) {
+function loadArtifactRecords (inputDir, runId) {
   const records = []
   for (const file of walkFiles(inputDir).filter(isBenchmarkArtifactName)) {
     const report = readJson(file)
     if (!report) continue
 
     if (isCanonicalReport(report)) {
-      records.push(...expandCanonicalReport(report, file))
+      records.push(...expandCanonicalReport(report, file, runId))
     } else if (isDesktopArtifact(report)) {
       records.push(normalizeDesktopRecord(report, file))
     }
@@ -453,6 +474,7 @@ function recordKey (record) {
     record.ditVariant,
     record.gpu,
     record.backend,
+    record.requestedBackend || record.backend,
     record.device,
     record.label || '',
     record.durationS === null ? '' : String(record.durationS),
@@ -488,6 +510,11 @@ function formatModelSize (mb) {
 function formatNoisy (noisy) {
   if (noisy === null || noisy === undefined) return '-'
   return noisy ? 'yes' : 'no'
+}
+
+function renderBackendCell (record) {
+  if (!fellBackToOtherBackend(record)) return record.backend
+  return `${record.backend} (requested ${record.requestedBackend})`
 }
 
 function missingGpuBackends (records) {
@@ -529,7 +556,7 @@ function renderRow (record) {
       record.platform,
       record.ditVariant,
       record.gpu,
-      record.backend,
+      renderBackendCell(record),
       record.gpuModel || '-',
       record.label || '-',
       record.durationS === null ? '-' : formatNumber(record.durationS, 0),
@@ -576,10 +603,18 @@ function renderIntro () {
 function renderFooter (records) {
   const lines = ['']
   const noisyCount = records.filter((r) => r.noisy === true).length
+  const fallbacks = records.filter(fellBackToOtherBackend)
   const missing = missingGpuBackends(records)
 
   lines.push(`Rows: ${records.length}. Noisy rows: ${noisyCount}.`)
   lines.push('')
+  if (fallbacks.length > 0) {
+    lines.push(
+      `> ${fallbacks.length} row(s) ran on a different backend than the one requested; ` +
+        'the Backend column names both. The requested backend has no coverage from those rows.'
+    )
+    lines.push('')
+  }
   if (missing.length > 0) {
     lines.push(
       `> GPU backends with no coverage in this run: ${missing.join(', ')}. ` +
@@ -622,7 +657,10 @@ function writeOutput (file, contents) {
 
 function collectRecords (args) {
   return sortRecords(
-    dedupeRecords([...loadArtifactRecords(args.input), ...loadManualRecords(args.manualDir)])
+    dedupeRecords([
+      ...loadArtifactRecords(args.input, args.runId),
+      ...loadManualRecords(args.manualDir)
+    ])
   )
 }
 
@@ -652,6 +690,8 @@ module.exports = {
   NOISY_STDDEV_RATIO,
   parseArgs,
   normalizeBackend,
+  requestedBackendOfResult,
+  fellBackToOtherBackend,
   normalizeDitVariant,
   isCanonicalReport,
   isDesktopArtifact,
@@ -664,6 +704,7 @@ module.exports = {
   manualItemsOf,
   manualItemToRecords,
   loadManualRecords,
+  loadArtifactRecords,
   dedupeRecords,
   sortRecords,
   missingGpuBackends,

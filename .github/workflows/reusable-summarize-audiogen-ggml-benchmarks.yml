@@ -53,12 +53,18 @@ jobs:
           pattern: perf-report-audiogen-ggml-*
           path: benchmark-artifacts/mobile
 
+      # The mobile artifacts carry the shared extractor's per-workflow
+      # run_number, not a run id, so the Run column would mix two identifiers.
+      # Every artifact downloaded above belongs to this run, so pass its id.
       - name: Generate consolidated benchmark report
+        env:
+          RUN_ID: ${{ github.run_id }}
         run: |
           mkdir -p benchmark-artifacts
           node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
             --dir benchmark-artifacts \
             --manual-dir packages/audiogen-ggml/benchmarks/manual-results \
+            --run-id "$RUN_ID" \
             --output benchmark-artifacts/audiogen-ggml-performance-findings.md \
             --output-json benchmark-artifacts/audiogen-ggml-performance-findings.json
 
