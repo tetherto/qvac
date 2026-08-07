@@ -1,0 +1,156 @@
+---
+title: Python SDK
+description: Install and use the Python client for QVAC.
+schemaType: TechArticle
+---
+
+## Overview
+
+The Python SDK (`tetherto-qvac-sdk` on PyPI) is the Python client for QVAC.
+It is asyncio-native, drives the worker over `bare-rpc`, and exposes every
+QVAC capability through a typed API.
+
+## Requirements
+
+- Python `>= 3.10`
+- Node.js `>= v22.17` (to host the worker)
+
+For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/system-requirements).
+
+## Install
+
+<Steps>
+<Step>
+Install the package:
+
+```bash
+pip install "tetherto-qvac-sdk"
+```
+
+Optional extras: `vla`, `notebook`.
+</Step>
+
+<Step>
+Install the worker:
+
+```bash
+python -m tetherto.qvac_sdk install-worker
+```
+
+`Client()` finds it automatically after this. To override the location, set `QVAC_WORKER_PATH` or pass `worker_path=` to `Client()`.
+</Step>
+</Steps>
+
+## Quickstart
+
+Run your first example using the Python SDK.
+
+<Steps>
+
+<Step>
+Create the examples workspace:
+```bash
+mkdir qvac-examples-py
+cd qvac-examples-py
+python -m venv .venv
+source .venv/bin/activate
+```
+</Step>
+
+<Step>
+Install the package:
+```bash
+pip install tetherto-qvac-sdk
+```
+</Step>
+
+<Step>
+Install the worker:
+```bash
+python -m tetherto.qvac_sdk install-worker
+```
+</Step>
+
+<Step>
+Create the quickstart script:
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/quickstart.py title="quickstart.py" lineNumbers
+```
+</WrapCode>
+</Step>
+
+<Step>
+Run the quickstart script:
+
+```bash
+python quickstart.py
+```
+</Step>
+
+</Steps>
+
+## Running examples
+
+Follow these instructions to run any example in this documentation:
+- All examples are self-contained, runnable Python scripts. Use the `qvac-examples-py` workspace created in this quickstart to store and run them as you explore this documentation.
+- Run each example with Python `>= 3.10`, inside the virtualenv where you installed `tetherto-qvac-sdk`.
+- More examples can be found in the [Python SDK examples directory](https://github.com/tetherto/qvac/tree/main/packages/sdk-python/examples).
+- Some examples need companion files — sample audio, an image, or a config — that aren't part of the embedded code. These can be found in the same examples directory.
+- The `notebook.ipynb` example runs in Jupyter — see [Notebook / data science](#notebook--data-science-jupyter) below.
+
+One such example queries the model registry:
+
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/registry_query.py title="registry_query.py" lineNumbers
+```
+</WrapCode>
+
+## Configuration
+
+Pass the config to `Client()`:
+
+```python
+async with Client(config={"cacheDirectory": "/data/qvac-models"}) as client:
+    ...
+```
+
+`QVAC_CACHE_DIR` is a shortcut that sets `cacheDirectory` without code.
+
+See [Configuration](/configuration) for options and schema.
+
+## Notebook / data science (Jupyter)
+
+For notebooks and REPLs, `tetherto.qvac_sdk.notebook.SyncClient` is a synchronous facade over `Client`: every call is a plain blocking call (no `await`), returns numpy/pandas-native data, and streams completions live into the cell.
+
+Install the `notebook` extra:
+
+```bash
+pip install "tetherto-qvac-sdk[notebook]"
+```
+
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/notebook.py title="notebook.py" lineNumbers
+```
+</WrapCode>
+
+Jupyter version: [`packages/sdk-python/examples/notebook.ipynb`](https://github.com/tetherto/qvac/tree/main/packages/sdk-python/examples/notebook.ipynb).
+
+## API reference
+
+Everything you normally need is imported flat from `tetherto.qvac_sdk`; model constants live in `tetherto.qvac_sdk.models`.
+
+| Group | Names |
+| --- | --- |
+| Client | `Client` (`client.transport` is passed to every call) |
+| Ergonomic wrappers | `load_model`, `unload_model`, `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin`, `invoke_plugin_stream`, `model_registry_list` / `_search` / `_get_model` |
+| Result types | `CompletionRun` (`.events`, `.final`), `CompletionFinal`, `ToolCall`, `TranslateRun` |
+| Generated methods | `embed`, `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, … (each takes a typed request model) |
+| Models & enums | `LoadModelRequest`, `ModelType`, … (also in `tetherto.qvac_sdk.schemas`) |
+| Errors | `QvacError`, `RPCError`, `InferenceCancelledError`, `ContextOverflowError`, … |
+| Logging / VLA | `logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`; `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state` |
+| Notebook | `tetherto.qvac_sdk.notebook.SyncClient` — synchronous, numpy/pandas returns, live in-cell streaming |
+
+See [API reference](/reference/api) for the JS/TS surface; the Python API is generated from the same contract.
