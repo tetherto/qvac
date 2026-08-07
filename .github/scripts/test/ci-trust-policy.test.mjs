@@ -1300,3 +1300,140 @@ test('tts-ggml Android per-test wait remains below its Mocha ceiling', () => {
       `Mocha timeout (${mochaTimeoutMs} ms)`,
   )
 })
+
+test('mobile scheduler preserves automatic sharding and supports explicit multi-spec dual flagship', () => {
+  const action = read(
+    '.github/actions/run-mobile-integration-tests/schedule-test-run/action.yml',
+  )
+  const llmWorkflow = read('.github/workflows/integration-mobile-test-llm-llamacpp.yml')
+  const validationIndex = action.indexOf('test-specs must be a non-empty array')
+  const schedulingStartedIndex = action.indexOf('SCHEDULING_STARTED=1')
+
+  assert.match(action, /multi-spec-dual-flagship:[\s\S]*?default:\s*"false"/)
+  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
+  assert.match(action, /length > 0/)
+  assert.ok(
+    validationIndex >= 0 && validationIndex < schedulingStartedIndex,
+    'invalid or empty specs fail before rollback ownership starts',
+  )
+  assert.match(action, /APP_UPLOAD_ID="\$\{APP_ARN##\*\/\}"/)
+  assert.match(
+    action,
+    /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{\{ github\.run_id \}\}\.\$\{\{ github\.run_attempt \}\}-\$\{APP_UPLOAD_ID\}"/,
+  )
+  assert.match(
+    action,
+    /if \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
+  )
+  assert.match(action, /for IDX in \$\(seq 0 \$\(\(SPEC_COUNT - 1\)\)\); do/)
+  assert.match(action, /RUN_NAME_PREFIX="\$\{RUN_NAME_BASE\}-\$\{GROUP_NAME\}"/)
+  assert.match(
+    action,
+    /RUN_ARNS_JSON=\$\(echo "\$RUN_ARNS_JSON" \| jq --arg a "\$RUN_ARN_1" --arg b "\$RUN_ARN_2" '\. \+ \[\$a,\$b\]'\)/,
+  )
+  assert.match(action, /S25 Ultra/)
+  assert.match(action, /Pixel 9/)
+  assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/)
+  assert.match(action, /iPhone 17/)
+  assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/)
+})
+
+test('mobile monitor maps both flagship runs back to each test spec', () => {
+  const action = read(
+    '.github/actions/run-mobile-integration-tests/monitor-test-run/action.yml',
+  )
+  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
+  assert.match(action, /spec_index_for_run\(\)/)
+  assert.match(action, /RUN_COUNT" -eq \$\(\(SPEC_COUNT \* 2\)\)/)
+  assert.match(action, /echo \$\(\(run_index \/ 2\)\)/)
+  assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/)
+})
+
+test('mobile shards pass grep explicitly and retain host-phase failure logs', () => {
+  const uploadAction = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/action.yml',
+  )
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  assert.match(uploadAction, /export GROUP_GREP_B64=/)
+  assert.match(
+    generateTestspec,
+    /base64 -d > \/tmp\/qvacShardGrep\.txt/,
+  )
+  assert.match(
+    generateTestspec,
+    /DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH:-/,
+  )
+  assert.match(collectLogs, /\*Test\*spec\*output\*/)
+  assert.match(collectLogs, /\*Standard\*Output\*/)
+  assert.match(collectLogs, /Host phase log:/)
+})
+
+test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+  const matrices = workflow.match(
+    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+  )
+  const jobName = workflow.match(/^\s{4}name:\s*(.+)$/m)
+
+  assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
+  assert.ok(jobName, 'build-and-test job must have a name')
+  const benchmarkMatrix = JSON.parse(matrices[1])
+  const functionalMatrix = JSON.parse(matrices[2])
+  assert.deepEqual(
+    functionalMatrix.include.map((entry) => entry.platform),
+    ['Android', 'iOS'],
+  )
+  assert.equal(benchmarkMatrix.include.length, 25)
+  assert.equal(
+    benchmarkMatrix.include.filter((entry) => entry.platform === 'Android').length,
+    13,
+  )
+  assert.equal(
+    benchmarkMatrix.include.filter((entry) => entry.platform === 'iOS').length,
+    12,
+  )
+  assert.match(
+    workflow,
+    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
+  )
+  assert.match(workflow, /egress-policy:\s*audit/)
+  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  assert.match(workflow, /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/)
+  assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
+  assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/)
+  assert.match(jobName[1], /matrix\.engine/)
+  assert.match(jobName[1], /matrix\.variant/)
+  assert.match(jobName[1], /matrix\.use_gpu/)
+  assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/)
+  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  assert.match(
+    workflow,
+    /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
+  )
+  assert.match(
+    workflow,
+    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
+  )
+  assert.match(
+    workflow,
+    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
+  )
+})
