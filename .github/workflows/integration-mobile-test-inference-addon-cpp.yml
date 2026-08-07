@@ -305,12 +305,20 @@ jobs:
             runner: macos-14
 
     steps:
+      # persist-credentials:false here too, not just on the addon checkout below:
+      # this checkout lands at $GITHUB_WORKSPACE, so without it actions/checkout writes
+      # the job GITHUB_TOKEN into ./.git/config as an http.extraheader — readable by the
+      # fork-controlled steps that follow via ../.git/config. Lower value than the PAT
+      # (this token is scoped contents+packages: read), but the same class of leak.
+      # Nothing later needs it: this is a sparse fetch of .github/actions only, and the
+      # addon and framework checkouts each carry their own credentials.
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       # No token, plus persist-credentials:false: keeps any credential out of
       # addon/.git/config, which the fork-controlled steps below could read. If a private
@@ -430,12 +438,20 @@ jobs:
         with:
           egress-policy: audit
 
+      # persist-credentials:false here too, not just on the addon checkout below:
+      # this checkout lands at $GITHUB_WORKSPACE, so without it actions/checkout writes
+      # the job GITHUB_TOKEN into ./.git/config as an http.extraheader — readable by the
+      # fork-controlled steps that follow via ../.git/config. Lower value than the PAT
+      # (this token is scoped contents+packages: read), but the same class of leak.
+      # Nothing later needs it: this is a sparse fetch of .github/actions only, and the
+      # addon and framework checkouts each carry their own credentials.
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       # Data-only handoff from the (fork-code) build job. NONE of it is executed
       # here: the app binary is uploaded to Device Farm, app.test.js is packed +
