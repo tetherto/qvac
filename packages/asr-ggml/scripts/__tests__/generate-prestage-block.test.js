@@ -17,6 +17,8 @@ const path = require('node:path')
 
 const {
   WHISPER_MODELS,
+  WHISPER_TEST_MODEL_NAMES,
+  buildWhisperManifest,
   buildWhisperStageBlock,
   buildScript
 } = require('../generate-prestage-block')
@@ -61,6 +63,26 @@ test('WHISPER_MODELS covers the full mobile set: functional + perf-sweep quants'
   }
 })
 
+test('Whisper manifest selects only the models required by each test runner', () => {
+  const manifest = buildWhisperManifest()
+
+  assert.deepEqual(Object.keys(manifest), Object.keys(WHISPER_TEST_MODEL_NAMES))
+  assert.deepEqual(
+    manifest.runMobilePerfTinyCpuTest.map((model) => model.name),
+    ['ggml-tiny.bin']
+  )
+  assert.deepEqual(
+    manifest.runMobilePerfSweepGpuTest.map((model) => model.name),
+    [
+      'ggml-base-q5_1.bin',
+      'ggml-base-q8_0.bin',
+      'ggml-small-q5_1.bin',
+      'ggml-small-q8_0.bin'
+    ]
+  )
+  assert.deepEqual(manifest.runLiveStreamSimulationTest, [])
+})
+
 test('buildWhisperStageBlock stages every model with a .size sidecar and degrades gracefully', () => {
   const block = buildWhisperStageBlock([
     { name: 'a.bin', url: 'https://example.com/a.bin' },
@@ -84,20 +106,23 @@ test('buildWhisperStageBlock stages every model with a .size sidecar and degrade
   assert.match(failedDownload.stdout, /device will use network fallback/)
 })
 
-test('buildScript emits the parakeet manifest block and the whisper block together', () => {
+test('buildScript selects Parakeet and Whisper models from the explicit shard grep', () => {
   const script = buildScript('QkFTRTY0')
   // Parakeet (fail-hard, manifest-driven).
+  assert.ok(script.startsWith('set -euo pipefail\n'))
   assert.match(script, /PRESTAGE_DIR=\/data\/local\/tmp\/prestaged-models/)
   assert.match(script, /base64 -d > \/tmp\/model-manifest\.json/)
+  assert.match(script, /base64 -d > \/tmp\/whisper-manifest\.json/)
+  assert.match(script, /cat \/tmp\/qvacShardGrep\.txt/)
+  assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
+  assert.match(script, /seen\.has\(m\.name\)/)
+  assert.match(script, /parakeet-prestage-list\.tsv/)
+  assert.match(script, /whisper-prestage-list\.tsv/)
   assert.match(script, /adb shell test -s/)
   assert.match(script, /FATAL/)
   // Whisper (graceful).
-  assert.match(script, /stage "ggml-tiny\.bin"/)
-  assert.match(script, /stage "ggml-silero-v5\.1\.2\.bin"/)
-  assert.match(script, /stage "ggml-base-q5_1\.bin"/)
-  assert.match(script, /stage "ggml-base-q8_0\.bin"/)
-  assert.match(script, /stage "ggml-small-q5_1\.bin"/)
-  assert.match(script, /stage "ggml-small-q8_0\.bin"/)
+  assert.match(script, /stage "\$NAME" "\$URL"/)
+  assert.match(script, /device will use network fallback/)
   assert.match(script, /\[prestage\] done/)
 
   const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })

@@ -6,8 +6,9 @@ const path = require('path')
 const manifestPath = path.resolve(__dirname, '../test/mobile/testAssets/model-manifest.json')
 
 // Whisper models are public HuggingFace downloads, so they are prestaged from a
-// fixed list here rather than through the presigned manifest that drives
-// parakeet. Device-side pickup for these lives in test/integration/helpers.js
+// local manifest here rather than through the presigned manifest that drives
+// parakeet. The current shard selects entries from this manifest by runner name.
+// Device-side pickup for these lives in test/integration/helpers.js
 // (copyPrestagedModel), which requires the .size sidecar this block pushes
 // alongside each model. Keep in sync with helpers.getTestPaths() and the
 // whisper mobile-perf runners: ggml-tiny + Silero VAD cover the functional
@@ -24,13 +25,48 @@ const WHISPER_MODELS = [
   { name: 'ggml-small-q8_0.bin', url: `${HF_WHISPER_BASE}/ggml-small-q8_0.bin` }
 ]
 
+const whisperByName = new Map(WHISPER_MODELS.map((model) => [model.name, model]))
+const WHISPER_TEST_MODEL_NAMES = {
+  runAccuracyMultilangTest: ['ggml-tiny.bin'],
+  runAudioCtxChunkingTest: ['ggml-tiny.bin'],
+  runColdStartTimingTest: ['ggml-tiny.bin', 'ggml-silero-v5.1.2.bin'],
+  runCorruptedModelTest: ['ggml-tiny.bin'],
+  runGpuTest: ['ggml-tiny.bin'],
+  runLiveStreamSimulationTest: [],
+  runLongESTest: ['ggml-tiny.bin'],
+  runMobilePerfSweepCpuTest: [
+    'ggml-base-q5_1.bin',
+    'ggml-base-q8_0.bin',
+    'ggml-small-q5_1.bin',
+    'ggml-small-q8_0.bin'
+  ],
+  runMobilePerfTinyCpuTest: ['ggml-tiny.bin'],
+  runModelFileValidationTest: ['ggml-tiny.bin', 'ggml-silero-v5.1.2.bin'],
+  runMultipleTranscriptionsTest: ['ggml-tiny.bin'],
+  runMobilePerfSweepGpuTest: [
+    'ggml-base-q5_1.bin',
+    'ggml-base-q8_0.bin',
+    'ggml-small-q5_1.bin',
+    'ggml-small-q8_0.bin'
+  ],
+  runMobilePerfTinyGpuTest: ['ggml-tiny.bin']
+}
+
+function buildWhisperManifest() {
+  return Object.fromEntries(
+    Object.entries(WHISPER_TEST_MODEL_NAMES).map(([testName, names]) => [
+      testName,
+      names.map((name) => whisperByName.get(name))
+    ])
+  )
+}
+
 // Whisper staging degrades gracefully: unlike parakeet's 600 MB-class GGUFs
 // (fail-hard above), whisper's tiny/VAD/quant models are small enough to fetch
 // on-device, so a host-side miss just warns and lets helpers.ensureWhisperModel
 // download from HuggingFace. A .size sidecar is pushed next to each model so the
 // device-side copy can reject a truncated push.
-function buildWhisperStageBlock(models) {
-  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+function buildWhisperStageFunction() {
   return `stage() {
   NAME="$1"; URL="$2"
   echo "[prestage] staging $NAME"
@@ -58,32 +94,46 @@ function buildWhisperStageBlock(models) {
     return 0
   fi
   rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+}`
 }
+
+function buildWhisperStageBlock(models) {
+  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+  return `${buildWhisperStageFunction()}
 ${stageCalls}`
 }
 
-// Parakeet block: presigned-S3 GGUFs resolved from the manifest by the deployed
-// wdio config's grep, staged fail-hard (a missing 600 MB-class model on-device
-// would blow the mocha budget). Whisper block appended after, staged gracefully.
+// Parakeet block: presigned-S3 GGUFs resolved from the manifest by the explicit
+// shard grep, staged fail-hard (a missing 600 MB-class model on-device would
+// blow the mocha budget). Whisper block appended after, staged gracefully.
 function buildScript(manifestB64) {
-  return `set -e
+  const whisperManifestB64 = Buffer.from(JSON.stringify(buildWhisperManifest()), 'utf8').toString(
+    'base64'
+  )
+  return `set -euo pipefail
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
 adb shell mkdir -p "$PRESTAGE_DIR"
 mkdir -p /tmp/prestage
 echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
+echo "${whisperManifestB64}" | base64 -d > /tmp/whisper-manifest.json
+GREP=$(cat /tmp/qvacShardGrep.txt)
 export GREP
 echo "[prestage] shard grep: '$GREP'"
-node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):Object.keys(man);const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
+[ -n "$GREP" ] || { echo "[prestage] FATAL: shard grep is required"; exit 1; }
+node -e "const fs=require('fs');const tests=process.env.GREP.split('|').map(s=>s.trim()).filter(Boolean);const select=(path)=>{const man=JSON.parse(fs.readFileSync(path,'utf8'));const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}return out};const write=(path,rows)=>fs.writeFileSync(path,rows.join('\\n')+(rows.length?'\\n':''));const parakeet=select('/tmp/model-manifest.json');const whisper=select('/tmp/whisper-manifest.json');write('/tmp/parakeet-prestage-list.tsv',parakeet);write('/tmp/whisper-prestage-list.tsv',whisper);console.error('[prestage] '+parakeet.length+' parakeet + '+whisper.length+' whisper model(s) for '+tests.length+' test(s)')"
 while IFS=$(printf '\\t') read -r NAME URL; do
   [ -z "$NAME" ] && continue
-  echo "[prestage] staging $NAME"
+  echo "[prestage] staging required parakeet model $NAME"
   curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
   adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"
   adb shell test -s "$PRESTAGE_DIR/$NAME" || { echo "[prestage] FATAL: $NAME not present on device after push"; exit 1; }
   rm -f "/tmp/prestage/$NAME"
-done < /tmp/prestage-list.tsv
-${buildWhisperStageBlock(WHISPER_MODELS)}
+done < /tmp/parakeet-prestage-list.tsv
+${buildWhisperStageFunction()}
+while IFS=$(printf '\\t') read -r NAME URL; do
+  [ -z "$NAME" ] && continue
+  stage "$NAME" "$URL"
+done < /tmp/whisper-prestage-list.tsv
 echo "[prestage] device contents:"
 adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
@@ -109,4 +159,10 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { WHISPER_MODELS, buildWhisperStageBlock, buildScript }
+module.exports = {
+  WHISPER_MODELS,
+  WHISPER_TEST_MODEL_NAMES,
+  buildWhisperManifest,
+  buildWhisperStageBlock,
+  buildScript
+}
