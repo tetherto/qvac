@@ -251,9 +251,15 @@ echo "[prestage] done"`
 //   1. The pre_test phase runs under sudo, so SUDO_UID/SUDO_GID are set and
 //      pymobiledevice3 aborts trying to chown ~/.pymobiledevice3 (EPERM).
 //      Unsetting them makes it skip the chown.
-//   2. `apps push` can exit 0 while logging an AFC error, so success is NOT
-//      inferred from the exit code alone — fail hard on a non-zero exit OR a
-//      specific AFC/Python failure token (mirrors Android's `adb shell test -s`).
+//   2. A failed `apps push` must fail the prestage. On the pinned
+//      pymobiledevice3 (==10.3.1) an AFC error — including the
+//      AfcFileNotFoundError raised when a remote parent is missing — is NOT
+//      swallowed: it propagates as a traceback and a non-zero exit, so the guard
+//      fails closed. The AFC failure-token regex is a version-proof backstop for
+//      older CLIs that log the error but still exit 0 (it carries the two literal
+//      handler prefixes "... not found during afc operation" / "failed to perform
+//      afc operation"). This gives iOS the fail-closed guarantee Android gets
+//      from `adb shell test -s`.
 //   3. `apps push` (AfcService._push_internal) only makedirs() on the directory
 //      branch; pushing a single file whose remote parent is missing raises
 //      AfcFileNotFoundError instead of creating it, and Documents/models does
@@ -275,7 +281,7 @@ MODELS_ROOT=${IOS_MODELS_ROOT}
 MODELS_PARENT=${IOS_MODELS_PARENT}
 SCAFFOLD_DIR=/tmp/prestage-scaffold/${IOS_MODELS_BASENAME}
 echo "[prestage] installing pymobiledevice3..."
-python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
+python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
 pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
 echo "${listB64}" | base64 -d > /tmp/prestage-list.tsv
 rm -rf "$SCAFFOLD_DIR"
@@ -288,7 +294,7 @@ done < /tmp/prestage-list.tsv
 echo "[prestage] seeding device dir tree at $MODELS_ROOT..."
 if SEED_OUT=$(pymobiledevice3 apps push "$BID" "$SCAFFOLD_DIR" "$MODELS_PARENT" 2>&1); then SEED_RC=0; else SEED_RC=$?; fi
 printf '%s\\n' "$SEED_OUT"
-if [ "$SEED_RC" -ne 0 ] || printf '%s' "$SEED_OUT" | grep -qiE "traceback|afcexception|failed with status|perm_denied|object_not_found|not permitted"; then
+if [ "$SEED_RC" -ne 0 ] || printf '%s' "$SEED_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
   echo "[prestage] FATAL: seeding $MODELS_ROOT dir tree failed (rc=$SEED_RC; see AFC error above)"; exit 1
 fi
 echo "[prestage] seeded $MODELS_ROOT"
@@ -300,7 +306,7 @@ while IFS=$(printf '\\t') read -r TARGET URL; do
   curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$TARGET" "$URL"
   if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$TARGET" "$MODELS_ROOT/$TARGET" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
   printf '%s\\n' "$PUSH_OUT"
-  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|failed with status|perm_denied|object_not_found|not permitted"; then
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
     echo "[prestage] FATAL: push of $TARGET failed (rc=$PUSH_RC; see AFC error above)"; exit 1
   fi
   echo "[prestage] pushed $TARGET -> $MODELS_ROOT/$TARGET"

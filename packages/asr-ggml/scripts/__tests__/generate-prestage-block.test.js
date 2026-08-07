@@ -147,7 +147,8 @@ test('buildScript ios backend pushes parakeet into Documents and keeps whisper g
   assert.match(script, /FATAL: push of \$NAME failed/)
   assert.match(script, /FATAL: pymobiledevice3 unavailable for parakeet pre-stage/)
   assert.match(script, /unset SUDO_UID SUDO_GID/)
-  assert.match(script, /traceback\|afcexception\|failed with status/)
+  assert.match(script, /not found during afc operation\|failed to perform afc operation/)
+  assert.match(script, /pymobiledevice3==10\.3\.1/)
   assert.doesNotMatch(script, /adb push/)
   assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
   // Whisper (graceful).

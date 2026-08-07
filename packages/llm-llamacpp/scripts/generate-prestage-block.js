@@ -108,17 +108,23 @@ function buildIosScript(manifestB64) {
   //   1. The pre_test phase runs under sudo, so SUDO_UID/SUDO_GID are set and
   //      pymobiledevice3 aborts trying to chown ~/.pymobiledevice3 (EPERM).
   //      Unsetting them makes it skip the chown.
-  //   2. `apps push` can exit 0 while logging an AFC error, so success is NOT
-  //      inferred from the exit code alone — we fail hard on a non-zero exit OR
-  //      a specific AFC/Python failure token. We deliberately do NOT match a
-  //      bare "error", which false-positives on benign log lines and would
-  //      fail-hard a perfectly good push (mirrors Android's `adb shell test -s`).
+  //   2. A failed `apps push` must fail the prestage. On the pinned
+  //      pymobiledevice3 (==10.3.1) an AFC error — including the
+  //      AfcFileNotFoundError raised when the remote parent is missing — is NOT
+  //      swallowed: it propagates as a traceback and a non-zero exit, so the
+  //      guard below fails closed on both signals. The AFC failure-token regex
+  //      is a version-proof backstop for older CLIs (e.g. the monolithic
+  //      __main__.py) that log the AFC error but still exit 0; it includes the
+  //      two literal handler prefixes ("... not found during afc operation",
+  //      "failed to perform afc operation"). We deliberately do NOT match a bare
+  //      "error" (false-positives on benign lines). Together this gives iOS the
+  //      same fail-closed guarantee Android gets from `adb shell test -s`.
   return `set -e
 export PATH="$HOME/.local/bin:$PATH"
 unset SUDO_UID SUDO_GID
 BID=${IOS_BUNDLE_ID}
 echo "[prestage] installing pymobiledevice3..."
-python3 -m pip install --quiet --upgrade pymobiledevice3 || pip3 install --quiet --upgrade pymobiledevice3 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
+python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
 pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
 ${commonPrelude(manifestB64)}
 while IFS=$(printf '\\t') read -r NAME URL; do
@@ -127,7 +133,7 @@ while IFS=$(printf '\\t') read -r NAME URL; do
   curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
   if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
   printf '%s\\n' "$PUSH_OUT"
-  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|failed with status|perm_denied|object_not_found|not permitted"; then
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
     echo "[prestage] FATAL: push of $NAME failed (rc=$PUSH_RC; see AFC error above)"; exit 1
   fi
   echo "[prestage] pushed $NAME -> Documents/$NAME"

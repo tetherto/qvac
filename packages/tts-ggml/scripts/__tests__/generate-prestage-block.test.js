@@ -479,7 +479,11 @@ test('buildIosPrestageScript stages into the Documents/models container via pymo
     script.includes('mkdir -p "/tmp/prestage/$(dirname "$TARGET")"'),
     'creates the host-side subdir so nested lavasr/ + whisper/ targets download cleanly'
   )
-  assert.ok(/traceback\|afcexception\|failed with status/.test(script), 'fails hard on an AFC token')
+  assert.ok(
+    /not found during afc operation\|failed to perform afc operation/.test(script),
+    'AFC error-token backstop covers the AfcFileNotFoundError phrasing older CLIs log on a still-zero exit'
+  )
+  assert.ok(/pymobiledevice3==10\.3\.1/.test(script), 'pins pymobiledevice3 to the fail-closed version')
   assert.ok(!script.includes('adb '), 'iOS backend uses no adb')
   assert.ok(!script.includes(PRESTAGE_DIR), 'iOS backend does not touch the Android prestage dir')
 })
