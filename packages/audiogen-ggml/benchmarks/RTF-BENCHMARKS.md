@@ -153,10 +153,20 @@ The matrix runner additionally honours `MATRIX_JSON` (the sweep) and
 
 ## Running in CI
 
-`.github/workflows/benchmark-performance-audiogen-ggml.yml` is the entry point
-(`workflow_dispatch` only — a full sweep renders for hours and downloads every
-DiT variant, so it never runs on a PR). It builds prebuilds (or takes a
-published `prebuild_package`), fans out to both lanes, and aggregates.
+There are two entry points.
+
+`.github/workflows/benchmark-performance-audiogen-ggml.yml` is the manual one
+(`workflow_dispatch`). It builds prebuilds (or takes a published
+`prebuild_package`), fans out to both lanes, and aggregates.
+
+On a pull request, add the **`run-benchmarks`** label alongside
+`run-desktop-addon-tests` and `run-mobile-addon-tests`. The lanes then run with
+`run_rtf_benchmarks: true` and `summarize-benchmarks` renders the findings table
+onto the run summary. Without the label a PR pays nothing, which is the default:
+a full sweep renders for hours and downloads every DiT variant.
+
+Both paths share `reusable-summarize-audiogen-ggml-benchmarks.yml`, so the table
+on a PR is the table a manual sweep produces.
 
 **Desktop** — `integration-test-audiogen-ggml.yml` with
 `run_rtf_benchmarks: true`. Every runner sweeps the three variants on CPU;

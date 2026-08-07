@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reports carry the backend that actually executed. A GPU request that fell back
   to CPU is reported as CPU work, with the request preserved as
   `requested_backend` / `requested_execution_provider`.
+- A `run-benchmarks` label makes a pull request run the benchmark matrix and
+  render the findings table on the run summary. The table was previously
+  reachable only from the manual sweep workflow.
 
 ### Fixed
 
