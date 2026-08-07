@@ -2,23 +2,29 @@
  * Validate the Python examples the docs embed with ```python file=<rootDir>/...
  *
  * The docs present each embedded block as something a reader can copy into an
- * empty directory and run. That only holds if the example imports nothing but
- * installed packages: a `from _common import ...` resolves in the repo (the
- * script's own directory is on `sys.path`) and fails everywhere else, so it
- * ships green while every copied block raises ModuleNotFoundError.
+ * empty directory and run. Checking that claim by inspecting import statements
+ * only ever approximates it, so this runs the example instead: each file is
+ * copied alone into a temp directory and executed there, with the examples
+ * directory absent from `sys.path`.
  *
- * This module finds those imports by parsing the example with Python's own
- * `ast`, and reports any that resolve to a sibling file in the same examples
- * directory rather than to a package the reader installed.
+ * A sibling helper cannot resolve under those conditions — which is exactly
+ * the bug this guards against. `from _common import print_progress` resolves
+ * in-repo, where the script's own directory is on `sys.path`, and raises
+ * ModuleNotFoundError for everyone who copies the block out.
+ *
+ * Installed packages are stubbed inside the child process, so the run needs no
+ * SDK, no worker and no model download, and a missing third-party package
+ * cannot mask a repo-local import further down the file.
  */
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import * as os from 'os'
 import { execFileSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
 const LIB_DIR = path.dirname(fileURLToPath(import.meta.url))
-const AST_HELPER = path.join(LIB_DIR, 'python_module_imports.py')
+const ISOLATION_RUNNER = path.join(LIB_DIR, 'run_isolated_example.py')
 
 const FENCE_OPEN_RE = /^```(\w+)?(.*)$/
 const FILE_ATTR_RE = /file=<rootDir>\/(\S+)/
@@ -32,16 +38,18 @@ export interface EmbeddedPythonRef {
   line: number
 }
 
-export interface PythonModuleInfo {
-  imports?: string[]
-  syntaxError?: string
+export interface IsolationResult {
+  ok: boolean
+  kind?: 'missing-module' | 'syntax-error' | 'exec-error'
+  module?: string
+  detail?: string
 }
 
 export interface PythonExampleFinding {
   mdxFile: string
   repoPath: string
   line: number
-  kind: 'syntax-error' | 'local-import'
+  kind: 'missing-module' | 'syntax-error' | 'exec-error'
   detail: string
 }
 
@@ -81,18 +89,7 @@ export function extractEmbeddedPythonRefs(content: string, mdxFile: string): Emb
   return refs
 }
 
-/**
- * Which of `imports` name a module that lives beside `examplePath`.
- *
- * `siblings` is the set of importable module names in the example's directory
- * (`foo.py` -> `foo`, `bar/__init__.py` -> `bar`). A relative import is always
- * local: it carries leading dots and cannot resolve to an installed package.
- */
-export function localImports(imports: string[], siblings: Set<string>): string[] {
-  return imports.filter((name) => name.startsWith('.') || siblings.has(name))
-}
-
-/** Importable module names sitting in `dir`. */
+/** Importable module names sitting in `dir` — what must NOT be stubbed. */
 export async function siblingModules(dir: string): Promise<Set<string>> {
   const names = new Set<string>()
 
@@ -114,7 +111,7 @@ export async function siblingModules(dir: string): Promise<Set<string>> {
   return names
 }
 
-/** True when a Python interpreter the helper can run is on PATH. */
+/** True when a Python interpreter the runner can use is on PATH. */
 export function pythonAvailable(python = 'python3'): boolean {
   try {
     execFileSync(python, ['--version'], { stdio: 'pipe', timeout: 15_000 })
@@ -125,75 +122,63 @@ export function pythonAvailable(python = 'python3'): boolean {
 }
 
 /**
- * Parse each file with Python's `ast` and return its imported module roots.
+ * Copy `absExample` alone into a fresh directory and execute it there.
  *
- * Throws when no interpreter is available — callers decide whether that is a
- * skip or a failure.
+ * `neverStub` are the module names that must be allowed to fail — the example's
+ * own siblings in the repo. Everything else is fabricated inside the child, so
+ * the only reachable import failure is a repo-local one.
  */
-export function parsePythonModules(
-  absPaths: string[],
+export async function runExampleIsolated(
+  absExample: string,
+  neverStub: Set<string>,
   python = 'python3',
-): Map<string, PythonModuleInfo> {
-  if (absPaths.length === 0) return new Map()
+): Promise<IsolationResult> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'docs-example-'))
 
-  let raw: string
   try {
-    raw = execFileSync(python, [AST_HELPER, ...absPaths], {
-      stdio: 'pipe',
-      timeout: 60_000,
-      maxBuffer: 16 * 1024 * 1024,
-    }).toString()
+    const copied = path.join(dir, path.basename(absExample))
+    await fs.copyFile(absExample, copied)
+
+    // cwd is the temp dir and the script sits beside nothing, so neither the
+    // real examples directory nor the repo is reachable via sys.path.
+    const raw = execFileSync(
+      python,
+      [ISOLATION_RUNNER, copied, JSON.stringify([...neverStub])],
+      { cwd: dir, stdio: 'pipe', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
+    ).toString()
+
+    return JSON.parse(raw) as IsolationResult
   } catch (err: unknown) {
     const e = err as { stderr?: Buffer; message?: string }
     const detail = e.stderr?.toString().trim() || e.message || 'unknown error'
-    throw new Error(`failed to run ${python} ${AST_HELPER}: ${detail}`)
+    return { ok: false, kind: 'exec-error', detail: `isolation runner failed: ${detail}` }
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true })
   }
-
-  return new Map(Object.entries(JSON.parse(raw) as Record<string, PythonModuleInfo>))
 }
 
-/**
- * Check every embedded Python example parses and imports nothing local.
- *
- * A local import is tolerated only when the imported file is itself embedded
- * somewhere in the docs — then the reader can at least see both halves.
- */
-export function validateEmbeddedPythonExamples(
-  refs: EmbeddedPythonRef[],
-  monorepoRoot: string,
-  modules: Map<string, PythonModuleInfo>,
-  siblingsByDir: Map<string, Set<string>>,
-): PythonExampleFinding[] {
-  const findings: PythonExampleFinding[] = []
-  const embedded = new Set(refs.map((ref) => ref.repoPath))
+/** Turn an isolation result into a reportable finding, or null when clean. */
+export function describeFinding(
+  ref: EmbeddedPythonRef,
+  result: IsolationResult,
+): PythonExampleFinding | null {
+  if (result.ok) return null
 
-  for (const ref of refs) {
-    const abs = path.join(monorepoRoot, ref.repoPath)
-    const info = modules.get(abs)
-    if (!info) continue
-
-    if (info.syntaxError) {
-      findings.push({ ...ref, kind: 'syntax-error', detail: info.syntaxError })
-      continue
-    }
-
-    const dir = path.dirname(ref.repoPath)
-    const siblings = siblingsByDir.get(dir) ?? new Set<string>()
-
-    for (const name of localImports(info.imports ?? [], siblings)) {
-      const target = `${dir}/${name}.py`
-      if (!name.startsWith('.') && embedded.has(target)) continue
-
-      const shown = name.startsWith('.') ? `relative import "${name}"` : `"${name}" (${target})`
-      findings.push({
-        ...ref,
-        kind: 'local-import',
-        detail: `imports ${shown}, which the docs never show — a reader copying this block gets ModuleNotFoundError`,
-      })
+  if (result.kind === 'missing-module') {
+    return {
+      ...ref,
+      kind: 'missing-module',
+      detail:
+        `imports "${result.module}", which exists only beside it in the repo — ` +
+        `a reader copying this block gets ModuleNotFoundError`,
     }
   }
 
-  return findings
+  return {
+    ...ref,
+    kind: result.kind ?? 'exec-error',
+    detail: result.detail ?? 'failed to run in isolation',
+  }
 }
 
 /** Run the whole check against a docs content tree. */
@@ -212,23 +197,32 @@ export async function checkPythonExamples(
 
   if (refs.length === 0) return { refs, findings: [] }
 
-  const absPaths = [...new Set(refs.map((ref) => path.join(monorepoRoot, ref.repoPath)))]
-  const existing: string[] = []
-  for (const abs of absPaths) {
-    try {
-      await fs.access(abs)
-      existing.push(abs)
-    } catch {
-      // A missing target is check 1's failure to report, not this one's.
-    }
-  }
-
-  const modules = parsePythonModules(existing, python)
-
   const siblingsByDir = new Map<string, Set<string>>()
   for (const dir of new Set(refs.map((ref) => path.dirname(ref.repoPath)))) {
     siblingsByDir.set(dir, await siblingModules(path.join(monorepoRoot, dir)))
   }
 
-  return { refs, findings: validateEmbeddedPythonExamples(refs, monorepoRoot, modules, siblingsByDir) }
+  // One example can be embedded on several pages; run each file once.
+  const resultsByPath = new Map<string, IsolationResult>()
+  const findings: PythonExampleFinding[] = []
+
+  for (const ref of refs) {
+    const abs = path.join(monorepoRoot, ref.repoPath)
+
+    if (!resultsByPath.has(ref.repoPath)) {
+      try {
+        await fs.access(abs)
+      } catch {
+        // A missing target is check 1's failure to report, not this one's.
+        continue
+      }
+      const siblings = siblingsByDir.get(path.dirname(ref.repoPath)) ?? new Set<string>()
+      resultsByPath.set(ref.repoPath, await runExampleIsolated(abs, siblings, python))
+    }
+
+    const finding = describeFinding(ref, resultsByPath.get(ref.repoPath)!)
+    if (finding) findings.push(finding)
+  }
+
+  return { refs, findings }
 }

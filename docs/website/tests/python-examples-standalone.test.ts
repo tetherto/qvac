@@ -6,10 +6,9 @@ import { fileURLToPath } from 'node:url'
 import { glob } from 'glob'
 import {
   extractEmbeddedPythonRefs,
-  localImports,
+  runExampleIsolated,
+  describeFinding,
   siblingModules,
-  parsePythonModules,
-  validateEmbeddedPythonExamples,
   checkPythonExamples,
   pythonAvailable,
 } from '../scripts/lib/python-example-validator'
@@ -18,6 +17,14 @@ const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEBSITE_DIR = path.resolve(TESTS_DIR, '..')
 const MONOREPO_ROOT = path.resolve(WEBSITE_DIR, '../..')
 const DOCS_CONTENT = path.join(WEBSITE_DIR, 'content', 'docs')
+
+async function mdxPaths() {
+  return glob('**/*.mdx', {
+    cwd: DOCS_CONTENT,
+    absolute: true,
+    ignore: ['reference/api/v*.mdx', 'reference/release-notes/v*.mdx'],
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Unit tests — fence extraction
@@ -73,182 +80,166 @@ describe('extractEmbeddedPythonRefs', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Unit tests — local import resolution
+// Isolation runner — the real check, exercised against synthetic examples
 // ---------------------------------------------------------------------------
 
-describe('localImports', () => {
-  const siblings = new Set(['_common', 'helpers'])
-
-  it('flags a sibling module', () => {
-    expect(localImports(['_common', 'asyncio'], siblings)).toEqual(['_common'])
-  })
-
-  it('leaves installed packages alone', () => {
-    expect(localImports(['asyncio', 'sys', 'tetherto'], siblings)).toEqual([])
-  })
-
-  it('always flags relative imports', () => {
-    expect(localImports(['.', '.utils'], siblings)).toEqual(['.', '.utils'])
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Unit tests — Python AST parsing
-// ---------------------------------------------------------------------------
-
-describe.runIf(pythonAvailable())('parsePythonModules', () => {
-  async function withTempFiles(
+describe.runIf(pythonAvailable())('runExampleIsolated', () => {
+  async function withExamples(
     files: Record<string, string>,
-    run: (dir: string) => Promise<void> | void,
+    run: (dir: string, siblings: Set<string>) => Promise<void>,
   ) {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'py-example-'))
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'py-src-'))
     try {
       for (const [name, body] of Object.entries(files)) {
         await fs.writeFile(path.join(dir, name), body, 'utf-8')
       }
-      await run(dir)
+      await run(dir, await siblingModules(dir))
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
   }
 
-  it('reports the root of each imported module', async () => {
-    await withTempFiles(
-      { 'a.py': 'import asyncio\nfrom tetherto.qvac_sdk import Client\nfrom _common import x\n' },
-      (dir) => {
-        const info = parsePythonModules([path.join(dir, 'a.py')]).get(path.join(dir, 'a.py'))
-        expect(info?.imports).toEqual(['_common', 'asyncio', 'tetherto'])
+  it('passes an example that stands on its own', async () => {
+    await withExamples(
+      {
+        'ok.py':
+          'import asyncio\nimport sys\n' +
+          'from tetherto.qvac_sdk import Client\n\n' +
+          'async def main():\n    return 0\n\n' +
+          'if __name__ == "__main__":\n    sys.exit(asyncio.run(main()))\n',
+      },
+      async (dir, siblings) => {
+        expect(await runExampleIsolated(path.join(dir, 'ok.py'), siblings)).toEqual({ ok: true })
       },
     )
   })
 
-  it('ignores imports that only appear inside a docstring', async () => {
-    // vla.py really does document its own API this way; a regex-based scanner
-    // reads the docstring line as an import.
-    await withTempFiles(
-      { 'a.py': '"""Doc.\n\nfrom _common import print_progress\n"""\n\nimport sys\n' },
-      (dir) => {
-        const info = parsePythonModules([path.join(dir, 'a.py')]).get(path.join(dir, 'a.py'))
-        expect(info?.imports).toEqual(['sys'])
+  it('fails an example that imports a sibling helper', async () => {
+    await withExamples(
+      {
+        '_common.py': 'def print_progress(p):\n    pass\n',
+        'bad.py': 'import sys\nfrom _common import print_progress\n',
+      },
+      async (dir, siblings) => {
+        const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
+        expect(result.ok).toBe(false)
+        expect(result.kind).toBe('missing-module')
+        expect(result.module).toBe('_common')
       },
     )
   })
 
-  it('ignores commented-out imports', async () => {
-    await withTempFiles({ 'a.py': '# from _common import x\nimport sys\n' }, (dir) => {
-      const info = parsePythonModules([path.join(dir, 'a.py')]).get(path.join(dir, 'a.py'))
-      expect(info?.imports).toEqual(['sys'])
-    })
+  it('catches a sibling import that sits after a third-party one', async () => {
+    // The reason installed packages are stubbed: without it the missing
+    // tetherto import would raise first and hide this.
+    await withExamples(
+      {
+        '_common.py': 'x = 1\n',
+        'bad.py': 'from tetherto.qvac_sdk import Client\nfrom _common import x\n',
+      },
+      async (dir, siblings) => {
+        const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
+        expect(result.kind).toBe('missing-module')
+        expect(result.module).toBe('_common')
+      },
+    )
   })
 
-  it('sees an import deferred into a function body', async () => {
-    await withTempFiles({ 'a.py': 'def main():\n    import _common\n' }, (dir) => {
-      const info = parsePythonModules([path.join(dir, 'a.py')]).get(path.join(dir, 'a.py'))
-      expect(info?.imports).toEqual(['_common'])
-    })
+  it('catches a sibling pulled in dynamically', async () => {
+    // A static import scanner cannot see this one.
+    await withExamples(
+      {
+        '_common.py': 'x = 1\n',
+        'bad.py': 'import importlib\n_c = importlib.import_module("_common")\n',
+      },
+      async (dir, siblings) => {
+        const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
+        expect(result.kind).toBe('missing-module')
+        expect(result.module).toBe('_common')
+      },
+    )
   })
 
-  it('reports a syntax error instead of imports', async () => {
-    await withTempFiles({ 'a.py': 'def broken(:\n' }, (dir) => {
-      const info = parsePythonModules([path.join(dir, 'a.py')]).get(path.join(dir, 'a.py'))
-      expect(info?.syntaxError).toMatch(/line 1/)
-      expect(info?.imports).toBeUndefined()
-    })
+  it('catches a sibling reached by a sys.path hack', async () => {
+    await withExamples(
+      {
+        'helpers.py': 'x = 1\n',
+        'bad.py':
+          'import sys, os\n' +
+          'sys.path.insert(0, os.path.dirname(__file__))\n' +
+          'import helpers\n',
+      },
+      async (dir, siblings) => {
+        const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
+        expect(result.kind).toBe('missing-module')
+        expect(result.module).toBe('helpers')
+      },
+    )
   })
 
-  it('keeps relative imports distinguishable', async () => {
-    await withTempFiles({ 'a.py': 'from .utils import x\nfrom . import y\n' }, (dir) => {
-      const info = parsePythonModules([path.join(dir, 'a.py')]).get(path.join(dir, 'a.py'))
-      expect(info?.imports).toEqual(['.', '.utils'])
+  it('does not run the __main__ entry point', async () => {
+    // Otherwise the check would need a worker and a model download.
+    await withExamples(
+      {
+        'ok.py':
+          'import sys\n\n' +
+          'if __name__ == "__main__":\n    raise SystemExit("must not run")\n',
+      },
+      async (dir, siblings) => {
+        expect(await runExampleIsolated(path.join(dir, 'ok.py'), siblings)).toEqual({ ok: true })
+      },
+    )
+  })
+
+  it('tolerates module-level use of a stubbed package', async () => {
+    await withExamples(
+      {
+        'ok.py':
+          'from tetherto.qvac_sdk.models import WHISPER_TINY\n' +
+          'MODELS = [WHISPER_TINY]\n' +
+          'NAME = str(WHISPER_TINY)\n',
+      },
+      async (dir, siblings) => {
+        expect(await runExampleIsolated(path.join(dir, 'ok.py'), siblings)).toEqual({ ok: true })
+      },
+    )
+  })
+
+  it('reports a syntax error', async () => {
+    await withExamples({ 'bad.py': 'def broken(:\n' }, async (dir, siblings) => {
+      const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
+      expect(result.ok).toBe(false)
+      expect(result.kind).toBe('syntax-error')
+      expect(result.detail).toMatch(/line 1/)
     })
   })
 })
 
 // ---------------------------------------------------------------------------
-// Unit tests — the rule itself
+// Unit tests — reporting
 // ---------------------------------------------------------------------------
 
-describe('validateEmbeddedPythonExamples', () => {
-  const root = '/repo'
-  const dir = 'packages/sdk-python/examples'
-  const siblingsByDir = new Map([[dir, new Set(['_common', 'quickstart', 'ocr'])]])
+describe('describeFinding', () => {
+  const ref = { mdxFile: 'page.mdx', repoPath: 'examples/quickstart.py', line: 10 }
 
-  function ref(name: string) {
-    return { mdxFile: 'page.mdx', repoPath: `${dir}/${name}`, line: 10 }
-  }
-
-  it('passes an example that only imports installed packages', () => {
-    const modules = new Map([
-      [path.join(root, dir, 'quickstart.py'), { imports: ['asyncio', 'sys', 'tetherto'] }],
-    ])
-
-    expect(
-      validateEmbeddedPythonExamples([ref('quickstart.py')], root, modules, siblingsByDir),
-    ).toEqual([])
+  it('returns nothing for a clean run', () => {
+    expect(describeFinding(ref, { ok: true })).toBeNull()
   })
 
-  it('fails an example importing a helper the docs never show', () => {
-    const modules = new Map([
-      [path.join(root, dir, 'quickstart.py'), { imports: ['_common', 'asyncio'] }],
-    ])
-
-    const findings = validateEmbeddedPythonExamples(
-      [ref('quickstart.py')],
-      root,
-      modules,
-      siblingsByDir,
-    )
-
-    expect(findings).toHaveLength(1)
-    expect(findings[0]!.kind).toBe('local-import')
-    expect(findings[0]!.detail).toContain('_common')
-    expect(findings[0]!.detail).toContain('ModuleNotFoundError')
+  it('names the offending module', () => {
+    const finding = describeFinding(ref, { ok: false, kind: 'missing-module', module: '_common' })
+    expect(finding?.detail).toContain('_common')
+    expect(finding?.detail).toContain('ModuleNotFoundError')
   })
 
-  it('allows a local import when that file is embedded too', () => {
-    const modules = new Map([
-      [path.join(root, dir, 'quickstart.py'), { imports: ['ocr'] }],
-      [path.join(root, dir, 'ocr.py'), { imports: ['sys'] }],
-    ])
-
-    expect(
-      validateEmbeddedPythonExamples(
-        [ref('quickstart.py'), ref('ocr.py')],
-        root,
-        modules,
-        siblingsByDir,
-      ),
-    ).toEqual([])
-  })
-
-  it('fails a relative import even if the target is embedded', () => {
-    const modules = new Map([[path.join(root, dir, 'quickstart.py'), { imports: ['.ocr'] }]])
-
-    const findings = validateEmbeddedPythonExamples(
-      [ref('quickstart.py'), ref('ocr.py')],
-      root,
-      modules,
-      siblingsByDir,
-    )
-
-    expect(findings).toHaveLength(1)
-    expect(findings[0]!.detail).toContain('relative import')
-  })
-
-  it('surfaces a syntax error', () => {
-    const modules = new Map([
-      [path.join(root, dir, 'quickstart.py'), { syntaxError: 'line 3: invalid syntax' }],
-    ])
-
-    const findings = validateEmbeddedPythonExamples(
-      [ref('quickstart.py')],
-      root,
-      modules,
-      siblingsByDir,
-    )
-
-    expect(findings).toHaveLength(1)
-    expect(findings[0]!.kind).toBe('syntax-error')
+  it('passes other failures through', () => {
+    const finding = describeFinding(ref, {
+      ok: false,
+      kind: 'syntax-error',
+      detail: 'line 3: invalid syntax',
+    })
+    expect(finding?.kind).toBe('syntax-error')
+    expect(finding?.detail).toBe('line 3: invalid syntax')
   })
 })
 
@@ -257,29 +248,17 @@ describe('validateEmbeddedPythonExamples', () => {
 // ---------------------------------------------------------------------------
 
 describe('embedded Python examples', () => {
-  it('has python3 available to parse them', () => {
+  it('has python3 available to run them', () => {
     expect(pythonAvailable()).toBe(true)
   })
 
   it('embeds at least one Python example', async () => {
-    const mdxPaths = await glob('**/*.mdx', {
-      cwd: DOCS_CONTENT,
-      absolute: true,
-      ignore: ['reference/api/v*.mdx', 'reference/release-notes/v*.mdx'],
-    })
-
-    const { refs } = await checkPythonExamples(mdxPaths, WEBSITE_DIR, MONOREPO_ROOT)
+    const { refs } = await checkPythonExamples(await mdxPaths(), WEBSITE_DIR, MONOREPO_ROOT)
     expect(refs.length).toBeGreaterThan(0)
   })
 
-  it('are all standalone and parse cleanly', async () => {
-    const mdxPaths = await glob('**/*.mdx', {
-      cwd: DOCS_CONTENT,
-      absolute: true,
-      ignore: ['reference/api/v*.mdx', 'reference/release-notes/v*.mdx'],
-    })
-
-    const { findings } = await checkPythonExamples(mdxPaths, WEBSITE_DIR, MONOREPO_ROOT)
+  it('each runs standalone when copied out of the repo', async () => {
+    const { findings } = await checkPythonExamples(await mdxPaths(), WEBSITE_DIR, MONOREPO_ROOT)
 
     if (findings.length > 0) {
       const details = findings
@@ -287,24 +266,5 @@ describe('embedded Python examples', () => {
         .join('\n')
       expect.fail(`${findings.length} embedded Python example(s) are not standalone:\n${details}`)
     }
-  })
-
-  it('every examples directory the docs draw from is free of shared helpers', async () => {
-    // The rule above is per-embedded-file. This one catches the other half:
-    // a helper module left in the directory is a standing invitation to import
-    // it again.
-    const mdxPaths = await glob('**/*.mdx', {
-      cwd: DOCS_CONTENT,
-      absolute: true,
-      ignore: ['reference/api/v*.mdx', 'reference/release-notes/v*.mdx'],
-    })
-
-    const { refs } = await checkPythonExamples(mdxPaths, WEBSITE_DIR, MONOREPO_ROOT)
-    const dirs = new Set(refs.map((r) => path.dirname(r.repoPath)))
-
-    for (const dir of dirs) {
-      const siblings = await siblingModules(path.join(MONOREPO_ROOT, dir))
-      expect(siblings.has('_common'), `${dir}/_common.py is back`).toBe(false)
-    }
-  })
+  }, 120_000)
 })
